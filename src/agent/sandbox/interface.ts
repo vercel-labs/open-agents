@@ -37,6 +37,20 @@ export interface Sandbox {
    * All path validations should be relative to this directory.
    */
   readonly workingDirectory: string;
+
+  /**
+   * Environment variables available to commands in the sandbox.
+   * For LocalSandbox, these are merged with process.env.
+   * For remote sandboxes, these are the only env vars available.
+   */
+  readonly env?: Record<string, string>;
+
+  /**
+   * The current git branch in the sandbox (if applicable).
+   * Useful for agents that need to know which branch they're working on.
+   */
+  readonly currentBranch?: string;
+
   /**
    * Read file contents as UTF-8 string
    */
@@ -74,4 +88,11 @@ export interface Sandbox {
    * @param timeoutMs - Timeout in milliseconds
    */
   exec(command: string, cwd: string, timeoutMs: number): Promise<ExecResult>;
+
+  /**
+   * Stop and clean up the sandbox.
+   * For local sandboxes, this is a no-op.
+   * For remote sandboxes, this releases resources.
+   */
+  stop(): Promise<void>;
 }
