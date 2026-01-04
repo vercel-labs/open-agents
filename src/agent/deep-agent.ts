@@ -16,13 +16,16 @@ import {
   taskTool,
 } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";
-import type { TodoItem } from "./types";
+import type { TodoItem, AgentMode } from "./types";
 import { addCacheControl, compactContext, getSandbox, sharedContext } from "./utils";
 import { gateway } from "../models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
 
+const agentModeSchema = z.enum(["interactive", "background"]);
+
 const callOptionsSchema = z.object({
   workingDirectory: z.string(),
+  mode: agentModeSchema.optional(),
   customInstructions: z.string().optional(),
   sandbox: z.custom<Sandbox>().optional(),
 });
@@ -63,8 +66,12 @@ export const deepAgent = new ToolLoopAgent({
   }),
   prepareCall: ({ options, model, ...settings }) => {
     const workingDirectory = options?.workingDirectory ?? process.cwd();
+    const mode: AgentMode = options?.mode ?? "interactive";
+
     // Update shared context for tool approval functions
     sharedContext.workingDirectory = workingDirectory;
+    sharedContext.mode = mode;
+
     const customInstructions = options?.customInstructions;
 
     // Use provided sandbox, or create a local sandbox with the working directory
@@ -76,9 +83,11 @@ export const deepAgent = new ToolLoopAgent({
       model,
       instructions: buildSystemPrompt({
         cwd: sandbox.workingDirectory,
+        mode,
+        currentBranch: sandbox.currentBranch,
         customInstructions,
       }),
-      experimental_context: { sandbox },
+      experimental_context: { sandbox, mode },
     };
   },
   onFinish: async ({ experimental_context }) => {
