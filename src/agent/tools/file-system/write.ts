@@ -48,6 +48,7 @@ function isOutsideWorkingDirectory(filePath: string): boolean {
  * Create a combined approval function for write operations.
  * Always requires approval if path is outside CWD, otherwise uses the provided option.
  * In background mode, auto-approve all operations (except outside working directory).
+ * When autoApprove is "edits" or "all", auto-approve file operations within working directory.
  */
 function createWriteApprovalFn(options?: WriteToolOptions): WriteApprovalFn {
   return async (args) => {
@@ -57,6 +58,10 @@ function createWriteApprovalFn(options?: WriteToolOptions): WriteApprovalFn {
     }
     // In background mode, auto-approve all operations within working directory
     if (sharedContext.mode === "background") {
+      return false;
+    }
+    // Auto-approve edits when autoApprove is "edits" or "all"
+    if (sharedContext.autoApprove === "edits" || sharedContext.autoApprove === "all") {
       return false;
     }
     // Otherwise use the configured approval setting
@@ -71,6 +76,7 @@ function createWriteApprovalFn(options?: WriteToolOptions): WriteApprovalFn {
  * Create a combined approval function for edit operations.
  * Always requires approval if path is outside CWD, otherwise uses the provided option.
  * In background mode, auto-approve all operations (except outside working directory).
+ * When autoApprove is "edits" or "all", auto-approve file operations within working directory.
  */
 function createEditApprovalFn(options?: EditToolOptions): EditApprovalFn {
   return async (args) => {
@@ -80,6 +86,10 @@ function createEditApprovalFn(options?: EditToolOptions): EditApprovalFn {
     }
     // In background mode, auto-approve all operations within working directory
     if (sharedContext.mode === "background") {
+      return false;
+    }
+    // Auto-approve edits when autoApprove is "edits" or "all"
+    if (sharedContext.autoApprove === "edits" || sharedContext.autoApprove === "all") {
       return false;
     }
     // Otherwise use the configured approval setting
