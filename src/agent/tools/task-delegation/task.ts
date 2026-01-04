@@ -2,7 +2,8 @@ import { tool, readUIMessageStream } from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "./subagents/explorer";
 import { executorSubagent } from "./subagents/executor";
-import { getSandbox } from "../../utils";
+import { getSandbox, sharedContext } from "../../utils";
+import { matchSubagentTypeRule } from "../../utils/session-rules";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -25,7 +26,20 @@ const taskInputSchema = z.object({
 export const taskTool = tool({
   // Executor subagent has full write access, so require approval
   // Explorer is read-only, so no approval needed
-  needsApproval: ({ subagentType }) => subagentType === "executor",
+  needsApproval: ({ subagentType }) => {
+    if (subagentType !== "executor") return false;
+
+    // Check session rules for subagent-type match
+    for (const rule of sharedContext.sessionRules) {
+      if (
+        matchSubagentTypeRule(rule, subagentType, sharedContext.workingDirectory)
+      ) {
+        return false; // Auto-approve
+      }
+    }
+
+    return true;
+  },
   description: `Launch a specialized subagent to handle complex tasks autonomously.
 
 SUBAGENT TYPES:
