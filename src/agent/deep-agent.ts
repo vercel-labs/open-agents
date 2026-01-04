@@ -17,7 +17,7 @@ import {
 } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { TodoItem } from "./types";
-import { addCacheControl, compactContext, sharedContext } from "./utils";
+import { addCacheControl, compactContext, getSandbox, sharedContext } from "./utils";
 import { gateway } from "../models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
 
@@ -81,6 +81,14 @@ export const deepAgent = new ToolLoopAgent({
       experimental_context: { sandbox },
     };
   },
+  onFinish: async ({ experimental_context }) => {
+    try {
+      const sandbox = getSandbox(experimental_context);
+      await sandbox.stop();
+    } catch {
+      // Sandbox not available, nothing to clean up
+    }
+  }
 });
 
 export function extractTodosFromStep(

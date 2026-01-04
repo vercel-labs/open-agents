@@ -11,9 +11,11 @@ const MAX_OUTPUT_LENGTH = 50_000;
  */
 export class LocalSandbox implements Sandbox {
   readonly workingDirectory: string;
+  readonly env?: Record<string, string>;
 
-  constructor(workingDirectory: string) {
+  constructor(workingDirectory: string, env?: Record<string, string>) {
     this.workingDirectory = workingDirectory;
+    this.env = env;
   }
 
   async readFile(path: string, encoding: "utf-8"): Promise<string> {
@@ -61,7 +63,7 @@ export class LocalSandbox implements Sandbox {
     return new Promise((resolve) => {
       const child = spawn("bash", ["-c", command], {
         cwd,
-        env: { ...process.env },
+        env: { ...process.env, ...this.env },
         timeout: timeoutMs,
       });
 
@@ -110,6 +112,10 @@ export class LocalSandbox implements Sandbox {
       });
     });
   }
+
+  async stop(): Promise<void> {
+    // No-op for local sandbox
+  }
 }
 
 /**
@@ -117,7 +123,11 @@ export class LocalSandbox implements Sandbox {
  * Use this as the default when no custom sandbox is provided.
  *
  * @param workingDirectory - The root directory for sandbox operations
+ * @param env - Optional environment variables to make available to commands (merged with process.env)
  */
-export function createLocalSandbox(workingDirectory: string): Sandbox {
-  return new LocalSandbox(workingDirectory);
+export function createLocalSandbox(
+  workingDirectory: string,
+  env?: Record<string, string>
+): Sandbox {
+  return new LocalSandbox(workingDirectory, env);
 }

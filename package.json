@@ -28,6 +28,7 @@
     "@ai-sdk/anthropic": "^3.0.1",
     "@ai-sdk/react": "^3.0.3",
     "@types/react": "^19.2.7",
+    "@vercel/sandbox": "^1.1.2",
     "ai": "^6.0.3",
     "cli-highlight": "^2.1.11",
     "ink": "^6.6.0",
