@@ -4,6 +4,7 @@ import React, {
   useState,
   useMemo,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -98,10 +99,14 @@ export function ChatProvider({
   model,
   workingDirectory,
 }: ChatProviderProps) {
-  const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>("edits");
+  const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>("off");
   const [usage, setUsage] = useState<LanguageModelUsage>(DEFAULT_USAGE);
   const [sessionUsage, setSessionUsage] =
     useState<LanguageModelUsage>(DEFAULT_USAGE);
+
+  // Use ref to pass current autoAcceptMode to transport without recreating it
+  const autoAcceptModeRef = useRef(autoAcceptMode);
+  autoAcceptModeRef.current = autoAcceptMode;
 
   const contextLimit = useMemo(() => getContextLimit(model ?? ""), [model]);
 
@@ -115,6 +120,7 @@ export function ChatProvider({
       createAgentTransport({
         agent: tuiAgent,
         agentOptions,
+        getAutoApprove: () => autoAcceptModeRef.current,
         onUsageUpdate: handleUsageUpdate,
       }),
     [agentOptions, handleUsageUpdate],

@@ -5,17 +5,19 @@ import {
   smoothStream,
   pruneMessages,
 } from "ai";
-import type { TUIAgent, TUIAgentCallOptions, TUIAgentUIMessage } from "./types";
+import type { TUIAgent, TUIAgentCallOptions, TUIAgentUIMessage, AutoAcceptMode } from "./types";
 
 export type AgentTransportOptions = {
   agent: TUIAgent;
   agentOptions: TUIAgentCallOptions;
+  getAutoApprove?: () => AutoAcceptMode;
   onUsageUpdate?: (usage: LanguageModelUsage) => void;
 };
 
 export function createAgentTransport({
   agent,
   agentOptions,
+  getAutoApprove,
   onUsageUpdate,
 }: AgentTransportOptions): ChatTransport<TUIAgentUIMessage> {
   return {
@@ -32,9 +34,12 @@ export function createAgentTransport({
         emptyMessages: "remove",
       });
 
+      // Get current autoApprove setting at request time
+      const autoApprove = getAutoApprove?.() ?? "off";
+
       const result = await agent.stream({
         messages: prunedMessages,
-        options: agentOptions,
+        options: { ...agentOptions, autoApprove },
         abortSignal: abortSignal ?? undefined,
         experimental_transform: smoothStream(),
       });
