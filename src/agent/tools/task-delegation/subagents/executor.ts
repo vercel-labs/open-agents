@@ -55,11 +55,11 @@ export const executorSubagent = new ToolLoopAgent({
   model: "anthropic/claude-sonnet-4-20250514",
   instructions: EXECUTOR_SYSTEM_PROMPT,
   tools: {
-    read: readFileTool,
+    read: readFileTool(),
     write: writeFileTool({ needsApproval: false }),
     edit: editFileTool({ needsApproval: false }),
-    grep: grepTool,
-    glob: globTool,
+    grep: grepTool(),
+    glob: globTool(),
     // Use smart approval: safe read-only commands run without approval,
     // dangerous commands (rm, git push, etc.) still require approval
     bash: bashTool({

@@ -19,7 +19,7 @@ import { buildSystemPrompt } from "./system-prompt";
 import { formatTodosForContext, formatScratchpadForContext } from "./state";
 import type { TodoItem, ScratchpadEntry } from "./types";
 import { todoItemSchema } from "./types";
-import { addCacheControl, compactContext } from "./utils";
+import { addCacheControl, compactContext, sharedContext } from "./utils";
 import { gateway } from "../models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
 
@@ -56,11 +56,11 @@ export const deepAgent = new ToolLoopAgent({
   tools: addCacheControl({
     tools: {
       todo_write: todoWriteTool,
-      read: readFileTool,
+      read: readFileTool(),
       write: writeFileTool({ needsApproval: true }),
       edit: editFileTool({ needsApproval: true }),
-      grep: grepTool,
-      glob: globTool,
+      grep: grepTool(),
+      glob: globTool(),
       bash: bashTool({ needsApproval: true }),
       task: taskTool,
       // memory_save: memorySaveTool,
@@ -78,6 +78,8 @@ export const deepAgent = new ToolLoopAgent({
   }),
   prepareCall: ({ options, model, ...settings }) => {
     const workingDirectory = options?.workingDirectory ?? process.cwd();
+    // Update shared context for tool approval functions
+    sharedContext.workingDirectory = workingDirectory;
     const customInstructions = options?.customInstructions;
     const todos = options?.todos ?? [];
     const scratchpad =

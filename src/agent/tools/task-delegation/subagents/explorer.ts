@@ -66,9 +66,9 @@ export const explorerSubagent = new ToolLoopAgent({
   model: "anthropic/claude-sonnet-4-20250514",
   instructions: EXPLORER_SYSTEM_PROMPT,
   tools: {
-    read: readFileTool,
-    grep: grepTool,
-    glob: globTool,
+    read: readFileTool(),
+    grep: grepTool(),
+    glob: globTool(),
     // Use smart approval: safe read-only commands run without approval,
     // dangerous commands are blocked (explorer is read-only anyway)
     bash: bashTool({
