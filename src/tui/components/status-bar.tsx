@@ -20,19 +20,55 @@ const SILLY_WORDS = [
   "Vibing",
   "Channeling",
 ];
-const SILLY_WORD_INTERVAL = 2000;
+const SILLY_WORD_INTERVAL = 4000;
+const PULSE_SPEED = 100;
 
 function useSillyWord() {
   const [index, setIndex] = useState(() => Math.floor(Math.random() * SILLY_WORDS.length));
+  const [pulsePosition, setPulsePosition] = useState(0);
+  const currentWord = SILLY_WORDS[index];
 
+  // Pulse animation - moves highlight from left to right
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPulsePosition((prev) => (prev + 1) % (currentWord.length + 2));
+    }, PULSE_SPEED);
+    return () => clearInterval(timer);
+  }, [currentWord.length]);
+
+  // Change word at interval
   useEffect(() => {
     const timer = setInterval(() => {
       setIndex((prev) => (prev + 1) % SILLY_WORDS.length);
+      setPulsePosition(0);
     }, SILLY_WORD_INTERVAL);
     return () => clearInterval(timer);
   }, []);
 
-  return SILLY_WORDS[index];
+  return { word: currentWord, pulsePosition };
+}
+
+function PulsedWord({ word, pulsePosition }: { word: string; pulsePosition: number }) {
+  return (
+    <>
+      {word.split("").map((char, i) => {
+        const distance = Math.abs(i - pulsePosition);
+        const isBright = distance === 0;
+        const isMedium = distance === 1;
+
+        return (
+          <Text
+            key={i}
+            color={isBright ? "yellowBright" : "yellow"}
+            bold={isBright}
+            dimColor={!isBright && !isMedium}
+          >
+            {char}
+          </Text>
+        );
+      })}
+    </>
+  );
 }
 
 type StatusBarProps = {
@@ -56,16 +92,12 @@ function getThinkingMeta(thinkingState: ThinkingState): string {
 // Status indicator - not memoized to allow animation
 function StatusIndicator({
   isStreaming,
-  status,
   thinkingState,
 }: {
   isStreaming: boolean;
-  status?: string;
   thinkingState: ThinkingState;
 }) {
-  const sillyWord = useSillyWord();
-  const isDefaultStatus = !status || status === "Thinking...";
-  const displayStatus = isDefaultStatus ? `${sillyWord}...` : status;
+  const { word, pulsePosition } = useSillyWord();
 
   // Determine prefix: + while streaming/thinking not done, * when thinking completed
   const hasThinkingCompleted = thinkingState.thinkingDuration !== null;
@@ -81,12 +113,13 @@ function StatusIndicator({
     return (
       <>
         <Text color="yellow">{prefix} </Text>
-        <Text color="yellow">{displayStatus}</Text>
+        <PulsedWord word={word} pulsePosition={pulsePosition} />
+        <Text color="gray">...</Text>
         <Text color="gray"> {metaText}</Text>
       </>
     );
   }
-  return <Text color="green">✓ {status || "Done"}</Text>;
+  return <Text color="green">✓ Done</Text>;
 }
 
 function getTodoIcon(status: TodoItem["status"]): string {
@@ -114,9 +147,6 @@ function getTodoColor(status: TodoItem["status"]): string {
 }
 
 function TodoList({ todos }: { todos: TodoItem[] }) {
-  const hasIncompleteTodos = todos.some((t) => t.status !== "completed");
-  if (!hasIncompleteTodos) return null;
-
   return (
     <Box flexDirection="column" marginLeft={2}>
       {todos.map((todo) => (
@@ -135,6 +165,31 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
   );
 }
 
+// Standalone todo list for when not streaming
+export function StandaloneTodoList({
+  todos,
+  isTodoVisible,
+}: {
+  todos: TodoItem[];
+  isTodoVisible: boolean;
+}) {
+  const hasIncompleteTodos = todos.some((t) => t.status !== "completed");
+
+  if (!hasIncompleteTodos || !isTodoVisible) {
+    return null;
+  }
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Box>
+        <Text color="gray">Todo List</Text>
+        <Text color="gray"> · ctrl+t to hide</Text>
+      </Box>
+      <TodoList todos={todos} />
+    </Box>
+  );
+}
+
 // Not memoized to allow animation
 export function StatusBar({
   isStreaming,
@@ -143,13 +198,13 @@ export function StatusBar({
   todos,
   isTodoVisible = true,
 }: StatusBarProps) {
-  if (!isStreaming && !status) {
-    return null;
-  }
-
   const hasTodos = todos && todos.length > 0;
   const hasIncompleteTodos = hasTodos && todos.some((t) => t.status !== "completed");
   const showTodos = isTodoVisible && hasIncompleteTodos;
+
+  if (!isStreaming && !status && !showTodos) {
+    return null;
+  }
 
   const todoHint = hasTodos && hasIncompleteTodos
     ? ` · ctrl+t to ${isTodoVisible ? "hide" : "show"} todos`
@@ -160,7 +215,6 @@ export function StatusBar({
       <Box>
         <StatusIndicator
           isStreaming={isStreaming}
-          status={status}
           thinkingState={thinkingState}
         />
         {hasTodos && <Text color="gray">{todoHint}</Text>}
