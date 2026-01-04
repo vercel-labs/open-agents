@@ -317,12 +317,7 @@ function FileChangeLayout({
       {/* Header: ● Update(src/tui/lib/markdown.ts) */}
       <Box>
         {running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text
-          bold
-          color={
-            denied ? "red" : running || approvalRequested ? "yellow" : "white"
-          }
-        >
+        <Text bold color="white">
           {action}
         </Text>
         <Text color="gray">(</Text>
