@@ -2,21 +2,59 @@ import React, { useState, useEffect, type ReactNode } from "react";
 import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
+import * as path from "path";
 import { useChatContext } from "../chat-context.js";
 import type { TUIAgentUIToolPart } from "../types.js";
+import type { ApprovalRule } from "../../agent/utils/session-rules.js";
+
+export type RuleCandidate = {
+  displayLabel: string;
+  rule: ApprovalRule;
+};
 
 export type ToolApprovalInfo = {
   toolType: string;
   toolCommand: string;
   toolDescription?: string;
   dontAskAgainPattern?: string;
+  ruleCandidate?: RuleCandidate;
 };
 
+/**
+ * Get a directory-based glob pattern from a file path.
+ * Returns the first directory component as a pattern like "src/**".
+ */
+function getDirectoryGlob(filePath: string, cwd: string): string | null {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(cwd, filePath);
+
+  // Get relative path from cwd
+  const relativePath = path.relative(cwd, absolutePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  const dir = path.dirname(relativePath);
+  if (dir === ".") {
+    return null;
+  }
+  const normalizedDir = dir.split(path.sep).join("/");
+
+  return `${normalizedDir}/**`;
+}
+
+/**
+ * Get approval info and rule candidate for a tool part.
+ *
+ * IMPORTANT: The `workingDirectory` parameter must match `sharedContext.workingDirectory`
+ * used by the agent. If they differ, generated rules won't match at runtime.
+ */
 export function getToolApprovalInfo(
   part: TUIAgentUIToolPart,
-  workingDirectory?: string,
+  workingDirectory: string,
 ): ToolApprovalInfo {
-  const cwd = workingDirectory ?? process.cwd();
+  const cwd = workingDirectory;
 
   switch (part.type) {
     case "tool-bash": {
@@ -24,33 +62,56 @@ export function getToolApprovalInfo(
       // Description may be provided by Claude as additional context
       const description = (part.input as { description?: string } | undefined)
         ?.description;
-      // Extract first word of command for the pattern
-      const firstWord = command.split(" ")[0] ?? "this command";
+      // Extract first two tokens for the prefix (e.g., "bun test", "git diff")
+      const trimmedCommand = command.trim();
+      const tokens = trimmedCommand ? trimmedCommand.split(/\s+/) : [];
+      const prefix = tokens.slice(0, Math.min(2, tokens.length)).join(" ");
+      const firstWord = tokens[0] ?? "this command";
       return {
         toolType: "Bash command",
         toolCommand: command,
         toolDescription: description,
         dontAskAgainPattern: `${firstWord} commands in ${cwd}`,
+        ruleCandidate: prefix
+          ? {
+              displayLabel: `"${prefix}" commands`,
+              rule: { type: "command-prefix", prefix },
+            }
+          : undefined,
       };
     }
 
     case "tool-write": {
       const filePath = String(part.input?.filePath ?? "");
+      const dirGlob = getDirectoryGlob(filePath, cwd);
       return {
         toolType: "Write file",
         toolCommand: filePath,
         toolDescription: "Create new file",
         dontAskAgainPattern: `writes in ${cwd}`,
+        ruleCandidate: dirGlob
+          ? {
+              displayLabel: `writes in ${dirGlob}`,
+              rule: { type: "path-glob", glob: dirGlob, toolTypes: ["write"] },
+            }
+          : undefined,
       };
     }
 
     case "tool-edit": {
       const filePath = String(part.input?.filePath ?? "");
+      const dirGlob = getDirectoryGlob(filePath, cwd);
       return {
         toolType: "Edit file",
         toolCommand: filePath,
         toolDescription: "Modify existing file",
         dontAskAgainPattern: `edits in ${cwd}`,
+        ruleCandidate: dirGlob
+          ? {
+              displayLabel: `edits in ${dirGlob}`,
+              rule: { type: "path-glob", glob: dirGlob, toolTypes: ["edit"] },
+            }
+          : undefined,
       };
     }
 
@@ -71,6 +132,13 @@ export function getToolApprovalInfo(
             ? "This executor has full write access and can create, modify, and delete files."
             : undefined,
         dontAskAgainPattern: `${subagentType ?? "task"} operations`,
+        ruleCandidate:
+          subagentType === "executor"
+            ? {
+                displayLabel: "executor tasks",
+                rule: { type: "subagent-type", subagentType: "executor" },
+              }
+            : undefined,
       };
     }
 
