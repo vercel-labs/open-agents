@@ -1,4 +1,4 @@
-import { tool, readUIMessageStream } from "ai";
+import { tool, readUIMessageStream, type UIToolInvocation } from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "./subagents/explorer";
 import { executorSubagent } from "./subagents/executor";
@@ -137,3 +137,5 @@ NOTE: The executor subagent requires user approval before running because it has
     return { type: "text", value: lastTextPart.text };
   },
 });
+
+export type TaskToolUIPart = UIToolInvocation<typeof taskTool>;
