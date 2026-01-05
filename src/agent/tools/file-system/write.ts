@@ -18,6 +18,10 @@ const editInputSchema = z.object({
     .boolean()
     .optional()
     .describe("Replace all occurrences. Default: false"),
+  startLine: z
+    .number()
+    .optional()
+    .describe("Line number where oldString starts (for diff display)"),
 });
 
 type WriteInput = z.infer<typeof writeInputSchema>;
@@ -205,6 +209,7 @@ USAGE:
 - Provide oldString as the EXACT text to replace, including whitespace and indentation
 - By default, oldString must be UNIQUE in the file; otherwise the edit will fail
 - Use replaceAll: true to change ALL occurrences of oldString in the file (e.g., for a rename)
+- ALWAYS provide startLine: the line number where oldString begins (from the read output)
 
 IMPORTANT:
 - Preserve exact indentation and spacing from the file's content as returned by readFileTool
@@ -213,8 +218,8 @@ IMPORTANT:
 - Paths outside the working directory require approval
 
 EXAMPLES:
-- Replace a single function call: filePath: "/Users/username/project/src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)"
-- Rename a variable throughout a file: filePath: "/Users/username/project/src/api.ts", oldString: "oldApiClient", newString: "newApiClient", replaceAll: true`,
+- Replace a single function call: filePath: "/Users/username/project/src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)", startLine: 42
+- Rename a variable throughout a file: filePath: "/Users/username/project/src/api.ts", oldString: "oldApiClient", newString: "newApiClient", replaceAll: true, startLine: 15`,
   inputSchema: editInputSchema,
   execute: async ({ filePath, oldString, newString, replaceAll = false }, { experimental_context }) => {
     const sandbox = getSandbox(experimental_context);
@@ -250,6 +255,10 @@ EXAMPLES:
         };
       }
 
+      // Calculate starting line number for the edit
+      const matchIndex = content.indexOf(oldString);
+      const startLine = content.slice(0, matchIndex).split("\n").length;
+
       const newContent = replaceAll
         ? content.replaceAll(oldString, newString)
         : content.replace(oldString, newString);
@@ -260,6 +269,7 @@ EXAMPLES:
         success: true,
         path: absolutePath,
         replacements: replaceAll ? occurrences : 1,
+        startLine,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
