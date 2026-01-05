@@ -16,7 +16,8 @@ import {
   taskTool,
 } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";
-import type { TodoItem, AgentMode } from "./types";
+import type { TodoItem, AgentMode, ApprovalRule } from "./types";
+import { approvalRuleSchema } from "./types";
 import { addCacheControl, compactContext, getSandbox, sharedContext } from "./utils";
 import { gateway } from "../models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
@@ -30,6 +31,7 @@ const callOptionsSchema = z.object({
   customInstructions: z.string().optional(),
   sandbox: z.custom<Sandbox>().optional(),
   autoApprove: autoApproveSchema.optional(),
+  approvalRules: z.array(approvalRuleSchema).optional(),
 });
 
 export type DeepAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -68,11 +70,13 @@ export const deepAgent = new ToolLoopAgent({
     const workingDirectory = options?.workingDirectory ?? process.cwd();
     const mode: AgentMode = options?.mode ?? "interactive";
     const autoApprove = options?.autoApprove ?? "off";
+    const approvalRules: ApprovalRule[] = options?.approvalRules ?? [];
 
     // Update shared context for tool approval functions
     sharedContext.workingDirectory = workingDirectory;
     sharedContext.mode = mode;
     sharedContext.autoApprove = autoApprove;
+    sharedContext.approvalRules = approvalRules;
 
     const customInstructions = options?.customInstructions;
 
