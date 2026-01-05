@@ -20,7 +20,10 @@ export type ToolApprovalInfo = {
 function getCommandPrefix(command: string): string {
   const tokens = command.trim().split(/\s+/);
   const tokenCount = tokens[1] === "run" ? 3 : 2;
-  return tokens.slice(0, Math.min(tokenCount, tokens.length)).join(" ") || "this command";
+  return (
+    tokens.slice(0, Math.min(tokenCount, tokens.length)).join(" ") ||
+    "this command"
+  );
 }
 
 export function getToolApprovalInfo(
@@ -78,8 +81,7 @@ export function getToolApprovalInfo(
 
     case "tool-task": {
       const desc = String(part.input?.task ?? "Spawning subagent");
-      const subagentType = (part.input as { subagentType?: string })
-        ?.subagentType;
+      const subagentType = part.input?.subagentType;
       return {
         toolType:
           subagentType === "executor"
@@ -170,8 +172,10 @@ export function inferApprovalRule(
     }
 
     case "tool-task": {
-      const subagentType = (part.input as { subagentType?: string })?.subagentType;
-      if (!subagentType) return null;
+      const input = part.input;
+      const subagentType = input?.subagentType;
+      if (subagentType !== "explorer" && subagentType !== "executor")
+        return null;
 
       return {
         type: "subagent-type",
@@ -606,7 +610,8 @@ export function SubagentToolCall({
   part: Parameters<typeof getToolName>[0];
 }) {
   const toolName = getToolName(part);
-  const isRunning = part.state === "input-streaming" || part.state === "input-available";
+  const isRunning =
+    part.state === "input-streaming" || part.state === "input-available";
   const hasError = part.state === "output-error";
 
   // Extract a summary based on common tool input patterns
@@ -657,7 +662,9 @@ export function ToolCall({
 }) {
   const running =
     part.state === "input-streaming" || part.state === "input-available";
-  const approval = (part as { approval?: { id?: string; approved?: boolean; reason?: string } }).approval;
+  const approval = (
+    part as { approval?: { id?: string; approved?: boolean; reason?: string } }
+  ).approval;
   // Check for denial both via state and via approval object (for intermediate states)
   const denied = part.state === "output-denied" || approval?.approved === false;
   const denialReason = denied ? approval?.reason : undefined;
@@ -665,7 +672,8 @@ export function ToolCall({
   const error = part.state === "output-error" ? part.errorText : undefined;
   const approvalId = approvalRequested ? approval?.id : undefined;
   // Only show interactive approval buttons for the first pending approval
-  const isActiveApproval = approvalId != null && approvalId === activeApprovalId;
+  const isActiveApproval =
+    approvalId != null && approvalId === activeApprovalId;
 
   switch (part.type) {
     case "tool-read": {
@@ -807,27 +815,37 @@ export function ToolCall({
     }
 
     case "tool-todo_write": {
-      const todos = part.input?.todos as Array<{ id: string; content: string; status: string }> | undefined;
+      const todos = part.input?.todos as
+        | Array<{ id: string; content: string; status: string }>
+        | undefined;
       const todoCount = todos?.length ?? 0;
-      const completedCount = todos?.filter(t => t.status === "completed").length ?? 0;
-      const inProgressCount = todos?.filter(t => t.status === "in_progress").length ?? 0;
-      
+      const completedCount =
+        todos?.filter((t) => t.status === "completed").length ?? 0;
+      const inProgressCount =
+        todos?.filter((t) => t.status === "in_progress").length ?? 0;
+
       const getTodoIcon = (status: string) => {
         switch (status) {
-          case "completed": return "☒";
-          case "in_progress": return "◎";
-          default: return "☐";
+          case "completed":
+            return "☒";
+          case "in_progress":
+            return "◎";
+          default:
+            return "☐";
         }
       };
-      
+
       const getTodoColor = (status: string) => {
         switch (status) {
-          case "completed": return "gray";
-          case "in_progress": return "yellow";
-          default: return "white";
+          case "completed":
+            return "gray";
+          case "in_progress":
+            return "yellow";
+          default:
+            return "white";
         }
       };
-      
+
       return (
         <Box flexDirection="column">
           <ToolLayout
@@ -863,12 +881,13 @@ export function ToolCall({
 
     case "tool-task": {
       const desc = part.input?.task ?? "Spawning subagent";
-      const subagentType = (part.input as { subagentType?: string })?.subagentType;
+      const subagentType = part.input?.subagentType;
       const taskApprovalRequested = part.state === "approval-requested";
       const taskApprovalId = taskApprovalRequested
         ? (part as { approval?: { id: string } }).approval?.id
         : undefined;
-      const isTaskActiveApproval = taskApprovalId != null && taskApprovalId === activeApprovalId;
+      const isTaskActiveApproval =
+        taskApprovalId != null && taskApprovalId === activeApprovalId;
       const taskDenied = part.state === "output-denied";
       const taskDenialReason = taskDenied
         ? (part as { approval?: { reason?: string } }).approval?.reason
@@ -883,7 +902,7 @@ export function ToolCall({
       // Get all parts in order, filter to text and tool parts
       const messageParts = message?.parts ?? [];
       const relevantParts = messageParts.filter(
-        (p) => isToolUIPart(p) || isTextUIPart(p)
+        (p) => isToolUIPart(p) || isTextUIPart(p),
       );
       const toolParts = messageParts.filter(isToolUIPart);
 
@@ -895,29 +914,43 @@ export function ToolCall({
       const isComplete = hasOutput && !isPreliminary;
       const isStreaming = hasOutput && isPreliminary;
 
-      const dotColor = taskDenied 
-        ? "red" 
-        : taskApprovalRequested 
+      const dotColor = taskDenied
+        ? "red"
+        : taskApprovalRequested
           ? "yellow"
-          : isStreaming 
-            ? "yellow" 
-            : isComplete 
-              ? "green" 
+          : isStreaming
+            ? "yellow"
+            : isComplete
+              ? "green"
               : "yellow";
-      
+
       // Format subagent type for display
-      const subagentLabel = subagentType === "explorer" 
-        ? "Explorer" 
-        : subagentType === "executor" 
-          ? "Executor" 
-          : "Task";
+      const subagentLabel =
+        subagentType === "explorer"
+          ? "Explorer"
+          : subagentType === "executor"
+            ? "Executor"
+            : "Task";
 
       return (
         <Box flexDirection="column" marginTop={1} marginBottom={1}>
           {/* Header */}
           <Box>
-            {running || isStreaming ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-            <Text bold color={taskDenied ? "red" : running || isStreaming || taskApprovalRequested ? "yellow" : "white"}>
+            {running || isStreaming ? (
+              <ToolSpinner />
+            ) : (
+              <Text color={dotColor}>● </Text>
+            )}
+            <Text
+              bold
+              color={
+                taskDenied
+                  ? "red"
+                  : running || isStreaming || taskApprovalRequested
+                    ? "yellow"
+                    : "white"
+              }
+            >
               {subagentLabel}
             </Text>
             <Text color="gray">(</Text>
@@ -929,7 +962,8 @@ export function ToolCall({
           {taskApprovalRequested && subagentType === "executor" && (
             <Box paddingLeft={2} marginTop={1}>
               <Text color="yellow">
-                This executor has full write access and can create, modify, and delete files.
+                This executor has full write access and can create, modify, and
+                delete files.
               </Text>
             </Box>
           )}
@@ -949,9 +983,7 @@ export function ToolCall({
             <Box flexDirection="column" paddingLeft={2} marginTop={1}>
               {hiddenCount > 0 && (
                 <Box marginBottom={1}>
-                  <Text color="gray">
-                    ... {hiddenCount} more above
-                  </Text>
+                  <Text color="gray">... {hiddenCount} more above</Text>
                 </Box>
               )}
               {visibleParts.map((p, i) => {
@@ -962,11 +994,14 @@ export function ToolCall({
                   // Show truncated text, dimmed
                   const text = p.text.trim();
                   if (!text) return null;
-                  const truncated = text.length > 80 ? text.slice(0, 80) + "..." : text;
+                  const truncated =
+                    text.length > 80 ? text.slice(0, 80) + "..." : text;
                   return (
                     <Box key={`text-${i}`} paddingLeft={1}>
                       <Text color="gray">│ </Text>
-                      <Text color="gray" dimColor>{truncated}</Text>
+                      <Text color="gray" dimColor>
+                        {truncated}
+                      </Text>
                     </Box>
                   );
                 }
@@ -979,7 +1014,9 @@ export function ToolCall({
           {isComplete && (
             <Box paddingLeft={2}>
               <Text color="gray">└ </Text>
-              <Text color="white">Complete ({toolParts.length} tool calls)</Text>
+              <Text color="white">
+                Complete ({toolParts.length} tool calls)
+              </Text>
             </Box>
           )}
 
