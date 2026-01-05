@@ -125,29 +125,39 @@ export function ApprovalPanel({
           {/* Option 1: Yes */}
           <Text>
             <Text color="yellow">{selected === 0 ? "› " : "  "}</Text>
-            <Text>1. Yes</Text>
+            <Text color={selected === 0 ? "yellow" : undefined}>1. Yes</Text>
           </Text>
 
           {/* Option 2: Yes, and don't ask again (only if rule can be inferred) */}
           {canSaveRule && (
             <Text>
               <Text color="yellow">{selected === 1 ? "› " : "  "}</Text>
-              <Text>2. Yes, and don't ask again for </Text>
-              <Text bold>{dontAskAgainPattern}</Text>
+              <Text color={selected === 1 ? "yellow" : undefined}>
+                2. Yes, and don't ask again for{" "}
+              </Text>
+              <Text color={selected === 1 ? "yellow" : undefined} bold>
+                {dontAskAgainPattern}
+              </Text>
             </Text>
           )}
 
           {/* Option 3 (or 2 if no rule): Inline text input */}
           <Box>
             <Text color="yellow">{selected === reasonOptionIndex ? "› " : "  "}</Text>
-            <Text>{canSaveRule ? "3" : "2"}. </Text>
+            <Text color={selected === reasonOptionIndex ? "yellow" : undefined}>
+              {canSaveRule ? "3" : "2"}.{" "}
+            </Text>
             {reason || selected === reasonOptionIndex ? (
               <>
-                <Text>{reason}</Text>
+                <Text color={selected === reasonOptionIndex ? "yellow" : undefined}>
+                  {reason}
+                </Text>
                 {selected === reasonOptionIndex && <Text color="gray">█</Text>}
               </>
             ) : (
-              <Text color="gray">Type here to tell Claude what to do differently</Text>
+              <Text color="gray">
+                Type here to tell Claude what to do differently
+              </Text>
             )}
           </Box>
         </Box>
