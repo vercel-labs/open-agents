@@ -35,12 +35,9 @@ export function getToolApprovalInfo(
   switch (part.type) {
     case "tool-bash": {
       const command = String(part.input?.command ?? "");
-      const description = (part.input as { description?: string } | undefined)
-        ?.description;
       return {
         toolType: "Bash command",
         toolCommand: command,
-        toolDescription: description,
         dontAskAgainPattern: `${getCommandPrefix(command)} commands`,
       };
     }
@@ -662,9 +659,7 @@ export function ToolCall({
 }) {
   const running =
     part.state === "input-streaming" || part.state === "input-available";
-  const approval = (
-    part as { approval?: { id?: string; approved?: boolean; reason?: string } }
-  ).approval;
+  const approval = part.approval;
   // Check for denial both via state and via approval object (for intermediate states)
   const denied = part.state === "output-denied" || approval?.approved === false;
   const denialReason = denied ? approval?.reason : undefined;
@@ -792,8 +787,10 @@ export function ToolCall({
       const command = String(part.input?.command ?? "");
       const exitCode =
         part.state === "output-available" ? part.output?.exitCode : undefined;
-      const stdout = part.state === "output-available" ? part.output?.stdout : undefined;
-      const stderr = part.state === "output-available" ? part.output?.stderr : undefined;
+      const stdout =
+        part.state === "output-available" ? part.output?.stdout : undefined;
+      const stderr =
+        part.state === "output-available" ? part.output?.stderr : undefined;
       const hasOutput = stdout || stderr;
       const isError = exitCode !== undefined && exitCode !== 0;
 
@@ -806,15 +803,41 @@ export function ToolCall({
       return (
         <Box flexDirection="column" marginTop={1} marginBottom={1}>
           <Box>
-            {running ? <ToolSpinner /> : <Text color={denied ? "red" : approvalRequested ? "yellow" : isError ? "red" : "green"}>● </Text>}
+            {running ? (
+              <ToolSpinner />
+            ) : (
+              <Text
+                color={
+                  denied
+                    ? "red"
+                    : approvalRequested
+                      ? "yellow"
+                      : isError
+                        ? "red"
+                        : "green"
+                }
+              >
+                ●{" "}
+              </Text>
+            )}
             <Text
               bold
-              color={denied ? "red" : running || approvalRequested ? "yellow" : "white"}
+              color={
+                denied
+                  ? "red"
+                  : running || approvalRequested
+                    ? "yellow"
+                    : "white"
+              }
             >
               Bash
             </Text>
             <Text color="gray">(</Text>
-            <Text color="cyan">{command.length > 60 ? command.slice(0, 60) + "…" : command || "..."}</Text>
+            <Text color="cyan">
+              {command.length > 60
+                ? command.slice(0, 60) + "…"
+                : command || "..."}
+            </Text>
             <Text color="gray">)</Text>
           </Box>
 
@@ -822,43 +845,53 @@ export function ToolCall({
           {approvalRequested && (
             <Box paddingLeft={2}>
               <Text color="gray">└ </Text>
-              <Text color="gray">{isActiveApproval ? "Running…" : "Waiting…"}</Text>
+              <Text color="gray">
+                {isActiveApproval ? "Running…" : "Waiting…"}
+              </Text>
             </Box>
           )}
 
           {/* Show output when completed */}
-          {part.state === "output-available" && !approvalRequested && !denied && (
-            <Box flexDirection="column" paddingLeft={2}>
-              {isError && (
-                <Box>
-                  <Text color="gray">└ </Text>
-                  <Text color="red">Error: Exit code {exitCode}</Text>
-                </Box>
-              )}
-              {hasOutput ? (
-                <Box flexDirection="column">
-                  {hasMoreLines && (
-                    <Box paddingLeft={isError ? 2 : 0}>
+          {part.state === "output-available" &&
+            !approvalRequested &&
+            !denied && (
+              <Box flexDirection="column" paddingLeft={2}>
+                {isError && (
+                  <Box>
+                    <Text color="gray">└ </Text>
+                    <Text color="red">Error: Exit code {exitCode}</Text>
+                  </Box>
+                )}
+                {hasOutput ? (
+                  <Box flexDirection="column">
+                    {hasMoreLines && (
+                      <Box paddingLeft={isError ? 2 : 0}>
+                        <Text color="gray">└ </Text>
+                        <Text color="gray">...</Text>
+                      </Box>
+                    )}
+                    {outputLines.map((line, i) => (
+                      <Box key={i} paddingLeft={isError ? 2 : 0}>
+                        {!hasMoreLines && !isError && i === 0 && (
+                          <Text color="gray">└ </Text>
+                        )}
+                        {(hasMoreLines || isError || i > 0) && <Text> </Text>}
+                        <Text color={isError ? "red" : "white"}>
+                          {line.slice(0, 100)}
+                        </Text>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  !isError && (
+                    <Box>
                       <Text color="gray">└ </Text>
-                      <Text color="gray">...</Text>
+                      <Text color="gray">(No content)</Text>
                     </Box>
-                  )}
-                  {outputLines.map((line, i) => (
-                    <Box key={i} paddingLeft={isError ? 2 : 0}>
-                      {!hasMoreLines && !isError && i === 0 && <Text color="gray">└ </Text>}
-                      {(hasMoreLines || isError || i > 0) && <Text>  </Text>}
-                      <Text color={isError ? "red" : "white"}>{line.slice(0, 100)}</Text>
-                    </Box>
-                  ))}
-                </Box>
-              ) : !isError && (
-                <Box>
-                  <Text color="gray">└ </Text>
-                  <Text color="gray">(No content)</Text>
-                </Box>
-              )}
-            </Box>
-          )}
+                  )
+                )}
+              </Box>
+            )}
 
           {denied && (
             <Box paddingLeft={2}>
@@ -949,14 +982,12 @@ export function ToolCall({
       const subagentType = part.input?.subagentType;
       const taskApprovalRequested = part.state === "approval-requested";
       const taskApprovalId = taskApprovalRequested
-        ? (part as { approval?: { id: string } }).approval?.id
+        ? part.approval?.id
         : undefined;
       const isTaskActiveApproval =
         taskApprovalId != null && taskApprovalId === activeApprovalId;
       const taskDenied = part.state === "output-denied";
-      const taskDenialReason = taskDenied
-        ? (part as { approval?: { reason?: string } }).approval?.reason
-        : undefined;
+      const taskDenialReason = taskDenied ? part.approval?.reason : undefined;
 
       // The output is a UIMessage with parts (text, tool-invocation, etc.)
       // Preliminary results have preliminary: true, final result has preliminary: false/undefined
