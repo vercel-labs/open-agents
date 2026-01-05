@@ -3,7 +3,8 @@ import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import { useChatContext } from "../chat-context.js";
-import type { TUIAgentUIToolPart } from "../types.js";
+import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
+import * as path from "path";
 
 export type ToolApprovalInfo = {
   toolType: string;
@@ -11,6 +12,16 @@ export type ToolApprovalInfo = {
   toolDescription?: string;
   dontAskAgainPattern?: string;
 };
+
+/**
+ * Extract command prefix for approval rules.
+ * Uses 3 tokens if second token is "run" (e.g., "bun run dev"), otherwise 2.
+ */
+function getCommandPrefix(command: string): string {
+  const tokens = command.trim().split(/\s+/);
+  const tokenCount = tokens[1] === "run" ? 3 : 2;
+  return tokens.slice(0, Math.min(tokenCount, tokens.length)).join(" ") || "this command";
+}
 
 export function getToolApprovalInfo(
   part: TUIAgentUIToolPart,
@@ -21,36 +32,47 @@ export function getToolApprovalInfo(
   switch (part.type) {
     case "tool-bash": {
       const command = String(part.input?.command ?? "");
-      // Description may be provided by Claude as additional context
       const description = (part.input as { description?: string } | undefined)
         ?.description;
-      // Extract first word of command for the pattern
-      const firstWord = command.split(" ")[0] ?? "this command";
       return {
         toolType: "Bash command",
         toolCommand: command,
         toolDescription: description,
-        dontAskAgainPattern: `${firstWord} commands in ${cwd}`,
+        dontAskAgainPattern: `${getCommandPrefix(command)} commands`,
       };
     }
 
     case "tool-write": {
       const filePath = String(part.input?.filePath ?? "");
+      // Get the directory glob pattern (matches inferApprovalRule)
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(cwd, filePath);
+      const relativePath = path.relative(cwd, absolutePath);
+      const dirPath = path.dirname(relativePath);
+      const glob = dirPath === "." ? "**" : `${dirPath}/**`;
       return {
         toolType: "Write file",
         toolCommand: filePath,
         toolDescription: "Create new file",
-        dontAskAgainPattern: `writes in ${cwd}`,
+        dontAskAgainPattern: `writes in ${glob}`,
       };
     }
 
     case "tool-edit": {
       const filePath = String(part.input?.filePath ?? "");
+      // Get the directory glob pattern (matches inferApprovalRule)
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(cwd, filePath);
+      const relativePath = path.relative(cwd, absolutePath);
+      const dirPath = path.dirname(relativePath);
+      const glob = dirPath === "." ? "**" : `${dirPath}/**`;
       return {
         toolType: "Edit file",
         toolCommand: filePath,
         toolDescription: "Modify existing file",
-        dontAskAgainPattern: `edits in ${cwd}`,
+        dontAskAgainPattern: `edits in ${glob}`,
       };
     }
 
@@ -82,6 +104,84 @@ export function getToolApprovalInfo(
         dontAskAgainPattern: `${toolName} operations`,
       };
     }
+  }
+}
+
+/**
+ * Infer an ApprovalRule from a tool part.
+ * Returns null if no suitable rule can be inferred.
+ */
+export function inferApprovalRule(
+  part: TUIAgentUIToolPart,
+  workingDirectory?: string,
+): ApprovalRule | null {
+  const cwd = workingDirectory ?? process.cwd();
+
+  switch (part.type) {
+    case "tool-bash": {
+      const command = String(part.input?.command ?? "").trim();
+      if (!command) return null;
+
+      return {
+        type: "command-prefix",
+        tool: "bash",
+        prefix: getCommandPrefix(command),
+      };
+    }
+
+    case "tool-write": {
+      const filePath = String(part.input?.filePath ?? "");
+      if (!filePath) return null;
+
+      // Extract directory glob pattern (e.g., "src/components/**")
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(cwd, filePath);
+      const relativePath = path.relative(cwd, absolutePath);
+      const dirPath = path.dirname(relativePath);
+
+      // Create a glob pattern for the directory
+      const glob = dirPath === "." ? "**" : `${dirPath}/**`;
+
+      return {
+        type: "path-glob",
+        tool: "write",
+        glob,
+      };
+    }
+
+    case "tool-edit": {
+      const filePath = String(part.input?.filePath ?? "");
+      if (!filePath) return null;
+
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(cwd, filePath);
+      const relativePath = path.relative(cwd, absolutePath);
+      const dirPath = path.dirname(relativePath);
+
+      const glob = dirPath === "." ? "**" : `${dirPath}/**`;
+
+      return {
+        type: "path-glob",
+        tool: "edit",
+        glob,
+      };
+    }
+
+    case "tool-task": {
+      const subagentType = (part.input as { subagentType?: string })?.subagentType;
+      if (!subagentType) return null;
+
+      return {
+        type: "subagent-type",
+        tool: "task",
+        subagentType,
+      };
+    }
+
+    default:
+      return null;
   }
 }
 
