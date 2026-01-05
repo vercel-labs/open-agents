@@ -2,7 +2,7 @@ import { tool, readUIMessageStream } from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "./subagents/explorer";
 import { executorSubagent } from "./subagents/executor";
-import { getSandbox } from "../../utils";
+import { getSandbox, sharedContext } from "../../utils";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -22,10 +22,42 @@ const taskInputSchema = z.object({
   ),
 });
 
+/**
+ * Check if a subagent type matches any approval rules.
+ */
+function subagentMatchesApprovalRule(subagentType: string): boolean {
+  for (const rule of sharedContext.approvalRules) {
+    if (rule.type === "subagent-type" && rule.tool === "task") {
+      if (rule.subagentType === subagentType) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export const taskTool = tool({
   // Executor subagent has full write access, so require approval
   // Explorer is read-only, so no approval needed
-  needsApproval: ({ subagentType }) => subagentType === "executor",
+  needsApproval: ({ subagentType }) => {
+    // Explorer never needs approval
+    if (subagentType !== "executor") {
+      return false;
+    }
+
+    // In background mode, auto-approve
+    if (sharedContext.mode === "background") {
+      return false;
+    }
+
+    // Check if a rule matches this subagent type
+    if (subagentMatchesApprovalRule(subagentType)) {
+      return false;
+    }
+
+    // Default: executor needs approval
+    return true;
+  },
   description: `Launch a specialized subagent to handle complex tasks autonomously.
 
 SUBAGENT TYPES:
