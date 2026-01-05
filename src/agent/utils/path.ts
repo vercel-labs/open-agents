@@ -86,16 +86,24 @@ export function pathMatchesGlob(
   }
 
   // Get the relative path from the base directory
-  const relativePath = path.relative(resolvedBase, resolvedPath);
+  // Normalize to POSIX separators for consistent matching
+  const relativePath = path.relative(resolvedBase, resolvedPath).replace(/\\/g, "/");
 
   // Convert glob pattern to regex
-  // Handle ** (match any directory depth), * (match any chars except /)
-  const globRegex = glob
-    .replace(/\*\*/g, "<<<GLOBSTAR>>>") // Temporary placeholder
-    .replace(/\*/g, "[^/]*") // * matches anything except /
-    .replace(/<<<GLOBSTAR>>>/g, ".*") // ** matches anything including /
-    .replace(/\//g, "\\/"); // Escape path separators
+  // First escape regex metacharacters (except * which we handle specially)
+  // Then handle ** (match any directory depth), * (match any chars except /)
+  try {
+    const globRegex = glob
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // Escape regex metacharacters
+      .replace(/\*\*/g, "<<<GLOBSTAR>>>") // Temporary placeholder
+      .replace(/\*/g, "[^/]*") // * matches anything except /
+      .replace(/<<<GLOBSTAR>>>/g, ".*") // ** matches anything including /
+      .replace(/\//g, "\\/"); // Escape path separators
 
-  const regex = new RegExp(`^${globRegex}`);
-  return regex.test(relativePath);
+    const regex = new RegExp(`^${globRegex}`);
+    return regex.test(relativePath);
+  } catch {
+    // If regex construction fails (malformed pattern), treat as no match
+    return false;
+  }
 }
