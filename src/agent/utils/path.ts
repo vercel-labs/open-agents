@@ -62,3 +62,40 @@ export function getMode(experimental_context: unknown): AgentMode {
 export function isBackgroundMode(experimental_context: unknown): boolean {
   return getMode(experimental_context) === "background";
 }
+
+/**
+ * Simple glob pattern matching for approval rules.
+ * Supports patterns like "src/**", "**\/*.ts", "src/components/**".
+ *
+ * @param filePath - The absolute file path to check
+ * @param glob - The glob pattern to match against
+ * @param baseDir - The base directory for relative glob patterns
+ * @returns true if the file path matches the glob pattern
+ */
+export function pathMatchesGlob(
+  filePath: string,
+  glob: string,
+  baseDir: string
+): boolean {
+  const resolvedPath = path.resolve(filePath);
+  const resolvedBase = path.resolve(baseDir);
+
+  // Ensure the path is within the base directory
+  if (!isPathWithinDirectory(resolvedPath, resolvedBase)) {
+    return false;
+  }
+
+  // Get the relative path from the base directory
+  const relativePath = path.relative(resolvedBase, resolvedPath);
+
+  // Convert glob pattern to regex
+  // Handle ** (match any directory depth), * (match any chars except /)
+  const globRegex = glob
+    .replace(/\*\*/g, "<<<GLOBSTAR>>>") // Temporary placeholder
+    .replace(/\*/g, "[^/]*") // * matches anything except /
+    .replace(/<<<GLOBSTAR>>>/g, ".*") // ** matches anything including /
+    .replace(/\//g, "\\/"); // Escape path separators
+
+  const regex = new RegExp(`^${globRegex}`);
+  return regex.test(relativePath);
+}
