@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
 import { useChatContext } from "../chat-context.js";
+import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
+import { inferApprovalRule } from "./tool-call.js";
 
 export type ApprovalPanelProps = {
   approvalId: string;
@@ -9,6 +11,7 @@ export type ApprovalPanelProps = {
   toolCommand: string;
   toolDescription?: string;
   dontAskAgainPattern?: string;
+  toolPart?: TUIAgentUIToolPart;
 };
 
 export function ApprovalPanel({
@@ -17,9 +20,16 @@ export function ApprovalPanel({
   toolCommand,
   toolDescription,
   dontAskAgainPattern,
+  toolPart,
 }: ApprovalPanelProps) {
-  const { chat } = useChatContext();
+  const { chat, state, addApprovalRule } = useChatContext();
   const { addToolApprovalResponse } = useChat({ chat });
+
+  // Infer the approval rule from the tool part
+  const inferredRule = useMemo((): ApprovalRule | null => {
+    if (!toolPart) return null;
+    return inferApprovalRule(toolPart, state.workingDirectory);
+  }, [toolPart, state.workingDirectory]);
   const [selected, setSelected] = useState(0);
   const [reason, setReason] = useState("");
 
@@ -69,7 +79,10 @@ export function ApprovalPanel({
         // Yes
         addToolApprovalResponse({ id: approvalId, approved: true });
       } else if (selected === 1) {
-        // Yes, and don't ask again (placeholder - behaves as Yes for now)
+        // Yes, and don't ask again - add the rule then approve
+        if (inferredRule) {
+          addApprovalRule(inferredRule);
+        }
         addToolApprovalResponse({ id: approvalId, approved: true });
       }
     }
