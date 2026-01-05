@@ -35,6 +35,21 @@ function cwdIsOutsideWorkingDirectory(cwd: string | undefined): boolean {
 }
 
 /**
+ * Check if a command matches any command-prefix approval rules.
+ */
+function commandMatchesApprovalRule(command: string): boolean {
+  const trimmedCommand = command.trim();
+  for (const rule of sharedContext.approvalRules) {
+    if (rule.type === "command-prefix" && rule.tool === "bash") {
+      if (trimmedCommand.startsWith(rule.prefix)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Create a combined approval function for bash operations.
  * Always requires approval if cwd is outside working directory,
  * then checks command safety and user-provided option.
@@ -55,6 +70,11 @@ function createBashApprovalFn(options?: ToolOptions): ApprovalFn {
 
     // Auto-approve all bash commands when autoApprove is "all"
     if (sharedContext.autoApprove === "all") {
+      return false;
+    }
+
+    // Check if command matches any saved approval rules
+    if (commandMatchesApprovalRule(args.command)) {
       return false;
     }
 
