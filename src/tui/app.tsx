@@ -1,10 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { Box, Text, useApp, useInput } from "ink";
-import {
-  isToolUIPart,
-  getToolName,
-  type FileUIPart,
-} from "ai";
+import { isToolUIPart, getToolName, type FileUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { renderMarkdown } from "./lib/markdown.js";
 import { useChatContext } from "./chat-context.js";
@@ -25,6 +21,7 @@ import type {
   TUIAgentUIMessage,
   TUIAgentUIToolPart,
 } from "./types.js";
+import type { TaskToolUIPart } from "../agent/tools/task-delegation/task.js";
 
 type AppProps = {
   options: TUIOptions;
@@ -60,7 +57,7 @@ const TextPart = memo(function TextPart({
       {isExpanded && timestamp && model && (
         <Box marginLeft={2} flexShrink={0}>
           <Text color="gray">
-            {formatTime(timestamp)}   {model}
+            {formatTime(timestamp)} {model}
           </Text>
         </Box>
       )}
@@ -104,7 +101,13 @@ function ToolPartWrapper({
   activeApprovalId: string | null;
   isExpanded: boolean;
 }) {
-  return <ToolCall part={part} activeApprovalId={activeApprovalId} isExpanded={isExpanded} />;
+  return (
+    <ToolCall
+      part={part}
+      activeApprovalId={activeApprovalId}
+      isExpanded={isExpanded}
+    />
+  );
 }
 
 type RenderPartOptions = {
@@ -146,7 +149,12 @@ function renderPart(
 
   if (isToolUIPart(part)) {
     return (
-      <ToolPartWrapper key={key} part={part} activeApprovalId={activeApprovalId} isExpanded={isExpanded} />
+      <ToolPartWrapper
+        key={key}
+        part={part}
+        activeApprovalId={activeApprovalId}
+        isExpanded={isExpanded}
+      />
     );
   }
 
@@ -187,7 +195,7 @@ const UserMessage = memo(function UserMessage({
     .join("");
 
   const imageCount = message.parts.filter(
-    (p) => p.type === "file" && (p as FileUIPart).mediaType?.startsWith("image/")
+    (p) => p.type === "file" && p.mediaType?.startsWith("image/"),
   ).length;
 
   return (
@@ -198,7 +206,9 @@ const UserMessage = memo(function UserMessage({
             &gt;{" "}
           </Text>
           <Text color="blue">
-            {imageCount === 1 ? "[1 image attached]" : `[${imageCount} images attached]`}
+            {imageCount === 1
+              ? "[1 image attached]"
+              : `[${imageCount} images attached]`}
           </Text>
         </Box>
       )}
@@ -219,7 +229,7 @@ const UserMessage = memo(function UserMessage({
 // Group consecutive task parts together while preserving order
 type RenderGroup =
   | { type: "part"; part: TUIAgentUIMessagePart; index: number }
-  | { type: "task-group"; tasks: TUIAgentUIToolPart[]; startIndex: number };
+  | { type: "task-group"; tasks: TaskToolUIPart[]; startIndex: number };
 
 const AssistantMessage = memo(function AssistantMessage({
   message,
@@ -260,20 +270,19 @@ const AssistantMessage = memo(function AssistantMessage({
 
     return {
       hasReasoning: foundReasoning,
-      isReasoningComplete: foundReasoning && (hasContentAfterReasoning || !isStreaming),
+      isReasoningComplete:
+        foundReasoning && (hasContentAfterReasoning || !isStreaming),
     };
   }, [message.parts, isStreaming]);
 
   // Group consecutive task parts together, keeping them in linear order
   const renderGroups = useMemo(() => {
     const groups: RenderGroup[] = [];
-    let currentTaskGroup: TUIAgentUIToolPart[] = [];
+    let currentTaskGroup: TaskToolUIPart[] = [];
     let taskGroupStartIndex = 0;
 
     message.parts.forEach((part, index) => {
-      const isTask = isToolUIPart(part) && part.type === "tool-task";
-
-      if (isTask) {
+      if (isToolUIPart(part) && part.type === "tool-task") {
         if (currentTaskGroup.length === 0) {
           taskGroupStartIndex = index;
         }
@@ -440,7 +449,7 @@ const StreamingStatusBar = memo(function StreamingStatusBar({
   // Extract todos from the most recent assistant message in the current exchange
   const todos = useMemo(
     () => extractTodosFromLastAssistantMessage(messages),
-    [messages]
+    [messages],
   );
 
   // Force re-render periodically to update thinking duration while thinking
@@ -478,7 +487,15 @@ const InterruptedIndicator = memo(function InterruptedIndicator() {
 
 const ExpandedViewIndicator = memo(function ExpandedViewIndicator() {
   return (
-    <Box marginTop={1} borderStyle="single" borderColor="gray" borderTop borderBottom={false} borderLeft={false} borderRight={false}>
+    <Box
+      marginTop={1}
+      borderStyle="single"
+      borderColor="gray"
+      borderTop
+      borderBottom={false}
+      borderLeft={false}
+      borderRight={false}
+    >
       <Text color="gray">Showing detailed transcript · ctrl+o to toggle</Text>
     </Box>
   );
@@ -504,27 +521,32 @@ function AppContent({ options }: AppProps) {
     }
   }, [isStreaming]);
 
-  const { hasPendingApproval, activeApprovalId, pendingToolPart } = useMemo(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === "assistant") {
-      for (const p of lastMessage.parts) {
-        if (isToolUIPart(p) && p.state === "approval-requested") {
-          const approval = (p as { approval?: { id: string } }).approval;
-          return {
-            hasPendingApproval: true,
-            activeApprovalId: approval?.id ?? null,
-            pendingToolPart: p,
-          };
+  const { hasPendingApproval, activeApprovalId, pendingToolPart } =
+    useMemo(() => {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        for (const p of lastMessage.parts) {
+          if (isToolUIPart(p) && p.state === "approval-requested") {
+            const approval = (p as { approval?: { id: string } }).approval;
+            return {
+              hasPendingApproval: true,
+              activeApprovalId: approval?.id ?? null,
+              pendingToolPart: p,
+            };
+          }
         }
       }
-    }
-    return { hasPendingApproval: false, activeApprovalId: null, pendingToolPart: null };
-  }, [messages]);
+      return {
+        hasPendingApproval: false,
+        activeApprovalId: null,
+        pendingToolPart: null,
+      };
+    }, [messages]);
 
   // Extract todos for standalone display when not streaming
   const todos = useMemo(
     () => extractTodosFromLastAssistantMessage(messages),
-    [messages]
+    [messages],
   );
 
   // Get approval info for the pending tool
@@ -587,7 +609,10 @@ function AppContent({ options }: AppProps) {
       <ErrorDisplay error={error} />
 
       {/* Show approval panel when there's a pending approval (replaces status bar and input) */}
-      {hasPendingApproval && activeApprovalId && approvalInfo && pendingToolPart ? (
+      {hasPendingApproval &&
+      activeApprovalId &&
+      approvalInfo &&
+      pendingToolPart ? (
         <ApprovalPanel
           approvalId={activeApprovalId}
           toolType={approvalInfo.toolType}
@@ -599,9 +624,7 @@ function AppContent({ options }: AppProps) {
       ) : (
         <>
           {/* Show streaming status bar when streaming */}
-          {isStreaming && (
-            <StreamingStatusBar messages={messages} />
-          )}
+          {isStreaming && <StreamingStatusBar messages={messages} />}
 
           {/* Show standalone todo list when not streaming and has todos */}
           {!isStreaming && todos && todos.length > 0 && (

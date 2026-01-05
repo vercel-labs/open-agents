@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Box, Text } from "ink";
-import { getToolName, isToolUIPart, isTextUIPart } from "ai";
-import type { TUIAgentUIToolPart } from "../types.js";
+import { getToolName, isToolUIPart } from "ai";
+import type { TaskToolUIPart } from "../../agent/tools/task-delegation/task.js";
 import { ApprovalButtons } from "./tool-call.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -57,7 +57,7 @@ function useTaskTiming(isRunning: boolean) {
     const interval = setInterval(() => {
       if (startTimeRef.current) {
         setElapsedSeconds(
-          Math.floor((Date.now() - startTimeRef.current) / 1000)
+          Math.floor((Date.now() - startTimeRef.current) / 1000),
         );
       }
     }, 1000);
@@ -76,7 +76,7 @@ type TaskStatus =
   | "approval-requested"
   | "denied";
 
-function getTaskStatus(part: TUIAgentUIToolPart): TaskStatus {
+function getTaskStatus(part: TaskToolUIPart): TaskStatus {
   if (part.state === "approval-requested") return "approval-requested";
   if (part.state === "output-denied") return "denied";
   if (part.state === "output-error") return "error";
@@ -91,22 +91,18 @@ function getTaskStatus(part: TUIAgentUIToolPart): TaskStatus {
   return "pending";
 }
 
-// Type for task output which contains parts from sub-agent
-type TaskOutputPart = Parameters<typeof isToolUIPart>[0];
-type TaskOutput = { parts?: TaskOutputPart[] };
-
-function countTaskTools(part: TUIAgentUIToolPart): number {
-  const message = part.output as TaskOutput | undefined;
-  if (!message?.parts) {
-    return 0;
-  }
+function countTaskTools(part: TaskToolUIPart): number {
+  if (part.state !== "output-available") return 0;
+  const message = part.output;
+  if (!message?.parts) return 0;
   return message.parts.filter(isToolUIPart).length;
 }
 
 function getLastToolInfo(
-  part: TUIAgentUIToolPart
+  part: TaskToolUIPart,
 ): { name: string; summary: string } | null {
-  const message = part.output as TaskOutput | undefined;
+  if (part.state !== "output-available") return null;
+  const message = part.output;
   if (!message?.parts) return null;
 
   const toolParts = message.parts.filter(isToolUIPart);
@@ -156,7 +152,7 @@ function TaskItem({
   isLast,
   activeApprovalId,
 }: {
-  part: TUIAgentUIToolPart;
+  part: TaskToolUIPart;
   isLast: boolean;
   activeApprovalId: string | null;
 }) {
@@ -166,25 +162,19 @@ function TaskItem({
   const toolCount = countTaskTools(part);
   const lastTool = getLastToolInfo(part);
 
-  const desc =
-    (part.input as { description?: string })?.description ??
-    (part.input as { task?: string })?.task ??
-    "Task";
+  const desc = part.input?.task ?? "Task";
 
-  const subagentType = (part.input as { subagentType?: string })?.subagentType;
+  const subagentType = part.input?.subagentType;
 
   // Handle approval state
   const approvalRequested = part.state === "approval-requested";
-  const approvalId = approvalRequested
-    ? (part as { approval?: { id: string } }).approval?.id
-    : undefined;
-  const isActiveApproval = approvalId != null && approvalId === activeApprovalId;
+  const approvalId = approvalRequested ? part.approval?.id : undefined;
+  const isActiveApproval =
+    approvalId != null && approvalId === activeApprovalId;
 
   // Handle denial
   const denied = part.state === "output-denied";
-  const denialReason = denied
-    ? (part as { approval?: { reason?: string } }).approval?.reason
-    : undefined;
+  const denialReason = denied ? part.approval?.reason : undefined;
 
   const treeChar = isLast ? "└─" : "├─";
   const continueChar = isLast ? "   " : "│  ";
@@ -197,7 +187,10 @@ function TaskItem({
     nestedStatus = denialReason ? `Denied: ${denialReason}` : "Denied";
   } else if (approvalRequested) {
     nestedStatus = "Awaiting approval...";
-  } else if (status === "pending" || (status === "running" && toolCount === 0)) {
+  } else if (
+    status === "pending" ||
+    (status === "running" && toolCount === 0)
+  ) {
     nestedStatus = "Initializing...";
   } else if (lastTool) {
     nestedStatus = lastTool.summary
@@ -213,11 +206,7 @@ function TaskItem({
         <TaskStatusIndicator status={status} />
         <Text> </Text>
         <Text
-          color={
-            status === "error" || status === "denied"
-              ? "red"
-              : "white"
-          }
+          color={status === "error" || status === "denied" ? "red" : "white"}
         >
           {desc}
         </Text>
@@ -225,9 +214,7 @@ function TaskItem({
           {" "}
           - {toolCount} tool{toolCount !== 1 ? "s" : ""}
         </Text>
-        {approvalRequested && (
-          <Text color="yellow"> [NEEDS APPROVAL]</Text>
-        )}
+        {approvalRequested && <Text color="yellow"> [NEEDS APPROVAL]</Text>}
         {isRunning && elapsedSeconds > 0 && (
           <Text color="gray"> - {formatTime(elapsedSeconds)}</Text>
         )}
@@ -237,7 +224,8 @@ function TaskItem({
       {approvalRequested && subagentType === "executor" && (
         <Box paddingLeft={4}>
           <Text color="yellow">
-            This executor has full write access and can create, modify, and delete files.
+            This executor has full write access and can create, modify, and
+            delete files.
           </Text>
         </Box>
       )}
@@ -259,23 +247,25 @@ function TaskItem({
 }
 
 type TaskGroupViewProps = {
-  taskParts: TUIAgentUIToolPart[];
+  taskParts: TaskToolUIPart[];
   activeApprovalId: string | null;
 };
 
-export function TaskGroupView({ taskParts, activeApprovalId }: TaskGroupViewProps) {
+export function TaskGroupView({
+  taskParts,
+  activeApprovalId,
+}: TaskGroupViewProps) {
   if (taskParts.length === 0) return null;
 
   // Count different states
   const hasApprovalPending = taskParts.some(
-    (p) => getTaskStatus(p) === "approval-requested"
+    (p) => getTaskStatus(p) === "approval-requested",
   );
   const runningCount = taskParts.filter((p) => {
     const status = getTaskStatus(p);
     return status === "running" || status === "pending";
   }).length;
-  const allComplete =
-    runningCount === 0 && !hasApprovalPending;
+  const allComplete = runningCount === 0 && !hasApprovalPending;
 
   // Determine header text
   let headerText: string;
