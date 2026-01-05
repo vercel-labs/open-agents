@@ -28,6 +28,9 @@ export type TUIAgentUIToolPart =
 /* --- */
 export type AutoAcceptMode = "off" | "edits" | "all";
 
+// Re-export ApprovalRule for client-side use
+export type { ApprovalRule } from "../agent/types";
+
 export type TUIOptions = {
   /** Initial prompt to run (for one-shot mode) */
   initialPrompt?: string;
