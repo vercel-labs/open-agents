@@ -24,6 +24,7 @@
 - [x] when going through suggestions, you should be able to use ctrl+n to go through to hidden files
 - [ ] command+enter should only delete until the end of the line
 - [x] sandbox adapter (sandbox.readFile) -> could be mapped to native fs or sandbox command (can live on the experimental_context too)
+- [ ] create action bullet has no space... 
 
 ---
 
