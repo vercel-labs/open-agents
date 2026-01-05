@@ -105,27 +105,35 @@ export function ApprovalPanel({
           {/* Option 1: Yes */}
           <Text>
             <Text color="yellow">{selected === 0 ? "› " : "  "}</Text>
-            <Text>1. Yes</Text>
+            <Text color={selected === 0 ? "yellow" : undefined}>1. Yes</Text>
           </Text>
 
           {/* Option 2: Yes, and don't ask again */}
           <Text>
             <Text color="yellow">{selected === 1 ? "› " : "  "}</Text>
-            <Text>2. Yes, and don't ask again for </Text>
-            <Text bold>{dontAskAgainPattern}</Text>
+            <Text color={selected === 1 ? "yellow" : undefined}>
+              2. Yes, and don't ask again for{" "}
+            </Text>
+            <Text color={selected === 1 ? "yellow" : undefined} bold>
+              {dontAskAgainPattern}
+            </Text>
           </Text>
 
           {/* Option 3: Inline text input */}
           <Box>
             <Text color="yellow">{selected === 2 ? "› " : "  "}</Text>
-            <Text>3. </Text>
+            <Text color={selected === 2 ? "yellow" : undefined}>3. </Text>
             {reason || selected === 2 ? (
               <>
-                <Text>{reason}</Text>
+                <Text color={selected === 2 ? "yellow" : undefined}>
+                  {reason}
+                </Text>
                 {selected === 2 && <Text color="gray">█</Text>}
               </>
             ) : (
-              <Text color="gray">Type here to tell Claude what to do differently</Text>
+              <Text color="gray">
+                Type here to tell Claude what to do differently
+              </Text>
             )}
           </Box>
         </Box>
