@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import { isPathWithinDirectory, getSandbox, sharedContext } from "../../utils";
+import { isPathWithinDirectory, getSandbox, sharedContext, pathMatchesGlob } from "../../utils";
 
 const writeInputSchema = z.object({
   filePath: z.string().describe("Absolute path to the file to write"),
@@ -45,6 +45,24 @@ function isOutsideWorkingDirectory(filePath: string): boolean {
 }
 
 /**
+ * Check if a file path matches any path-glob approval rules for a specific tool.
+ */
+function pathMatchesApprovalRule(filePath: string, toolName: "write" | "edit"): boolean {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(sharedContext.workingDirectory, filePath);
+
+  for (const rule of sharedContext.approvalRules) {
+    if (rule.type === "path-glob" && rule.tool === toolName) {
+      if (pathMatchesGlob(absolutePath, rule.glob, sharedContext.workingDirectory)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Create a combined approval function for write operations.
  * Always requires approval if path is outside CWD, otherwise uses the provided option.
  * In background mode, auto-approve all operations (except outside working directory).
@@ -62,6 +80,10 @@ function createWriteApprovalFn(options?: WriteToolOptions): WriteApprovalFn {
     }
     // Auto-approve edits when autoApprove is "edits" or "all"
     if (sharedContext.autoApprove === "edits" || sharedContext.autoApprove === "all") {
+      return false;
+    }
+    // Check if path matches any saved approval rules
+    if (pathMatchesApprovalRule(args.filePath, "write")) {
       return false;
     }
     // Otherwise use the configured approval setting
@@ -90,6 +112,10 @@ function createEditApprovalFn(options?: EditToolOptions): EditApprovalFn {
     }
     // Auto-approve edits when autoApprove is "edits" or "all"
     if (sharedContext.autoApprove === "edits" || sharedContext.autoApprove === "all") {
+      return false;
+    }
+    // Check if path matches any saved approval rules
+    if (pathMatchesApprovalRule(args.filePath, "edit")) {
       return false;
     }
     // Otherwise use the configured approval setting
