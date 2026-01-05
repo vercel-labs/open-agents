@@ -587,13 +587,14 @@ function AppContent({ options }: AppProps) {
       <ErrorDisplay error={error} />
 
       {/* Show approval panel when there's a pending approval (replaces status bar and input) */}
-      {hasPendingApproval && activeApprovalId && approvalInfo ? (
+      {hasPendingApproval && activeApprovalId && approvalInfo && pendingToolPart ? (
         <ApprovalPanel
           approvalId={activeApprovalId}
           toolType={approvalInfo.toolType}
           toolCommand={approvalInfo.toolCommand}
           toolDescription={approvalInfo.toolDescription}
           dontAskAgainPattern={approvalInfo.dontAskAgainPattern}
+          toolPart={pendingToolPart}
         />
       ) : (
         <>
