@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import { isPathWithinDirectory, getSandbox, sharedContext } from "../../utils";
+import { isPathWithinDirectory, getSandbox, sharedContext, pathMatchesGlob } from "../../utils";
 
 const readInputSchema = z.object({
   filePath: z
@@ -22,14 +22,45 @@ const readInputSchema = z.object({
 type ReadInput = z.infer<typeof readInputSchema>;
 
 /**
+ * Check if a file path matches any path-glob approval rules for read operations.
+ */
+function pathMatchesApprovalRule(filePath: string): boolean {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(sharedContext.workingDirectory, filePath);
+
+  for (const rule of sharedContext.approvalRules) {
+    if (rule.type === "path-glob" && rule.tool === "read") {
+      if (pathMatchesGlob(absolutePath, rule.glob, sharedContext.workingDirectory)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Check if a read operation needs approval based on the file path.
- * Returns true if the path is outside the working directory.
+ * Returns true if the path is outside the working directory and no approval rule matches.
  */
 function pathNeedsApproval(args: ReadInput): boolean {
   const absolutePath = path.isAbsolute(args.filePath)
     ? args.filePath
     : path.resolve(sharedContext.workingDirectory, args.filePath);
-  return !isPathWithinDirectory(absolutePath, sharedContext.workingDirectory);
+
+  // Check if within working directory - no approval needed
+  if (isPathWithinDirectory(absolutePath, sharedContext.workingDirectory)) {
+    return false;
+  }
+
+  // Outside working directory - check if a rule matches
+  // Note: Rules only apply within working directory per security considerations,
+  // so this will always return true for outside-cwd paths
+  if (pathMatchesApprovalRule(args.filePath)) {
+    return false;
+  }
+
+  return true;
 }
 
 export const readFileTool = () => tool({
