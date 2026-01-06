@@ -138,7 +138,6 @@ export function ApprovalPanel({
   }, [toolPart, state.workingDirectory]);
   // Determine available options based on whether a rule can be inferred
   const canSaveRule = inferredRule !== null;
-  const maxOption = canSaveRule ? 2 : 1; // 0=Yes, 1=Don't ask again (if available), last=reason
 
   const [selected, setSelected] = useState(0);
   const [reason, setReason] = useState("");

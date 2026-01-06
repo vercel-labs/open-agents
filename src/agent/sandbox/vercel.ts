@@ -185,7 +185,7 @@ export class VercelSandbox implements Sandbox {
     );
   }
 
-  async readFile(path: string, encoding: "utf-8"): Promise<string> {
+  async readFile(path: string, _encoding: "utf-8"): Promise<string> {
     const result = await this.sdk.runCommand({
       cmd: "cat",
       args: [path],
@@ -202,7 +202,7 @@ export class VercelSandbox implements Sandbox {
   async writeFile(
     path: string,
     content: string,
-    encoding: "utf-8",
+    _encoding: "utf-8",
   ): Promise<void> {
     // Ensure parent directory exists
     const parentDir = path.substring(0, path.lastIndexOf("/"));
@@ -280,7 +280,7 @@ export class VercelSandbox implements Sandbox {
 
   async readdir(
     path: string,
-    options: { withFileTypes: true },
+    _options: { withFileTypes: true },
   ): Promise<Dirent[]> {
     // List files with type info using find
     const result = await this.sdk.runCommand({
@@ -333,6 +333,7 @@ export class VercelSandbox implements Sandbox {
         cmd: "bash",
         args: ["-c", `cd "${cwd}" && ${command}`],
         env: this.env,
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       let stdout = await result.stdout();
@@ -351,6 +352,16 @@ export class VercelSandbox implements Sandbox {
         truncated,
       };
     } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        return {
+          success: false,
+          exitCode: null,
+          stdout: "",
+          stderr: `Command timed out after ${timeoutMs}ms`,
+          truncated: false,
+        };
+      }
+
       return {
         success: false,
         exitCode: null,

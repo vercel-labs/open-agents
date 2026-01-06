@@ -24,8 +24,6 @@ const readInputSchema = z.object({
     .describe("Maximum number of lines to read. Default: 2000"),
 });
 
-type ReadInput = z.infer<typeof readInputSchema>;
-
 /**
  * Resolve file path with fallback for root-like paths.
  * If a path like "/README.md" doesn't exist, try resolving it relative to workingDirectory.

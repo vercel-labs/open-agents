@@ -299,7 +299,7 @@ function ToolLayout({
   denied,
   denialReason,
   approvalRequested,
-  approvalId,
+  approvalId: _approvalId,
   isActiveApproval,
 }: {
   name: string;
@@ -380,7 +380,7 @@ function FileChangeLayout({
   denied,
   denialReason,
   approvalRequested,
-  approvalId,
+  approvalId: _approvalId,
   isActiveApproval,
 }: {
   action: "Create" | "Update";
@@ -984,11 +984,6 @@ export function ToolCall({
       const desc = part.input?.task ?? "Spawning subagent";
       const subagentType = part.input?.subagentType;
       const taskApprovalRequested = part.state === "approval-requested";
-      const taskApprovalId = taskApprovalRequested
-        ? part.approval?.id
-        : undefined;
-      const isTaskActiveApproval =
-        taskApprovalId != null && taskApprovalId === activeApprovalId;
       const taskDenied = part.state === "output-denied";
       const taskDenialReason = taskDenied ? part.approval?.reason : undefined;
 

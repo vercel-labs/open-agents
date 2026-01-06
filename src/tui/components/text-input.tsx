@@ -165,6 +165,7 @@ export function TextInput({
 
     // Strip bracketed paste escape sequences (used by Ghostty, iTerm2, etc.)
     // Start: \x1b[200~ End: \x1b[201~
+    // oxlint-disable-next-line no-control-regex
     buffered = buffered.replace(/\x1b\[200~/g, "").replace(/\x1b\[201~/g, "");
 
     if (!buffered) return;

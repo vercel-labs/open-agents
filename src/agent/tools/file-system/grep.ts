@@ -104,8 +104,6 @@ const grepInputSchema = z.object({
     .describe("Case-sensitive search. Default: true"),
 });
 
-type GrepInput = z.infer<typeof grepInputSchema>;
-
 /**
  * Check if a path matches any path-glob approval rules for grep operations.
  */

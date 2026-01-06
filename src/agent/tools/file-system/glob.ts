@@ -113,8 +113,6 @@ const globInputSchema = z.object({
     .describe("Maximum number of results. Default: 100"),
 });
 
-type GlobInput = z.infer<typeof globInputSchema>;
-
 /**
  * Check if a path matches any path-glob approval rules for glob operations.
  */
