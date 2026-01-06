@@ -3,8 +3,18 @@
 ## Commands
 - `bun run dev` - Run CLI agent
 - `bun run typecheck` - Type check
+- `bun run lint` - Lint with oxlint
+- `bun run lint:fix` - Lint and auto-fix issues
+- `bun run format` - Format with Biome
+- `bun run format:check` - Check formatting
 - `bun test` - Run all tests
 - `bun test path/to/file.test.ts` - Run single test
+
+## After Making Changes
+Always run these commands after modifying code:
+1. `bun run format` - Format code
+2. `bun run lint:fix` - Fix linting issues
+3. `bun run typecheck` - Verify types
 
 ## Architecture
 - `src/agent/` - Core agent: deep-agent.ts (main), system-prompt.ts, types.ts
