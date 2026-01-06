@@ -43,17 +43,17 @@ export const Suggestions = memo(function Suggestions({
   selectedIndex,
   visible,
 }: SuggestionsProps) {
-  if (!visible || suggestions.length === 0) {
-    return null;
-  }
-
   const maxDisplay = 10;
 
-  // Calculate window based on selected index
+  // Calculate window based on selected index (must be called before early return)
   const { windowStart, windowEnd } = useMemo(
     () => calculateWindow(selectedIndex, suggestions.length, maxDisplay),
     [selectedIndex, suggestions.length],
   );
+
+  if (!visible || suggestions.length === 0) {
+    return null;
+  }
 
   const displayedSuggestions = suggestions.slice(windowStart, windowEnd);
   const hasItemsAbove = windowStart > 0;
