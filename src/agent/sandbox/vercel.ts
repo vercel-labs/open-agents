@@ -54,6 +54,11 @@ export interface VercelSandboxConfig {
  * Runs code in isolated Firecracker MicroVMs.
  */
 export class VercelSandbox implements Sandbox {
+  /**
+   * Unique identifier for this sandbox.
+   * Use this to reconnect to an existing sandbox via `connectVercelSandbox({ sandboxId })`.
+   */
+  readonly id: string;
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
   /**
@@ -65,11 +70,13 @@ export class VercelSandbox implements Sandbox {
 
   private constructor(
     sdk: VercelSandboxSDK,
+    id: string,
     workingDirectory: string,
     env?: Record<string, string>,
     currentBranch?: string
   ) {
     this.sdk = sdk;
+    this.id = id;
     this.workingDirectory = workingDirectory;
     this.env = env;
     this.currentBranch = currentBranch;
@@ -151,7 +158,29 @@ export class VercelSandbox implements Sandbox {
       currentBranch = source.branch;
     }
 
-    return new VercelSandbox(sdk, workingDirectory, env, currentBranch);
+    return new VercelSandbox(
+      sdk,
+      sdk.sandboxId,
+      workingDirectory,
+      env,
+      currentBranch
+    );
+  }
+
+  /**
+   * Connect to an existing Vercel Sandbox by ID.
+   */
+  static async connect(
+    sandboxId: string,
+    options: { env?: Record<string, string> } = {}
+  ): Promise<VercelSandbox> {
+    const sdk = await VercelSandboxSDK.get({ sandboxId });
+    return new VercelSandbox(
+      sdk,
+      sandboxId,
+      DEFAULT_WORKING_DIRECTORY,
+      options.env
+    );
   }
 
   async readFile(path: string, encoding: "utf-8"): Promise<string> {
@@ -349,17 +378,32 @@ export class VercelSandbox implements Sandbox {
 }
 
 /**
- * Create a new Vercel Sandbox instance.
+ * Configuration for reconnecting to an existing sandbox.
+ */
+export interface VercelSandboxConnectConfig {
+  /** The sandbox ID to reconnect to */
+  sandboxId: string;
+  /** Environment variables to make available to commands */
+  env?: Record<string, string>;
+}
+
+/**
+ * Connect to a Vercel Sandbox - either create a new one or reconnect to an existing one.
  *
- * @param config - Configuration options including optional GitHub source
+ * @param config - Configuration options. Pass `sandboxId` to reconnect, or other options to create new.
  *
  * @example
  * // Start empty sandbox
- * const sandbox = await createVercelSandbox();
+ * const sandbox = await connectVercelSandbox();
+ * console.log(sandbox.id); // Save this ID for reconnection
  *
  * @example
- * // Clone a repo into the sandbox
- * const sandbox = await createVercelSandbox({
+ * // Reconnect to an existing sandbox
+ * const sandbox = await connectVercelSandbox({ sandboxId: "saved-sandbox-id" });
+ *
+ * @example
+ * // Clone a repo into a new sandbox
+ * const sandbox = await connectVercelSandbox({
  *   source: {
  *     url: "https://github.com/owner/repo",
  *     branch: "develop",
@@ -368,7 +412,7 @@ export class VercelSandbox implements Sandbox {
  *
  * @example
  * // Clone with authentication and create a new branch for agent work
- * const sandbox = await createVercelSandbox({
+ * const sandbox = await connectVercelSandbox({
  *   source: {
  *     url: "https://github.com/owner/repo",
  *     branch: "main",
@@ -380,14 +424,15 @@ export class VercelSandbox implements Sandbox {
  *   },
  * });
  *
- * // The sandbox exposes the current branch for the agent to use
+ * // The sandbox exposes the ID and current branch
+ * console.log(sandbox.id); // "sandbox-abc123"
  * console.log(sandbox.currentBranch); // "agent/feature-123"
- *
- * // Agent can push to this branch:
- * // git add . && git commit -m "changes" && git push -u origin agent/feature-123
  */
-export async function createVercelSandbox(
-  config: VercelSandboxConfig = {}
+export async function connectVercelSandbox(
+  config: VercelSandboxConfig | VercelSandboxConnectConfig = {}
 ): Promise<VercelSandbox> {
+  if ("sandboxId" in config) {
+    return VercelSandbox.connect(config.sandboxId, { env: config.env });
+  }
   return VercelSandbox.create(config);
 }
