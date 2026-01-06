@@ -67,32 +67,41 @@ const DEFAULT_USAGE: LanguageModelUsage = {
   },
 };
 
+function addTokens(a?: number, b?: number) {
+  if (a === undefined && b === undefined) return undefined;
+  return (a ?? 0) + (b ?? 0);
+}
+
 function accumulateUsage(
   prev: LanguageModelUsage,
   next: LanguageModelUsage,
 ): LanguageModelUsage {
-  const add = (a?: number, b?: number) => {
-    if (a === undefined && b === undefined) return undefined;
-    return (a ?? 0) + (b ?? 0);
-  };
-
   const prevIn = prev.inputTokenDetails ?? {};
   const nextIn = next.inputTokenDetails ?? {};
   const prevOut = prev.outputTokenDetails ?? {};
   const nextOut = next.outputTokenDetails ?? {};
 
   return {
-    inputTokens: add(prev.inputTokens, next.inputTokens),
-    outputTokens: add(prev.outputTokens, next.outputTokens),
-    totalTokens: add(prev.totalTokens, next.totalTokens),
+    inputTokens: addTokens(prev.inputTokens, next.inputTokens),
+    outputTokens: addTokens(prev.outputTokens, next.outputTokens),
+    totalTokens: addTokens(prev.totalTokens, next.totalTokens),
     inputTokenDetails: {
-      noCacheTokens: add(prevIn.noCacheTokens, nextIn.noCacheTokens),
-      cacheReadTokens: add(prevIn.cacheReadTokens, nextIn.cacheReadTokens),
-      cacheWriteTokens: add(prevIn.cacheWriteTokens, nextIn.cacheWriteTokens),
+      noCacheTokens: addTokens(prevIn.noCacheTokens, nextIn.noCacheTokens),
+      cacheReadTokens: addTokens(
+        prevIn.cacheReadTokens,
+        nextIn.cacheReadTokens,
+      ),
+      cacheWriteTokens: addTokens(
+        prevIn.cacheWriteTokens,
+        nextIn.cacheWriteTokens,
+      ),
     },
     outputTokenDetails: {
-      textTokens: add(prevOut.textTokens, nextOut.textTokens),
-      reasoningTokens: add(prevOut.reasoningTokens, nextOut.reasoningTokens),
+      textTokens: addTokens(prevOut.textTokens, nextOut.textTokens),
+      reasoningTokens: addTokens(
+        prevOut.reasoningTokens,
+        nextOut.reasoningTokens,
+      ),
     },
   };
 }
