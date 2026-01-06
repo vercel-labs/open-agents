@@ -111,7 +111,7 @@ NOTE: The executor subagent requires user approval before running because it has
   inputSchema: taskInputSchema,
   execute: async function* (
     { subagentType, task, instructions },
-    { experimental_context },
+    { experimental_context, abortSignal },
   ) {
     const sandbox = getSandbox(experimental_context);
 
@@ -122,6 +122,7 @@ NOTE: The executor subagent requires user approval before running because it has
       prompt:
         "Complete this task and provide a summary of what you accomplished.",
       options: { task, instructions, sandbox },
+      abortSignal,
     });
 
     for await (const message of readUIMessageStream({
