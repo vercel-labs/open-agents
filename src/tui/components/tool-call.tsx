@@ -6,6 +6,28 @@ import { useChatContext } from "../chat-context.js";
 import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
 import * as path from "path";
 
+function getTodoIcon(status: string) {
+  switch (status) {
+    case "completed":
+      return "☒";
+    case "in_progress":
+      return "◎";
+    default:
+      return "☐";
+  }
+}
+
+function getTodoColor(status: string) {
+  switch (status) {
+    case "completed":
+      return "gray";
+    case "in_progress":
+      return "yellow";
+    default:
+      return "white";
+  }
+}
+
 export type ToolApprovalInfo = {
   toolType: string;
   toolCommand: string;
@@ -924,28 +946,6 @@ export function ToolCall({
         todos?.filter((t) => t.status === "completed").length ?? 0;
       const inProgressCount =
         todos?.filter((t) => t.status === "in_progress").length ?? 0;
-
-      const getTodoIcon = (status: string) => {
-        switch (status) {
-          case "completed":
-            return "☒";
-          case "in_progress":
-            return "◎";
-          default:
-            return "☐";
-        }
-      };
-
-      const getTodoColor = (status: string) => {
-        switch (status) {
-          case "completed":
-            return "gray";
-          case "in_progress":
-            return "yellow";
-          default:
-            return "white";
-        }
-      };
 
       return (
         <Box flexDirection="column">
