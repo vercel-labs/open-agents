@@ -9,7 +9,7 @@ const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
 const taskInputSchema = z.object({
   subagentType: subagentTypeSchema.describe(
-    "Type of subagent: 'explorer' for read-only research, 'executor' for implementation tasks"
+    "Type of subagent: 'explorer' for read-only research, 'executor' for implementation tasks",
   ),
   task: z
     .string()
@@ -19,14 +19,17 @@ const taskInputSchema = z.object({
 - Goal and deliverables
 - Step-by-step procedure
 - Constraints and patterns to follow
-- How to verify the work`
+- How to verify the work`,
   ),
 });
 
 /**
  * Check if a subagent type matches any approval rules.
  */
-function subagentMatchesApprovalRule(subagentType: string, approvalRules: ApprovalRule[]): boolean {
+function subagentMatchesApprovalRule(
+  subagentType: string,
+  approvalRules: ApprovalRule[],
+): boolean {
   for (const rule of approvalRules) {
     if (rule.type === "subagent-type" && rule.tool === "task") {
       if (rule.subagentType === subagentType) {
@@ -106,13 +109,18 @@ IMPORTANT:
 
 NOTE: The executor subagent requires user approval before running because it has full write access.`,
   inputSchema: taskInputSchema,
-  execute: async function* ({ subagentType, task, instructions }, { experimental_context }) {
+  execute: async function* (
+    { subagentType, task, instructions },
+    { experimental_context },
+  ) {
     const sandbox = getSandbox(experimental_context);
 
-    const subagent = subagentType === "explorer" ? explorerSubagent : executorSubagent;
+    const subagent =
+      subagentType === "explorer" ? explorerSubagent : executorSubagent;
 
     const result = await subagent.stream({
-      prompt: "Complete this task and provide a summary of what you accomplished.",
+      prompt:
+        "Complete this task and provide a summary of what you accomplished.",
       options: { task, instructions, sandbox },
     });
 

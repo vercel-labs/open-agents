@@ -23,7 +23,7 @@ type ReasoningContextValue = {
 };
 
 const ReasoningContext = createContext<ReasoningContextValue | undefined>(
-  undefined
+  undefined,
 );
 
 export function ReasoningProvider({ children }: { children: ReactNode }) {
@@ -50,7 +50,10 @@ export function ReasoningProvider({ children }: { children: ReactNode }) {
     if (!duration.endTime) {
       return { isThinking: true, thinkingDuration: null };
     }
-    const seconds = Math.max(1, Math.round((duration.endTime - duration.startTime) / 1000));
+    const seconds = Math.max(
+      1,
+      Math.round((duration.endTime - duration.startTime) / 1000),
+    );
     return { isThinking: false, thinkingDuration: seconds };
   }, []);
 
@@ -71,7 +74,7 @@ export function useReasoningContext() {
   const context = useContext(ReasoningContext);
   if (!context) {
     throw new Error(
-      "useReasoningContext must be used within a ReasoningProvider"
+      "useReasoningContext must be used within a ReasoningProvider",
     );
   }
   return context;

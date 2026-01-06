@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useLayoutEffect, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+} from "react";
 import { Text, useInput } from "ink";
 import chalk from "chalk";
 
@@ -60,11 +66,13 @@ export function TextInput({
   renderToken,
   placeholder = "",
   focus = true,
-  showCursor = true
+  showCursor = true,
 }: TextInputProps) {
   // Internal state - this is the source of truth during typing
   const [internalValue, setInternalValue] = useState(externalValue || "");
-  const [cursorOffset, setCursorOffset] = useState((externalValue || "").length);
+  const [cursorOffset, setCursorOffset] = useState(
+    (externalValue || "").length,
+  );
 
   // Refs to always have access to latest values in useInput callback
   const valueRef = useRef(internalValue);
@@ -85,14 +93,18 @@ export function TextInput({
     const valueChanged = externalValue !== lastExternalValueRef.current;
     const cursorProvided = externalCursorPosition !== undefined;
     const cursorChanged =
-      cursorProvided && externalCursorPosition !== lastExternalCursorRef.current;
+      cursorProvided &&
+      externalCursorPosition !== lastExternalCursorRef.current;
 
     if (!valueChanged && !cursorChanged) return;
 
     const nextValue = valueChanged ? externalValue || "" : valueRef.current;
     let nextCursor = cursorRef.current;
 
-    if (externalCursorPosition !== undefined && (cursorChanged || valueChanged)) {
+    if (
+      externalCursorPosition !== undefined &&
+      (cursorChanged || valueChanged)
+    ) {
       nextCursor = externalCursorPosition;
     } else if (valueChanged) {
       nextCursor = Math.min(nextCursor, nextValue.length);
@@ -127,7 +139,7 @@ export function TextInput({
       onChange(newValue);
       onCursorChange?.(newCursor);
     },
-    [onChange, onCursorChange]
+    [onChange, onCursorChange],
   );
 
   // Helper to update cursor only
@@ -138,7 +150,7 @@ export function TextInput({
       lastExternalCursorRef.current = newCursor;
       onCursorChange?.(newCursor);
     },
-    [onCursorChange]
+    [onCursorChange],
   );
 
   const flushPasteBuffer = useCallback(() => {
@@ -206,9 +218,10 @@ export function TextInput({
       if (tokenMatcher(char)) {
         const tokenText = tokenRenderer(char);
         if (isCursor) {
-          result += tokenText.length > 0
-            ? chalk.inverse(tokenText[0]) + tokenText.slice(1)
-            : chalk.inverse(" ");
+          result +=
+            tokenText.length > 0
+              ? chalk.inverse(tokenText[0]) + tokenText.slice(1)
+              : chalk.inverse(" ");
         } else {
           result += tokenText;
         }
@@ -256,7 +269,15 @@ export function TextInput({
       // If we have a paste buffer and receive a single printable character,
       // it's likely the tail end of a paste that got split. Add it to the buffer
       // and flush immediately.
-      if (pasteBufferRef.current && input.length === 1 && !key.backspace && !key.delete && !key.return && !key.escape && !key.tab) {
+      if (
+        pasteBufferRef.current &&
+        input.length === 1 &&
+        !key.backspace &&
+        !key.delete &&
+        !key.return &&
+        !key.escape &&
+        !key.tab
+      ) {
         pasteBufferRef.current += input;
         flushPasteBuffer();
         return;
@@ -298,7 +319,10 @@ export function TextInput({
 
       // Ignore certain key combinations
       const ignoredCtrlKeys = ["c", "o", "t"];
-      if ((key.ctrl && ignoredCtrlKeys.includes(input)) || (key.shift && key.tab)) {
+      if (
+        (key.ctrl && ignoredCtrlKeys.includes(input)) ||
+        (key.shift && key.tab)
+      ) {
         return;
       }
 
@@ -317,7 +341,10 @@ export function TextInput({
         if (showCursor) {
           // Option+Left: Move to previous word boundary
           if (key.meta) {
-            nextCursorOffset = findPrevWordBoundary(currentValue, currentCursor);
+            nextCursorOffset = findPrevWordBoundary(
+              currentValue,
+              currentCursor,
+            );
           } else {
             nextCursorOffset--;
           }
@@ -328,7 +355,10 @@ export function TextInput({
           if (key.meta) {
             let pos = currentCursor;
             // Skip current word
-            while (pos < currentValue.length && !/\s/.test(currentValue[pos]!)) {
+            while (
+              pos < currentValue.length &&
+              !/\s/.test(currentValue[pos]!)
+            ) {
               pos++;
             }
             // Skip whitespace
@@ -349,18 +379,26 @@ export function TextInput({
       } else if (key.ctrl && input === "w") {
         // Ctrl+W: Delete previous word (unix-style, Option+Delete equivalent)
         if (currentCursor > 0) {
-          const wordBoundary = findPrevWordBoundary(currentValue, currentCursor);
+          const wordBoundary = findPrevWordBoundary(
+            currentValue,
+            currentCursor,
+          );
           nextValue =
-            currentValue.slice(0, wordBoundary) + currentValue.slice(currentCursor);
+            currentValue.slice(0, wordBoundary) +
+            currentValue.slice(currentCursor);
           nextCursorOffset = wordBoundary;
         }
       } else if (key.backspace || key.delete) {
         if (currentCursor > 0) {
           // Option+Delete (meta + delete): Delete previous word
           if (key.delete && key.meta) {
-            const wordBoundary = findPrevWordBoundary(currentValue, currentCursor);
+            const wordBoundary = findPrevWordBoundary(
+              currentValue,
+              currentCursor,
+            );
             nextValue =
-              currentValue.slice(0, wordBoundary) + currentValue.slice(currentCursor);
+              currentValue.slice(0, wordBoundary) +
+              currentValue.slice(currentCursor);
             nextCursorOffset = wordBoundary;
           } else {
             // Regular backspace: delete one character
@@ -393,7 +431,7 @@ export function TextInput({
         updateCursor(nextCursorOffset);
       }
     },
-    { isActive: focus }
+    { isActive: focus },
   );
 
   return (

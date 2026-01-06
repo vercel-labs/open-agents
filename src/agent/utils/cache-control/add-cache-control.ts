@@ -73,7 +73,7 @@ export function addCacheControl<T extends ToolSet>({
   if (tools !== undefined) {
     const entries = Object.entries(tools);
     if (entries.length === 0) return tools;
-    
+
     // Anthropic supports max 4 cache breakpoints - only mark the last tool
     // to avoid exceeding the limit when combined with message caching
     const lastIndex = entries.length - 1;

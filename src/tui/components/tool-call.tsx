@@ -327,12 +327,7 @@ function ToolLayout({
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
       <Box>
         {running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text
-          bold
-          color={
-            denied ? "red" : "white"
-          }
-        >
+        <Text bold color={denied ? "red" : "white"}>
           {name}
         </Text>
         <Text color="gray">(</Text>
@@ -684,7 +679,8 @@ export function ToolCall({
   switch (part.type) {
     case "tool-read": {
       const rawFilePath = part.input?.filePath ?? "...";
-      const filePath = rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
+      const filePath =
+        rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
       const lines =
         part.state === "output-available" ? part.output?.totalLines : undefined;
       return (
@@ -700,7 +696,8 @@ export function ToolCall({
 
     case "tool-write": {
       const rawFilePath = part.input?.filePath ?? "...";
-      const filePath = rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
+      const filePath =
+        rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
       const content = part.input?.content ?? "";
       const lines = createWriteDiffLines(content);
       const additions = content ? content.split("\n").length : 0;
@@ -731,7 +728,8 @@ export function ToolCall({
 
     case "tool-edit": {
       const rawFilePath = part.input?.filePath ?? "...";
-      const filePath = rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
+      const filePath =
+        rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath);
       const oldString = part.input?.oldString ?? "";
       const newString = part.input?.newString ?? "";
       const { lines, additions, removals } = createEditDiffLines(
@@ -834,14 +832,7 @@ export function ToolCall({
                 ●{" "}
               </Text>
             )}
-            <Text
-              bold
-              color={
-                denied
-                  ? "red"
-                  : "white"
-              }
-            >
+            <Text bold color={denied ? "red" : "white"}>
               Bash
             </Text>
             <Text color="gray">(</Text>
@@ -1049,14 +1040,7 @@ export function ToolCall({
             ) : (
               <Text color={dotColor}>● </Text>
             )}
-            <Text
-              bold
-              color={
-                taskDenied
-                  ? "red"
-                  : "white"
-              }
-            >
+            <Text bold color={taskDenied ? "red" : "white"}>
               {subagentLabel}
             </Text>
             <Text color="gray">(</Text>

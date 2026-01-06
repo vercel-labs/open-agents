@@ -33,7 +33,7 @@ export function extractPasteTokens(value: string): Set<string> {
 
 export function expandPasteTokens(
   value: string,
-  blocksByToken: Map<string, PasteBlock>
+  blocksByToken: Map<string, PasteBlock>,
 ): string {
   let result = "";
   for (const char of value) {

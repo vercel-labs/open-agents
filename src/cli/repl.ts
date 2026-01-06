@@ -8,7 +8,8 @@ export interface ReplOptions {
 }
 
 export async function startRepl(options: ReplOptions = {}): Promise<void> {
-  const { workingDirectory = process.cwd(), prompt: promptPrefix = ">" } = options;
+  const { workingDirectory = process.cwd(), prompt: promptPrefix = ">" } =
+    options;
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -61,7 +62,7 @@ export async function startRepl(options: ReplOptions = {}): Promise<void> {
       } catch (error) {
         console.error(
           "\nError:",
-          error instanceof Error ? error.message : error
+          error instanceof Error ? error.message : error,
         );
         console.log("");
       }

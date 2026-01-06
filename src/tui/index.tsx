@@ -11,7 +11,10 @@ import type { TUIOptions } from "./types.js";
 export type { TUIOptions, AutoAcceptMode } from "./types.js";
 export { useChatContext, ChatProvider } from "./chat-context.js";
 export { useReasoningContext, ReasoningProvider } from "./reasoning-context.js";
-export { useExpandedView, ExpandedViewProvider } from "./expanded-view-context.js";
+export {
+  useExpandedView,
+  ExpandedViewProvider,
+} from "./expanded-view-context.js";
 export { useTodoView, TodoViewProvider } from "./todo-view-context.js";
 export {
   tuiAgent,

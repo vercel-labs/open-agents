@@ -75,11 +75,19 @@ function createEditDiffLines(
   const allLines: DiffLine[] = [];
 
   oldLines.forEach((line, i) => {
-    allLines.push({ type: "removal", lineNumber: startLine + i, content: line });
+    allLines.push({
+      type: "removal",
+      lineNumber: startLine + i,
+      content: line,
+    });
   });
 
   newLines.forEach((line, i) => {
-    allLines.push({ type: "addition", lineNumber: startLine + i, content: line });
+    allLines.push({
+      type: "addition",
+      lineNumber: startLine + i,
+      content: line,
+    });
   });
 
   // Limit total lines
@@ -243,20 +251,26 @@ export function ApprovalPanel({
           {diffInfo.lines.map((line, i) => (
             <Box key={i}>
               {line.type === "separator" ? (
-                <Text color="gray">     {line.content}</Text>
+                <Text color="gray"> {line.content}</Text>
               ) : line.type === "addition" ? (
                 <Text backgroundColor="#234823">
                   {line.lineNumber !== undefined
                     ? String(line.lineNumber).padStart(3, " ")
                     : "   "}{" "}
-                  +{line.content.slice(0, DIFF_LINE_MAX_WIDTH).padEnd(DIFF_LINE_MAX_WIDTH, " ")}
+                  +
+                  {line.content
+                    .slice(0, DIFF_LINE_MAX_WIDTH)
+                    .padEnd(DIFF_LINE_MAX_WIDTH, " ")}
                 </Text>
               ) : (
                 <Text backgroundColor="#5c2626">
                   {line.lineNumber !== undefined
                     ? String(line.lineNumber).padStart(3, " ")
                     : "   "}{" "}
-                  -{line.content.slice(0, DIFF_LINE_MAX_WIDTH).padEnd(DIFF_LINE_MAX_WIDTH, " ")}
+                  -
+                  {line.content
+                    .slice(0, DIFF_LINE_MAX_WIDTH)
+                    .padEnd(DIFF_LINE_MAX_WIDTH, " ")}
                 </Text>
               )}
             </Box>
@@ -289,13 +303,17 @@ export function ApprovalPanel({
 
           {/* Option 3 (or 2 if no rule): Inline text input */}
           <Box>
-            <Text color="yellow">{selected === reasonOptionIndex ? "› " : "  "}</Text>
+            <Text color="yellow">
+              {selected === reasonOptionIndex ? "› " : "  "}
+            </Text>
             <Text color={selected === reasonOptionIndex ? "yellow" : undefined}>
               {canSaveRule ? "3" : "2"}.{" "}
             </Text>
             {reason || selected === reasonOptionIndex ? (
               <>
-                <Text color={selected === reasonOptionIndex ? "yellow" : undefined}>
+                <Text
+                  color={selected === reasonOptionIndex ? "yellow" : undefined}
+                >
                   {reason}
                 </Text>
                 {selected === reasonOptionIndex && <Text color="gray">█</Text>}
@@ -312,7 +330,9 @@ export function ApprovalPanel({
       {/* Footer hint */}
       <Box marginTop={1}>
         <Text color="gray">
-          {selected === reasonOptionIndex ? "Enter to submit, Esc to cancel" : "Esc to cancel"}
+          {selected === reasonOptionIndex
+            ? "Enter to submit, Esc to cancel"
+            : "Esc to cancel"}
         </Text>
       </Box>
     </Box>

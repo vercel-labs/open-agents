@@ -24,7 +24,9 @@ const SILLY_WORD_INTERVAL = 4000;
 const PULSE_SPEED = 100;
 
 function useSillyWord() {
-  const [index, setIndex] = useState(() => Math.floor(Math.random() * SILLY_WORDS.length));
+  const [index, setIndex] = useState(() =>
+    Math.floor(Math.random() * SILLY_WORDS.length),
+  );
   const [pulsePosition, setPulsePosition] = useState(0);
   const currentWord = SILLY_WORDS[index] ?? "Thinking";
   const wordLength = currentWord.length;
@@ -49,7 +51,13 @@ function useSillyWord() {
   return { word: currentWord, pulsePosition };
 }
 
-function PulsedWord({ word, pulsePosition }: { word: string; pulsePosition: number }) {
+function PulsedWord({
+  word,
+  pulsePosition,
+}: {
+  word: string;
+  pulsePosition: number;
+}) {
   return (
     <>
       {word.split("").map((char, i) => {
@@ -213,16 +221,18 @@ export function StatusBar({
   inputTokens,
 }: StatusBarProps) {
   const hasTodos = todos && todos.length > 0;
-  const hasIncompleteTodos = hasTodos && todos.some((t) => t.status !== "completed");
+  const hasIncompleteTodos =
+    hasTodos && todos.some((t) => t.status !== "completed");
   const showTodos = isTodoVisible && hasIncompleteTodos;
 
   if (!isStreaming && !status && !showTodos) {
     return null;
   }
 
-  const todoHint = hasTodos && hasIncompleteTodos
-    ? ` · ctrl+t to ${isTodoVisible ? "hide" : "show"} todos`
-    : "";
+  const todoHint =
+    hasTodos && hasIncompleteTodos
+      ? ` · ctrl+t to ${isTodoVisible ? "hide" : "show"} todos`
+      : "";
 
   return (
     <Box flexDirection="column" marginTop={1}>

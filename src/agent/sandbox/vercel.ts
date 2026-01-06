@@ -73,7 +73,7 @@ export class VercelSandbox implements Sandbox {
     id: string,
     workingDirectory: string,
     env?: Record<string, string>,
-    currentBranch?: string
+    currentBranch?: string,
   ) {
     this.sdk = sdk;
     this.id = id;
@@ -86,7 +86,9 @@ export class VercelSandbox implements Sandbox {
    * Create a new Vercel Sandbox instance.
    * If a source is provided, the repo will be cloned into the working directory.
    */
-  static async create(config: VercelSandboxConfig = {}): Promise<VercelSandbox> {
+  static async create(
+    config: VercelSandboxConfig = {},
+  ): Promise<VercelSandbox> {
     const {
       source,
       env,
@@ -149,7 +151,7 @@ export class VercelSandbox implements Sandbox {
 
       if (checkoutResult.exitCode !== 0) {
         throw new Error(
-          `Failed to create branch '${source.newBranch}': ${await checkoutResult.stdout()}`
+          `Failed to create branch '${source.newBranch}': ${await checkoutResult.stdout()}`,
         );
       }
 
@@ -163,7 +165,7 @@ export class VercelSandbox implements Sandbox {
       sdk.sandboxId,
       workingDirectory,
       env,
-      currentBranch
+      currentBranch,
     );
   }
 
@@ -172,14 +174,14 @@ export class VercelSandbox implements Sandbox {
    */
   static async connect(
     sandboxId: string,
-    options: { env?: Record<string, string> } = {}
+    options: { env?: Record<string, string> } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
     return new VercelSandbox(
       sdk,
       sandboxId,
       DEFAULT_WORKING_DIRECTORY,
-      options.env
+      options.env,
     );
   }
 
@@ -200,7 +202,7 @@ export class VercelSandbox implements Sandbox {
   async writeFile(
     path: string,
     content: string,
-    encoding: "utf-8"
+    encoding: "utf-8",
   ): Promise<void> {
     // Ensure parent directory exists
     const parentDir = path.substring(0, path.lastIndexOf("/"));
@@ -278,15 +280,12 @@ export class VercelSandbox implements Sandbox {
 
   async readdir(
     path: string,
-    options: { withFileTypes: true }
+    options: { withFileTypes: true },
   ): Promise<Dirent[]> {
     // List files with type info using find
     const result = await this.sdk.runCommand({
       cmd: "bash",
-      args: [
-        "-c",
-        `find "${path}" -maxdepth 1 -mindepth 1 -printf "%y %f\\n"`,
-      ],
+      args: ["-c", `find "${path}" -maxdepth 1 -mindepth 1 -printf "%y %f\\n"`],
       env: this.env,
     });
 
@@ -327,7 +326,7 @@ export class VercelSandbox implements Sandbox {
   async exec(
     command: string,
     cwd: string,
-    timeoutMs: number
+    timeoutMs: number,
   ): Promise<ExecResult> {
     try {
       const result = await this.sdk.runCommand({
@@ -429,7 +428,7 @@ export interface VercelSandboxConnectConfig {
  * console.log(sandbox.currentBranch); // "agent/feature-123"
  */
 export async function connectVercelSandbox(
-  config: VercelSandboxConfig | VercelSandboxConnectConfig = {}
+  config: VercelSandboxConfig | VercelSandboxConnectConfig = {},
 ): Promise<VercelSandbox> {
   if ("sandboxId" in config) {
     return VercelSandbox.connect(config.sandboxId, { env: config.env });

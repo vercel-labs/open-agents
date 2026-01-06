@@ -188,14 +188,16 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     }
     const backgroundInstructions = BACKGROUND_MODE_INSTRUCTIONS.replace(
       "{branch}",
-      options.currentBranch
+      options.currentBranch,
     );
     parts.push(`\nCurrent branch: ${options.currentBranch}`);
     parts.push(`\n${backgroundInstructions}`);
   }
 
   if (options.customInstructions) {
-    parts.push(`\n# Project-Specific Instructions\n\n${options.customInstructions}`);
+    parts.push(
+      `\n# Project-Specific Instructions\n\n${options.customInstructions}`,
+    );
   }
 
   return parts.join("\n");

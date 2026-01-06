@@ -2,7 +2,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import type { Sandbox } from "../../sandbox";
-import { isPathWithinDirectory, getSandbox, pathMatchesGlob, getApprovalContext } from "../../utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  pathMatchesGlob,
+  getApprovalContext,
+} from "../../utils";
 import type { ApprovalRule } from "../../types";
 
 interface FileInfo {
@@ -16,14 +21,17 @@ async function findFiles(
   baseDir: string,
   pattern: string,
   limit: number,
-  sandbox: Sandbox
+  sandbox: Sandbox,
 ): Promise<FileInfo[]> {
   const results: FileInfo[] = [];
 
   const patternParts = pattern.split("/").filter(Boolean);
   const hasRecursive = pattern.includes("**");
 
-  async function matchesPattern(filePath: string, fileName: string): Promise<boolean> {
+  async function matchesPattern(
+    filePath: string,
+    fileName: string,
+  ): Promise<boolean> {
     const lastPart = patternParts[patternParts.length - 1] ?? "*";
 
     if (lastPart === "*") return true;
@@ -35,7 +43,7 @@ async function findFiles(
 
     if (lastPart.includes("*")) {
       const regex = new RegExp(
-        "^" + lastPart.replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
+        "^" + lastPart.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
       );
       return regex.test(fileName);
     }
@@ -47,7 +55,9 @@ async function findFiles(
     if (results.length >= limit) return;
 
     try {
-      const entries = await sandbox.readdir(currentDir, { withFileTypes: true });
+      const entries = await sandbox.readdir(currentDir, {
+        withFileTypes: true,
+      });
 
       for (const entry of entries) {
         if (results.length >= limit) break;
@@ -111,7 +121,7 @@ type GlobInput = z.infer<typeof globInputSchema>;
 function pathMatchesApprovalRule(
   searchPath: string,
   workingDirectory: string,
-  approvalRules: ApprovalRule[]
+  approvalRules: ApprovalRule[],
 ): boolean {
   const absolutePath = path.isAbsolute(searchPath)
     ? searchPath
@@ -127,27 +137,34 @@ function pathMatchesApprovalRule(
   return false;
 }
 
-export const globTool = () => tool({
-  needsApproval: (args, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
-    // If no path is provided, it defaults to working directory (no approval needed)
-    if (!args.path) {
-      return false;
-    }
-    const absolutePath = path.isAbsolute(args.path)
-      ? args.path
-      : path.resolve(ctx.workingDirectory, args.path);
-    // Check if within working directory - no approval needed
-    if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
-      return false;
-    }
-    // Outside working directory - check if a rule matches
-    if (pathMatchesApprovalRule(args.path, ctx.workingDirectory, ctx.approvalRules)) {
-      return false;
-    }
-    return true;
-  },
-  description: `Find files matching a glob pattern.
+export const globTool = () =>
+  tool({
+    needsApproval: (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context);
+      // If no path is provided, it defaults to working directory (no approval needed)
+      if (!args.path) {
+        return false;
+      }
+      const absolutePath = path.isAbsolute(args.path)
+        ? args.path
+        : path.resolve(ctx.workingDirectory, args.path);
+      // Check if within working directory - no approval needed
+      if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+        return false;
+      }
+      // Outside working directory - check if a rule matches
+      if (
+        pathMatchesApprovalRule(
+          args.path,
+          ctx.workingDirectory,
+          ctx.approvalRules,
+        )
+      ) {
+        return false;
+      }
+      return true;
+    },
+    description: `Find files matching a glob pattern.
 
 WHEN TO USE:
 - Locating files by extension or naming pattern (e.g., all *.test.ts files)
@@ -175,41 +192,44 @@ EXAMPLES:
 - All TypeScript files in the project: pattern: "**/*.ts"
 - All Jest tests under src: pattern: "src/**/*.test.ts"
 - Recent JSON config files: pattern: "*.json", path: "/Users/username/project/config", limit: 20`,
-  inputSchema: globInputSchema,
-  execute: async ({ pattern, path: basePath, limit = 100 }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context);
-    const workingDirectory = sandbox.workingDirectory;
+    inputSchema: globInputSchema,
+    execute: async (
+      { pattern, path: basePath, limit = 100 },
+      { experimental_context },
+    ) => {
+      const sandbox = getSandbox(experimental_context);
+      const workingDirectory = sandbox.workingDirectory;
 
-    try {
-      // Resolve search directory relative to working directory
-      let searchDir: string;
-      if (basePath) {
-        searchDir = path.isAbsolute(basePath)
-          ? basePath
-          : path.resolve(workingDirectory, basePath);
-      } else {
-        searchDir = workingDirectory;
+      try {
+        // Resolve search directory relative to working directory
+        let searchDir: string;
+        if (basePath) {
+          searchDir = path.isAbsolute(basePath)
+            ? basePath
+            : path.resolve(workingDirectory, basePath);
+        } else {
+          searchDir = workingDirectory;
+        }
+
+        const files = await findFiles(searchDir, pattern, limit, sandbox);
+
+        return {
+          success: true,
+          pattern,
+          baseDir: searchDir,
+          count: files.length,
+          files: files.map((f) => ({
+            path: f.path,
+            size: f.size,
+            modifiedAt: new Date(f.modifiedAt).toISOString(),
+          })),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          error: `Glob failed: ${message}`,
+        };
       }
-
-      const files = await findFiles(searchDir, pattern, limit, sandbox);
-
-      return {
-        success: true,
-        pattern,
-        baseDir: searchDir,
-        count: files.length,
-        files: files.map((f) => ({
-          path: f.path,
-          size: f.size,
-          modifiedAt: new Date(f.modifiedAt).toISOString(),
-        })),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Glob failed: ${message}`,
-      };
-    }
-  },
-});
+    },
+  });

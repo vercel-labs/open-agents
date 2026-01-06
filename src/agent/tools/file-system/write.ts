@@ -1,7 +1,12 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import { isPathWithinDirectory, getSandbox, pathMatchesGlob, getApprovalContext } from "../../utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  pathMatchesGlob,
+  getApprovalContext,
+} from "../../utils";
 import type { ApprovalRule } from "../../types";
 
 const writeInputSchema = z.object({
@@ -42,7 +47,10 @@ interface EditToolOptions {
 /**
  * Check if a path is outside the working directory.
  */
-function isOutsideWorkingDirectory(filePath: string, workingDirectory: string): boolean {
+function isOutsideWorkingDirectory(
+  filePath: string,
+  workingDirectory: string,
+): boolean {
   const absolutePath = path.isAbsolute(filePath)
     ? filePath
     : path.resolve(workingDirectory, filePath);
@@ -56,7 +64,7 @@ function pathMatchesApprovalRule(
   filePath: string,
   toolName: "write" | "edit",
   workingDirectory: string,
-  approvalRules: ApprovalRule[]
+  approvalRules: ApprovalRule[],
 ): boolean {
   const absolutePath = path.isAbsolute(filePath)
     ? filePath
@@ -72,32 +80,40 @@ function pathMatchesApprovalRule(
   return false;
 }
 
-export const writeFileTool = (options?: WriteToolOptions) => tool({
-  needsApproval: async (args, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
-    // Always need approval if outside working directory (even in background mode)
-    if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
-      return true;
-    }
-    // In background mode, auto-approve all operations within working directory
-    if (ctx.mode === "background") {
-      return false;
-    }
-    // Auto-approve edits when autoApprove is "edits" or "all"
-    if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-      return false;
-    }
-    // Check if path matches any saved approval rules
-    if (pathMatchesApprovalRule(args.filePath, "write", ctx.workingDirectory, ctx.approvalRules)) {
-      return false;
-    }
-    // Otherwise use the configured approval setting
-    if (typeof options?.needsApproval === "function") {
-      return options.needsApproval(args);
-    }
-    return options?.needsApproval ?? true;
-  },
-  description: `Write content to a file on the filesystem.
+export const writeFileTool = (options?: WriteToolOptions) =>
+  tool({
+    needsApproval: async (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context);
+      // Always need approval if outside working directory (even in background mode)
+      if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
+        return true;
+      }
+      // In background mode, auto-approve all operations within working directory
+      if (ctx.mode === "background") {
+        return false;
+      }
+      // Auto-approve edits when autoApprove is "edits" or "all"
+      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
+        return false;
+      }
+      // Check if path matches any saved approval rules
+      if (
+        pathMatchesApprovalRule(
+          args.filePath,
+          "write",
+          ctx.workingDirectory,
+          ctx.approvalRules,
+        )
+      ) {
+        return false;
+      }
+      // Otherwise use the configured approval setting
+      if (typeof options?.needsApproval === "function") {
+        return options.needsApproval(args);
+      }
+      return options?.needsApproval ?? true;
+    },
+    description: `Write content to a file on the filesystem.
 
 WHEN TO USE:
 - Creating a new file that does not yet exist
@@ -124,63 +140,71 @@ IMPORTANT:
 EXAMPLES:
 - Create a new test file: filePath: "/Users/username/project/src/user.test.ts", content: "<full file contents>"
 - Replace a script after reading it: filePath: "/Users/username/project/scripts/build.sh", content: "<entire updated script>"`,
-  inputSchema: writeInputSchema,
-  execute: async ({ filePath, content }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context);
-    const workingDirectory = sandbox.workingDirectory;
+    inputSchema: writeInputSchema,
+    execute: async ({ filePath, content }, { experimental_context }) => {
+      const sandbox = getSandbox(experimental_context);
+      const workingDirectory = sandbox.workingDirectory;
 
-    try {
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(workingDirectory, filePath);
+      try {
+        const absolutePath = path.isAbsolute(filePath)
+          ? filePath
+          : path.resolve(workingDirectory, filePath);
 
-      const dir = path.dirname(absolutePath);
-      await sandbox.mkdir(dir, { recursive: true });
-      await sandbox.writeFile(absolutePath, content, "utf-8");
+        const dir = path.dirname(absolutePath);
+        await sandbox.mkdir(dir, { recursive: true });
+        await sandbox.writeFile(absolutePath, content, "utf-8");
 
-      const stats = await sandbox.stat(absolutePath);
+        const stats = await sandbox.stat(absolutePath);
 
-      return {
-        success: true,
-        path: absolutePath,
-        bytesWritten: stats.size,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Failed to write file: ${message}`,
-      };
-    }
-  },
-});
+        return {
+          success: true,
+          path: absolutePath,
+          bytesWritten: stats.size,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          error: `Failed to write file: ${message}`,
+        };
+      }
+    },
+  });
 
-export const editFileTool = (options?: EditToolOptions) => tool({
-  needsApproval: async (args, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
-    // Always need approval if outside working directory (even in background mode)
-    if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
-      return true;
-    }
-    // In background mode, auto-approve all operations within working directory
-    if (ctx.mode === "background") {
-      return false;
-    }
-    // Auto-approve edits when autoApprove is "edits" or "all"
-    if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-      return false;
-    }
-    // Check if path matches any saved approval rules
-    if (pathMatchesApprovalRule(args.filePath, "edit", ctx.workingDirectory, ctx.approvalRules)) {
-      return false;
-    }
-    // Otherwise use the configured approval setting
-    if (typeof options?.needsApproval === "function") {
-      return options.needsApproval(args);
-    }
-    return options?.needsApproval ?? true;
-  },
-  description: `Perform exact string replacement in a file.
+export const editFileTool = (options?: EditToolOptions) =>
+  tool({
+    needsApproval: async (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context);
+      // Always need approval if outside working directory (even in background mode)
+      if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
+        return true;
+      }
+      // In background mode, auto-approve all operations within working directory
+      if (ctx.mode === "background") {
+        return false;
+      }
+      // Auto-approve edits when autoApprove is "edits" or "all"
+      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
+        return false;
+      }
+      // Check if path matches any saved approval rules
+      if (
+        pathMatchesApprovalRule(
+          args.filePath,
+          "edit",
+          ctx.workingDirectory,
+          ctx.approvalRules,
+        )
+      ) {
+        return false;
+      }
+      // Otherwise use the configured approval setting
+      if (typeof options?.needsApproval === "function") {
+        return options.needsApproval(args);
+      }
+      return options?.needsApproval ?? true;
+    },
+    description: `Perform exact string replacement in a file.
 
 WHEN TO USE:
 - Making small, precise edits to an existing file you have already read
@@ -208,63 +232,66 @@ IMPORTANT:
 EXAMPLES:
 - Replace a single function call: filePath: "/Users/username/project/src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)", startLine: 42
 - Rename a variable throughout a file: filePath: "/Users/username/project/src/api.ts", oldString: "oldApiClient", newString: "newApiClient", replaceAll: true, startLine: 15`,
-  inputSchema: editInputSchema,
-  execute: async ({ filePath, oldString, newString, replaceAll = false }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context);
-    const workingDirectory = sandbox.workingDirectory;
+    inputSchema: editInputSchema,
+    execute: async (
+      { filePath, oldString, newString, replaceAll = false },
+      { experimental_context },
+    ) => {
+      const sandbox = getSandbox(experimental_context);
+      const workingDirectory = sandbox.workingDirectory;
 
-    try {
-      if (oldString === newString) {
+      try {
+        if (oldString === newString) {
+          return {
+            success: false,
+            error: "oldString and newString must be different",
+          };
+        }
+
+        const absolutePath = path.isAbsolute(filePath)
+          ? filePath
+          : path.resolve(workingDirectory, filePath);
+
+        const content = await sandbox.readFile(absolutePath, "utf-8");
+
+        if (!content.includes(oldString)) {
+          return {
+            success: false,
+            error: "oldString not found in file",
+            hint: "Make sure to match exact whitespace and indentation",
+          };
+        }
+
+        const occurrences = content.split(oldString).length - 1;
+        if (occurrences > 1 && !replaceAll) {
+          return {
+            success: false,
+            error: `oldString found ${occurrences} times. Use replaceAll=true or provide more context to make it unique.`,
+          };
+        }
+
+        // Calculate starting line number for the edit
+        const matchIndex = content.indexOf(oldString);
+        const startLine = content.slice(0, matchIndex).split("\n").length;
+
+        const newContent = replaceAll
+          ? content.replaceAll(oldString, newString)
+          : content.replace(oldString, newString);
+
+        await sandbox.writeFile(absolutePath, newContent, "utf-8");
+
+        return {
+          success: true,
+          path: absolutePath,
+          replacements: replaceAll ? occurrences : 1,
+          startLine,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         return {
           success: false,
-          error: "oldString and newString must be different",
+          error: `Failed to edit file: ${message}`,
         };
       }
-
-      const absolutePath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(workingDirectory, filePath);
-
-      const content = await sandbox.readFile(absolutePath, "utf-8");
-
-      if (!content.includes(oldString)) {
-        return {
-          success: false,
-          error: "oldString not found in file",
-          hint: "Make sure to match exact whitespace and indentation",
-        };
-      }
-
-      const occurrences = content.split(oldString).length - 1;
-      if (occurrences > 1 && !replaceAll) {
-        return {
-          success: false,
-          error: `oldString found ${occurrences} times. Use replaceAll=true or provide more context to make it unique.`,
-        };
-      }
-
-      // Calculate starting line number for the edit
-      const matchIndex = content.indexOf(oldString);
-      const startLine = content.slice(0, matchIndex).split("\n").length;
-
-      const newContent = replaceAll
-        ? content.replaceAll(oldString, newString)
-        : content.replace(oldString, newString);
-
-      await sandbox.writeFile(absolutePath, newContent, "utf-8");
-
-      return {
-        success: true,
-        path: absolutePath,
-        replacements: replaceAll ? occurrences : 1,
-        startLine,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Failed to edit file: ${message}`,
-      };
-    }
-  },
-});
+    },
+  });

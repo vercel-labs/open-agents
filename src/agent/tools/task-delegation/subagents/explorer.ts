@@ -56,8 +56,12 @@ You have access to: read, grep, glob, bash (read-only commands only)
 
 const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the exploration task"),
-  instructions: z.string().describe("Detailed instructions for the exploration"),
-  sandbox: z.custom<Sandbox>().describe("Sandbox for file system and shell operations"),
+  instructions: z
+    .string()
+    .describe("Detailed instructions for the exploration"),
+  sandbox: z
+    .custom<Sandbox>()
+    .describe("Sandbox for file system and shell operations"),
 });
 
 export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
@@ -72,7 +76,7 @@ export const explorerSubagent = new ToolLoopAgent({
     // Use smart approval: safe read-only commands run without approval,
     // dangerous commands are blocked (explorer is read-only anyway)
     bash: bashTool({
-      needsApproval: ({ command }) => commandNeedsApproval(command)
+      needsApproval: ({ command }) => commandNeedsApproval(command),
     }),
   },
   stopWhen: stepCountIs(30),

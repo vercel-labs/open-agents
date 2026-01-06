@@ -5,7 +5,13 @@ import {
   smoothStream,
   pruneMessages,
 } from "ai";
-import type { TUIAgent, TUIAgentCallOptions, TUIAgentUIMessage, AutoAcceptMode, ApprovalRule } from "./types";
+import type {
+  TUIAgent,
+  TUIAgentCallOptions,
+  TUIAgentUIMessage,
+  AutoAcceptMode,
+  ApprovalRule,
+} from "./types";
 
 export type AgentTransportOptions = {
   agent: TUIAgent;

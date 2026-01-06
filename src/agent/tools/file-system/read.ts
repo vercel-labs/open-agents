@@ -2,7 +2,11 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import * as fs from "fs";
-import { isPathWithinDirectory, getSandbox, getApprovalContext } from "../../utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  getApprovalContext,
+} from "../../utils";
 
 const readInputSchema = z.object({
   filePath: z
@@ -54,18 +58,19 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
   return absolutePath;
 }
 
-export const readFileTool = () => tool({
-  needsApproval: (args, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
-    const absolutePath = resolveFilePath(args.filePath, ctx.workingDirectory);
-    // Check if within working directory - no approval needed
-    if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
-      return false;
-    }
-    // Outside working directory - always requires approval
-    return true;
-  },
-  description: `Read a file from the filesystem.
+export const readFileTool = () =>
+  tool({
+    needsApproval: (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context);
+      const absolutePath = resolveFilePath(args.filePath, ctx.workingDirectory);
+      // Check if within working directory - no approval needed
+      if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+        return false;
+      }
+      // Outside working directory - always requires approval
+      return true;
+    },
+    description: `Read a file from the filesystem.
 
 USAGE:
 - The path should be a FULL absolute path (e.g., /Users/username/project/file.ts), not just /file.ts
@@ -83,47 +88,50 @@ IMPORTANT:
 EXAMPLES:
 - Read an entire file: filePath: "/Users/username/project/src/index.ts"
 - Read a slice of a long file: filePath: "/Users/username/project/logs/app.log", offset: 500, limit: 200`,
-  inputSchema: readInputSchema,
-  execute: async ({ filePath, offset = 1, limit = 2000 }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context);
-    const workingDirectory = sandbox.workingDirectory;
+    inputSchema: readInputSchema,
+    execute: async (
+      { filePath, offset = 1, limit = 2000 },
+      { experimental_context },
+    ) => {
+      const sandbox = getSandbox(experimental_context);
+      const workingDirectory = sandbox.workingDirectory;
 
-    try {
-      // Use the same path resolution logic as needsApproval
-      const absolutePath = resolveFilePath(filePath, workingDirectory);
+      try {
+        // Use the same path resolution logic as needsApproval
+        const absolutePath = resolveFilePath(filePath, workingDirectory);
 
-      const stats = await sandbox.stat(absolutePath);
-      if (stats.isDirectory()) {
+        const stats = await sandbox.stat(absolutePath);
+        if (stats.isDirectory()) {
+          return {
+            success: false,
+            error: "Cannot read a directory. Use glob or ls command instead.",
+          };
+        }
+
+        const content = await sandbox.readFile(absolutePath, "utf-8");
+        const lines = content.split("\n");
+        const startLine = Math.max(1, offset) - 1;
+        const endLine = Math.min(lines.length, startLine + limit);
+        const selectedLines = lines.slice(startLine, endLine);
+
+        const numberedLines = selectedLines.map(
+          (line, i) => `${startLine + i + 1}: ${line}`,
+        );
+
+        return {
+          success: true,
+          path: absolutePath,
+          totalLines: lines.length,
+          startLine: startLine + 1,
+          endLine,
+          content: numberedLines.join("\n"),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         return {
           success: false,
-          error: "Cannot read a directory. Use glob or ls command instead.",
+          error: `Failed to read file: ${message}`,
         };
       }
-
-      const content = await sandbox.readFile(absolutePath, "utf-8");
-      const lines = content.split("\n");
-      const startLine = Math.max(1, offset) - 1;
-      const endLine = Math.min(lines.length, startLine + limit);
-      const selectedLines = lines.slice(startLine, endLine);
-
-      const numberedLines = selectedLines.map(
-        (line, i) => `${startLine + i + 1}: ${line}`,
-      );
-
-      return {
-        success: true,
-        path: absolutePath,
-        totalLines: lines.length,
-        startLine: startLine + 1,
-        endLine,
-        content: numberedLines.join("\n"),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        error: `Failed to read file: ${message}`,
-      };
-    }
-  },
-});
+    },
+  });

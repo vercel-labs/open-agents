@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef, memo, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  memo,
+  useMemo,
+} from "react";
 import { Box, Text, useInput } from "ink";
 import type { FileUIPart } from "ai";
 import { TextInput } from "./text-input.js";
@@ -87,7 +94,7 @@ const ContextUsageIndicator = memo(function ContextUsageIndicator({
 
 // Memoized auto-accept indicator
 const AutoAcceptIndicator = memo(function AutoAcceptIndicator({
-  mode
+  mode,
 }: {
   mode: AutoAcceptMode;
 }) {
@@ -120,7 +127,9 @@ export const InputBox = memo(function InputBox({
   } | null>(null);
   const [pasteBlocks, setPasteBlocks] = useState<PasteBlock[]>([]);
   const [imageBlocks, setImageBlocks] = useState<ImageBlock[]>([]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextPasteIdRef = useRef(1);
@@ -164,7 +173,12 @@ export const InputBox = memo(function InputBox({
       handleImagePaste();
     }
     // Up arrow to select image when at start of input
-    if (key.upArrow && imageBlocks.length > 0 && cursorPosition === 0 && suggestions.length === 0) {
+    if (
+      key.upArrow &&
+      imageBlocks.length > 0 &&
+      cursorPosition === 0 &&
+      suggestions.length === 0
+    ) {
       if (selectedImageIndex === null) {
         setSelectedImageIndex(imageBlocks.length - 1);
       } else if (selectedImageIndex > 0) {
@@ -225,9 +239,12 @@ export const InputBox = memo(function InputBox({
     setPasteBlocks((prev) => prev.filter((block) => tokens.has(block.token)));
   }, []);
 
-  const handleValueChange = useCallback((newValue: string) => {
-    updateValue(newValue);
-  }, [updateValue]);
+  const handleValueChange = useCallback(
+    (newValue: string) => {
+      updateValue(newValue);
+    },
+    [updateValue],
+  );
 
   const handleCursorChange = useCallback((position: number) => {
     setCursorPosition(position);
@@ -272,7 +289,13 @@ export const InputBox = memo(function InputBox({
       setPasteBlocks((prev) => [...prev, { id, token, text, lineCount }]);
       return true;
     },
-    [cursorPosition, pasteCollapseLineThreshold, updateValue, value, addImageFromPath]
+    [
+      cursorPosition,
+      pasteCollapseLineThreshold,
+      updateValue,
+      value,
+      addImageFromPath,
+    ],
   );
 
   const renderPasteToken = useCallback(
@@ -281,13 +304,13 @@ export const InputBox = memo(function InputBox({
       if (!block) return "[Pasted text]";
       return formatPastePlaceholder(block.id, block.lineCount);
     },
-    [pasteBlocksByToken]
+    [pasteBlocksByToken],
   );
 
   const handleUpArrow = useCallback(() => {
     if (suggestions.length > 0) {
       setSelectedIndex((prev) =>
-        prev > 0 ? prev - 1 : suggestions.length - 1
+        prev > 0 ? prev - 1 : suggestions.length - 1,
       );
       return true; // Consumed the event
     }
@@ -297,7 +320,7 @@ export const InputBox = memo(function InputBox({
   const handleDownArrow = useCallback(() => {
     if (suggestions.length > 0) {
       setSelectedIndex((prev) =>
-        prev < suggestions.length - 1 ? prev + 1 : 0
+        prev < suggestions.length - 1 ? prev + 1 : 0,
       );
       return true; // Consumed the event
     }
@@ -307,7 +330,7 @@ export const InputBox = memo(function InputBox({
   const handleCtrlN = useCallback(() => {
     if (suggestions.length > 0) {
       setSelectedIndex((prev) =>
-        prev < suggestions.length - 1 ? prev + 1 : 0
+        prev < suggestions.length - 1 ? prev + 1 : 0,
       );
       return true; // Consumed the event
     }
@@ -317,7 +340,7 @@ export const InputBox = memo(function InputBox({
   const handleCtrlP = useCallback(() => {
     if (suggestions.length > 0) {
       setSelectedIndex((prev) =>
-        prev > 0 ? prev - 1 : suggestions.length - 1
+        prev > 0 ? prev - 1 : suggestions.length - 1,
       );
       return true; // Consumed the event
     }
@@ -334,7 +357,8 @@ export const InputBox = memo(function InputBox({
         const newValue = before + selected.value + " " + after;
         updateValue(newValue);
         // Update cursor position to after the space
-        const newCursorPos = mentionInfo.mentionStart + 1 + selected.value.length + 1;
+        const newCursorPos =
+          mentionInfo.mentionStart + 1 + selected.value.length + 1;
         setCursorPosition(newCursorPos);
         // Close suggestions after selection
         setSuggestions([]);
@@ -343,7 +367,14 @@ export const InputBox = memo(function InputBox({
       }
     }
     return false;
-  }, [suggestions, selectedIndex, mentionInfo, value, cursorPosition, updateValue]);
+  }, [
+    suggestions,
+    selectedIndex,
+    mentionInfo,
+    value,
+    cursorPosition,
+    updateValue,
+  ]);
 
   const handleTab = useCallback(() => {
     // If a directory is selected, "enter" it instead of selecting
@@ -356,7 +387,8 @@ export const InputBox = memo(function InputBox({
         const newValue = before + selected.value + after;
         updateValue(newValue);
         // Update cursor position to end of directory path
-        const newCursorPos = mentionInfo.mentionStart + 1 + selected.value.length;
+        const newCursorPos =
+          mentionInfo.mentionStart + 1 + selected.value.length;
         setCursorPosition(newCursorPos);
         // Keep suggestions open - they will refresh via the useEffect
         return true;
@@ -364,7 +396,15 @@ export const InputBox = memo(function InputBox({
     }
     // For files, select normally
     return selectSuggestion();
-  }, [suggestions, selectedIndex, mentionInfo, value, cursorPosition, updateValue, selectSuggestion]);
+  }, [
+    suggestions,
+    selectedIndex,
+    mentionInfo,
+    value,
+    cursorPosition,
+    updateValue,
+    selectSuggestion,
+  ]);
 
   const handleReturn = useCallback(() => {
     return selectSuggestion();
@@ -376,9 +416,10 @@ export const InputBox = memo(function InputBox({
       const trimmedValue = expandedValue.trim();
       const hasContent = trimmedValue || imageBlocks.length > 0;
       if (hasContent && !disabled) {
-        const files = imageBlocks.length > 0
-          ? imageBlocks.map(imageBlockToFilePart)
-          : undefined;
+        const files =
+          imageBlocks.length > 0
+            ? imageBlocks.map(imageBlockToFilePart)
+            : undefined;
         onSubmit(trimmedValue, files);
         updateValue("");
         setCursorPosition(0);
@@ -389,7 +430,7 @@ export const InputBox = memo(function InputBox({
         nextImageIdRef.current = 1;
       }
     },
-    [disabled, onSubmit, pasteBlocksByToken, updateValue, imageBlocks]
+    [disabled, onSubmit, pasteBlocksByToken, updateValue, imageBlocks],
   );
 
   return (

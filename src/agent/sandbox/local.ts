@@ -25,7 +25,7 @@ export class LocalSandbox implements Sandbox {
   async writeFile(
     path: string,
     content: string,
-    encoding: "utf-8"
+    encoding: "utf-8",
   ): Promise<void> {
     await fs.writeFile(path, content, encoding);
   }
@@ -50,7 +50,7 @@ export class LocalSandbox implements Sandbox {
 
   async readdir(
     path: string,
-    options: { withFileTypes: true }
+    options: { withFileTypes: true },
   ): Promise<Dirent[]> {
     return fs.readdir(path, options);
   }
@@ -58,7 +58,7 @@ export class LocalSandbox implements Sandbox {
   async exec(
     command: string,
     cwd: string,
-    timeoutMs: number
+    timeoutMs: number,
   ): Promise<ExecResult> {
     return new Promise((resolve) => {
       const child = spawn("bash", ["-c", command], {
@@ -127,7 +127,7 @@ export class LocalSandbox implements Sandbox {
  */
 export function createLocalSandbox(
   workingDirectory: string,
-  env?: Record<string, string>
+  env?: Record<string, string>,
 ): Sandbox {
   return new LocalSandbox(workingDirectory, env);
 }

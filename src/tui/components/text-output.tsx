@@ -8,21 +8,25 @@ type TextOutputProps = {
   showReasoning?: boolean;
 };
 
-export function TextOutput({ text, reasoning, showReasoning = false }: TextOutputProps) {
+export function TextOutput({
+  text,
+  reasoning,
+  showReasoning = false,
+}: TextOutputProps) {
   return (
     <Box flexDirection="column">
       {showReasoning && reasoning && (
         <Box marginBottom={1}>
           <Text color="blue" dimColor>
-            {" "}{reasoning}
+            {" "}
+            {reasoning}
           </Text>
         </Box>
       )}
       {text && (
         <Box>
           <Text>
-            <Text color="white">●</Text>
-            {" "}{renderMarkdown(text)}
+            <Text color="white">●</Text> {renderMarkdown(text)}
           </Text>
         </Box>
       )}

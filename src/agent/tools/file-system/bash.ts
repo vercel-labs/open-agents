@@ -1,7 +1,11 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import { isPathWithinDirectory, getSandbox, getApprovalContext } from "../../utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  getApprovalContext,
+} from "../../utils";
 import type { ApprovalRule } from "../../types";
 
 const TIMEOUT_MS = 120_000;
@@ -25,7 +29,10 @@ interface ToolOptions {
  * Check if the cwd parameter is outside the working directory.
  * If cwd is not provided, it defaults to working directory (no approval needed for path).
  */
-function cwdIsOutsideWorkingDirectory(cwd: string | undefined, workingDirectory: string): boolean {
+function cwdIsOutsideWorkingDirectory(
+  cwd: string | undefined,
+  workingDirectory: string,
+): boolean {
   if (!cwd) {
     return false;
   }
@@ -38,7 +45,10 @@ function cwdIsOutsideWorkingDirectory(cwd: string | undefined, workingDirectory:
 /**
  * Check if a command matches any command-prefix approval rules.
  */
-function commandMatchesApprovalRule(command: string, approvalRules: ApprovalRule[]): boolean {
+function commandMatchesApprovalRule(
+  command: string,
+  approvalRules: ApprovalRule[],
+): boolean {
   const trimmedCommand = command.trim();
   for (const rule of approvalRules) {
     if (rule.type === "command-prefix" && rule.tool === "bash") {
@@ -90,10 +100,10 @@ const DANGEROUS_COMMAND_PATTERNS = [
   /\byarn\s+(add|remove|publish)/,
   /\bbun\s+(add|remove|install)/,
   /\bpip\s+install/,
-  />/,  // redirects
-  /\|/,  // pipes (could be dangerous)
-  /&&/,  // command chaining
-  /;/,   // command chaining
+  />/, // redirects
+  /\|/, // pipes (could be dangerous)
+  /&&/, // command chaining
+  /;/, // command chaining
 ];
 
 /**
@@ -102,56 +112,57 @@ const DANGEROUS_COMMAND_PATTERNS = [
  */
 export function commandNeedsApproval(command: string): boolean {
   const trimmedCommand = command.trim();
-  
+
   // Check for dangerous patterns first
   for (const pattern of DANGEROUS_COMMAND_PATTERNS) {
     if (pattern.test(trimmedCommand)) {
       return true;
     }
   }
-  
+
   // Check if it starts with a safe command
   for (const prefix of SAFE_COMMAND_PREFIXES) {
     if (trimmedCommand.startsWith(prefix)) {
       return false;
     }
   }
-  
+
   // Default to requiring approval for unknown commands
   return true;
 }
 
-export const bashTool = (options?: ToolOptions) => tool({
-  needsApproval: async (args, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
-    // Always need approval if cwd is outside working directory (even in background mode)
-    if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
-      return true;
-    }
-    // In background mode, auto-approve all operations within working directory
-    if (ctx.mode === "background") {
-      return false;
-    }
-    // Auto-approve all bash commands when autoApprove is "all"
-    if (ctx.autoApprove === "all") {
-      return false;
-    }
-    // Check if command matches any saved approval rules
-    if (commandMatchesApprovalRule(args.command, ctx.approvalRules)) {
-      return false;
-    }
-    // Check command safety
-    if (commandNeedsApproval(args.command)) {
-      // If command is dangerous, check user's approval setting
-      if (typeof options?.needsApproval === "function") {
-        return options.needsApproval(args);
+export const bashTool = (options?: ToolOptions) =>
+  tool({
+    needsApproval: async (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context);
+      // Always need approval if cwd is outside working directory (even in background mode)
+      if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
+        return true;
       }
-      return options?.needsApproval ?? true;
-    }
-    // Command is safe - no approval needed
-    return false;
-  },
-  description: `Execute a bash command in the user's shell (non-interactive).
+      // In background mode, auto-approve all operations within working directory
+      if (ctx.mode === "background") {
+        return false;
+      }
+      // Auto-approve all bash commands when autoApprove is "all"
+      if (ctx.autoApprove === "all") {
+        return false;
+      }
+      // Check if command matches any saved approval rules
+      if (commandMatchesApprovalRule(args.command, ctx.approvalRules)) {
+        return false;
+      }
+      // Check command safety
+      if (commandNeedsApproval(args.command)) {
+        // If command is dangerous, check user's approval setting
+        if (typeof options?.needsApproval === "function") {
+          return options.needsApproval(args);
+        }
+        return options?.needsApproval ?? true;
+      }
+      // Command is safe - no approval needed
+      return false;
+    },
+    description: `Execute a bash command in the user's shell (non-interactive).
 
 WHEN TO USE:
 - Running existing project commands (build, test, lint, typecheck)
@@ -187,24 +198,26 @@ EXAMPLES:
 - Run the test suite: command: "npm test", cwd: "/Users/username/project"
 - Check git status: command: "git status --short"
 - List files in src: command: "ls -la", cwd: "/Users/username/project/src"`,
-  inputSchema: bashInputSchema,
-  execute: async ({ command, cwd }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context);
-    const workingDirectory = sandbox.workingDirectory;
+    inputSchema: bashInputSchema,
+    execute: async ({ command, cwd }, { experimental_context }) => {
+      const sandbox = getSandbox(experimental_context);
+      const workingDirectory = sandbox.workingDirectory;
 
-    // Resolve the working directory
-    const workingDir = cwd
-      ? (path.isAbsolute(cwd) ? cwd : path.resolve(workingDirectory, cwd))
-      : workingDirectory;
+      // Resolve the working directory
+      const workingDir = cwd
+        ? path.isAbsolute(cwd)
+          ? cwd
+          : path.resolve(workingDirectory, cwd)
+        : workingDirectory;
 
-    const result = await sandbox.exec(command, workingDir, TIMEOUT_MS);
+      const result = await sandbox.exec(command, workingDir, TIMEOUT_MS);
 
-    return {
-      success: result.success,
-      exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      ...(result.truncated && { truncated: true }),
-    };
-  },
-});
+      return {
+        success: result.success,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        ...(result.truncated && { truncated: true }),
+      };
+    },
+  });

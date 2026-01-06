@@ -46,7 +46,9 @@ You have full access to file operations (read, write, edit, grep, glob) and bash
 const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the task"),
   instructions: z.string().describe("Detailed instructions for the task"),
-  sandbox: z.custom<Sandbox>().describe("Sandbox for file system and shell operations"),
+  sandbox: z
+    .custom<Sandbox>()
+    .describe("Sandbox for file system and shell operations"),
 });
 
 export type ExecutorCallOptions = z.infer<typeof callOptionsSchema>;
@@ -63,7 +65,7 @@ export const executorSubagent = new ToolLoopAgent({
     // Use smart approval: safe read-only commands run without approval,
     // dangerous commands (rm, git push, etc.) still require approval
     bash: bashTool({
-      needsApproval: ({ command }) => commandNeedsApproval(command)
+      needsApproval: ({ command }) => commandNeedsApproval(command),
     }),
   },
   stopWhen: stepCountIs(30),

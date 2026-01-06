@@ -169,7 +169,15 @@ export function ChatProvider({
       contextLimit,
       approvalRules,
     }),
-    [model, autoAcceptMode, workingDirectory, usage, sessionUsage, contextLimit, approvalRules],
+    [
+      model,
+      autoAcceptMode,
+      workingDirectory,
+      usage,
+      sessionUsage,
+      contextLimit,
+      approvalRules,
+    ],
   );
 
   const cycleAutoAcceptMode = () => {

@@ -3,13 +3,13 @@ import type { TodoItem } from "../../agent/types.js";
 import type { TUIAgentUIMessage, TUIAgentUIToolPart } from "../types.js";
 
 function isTodoWritePart(
-  part: TUIAgentUIToolPart
+  part: TUIAgentUIToolPart,
 ): part is TUIAgentUIToolPart & { type: "tool-todo_write" } {
   return part.type === "tool-todo_write";
 }
 
 export function extractTodosFromMessage(
-  message: TUIAgentUIMessage
+  message: TUIAgentUIMessage,
 ): TodoItem[] | null {
   let latestTodos: TodoItem[] | null = null;
   for (const part of message.parts) {
@@ -26,7 +26,7 @@ export function extractTodosFromMessage(
 }
 
 export function extractTodosFromLastAssistantMessage(
-  messages: TUIAgentUIMessage[]
+  messages: TUIAgentUIMessage[],
 ): TodoItem[] | null {
   // Find the last user message index to separate current vs previous exchanges
   let lastUserMessageIndex = -1;

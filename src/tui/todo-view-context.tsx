@@ -12,7 +12,7 @@ type TodoViewContextValue = {
 };
 
 const TodoViewContext = createContext<TodoViewContextValue | undefined>(
-  undefined
+  undefined,
 );
 
 export function TodoViewProvider({ children }: { children: ReactNode }) {

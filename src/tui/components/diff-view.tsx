@@ -15,7 +15,13 @@ type DiffViewProps = {
   maxLines?: number;
 };
 
-export function DiffView({ filePath, additions, removals, lines, maxLines = 10 }: DiffViewProps) {
+export function DiffView({
+  filePath,
+  additions,
+  removals,
+  lines,
+  maxLines = 10,
+}: DiffViewProps) {
   const displayLines = lines.slice(0, maxLines);
 
   return (
@@ -25,9 +31,13 @@ export function DiffView({ filePath, additions, removals, lines, maxLines = 10 }
         <Text color="gray">└ Updated </Text>
         <Text bold>{filePath}</Text>
         <Text color="gray"> with </Text>
-        <Text color="green">{additions} addition{additions !== 1 ? 's' : ''}</Text>
+        <Text color="green">
+          {additions} addition{additions !== 1 ? "s" : ""}
+        </Text>
         <Text color="gray"> and </Text>
-        <Text color="red">{removals} removal{removals !== 1 ? 's' : ''}</Text>
+        <Text color="red">
+          {removals} removal{removals !== 1 ? "s" : ""}
+        </Text>
       </Box>
 
       {/* Diff lines */}
@@ -35,22 +45,32 @@ export function DiffView({ filePath, additions, removals, lines, maxLines = 10 }
         {displayLines.map((line, i) => (
           <Box key={i}>
             {/* Line number */}
-            <Text color="gray">{String(line.lineNumber).padStart(3, ' ')} </Text>
+            <Text color="gray">
+              {String(line.lineNumber).padStart(3, " ")}{" "}
+            </Text>
 
             {/* +/- indicator and content */}
             {line.type === "addition" ? (
               <>
-                <Text color="green" backgroundColor="greenBright">+ </Text>
-                <Text color="white" backgroundColor="green">{line.content}</Text>
+                <Text color="green" backgroundColor="greenBright">
+                  +{" "}
+                </Text>
+                <Text color="white" backgroundColor="green">
+                  {line.content}
+                </Text>
               </>
             ) : line.type === "removal" ? (
               <>
-                <Text color="red" backgroundColor="redBright">- </Text>
-                <Text color="white" backgroundColor="red">{line.content}</Text>
+                <Text color="red" backgroundColor="redBright">
+                  -{" "}
+                </Text>
+                <Text color="white" backgroundColor="red">
+                  {line.content}
+                </Text>
               </>
             ) : (
               <>
-                <Text color="gray">  </Text>
+                <Text color="gray"> </Text>
                 <Text>{line.content}</Text>
               </>
             )}
@@ -62,9 +82,13 @@ export function DiffView({ filePath, additions, removals, lines, maxLines = 10 }
 }
 
 // Helper to parse edit tool output into diff lines
-export function parseEditOutput(oldString: string, newString: string, startLine: number = 1): DiffLine[] {
-  const oldLines = oldString.split('\n');
-  const newLines = newString.split('\n');
+export function parseEditOutput(
+  oldString: string,
+  newString: string,
+  startLine: number = 1,
+): DiffLine[] {
+  const oldLines = oldString.split("\n");
+  const newLines = newString.split("\n");
   const result: DiffLine[] = [];
 
   let lineNum = startLine;

@@ -41,7 +41,7 @@ async function getGitFiles(cwd: string): Promise<Suggestion[]> {
             results.push({
               value: dirPath + "/",
               display: dirPath + "/",
-              isDirectory: true
+              isDirectory: true,
             });
           }
         }
@@ -50,7 +50,7 @@ async function getGitFiles(cwd: string): Promise<Suggestion[]> {
         results.push({
           value: file,
           display: file,
-          isDirectory: false
+          isDirectory: false,
         });
       }
 
@@ -98,7 +98,7 @@ async function getCachedFiles(cwd: string): Promise<Suggestion[]> {
  */
 export async function getFileSuggestions(
   partialPath: string,
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
 ): Promise<Suggestion[]> {
   const allFiles = await getCachedFiles(cwd);
   const query = partialPath.toLowerCase();
@@ -108,7 +108,10 @@ export async function getFileSuggestions(
     // Show top-level items when no query
     const results: Suggestion[] = [];
     for (const f of allFiles) {
-      if (!f.value.includes("/") || (f.isDirectory && !f.value.slice(0, -1).includes("/"))) {
+      if (
+        !f.value.includes("/") ||
+        (f.isDirectory && !f.value.slice(0, -1).includes("/"))
+      ) {
         results.push(f);
         if (results.length >= maxResults) break;
       }
@@ -133,7 +136,7 @@ export async function getFileSuggestions(
  */
 export function extractMention(
   text: string,
-  cursorPosition: number
+  cursorPosition: number,
 ): { mentionStart: number; partialPath: string } | null {
   // Find the @ symbol before cursor
   let atIndex = -1;

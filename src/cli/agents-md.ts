@@ -73,7 +73,7 @@ async function findAgentsMdFiles(startDirectory: string): Promise<string[]> {
  * @returns Combined content and list of files found, or null if no files found
  */
 export async function loadAgentsMd(
-  workingDirectory: string
+  workingDirectory: string,
 ): Promise<AgentsMdResult | null> {
   const files = await findAgentsMdFiles(workingDirectory);
 

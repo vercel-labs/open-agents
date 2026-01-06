@@ -34,7 +34,9 @@ IMPORTANT:
   inputSchema: z.object({
     todos: z
       .array(todoItemSchema)
-      .describe("The complete list of todo items. This replaces existing todos."),
+      .describe(
+        "The complete list of todo items. This replaces existing todos.",
+      ),
   }),
   execute: async ({ todos }) => {
     return {

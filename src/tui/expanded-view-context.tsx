@@ -12,7 +12,7 @@ type ExpandedViewContextValue = {
 };
 
 const ExpandedViewContext = createContext<ExpandedViewContextValue | undefined>(
-  undefined
+  undefined,
 );
 
 export function ExpandedViewProvider({ children }: { children: ReactNode }) {
@@ -38,7 +38,7 @@ export function useExpandedView() {
   const context = useContext(ExpandedViewContext);
   if (!context) {
     throw new Error(
-      "useExpandedView must be used within an ExpandedViewProvider"
+      "useExpandedView must be used within an ExpandedViewProvider",
     );
   }
   return context;

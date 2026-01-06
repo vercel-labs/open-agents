@@ -16,7 +16,7 @@ type SuggestionsProps = {
 function calculateWindow(
   selectedIndex: number,
   totalItems: number,
-  maxDisplay: number
+  maxDisplay: number,
 ): { windowStart: number; windowEnd: number } {
   if (totalItems <= maxDisplay) {
     return { windowStart: 0, windowEnd: totalItems };
@@ -52,7 +52,7 @@ export const Suggestions = memo(function Suggestions({
   // Calculate window based on selected index
   const { windowStart, windowEnd } = useMemo(
     () => calculateWindow(selectedIndex, suggestions.length, maxDisplay),
-    [selectedIndex, suggestions.length]
+    [selectedIndex, suggestions.length],
   );
 
   const displayedSuggestions = suggestions.slice(windowStart, windowEnd);
@@ -62,12 +62,7 @@ export const Suggestions = memo(function Suggestions({
   const itemsBelow = suggestions.length - windowEnd;
 
   return (
-    <Box
-      flexDirection="column"
-      paddingLeft={1}
-      paddingRight={1}
-      marginTop={0}
-    >
+    <Box flexDirection="column" paddingLeft={1} paddingRight={1} marginTop={0}>
       {/* Scroll indicator: items above */}
       {hasItemsAbove && (
         <Text color="gray" dimColor>

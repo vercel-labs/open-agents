@@ -14,10 +14,13 @@ export type TUIAgentCallOptions = Parameters<
 
 export type TUIAgentMessageMetadata = {
   usage: LanguageModelUsage;
-}
+};
 
 // all derived
-export type TUIAgentUIMessage = InferAgentUIMessage<TUIAgent, TUIAgentMessageMetadata>;
+export type TUIAgentUIMessage = InferAgentUIMessage<
+  TUIAgent,
+  TUIAgentMessageMetadata
+>;
 export type TUIAgentUIMessagePart = TUIAgentUIMessage["parts"][number];
 export type TUIAgentTools = TUIAgent["tools"];
 export type TUIAgentUITools = InferUITools<TUIAgentTools>;

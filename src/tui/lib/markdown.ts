@@ -113,7 +113,7 @@ marked.use({
           const text = this.parser.parseInline(cell.tokens).trim();
           colWidths[i] = Math.max(colWidths[i] ?? 0, text.length);
           return text;
-        })
+        }),
       );
 
       // Build the table
@@ -127,7 +127,7 @@ marked.use({
 
       // Body rows
       const bodyRows = rowTexts.map((row) =>
-        row.map((text, i) => ` ${pad(text, colWidths[i] ?? 0)} `).join("│")
+        row.map((text, i) => ` ${pad(text, colWidths[i] ?? 0)} `).join("│"),
       );
 
       return (

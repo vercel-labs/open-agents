@@ -1,6 +1,10 @@
 import { $ } from "bun";
 
-export type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+export type ImageMediaType =
+  | "image/png"
+  | "image/jpeg"
+  | "image/gif"
+  | "image/webp";
 
 export type ClipboardImage = {
   data: Buffer;
@@ -36,7 +40,7 @@ export function getImageMediaType(path: string): ImageMediaType | null {
 }
 
 export async function loadImageFromPath(
-  filePath: string
+  filePath: string,
 ): Promise<ClipboardImage | null> {
   try {
     // Clean up: remove quotes, unescape backslash-escaped spaces
@@ -70,8 +74,7 @@ export async function getClipboardImage(): Promise<ClipboardImage | null> {
 
 async function getClipboardImageMacOS(): Promise<ClipboardImage | null> {
   try {
-    const result =
-      await $`osascript -e 'clipboard info' 2>/dev/null`.text();
+    const result = await $`osascript -e 'clipboard info' 2>/dev/null`.text();
     if (
       !result.includes("«class PNGf»") &&
       !result.includes("JPEG picture") &&

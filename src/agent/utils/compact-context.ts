@@ -1,4 +1,9 @@
-import { pruneMessages, type ModelMessage, type StepResult, type ToolSet } from "ai";
+import {
+  pruneMessages,
+  type ModelMessage,
+  type StepResult,
+  type ToolSet,
+} from "ai";
 
 export interface CompactContextOptions<T extends ToolSet> {
   messages: ModelMessage[];
@@ -21,13 +26,13 @@ export interface CompactContextOptions<T extends ToolSet> {
  *
  * This strategy is from OpenCode (https://x.com/thdxr/status/1968083076841607279?s=20)
  */
- export function compactContext<T extends ToolSet>({
-   messages,
-   steps,
-   tokenThreshold = 40_000, // adjust
-   minTrimSavings = 20_000, // adjust
-   protectLastUserMessages = 3, // adjust
- }: CompactContextOptions<T>): ModelMessage[] {
+export function compactContext<T extends ToolSet>({
+  messages,
+  steps,
+  tokenThreshold = 40_000, // adjust
+  minTrimSavings = 20_000, // adjust
+  protectLastUserMessages = 3, // adjust
+}: CompactContextOptions<T>): ModelMessage[] {
   if (messages.length === 0) return messages;
 
   // Step 1: Get current token usage from the last step
@@ -43,7 +48,10 @@ export interface CompactContextOptions<T extends ToolSet> {
   }
 
   // Step 3: Estimate tool tokens that would be saved
-  const toolTokensToTrim = estimateToolTokensBeforeCutoff(messages, cutoffIndex);
+  const toolTokensToTrim = estimateToolTokensBeforeCutoff(
+    messages,
+    cutoffIndex,
+  );
   if (toolTokensToTrim < minTrimSavings) {
     return messages; // Not enough savings to justify trimming
   }
@@ -52,9 +60,10 @@ export interface CompactContextOptions<T extends ToolSet> {
   const messagesToProtect = messages.length - cutoffIndex;
 
   // When protecting 0 messages, prune all tool calls
-  const toolCallsOption = messagesToProtect === 0
-    ? "all"
-    : `before-last-${messagesToProtect}-messages` as const;
+  const toolCallsOption =
+    messagesToProtect === 0
+      ? "all"
+      : (`before-last-${messagesToProtect}-messages` as const);
 
   return pruneMessages({
     messages,
@@ -63,7 +72,9 @@ export interface CompactContextOptions<T extends ToolSet> {
   });
 }
 
-function getCurrentTokenUsage<T extends ToolSet>(steps: StepResult<T>[]): number {
+function getCurrentTokenUsage<T extends ToolSet>(
+  steps: StepResult<T>[],
+): number {
   if (steps.length === 0) return 0;
   const lastStep = steps[steps.length - 1];
   if (!lastStep) return 0;
@@ -72,7 +83,7 @@ function getCurrentTokenUsage<T extends ToolSet>(steps: StepResult<T>[]): number
 
 function findCutoffIndex(
   messages: ModelMessage[],
-  protectLastUserMessages: number
+  protectLastUserMessages: number,
 ): number {
   // Special case: protect nothing, allow pruning all old tool calls
   if (protectLastUserMessages === 0) {
@@ -94,7 +105,7 @@ function findCutoffIndex(
 
 function estimateToolTokensBeforeCutoff(
   messages: ModelMessage[],
-  cutoffIndex: number
+  cutoffIndex: number,
 ): number {
   let toolChars = 0;
   for (let i = 0; i < cutoffIndex; i++) {
