@@ -7,6 +7,10 @@ chalk.level = 3;
 
 const marked = new Marked({ async: false });
 
+function pad(text: string, width: number) {
+  return text.padEnd(width);
+}
+
 marked.use({
   renderer: {
     code({ text, lang }: Tokens.Code): string {
@@ -117,7 +121,6 @@ marked.use({
       );
 
       // Build the table
-      const pad = (text: string, width: number) => text.padEnd(width);
       const separator = colWidths.map((w) => "─".repeat(w + 2)).join("┼");
 
       // Header row
