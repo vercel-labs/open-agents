@@ -2,6 +2,7 @@ export type { Sandbox, SandboxStats, ExecResult } from "./interface";
 export { LocalSandbox, createLocalSandbox } from "./local";
 export {
   VercelSandbox,
-  createVercelSandbox,
+  connectVercelSandbox,
   type VercelSandboxConfig,
+  type VercelSandboxConnectConfig,
 } from "./vercel";
