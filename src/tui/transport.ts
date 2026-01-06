@@ -34,6 +34,7 @@ export function createAgentTransport({
       // tool approval responses for locally-executed tools
       const modelMessages = await convertToModelMessages(messages, {
         tools: agent.tools,
+        ignoreIncompleteToolCalls: true,
       });
 
       // Prune incomplete messages from aborted requests
