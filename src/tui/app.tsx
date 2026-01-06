@@ -576,7 +576,7 @@ function AppContent({ options }: AppProps) {
     if (options?.initialPrompt) {
       sendMessage({ text: options.initialPrompt });
     }
-  }, []);
+  }, []); // oxlint-disable-line exhaustive-deps -- intentionally run only on mount
 
   const handleSubmit = useCallback(
     (prompt: string, files?: FileUIPart[]) => {
