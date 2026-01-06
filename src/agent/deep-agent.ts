@@ -13,7 +13,7 @@ import {
 import { buildSystemPrompt } from "./system-prompt";
 import type { TodoItem, AgentMode, ApprovalRule } from "./types";
 import { approvalRuleSchema } from "./types";
-import { addCacheControl, compactContext, getSandbox } from "./utils";
+import { addCacheControl, compactContext } from "./utils";
 import { gateway } from "../models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
 
@@ -84,14 +84,9 @@ export const deepAgent = new ToolLoopAgent({
       experimental_context: { sandbox, mode, autoApprove, approvalRules },
     };
   },
-  onFinish: async ({ experimental_context }) => {
-    try {
-      const sandbox = getSandbox(experimental_context);
-      await sandbox.stop();
-    } catch {
-      // Sandbox not available, nothing to clean up
-    }
-  },
+  // Sandbox lifecycle is managed by the consumer, not the agent.
+  // Consumers should call sandbox.stop() when they're done with the sandbox.
+  onFinish: async () => {},
 });
 
 export function extractTodosFromStep(
