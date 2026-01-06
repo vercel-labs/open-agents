@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun add:*)",
+      "Bash(bun run typecheck:*)",
+      "Bash(ls:*)",
+      "Bash(bun -e:*)",
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(cat:*)",
+      "Bash(jq:*)",
+      "Bash(python3 -c:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|tsx|js|jsx|json)$'; then biome format --write \"$file_path\" 2>/dev/null; fi; }"
+          }
+        ]
+      }
+    ]
+  }
+}
