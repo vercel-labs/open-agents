@@ -2,49 +2,142 @@
 
 import { createTUI } from "../tui/index.js";
 import { loadAgentsMd } from "./agents-md.js";
+import { onCleanup, cleanup } from "./cleanup-handler.js";
+import {
+  createSandbox,
+  parseSandboxType,
+  type SandboxType,
+} from "./sandbox-factory.js";
+import { showSpinner } from "./spinner.js";
+
+function printHelp() {
+  console.log("Deep Agent CLI");
+  console.log("");
+  console.log("Usage:");
+  console.log("  deep-agent [options]              Start interactive REPL");
+  console.log("  deep-agent [options] <prompt>     Run a one-shot prompt");
+  console.log("");
+  console.log("Options:");
+  console.log("  --sandbox=<type>  Sandbox to use: local (default), vercel");
+  console.log("  --repo=<repo>     GitHub repo to clone (e.g., vercel/ai)");
+  console.log("  --help, -h        Show this help message");
+  console.log("");
+  console.log("Environment variables (for --sandbox=vercel):");
+  console.log("  GITHUB_TOKEN        GitHub PAT for private repos (optional)");
+  console.log("  SANDBOX_BRANCH      Branch to clone (optional)");
+  console.log("  SANDBOX_NEW_BRANCH  New branch to create (optional)");
+  console.log("");
+  console.log("Examples:");
+  console.log('  deep-agent "Explain the structure of this codebase"');
+  console.log("  deep-agent --sandbox=vercel");
+  console.log("  deep-agent --sandbox=vercel --repo=vercel/ai");
+  console.log('  deep-agent --sandbox=vercel --repo=vercel/ai "Fix the bug"');
+  console.log("");
+  console.log("Keyboard shortcuts:");
+  console.log("  esc           Abort current operation / exit");
+  console.log("  ctrl+c        Force exit");
+  console.log("  shift+tab     Cycle auto-accept mode");
+  console.log("  ctrl+r        Expand tool output (when available)");
+}
+
+interface ParsedArgs {
+  sandboxType: SandboxType;
+  repo?: string;
+  initialPrompt?: string;
+  showHelp: boolean;
+}
+
+function parseArgs(args: string[]): ParsedArgs {
+  let sandboxType: SandboxType = "local";
+  let repo: string | undefined;
+  let showHelp = false;
+  const promptParts: string[] = [];
+
+  for (const arg of args) {
+    if (arg === "--help" || arg === "-h") {
+      showHelp = true;
+    } else if (arg.startsWith("--sandbox=")) {
+      const value = arg.slice("--sandbox=".length);
+      sandboxType = parseSandboxType(value);
+    } else if (arg.startsWith("--repo=")) {
+      repo = arg.slice("--repo=".length);
+    } else if (arg.startsWith("--")) {
+      // Unknown flag - treat as part of prompt for backwards compatibility
+      promptParts.push(arg);
+    } else {
+      promptParts.push(arg);
+    }
+  }
+
+  return {
+    sandboxType,
+    repo,
+    initialPrompt: promptParts.length > 0 ? promptParts.join(" ") : undefined,
+    showHelp,
+  };
+}
 
 async function main() {
   const args = process.argv.slice(2);
   const workingDirectory = process.cwd();
 
-  // Parse arguments
-  const initialPrompt =
-    args.length > 0 && args[0] !== "--help" ? args.join(" ") : undefined;
+  const parsed = parseArgs(args);
 
-  if (args[0] === "--help" || args[0] === "-h") {
-    console.log("Deep Agent CLI");
-    console.log("");
-    console.log("Usage:");
-    console.log("  deep-agent              Start interactive REPL");
-    console.log("  deep-agent <prompt>     Run a one-shot prompt");
-    console.log("");
-    console.log("Examples:");
-    console.log('  deep-agent "Explain the structure of this codebase"');
-    console.log(
-      '  deep-agent "Add a new endpoint to handle user authentication"',
-    );
-    console.log("");
-    console.log("Keyboard shortcuts:");
-    console.log("  esc           Abort current operation / exit");
-    console.log("  ctrl+c        Force exit");
-    console.log("  shift+tab     Cycle auto-accept mode");
-    console.log("  ctrl+r        Expand tool output (when available)");
+  if (parsed.showHelp) {
+    printHelp();
     process.exit(0);
   }
 
+  let sandbox: Awaited<ReturnType<typeof createSandbox>> | undefined;
+  const isRemoteSandbox = parsed.sandboxType !== "local";
+
+  // Register cleanup for remote sandboxes
+  if (isRemoteSandbox) {
+    onCleanup(async () => {
+      if (sandbox) {
+        const spinner = showSpinner("Stopping sandbox...");
+        try {
+          await sandbox.stop();
+        } finally {
+          spinner.stop();
+        }
+      }
+    });
+  }
+
   try {
+    // Create the appropriate sandbox
+    let spinner: ReturnType<typeof showSpinner> | undefined;
+    if (isRemoteSandbox) {
+      const message = parsed.repo
+        ? `Starting sandbox (cloning ${parsed.repo})...`
+        : "Starting sandbox...";
+      spinner = showSpinner(message);
+    }
+
+    try {
+      sandbox = await createSandbox({
+        type: parsed.sandboxType,
+        workingDirectory,
+        repo: parsed.repo,
+      });
+    } finally {
+      spinner?.stop();
+    }
+
     // Load agents.md files from the working directory hierarchy
     const agentsMd = await loadAgentsMd(workingDirectory);
 
     await createTUI({
-      initialPrompt,
-      workingDirectory,
+      initialPrompt: parsed.initialPrompt,
+      workingDirectory: sandbox.workingDirectory,
       header: {
         name: "Open Harness",
         version: "0.1.0",
       },
       agentOptions: {
-        workingDirectory,
+        workingDirectory: sandbox.workingDirectory,
+        sandbox,
         ...(agentsMd?.content && {
           customInstructions: agentsMd.content,
         }),
@@ -57,6 +150,8 @@ async function main() {
     }
     console.error("Error:", error instanceof Error ? error.message : error);
     process.exit(1);
+  } finally {
+    await cleanup();
   }
 }
 
