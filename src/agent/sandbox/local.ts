@@ -8,6 +8,9 @@ const MAX_OUTPUT_LENGTH = 50_000;
 /**
  * Local sandbox implementation using Node.js fs/promises and child_process.
  * This is the default sandbox used when no custom sandbox is provided.
+ *
+ * Note: Lifecycle hooks are not supported for local sandboxes.
+ * Use VercelSandbox for hooks support.
  */
 export class LocalSandbox implements Sandbox {
   readonly workingDirectory: string;
