@@ -46,6 +46,10 @@ export async function createSandbox(
 
       return connectVercelSandbox({
         ...(repoUrl && {
+          gitUser: {
+            name: "Open Harness",
+            email: "open.harness@vercel.com",
+          },
           source: {
             url: repoUrl,
             ...(token && { token }),
