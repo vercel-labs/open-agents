@@ -47,4 +47,6 @@ export type TUIOptions = {
     version?: string;
     model?: string;
   };
+  /** Initial auto-accept mode (defaults to "off") */
+  initialAutoAcceptMode?: AutoAcceptMode;
 };
