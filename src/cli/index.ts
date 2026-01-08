@@ -142,6 +142,8 @@ async function main() {
           customInstructions: agentsMd.content,
         }),
       },
+      // Auto-accept all tools in sandbox mode since it's an isolated environment
+      ...(isRemoteSandbox && { initialAutoAcceptMode: "all" }),
     });
   } catch (error) {
     // Ignore abort errors from ESC key interrupts
