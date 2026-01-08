@@ -173,6 +173,7 @@ export interface BuildSystemPromptOptions {
   mode?: "interactive" | "background";
   currentBranch?: string;
   customInstructions?: string;
+  environmentDetails?: string;
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
@@ -180,6 +181,9 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
   if (options.cwd) {
     parts.push(`\n# Environment\n\nWorking directory: ${options.cwd}`);
+    if (options.environmentDetails) {
+      parts.push(`\n${options.environmentDetails}`);
+    }
   }
 
   if (options.mode === "background") {
