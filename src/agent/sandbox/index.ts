@@ -12,3 +12,8 @@ export {
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,
 } from "./vercel";
+export {
+  JustBashSandbox,
+  createJustBashSandbox,
+  type JustBashSandboxConfig,
+} from "./just-bash";
