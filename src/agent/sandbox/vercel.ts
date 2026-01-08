@@ -75,6 +75,7 @@ export interface VercelSandboxConfig {
  * Runs code in isolated Firecracker MicroVMs.
  */
 export class VercelSandbox implements Sandbox {
+  readonly type = "vercel";
   /**
    * Unique identifier for this sandbox.
    * Use this to reconnect to an existing sandbox via `connectVercelSandbox({ sandboxId })`.
