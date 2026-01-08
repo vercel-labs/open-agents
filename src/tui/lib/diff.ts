@@ -2,9 +2,9 @@
  * Shared diff utilities for rendering file changes in the TUI.
  * Used by both tool-call renderers and approval-panel.
  */
+import { highlight } from "cli-highlight";
 
 // Display constants
-export const DIFF_MAX_WRITE_LINES = 10;
 export const DIFF_MAX_EDIT_LINES = 15;
 export const DIFF_LINE_MAX_WIDTH = 80;
 
@@ -15,48 +15,18 @@ export type DiffLine = {
 };
 
 /**
- * Create diff lines for a write (new file) operation.
- * Shows all lines as additions, with truncation for large files.
+ * Split content into lines, removing trailing empty line from files ending with newline.
+ * "hello\n".split("\n") -> ["hello", ""], but we want ["hello"].
  */
-export function createWriteDiffLines(
-  content: string,
-  maxLines: number = DIFF_MAX_WRITE_LINES,
-): DiffLine[] {
+function splitLines(content: string): string[] {
   if (!content) return [];
-
-  const contentLines = content.split("\n");
-  // Handle empty string case where split returns [""]
-  if (contentLines.length === 1 && contentLines[0] === "") return [];
-
-  const result: DiffLine[] = [];
-
-  if (contentLines.length <= maxLines) {
-    contentLines.forEach((line, i) => {
-      result.push({ type: "addition", lineNumber: i + 1, content: line });
-    });
-  } else {
-    // Show first few and last few lines with separator
-    const showStart = Math.floor(maxLines / 2);
-    const showEnd = maxLines - showStart;
-
-    for (let i = 0; i < showStart; i++) {
-      const line = contentLines[i];
-      if (line !== undefined) {
-        result.push({ type: "addition", lineNumber: i + 1, content: line });
-      }
-    }
-
-    result.push({ type: "separator", content: "..." });
-
-    for (let i = contentLines.length - showEnd; i < contentLines.length; i++) {
-      const line = contentLines[i];
-      if (line !== undefined) {
-        result.push({ type: "addition", lineNumber: i + 1, content: line });
-      }
-    }
+  const lines = content.split("\n");
+  if (lines.length === 1 && lines[0] === "") return [];
+  // Remove trailing empty line from files ending with newline
+  if (lines.length > 1 && lines[lines.length - 1] === "") {
+    return lines.slice(0, -1);
   }
-
-  return result;
+  return lines;
 }
 
 /**
@@ -69,15 +39,8 @@ export function createEditDiffLines(
   startLine: number = 1,
   maxLines: number = DIFF_MAX_EDIT_LINES,
 ): { lines: DiffLine[]; additions: number; removals: number } {
-  // Handle empty strings
-  const oldLines =
-    oldString && !(oldString.split("\n").length === 1 && oldString === "")
-      ? oldString.split("\n")
-      : [];
-  const newLines =
-    newString && !(newString.split("\n").length === 1 && newString === "")
-      ? newString.split("\n")
-      : [];
+  const oldLines = splitLines(oldString);
+  const newLines = splitLines(newString);
 
   const removals = oldLines.length;
   const additions = newLines.length;
@@ -119,4 +82,98 @@ export function createEditDiffLines(
   }
 
   return { lines: result, additions, removals };
+}
+
+/**
+ * Get the language identifier from a file path for syntax highlighting.
+ */
+export function getLanguageFromPath(filePath: string): string | undefined {
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  if (!ext) return undefined;
+
+  const extToLang: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    json: "json",
+    md: "markdown",
+    py: "python",
+    rb: "ruby",
+    rs: "rust",
+    go: "go",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    h: "c",
+    hpp: "cpp",
+    css: "css",
+    scss: "scss",
+    html: "html",
+    xml: "xml",
+    yaml: "yaml",
+    yml: "yaml",
+    toml: "toml",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    sql: "sql",
+    graphql: "graphql",
+    vue: "vue",
+    svelte: "svelte",
+  };
+
+  return extToLang[ext];
+}
+
+export type CodeLine = {
+  content: string;
+  highlighted: string;
+};
+
+// Max lines to display for new file preview
+export const NEW_FILE_MAX_LINES = 200;
+
+/**
+ * Create code lines for displaying a new file with syntax highlighting.
+ * Returns plain content and highlighted version for each line.
+ * Truncates to MAX_LINES for performance, showing first lines only.
+ */
+export function createNewFileCodeLines(
+  content: string,
+  filePath: string,
+  maxLines: number = NEW_FILE_MAX_LINES,
+): { lines: CodeLine[]; totalLines: number; hiddenLines: number } {
+  const contentLines = splitLines(content);
+  if (contentLines.length === 0) {
+    return { lines: [], totalLines: 0, hiddenLines: 0 };
+  }
+
+  const totalLines = contentLines.length;
+  const linesToShow = contentLines.slice(0, maxLines);
+  const hiddenLines = Math.max(0, totalLines - maxLines);
+  const language = getLanguageFromPath(filePath);
+
+  // Highlight only the lines we're showing
+  const codeToHighlight = linesToShow.join("\n");
+  let highlightedCode: string;
+
+  try {
+    highlightedCode = highlight(codeToHighlight, {
+      language: language || undefined,
+      ignoreIllegals: true,
+    });
+  } catch {
+    highlightedCode = codeToHighlight;
+  }
+
+  const highlightedLines = highlightedCode.split("\n");
+  const result: CodeLine[] = linesToShow.map((line, i) => ({
+    content: line,
+    highlighted: highlightedLines[i] ?? line,
+  }));
+
+  return { lines: result, totalLines, hiddenLines };
 }
