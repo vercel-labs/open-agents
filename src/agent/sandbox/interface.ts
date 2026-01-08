@@ -1,6 +1,42 @@
 import type { Dirent } from "fs";
 
 /**
+ * Lifecycle hook that receives the sandbox instance.
+ * Use these to run arbitrary setup or teardown code.
+ */
+export type SandboxHook = (sandbox: Sandbox) => Promise<void>;
+
+/**
+ * Configuration for sandbox lifecycle hooks.
+ */
+export interface SandboxHooks {
+  /**
+   * Called after the sandbox starts and is ready.
+   * Use for setup tasks like configuring credentials, installing dependencies, etc.
+   *
+   * @example
+   * afterStart: async (sandbox) => {
+   *   await sandbox.exec('git config user.name "Bot"', sandbox.workingDirectory, 30000);
+   * }
+   */
+  afterStart?: SandboxHook;
+
+  /**
+   * Called before the sandbox stops.
+   * Use for teardown tasks like committing uncommitted changes, cleanup, etc.
+   *
+   * @example
+   * beforeStop: async (sandbox) => {
+   *   const result = await sandbox.exec('git status --porcelain', sandbox.workingDirectory, 30000);
+   *   if (result.stdout.trim()) {
+   *     await sandbox.exec('git add -A && git commit -m "Auto-commit"', sandbox.workingDirectory, 30000);
+   *   }
+   * }
+   */
+  beforeStop?: SandboxHook;
+}
+
+/**
  * File stats returned by sandbox.stat()
  * Mirrors the subset of fs.Stats used by the tools
  */
@@ -50,6 +86,13 @@ export interface Sandbox {
    * Useful for agents that need to know which branch they're working on.
    */
   readonly currentBranch?: string;
+
+  /**
+   * Lifecycle hooks for this sandbox.
+   * Note: afterStart is called automatically during creation.
+   * beforeStop is called automatically when stop() is invoked.
+   */
+  readonly hooks?: SandboxHooks;
 
   /**
    * Read file contents as UTF-8 string

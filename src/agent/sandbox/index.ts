@@ -1,4 +1,10 @@
-export type { Sandbox, SandboxStats, ExecResult } from "./interface";
+export type {
+  Sandbox,
+  SandboxStats,
+  ExecResult,
+  SandboxHook,
+  SandboxHooks,
+} from "./interface";
 export { LocalSandbox, createLocalSandbox } from "./local";
 export {
   VercelSandbox,
