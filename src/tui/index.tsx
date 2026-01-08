@@ -51,6 +51,7 @@ export async function createTUI(options: TUIOptions): Promise<void> {
       agentOptions={agentOptions}
       model={options.header?.model ?? tuiAgentModelId}
       workingDirectory={options.workingDirectory}
+      initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
@@ -79,6 +80,7 @@ export function renderTUI(options: TUIOptions) {
       agentOptions={agentOptions}
       model={options.header?.model ?? tuiAgentModelId}
       workingDirectory={options.workingDirectory}
+      initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
