@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { createWriteDiffLines } from "../../lib/diff.js";
-import { FileChangeLayout, toRelativePath } from "./shared.js";
+import { createNewFileCodeLines } from "../../lib/diff.js";
+import { NewFileLayout, toRelativePath } from "./shared.js";
 import { useChatContext } from "../../chat-context.js";
 
 export function WriteRenderer({
@@ -14,8 +14,12 @@ export function WriteRenderer({
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
   const content = part.input?.content ?? "";
-  const lines = createWriteDiffLines(content);
-  const additions = content ? content.split("\n").length : 0;
+
+  // Memoize the expensive syntax highlighting operation
+  const { lines, totalLines, hiddenLines } = useMemo(
+    () => createNewFileCodeLines(content, rawFilePath),
+    [content, rawFilePath],
+  );
 
   // Check for tool execution failure (success: false in output)
   const outputError =
@@ -29,12 +33,11 @@ export function WriteRenderer({
     : state;
 
   return (
-    <FileChangeLayout
-      action="Create"
+    <NewFileLayout
       filePath={filePath}
-      additions={additions}
-      removals={0}
       lines={state.running || state.denied || outputError ? [] : lines}
+      totalLines={totalLines}
+      hiddenLines={hiddenLines}
       state={mergedState}
     />
   );
