@@ -89,6 +89,14 @@ export class VercelSandbox implements Sandbox {
    */
   readonly currentBranch?: string;
   readonly hooks?: SandboxHooks;
+  readonly environmentDetails =
+    `- Ephemeral sandbox - all work is lost unless committed and pushed to git
+- Default workflow: create a new branch, commit changes, push, and open a PR (since the sandbox is ephemeral, this ensures work is preserved)
+- Git is already configured (user, email, remote auth) - no setup or verification needed
+- GitHub CLI (gh) is NOT available - use curl with the GitHub API to create PRs
+  Use the $GITHUB_TOKEN environment variable directly (do not paste the actual token):
+  curl -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/OWNER/REPO/pulls -d '{"title":"...","head":"branch","base":"main","body":"..."}'
+- Node.js runtime with npm/pnpm available`;
   private sdk: VercelSandboxSDK;
 
   private constructor(

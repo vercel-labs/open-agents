@@ -16,6 +16,9 @@ export class LocalSandbox implements Sandbox {
   readonly type = "local";
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
+  readonly environmentDetails = `- Full shell access with all standard CLI tools
+- Git and GitHub CLI (gh) available
+- Can install packages and run any commands`;
 
   constructor(workingDirectory: string, env?: Record<string, string>) {
     this.workingDirectory = workingDirectory;

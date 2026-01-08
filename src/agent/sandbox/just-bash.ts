@@ -69,6 +69,11 @@ export class JustBashSandbox implements Sandbox {
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
   readonly hooks?: SandboxHooks;
+  readonly environmentDetails =
+    `- Simulated shell environment (not a real bash process)
+- Git is NOT available - do not attempt git operations
+- Limited to basic file operations and shell commands
+- No package installation or network access`;
 
   private bash: Bash;
   private mode: "memory" | "overlay";
