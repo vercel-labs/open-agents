@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, type ReactNode } from "react";
 import { Box, Text } from "ink";
-import type { DiffLine } from "../../lib/diff.js";
+import type { DiffLine, CodeLine } from "../../lib/diff.js";
 import type { ToolRenderState } from "../../lib/render-tool.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -204,6 +204,105 @@ export function FileChangeLayout({
                 )}
               </Box>
             ))}
+          </Box>
+        )}
+
+      {state.denied && (
+        <Box paddingLeft={2}>
+          <Text color="gray">└ </Text>
+          <Text color="red">
+            Denied{state.denialReason ? `: ${state.denialReason}` : ""}
+          </Text>
+        </Box>
+      )}
+
+      {state.error && (
+        <Box paddingLeft={2}>
+          <Text color="gray">└ </Text>
+          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Layout for new file creation with syntax-highlighted code preview.
+ */
+export function NewFileLayout({
+  filePath,
+  lines,
+  totalLines,
+  hiddenLines,
+  state,
+}: {
+  filePath: string;
+  lines: CodeLine[];
+  totalLines: number;
+  hiddenLines: number;
+  state: ToolRenderState;
+}) {
+  const dotColor = getDotColor(state);
+  const showCode =
+    state.approvalRequested ||
+    (!state.running && !state.error && !state.denied);
+
+  return (
+    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+      {/* Header: ● Create(src/file.ts) */}
+      <Box>
+        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
+        <Text bold color="white">
+          Create
+        </Text>
+        <Text color="gray">(</Text>
+        <Text color="white">{filePath}</Text>
+        <Text color="gray">)</Text>
+      </Box>
+
+      {/* Show Running/Waiting status for approval-requested tools */}
+      {state.approvalRequested && (
+        <Box paddingLeft={2}>
+          <Text color="gray">└ </Text>
+          <Text color="gray">
+            {state.isActiveApproval ? "Running…" : "Waiting…"}
+          </Text>
+        </Box>
+      )}
+
+      {/* Subheader: └ Created src/file.ts (N lines) */}
+      {showCode && !state.approvalRequested && !state.denied && (
+        <Box paddingLeft={2}>
+          <Text color="gray">└ </Text>
+          <Text>Created </Text>
+          <Text bold>{filePath}</Text>
+          <Text color="gray">
+            {" "}
+            ({totalLines} line{totalLines !== 1 ? "s" : ""})
+          </Text>
+        </Box>
+      )}
+
+      {/* Code preview with syntax highlighting */}
+      {showCode &&
+        !state.approvalRequested &&
+        !state.denied &&
+        lines.length > 0 && (
+          <Box
+            flexDirection="column"
+            marginLeft={2}
+            borderStyle="round"
+            borderColor="gray"
+            paddingX={1}
+          >
+            {lines.map((line, i) => (
+              <Text key={i}>{line.highlighted}</Text>
+            ))}
+            {hiddenLines > 0 && (
+              <Text color="gray">
+                ... {hiddenLines} more line{hiddenLines !== 1 ? "s" : ""}
+              </Text>
+            )}
           </Box>
         )}
 
