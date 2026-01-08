@@ -211,10 +211,11 @@ export class VercelSandbox implements Sandbox {
     }
 
     // Use base64 encoding to safely handle special characters
+    // Use printf '%s' instead of echo to avoid interpreting backslash sequences
     const base64Content = Buffer.from(content, "utf-8").toString("base64");
     const result = await this.sdk.runCommand({
       cmd: "bash",
-      args: ["-c", `echo "${base64Content}" | base64 -d > "${path}"`],
+      args: ["-c", `printf '%s' "${base64Content}" | base64 -d > "${path}"`],
       env: this.env,
     });
 
@@ -225,9 +226,10 @@ export class VercelSandbox implements Sandbox {
 
   async stat(path: string): Promise<SandboxStats> {
     // Use stat command to get file info
+    // Use tab delimiter to avoid issues with file types containing spaces (e.g., "regular file")
     const result = await this.sdk.runCommand({
       cmd: "stat",
-      args: ["-c", "%F %s %Y", path],
+      args: ["-c", "%F\t%s\t%Y", path],
       env: this.env,
     });
 
@@ -236,7 +238,7 @@ export class VercelSandbox implements Sandbox {
     }
 
     const output = (await result.stdout()).trim();
-    const [fileType, sizeStr, mtimeStr] = output.split(" ");
+    const [fileType, sizeStr, mtimeStr] = output.split("\t");
 
     const isDir = fileType === "directory";
     const size = parseInt(sizeStr ?? "0", 10);
