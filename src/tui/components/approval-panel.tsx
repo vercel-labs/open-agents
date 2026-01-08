@@ -5,9 +5,11 @@ import { useChatContext } from "../chat-context.js";
 import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
 import { inferApprovalRule } from "../lib/approval.js";
 import {
-  createWriteDiffLines,
+  createNewFileCodeLines,
   createEditDiffLines,
   DIFF_LINE_MAX_WIDTH,
+  type CodeLine,
+  type DiffLine,
 } from "../lib/diff.js";
 
 export type ApprovalPanelProps = {
@@ -52,22 +54,34 @@ export function ApprovalPanel({
   // When !canSaveRule: 0=Yes, 1=Reason (skip "don't ask again")
   const reasonOptionIndex = canSaveRule ? 2 : 1;
 
-  // Generate diff lines if this is a write or edit operation
-  const diffInfo = useMemo(() => {
+  // Generate preview info for write or edit operations
+  const previewInfo = useMemo(():
+    | {
+        type: "newFile";
+        lines: CodeLine[];
+        totalLines: number;
+        hiddenLines: number;
+      }
+    | { type: "edit"; lines: DiffLine[]; additions: number; removals: number }
+    | null => {
     if (!toolPart) return null;
 
     if (toolPart.type === "tool-write") {
       const content = String(toolPart.input?.content ?? "");
-      const lines = createWriteDiffLines(content);
-      const additions = content ? content.split("\n").length : 0;
-      return { lines, additions, removals: 0 };
+      const filePath = String(toolPart.input?.filePath ?? "");
+      const { lines, totalLines, hiddenLines } = createNewFileCodeLines(
+        content,
+        filePath,
+      );
+      return { type: "newFile", lines, totalLines, hiddenLines };
     }
 
     if (toolPart.type === "tool-edit") {
       const oldString = String(toolPart.input?.oldString ?? "");
       const newString = String(toolPart.input?.newString ?? "");
       const startLine = Number(toolPart.input?.startLine) || 1;
-      return createEditDiffLines(oldString, newString, startLine);
+      const result = createEditDiffLines(oldString, newString, startLine);
+      return { type: "edit", ...result };
     }
 
     return null;
@@ -143,10 +157,31 @@ export function ApprovalPanel({
         {toolDescription && <Text color="gray">{toolDescription}</Text>}
       </Box>
 
-      {/* Diff preview */}
-      {diffInfo && diffInfo.lines.length > 0 && (
+      {/* Code preview for new files */}
+      {previewInfo?.type === "newFile" && previewInfo.lines.length > 0 && (
+        <Box
+          flexDirection="column"
+          marginTop={1}
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={1}
+        >
+          {previewInfo.lines.map((line, i) => (
+            <Text key={i}>{line.highlighted}</Text>
+          ))}
+          {previewInfo.hiddenLines > 0 && (
+            <Text color="gray">
+              ... {previewInfo.hiddenLines} more line
+              {previewInfo.hiddenLines !== 1 ? "s" : ""}
+            </Text>
+          )}
+        </Box>
+      )}
+
+      {/* Diff preview for edits */}
+      {previewInfo?.type === "edit" && previewInfo.lines.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
-          {diffInfo.lines.map((line, i) => (
+          {previewInfo.lines.map((line, i) => (
             <Box key={i}>
               {line.type === "separator" ? (
                 <Text color="gray"> {line.content}</Text>
