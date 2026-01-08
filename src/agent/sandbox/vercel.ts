@@ -1,6 +1,11 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Dirent } from "fs";
-import type { Sandbox, SandboxStats, ExecResult } from "./interface";
+import type {
+  Sandbox,
+  SandboxStats,
+  ExecResult,
+  SandboxHooks,
+} from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
@@ -22,6 +27,16 @@ export interface VercelSandboxConfig {
      * Useful for isolating agent changes from the main branch.
      */
     newBranch?: string;
+  };
+  /**
+   * Git user configuration for commits.
+   * Required if you want the agent to make commits.
+   */
+  gitUser?: {
+    /** Name for git commits (e.g., "AI Agent") */
+    name: string;
+    /** Email for git commits (e.g., "agent@example.com") */
+    email: string;
   };
   /**
    * Environment variables to make available to all commands in the sandbox.
@@ -47,6 +62,12 @@ export interface VercelSandboxConfig {
    * Ports to expose from the sandbox.
    */
   ports?: number[];
+  /**
+   * Lifecycle hooks for setup and teardown.
+   * afterStart is called after the sandbox is created and configured.
+   * beforeStop is called before the sandbox is stopped.
+   */
+  hooks?: SandboxHooks;
 }
 
 /**
@@ -66,6 +87,7 @@ export class VercelSandbox implements Sandbox {
    * Set when a newBranch is created, or when cloning from a specific branch.
    */
   readonly currentBranch?: string;
+  readonly hooks?: SandboxHooks;
   private sdk: VercelSandboxSDK;
 
   private constructor(
@@ -74,12 +96,14 @@ export class VercelSandbox implements Sandbox {
     workingDirectory: string,
     env?: Record<string, string>,
     currentBranch?: string,
+    hooks?: SandboxHooks,
   ) {
     this.sdk = sdk;
     this.id = id;
     this.workingDirectory = workingDirectory;
     this.env = env;
     this.currentBranch = currentBranch;
+    this.hooks = hooks;
   }
 
   /**
@@ -91,11 +115,13 @@ export class VercelSandbox implements Sandbox {
   ): Promise<VercelSandbox> {
     const {
       source,
+      gitUser,
       env,
       vcpus = 2,
       timeout = 300_000,
       runtime = "node22",
       ports,
+      hooks,
     } = config;
 
     // Build the source config with optional authentication
@@ -126,14 +152,33 @@ export class VercelSandbox implements Sandbox {
     const workingDirectory = DEFAULT_WORKING_DIRECTORY;
 
     // Configure git to use the token for push operations if provided
+    // We modify the remote URL to embed credentials directly (standard CI/CD approach)
     if (source?.token) {
+      // Parse the GitHub URL to extract owner/repo
+      const githubUrlMatch = source.url.match(
+        /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/,
+      );
+      if (githubUrlMatch) {
+        const [, owner, repo] = githubUrlMatch;
+        const authenticatedUrl = `https://x-access-token:${source.token}@github.com/${owner}/${repo}.git`;
+        await sdk.runCommand({
+          cmd: "git",
+          args: ["remote", "set-url", "origin", authenticatedUrl],
+          cwd: workingDirectory,
+        });
+      }
+    }
+
+    // Configure git user for commits if provided
+    if (gitUser) {
       await sdk.runCommand({
         cmd: "git",
-        args: [
-          "config",
-          "credential.helper",
-          `!f() { echo "username=x-access-token"; echo "password=${source.token}"; }; f`,
-        ],
+        args: ["config", "user.name", gitUser.name],
+        cwd: workingDirectory,
+      });
+      await sdk.runCommand({
+        cmd: "git",
+        args: ["config", "user.email", gitUser.email],
         cwd: workingDirectory,
       });
     }
@@ -160,13 +205,21 @@ export class VercelSandbox implements Sandbox {
       currentBranch = source.branch;
     }
 
-    return new VercelSandbox(
+    const sandbox = new VercelSandbox(
       sdk,
       sdk.sandboxId,
       workingDirectory,
       env,
       currentBranch,
+      hooks,
     );
+
+    // Call afterStart hook if provided
+    if (hooks?.afterStart) {
+      await hooks.afterStart(sandbox);
+    }
+
+    return sandbox;
   }
 
   /**
@@ -174,15 +227,24 @@ export class VercelSandbox implements Sandbox {
    */
   static async connect(
     sandboxId: string,
-    options: { env?: Record<string, string> } = {},
+    options: { env?: Record<string, string>; hooks?: SandboxHooks } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
-    return new VercelSandbox(
+    const sandbox = new VercelSandbox(
       sdk,
       sandboxId,
       DEFAULT_WORKING_DIRECTORY,
       options.env,
+      undefined,
+      options.hooks,
     );
+
+    // Call afterStart hook if provided (useful for reconnection setup)
+    if (options.hooks?.afterStart) {
+      await options.hooks.afterStart(sandbox);
+    }
+
+    return sandbox;
   }
 
   async readFile(path: string, _encoding: "utf-8"): Promise<string> {
@@ -383,8 +445,12 @@ export class VercelSandbox implements Sandbox {
 
   /**
    * Stop and clean up the sandbox.
+   * Calls beforeStop hook if provided before stopping the sandbox.
    */
   async stop(): Promise<void> {
+    if (this.hooks?.beforeStop) {
+      await this.hooks.beforeStop(this);
+    }
     await this.sdk.stop();
   }
 }
@@ -397,6 +463,8 @@ export interface VercelSandboxConnectConfig {
   sandboxId: string;
   /** Environment variables to make available to commands */
   env?: Record<string, string>;
+  /** Lifecycle hooks for setup and teardown */
+  hooks?: SandboxHooks;
 }
 
 /**
@@ -423,13 +491,17 @@ export interface VercelSandboxConnectConfig {
  * });
  *
  * @example
- * // Clone with authentication and create a new branch for agent work
+ * // Clone with authentication, create a branch, and enable commits/push
  * const sandbox = await connectVercelSandbox({
  *   source: {
  *     url: "https://github.com/owner/repo",
  *     branch: "main",
  *     token: process.env.GITHUB_TOKEN,
  *     newBranch: "agent/feature-123",
+ *   },
+ *   gitUser: {
+ *     name: "AI Agent",
+ *     email: "agent@example.com",
  *   },
  *   env: {
  *     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
@@ -439,12 +511,19 @@ export interface VercelSandboxConnectConfig {
  * // The sandbox exposes the ID and current branch
  * console.log(sandbox.id); // "sandbox-abc123"
  * console.log(sandbox.currentBranch); // "agent/feature-123"
+ *
+ * // Now the agent can commit and push changes:
+ * await sandbox.exec("git add . && git commit -m 'feat: add feature'", sandbox.workingDirectory, 30000);
+ * await sandbox.exec("git push -u origin agent/feature-123", sandbox.workingDirectory, 60000);
  */
 export async function connectVercelSandbox(
   config: VercelSandboxConfig | VercelSandboxConnectConfig = {},
 ): Promise<VercelSandbox> {
   if ("sandboxId" in config) {
-    return VercelSandbox.connect(config.sandboxId, { env: config.env });
+    return VercelSandbox.connect(config.sandboxId, {
+      env: config.env,
+      hooks: config.hooks,
+    });
   }
   return VercelSandbox.create(config);
 }
