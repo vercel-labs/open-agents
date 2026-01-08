@@ -72,15 +72,22 @@ export const deepAgent = new ToolLoopAgent({
     // Use provided sandbox, or create a local sandbox with the working directory
     const sandbox = options?.sandbox ?? createLocalSandbox(workingDirectory);
 
+    let instructions = buildSystemPrompt({
+      cwd: sandbox.workingDirectory,
+      mode,
+      currentBranch: sandbox.currentBranch,
+      customInstructions,
+    });
+
+    if (sandbox.type === "just-bash") {
+      instructions +=
+        "\n\n# Sandbox Limitations\n\nGit commands are not available. Do not attempt git operations.";
+    }
+
     return {
       ...settings,
       model,
-      instructions: buildSystemPrompt({
-        cwd: sandbox.workingDirectory,
-        mode,
-        currentBranch: sandbox.currentBranch,
-        customInstructions,
-      }),
+      instructions,
       experimental_context: { sandbox, mode, autoApprove, approvalRules },
     };
   },
