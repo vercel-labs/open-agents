@@ -101,6 +101,16 @@ export interface Sandbox {
   readonly hooks?: SandboxHooks;
 
   /**
+   * Environment-specific details for the agent system prompt.
+   * Describes available commands, capabilities, and limitations.
+   * Added to the system prompt under the Environment section.
+   *
+   * @example
+   * environmentDetails: "- Git available, GitHub CLI (gh) is NOT available"
+   */
+  readonly environmentDetails?: string;
+
+  /**
    * Read file contents as UTF-8 string
    */
   readFile(path: string, encoding: "utf-8"): Promise<string>;
