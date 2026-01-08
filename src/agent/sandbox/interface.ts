@@ -69,6 +69,12 @@ export interface ExecResult {
  */
 export interface Sandbox {
   /**
+   * Identifier for the sandbox implementation type.
+   * Used to conditionally adjust agent behavior (e.g., disable git instructions).
+   */
+  readonly type?: string;
+
+  /**
    * The working directory for this sandbox.
    * All path validations should be relative to this directory.
    */
