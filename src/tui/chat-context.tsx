@@ -50,6 +50,7 @@ type ChatProviderProps = {
   agentOptions: TUIAgentCallOptions;
   model?: string;
   workingDirectory?: string;
+  initialAutoAcceptMode?: AutoAcceptMode;
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -111,8 +112,11 @@ export function ChatProvider({
   agentOptions,
   model,
   workingDirectory,
+  initialAutoAcceptMode = "off",
 }: ChatProviderProps) {
-  const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>("off");
+  const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
+    initialAutoAcceptMode,
+  );
   const [usage, setUsage] = useState<LanguageModelUsage>(DEFAULT_USAGE);
   const [sessionUsage, setSessionUsage] =
     useState<LanguageModelUsage>(DEFAULT_USAGE);
