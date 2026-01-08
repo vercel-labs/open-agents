@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text } from "ink";
 import { getToolName, isToolUIPart } from "ai";
-import type { TaskToolUIPart } from "../../agent/tools/task-delegation/task.js";
+import type { TaskToolUIPart } from "../../agent/tools/task.js";
 import { ApprovalButtons } from "./tool-call.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

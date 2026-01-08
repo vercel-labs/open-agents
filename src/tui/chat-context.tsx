@@ -20,7 +20,7 @@ import type {
   AutoAcceptMode,
   ApprovalRule,
 } from "./types.js";
-import { getContextLimit } from "../agent/utils/model-context-limits.js";
+import { getContextLimit } from "../agent/context-management/model-limits.js";
 
 type ChatState = {
   model?: string;

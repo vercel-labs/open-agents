@@ -21,7 +21,7 @@ import type {
   TUIAgentUIMessage,
   TUIAgentUIToolPart,
 } from "./types.js";
-import type { TaskToolUIPart } from "../agent/tools/task-delegation/task.js";
+import type { TaskToolUIPart } from "../agent/tools/task.js";
 
 type AppProps = {
   options: TUIOptions;
