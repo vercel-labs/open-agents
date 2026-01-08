@@ -26,7 +26,9 @@
 - [x] sandbox adapter (sandbox.readFile) -> could be mapped to native fs or sandbox command (can live on the experimental_context too)
 - [ ] create action bullet has no space... 
 - [ ] add some kind of check for editing tools blocking if it hasn't been read first!  (cc claude code)
-- [ ] update action / command ui to be white when pending (not orange)
+- [x] update action / command ui to be white when pending (not orange)
+- [ ] explore a tool registry that uses provider defined tools when available...
+- [ ] explore tool registry (server-side) that switches to provider-defined tools when available
 
 ---
 

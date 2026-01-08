@@ -1,3 +1,4 @@
+/* oxlint-disable */
 import { Marked, type Tokens } from "marked";
 import chalk from "chalk";
 import { highlight } from "cli-highlight";

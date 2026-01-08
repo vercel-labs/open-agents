@@ -3,113 +3,12 @@ import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
 import { useChatContext } from "../chat-context.js";
 import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
-import { inferApprovalRule } from "./tool-call.js";
-
-// Display constants
-const DIFF_MAX_WRITE_LINES = 10;
-const DIFF_MAX_EDIT_LINES = 15;
-const DIFF_LINE_MAX_WIDTH = 80;
-
-type DiffLine = {
-  type: "addition" | "removal" | "separator";
-  lineNumber?: number;
-  content: string;
-};
-
-function createWriteDiffLines(content: string): DiffLine[] {
-  if (!content) return [];
-
-  const contentLines = content.split("\n");
-  // Handle empty string case where split returns [""]
-  if (contentLines.length === 1 && contentLines[0] === "") return [];
-
-  const result: DiffLine[] = [];
-
-  if (contentLines.length <= DIFF_MAX_WRITE_LINES) {
-    contentLines.forEach((line, i) => {
-      result.push({ type: "addition", lineNumber: i + 1, content: line });
-    });
-  } else {
-    // Show first few and last few lines with separator
-    const showStart = Math.floor(DIFF_MAX_WRITE_LINES / 2);
-    const showEnd = DIFF_MAX_WRITE_LINES - showStart;
-
-    for (let i = 0; i < showStart; i++) {
-      const line = contentLines[i];
-      if (line !== undefined) {
-        result.push({ type: "addition", lineNumber: i + 1, content: line });
-      }
-    }
-
-    result.push({ type: "separator", content: "..." });
-
-    for (let i = contentLines.length - showEnd; i < contentLines.length; i++) {
-      const line = contentLines[i];
-      if (line !== undefined) {
-        result.push({ type: "addition", lineNumber: i + 1, content: line });
-      }
-    }
-  }
-
-  return result;
-}
-
-function createEditDiffLines(
-  oldString: string,
-  newString: string,
-  startLine: number = 1,
-): { lines: DiffLine[]; additions: number; removals: number } {
-  // Handle empty strings
-  const oldLines =
-    oldString && !(oldString.split("\n").length === 1 && oldString === "")
-      ? oldString.split("\n")
-      : [];
-  const newLines =
-    newString && !(newString.split("\n").length === 1 && newString === "")
-      ? newString.split("\n")
-      : [];
-
-  const removals = oldLines.length;
-  const additions = newLines.length;
-
-  const allLines: DiffLine[] = [];
-
-  oldLines.forEach((line, i) => {
-    allLines.push({
-      type: "removal",
-      lineNumber: startLine + i,
-      content: line,
-    });
-  });
-
-  newLines.forEach((line, i) => {
-    allLines.push({
-      type: "addition",
-      lineNumber: startLine + i,
-      content: line,
-    });
-  });
-
-  // Limit total lines
-  if (allLines.length <= DIFF_MAX_EDIT_LINES) {
-    return { lines: allLines, additions, removals };
-  }
-
-  // Show first portion and last portion with separator
-  const result: DiffLine[] = [];
-  const half = Math.floor(DIFF_MAX_EDIT_LINES / 2);
-  for (let i = 0; i < half; i++) {
-    const line = allLines[i];
-    if (line) result.push(line);
-  }
-  result.push({ type: "separator", content: "..." });
-  for (let i = allLines.length - half; i < allLines.length; i++) {
-    const line = allLines[i];
-    if (line) result.push(line);
-  }
-
-  return { lines: result, additions, removals };
-}
+import { inferApprovalRule } from "../lib/approval.js";
+import {
+  createWriteDiffLines,
+  createEditDiffLines,
+  DIFF_LINE_MAX_WIDTH,
+} from "../lib/diff.js";
 
 export type ApprovalPanelProps = {
   approvalId: string;

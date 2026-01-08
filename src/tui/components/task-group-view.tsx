@@ -74,9 +74,10 @@ type TaskStatus =
   | "complete"
   | "error"
   | "approval-requested"
-  | "denied";
+  | "denied"
+  | "interrupted";
 
-function getTaskStatus(part: TaskToolUIPart): TaskStatus {
+function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
   if (part.state === "approval-requested") return "approval-requested";
   if (part.state === "output-denied") return "denied";
   if (part.state === "output-error") return "error";
@@ -86,7 +87,8 @@ function getTaskStatus(part: TaskToolUIPart): TaskStatus {
     part.state === "input-available" ||
     (part.state === "output-available" && part.preliminary)
   ) {
-    return "running";
+    // If streaming stopped but task is still in a running state, it was interrupted
+    return isStreaming ? "running" : "interrupted";
   }
   return "pending";
 }
@@ -139,6 +141,8 @@ function TaskStatusIndicator({ status }: { status: TaskStatus }) {
       return <Text color="white">●</Text>;
     case "complete":
       return <Text color="green">✓</Text>;
+    case "interrupted":
+      return <Text color="yellow">○</Text>;
     case "error":
     case "denied":
       return <Text color="red">✗</Text>;
@@ -151,12 +155,14 @@ function TaskItem({
   part,
   isLast,
   activeApprovalId,
+  isStreaming,
 }: {
   part: TaskToolUIPart;
   isLast: boolean;
   activeApprovalId: string | null;
+  isStreaming: boolean;
 }) {
-  const status = getTaskStatus(part);
+  const status = getTaskStatus(part, isStreaming);
   const isRunning = status === "running" || status === "pending";
   const elapsedSeconds = useTaskTiming(isRunning);
   const toolCount = countTaskTools(part);
@@ -183,6 +189,8 @@ function TaskItem({
   let nestedStatus = "";
   if (status === "complete") {
     nestedStatus = "Done";
+  } else if (status === "interrupted") {
+    nestedStatus = "Interrupted";
   } else if (denied) {
     nestedStatus = denialReason ? `Denied: ${denialReason}` : "Denied";
   } else if (approvalRequested) {
@@ -239,7 +247,13 @@ function TaskItem({
       {nestedStatus && !isActiveApproval && (
         <Box>
           <Text color="gray">{continueChar}└ </Text>
-          <Text color={denied ? "red" : "gray"}>{nestedStatus}</Text>
+          <Text
+            color={
+              denied ? "red" : status === "interrupted" ? "yellow" : "gray"
+            }
+          >
+            {nestedStatus}
+          </Text>
         </Box>
       )}
     </Box>
@@ -249,28 +263,37 @@ function TaskItem({
 type TaskGroupViewProps = {
   taskParts: TaskToolUIPart[];
   activeApprovalId: string | null;
+  isStreaming: boolean;
 };
 
 export function TaskGroupView({
   taskParts,
   activeApprovalId,
+  isStreaming,
 }: TaskGroupViewProps) {
   if (taskParts.length === 0) return null;
 
   // Count different states
   const hasApprovalPending = taskParts.some(
-    (p) => getTaskStatus(p) === "approval-requested",
+    (p) => getTaskStatus(p, isStreaming) === "approval-requested",
   );
   const runningCount = taskParts.filter((p) => {
-    const status = getTaskStatus(p);
+    const status = getTaskStatus(p, isStreaming);
     return status === "running" || status === "pending";
   }).length;
-  const allComplete = runningCount === 0 && !hasApprovalPending;
+  const interruptedCount = taskParts.filter(
+    (p) => getTaskStatus(p, isStreaming) === "interrupted",
+  ).length;
+  const allComplete =
+    runningCount === 0 && interruptedCount === 0 && !hasApprovalPending;
+  const hasInterrupted = interruptedCount > 0;
 
   // Determine header text
   let headerText: string;
   if (allComplete) {
     headerText = `Completed ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}`;
+  } else if (hasInterrupted && runningCount === 0) {
+    headerText = `Interrupted ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}`;
   } else if (hasApprovalPending && runningCount === 0) {
     headerText = `${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""} (approval needed)`;
   } else {
@@ -283,6 +306,8 @@ export function TaskGroupView({
       <Box>
         {allComplete ? (
           <Text color="green">● </Text>
+        ) : hasInterrupted && runningCount === 0 ? (
+          <Text color="yellow">○ </Text>
         ) : hasApprovalPending && runningCount === 0 ? (
           <Text color="white">● </Text>
         ) : (
@@ -304,6 +329,7 @@ export function TaskGroupView({
             part={part}
             isLast={index === taskParts.length - 1}
             activeApprovalId={activeApprovalId}
+            isStreaming={isStreaming}
           />
         ))}
       </Box>

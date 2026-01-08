@@ -327,6 +327,7 @@ const AssistantMessage = memo(function AssistantMessage({
               key={`task-group-${group.startIndex}`}
               taskParts={group.tasks}
               activeApprovalId={activeApprovalId}
+              isStreaming={isStreaming}
             />
           );
         }

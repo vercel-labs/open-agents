@@ -94,5 +94,12 @@ export function renderTUI(options: TUIOptions) {
 // Re-export components for custom TUI composition
 export * from "./components/index.js";
 
+// Re-export render-tool types and utilities
+export * from "./lib/render-tool.js";
+
+// Re-export lib utilities
+export * from "./lib/diff.js";
+// Note: approval.js exports are already re-exported via components/index.js -> tool-call.js
+
 // Re-export transport for custom usage
 export { createAgentTransport } from "./transport.js";

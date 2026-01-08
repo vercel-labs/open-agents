@@ -8,6 +8,7 @@
   "rules": {
     "no-console": "off",
     "react/rules-of-hooks": "error",
-    "react/exhaustive-deps": "warn"
+    "react/exhaustive-deps": "warn",
+    "typescript/no-explicit-any": "error"
   }
 }

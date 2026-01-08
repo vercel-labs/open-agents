@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|tsx|js|jsx|json)$'; then biome format --write \"$file_path\" 2>/dev/null; fi; }"
+            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|tsx|js|jsx|json)$'; then bunx biome format --write \"$file_path\"; fi; }"
           }
         ]
       }
