@@ -13,6 +13,7 @@ const MAX_OUTPUT_LENGTH = 50_000;
  * Use VercelSandbox for hooks support.
  */
 export class LocalSandbox implements Sandbox {
+  readonly type = "local";
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
 
