@@ -2,9 +2,10 @@ import {
   type Sandbox,
   createLocalSandbox,
   connectVercelSandbox,
+  createJustBashSandbox,
 } from "../agent/sandbox/index.js";
 
-export type SandboxType = "local" | "vercel";
+export type SandboxType = "local" | "vercel" | "just-bash";
 
 export interface SandboxFactoryOptions {
   type: SandboxType;
@@ -61,6 +62,13 @@ export async function createSandbox(
       });
     }
 
+    case "just-bash": {
+      return createJustBashSandbox({
+        workingDirectory,
+        mode: "overlay",
+      });
+    }
+
     default:
       throw new Error(`Unknown sandbox type: ${type}`);
   }
@@ -82,10 +90,14 @@ function expandRepoUrl(repo: string): string {
  */
 export function parseSandboxType(value: string): SandboxType {
   const normalized = value.toLowerCase();
-  if (normalized === "local" || normalized === "vercel") {
+  if (
+    normalized === "local" ||
+    normalized === "vercel" ||
+    normalized === "just-bash"
+  ) {
     return normalized;
   }
   throw new Error(
-    `Invalid sandbox type: ${value}. Valid options: local, vercel`,
+    `Invalid sandbox type: ${value}. Valid options: local, vercel, just-bash`,
   );
 }
