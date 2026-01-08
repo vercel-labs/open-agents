@@ -1,7 +1,7 @@
-export { todoWriteTool } from "./planning/todo";
-export { readFileTool } from "./file-system/read";
-export { writeFileTool, editFileTool } from "./file-system/write";
-export { grepTool } from "./file-system/grep";
-export { globTool } from "./file-system/glob";
-export { bashTool } from "./file-system/bash";
-export { taskTool } from "./task-delegation/task";
+export { todoWriteTool } from "./todo";
+export { readFileTool } from "./read";
+export { writeFileTool, editFileTool } from "./write";
+export { grepTool } from "./grep";
+export { globTool } from "./glob";
+export { bashTool, commandNeedsApproval } from "./bash";
+export { taskTool, type TaskToolUIPart } from "./task";
