@@ -20,7 +20,7 @@ import type {
   AutoAcceptMode,
   ApprovalRule,
 } from "./types.js";
-import { getContextLimit } from "../agent/context-management/model-limits.js";
+import { getContextLimit } from "@open-harness/agent";
 
 type ChatState = {
   model?: string;

@@ -1,0 +1,32 @@
+{
+  "name": "@open-harness/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.1",
+    "@vercel/sandbox": "^1.1.2",
+    "ai": "^6.0.3",
+    "just-bash": "^2.1.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/devtools": "^0.0.2",
+    "@open-harness/tsconfig": "workspace:*",
+    "@types/bun": "latest",
+    "@types/node": "^22",
+    "oxlint": "^1.38.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

@@ -3,7 +3,7 @@ import {
   createLocalSandbox,
   connectVercelSandbox,
   createJustBashSandbox,
-} from "../agent/sandbox/index.js";
+} from "@open-harness/agent";
 
 export type SandboxType = "local" | "vercel" | "just-bash";
 

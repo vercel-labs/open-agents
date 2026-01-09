@@ -1,4 +1,4 @@
-import { deepAgent, deepAgentModelId } from "../agent/deep-agent";
+import { deepAgent, deepAgentModelId } from "@open-harness/agent";
 import type { TUIAgentCallOptions } from "./types";
 
 // Configure your agent here - this is the single source of truth for the TUI

@@ -1,10 +1,10 @@
 # Deep Agent - AI SDK Coding Agent
 
 ## Commands
-- `bun run dev` - Run CLI agent
-- `bun run typecheck` - Type check
-- `bun run lint` - Lint with oxlint
-- `bun run lint:fix` - Lint and auto-fix issues
+- `turbo dev` - Run CLI agent (from root)
+- `turbo typecheck` - Type check all packages
+- `turbo lint` - Lint all packages with oxlint
+- `turbo lint:fix` - Lint and auto-fix issues
 - `bun run format` - Format with Biome
 - `bun run format:check` - Check formatting
 - `bun test` - Run all tests
@@ -13,15 +13,26 @@
 ## After Making Changes
 Always run these commands after modifying code:
 1. `bun run format` - Format code
-2. `bun run lint:fix` - Fix linting issues
-3. `bun run typecheck` - Verify types
+2. `turbo lint:fix` - Fix linting issues
+3. `turbo typecheck` - Verify types
 
-## Architecture
-- `src/agent/` - Core agent: deep-agent.ts (main), system-prompt.ts, types.ts
-- `src/agent/tools/` - Tools: file-system, memory, planning, task-delegation
-- `src/agent/sandbox/` - Sandbox execution, `src/agent/state/` - State management
-- `src/cli/` - CLI entry point, `src/tui/` - Terminal UI with Ink/React
-- `src/models.ts` - Model configuration using AI SDK
+## Monorepo Architecture
+This is a Turborepo monorepo with the following structure:
+
+### Apps
+- `apps/cli/` - CLI entry point application
+
+### Packages
+- `packages/agent/` - Core agent: deep-agent.ts (main), system-prompt.ts, types.ts
+  - `tools/` - Tools: file-system, memory, planning, task-delegation
+  - `sandbox/` - Sandbox execution (local, vercel, just-bash)
+  - `context-management/` - Context and token management
+  - `subagents/` - Sub-agent implementations
+  - `models.ts` - Model configuration using AI SDK
+- `packages/tui/` - Terminal UI with Ink/React
+  - `components/` - UI components
+  - `lib/` - Utility functions
+- `packages/tsconfig/` - Shared TypeScript configurations
 
 ## Code Style
 - Use Bun exclusively (not Node, npm, pnpm, vite, express, ws, dotenv)

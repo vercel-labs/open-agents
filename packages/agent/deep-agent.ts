@@ -14,7 +14,7 @@ import { buildSystemPrompt } from "./system-prompt";
 import type { TodoItem, AgentMode, ApprovalRule } from "./types";
 import { approvalRuleSchema } from "./types";
 import { addCacheControl, compactContext } from "./context-management";
-import { gateway } from "../models";
+import { gateway } from "./models";
 import { createLocalSandbox, type Sandbox } from "./sandbox";
 
 const agentModeSchema = z.enum(["interactive", "background"]);

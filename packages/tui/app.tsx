@@ -21,7 +21,7 @@ import type {
   TUIAgentUIMessage,
   TUIAgentUIToolPart,
 } from "./types.js";
-import type { TaskToolUIPart } from "../agent/tools/task.js";
+import type { TaskToolUIPart } from "@open-harness/agent";
 
 type AppProps = {
   options: TUIOptions;

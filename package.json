@@ -1,49 +1,24 @@
 {
   "name": "open-harness",
-  "module": "src/index.ts",
-  "type": "module",
   "private": true,
-  "bin": {
-    "deep-agent": "./src/cli/index.ts"
-  },
-  "exports": {
-    ".": "./src/index.ts",
-    "./agent": "./src/agent/index.ts",
-    "./cli": "./src/cli/index.ts",
-    "./tui": "./src/tui/index.tsx"
-  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "bun run src/cli/index.ts",
-    "dev:vercel": "bun run src/cli/index.ts --sandbox=vercel",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
+    "cli": "bun run --cwd apps/cli dev",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
     "format": "biome format --write .",
     "format:check": "biome format ."
   },
   "devDependencies": {
-    "@ai-sdk/devtools": "^0.0.2",
     "@biomejs/biome": "^2.3.11",
-    "@types/bun": "latest",
-    "@types/node": "^22",
-    "oxlint": "^1.38.0"
-  },
-  "peerDependencies": {
+    "turbo": "^2.5.4",
     "typescript": "^5"
   },
-  "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.1",
-    "@ai-sdk/react": "^3.0.3",
-    "@types/react": "^19.2.7",
-    "@vercel/sandbox": "^1.1.2",
-    "ai": "^6.0.3",
-    "cli-highlight": "^2.1.11",
-    "ink": "^6.6.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "just-bash": "^2.1.0",
-    "marked": "^17.0.1",
-    "react": "^19.2.3",
-    "zod": "^3.24.0"
-  }
+  "packageManager": "bun@1.2.14"
 }

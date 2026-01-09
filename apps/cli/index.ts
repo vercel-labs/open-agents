@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createTUI } from "../tui/index.js";
+import { createTUI } from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md.js";
 import { onCleanup, cleanup } from "./cleanup-handler.js";
 import {
