@@ -1,5 +1,9 @@
 # Open Harness
 
+Copyright © 2025. All rights reserved.
+
+## Getting Started
+
 To install dependencies:
 
 ```bash
