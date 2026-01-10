@@ -3,8 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { Streamdown } from "streamdown";
-import type { BundledTheme } from "shiki";
+import type { ComponentProps, ReactNode } from "react";
 import {
   Children,
   cloneElement,
@@ -12,7 +11,8 @@ import {
   useEffect,
   useState,
 } from "react";
-import type { ComponentProps, ReactNode } from "react";
+import type { BundledTheme } from "shiki";
+import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 
