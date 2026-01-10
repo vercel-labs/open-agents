@@ -9,6 +9,7 @@ import {
   cloneElement,
   isValidElement,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import type { BundledTheme } from "shiki";
@@ -140,6 +141,7 @@ function SandboxStatus({
 function Chat() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
   const { chat, sandboxInfo, setSandboxInfo, clearSandboxInfo } =
@@ -165,6 +167,12 @@ function Chat() {
       scrollToBottom();
     }
   }, [messages, isAtBottom, scrollToBottom]);
+
+  useEffect(() => {
+    if (status !== "streaming") {
+      inputRef.current?.focus();
+    }
+  }, [status]);
 
   const hasMessages = messages.length > 0;
 
@@ -294,6 +302,7 @@ function Chat() {
             className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
           >
             <input
+              ref={inputRef}
               value={input}
               placeholder="Ask anything"
               onChange={(e) => setInput(e.currentTarget.value)}
