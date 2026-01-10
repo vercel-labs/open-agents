@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -49,8 +50,16 @@ export function ChatProvider({
   workingDirectory,
   apiEndpoint = "/api/chat",
 }: ChatProviderProps) {
+  const sandboxIdRef = useRef<string | null>(null);
+
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: apiEndpoint }),
+    () =>
+      new DefaultChatTransport({
+        api: apiEndpoint,
+        body: () => ({
+          sandboxId: sandboxIdRef.current,
+        }),
+      }),
     [apiEndpoint],
   );
 
@@ -70,10 +79,12 @@ export function ChatProvider({
   const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(null);
 
   const setSandboxInfo = useCallback((info: SandboxInfo) => {
+    sandboxIdRef.current = info.sandboxId;
     setSandboxInfoState(info);
   }, []);
 
   const clearSandboxInfo = useCallback(() => {
+    sandboxIdRef.current = null;
     setSandboxInfoState(null);
   }, []);
 

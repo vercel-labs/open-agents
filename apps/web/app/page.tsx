@@ -280,23 +280,17 @@ function Chat() {
               e.preventDefault();
               if (!input.trim()) return;
 
-              let currentSandboxId = sandboxInfo?.sandboxId;
-
               if (!isSandboxValid(sandboxInfo)) {
                 setIsCreatingSandbox(true);
                 try {
                   const newSandbox = await createSandbox();
                   setSandboxInfo(newSandbox);
-                  currentSandboxId = newSandbox.sandboxId;
                 } finally {
                   setIsCreatingSandbox(false);
                 }
               }
 
-              sendMessage(
-                { text: input },
-                { body: { sandboxId: currentSandboxId } },
-              );
+              sendMessage({ text: input });
               setInput("");
             }}
             className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
