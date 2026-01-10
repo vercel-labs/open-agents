@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import type { Sandbox } from "../sandbox";
+import type { Sandbox } from "@open-harness/sandbox";
 import {
   isPathWithinDirectory,
   getSandbox,

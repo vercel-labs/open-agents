@@ -17,11 +17,10 @@
       },
       "dependencies": {
         "@open-harness/agent": "workspace:*",
+        "@open-harness/sandbox": "workspace:*",
         "@open-harness/tui": "workspace:*",
-        "@vercel/sandbox": "^1.1.2",
         "ink": "^6.6.0",
         "ink-spinner": "^5.0.0",
-        "just-bash": "^2.1.0",
         "react": "^19.2.3",
       },
       "devDependencies": {
@@ -40,15 +39,30 @@
       "version": "0.0.0",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.1",
-        "@vercel/sandbox": "^1.1.2",
+        "@open-harness/sandbox": "workspace:*",
         "ai": "^6.0.3",
-        "just-bash": "^2.1.0",
         "zod": "^3.24.0",
       },
       "devDependencies": {
         "@ai-sdk/devtools": "^0.0.2",
         "@open-harness/tsconfig": "workspace:*",
         "@types/bun": "latest",
+        "@types/node": "^22",
+        "oxlint": "^1.38.0",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+    },
+    "packages/sandbox": {
+      "name": "@open-harness/sandbox",
+      "version": "0.0.0",
+      "dependencies": {
+        "@vercel/sandbox": "^1.1.2",
+        "just-bash": "^2.1.0",
+      },
+      "devDependencies": {
+        "@open-harness/tsconfig": "workspace:*",
         "@types/node": "^22",
         "oxlint": "^1.38.0",
       },
@@ -131,6 +145,8 @@
     "@open-harness/agent": ["@open-harness/agent@workspace:packages/agent"],
 
     "@open-harness/cli": ["@open-harness/cli@workspace:apps/cli"],
+
+    "@open-harness/sandbox": ["@open-harness/sandbox@workspace:packages/sandbox"],
 
     "@open-harness/tsconfig": ["@open-harness/tsconfig@workspace:packages/tsconfig"],
 
