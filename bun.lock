@@ -40,6 +40,8 @@
       "dependencies": {
         "@ai-sdk/react": "^3.0.29",
         "@hookform/resolvers": "^5.2.2",
+        "@open-harness/agent": "workspace:*",
+        "@open-harness/sandbox": "workspace:*",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-label": "^2.1.8",
         "@radix-ui/react-scroll-area": "^1.2.10",
