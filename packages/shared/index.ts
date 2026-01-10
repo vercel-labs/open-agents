@@ -38,3 +38,13 @@ export {
   getLanguageFromPath,
   createNewFileCodeLines,
 } from "./lib/diff.js";
+
+// Lib - Tool state utilities
+export {
+  type ToolRenderState,
+  type GenericToolPart,
+  extractRenderState,
+  getStatusColor,
+  getStatusLabel,
+  toRelativePath,
+} from "./lib/tool-state.js";

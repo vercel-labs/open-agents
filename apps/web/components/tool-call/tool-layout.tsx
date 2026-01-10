@@ -1,0 +1,95 @@
+"use client";
+
+import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
+import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import { cn } from "@/lib/utils";
+import { ApprovalButtons } from "./approval-buttons";
+
+export type ToolLayoutProps = {
+  name: string;
+  summary: string;
+  state: ToolRenderState;
+  output?: ReactNode;
+  children?: ReactNode;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string, reason?: string) => void;
+};
+
+function StatusDot({ state }: { state: ToolRenderState }) {
+  if (state.running) {
+    return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
+  }
+
+  const color = state.denied
+    ? "bg-red-500"
+    : state.approvalRequested
+      ? "bg-yellow-500"
+      : state.error
+        ? "bg-red-500"
+        : "bg-green-500";
+
+  return <span className={cn("inline-block h-2 w-2 rounded-full", color)} />;
+}
+
+export function ToolLayout({
+  name,
+  summary,
+  state,
+  output,
+  children,
+  onApprove,
+  onDeny,
+}: ToolLayoutProps) {
+  const showApprovalButtons =
+    state.approvalRequested && !state.isActiveApproval && state.approvalId;
+
+  return (
+    <div className="my-2 rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-2">
+        <StatusDot state={state} />
+        <span
+          className={cn(
+            "font-medium",
+            state.denied ? "text-red-500" : "text-foreground",
+          )}
+        >
+          {name}
+        </span>
+        <span className="text-muted-foreground">(</span>
+        <span className="truncate text-sm text-foreground">{summary}</span>
+        <span className="text-muted-foreground">)</span>
+      </div>
+
+      {state.approvalRequested && !showApprovalButtons && (
+        <div className="mt-2 pl-5 text-sm text-muted-foreground">Running…</div>
+      )}
+
+      {showApprovalButtons && (
+        <ApprovalButtons
+          approvalId={state.approvalId!}
+          onApprove={onApprove}
+          onDeny={onDeny}
+        />
+      )}
+
+      {output && !state.approvalRequested && !state.denied && (
+        <div className="mt-2 pl-5 text-sm text-muted-foreground">{output}</div>
+      )}
+
+      {state.denied && (
+        <div className="mt-2 pl-5 text-sm text-red-500">
+          Denied{state.denialReason ? `: ${state.denialReason}` : ""}
+        </div>
+      )}
+
+      {state.error && !state.denied && (
+        <div className="mt-2 pl-5 text-sm text-red-500">
+          Error: {state.error.slice(0, 80)}
+        </div>
+      )}
+
+      {children}
+    </div>
+  );
+}

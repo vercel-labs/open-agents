@@ -1,8 +1,13 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import {
+  DefaultChatTransport,
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { ToolCall } from "@/components/tool-call";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Children,
@@ -42,9 +47,12 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
-  const { messages, error, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-  });
+  const { messages, error, sendMessage, status, addToolApprovalResponse } =
+    useChat({
+      transport: new DefaultChatTransport({ api: "/api/chat" }),
+      sendAutomaticallyWhen:
+        lastAssistantMessageIsCompleteWithApprovalResponses,
+    });
 
   useEffect(() => {
     if (isAtBottom) {
@@ -71,36 +79,55 @@ export default function Chat() {
               <div className="space-y-6">
                 {messages.map((m) =>
                   m.parts.map((p, i) => {
-                    switch (p.type) {
-                      case "text":
-                        return (
-                          <div
-                            key={`${m.id}-${i}`}
-                            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            {m.role === "user" ? (
-                              <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                                <p className="whitespace-pre-wrap">{p.text}</p>
-                              </div>
-                            ) : (
-                              <div className="max-w-[80%]">
-                                <Streamdown
-                                  isAnimating={
-                                    status === "streaming" &&
-                                    m.id === messages[messages.length - 1]?.id
-                                  }
-                                  shikiTheme={shikiThemes}
-                                  components={customComponents}
-                                >
-                                  {p.text}
-                                </Streamdown>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      default:
-                        return null;
+                    if (p.type === "text") {
+                      return (
+                        <div
+                          key={`${m.id}-${i}`}
+                          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                        >
+                          {m.role === "user" ? (
+                            <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                              <p className="whitespace-pre-wrap">{p.text}</p>
+                            </div>
+                          ) : (
+                            <div className="max-w-[80%]">
+                              <Streamdown
+                                isAnimating={
+                                  status === "streaming" &&
+                                  m.id === messages[messages.length - 1]?.id
+                                }
+                                shikiTheme={shikiThemes}
+                                components={customComponents}
+                              >
+                                {p.text}
+                              </Streamdown>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }
+
+                    if (isToolUIPart(p)) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="max-w-full">
+                          <ToolCall
+                            part={p}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    }
+
+                    return null;
                   }),
                 )}
               </div>
