@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
-import { useChatContext } from "../chat-context.js";
-import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
-import { inferApprovalRule } from "../lib/approval.js";
 import {
   createNewFileCodeLines,
   createEditDiffLines,
   DIFF_LINE_MAX_WIDTH,
   type CodeLine,
   type DiffLine,
-} from "../lib/diff.js";
+} from "@open-harness/shared";
+import { useChatContext } from "../chat-context.js";
+import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
+import { inferApprovalRule } from "../lib/approval.js";
+import { cliHighlighter } from "../lib/highlighter.js";
 
 export type ApprovalPanelProps = {
   approvalId: string;
@@ -72,6 +73,7 @@ export function ApprovalPanel({
       const { lines, totalLines, hiddenLines } = createNewFileCodeLines(
         content,
         filePath,
+        cliHighlighter,
       );
       return { type: "newFile", lines, totalLines, hiddenLines };
     }

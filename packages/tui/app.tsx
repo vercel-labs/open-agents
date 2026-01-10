@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { isToolUIPart, getToolName, type FileUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
+import {
+  useReasoningContext,
+  useExpandedView,
+  useTodoView,
+} from "@open-harness/shared";
 import { renderMarkdown } from "./lib/markdown.js";
 import { useChatContext } from "./chat-context.js";
-import { useReasoningContext } from "./reasoning-context.js";
-import { useExpandedView } from "./expanded-view-context.js";
-import { useTodoView } from "./todo-view-context.js";
 import { ToolCall, getToolApprovalInfo } from "./components/tool-call.js";
 import { ApprovalPanel } from "./components/approval-panel.js";
 import { TaskGroupView } from "./components/task-group-view.js";

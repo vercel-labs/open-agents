@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import type { ThinkingState } from "../reasoning-context.js";
-import type { TodoItem } from "../../agent/types.js";
+import type { ThinkingState } from "@open-harness/shared";
+import type { TodoItem } from "@open-harness/agent";
 
 const SILLY_WORDS = [
   "Thinking",

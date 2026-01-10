@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
+import { createNewFileCodeLines } from "@open-harness/shared";
 import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { createNewFileCodeLines } from "../../lib/diff.js";
 import { NewFileLayout, toRelativePath } from "./shared.js";
 import { useChatContext } from "../../chat-context.js";
+import { cliHighlighter } from "../../lib/highlighter.js";
 
 export function WriteRenderer({
   part,
@@ -17,7 +18,7 @@ export function WriteRenderer({
 
   // Memoize the expensive syntax highlighting operation
   const { lines, totalLines, hiddenLines } = useMemo(
-    () => createNewFileCodeLines(content, rawFilePath),
+    () => createNewFileCodeLines(content, rawFilePath, cliHighlighter),
     [content, rawFilePath],
   );
 

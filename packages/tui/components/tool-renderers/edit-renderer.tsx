@@ -1,6 +1,6 @@
 import React from "react";
+import { createEditDiffLines } from "@open-harness/shared";
 import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { createEditDiffLines } from "../../lib/diff.js";
 import { FileChangeLayout, toRelativePath } from "./shared.js";
 import { useChatContext } from "../../chat-context.js";
 

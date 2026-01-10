@@ -19,7 +19,7 @@ import {
   formatPastePlaceholder,
   isPasteTokenChar,
   type PasteBlock,
-} from "../lib/paste-blocks.js";
+} from "@open-harness/shared";
 import {
   getClipboardImage,
   imageToDataUrl,

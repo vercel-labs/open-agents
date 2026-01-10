@@ -2,20 +2,16 @@ import React from "react";
 import { render } from "ink";
 import { App } from "./app.js";
 import { ChatProvider } from "./chat-context.js";
-import { ReasoningProvider } from "./reasoning-context.js";
-import { ExpandedViewProvider } from "./expanded-view-context.js";
-import { TodoViewProvider } from "./todo-view-context.js";
+import {
+  ReasoningProvider,
+  ExpandedViewProvider,
+  TodoViewProvider,
+} from "@open-harness/shared";
 import { tuiAgentModelId, createDefaultAgentOptions } from "./config.js";
 import type { TUIOptions } from "./types.js";
 
 export type { TUIOptions, AutoAcceptMode } from "./types.js";
 export { useChatContext, ChatProvider } from "./chat-context.js";
-export { useReasoningContext, ReasoningProvider } from "./reasoning-context.js";
-export {
-  useExpandedView,
-  ExpandedViewProvider,
-} from "./expanded-view-context.js";
-export { useTodoView, TodoViewProvider } from "./todo-view-context.js";
 export {
   tuiAgent,
   tuiAgentModelId,
@@ -98,10 +94,6 @@ export * from "./components/index.js";
 
 // Re-export render-tool types and utilities
 export * from "./lib/render-tool.js";
-
-// Re-export lib utilities
-export * from "./lib/diff.js";
-// Note: approval.js exports are already re-exported via components/index.js -> tool-call.js
 
 // Re-export transport for custom usage
 export { createAgentTransport } from "./transport.js";

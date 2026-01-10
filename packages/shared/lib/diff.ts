@@ -1,8 +1,7 @@
 /**
- * Shared diff utilities for rendering file changes in the TUI.
- * Used by both tool-call renderers and approval-panel.
+ * Shared diff utilities for rendering file changes.
+ * Platform-agnostic - no terminal-specific dependencies.
  */
-import { highlight } from "cli-highlight";
 
 // Display constants
 export const DIFF_MAX_EDIT_LINES = 15;
@@ -18,7 +17,7 @@ export type DiffLine = {
  * Split content into lines, removing trailing empty line from files ending with newline.
  * "hello\n".split("\n") -> ["hello", ""], but we want ["hello"].
  */
-function splitLines(content: string): string[] {
+export function splitLines(content: string): string[] {
   if (!content) return [];
   const lines = content.split("\n");
   if (lines.length === 1 && lines[0] === "") return [];
@@ -136,14 +135,22 @@ export type CodeLine = {
 // Max lines to display for new file preview
 export const NEW_FILE_MAX_LINES = 200;
 
+export type Highlighter = (code: string, language?: string) => string;
+
 /**
  * Create code lines for displaying a new file with syntax highlighting.
  * Returns plain content and highlighted version for each line.
- * Truncates to MAX_LINES for performance, showing first lines only.
+ * Truncates to maxLines for performance, showing first lines only.
+ *
+ * @param content - The file content
+ * @param filePath - Path to the file (used for language detection)
+ * @param highlighter - Optional function to highlight code. Receives (code, language) and returns highlighted string.
+ * @param maxLines - Maximum lines to show (default: NEW_FILE_MAX_LINES)
  */
 export function createNewFileCodeLines(
   content: string,
   filePath: string,
+  highlighter?: Highlighter,
   maxLines: number = NEW_FILE_MAX_LINES,
 ): { lines: CodeLine[]; totalLines: number; hiddenLines: number } {
   const contentLines = splitLines(content);
@@ -160,12 +167,13 @@ export function createNewFileCodeLines(
   const codeToHighlight = linesToShow.join("\n");
   let highlightedCode: string;
 
-  try {
-    highlightedCode = highlight(codeToHighlight, {
-      language: language || undefined,
-      ignoreIllegals: true,
-    });
-  } catch {
+  if (highlighter) {
+    try {
+      highlightedCode = highlighter(codeToHighlight, language);
+    } catch {
+      highlightedCode = codeToHighlight;
+    }
+  } else {
     highlightedCode = codeToHighlight;
   }
 

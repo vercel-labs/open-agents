@@ -1,11 +1,13 @@
 {
-  "name": "@open-harness/tui",
+  "name": "@open-harness/shared",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./index.tsx",
+  "main": "./index.ts",
   "exports": {
-    ".": "./index.tsx"
+    ".": "./index.ts",
+    "./lib/*": "./lib/*.ts",
+    "./hooks/*": "./hooks/*.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,20 +15,11 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@open-harness/agent": "workspace:*",
-    "@open-harness/shared": "workspace:*",
-    "cli-highlight": "^2.1.11",
-    "ink": "^6.6.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "marked": "^17.0.1",
     "react": "^19.2.3"
   },
   "devDependencies": {
-    "@ai-sdk/react": "^3.0.3",
     "@open-harness/tsconfig": "workspace:*",
     "@types/bun": "latest",
-    "@types/node": "^22",
     "@types/react": "^19.2.7",
     "oxlint": "^1.38.0"
   },
