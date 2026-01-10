@@ -1,4 +1,4 @@
 #!/bin/zsh
 
 bun install
-cp "$GWT_MAIN_PATH/.env" .env
+cp "$GWT_MAIN_PATH/apps/cli/.env" apps/cli/.env

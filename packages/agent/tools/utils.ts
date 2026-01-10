@@ -5,7 +5,7 @@ import type {
   AutoApprove,
   ApprovalRule,
 } from "../types";
-import type { Sandbox } from "../sandbox";
+import type { Sandbox } from "@open-harness/sandbox";
 
 /**
  * Check if a file path is within a given directory.

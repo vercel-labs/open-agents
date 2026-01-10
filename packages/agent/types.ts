@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Sandbox } from "./sandbox";
+import type { Sandbox } from "@open-harness/sandbox";
 
 export const todoStatusSchema = z.enum(["pending", "in_progress", "completed"]);
 export type TodoStatus = z.infer<typeof todoStatusSchema>;

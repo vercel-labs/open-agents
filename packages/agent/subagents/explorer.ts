@@ -4,7 +4,7 @@ import { readFileTool } from "../tools/read";
 import { grepTool } from "../tools/grep";
 import { globTool } from "../tools/glob";
 import { bashTool, commandNeedsApproval } from "../tools/bash";
-import type { Sandbox } from "../sandbox";
+import type { Sandbox } from "@open-harness/sandbox";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@open-harness/agent",
+  "name": "@open-harness/sandbox",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,15 +13,11 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.1",
-    "@open-harness/sandbox": "workspace:*",
-    "ai": "^6.0.3",
-    "zod": "^3.24.0"
+    "@vercel/sandbox": "^1.1.2",
+    "just-bash": "^2.1.0"
   },
   "devDependencies": {
-    "@ai-sdk/devtools": "^0.0.2",
     "@open-harness/tsconfig": "workspace:*",
-    "@types/bun": "latest",
     "@types/node": "^22",
     "oxlint": "^1.38.0"
   },

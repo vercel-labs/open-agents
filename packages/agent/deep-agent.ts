@@ -15,7 +15,7 @@ import type { TodoItem, AgentMode, ApprovalRule } from "./types";
 import { approvalRuleSchema } from "./types";
 import { addCacheControl, compactContext } from "./context-management";
 import { gateway } from "./models";
-import { createLocalSandbox, type Sandbox } from "./sandbox";
+import { createLocalSandbox, type Sandbox } from "@open-harness/sandbox";
 
 const agentModeSchema = z.enum(["interactive", "background"]);
 const autoApproveSchema = z.enum(["off", "edits", "all"]);

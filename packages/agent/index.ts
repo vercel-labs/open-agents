@@ -18,9 +18,3 @@ export { getContextLimit } from "./context-management/model-limits";
 
 // Tool exports
 export { type TaskToolUIPart } from "./tools/task";
-
-// Sandbox exports
-export type { Sandbox, ExecResult } from "./sandbox";
-export { createLocalSandbox } from "./sandbox";
-export { connectVercelSandbox } from "./sandbox";
-export { createJustBashSandbox } from "./sandbox";
