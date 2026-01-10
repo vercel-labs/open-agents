@@ -11,9 +11,19 @@ bun run cli            # Alternative: run CLI directly
 bun run web            # Run web app
 
 # Quality checks (run after making changes)
-bun run format         # Format with Biome
-turbo lint:fix         # Lint and auto-fix with oxlint
-turbo typecheck        # Type check all packages
+turbo typecheck                            # Type check all packages
+turbo lint                                 # Lint all packages with oxlint
+turbo lint:fix                             # Lint and auto-fix all packages
+
+# Filter by package (use --filter)
+turbo typecheck --filter=web               # Type check web app only
+turbo typecheck --filter=@open-harness/cli # Type check CLI only
+turbo lint:fix --filter=web                # Lint web app only
+turbo lint:fix --filter=@open-harness/cli  # Lint CLI only
+
+# Formatting (Biome - run from root)
+bun run format                             # Format all files
+bun run format:check                       # Check formatting without writing
 
 # Testing
 bun test                        # Run all tests
