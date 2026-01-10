@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     options: {
       workingDirectory,
       sandbox,
+      autoApprove: "all",
     },
   });
 

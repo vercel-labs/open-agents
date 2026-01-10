@@ -1,11 +1,6 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  isToolUIPart,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-} from "ai";
+import { isToolUIPart } from "ai";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { ToolCall } from "@/components/tool-call";
 import type { ComponentProps, ReactNode } from "react";
@@ -20,6 +15,8 @@ import type { BundledTheme } from "shiki";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
+import { ChatProvider, useChatContext } from "./chat-context";
+import type { WebAgentUIToolPart } from "./types";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -43,16 +40,21 @@ const shikiThemes = ["github-dark", "github-dark"] as [
   BundledTheme,
 ];
 
-export default function Chat() {
+export default function ChatPage() {
+  return (
+    <ChatProvider>
+      <Chat />
+    </ChatProvider>
+  );
+}
+
+function Chat() {
   const [input, setInput] = useState("");
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
+  const { chat } = useChatContext();
   const { messages, error, sendMessage, status, addToolApprovalResponse } =
-    useChat({
-      transport: new DefaultChatTransport({ api: "/api/chat" }),
-      sendAutomaticallyWhen:
-        lastAssistantMessageIsCompleteWithApprovalResponses,
-    });
+    chat;
 
   useEffect(() => {
     if (isAtBottom) {
@@ -111,7 +113,7 @@ export default function Chat() {
                       return (
                         <div key={`${m.id}-${i}`} className="max-w-full">
                           <ToolCall
-                            part={p}
+                            part={p as WebAgentUIToolPart}
                             onApprove={(id) =>
                               addToolApprovalResponse({ id, approved: true })
                             }

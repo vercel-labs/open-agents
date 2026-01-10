@@ -3,11 +3,12 @@
 /**
  * Tool call component that renders tool invocations for the web app.
  */
+import type { WebAgentUIToolPart } from "@/app/types";
 import {
   extractRenderState,
+  getToolName,
   type ToolRenderState,
-  type GenericToolPart,
-} from "@open-harness/shared/lib/tool-state";
+} from "@/app/lib/render-tool";
 import { ToolLayout } from "./tool-layout";
 import { BashRenderer } from "./renderers/bash-renderer";
 import { ReadRenderer } from "./renderers/read-renderer";
@@ -17,37 +18,13 @@ import { GlobRenderer } from "./renderers/glob-renderer";
 import { GrepRenderer } from "./renderers/grep-renderer";
 import { TaskRenderer } from "./renderers/task-renderer";
 
-/**
- * Extended tool part type with toolName for getToolName compatibility.
- */
-type ToolPart = GenericToolPart & {
-  toolName?: string;
-  type?: string;
-};
-
 export type ToolCallProps = {
-  part: ToolPart;
+  part: WebAgentUIToolPart;
   activeApprovalId?: string | null;
   cwd?: string;
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
 };
-
-/**
- * Get tool name from a tool part.
- * Handles both dynamic-tool and tool-* types.
- */
-function getToolNameFromPart(part: ToolPart): string {
-  // Dynamic tools have toolName property
-  if (part.toolName) {
-    return part.toolName;
-  }
-  // Static tools have type like "tool-read", "tool-bash", etc.
-  if (part.type?.startsWith("tool-")) {
-    return part.type.slice(5);
-  }
-  return "unknown";
-}
 
 /**
  * Render a tool call based on its type.
@@ -60,7 +37,7 @@ export function ToolCall({
   onDeny,
 }: ToolCallProps) {
   const state = extractRenderState(part, activeApprovalId);
-  const toolName = getToolNameFromPart(part);
+  const toolName = getToolName(part);
   const approvalProps = { onApprove, onDeny };
 
   switch (toolName) {
@@ -103,7 +80,7 @@ function DefaultRenderer({
   onApprove,
   onDeny,
 }: {
-  part: ToolPart;
+  part: WebAgentUIToolPart;
   state: ToolRenderState;
   toolName: string;
   onApprove?: (id: string) => void;
@@ -126,4 +103,4 @@ function DefaultRenderer({
 }
 
 export { ToolLayout } from "./tool-layout";
-export type { ToolRenderState } from "@open-harness/shared";
+export type { ToolRenderState } from "@/app/lib/render-tool";
