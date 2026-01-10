@@ -1,12 +1,25 @@
 "use client";
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   DefaultChatTransport,
 } from "ai";
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "./types";
+
+export type SandboxInfo = {
+  sandboxId: string;
+  createdAt: number;
+  timeout: number;
+};
 
 type ChatState = {
   model?: string;
@@ -16,6 +29,9 @@ type ChatState = {
 type ChatContextValue = {
   chat: UseChatHelpers<WebAgentUIMessage>;
   state: ChatState;
+  sandboxInfo: SandboxInfo | null;
+  setSandboxInfo: (info: SandboxInfo) => void;
+  clearSandboxInfo: () => void;
 };
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -51,8 +67,20 @@ export function ChatProvider({
     [model, workingDirectory],
   );
 
+  const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(null);
+
+  const setSandboxInfo = useCallback((info: SandboxInfo) => {
+    setSandboxInfoState(info);
+  }, []);
+
+  const clearSandboxInfo = useCallback(() => {
+    setSandboxInfoState(null);
+  }, []);
+
   return (
-    <ChatContext.Provider value={{ chat, state }}>
+    <ChatContext.Provider
+      value={{ chat, state, sandboxInfo, setSandboxInfo, clearSandboxInfo }}
+    >
       {children}
     </ChatContext.Provider>
   );

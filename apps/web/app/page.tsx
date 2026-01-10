@@ -1,7 +1,7 @@
 "use client";
 
 import { isToolUIPart } from "ai";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { ToolCall } from "@/components/tool-call";
 import type { ComponentProps, ReactNode } from "react";
 import {
@@ -15,7 +15,7 @@ import type { BundledTheme } from "shiki";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
-import { ChatProvider, useChatContext } from "./chat-context";
+import { ChatProvider, useChatContext, type SandboxInfo } from "./chat-context";
 import type { WebAgentUIToolPart } from "./types";
 
 const customComponents = {
@@ -48,13 +48,117 @@ export default function ChatPage() {
   );
 }
 
+async function createSandbox(): Promise<SandboxInfo> {
+  const response = await fetch("/api/sandbox", { method: "POST" });
+  if (!response.ok) {
+    throw new Error("Failed to create sandbox");
+  }
+  return response.json();
+}
+
+function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
+  if (!sandboxInfo) return false;
+  const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
+  // Add 10 second buffer to avoid edge cases
+  return Date.now() < expiresAt - 10_000;
+}
+
+function formatTimeRemaining(ms: number): string {
+  if (ms <= 0) return "0:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function SandboxStatus({
+  sandboxInfo,
+  isCreating,
+  onKill,
+}: {
+  sandboxInfo: SandboxInfo | null;
+  isCreating: boolean;
+  onKill: () => void;
+}) {
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!sandboxInfo) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTime = () => {
+      const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
+      const remaining = expiresAt - Date.now();
+      setTimeRemaining(remaining > 0 ? remaining : 0);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [sandboxInfo]);
+
+  if (isCreating) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+        <span>Creating sandbox...</span>
+      </div>
+    );
+  }
+
+  if (!sandboxInfo || timeRemaining === null) {
+    return null;
+  }
+
+  if (timeRemaining <= 0) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-red-500" />
+        <span>Sandbox expired</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="h-2 w-2 rounded-full bg-green-500" />
+      <span>{formatTimeRemaining(timeRemaining)}</span>
+      <button
+        type="button"
+        onClick={onKill}
+        className="rounded p-0.5 hover:bg-muted-foreground/20"
+        title="Stop sandbox"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 function Chat() {
   const [input, setInput] = useState("");
+  const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
-  const { chat } = useChatContext();
+  const { chat, sandboxInfo, setSandboxInfo, clearSandboxInfo } =
+    useChatContext();
   const { messages, error, sendMessage, status, addToolApprovalResponse } =
     chat;
+
+  const handleKillSandbox = async () => {
+    if (!sandboxInfo) return;
+    try {
+      await fetch("/api/sandbox", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sandboxId: sandboxInfo.sandboxId }),
+      });
+    } finally {
+      clearSandboxInfo();
+    }
+  };
 
   useEffect(() => {
     if (isAtBottom) {
@@ -155,12 +259,36 @@ function Chat() {
       )}
 
       <div className="p-4 pb-8">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-3xl space-y-2">
+          <div className="flex justify-end px-2">
+            <SandboxStatus
+              sandboxInfo={sandboxInfo}
+              isCreating={isCreatingSandbox}
+              onKill={handleKillSandbox}
+            />
+          </div>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!input.trim()) return;
-              sendMessage({ text: input });
+
+              let currentSandboxId = sandboxInfo?.sandboxId;
+
+              if (!isSandboxValid(sandboxInfo)) {
+                setIsCreatingSandbox(true);
+                try {
+                  const newSandbox = await createSandbox();
+                  setSandboxInfo(newSandbox);
+                  currentSandboxId = newSandbox.sandboxId;
+                } finally {
+                  setIsCreatingSandbox(false);
+                }
+              }
+
+              sendMessage(
+                { text: input },
+                { body: { sandboxId: currentSandboxId } },
+              );
               setInput("");
             }}
             className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
