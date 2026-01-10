@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.29",
+    "@ai-sdk/react": "catalog:",
     "@hookform/resolvers": "^5.2.2",
     "@open-harness/agent": "workspace:*",
     "@open-harness/sandbox": "workspace:*",
@@ -24,7 +24,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "ai": "^6.0.27",
+    "ai": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
@@ -34,7 +34,7 @@
     "react-hook-form": "^7.70.0",
     "streamdown": "^1.6.11",
     "tailwind-merge": "^3.4.0",
-    "zod": "^4.3.5"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

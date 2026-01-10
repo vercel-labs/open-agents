@@ -1,10 +1,21 @@
 {
   "name": "open-harness",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "ai": "^6.0.27",
+      "@ai-sdk/anthropic": "^3.0.1",
+      "@ai-sdk/react": "^3.0.29",
+      "zod": "^4.3.5"
+    }
+  },
+  "overrides": {
+    "zod": "^4.3.5"
+  },
   "scripts": {
     "cli": "bun run --cwd apps/cli dev",
     "web": "cd apps/web/ && bun run dev",
