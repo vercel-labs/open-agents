@@ -54,9 +54,12 @@ export default function ChatPage() {
 async function createSandbox(): Promise<SandboxInfo> {
   const response = await fetch("/api/sandbox", { method: "POST" });
   if (!response.ok) {
-    throw new Error("Failed to create sandbox");
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to create sandbox: ${response.status}${text ? ` - ${text}` : ""}`,
+    );
   }
-  return response.json();
+  return await response.json();
 }
 
 function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
@@ -368,18 +371,25 @@ function Chat() {
               e.preventDefault();
               if (!input.trim()) return;
 
+              const messageText = input;
+              setInput("");
+
               if (!isSandboxValid(sandboxInfo)) {
                 setIsCreatingSandbox(true);
                 try {
                   const newSandbox = await createSandbox();
                   setSandboxInfo(newSandbox);
+                } catch (error) {
+                  // Restore input on error so user doesn't lose their message
+                  setInput(messageText);
+                  // Re-throw to let error boundary or other handlers deal with it
+                  throw error;
                 } finally {
                   setIsCreatingSandbox(false);
                 }
               }
 
-              sendMessage({ text: input });
-              setInput("");
+              sendMessage({ text: messageText });
             }}
             className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
           >
