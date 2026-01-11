@@ -69,15 +69,19 @@ export async function POST(req: Request) {
   if (taskId && messages.length > 0) {
     const userMessage = messages[messages.length - 1];
     if (userMessage && userMessage.role === "user" && userMessage.id) {
-      // Check if message already exists to avoid duplicates
-      const existingMessage = await getTaskMessageById(userMessage.id);
-      if (!existingMessage) {
-        await createTaskMessage({
-          id: userMessage.id,
-          taskId,
-          role: "user",
-          parts: userMessage,
-        });
+      try {
+        // Check if message already exists to avoid duplicates
+        const existingMessage = await getTaskMessageById(userMessage.id);
+        if (!existingMessage) {
+          await createTaskMessage({
+            id: userMessage.id,
+            taskId,
+            role: "user",
+            parts: userMessage,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to save user message:", error);
       }
     }
   }
@@ -99,12 +103,16 @@ export async function POST(req: Request) {
     generateMessageId: nanoid,
     onFinish: async ({ responseMessage }) => {
       if (taskId) {
-        await createTaskMessage({
-          id: responseMessage.id,
-          taskId,
-          role: "assistant",
-          parts: responseMessage,
-        });
+        try {
+          await createTaskMessage({
+            id: responseMessage.id,
+            taskId,
+            role: "assistant",
+            parts: responseMessage,
+          });
+        } catch (error) {
+          console.error("Failed to save assistant message:", error);
+        }
       }
     },
   });

@@ -1,5 +1,5 @@
 import { createPullRequest } from "@/lib/github/client";
-import { updateTask } from "@/lib/db/tasks";
+import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreatePRRequest {
@@ -32,7 +32,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // 3. Create PR using existing function
+  // 3. Verify task ownership
+  const task = await getTaskById(taskId);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+  if (task.userId !== session.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // 4. Create PR using existing function
   const result = await createPullRequest({
     repoUrl,
     branchName,
@@ -56,13 +65,13 @@ export async function POST(req: Request) {
     return Response.json({ error }, { status: isClientError ? 400 : 502 });
   }
 
-  // 4. Update task with PR info
+  // 5. Update task with PR info
   await updateTask(taskId, {
     prNumber: result.prNumber,
     prStatus: "open",
   });
 
-  // 5. Return success
+  // 6. Return success
   return Response.json({
     success: true,
     prUrl: result.prUrl,

@@ -1,5 +1,6 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
+import { getTaskById } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { z } from "zod";
 
@@ -16,6 +17,7 @@ const prContentSchema = z.object({
 export const maxDuration = 120;
 
 interface GeneratePRRequest {
+  taskId: string;
   sandboxId: string;
   taskTitle: string;
   baseBranch: string;
@@ -37,7 +39,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { sandboxId, taskTitle, baseBranch, branchName } = body;
+  const { taskId, sandboxId, taskTitle, baseBranch, branchName } = body;
+
+  if (!taskId) {
+    return Response.json({ error: "Task ID is required" }, { status: 400 });
+  }
+
+  // Verify task ownership
+  const task = await getTaskById(taskId);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+  if (task.userId !== session.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (!sandboxId) {
     return Response.json(

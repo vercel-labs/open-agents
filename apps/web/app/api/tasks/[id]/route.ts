@@ -60,7 +60,11 @@ export async function PATCH(
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // Task existence is guaranteed by the ownership check above
   const task = await updateTask(id, body);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
   return Response.json({ task });
 }
 
