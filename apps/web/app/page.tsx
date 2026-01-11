@@ -1,8 +1,9 @@
 "use client";
 
 import { isToolUIPart } from "ai";
-import { ArrowDown, ArrowUp, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
 import { ToolCall } from "@/components/tool-call";
+import { TaskGroupView } from "@/components/task-group-view";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Children,
@@ -17,7 +18,8 @@ import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { ChatProvider, useChatContext, type SandboxInfo } from "./chat-context";
-import type { WebAgentUIToolPart } from "./types";
+import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "./types";
+import type { TaskToolUIPart } from "@open-harness/agent";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -146,8 +148,14 @@ function Chat() {
     useScrollToBottom<HTMLDivElement>();
   const { chat, sandboxInfo, setSandboxInfo, clearSandboxInfo } =
     useChatContext();
-  const { messages, error, sendMessage, status, addToolApprovalResponse } =
-    chat;
+  const {
+    messages,
+    error,
+    sendMessage,
+    status,
+    addToolApprovalResponse,
+    stop,
+  } = chat;
 
   const handleKillSandbox = async () => {
     if (!sandboxInfo) return;
@@ -191,8 +199,90 @@ function Chat() {
           <div ref={containerRef} className="h-full overflow-y-auto">
             <div className="mx-auto max-w-3xl px-4 py-8">
               <div className="space-y-6">
-                {messages.map((m) =>
-                  m.parts.map((p, i) => {
+                {messages.map((m, messageIndex) => {
+                  const isLastMessage = messageIndex === messages.length - 1;
+                  const isMessageStreaming =
+                    status === "streaming" && isLastMessage;
+
+                  // Group consecutive task parts together
+                  type RenderGroup =
+                    | {
+                        type: "part";
+                        part: WebAgentUIMessagePart;
+                        index: number;
+                      }
+                    | {
+                        type: "task-group";
+                        tasks: TaskToolUIPart[];
+                        startIndex: number;
+                      };
+
+                  const renderGroups: RenderGroup[] = [];
+                  let currentTaskGroup: TaskToolUIPart[] = [];
+                  let taskGroupStartIndex = 0;
+
+                  m.parts.forEach((part, index) => {
+                    if (isToolUIPart(part) && part.type === "tool-task") {
+                      if (currentTaskGroup.length === 0) {
+                        taskGroupStartIndex = index;
+                      }
+                      currentTaskGroup.push(part as TaskToolUIPart);
+                    } else {
+                      // Flush any pending task group
+                      if (currentTaskGroup.length > 0) {
+                        renderGroups.push({
+                          type: "task-group",
+                          tasks: currentTaskGroup,
+                          startIndex: taskGroupStartIndex,
+                        });
+                        currentTaskGroup = [];
+                      }
+                      renderGroups.push({ type: "part", part, index });
+                    }
+                  });
+
+                  // Flush remaining task group
+                  if (currentTaskGroup.length > 0) {
+                    renderGroups.push({
+                      type: "task-group",
+                      tasks: currentTaskGroup,
+                      startIndex: taskGroupStartIndex,
+                    });
+                  }
+
+                  return renderGroups.map((group) => {
+                    if (group.type === "task-group") {
+                      return (
+                        <div
+                          key={`${m.id}-task-group-${group.startIndex}`}
+                          className="max-w-full"
+                        >
+                          <TaskGroupView
+                            taskParts={group.tasks}
+                            activeApprovalId={
+                              group.tasks.find(
+                                (t) => t.state === "approval-requested",
+                              )?.approval?.id ?? null
+                            }
+                            isStreaming={isMessageStreaming}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    }
+
+                    const p = group.part;
+                    const i = group.index;
+
                     if (p.type === "text") {
                       return (
                         <div
@@ -206,10 +296,7 @@ function Chat() {
                           ) : (
                             <div className="max-w-[80%]">
                               <Streamdown
-                                isAnimating={
-                                  status === "streaming" &&
-                                  m.id === messages[messages.length - 1]?.id
-                                }
+                                isAnimating={isMessageStreaming}
                                 shikiTheme={shikiThemes}
                                 components={customComponents}
                               >
@@ -226,6 +313,7 @@ function Chat() {
                         <div key={`${m.id}-${i}`} className="max-w-full">
                           <ToolCall
                             part={p as WebAgentUIToolPart}
+                            isStreaming={isMessageStreaming}
                             onApprove={(id) =>
                               addToolApprovalResponse({ id, approved: true })
                             }
@@ -242,8 +330,8 @@ function Chat() {
                     }
 
                     return null;
-                  }),
-                )}
+                  });
+                })}
               </div>
             </div>
           </div>
@@ -303,14 +391,25 @@ function Chat() {
               disabled={status === "streaming"}
               className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={status === "streaming" || !input.trim()}
-              className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
+            {status === "streaming" ? (
+              <Button
+                type="button"
+                size="icon"
+                onClick={stop}
+                className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                <Square className="h-3 w-3 fill-current" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={!input.trim()}
+                className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            )}
           </form>
         </div>
       </div>

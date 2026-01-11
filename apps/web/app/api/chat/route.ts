@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       sandbox,
       autoApprove: "all",
     },
+    abortSignal: req.signal,
   });
 
   return result.toUIMessageStreamResponse();
