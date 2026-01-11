@@ -1,0 +1,59 @@
+"use client";
+
+import { useState } from "react";
+import { RepoSelector } from "./repo-selector";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+interface RepoSelectionScreenProps {
+  onSelect: (owner: string, repo: string, branch: string) => void;
+  isLoading?: boolean;
+}
+
+export function RepoSelectionScreen({
+  onSelect,
+  isLoading,
+}: RepoSelectionScreenProps) {
+  const [selectedOwner, setSelectedOwner] = useState("");
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [branch, setBranch] = useState("main");
+
+  const handleRepoSelect = (owner: string, repo: string) => {
+    setSelectedOwner(owner);
+    setSelectedRepo(repo);
+  };
+
+  const handleStart = () => {
+    if (selectedOwner && selectedRepo) {
+      onSelect(selectedOwner, selectedRepo, branch);
+    }
+  };
+
+  const canStart = selectedOwner && selectedRepo && !isLoading;
+
+  return (
+    <div className="flex h-screen flex-col items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-6">
+        <h1 className="text-3xl font-light text-foreground">
+          Select a repository
+        </h1>
+        <RepoSelector onRepoSelect={handleRepoSelect} />
+        <div className="flex items-center gap-2">
+          <label htmlFor="branch" className="text-sm text-muted-foreground">
+            Branch:
+          </label>
+          <Input
+            id="branch"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="main"
+            className="w-40"
+          />
+        </div>
+        <Button onClick={handleStart} disabled={!canStart}>
+          {isLoading ? "Creating sandbox..." : "Start"}
+        </Button>
+      </div>
+    </div>
+  );
+}
