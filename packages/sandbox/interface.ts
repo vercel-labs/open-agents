@@ -111,6 +111,15 @@ export interface Sandbox {
   readonly environmentDetails?: string;
 
   /**
+   * The base host/domain for this sandbox (for remote sandboxes).
+   * Used to construct URLs for accessing running services.
+   * For local sandboxes, this is typically undefined or "localhost".
+   *
+   * @example "abc123.vercel.run"
+   */
+  readonly host?: string;
+
+  /**
    * Read file contents as UTF-8 string
    */
   readFile(path: string, encoding: "utf-8"): Promise<string>;
