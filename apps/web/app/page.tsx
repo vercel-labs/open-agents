@@ -1,7 +1,7 @@
 "use client";
 
 import { isToolUIPart } from "ai";
-import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Square, X } from "lucide-react";
 import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
 import type { ComponentProps, ReactNode } from "react";
@@ -17,9 +17,16 @@ import type { BundledTheme } from "shiki";
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
-import { ChatProvider, useChatContext, type SandboxInfo } from "./chat-context";
+import {
+  ChatProvider,
+  useChatContext,
+  type SandboxInfo,
+  type RepoInfo,
+} from "./chat-context";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "./types";
 import type { TaskToolUIPart } from "@open-harness/agent";
+import { AuthGuard } from "@/components/auth/auth-guard";
+import { RepoSelectionScreen } from "@/components/repo-selection-screen";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -45,14 +52,55 @@ const shikiThemes = ["github-dark", "github-dark"] as [
 
 export default function ChatPage() {
   return (
-    <ChatProvider>
-      <Chat />
-    </ChatProvider>
+    <AuthGuard>
+      <ChatProvider>
+        <ChatFlow />
+      </ChatProvider>
+    </AuthGuard>
   );
 }
 
-async function createSandbox(): Promise<SandboxInfo> {
-  const response = await fetch("/api/sandbox", { method: "POST" });
+function ChatFlow() {
+  const { repoInfo, setRepoInfo, clearSandboxInfo } = useChatContext();
+  const [isSelectingRepo, setIsSelectingRepo] = useState(false);
+
+  const handleRepoSelect = (owner: string, repo: string, branch: string) => {
+    setRepoInfo({
+      owner,
+      repo,
+      fullName: `${owner}/${repo}`,
+      cloneUrl: `https://github.com/${owner}/${repo}`,
+      branch,
+    });
+    // Clear any stale sandbox when repo changes
+    clearSandboxInfo();
+    setIsSelectingRepo(false);
+  };
+
+  // Show repo selection if no repo selected or user requested change
+  if (!repoInfo || isSelectingRepo) {
+    return <RepoSelectionScreen onSelect={handleRepoSelect} />;
+  }
+
+  return (
+    <Chat
+      onChangeRepo={() => {
+        clearSandboxInfo();
+        setIsSelectingRepo(true);
+      }}
+    />
+  );
+}
+
+async function createSandbox(repoInfo: RepoInfo): Promise<SandboxInfo> {
+  const response = await fetch("/api/sandbox", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      repoUrl: repoInfo.cloneUrl,
+      branch: repoInfo.branch,
+    }),
+  });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
@@ -143,13 +191,13 @@ function SandboxStatus({
   );
 }
 
-function Chat() {
+function Chat({ onChangeRepo }: { onChangeRepo: () => void }) {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
-  const { chat, sandboxInfo, setSandboxInfo, clearSandboxInfo } =
+  const { chat, sandboxInfo, setSandboxInfo, clearSandboxInfo, repoInfo } =
     useChatContext();
   const {
     messages,
@@ -197,6 +245,20 @@ function Chat() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
+      {repoInfo && (
+        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{repoInfo.fullName}</span>
+            <span className="flex items-center gap-1">
+              <GitBranch className="h-3 w-3" />
+              {repoInfo.branch}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onChangeRepo}>
+            Change
+          </Button>
+        </div>
+      )}
       {hasMessages ? (
         <div className="relative flex-1 overflow-hidden">
           <div ref={containerRef} className="h-full overflow-y-auto">
@@ -375,9 +437,13 @@ function Chat() {
               setInput("");
 
               if (!isSandboxValid(sandboxInfo)) {
+                if (!repoInfo) {
+                  // Should not happen as ChatFlow guards this
+                  return;
+                }
                 setIsCreatingSandbox(true);
                 try {
-                  const newSandbox = await createSandbox();
+                  const newSandbox = await createSandbox(repoInfo);
                   setSandboxInfo(newSandbox);
                 } catch {
                   // Restore input on error so user doesn't lose their message
