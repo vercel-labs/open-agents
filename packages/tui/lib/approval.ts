@@ -49,6 +49,17 @@ export function getToolApprovalInfo(
   const cwd = workingDirectory ?? process.cwd();
 
   switch (part.type) {
+    case "tool-read": {
+      const filePath = String(part.input?.filePath ?? "");
+      const glob = getDirectoryGlob(filePath, cwd);
+      return {
+        toolType: "Read file",
+        toolCommand: filePath,
+        toolDescription: "Read file outside working directory",
+        dontAskAgainPattern: `reads in ${glob}`,
+      };
+    }
+
     case "tool-bash": {
       const command = String(part.input?.command ?? "");
       return {
@@ -121,6 +132,17 @@ export function inferApprovalRule(
   const cwd = workingDirectory ?? process.cwd();
 
   switch (part.type) {
+    case "tool-read": {
+      const filePath = String(part.input?.filePath ?? "");
+      if (!filePath) return null;
+
+      return {
+        type: "path-glob",
+        tool: "read",
+        glob: getDirectoryGlob(filePath, cwd),
+      };
+    }
+
     case "tool-bash": {
       const command = String(part.input?.command ?? "").trim();
       if (!command) return null;

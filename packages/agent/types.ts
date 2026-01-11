@@ -52,7 +52,7 @@ export const approvalRuleSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("path-glob"),
-    tool: z.enum(["write", "edit", "grep", "glob"]),
+    tool: z.enum(["read", "write", "edit", "grep", "glob"]),
     glob: z.string(),
   }),
   z.object({
