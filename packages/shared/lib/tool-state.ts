@@ -89,10 +89,12 @@ export function getStatusColor(
   return "green";
 }
 
+const MAX_ERROR_DISPLAY_LENGTH = 80;
+
 /**
  * Get the status label based on tool state.
  */
-export function getStatusLabel(state: ToolRenderState): string | null {
+export function getStatusLabel(state: ToolRenderState): string | undefined {
   if (state.denied) {
     return state.denialReason ? `Denied: ${state.denialReason}` : "Denied";
   }
@@ -106,9 +108,9 @@ export function getStatusLabel(state: ToolRenderState): string | null {
     return "Running…";
   }
   if (state.error) {
-    return `Error: ${state.error.slice(0, 80)}`;
+    return `Error: ${state.error.slice(0, MAX_ERROR_DISPLAY_LENGTH)}`;
   }
-  return null;
+  return undefined;
 }
 
 /**
