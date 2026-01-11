@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
+import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
@@ -169,6 +170,7 @@ export function TaskDetailContent() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [prDialogOpen, setPrDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -307,10 +309,29 @@ export function TaskDetailContent() {
               <Share2 className="mr-2 h-4 w-4" />
               Share
             </Button>
-            <Button variant="outline" size="sm">
-              <GitPullRequest className="mr-2 h-4 w-4" />
-              Create PR
-            </Button>
+            {task?.prNumber ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const prUrl = `https://github.com/${task.repoOwner}/${task.repoName}/pull/${task.prNumber}`;
+                  window.open(prUrl, "_blank");
+                }}
+              >
+                <GitPullRequest className="mr-2 h-4 w-4" />
+                View PR #{task.prNumber}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPrDialogOpen(true)}
+                disabled={!task?.branch || !task?.cloneUrl}
+              >
+                <GitPullRequest className="mr-2 h-4 w-4" />
+                Create PR
+              </Button>
+            )}
             <Button variant="ghost" size="icon">
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -570,6 +591,16 @@ export function TaskDetailContent() {
             Diff panel coming soon
           </div>
         </div>
+      )}
+
+      {/* Create PR Dialog */}
+      {task && (
+        <CreatePRDialog
+          open={prDialogOpen}
+          onOpenChange={setPrDialogOpen}
+          task={task}
+          sandboxId={sandboxInfo?.sandboxId ?? null}
+        />
       )}
     </div>
   );

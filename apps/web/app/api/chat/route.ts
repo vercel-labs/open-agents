@@ -66,10 +66,12 @@ export async function POST(req: Request) {
 
   // Save assistant message on finish
   return result.toUIMessageStreamResponse({
+    originalMessages: messages,
+    generateMessageId: nanoid,
     onFinish: async ({ responseMessage }) => {
       if (taskId) {
         await createTaskMessage({
-          id: responseMessage.id ?? nanoid(),
+          id: responseMessage.id,
           taskId,
           role: "assistant",
           parts: responseMessage,
