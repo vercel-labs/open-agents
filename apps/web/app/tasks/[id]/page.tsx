@@ -1,0 +1,599 @@
+"use client";
+
+import { use, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { isToolUIPart } from "ai";
+import type { ComponentProps, ReactNode } from "react";
+import { Children, cloneElement, isValidElement } from "react";
+import type { BundledTheme } from "shiki";
+import { Streamdown } from "streamdown";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Square,
+  X,
+  Archive,
+  Share2,
+  GitPullRequest,
+  MoreVertical,
+} from "lucide-react";
+
+import { AuthGuard } from "@/components/auth/auth-guard";
+import { Button } from "@/components/ui/button";
+import { ToolCall } from "@/components/tool-call";
+import { TaskGroupView } from "@/components/task-group-view";
+import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
+import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
+import type { TaskToolUIPart } from "@open-harness/agent";
+
+import {
+  TaskChatProvider,
+  useTaskChatContext,
+  type SandboxInfo,
+} from "./task-context";
+
+const customComponents = {
+  pre: ({ children, ...props }: ComponentProps<"pre">) => {
+    const processChildren = (child: ReactNode): ReactNode => {
+      if (isValidElement<{ children?: ReactNode }>(child)) {
+        const codeContent = child.props.children;
+        if (typeof codeContent === "string") {
+          return cloneElement(child, {
+            children: codeContent.trimEnd(),
+          });
+        }
+      }
+      return child;
+    };
+    return <pre {...props}>{Children.map(children, processChildren)}</pre>;
+  },
+};
+
+const shikiThemes = ["github-dark", "github-dark"] as [
+  BundledTheme,
+  BundledTheme,
+];
+
+interface TaskPageProps {
+  params: Promise<{ id: string }>;
+}
+
+async function createSandbox(
+  cloneUrl: string,
+  branch?: string,
+): Promise<SandboxInfo> {
+  const response = await fetch("/api/sandbox", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      repoUrl: cloneUrl,
+      branch: branch ?? "main",
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to create sandbox: ${response.status}${text ? ` - ${text}` : ""}`,
+    );
+  }
+  return (await response.json()) as SandboxInfo;
+}
+
+function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
+  if (!sandboxInfo) return false;
+  const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
+  return Date.now() < expiresAt - 10_000;
+}
+
+function formatTimeRemaining(ms: number): string {
+  if (ms <= 0) return "0:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function SandboxStatus({
+  sandboxInfo,
+  isCreating,
+  onKill,
+}: {
+  sandboxInfo: SandboxInfo | null;
+  isCreating: boolean;
+  onKill: () => void;
+}) {
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!sandboxInfo) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTime = () => {
+      const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
+      const remaining = expiresAt - Date.now();
+      setTimeRemaining(remaining > 0 ? remaining : 0);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [sandboxInfo]);
+
+  if (isCreating) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+        <span>Creating sandbox...</span>
+      </div>
+    );
+  }
+
+  if (!sandboxInfo || timeRemaining === null) {
+    return null;
+  }
+
+  if (timeRemaining <= 0) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-red-500" />
+        <span>Sandbox expired</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="h-2 w-2 rounded-full bg-green-500" />
+      <span>{formatTimeRemaining(timeRemaining)}</span>
+      <button
+        type="button"
+        onClick={onKill}
+        className="rounded p-0.5 hover:bg-muted-foreground/20"
+        title="Stop sandbox"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function TaskDetailContent() {
+  const router = useRouter();
+  const [input, setInput] = useState("");
+  const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { containerRef, isAtBottom, scrollToBottom } =
+    useScrollToBottom<HTMLDivElement>();
+  const {
+    task,
+    chat,
+    sandboxInfo,
+    setSandboxInfo,
+    clearSandboxInfo,
+    isLoading,
+  } = useTaskChatContext();
+  const {
+    messages,
+    error,
+    sendMessage,
+    status,
+    addToolApprovalResponse,
+    stop,
+  } = chat;
+
+  const handleKillSandbox = async () => {
+    if (!sandboxInfo) return;
+    try {
+      await fetch("/api/sandbox", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sandboxId: sandboxInfo.sandboxId }),
+      });
+    } finally {
+      clearSandboxInfo();
+    }
+  };
+
+  useEffect(() => {
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isAtBottom, scrollToBottom]);
+
+  useEffect(() => {
+    if (status !== "streaming") {
+      inputRef.current?.focus();
+    }
+  }, [status]);
+
+  // Auto-send initial message when task loads and no messages exist
+  const hasSentInitialMessage = useRef(false);
+  useEffect(() => {
+    if (
+      task &&
+      !isLoading &&
+      messages.length === 0 &&
+      !hasSentInitialMessage.current
+    ) {
+      hasSentInitialMessage.current = true;
+
+      // Create sandbox and send first message
+      const initTask = async () => {
+        if (task.cloneUrl) {
+          setIsCreatingSandbox(true);
+          try {
+            const newSandbox = await createSandbox(
+              task.cloneUrl,
+              task.branch ?? undefined,
+            );
+            setSandboxInfo(newSandbox);
+          } catch (err) {
+            console.error("Failed to create sandbox:", err);
+            return;
+          } finally {
+            setIsCreatingSandbox(false);
+          }
+        }
+
+        sendMessage({ text: task.title });
+      };
+
+      initTask();
+    }
+  }, [task, isLoading, messages.length, sendMessage, setSandboxInfo]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading task...</p>
+      </div>
+    );
+  }
+
+  if (!task) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <p className="text-destructive">Task not found</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <p className="text-destructive">{error.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-background text-foreground">
+      {/* Main chat area */}
+      <div className="flex flex-1 flex-col">
+        {/* Header */}
+        <header className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="rounded-lg p-2 hover:bg-muted"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="font-medium">{task.title}</h1>
+              <p className="text-sm text-muted-foreground">
+                {formatDate(new Date(task.createdAt))}
+                {task.repoName && (
+                  <>
+                    {" "}
+                    <span className="text-muted-foreground/50">-</span>{" "}
+                    {task.repoOwner}/{task.repoName}
+                  </>
+                )}
+                {task.branch && (
+                  <>
+                    {" "}
+                    <span className="text-muted-foreground/50">-</span>{" "}
+                    {task.branch}
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm">
+              <Archive className="mr-2 h-4 w-4" />
+              Archive
+            </Button>
+            <Button variant="ghost" size="sm">
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
+            <Button variant="outline" size="sm">
+              <GitPullRequest className="mr-2 h-4 w-4" />
+              Create PR
+            </Button>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </div>
+        </header>
+
+        {/* Messages */}
+        <div className="relative flex-1 overflow-hidden">
+          <div ref={containerRef} className="h-full overflow-y-auto">
+            <div className="mx-auto max-w-3xl px-4 py-8">
+              <div className="space-y-6">
+                {messages.map((m, messageIndex) => {
+                  const isLastMessage = messageIndex === messages.length - 1;
+                  const isMessageStreaming =
+                    status === "streaming" && isLastMessage;
+
+                  type RenderGroup =
+                    | {
+                        type: "part";
+                        part: WebAgentUIMessagePart;
+                        index: number;
+                      }
+                    | {
+                        type: "task-group";
+                        tasks: TaskToolUIPart[];
+                        startIndex: number;
+                      };
+
+                  const renderGroups: RenderGroup[] = [];
+                  let currentTaskGroup: TaskToolUIPart[] = [];
+                  let taskGroupStartIndex = 0;
+
+                  m.parts.forEach((part, index) => {
+                    if (isToolUIPart(part) && part.type === "tool-task") {
+                      if (currentTaskGroup.length === 0) {
+                        taskGroupStartIndex = index;
+                      }
+                      currentTaskGroup.push(part as TaskToolUIPart);
+                    } else {
+                      if (currentTaskGroup.length > 0) {
+                        renderGroups.push({
+                          type: "task-group",
+                          tasks: currentTaskGroup,
+                          startIndex: taskGroupStartIndex,
+                        });
+                        currentTaskGroup = [];
+                      }
+                      renderGroups.push({ type: "part", part, index });
+                    }
+                  });
+
+                  if (currentTaskGroup.length > 0) {
+                    renderGroups.push({
+                      type: "task-group",
+                      tasks: currentTaskGroup,
+                      startIndex: taskGroupStartIndex,
+                    });
+                  }
+
+                  return renderGroups.map((group) => {
+                    if (group.type === "task-group") {
+                      return (
+                        <div
+                          key={`${m.id}-task-group-${group.startIndex}`}
+                          className="max-w-full"
+                        >
+                          <TaskGroupView
+                            taskParts={group.tasks}
+                            activeApprovalId={
+                              group.tasks.find(
+                                (t) => t.state === "approval-requested",
+                              )?.approval?.id ?? null
+                            }
+                            isStreaming={isMessageStreaming}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    }
+
+                    const p = group.part;
+                    const i = group.index;
+
+                    if (p.type === "text") {
+                      return (
+                        <div
+                          key={`${m.id}-${i}`}
+                          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                        >
+                          {m.role === "user" ? (
+                            <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                              <p className="whitespace-pre-wrap">{p.text}</p>
+                            </div>
+                          ) : (
+                            <div className="max-w-[80%]">
+                              <Streamdown
+                                isAnimating={isMessageStreaming}
+                                shikiTheme={shikiThemes}
+                                components={customComponents}
+                              >
+                                {p.text}
+                              </Streamdown>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (isToolUIPart(p)) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="max-w-full">
+                          <ToolCall
+                            part={p as WebAgentUIToolPart}
+                            isStreaming={isMessageStreaming}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  });
+                })}
+              </div>
+            </div>
+          </div>
+          {!isAtBottom && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-secondary text-secondary-foreground hover:bg-accent"
+              onClick={scrollToBottom}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="p-4 pb-8">
+          <div className="mx-auto max-w-3xl space-y-2">
+            <div className="flex justify-end px-2">
+              <SandboxStatus
+                sandboxInfo={sandboxInfo}
+                isCreating={isCreatingSandbox}
+                onKill={handleKillSandbox}
+              />
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!input.trim()) return;
+
+                const messageText = input;
+                setInput("");
+
+                if (!isSandboxValid(sandboxInfo) && task.cloneUrl) {
+                  setIsCreatingSandbox(true);
+                  try {
+                    const newSandbox = await createSandbox(
+                      task.cloneUrl,
+                      task.branch ?? undefined,
+                    );
+                    setSandboxInfo(newSandbox);
+                  } catch {
+                    setInput(messageText);
+                    return;
+                  } finally {
+                    setIsCreatingSandbox(false);
+                  }
+                }
+
+                sendMessage({ text: messageText });
+              }}
+              className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
+            >
+              <input
+                ref={inputRef}
+                value={input}
+                placeholder="Request changes or ask a ..."
+                onChange={(e) => setInput(e.currentTarget.value)}
+                disabled={status === "streaming"}
+                className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+              {status === "streaming" ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={stop}
+                  className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!input.trim()}
+                  className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              )}
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* Diff panel placeholder */}
+      {showDiffPanel && (
+        <div className="w-[500px] border-l border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                className="text-sm font-medium text-foreground"
+              >
+                Diff
+              </button>
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Logs
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDiffPanel(false)}
+              className="rounded p-1 hover:bg-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="p-4 text-center text-muted-foreground">
+            Diff panel coming soon
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TaskPage({ params }: TaskPageProps) {
+  const { id } = use(params);
+
+  return (
+    <AuthGuard>
+      <TaskChatProvider taskId={id}>
+        <TaskDetailContent />
+      </TaskChatProvider>
+    </AuthGuard>
+  );
+}

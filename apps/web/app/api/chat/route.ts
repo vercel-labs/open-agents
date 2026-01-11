@@ -3,15 +3,28 @@ import { connectVercelSandbox } from "@open-harness/sandbox";
 import { convertToModelMessages } from "ai";
 import { WebAgentUIMessage } from "@/app/types";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { updateTask } from "@/lib/db/tasks";
 
 // Allow streaming responses up to 5 minutes (matching sandbox timeout)
 export const maxDuration = 300;
 
+interface ChatRequestBody {
+  messages: WebAgentUIMessage[];
+  sandboxId: string;
+  taskId?: string;
+}
+
 export async function POST(req: Request) {
-  const {
-    messages,
-    sandboxId,
-  }: { messages: WebAgentUIMessage[]; sandboxId: string } = await req.json();
+  const { messages, sandboxId, taskId }: ChatRequestBody = await req.json();
+
+  // If this is a task-based chat, update the task with the sandbox ID
+  if (taskId && sandboxId) {
+    try {
+      await updateTask(taskId, { sandboxId });
+    } catch (error) {
+      console.error("Failed to update task with sandbox ID:", error);
+    }
+  }
 
   const modelMessages = await convertToModelMessages(messages, {
     ignoreIncompleteToolCalls: true,

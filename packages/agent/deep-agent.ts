@@ -86,7 +86,7 @@ export const deepAgent = new ToolLoopAgent({
   },
   // Sandbox lifecycle is managed by the consumer, not the agent.
   // Consumers should call sandbox.stop() when they're done with the sandbox.
-  onFinish: async () => { },
+  onFinish: async () => {},
 });
 
 export function extractTodosFromStep(

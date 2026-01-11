@@ -1,4 +1,11 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -55,3 +62,52 @@ export const accounts = pgTable(
     ),
   ],
 );
+
+export const tasks = pgTable("tasks", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  status: text("status", {
+    enum: ["running", "completed", "failed", "archived"],
+  })
+    .notNull()
+    .default("running"),
+  // Repository info
+  repoOwner: text("repo_owner"),
+  repoName: text("repo_name"),
+  branch: text("branch"),
+  cloneUrl: text("clone_url"),
+  // Sandbox info
+  sandboxId: text("sandbox_id"),
+  // Git stats (for display in task list)
+  linesAdded: integer("lines_added").default(0),
+  linesRemoved: integer("lines_removed").default(0),
+  // PR info if created
+  prNumber: integer("pr_number"),
+  prStatus: text("pr_status", {
+    enum: ["open", "merged", "closed"],
+  }),
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const taskMessages = pgTable("task_messages", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  role: text("role", {
+    enum: ["user", "assistant"],
+  }).notNull(),
+  // Store the full message parts as JSON for flexibility
+  parts: jsonb("parts").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+export type TaskMessage = typeof taskMessages.$inferSelect;
+export type NewTaskMessage = typeof taskMessages.$inferInsert;
