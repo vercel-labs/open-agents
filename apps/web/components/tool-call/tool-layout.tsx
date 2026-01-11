@@ -17,6 +17,13 @@ export type ToolLayoutProps = {
 };
 
 function StatusDot({ state }: { state: ToolRenderState }) {
+  // Show empty circle for interrupted state
+  if (state.interrupted) {
+    return (
+      <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
+    );
+  }
+
   if (state.running) {
     return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
   }
@@ -61,9 +68,13 @@ export function ToolLayout({
         <span className="text-muted-foreground">)</span>
       </div>
 
-      {state.approvalRequested && !showApprovalButtons && (
-        <div className="mt-2 pl-5 text-sm text-muted-foreground">Running…</div>
-      )}
+      {state.approvalRequested &&
+        !showApprovalButtons &&
+        !state.interrupted && (
+          <div className="mt-2 pl-5 text-sm text-muted-foreground">
+            Running…
+          </div>
+        )}
 
       {showApprovalButtons && (
         <ApprovalButtons
@@ -73,9 +84,14 @@ export function ToolLayout({
         />
       )}
 
-      {output && !state.approvalRequested && !state.denied && (
-        <div className="mt-2 pl-5 text-sm text-muted-foreground">{output}</div>
-      )}
+      {output &&
+        !state.approvalRequested &&
+        !state.denied &&
+        !state.interrupted && (
+          <div className="mt-2 pl-5 text-sm text-muted-foreground">
+            {output}
+          </div>
+        )}
 
       {state.denied && (
         <div className="mt-2 pl-5 text-sm text-red-500">
@@ -87,6 +103,10 @@ export function ToolLayout({
         <div className="mt-2 pl-5 text-sm text-red-500">
           Error: {state.error.slice(0, 80)}
         </div>
+      )}
+
+      {state.interrupted && (
+        <div className="mt-2 pl-5 text-sm text-yellow-500">Interrupted</div>
       )}
 
       {children}

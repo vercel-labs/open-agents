@@ -22,6 +22,7 @@ export type ToolCallProps = {
   part: WebAgentUIToolPart;
   activeApprovalId?: string | null;
   cwd?: string;
+  isStreaming?: boolean;
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
 };
@@ -33,10 +34,11 @@ export function ToolCall({
   part,
   activeApprovalId = null,
   cwd = "",
+  isStreaming = false,
   onApprove,
   onDeny,
 }: ToolCallProps) {
-  const state = extractRenderState(part, activeApprovalId);
+  const state = extractRenderState(part, activeApprovalId, isStreaming);
   const toolName = getToolName(part);
   const approvalProps = { onApprove, onDeny };
 

@@ -9,6 +9,8 @@
 export type ToolRenderState = {
   /** Whether the tool is currently running */
   running: boolean;
+  /** Whether the tool was interrupted (running when stream stopped) */
+  interrupted: boolean;
   /** Error message if the tool failed */
   error?: string;
   /** Whether the tool was denied by the user */
@@ -45,6 +47,7 @@ export type GenericToolPart = {
 export function extractRenderState(
   part: GenericToolPart,
   activeApprovalId: string | null,
+  isStreaming: boolean,
 ): ToolRenderState {
   const running =
     part.state === "input-streaming" || part.state === "input-available";
@@ -57,8 +60,12 @@ export function extractRenderState(
   const isActiveApproval =
     approvalId != null && approvalId === activeApprovalId;
 
+  // Tool was running but stream stopped - it was interrupted
+  const interrupted = running && !isStreaming;
+
   return {
     running,
+    interrupted,
     error,
     denied,
     denialReason,
@@ -75,6 +82,7 @@ export function getStatusColor(
   state: ToolRenderState,
 ): "red" | "yellow" | "green" {
   if (state.denied) return "red";
+  if (state.interrupted) return "yellow";
   if (state.approvalRequested) return "yellow";
   if (state.running) return "yellow";
   if (state.error) return "red";
@@ -87,6 +95,9 @@ export function getStatusColor(
 export function getStatusLabel(state: ToolRenderState): string | null {
   if (state.denied) {
     return state.denialReason ? `Denied: ${state.denialReason}` : "Denied";
+  }
+  if (state.interrupted) {
+    return "Interrupted";
   }
   if (state.approvalRequested) {
     return state.isActiveApproval ? "Running…" : "Waiting for approval…";

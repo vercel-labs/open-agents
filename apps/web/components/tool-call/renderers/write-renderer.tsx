@@ -73,7 +73,9 @@ export function WriteRenderer({
   return (
     <div className="my-2 rounded-lg border border-border bg-card p-3">
       <div className="flex items-center gap-2">
-        {mergedState.running ? (
+        {mergedState.interrupted ? (
+          <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
+        ) : mergedState.running ? (
           <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
         ) : (
           <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
@@ -137,6 +139,10 @@ export function WriteRenderer({
         <div className="mt-2 pl-5 text-sm text-red-500">
           Error: {mergedState.error.slice(0, 80)}
         </div>
+      )}
+
+      {mergedState.interrupted && (
+        <div className="mt-2 pl-5 text-sm text-yellow-500">Interrupted</div>
       )}
     </div>
   );

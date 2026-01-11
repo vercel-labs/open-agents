@@ -22,6 +22,7 @@ export type ToolCallProps = {
   part: TUIAgentUIToolPart;
   activeApprovalId: string | null;
   isExpanded?: boolean;
+  isStreaming?: boolean;
 };
 
 /**
@@ -34,8 +35,9 @@ export function ToolCall({
   part,
   activeApprovalId,
   isExpanded = false,
+  isStreaming = false,
 }: ToolCallProps) {
-  const state = extractRenderState(part, activeApprovalId);
+  const state = extractRenderState(part, activeApprovalId, isStreaming);
 
   return renderToolPart(part, state, isExpanded);
 }

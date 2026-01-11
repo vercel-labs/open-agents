@@ -146,17 +146,26 @@ export function TaskRenderer({
   const visibleParts = relevantParts.slice(-maxVisible);
 
   const isComplete = hasOutput && !isPreliminary;
-  const isStreaming = hasOutput && isPreliminary;
+  const isTaskStreaming = hasOutput && isPreliminary;
+
+  // Compute running states using state.interrupted from shared extractRenderState
+  const isRunningState =
+    part.state === "input-streaming" ||
+    part.state === "input-available" ||
+    isTaskStreaming;
+  const isActuallyRunning = isRunningState && !state.interrupted;
 
   const dotColor = taskDenied
     ? "bg-red-500"
     : taskApprovalRequested
       ? "bg-yellow-500"
-      : isStreaming
+      : state.interrupted
         ? "bg-yellow-500"
-        : isComplete
-          ? "bg-green-500"
-          : "bg-yellow-500";
+        : isActuallyRunning
+          ? "bg-yellow-500"
+          : isComplete
+            ? "bg-green-500"
+            : "bg-yellow-500";
 
   const subagentLabel =
     subagentType === "explorer"
@@ -168,7 +177,9 @@ export function TaskRenderer({
   return (
     <div className="my-2 rounded-lg border border-border bg-card p-3">
       <div className="flex items-center gap-2">
-        {state.running || isStreaming ? (
+        {state.interrupted ? (
+          <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
+        ) : state.running || isActuallyRunning ? (
           <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
         ) : (
           <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
@@ -241,6 +252,10 @@ export function TaskRenderer({
         <div className="mt-2 pl-5 text-sm text-muted-foreground">
           Complete ({toolParts.length} tool calls)
         </div>
+      )}
+
+      {state.interrupted && (
+        <div className="mt-2 pl-5 text-sm text-yellow-500">Interrupted</div>
       )}
 
       {state.error && (
