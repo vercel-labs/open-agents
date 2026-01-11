@@ -125,7 +125,7 @@ export function RepoSelectorCompact({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
         >
           <Folder className="h-4 w-4" />
           <span className="max-w-[150px] truncate">{displayText}</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Plus, Mic, ArrowUp, Layers } from "lucide-react";
+import { Plus, Mic, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RepoSelectorCompact } from "./repo-selector-compact";
 import { BranchSelectorCompact } from "./branch-selector-compact";
@@ -76,37 +76,58 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     <div
       ref={containerRef}
       className={cn(
-        "w-full max-w-2xl rounded-xl border border-border bg-muted/50 transition-all duration-200",
-        isFocused && "bg-muted",
+        "w-full max-w-2xl overflow-hidden rounded-xl border border-white/10 bg-neutral-800/60 transition-all duration-200",
+        isFocused && "border-white/15 bg-neutral-800/80",
       )}
     >
-      <div className="flex items-start gap-3 p-4">
-        <button
-          type="button"
-          className="mt-0.5 text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
-
+      {/* Input area */}
+      <div className="px-5 pb-3 pt-4">
         <textarea
           ref={inputRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe a task"
+          placeholder="Ask a question with /plan"
           rows={1}
-          className="flex-1 resize-none bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="w-full resize-none bg-transparent text-base text-foreground placeholder:text-neutral-500 focus:outline-none"
           style={{
             minHeight: "24px",
             height: "auto",
           }}
         />
+      </div>
 
-        <div className="flex items-center gap-2">
+      {/* Bottom toolbar */}
+      <div className="flex items-center justify-between px-3 pb-3 pt-0">
+        <div className="flex items-center">
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+
+          <RepoSelectorCompact
+            selectedOwner={selectedOwner}
+            selectedRepo={selectedRepo}
+            onSelect={handleRepoSelect}
+          />
+
+          {selectedOwner && selectedRepo && (
+            <BranchSelectorCompact
+              owner={selectedOwner}
+              repo={selectedRepo}
+              value={selectedBranch}
+              onChange={setSelectedBranch}
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
           >
             <Mic className="h-5 w-5" />
           </button>
@@ -118,35 +139,12 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
               prompt.trim() && !isLoading
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-muted-foreground/20 text-muted-foreground",
+                ? "bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+                : "bg-neutral-700 text-neutral-500",
             )}
           >
             <ArrowUp className="h-4 w-4" />
           </button>
-        </div>
-      </div>
-
-      {/* Repo and branch selection */}
-      <div className="flex items-center gap-2 border-t border-border px-4 py-3">
-        <RepoSelectorCompact
-          selectedOwner={selectedOwner}
-          selectedRepo={selectedRepo}
-          onSelect={handleRepoSelect}
-        />
-
-        {selectedOwner && selectedRepo && (
-          <BranchSelectorCompact
-            owner={selectedOwner}
-            repo={selectedRepo}
-            value={selectedBranch}
-            onChange={setSelectedBranch}
-          />
-        )}
-
-        <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground">
-          <Layers className="h-4 w-4" />
-          <span>2x</span>
         </div>
       </div>
     </div>
