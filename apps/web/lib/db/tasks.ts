@@ -53,6 +53,20 @@ export async function createTaskMessage(data: NewTaskMessage) {
   return message;
 }
 
+/**
+ * Creates a task message if it doesn't already exist (idempotent insert).
+ * Uses onConflictDoNothing to handle race conditions gracefully.
+ * Returns the message if created, or undefined if it already existed.
+ */
+export async function createTaskMessageIfNotExists(data: NewTaskMessage) {
+  const [message] = await db
+    .insert(taskMessages)
+    .values(data)
+    .onConflictDoNothing({ target: taskMessages.id })
+    .returning();
+  return message;
+}
+
 export async function getTaskMessageById(messageId: string) {
   return db.query.taskMessages.findFirst({
     where: eq(taskMessages.id, messageId),
@@ -62,6 +76,7 @@ export async function getTaskMessageById(messageId: string) {
 export async function getTaskMessages(taskId: string) {
   return db.query.taskMessages.findMany({
     where: eq(taskMessages.taskId, taskId),
-    orderBy: [taskMessages.createdAt],
+    // Order by createdAt, then by id as tiebreaker for deterministic ordering
+    orderBy: [taskMessages.createdAt, taskMessages.id],
   });
 }

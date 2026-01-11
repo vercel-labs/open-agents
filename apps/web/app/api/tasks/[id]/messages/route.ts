@@ -68,6 +68,13 @@ export async function POST(
     );
   }
 
+  if (!["user", "assistant"].includes(role)) {
+    return Response.json(
+      { error: "role must be 'user' or 'assistant'" },
+      { status: 400 },
+    );
+  }
+
   const message = await createTaskMessage({
     id: nanoid(),
     taskId: id,

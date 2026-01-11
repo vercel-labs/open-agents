@@ -73,18 +73,23 @@ export async function POST(req: Request) {
     finalBranch = generateBranchName(session.user.username, session.user.name);
   }
 
-  const task = await createTask({
-    id: nanoid(),
-    userId: session.user.id,
-    title,
-    status: "running",
-    repoOwner,
-    repoName,
-    branch: finalBranch,
-    cloneUrl,
-    sandboxId,
-    isNewBranch: isNewBranch ?? false,
-  });
+  try {
+    const task = await createTask({
+      id: nanoid(),
+      userId: session.user.id,
+      title,
+      status: "running",
+      repoOwner,
+      repoName,
+      branch: finalBranch,
+      cloneUrl,
+      sandboxId,
+      isNewBranch: isNewBranch ?? false,
+    });
 
-  return Response.json({ task });
+    return Response.json({ task });
+  } catch (error) {
+    console.error("Failed to create task:", error);
+    return Response.json({ error: "Failed to create task" }, { status: 500 });
+  }
 }

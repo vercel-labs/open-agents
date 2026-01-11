@@ -7,8 +7,8 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
   updateTask,
   createTaskMessage,
+  createTaskMessageIfNotExists,
   getTaskById,
-  getTaskMessageById,
 } from "@/lib/db/tasks";
 
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -70,16 +70,13 @@ export async function POST(req: Request) {
     const userMessage = messages[messages.length - 1];
     if (userMessage && userMessage.role === "user" && userMessage.id) {
       try {
-        // Check if message already exists to avoid duplicates
-        const existingMessage = await getTaskMessageById(userMessage.id);
-        if (!existingMessage) {
-          await createTaskMessage({
-            id: userMessage.id,
-            taskId,
-            role: "user",
-            parts: userMessage,
-          });
-        }
+        // Use idempotent insert to handle race conditions gracefully
+        await createTaskMessageIfNotExists({
+          id: userMessage.id,
+          taskId,
+          role: "user",
+          parts: userMessage,
+        });
       } catch (error) {
         console.error("Failed to save user message:", error);
       }

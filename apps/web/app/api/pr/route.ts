@@ -32,6 +32,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Validate branch names to prevent injection
+  const safeBranchPattern = /^[\w\-/.]+$/;
+  if (!safeBranchPattern.test(baseBranch)) {
+    return Response.json(
+      { error: "Invalid base branch name" },
+      { status: 400 },
+    );
+  }
+  if (!safeBranchPattern.test(branchName)) {
+    return Response.json({ error: "Invalid branch name" }, { status: 400 });
+  }
+
   // 3. Verify task ownership
   const task = await getTaskById(taskId);
   if (!task) {
@@ -66,10 +78,15 @@ export async function POST(req: Request) {
   }
 
   // 5. Update task with PR info
-  await updateTask(taskId, {
+  const updatedTask = await updateTask(taskId, {
     prNumber: result.prNumber,
     prStatus: "open",
   });
+
+  if (!updatedTask) {
+    // PR was created but task update failed - log error but still return PR info
+    console.error(`Failed to update task ${taskId} with PR info`);
+  }
 
   // 6. Return success
   return Response.json({
