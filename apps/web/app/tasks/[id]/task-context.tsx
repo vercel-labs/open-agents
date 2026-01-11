@@ -7,7 +7,6 @@ import {
   useState,
   useCallback,
   useRef,
-  useEffect,
   type ReactNode,
 } from "react";
 import {
@@ -26,12 +25,11 @@ export type SandboxInfo = {
 };
 
 type TaskChatContextValue = {
-  task: Task | null;
+  task: Task;
   chat: UseChatHelpers<WebAgentUIMessage>;
   sandboxInfo: SandboxInfo | null;
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
-  isLoading: boolean;
   archiveTask: () => Promise<void>;
 };
 
@@ -40,37 +38,18 @@ const TaskChatContext = createContext<TaskChatContextValue | undefined>(
 );
 
 type TaskChatProviderProps = {
-  taskId: string;
+  task: Task;
+  initialMessages: WebAgentUIMessage[];
   children: ReactNode;
 };
 
-export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
-  const [task, setTask] = useState<Task | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const sandboxIdRef = useRef<string | null>(null);
-
-  // Fetch task on mount
-  useEffect(() => {
-    const fetchTask = async () => {
-      try {
-        const res = await fetch(`/api/tasks/${taskId}`);
-        if (res.ok) {
-          const data = (await res.json()) as { task: Task };
-          setTask(data.task);
-          // Set sandbox ID if task has one
-          if (data.task.sandboxId) {
-            sandboxIdRef.current = data.task.sandboxId;
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch task:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTask();
-  }, [taskId]);
+export function TaskChatProvider({
+  task: initialTask,
+  initialMessages,
+  children,
+}: TaskChatProviderProps) {
+  const [task, setTask] = useState<Task>(initialTask);
+  const sandboxIdRef = useRef<string | null>(initialTask.sandboxId ?? null);
 
   const transport = useMemo(
     () =>
@@ -78,14 +57,15 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
         api: "/api/chat",
         body: () => ({
           sandboxId: sandboxIdRef.current,
-          taskId,
+          taskId: task.id,
         }),
       }),
-    [taskId],
+    [task.id],
   );
 
   const chat = useChat<WebAgentUIMessage>({
     transport,
+    messages: initialMessages,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
@@ -102,7 +82,7 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
   }, []);
 
   const archiveTask = useCallback(async () => {
-    const res = await fetch(`/api/tasks/${taskId}`, {
+    const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "archived" }),
@@ -115,7 +95,7 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
 
     const data = (await res.json()) as { task: Task };
     setTask(data.task);
-  }, [taskId]);
+  }, [task.id]);
 
   return (
     <TaskChatContext.Provider
@@ -125,7 +105,6 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
         sandboxInfo,
         setSandboxInfo,
         clearSandboxInfo,
-        isLoading,
         archiveTask,
       }}
     >

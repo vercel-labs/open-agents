@@ -1,9 +1,10 @@
 import { deepAgent } from "@open-harness/agent";
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { convertToModelMessages } from "ai";
+import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { updateTask } from "@/lib/db/tasks";
+import { updateTask, createTaskMessage } from "@/lib/db/tasks";
 
 // Allow streaming responses up to 5 minutes (matching sandbox timeout)
 export const maxDuration = 300;
@@ -39,6 +40,19 @@ export async function POST(req: Request) {
     env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
   });
 
+  // Save user message immediately (incremental persistence)
+  if (taskId && messages.length > 0) {
+    const userMessage = messages[messages.length - 1];
+    if (userMessage && userMessage.role === "user") {
+      await createTaskMessage({
+        id: userMessage.id ?? nanoid(),
+        taskId,
+        role: "user",
+        parts: userMessage,
+      });
+    }
+  }
+
   const result = await deepAgent.stream({
     messages: modelMessages,
     options: {
@@ -50,5 +64,17 @@ export async function POST(req: Request) {
     abortSignal: req.signal,
   });
 
-  return result.toUIMessageStreamResponse();
+  // Save assistant message on finish
+  return result.toUIMessageStreamResponse({
+    onFinish: async ({ responseMessage }) => {
+      if (taskId) {
+        await createTaskMessage({
+          id: responseMessage.id ?? nanoid(),
+          taskId,
+          role: "assistant",
+          parts: responseMessage,
+        });
+      }
+    },
+  });
 }
