@@ -37,9 +37,8 @@ export function RepoSelectionScreen({
         <h1 className="text-3xl font-light text-foreground">
           Select a repository
         </h1>
-        <RepoSelector onRepoSelect={handleRepoSelect} />
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Branch:</span>
+        <div className="flex flex-col gap-4">
+          <RepoSelector onRepoSelect={handleRepoSelect} />
           <BranchSelector
             owner={selectedOwner}
             repo={selectedRepo}

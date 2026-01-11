@@ -156,7 +156,7 @@ export function BranchSelector({
         <Button
           variant="outline"
           aria-expanded={open}
-          className="w-48 justify-between"
+          className="w-full justify-between"
           disabled={isDisabled}
         >
           <div className="flex items-center gap-2 truncate">
@@ -172,7 +172,7 @@ export function BranchSelector({
           <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-48 p-0">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
           <CommandInput placeholder="Search branches..." />
           <CommandList>
