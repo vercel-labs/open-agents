@@ -61,7 +61,7 @@ function HomePage() {
               <path d="M12 6v6l4 2" />
             </svg>
           </div>
-          <span className="text-lg font-semibold">Codex</span>
+          <span className="text-lg font-semibold">Open Harness</span>
         </div>
         <div className="flex items-center gap-4">
           <button
