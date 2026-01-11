@@ -1,7 +1,7 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { updateTask } from "@/lib/db/tasks";
+import { getTaskById, updateTask } from "@/lib/db/tasks";
 
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 
@@ -70,8 +70,12 @@ export async function POST(req: Request) {
   });
 
   // Update task with sandboxId if this is a new sandbox
+  // Verify task ownership before updating
   if (taskId && !existingSandboxId) {
-    await updateTask(taskId, { sandboxId: sandbox.id });
+    const task = await getTaskById(taskId);
+    if (task && task.userId === session.user.id) {
+      await updateTask(taskId, { sandboxId: sandbox.id });
+    }
   }
 
   return Response.json({

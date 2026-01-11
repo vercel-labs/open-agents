@@ -9,6 +9,9 @@ import {
 
 export async function createTask(data: NewTask) {
   const [task] = await db.insert(tasks).values(data).returning();
+  if (!task) {
+    throw new Error("Failed to create task");
+  }
   return task;
 }
 
@@ -34,6 +37,7 @@ export async function updateTask(
     .set({ ...data, updatedAt: new Date() })
     .where(eq(tasks.id, taskId))
     .returning();
+  // Returns undefined if task doesn't exist
   return task;
 }
 
@@ -43,6 +47,9 @@ export async function deleteTask(taskId: string) {
 
 export async function createTaskMessage(data: NewTaskMessage) {
   const [message] = await db.insert(taskMessages).values(data).returning();
+  if (!message) {
+    throw new Error("Failed to create task message");
+  }
   return message;
 }
 

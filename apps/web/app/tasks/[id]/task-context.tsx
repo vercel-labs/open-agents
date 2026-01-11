@@ -90,13 +90,15 @@ export function TaskChatProvider({
       body: JSON.stringify({ status: "archived" }),
     });
 
+    const data = (await res.json()) as { task?: Task; error?: string };
+
     if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Failed to archive task");
     }
 
-    const data = (await res.json()) as { task: Task };
-    setTask(data.task);
+    if (data.task) {
+      setTask(data.task);
+    }
   }, [task.id]);
 
   // Track whether we started with persisted messages (for initial message logic)

@@ -228,10 +228,13 @@ export function TaskDetailContent() {
         if (task.cloneUrl) {
           setIsCreatingSandbox(true);
           try {
+            // Only create new branch on first sandbox creation
+            // If task already has a sandboxId, branch was already created
+            const shouldCreateNewBranch = task.isNewBranch && !task.sandboxId;
             const newSandbox = await createSandbox(
               task.cloneUrl,
               task.branch ?? undefined,
-              task.isNewBranch,
+              shouldCreateNewBranch,
               task.id,
               task.sandboxId ?? undefined,
             );
@@ -510,10 +513,14 @@ export function TaskDetailContent() {
                 if (!isSandboxValid(sandboxInfo) && task.cloneUrl) {
                   setIsCreatingSandbox(true);
                   try {
+                    // Only create new branch on first sandbox creation
+                    // If task already has a sandboxId, branch was already created
+                    const shouldCreateNewBranch =
+                      task.isNewBranch && !task.sandboxId;
                     const newSandbox = await createSandbox(
                       task.cloneUrl,
                       task.branch ?? undefined,
-                      task.isNewBranch,
+                      shouldCreateNewBranch,
                       task.id,
                       task.sandboxId ?? undefined,
                     );

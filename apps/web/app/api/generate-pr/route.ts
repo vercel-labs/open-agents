@@ -130,10 +130,12 @@ Respond with ONLY the commit message, nothing else.`,
 
     const commitMessage = commitMsgResult.text.trim();
 
-    // 4d. Create commit (escape double quotes in message)
-    const escapedMessage = commitMessage.replace(/"/g, '\\"');
+    // 4d. Create commit (escape shell special characters in message)
+    // Using single quotes is safest, but we need to handle single quotes in the message
+    // by ending the quote, adding an escaped single quote, and starting a new quote
+    const escapedMessage = commitMessage.replace(/'/g, "'\\''");
     const commitResult = await sandbox.exec(
-      `git commit -m "${escapedMessage}"`,
+      `git commit -m '${escapedMessage}'`,
       cwd,
       10000,
     );
