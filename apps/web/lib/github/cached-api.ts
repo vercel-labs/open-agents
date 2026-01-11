@@ -1,0 +1,192 @@
+import "server-only";
+import { unstable_cache } from "next/cache";
+
+const CACHE_REVALIDATE_SECONDS = 300; // 5 minutes
+
+interface GitHubUser {
+  login: string;
+  name: string | null;
+  avatar_url: string;
+}
+
+interface GitHubOrg {
+  login: string;
+  avatar_url: string;
+}
+
+interface GitHubRepo {
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  clone_url: string;
+  updated_at: string;
+  language: string | null;
+}
+
+interface GitHubBranch {
+  name: string;
+}
+
+interface GitHubRepoInfo {
+  default_branch: string;
+}
+
+async function fetchGitHubAPI<T>(
+  endpoint: string,
+  token: string,
+): Promise<T | null> {
+  const response = await fetch(`https://api.github.com${endpoint}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github.v3+json",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export const getCachedGitHubUser = unstable_cache(
+  async (userId: string, token: string) => {
+    const user = await fetchGitHubAPI<GitHubUser>("/user", token);
+    if (!user) return null;
+
+    return {
+      login: user.login,
+      name: user.name,
+      avatar_url: user.avatar_url,
+    };
+  },
+  ["github-user"],
+  { revalidate: CACHE_REVALIDATE_SECONDS },
+);
+
+export const getCachedGitHubOrgs = unstable_cache(
+  async (userId: string, token: string) => {
+    const orgs = await fetchGitHubAPI<GitHubOrg[]>("/user/orgs", token);
+    if (!orgs) return null;
+
+    return orgs.map((org) => ({
+      login: org.login,
+      name: org.login,
+      avatar_url: org.avatar_url,
+    }));
+  },
+  ["github-orgs"],
+  { revalidate: CACHE_REVALIDATE_SECONDS },
+);
+
+export const getCachedGitHubRepos = unstable_cache(
+  async (userId: string, token: string, owner: string) => {
+    // Check if owner is the authenticated user
+    const currentUser = await fetchGitHubAPI<{ login: string }>("/user", token);
+    const isAuthenticatedUser = currentUser?.login === owner;
+
+    // Determine endpoint type
+    let apiEndpointType: "user" | "org" | "other" = "other";
+    if (isAuthenticatedUser) {
+      apiEndpointType = "user";
+    } else {
+      const orgResponse = await fetchGitHubAPI<unknown>(
+        `/orgs/${owner}`,
+        token,
+      );
+      if (orgResponse) {
+        apiEndpointType = "org";
+      }
+    }
+
+    // Fetch all repos with pagination
+    const allRepos: GitHubRepo[] = [];
+    let page = 1;
+    const perPage = 100;
+    const maxPages = 50;
+
+    while (page <= maxPages) {
+      let endpoint: string;
+
+      if (apiEndpointType === "user") {
+        endpoint = `/user/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner`;
+      } else if (apiEndpointType === "org") {
+        endpoint = `/orgs/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
+      } else {
+        endpoint = `/users/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
+      }
+
+      const repos = await fetchGitHubAPI<GitHubRepo[]>(endpoint, token);
+      if (!repos || repos.length === 0) break;
+
+      allRepos.push(...repos);
+      if (repos.length < perPage) break;
+      page++;
+    }
+
+    // Dedupe and sort
+    const uniqueRepos = allRepos.filter(
+      (repo, index, self) =>
+        index === self.findIndex((r) => r.full_name === repo.full_name),
+    );
+    uniqueRepos.sort((a, b) =>
+      a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+    );
+
+    return uniqueRepos.map((repo) => ({
+      name: repo.name,
+      full_name: repo.full_name,
+      description: repo.description,
+      private: repo.private,
+      clone_url: repo.clone_url,
+      updated_at: repo.updated_at,
+      language: repo.language,
+    }));
+  },
+  ["github-repos"],
+  { revalidate: CACHE_REVALIDATE_SECONDS },
+);
+
+export const getCachedGitHubBranches = unstable_cache(
+  async (userId: string, token: string, owner: string, repo: string) => {
+    // Fetch repo info for default branch
+    const repoInfo = await fetchGitHubAPI<GitHubRepoInfo>(
+      `/repos/${owner}/${repo}`,
+      token,
+    );
+    const defaultBranch = repoInfo?.default_branch ?? "main";
+
+    // Fetch all branches with pagination
+    const allBranches: string[] = [];
+    let page = 1;
+    const perPage = 100;
+    const maxPages = 50;
+
+    while (page <= maxPages) {
+      const branches = await fetchGitHubAPI<GitHubBranch[]>(
+        `/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
+        token,
+      );
+
+      if (!branches || branches.length === 0) break;
+      allBranches.push(...branches.map((b) => b.name));
+      if (branches.length < perPage) break;
+      page++;
+    }
+
+    // Sort with default branch first
+    allBranches.sort((a, b) => {
+      if (a === defaultBranch) return -1;
+      if (b === defaultBranch) return 1;
+      return a.toLowerCase().localeCompare(b.toLowerCase());
+    });
+
+    return {
+      branches: allBranches,
+      defaultBranch,
+    };
+  },
+  ["github-branches"],
+  { revalidate: CACHE_REVALIDATE_SECONDS },
+);

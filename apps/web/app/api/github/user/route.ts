@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-
-interface GitHubUser {
-  login: string;
-  name: string | null;
-  avatar_url: string;
-}
+import { getCachedGitHubUser } from "@/lib/github/cached-api";
 
 export async function GET() {
+  const session = await getServerSession();
+
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+
   const token = await getUserGitHubToken();
 
   if (!token) {
@@ -18,24 +23,16 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch("https://api.github.com/user", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
+    const user = await getCachedGitHubUser(session.user.id, token);
 
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status}`);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Failed to fetch user" },
+        { status: 500 },
+      );
     }
 
-    const user = (await response.json()) as GitHubUser;
-
-    return NextResponse.json({
-      login: user.login,
-      name: user.name,
-      avatar_url: user.avatar_url,
-    });
+    return NextResponse.json(user);
   } catch (error) {
     console.error("Error fetching GitHub user:", error);
     return NextResponse.json(

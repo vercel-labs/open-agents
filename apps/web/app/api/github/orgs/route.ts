@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-
-interface GitHubOrg {
-  login: string;
-  avatar_url: string;
-}
+import { getCachedGitHubOrgs } from "@/lib/github/cached-api";
 
 export async function GET() {
+  const session = await getServerSession();
+
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+
   const token = await getUserGitHubToken();
 
   if (!token) {
@@ -17,26 +23,16 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch("https://api.github.com/user/orgs", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
+    const orgs = await getCachedGitHubOrgs(session.user.id, token);
 
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status}`);
+    if (!orgs) {
+      return NextResponse.json(
+        { error: "Failed to fetch organizations" },
+        { status: 500 },
+      );
     }
 
-    const orgs = (await response.json()) as GitHubOrg[];
-
-    return NextResponse.json(
-      orgs.map((org) => ({
-        login: org.login,
-        name: org.login,
-        avatar_url: org.avatar_url,
-      })),
-    );
+    return NextResponse.json(orgs);
   } catch (error) {
     console.error("Error fetching organizations:", error);
     return NextResponse.json(
