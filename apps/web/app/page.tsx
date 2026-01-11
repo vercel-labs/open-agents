@@ -121,7 +121,10 @@ function HomePage() {
                   Loading tasks...
                 </div>
               ) : (
-                <TaskList tasks={tasks} onTaskClick={handleTaskClick} />
+                <TaskList
+                  tasks={tasks.filter((t) => t.status !== "archived")}
+                  onTaskClick={handleTaskClick}
+                />
               )}
             </TabsContent>
             <TabsContent value="reviews" className="mt-6">
@@ -130,9 +133,17 @@ function HomePage() {
               </div>
             </TabsContent>
             <TabsContent value="archive" className="mt-6">
-              <div className="py-8 text-center text-muted-foreground">
-                No archived tasks
-              </div>
+              {loading ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  Loading tasks...
+                </div>
+              ) : (
+                <TaskList
+                  tasks={tasks.filter((t) => t.status === "archived")}
+                  onTaskClick={handleTaskClick}
+                  emptyMessage="No archived tasks"
+                />
+              )}
             </TabsContent>
           </Tabs>
         </div>

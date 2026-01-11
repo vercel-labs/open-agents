@@ -182,6 +182,7 @@ function TaskDetailContent() {
     setSandboxInfo,
     clearSandboxInfo,
     isLoading,
+    archiveTask,
   } = useTaskChatContext();
   const {
     messages,
@@ -313,7 +314,14 @@ function TaskDetailContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await archiveTask();
+                router.push("/");
+              }}
+            >
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>

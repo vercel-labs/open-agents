@@ -32,6 +32,7 @@ type TaskChatContextValue = {
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   isLoading: boolean;
+  archiveTask: () => Promise<void>;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -100,6 +101,22 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
     setSandboxInfoState(null);
   }, []);
 
+  const archiveTask = useCallback(async () => {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "archived" }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Failed to archive task");
+    }
+
+    const data = (await res.json()) as { task: Task };
+    setTask(data.task);
+  }, [taskId]);
+
   return (
     <TaskChatContext.Provider
       value={{
@@ -109,6 +126,7 @@ export function TaskChatProvider({ taskId, children }: TaskChatProviderProps) {
         setSandboxInfo,
         clearSandboxInfo,
         isLoading,
+        archiveTask,
       }}
     >
       {children}

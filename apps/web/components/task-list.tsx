@@ -6,6 +6,7 @@ import type { Task } from "@/lib/db/schema";
 interface TaskListProps {
   tasks: Task[];
   onTaskClick: (taskId: string) => void;
+  emptyMessage?: string;
 }
 
 function formatTime(date: Date): string {
@@ -78,13 +79,17 @@ function PrStatus({ status }: { status: "open" | "merged" | "closed" | null }) {
   return null;
 }
 
-export function TaskList({ tasks, onTaskClick }: TaskListProps) {
+export function TaskList({
+  tasks,
+  onTaskClick,
+  emptyMessage = "No tasks yet. Create one above!",
+}: TaskListProps) {
   const groupedTasks = groupTasksByDate(tasks);
 
   if (tasks.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground">
-        No tasks yet. Create one above!
+        {emptyMessage}
       </div>
     );
   }

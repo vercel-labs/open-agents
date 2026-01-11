@@ -53,11 +53,29 @@ export function useTasks() {
     return data.task;
   }, []);
 
+  const archiveTask = useCallback(async (taskId: string) => {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "archived" }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      throw new Error(data.error ?? "Failed to archive task");
+    }
+
+    const data = (await res.json()) as { task: Task };
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? data.task : t)));
+    return data.task;
+  }, []);
+
   return {
     tasks,
     loading,
     error,
     createTask,
+    archiveTask,
     refreshTasks: fetchTasks,
   };
 }
