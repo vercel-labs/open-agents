@@ -25,8 +25,15 @@ export async function GET(req: NextRequest): Promise<Response> {
   const cookieStore = await cookies();
 
   const storedState = cookieStore.get("github_auth_state")?.value;
-  const storedRedirectTo =
+  const rawRedirectTo =
     cookieStore.get("github_auth_redirect_to")?.value ?? "/";
+
+  // Validate redirect URL to prevent open redirect attacks
+  // Only allow relative paths starting with /
+  const storedRedirectTo =
+    rawRedirectTo.startsWith("/") && !rawRedirectTo.startsWith("//")
+      ? rawRedirectTo
+      : "/";
 
   if (!code || !state || storedState !== state) {
     return new Response("Invalid OAuth state", { status: 400 });
@@ -75,6 +82,10 @@ export async function GET(req: NextRequest): Promise<Response> {
         Accept: "application/vnd.github.v3+json",
       },
     });
+
+    if (!userResponse.ok) {
+      return new Response("Failed to fetch GitHub user", { status: 400 });
+    }
 
     const githubUser = (await userResponse.json()) as GitHubUser;
 

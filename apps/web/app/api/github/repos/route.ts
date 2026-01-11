@@ -49,31 +49,36 @@ export async function GET(request: NextRequest) {
       isAuthenticatedUser = user.login === owner;
     }
 
+    // Determine the API endpoint type once, outside the pagination loop
+    let apiEndpointType: "user" | "org" | "other" = "other";
+    if (isAuthenticatedUser) {
+      apiEndpointType = "user";
+    } else {
+      const orgResponse = await fetch(`https://api.github.com/orgs/${owner}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+      if (orgResponse.ok) {
+        apiEndpointType = "org";
+      }
+    }
+
     const allRepos: GitHubRepo[] = [];
     let page = 1;
     const perPage = 100;
+    const maxPages = 50;
 
-    while (true) {
+    while (page <= maxPages) {
       let apiUrl: string;
 
-      if (isAuthenticatedUser) {
+      if (apiEndpointType === "user") {
         apiUrl = `https://api.github.com/user/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner`;
+      } else if (apiEndpointType === "org") {
+        apiUrl = `https://api.github.com/orgs/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
       } else {
-        const orgResponse = await fetch(
-          `https://api.github.com/orgs/${owner}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github.v3+json",
-            },
-          },
-        );
-
-        if (orgResponse.ok) {
-          apiUrl = `https://api.github.com/orgs/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
-        } else {
-          apiUrl = `https://api.github.com/users/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
-        }
+        apiUrl = `https://api.github.com/users/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
       }
 
       const response = await fetch(apiUrl, {

@@ -52,8 +52,9 @@ export async function GET(request: NextRequest) {
     const allBranches: string[] = [];
     let page = 1;
     const perPage = 100;
+    const maxPages = 50;
 
-    while (true) {
+    while (page <= maxPages) {
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
         {

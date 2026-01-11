@@ -62,7 +62,6 @@ export default function ChatPage() {
 
 function ChatFlow() {
   const { repoInfo, setRepoInfo, clearSandboxInfo } = useChatContext();
-  const [isSelectingRepo, setIsSelectingRepo] = useState(false);
 
   const handleRepoSelect = (owner: string, repo: string, branch: string) => {
     setRepoInfo({
@@ -72,24 +71,14 @@ function ChatFlow() {
       cloneUrl: `https://github.com/${owner}/${repo}`,
       branch,
     });
-    // Clear any stale sandbox when repo changes
     clearSandboxInfo();
-    setIsSelectingRepo(false);
   };
 
-  // Show repo selection if no repo selected or user requested change
-  if (!repoInfo || isSelectingRepo) {
+  if (!repoInfo) {
     return <RepoSelectionScreen onSelect={handleRepoSelect} />;
   }
 
-  return (
-    <Chat
-      onChangeRepo={() => {
-        clearSandboxInfo();
-        setIsSelectingRepo(true);
-      }}
-    />
-  );
+  return <Chat />;
 }
 
 async function createSandbox(repoInfo: RepoInfo): Promise<SandboxInfo> {
@@ -191,7 +180,7 @@ function SandboxStatus({
   );
 }
 
-function Chat({ onChangeRepo }: { onChangeRepo: () => void }) {
+function Chat() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -246,7 +235,7 @@ function Chat({ onChangeRepo }: { onChangeRepo: () => void }) {
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       {repoInfo && (
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        <div className="flex items-center border-b border-border px-4 py-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>{repoInfo.fullName}</span>
             <span className="flex items-center gap-1">
@@ -254,9 +243,6 @@ function Chat({ onChangeRepo }: { onChangeRepo: () => void }) {
               {repoInfo.branch}
             </span>
           </div>
-          <Button variant="ghost" size="sm" onClick={onChangeRepo}>
-            Change
-          </Button>
         </div>
       )}
       {hasMessages ? (
