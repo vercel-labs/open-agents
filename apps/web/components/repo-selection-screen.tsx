@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { RepoSelector } from "./repo-selector";
+import { BranchSelector } from "./branch-selector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 interface RepoSelectionScreenProps {
   onSelect: (owner: string, repo: string, branch: string) => void;
@@ -39,15 +39,12 @@ export function RepoSelectionScreen({
         </h1>
         <RepoSelector onRepoSelect={handleRepoSelect} />
         <div className="flex items-center gap-2">
-          <label htmlFor="branch" className="text-sm text-muted-foreground">
-            Branch:
-          </label>
-          <Input
-            id="branch"
+          <span className="text-sm text-muted-foreground">Branch:</span>
+          <BranchSelector
+            owner={selectedOwner}
+            repo={selectedRepo}
             value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            placeholder="main"
-            className="w-40"
+            onChange={setBranch}
           />
         </div>
         <Button onClick={handleStart} disabled={!canStart}>
