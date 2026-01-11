@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     options: {
       workingDirectory: sandbox.workingDirectory,
       sandbox,
+      // TODO: consider enabling approvals for non-cloud-sandbox environments
       autoApprove: "all",
     },
     abortSignal: req.signal,

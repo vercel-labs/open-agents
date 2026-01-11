@@ -100,7 +100,7 @@ export function getStatusLabel(state: ToolRenderState): string | null {
     return "Interrupted";
   }
   if (state.approvalRequested) {
-    return state.isActiveApproval ? "Running…" : "Waiting for approval…";
+    return "Waiting for approval…";
   }
   if (state.running) {
     return "Running…";

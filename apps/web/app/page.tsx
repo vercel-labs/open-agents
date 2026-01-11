@@ -379,11 +379,10 @@ function Chat() {
                 try {
                   const newSandbox = await createSandbox();
                   setSandboxInfo(newSandbox);
-                } catch (error) {
+                } catch {
                   // Restore input on error so user doesn't lose their message
                   setInput(messageText);
-                  // Re-throw to let error boundary or other handlers deal with it
-                  throw error;
+                  return;
                 } finally {
                   setIsCreatingSandbox(false);
                 }
