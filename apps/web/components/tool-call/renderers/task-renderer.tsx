@@ -1,13 +1,16 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
 type TaskInput = {
-  task?: string;
-  subagentType?: string;
+  prompt?: string;
+  description?: string;
+  subagent_type?: string;
 };
 
 type MessagePart = {
@@ -17,6 +20,7 @@ type MessagePart = {
   toolCallId?: string;
   state?: string;
   input?: Record<string, unknown>;
+  output?: unknown;
   [key: string]: unknown;
 };
 
@@ -51,7 +55,13 @@ function getToolName(part: MessagePart): string {
   return "unknown";
 }
 
-function SubagentToolCall({ part }: { part: MessagePart }) {
+function SubagentToolCall({
+  part,
+  expanded = false,
+}: {
+  part: MessagePart;
+  expanded?: boolean;
+}) {
   const toolName = getToolName(part);
   const isRunning =
     part.state === "input-streaming" || part.state === "input-available";
@@ -77,32 +87,45 @@ function SubagentToolCall({ part }: { part: MessagePart }) {
   const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
 
   return (
-    <div className="flex items-center gap-2 border-l-2 border-border py-1 pl-3">
-      {isRunning ? (
-        <Loader2 className="h-2.5 w-2.5 animate-spin text-yellow-500" />
-      ) : (
-        <span
-          className={cn("inline-block h-1.5 w-1.5 rounded-full", dotColor)}
-        />
-      )}
-      <span
-        className={cn(
-          "text-sm font-medium",
-          isRunning ? "text-yellow-500" : "text-foreground",
+    <div className="border-l-2 border-border py-1 pl-3">
+      <div className="flex items-center gap-2">
+        {isRunning ? (
+          <Loader2 className="h-2.5 w-2.5 animate-spin text-yellow-500" />
+        ) : (
+          <span
+            className={cn("inline-block h-1.5 w-1.5 rounded-full", dotColor)}
+          />
         )}
-      >
-        {displayName}
-      </span>
-      {summary && (
-        <>
-          <span className="text-sm text-muted-foreground">(</span>
-          <span className="max-w-[200px] truncate text-sm text-foreground">
-            {summary}
-          </span>
-          <span className="text-sm text-muted-foreground">)</span>
-        </>
+        <span
+          className={cn(
+            "text-sm font-medium",
+            isRunning ? "text-yellow-500" : "text-foreground",
+          )}
+        >
+          {displayName}
+        </span>
+        {summary && (
+          <>
+            <span className="text-sm text-muted-foreground">(</span>
+            <span
+              className={cn(
+                "text-sm text-foreground",
+                expanded ? "" : "max-w-[200px] truncate",
+              )}
+            >
+              {summary}
+            </span>
+            <span className="text-sm text-muted-foreground">)</span>
+          </>
+        )}
+        {hasError && <span className="text-sm text-red-500"> - error</span>}
+      </div>
+      {/* Show full input in expanded mode */}
+      {expanded && input && Object.keys(input).length > 0 && (
+        <pre className="ml-4 mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
+          {JSON.stringify(input, null, 2)}
+        </pre>
       )}
-      {hasError && <span className="text-sm text-red-500"> - error</span>}
     </div>
   );
 }
@@ -124,9 +147,11 @@ export function TaskRenderer({
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const input = part.input as TaskInput | undefined;
-  const desc = input?.task ?? "Spawning subagent";
-  const subagentType = input?.subagentType;
+  const desc = input?.description ?? input?.prompt ?? "Spawning subagent";
+  const fullPrompt = input?.prompt;
+  const subagentType = input?.subagent_type;
   const taskApprovalRequested = part.state === "approval-requested";
   const taskDenied = part.state === "output-denied";
   const taskDenialReason = taskDenied ? part.approval?.reason : undefined;
@@ -140,6 +165,7 @@ export function TaskRenderer({
     (p) => isToolPart(p) || isTextPart(p),
   );
   const toolParts = messageParts.filter(isToolPart);
+  const textParts = messageParts.filter(isTextPart);
 
   const maxVisible = 4;
   const hiddenCount = Math.max(0, relevantParts.length - maxVisible);
@@ -172,10 +198,45 @@ export function TaskRenderer({
       ? "Explorer"
       : subagentType === "executor"
         ? "Executor"
-        : "Task";
+        : subagentType === "general"
+          ? "General"
+          : "Task";
+
+  // Has expandable content if there are tool parts or the prompt is long
+  const hasExpandableContent =
+    toolParts.length > 0 ||
+    (fullPrompt && fullPrompt.length > 80) ||
+    textParts.length > 0;
+
+  const handleClick = () => {
+    if (hasExpandableContent) {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (hasExpandableContent) {
+        setIsExpanded(!isExpanded);
+      }
+    }
+  };
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card p-3">
+    <div
+      className={cn(
+        "my-2 rounded-lg border border-border bg-card p-3",
+        hasExpandableContent && "cursor-pointer hover:bg-accent/50",
+      )}
+      {...(hasExpandableContent && {
+        onClick: handleClick,
+        onKeyDown: handleKeyDown,
+        role: "button",
+        tabIndex: 0,
+        "aria-expanded": isExpanded,
+      })}
+    >
       <div className="flex items-center gap-2">
         {state.interrupted ? (
           <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
@@ -193,7 +254,9 @@ export function TaskRenderer({
           {subagentLabel}
         </span>
         <span className="text-muted-foreground">(</span>
-        <span className="truncate text-sm text-foreground">{desc}</span>
+        <span className="truncate text-sm text-foreground">
+          {desc.length > 60 ? desc.slice(0, 60) + "..." : desc}
+        </span>
         <span className="text-muted-foreground">)</span>
       </div>
 
@@ -205,11 +268,17 @@ export function TaskRenderer({
       )}
 
       {taskApprovalRequested && part.approval?.id && (
-        <ApprovalButtons
-          approvalId={part.approval.id}
-          onApprove={onApprove}
-          onDeny={onDeny}
-        />
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <ApprovalButtons
+            approvalId={part.approval.id}
+            onApprove={onApprove}
+            onDeny={onDeny}
+          />
+        </div>
       )}
 
       {taskDenied && (
@@ -218,7 +287,8 @@ export function TaskRenderer({
         </div>
       )}
 
-      {hasOutput && visibleParts.length > 0 && (
+      {/* Collapsed view - show last 4 parts */}
+      {!isExpanded && hasOutput && visibleParts.length > 0 && (
         <div className="mt-3 space-y-1 pl-3">
           {hiddenCount > 0 && (
             <div className="text-sm text-muted-foreground">
@@ -248,7 +318,69 @@ export function TaskRenderer({
         </div>
       )}
 
-      {isComplete && (
+      {/* Expanded view - show all parts with full details */}
+      {isExpanded && (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          {/* Full prompt */}
+          {fullPrompt && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                Task Prompt
+              </div>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
+                {fullPrompt}
+              </pre>
+            </div>
+          )}
+
+          {/* Subagent type */}
+          {subagentType && (
+            <div>
+              <span className="text-xs text-muted-foreground">
+                Subagent Type:{" "}
+              </span>
+              <span className="text-sm text-foreground">{subagentType}</span>
+            </div>
+          )}
+
+          {/* All tool calls */}
+          {relevantParts.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                Tool Calls ({toolParts.length})
+              </div>
+              <div className="max-h-96 space-y-1 overflow-auto">
+                {relevantParts.map((p, i) => {
+                  if (isToolPart(p)) {
+                    return (
+                      <SubagentToolCall
+                        key={p.toolCallId ?? i}
+                        part={p}
+                        expanded
+                      />
+                    );
+                  }
+                  if (isTextPart(p)) {
+                    const text = p.text?.trim() ?? "";
+                    if (!text) return null;
+                    return (
+                      <div
+                        key={`text-${i}`}
+                        className="border-l-2 border-border py-1 pl-3 text-sm text-muted-foreground"
+                      >
+                        {text}
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isExpanded && isComplete && (
         <div className="mt-2 pl-5 text-sm text-muted-foreground">
           Complete ({toolParts.length} tool calls)
         </div>

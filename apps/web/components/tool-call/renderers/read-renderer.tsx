@@ -8,6 +8,8 @@ import { ToolLayout } from "../tool-layout";
 
 type ReadInput = {
   filePath?: string;
+  offset?: number;
+  limit?: number;
 };
 
 type ReadOutput = {
@@ -31,10 +33,42 @@ export function ReadRenderer({
   const rawFilePath = input?.filePath ?? "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
+  const offset = input?.offset;
+  const limit = input?.limit;
 
   const output =
     part.state === "output-available" ? (part.output as ReadOutput) : undefined;
   const lines = output?.totalLines;
+
+  // Show expanded content if there are additional parameters
+  const hasExpandedContent = offset !== undefined || limit !== undefined;
+
+  const expandedContent = hasExpandedContent ? (
+    <div className="space-y-2 text-sm">
+      <div>
+        <span className="text-muted-foreground">File: </span>
+        <code className="text-foreground">{rawFilePath}</code>
+      </div>
+      {offset !== undefined && (
+        <div>
+          <span className="text-muted-foreground">Offset: </span>
+          <span className="text-foreground">line {offset}</span>
+        </div>
+      )}
+      {limit !== undefined && (
+        <div>
+          <span className="text-muted-foreground">Limit: </span>
+          <span className="text-foreground">{limit} lines</span>
+        </div>
+      )}
+      {lines !== undefined && (
+        <div>
+          <span className="text-muted-foreground">Total lines read: </span>
+          <span className="text-foreground">{lines}</span>
+        </div>
+      )}
+    </div>
+  ) : undefined;
 
   return (
     <ToolLayout
@@ -42,6 +76,7 @@ export function ReadRenderer({
       summary={lines ? `${filePath} (${lines} lines)` : filePath}
       state={state}
       output={lines ? `Read ${lines} lines` : undefined}
+      expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}
     />

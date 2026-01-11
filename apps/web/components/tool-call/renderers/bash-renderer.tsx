@@ -1,12 +1,17 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
 type BashInput = {
   command?: string;
+  description?: string;
+  workdir?: string;
+  timeout?: number;
 };
 
 type BashOutput = {
@@ -26,8 +31,11 @@ export function BashRenderer({
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const input = part.input as BashInput | undefined;
   const command = String(input?.command ?? "");
+  const description = input?.description;
+  const workdir = input?.workdir;
 
   const output =
     part.state === "output-available" ? (part.output as BashOutput) : undefined;
@@ -42,6 +50,10 @@ export function BashRenderer({
   const outputLines = allLines.slice(-3);
   const hasMoreLines = allLines.length > 3;
 
+  // Determine if we have content worth expanding
+  const hasExpandableContent =
+    command.length > 60 || hasMoreLines || description || workdir;
+
   const dotColor = state.denied
     ? "bg-red-500"
     : state.approvalRequested
@@ -52,8 +64,35 @@ export function BashRenderer({
           ? "bg-yellow-500"
           : "bg-green-500";
 
+  const handleClick = () => {
+    if (hasExpandableContent) {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (hasExpandableContent) {
+        setIsExpanded(!isExpanded);
+      }
+    }
+  };
+
   return (
-    <div className="my-2 rounded-lg border border-border bg-card p-3">
+    <div
+      className={cn(
+        "my-2 rounded-lg border border-border bg-card p-3",
+        hasExpandableContent && "cursor-pointer hover:bg-accent/50",
+      )}
+      {...(hasExpandableContent && {
+        onClick: handleClick,
+        onKeyDown: handleKeyDown,
+        role: "button",
+        tabIndex: 0,
+        "aria-expanded": isExpanded,
+      })}
+    >
       <div className="flex items-center gap-2">
         {state.interrupted ? (
           <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
@@ -72,26 +111,38 @@ export function BashRenderer({
         </span>
         <span className="text-muted-foreground">(</span>
         <code className="max-w-md truncate rounded bg-muted px-1 text-sm">
-          {command.length > 60 ? command.slice(0, 60) + "…" : command || "..."}
+          {command.length > 60
+            ? command.slice(0, 60) + "..."
+            : command || "..."}
         </code>
         <span className="text-muted-foreground">)</span>
       </div>
 
       {state.approvalRequested && state.isActiveApproval && (
-        <div className="mt-2 pl-5 text-sm text-muted-foreground">Running…</div>
+        <div className="mt-2 pl-5 text-sm text-muted-foreground">
+          Running...
+        </div>
       )}
 
       {state.approvalRequested &&
         !state.isActiveApproval &&
         state.approvalId && (
-          <ApprovalButtons
-            approvalId={state.approvalId}
-            onApprove={onApprove}
-            onDeny={onDeny}
-          />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <ApprovalButtons
+              approvalId={state.approvalId}
+              onApprove={onApprove}
+              onDeny={onDeny}
+            />
+          </div>
         )}
 
-      {part.state === "output-available" &&
+      {/* Collapsed output preview */}
+      {!isExpanded &&
+        part.state === "output-available" &&
         !state.approvalRequested &&
         !state.denied && (
           <div className="mt-2 pl-5">
@@ -124,6 +175,74 @@ export function BashRenderer({
             )}
           </div>
         )}
+
+      {/* Expanded full content */}
+      {isExpanded && !state.denied && (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          {/* Full command */}
+          <div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              Command
+            </div>
+            <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
+              {command}
+            </pre>
+          </div>
+
+          {/* Description if present */}
+          {description && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                Description
+              </div>
+              <div className="text-sm text-foreground">{description}</div>
+            </div>
+          )}
+
+          {/* Working directory if present */}
+          {workdir && (
+            <div>
+              <div className="mb-1 text-xs font-medium text-muted-foreground">
+                Working Directory
+              </div>
+              <code className="text-sm text-foreground">{workdir}</code>
+            </div>
+          )}
+
+          {/* Full output */}
+          {part.state === "output-available" && (
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <span>Output</span>
+                {exitCode !== undefined && (
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5",
+                      isError
+                        ? "bg-red-500/20 text-red-500"
+                        : "bg-green-500/20 text-green-500",
+                    )}
+                  >
+                    exit {exitCode}
+                  </span>
+                )}
+              </div>
+              {hasOutput ? (
+                <pre
+                  className={cn(
+                    "max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs",
+                    isError ? "text-red-400" : "text-foreground",
+                  )}
+                >
+                  {combinedOutput}
+                </pre>
+              ) : (
+                <div className="text-sm text-muted-foreground">(No output)</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {state.denied && (
         <div className="mt-2 pl-5 text-sm text-red-500">
