@@ -2,13 +2,27 @@
 
 import { useState, useEffect } from "react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  CheckIcon,
+  ChevronsUpDownIcon,
+  UserIcon,
+  BookIcon,
+  LockIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface Owner {
   login: string;
@@ -32,12 +46,16 @@ export function RepoSelector({
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [ownersLoading, setOwnersLoading] = useState(true);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [ownerOpen, setOwnerOpen] = useState(false);
+  const [repoOpen, setRepoOpen] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadOwners = async () => {
+      setOwnersLoading(true);
       try {
         const [userRes, orgsRes] = await Promise.all([
           fetch("/api/github/user"),
@@ -67,7 +85,7 @@ export function RepoSelector({
         console.error("Failed to load owners:", err);
         setError("Failed to load GitHub data");
       } finally {
-        setLoading(false);
+        setOwnersLoading(false);
       }
     };
 
@@ -78,29 +96,33 @@ export function RepoSelector({
     if (!selectedOwner) return;
 
     const loadRepos = async () => {
+      setReposLoading(true);
+      setRepos([]);
       try {
         const res = await fetch(`/api/github/repos?owner=${selectedOwner}`);
         const data = (await res.json()) as Repo[];
         setRepos(data);
       } catch (error) {
         console.error("Failed to load repos:", error);
+      } finally {
+        setReposLoading(false);
       }
     };
 
     loadRepos();
   }, [selectedOwner]);
 
-  const handleOwnerChange = (value: string) => {
-    setSelectedOwner(value);
+  const handleOwnerSelect = (ownerLogin: string) => {
+    setSelectedOwner(ownerLogin);
     setSelectedRepo("");
+    setOwnerOpen(false);
   };
 
-  const handleRepoChange = (value: string) => {
-    setSelectedRepo(value);
-    onRepoSelect(selectedOwner, value);
+  const handleRepoSelect = (repoName: string) => {
+    setSelectedRepo(repoName);
+    onRepoSelect(selectedOwner, repoName);
+    setRepoOpen(false);
   };
-
-  if (loading) return <div>Loading...</div>;
 
   if (error) {
     return (
@@ -120,35 +142,111 @@ export function RepoSelector({
 
   return (
     <div className="flex gap-2">
-      <Select value={selectedOwner} onValueChange={handleOwnerChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select owner" />
-        </SelectTrigger>
-        <SelectContent>
-          {owners.map((owner) => (
-            <SelectItem key={owner.login} value={owner.login}>
-              {owner.login}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={ownerOpen} onOpenChange={setOwnerOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            aria-expanded={ownerOpen}
+            className="w-48 justify-between"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <UserIcon className="size-4 shrink-0" />
+              {ownersLoading ? (
+                <span className="text-muted-foreground">Loading...</span>
+              ) : selectedOwner ? (
+                <span className="truncate">{selectedOwner}</span>
+              ) : (
+                <span className="text-muted-foreground">Select owner</span>
+              )}
+            </div>
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-0">
+          <Command>
+            <CommandInput placeholder="Search owners..." />
+            <CommandList>
+              <CommandEmpty>
+                {ownersLoading ? "Loading..." : "No owners found."}
+              </CommandEmpty>
+              <CommandGroup>
+                {owners.map((owner) => (
+                  <CommandItem
+                    key={owner.login}
+                    value={owner.login}
+                    onSelect={() => handleOwnerSelect(owner.login)}
+                  >
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-4",
+                        selectedOwner === owner.login
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">{owner.login}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
 
-      <Select
-        value={selectedRepo}
-        onValueChange={handleRepoChange}
-        disabled={!selectedOwner}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Select repository" />
-        </SelectTrigger>
-        <SelectContent>
-          {repos.map((repo) => (
-            <SelectItem key={repo.full_name} value={repo.name}>
-              {repo.name} {repo.private && "(private)"}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={repoOpen} onOpenChange={setRepoOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            aria-expanded={repoOpen}
+            className="w-64 justify-between"
+            disabled={!selectedOwner}
+          >
+            <div className="flex items-center gap-2 truncate">
+              <BookIcon className="size-4 shrink-0" />
+              {reposLoading ? (
+                <span className="text-muted-foreground">Loading...</span>
+              ) : selectedRepo ? (
+                <span className="truncate">{selectedRepo}</span>
+              ) : (
+                <span className="text-muted-foreground">Select repository</span>
+              )}
+            </div>
+            <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-0">
+          <Command>
+            <CommandInput placeholder="Search repositories..." />
+            <CommandList>
+              <CommandEmpty>
+                {reposLoading ? "Loading..." : "No repositories found."}
+              </CommandEmpty>
+              <CommandGroup>
+                {repos.map((repo) => (
+                  <CommandItem
+                    key={repo.full_name}
+                    value={repo.name}
+                    onSelect={() => handleRepoSelect(repo.name)}
+                  >
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-4",
+                        selectedRepo === repo.name
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">{repo.name}</span>
+                    {repo.private && (
+                      <LockIcon className="ml-auto size-3 text-muted-foreground" />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
