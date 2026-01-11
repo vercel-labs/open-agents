@@ -55,10 +55,14 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
 export const readFileTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
+      const ctx = getApprovalContext(experimental_context, "read");
       const absolutePath = resolveFilePath(args.filePath, ctx.workingDirectory);
       // Check if within working directory - no approval needed
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+        return false;
+      }
+      // Auto-approve when autoApprove is "all"
+      if (ctx.autoApprove === "all") {
         return false;
       }
       // Outside working directory - always requires approval
@@ -87,7 +91,7 @@ EXAMPLES:
       { filePath, offset = 1, limit = 2000 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

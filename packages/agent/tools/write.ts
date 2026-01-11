@@ -83,7 +83,7 @@ function pathMatchesApprovalRule(
 export const writeFileTool = (options?: WriteToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
+      const ctx = getApprovalContext(experimental_context, "write");
       // Always need approval if outside working directory (even in background mode)
       if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
         return true;
@@ -142,7 +142,7 @@ EXAMPLES:
 - Replace a script after reading it: filePath: "/Users/username/project/scripts/build.sh", content: "<entire updated script>"`,
     inputSchema: writeInputSchema,
     execute: async ({ filePath, content }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "write");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -174,7 +174,7 @@ EXAMPLES:
 export const editFileTool = (options?: EditToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
+      const ctx = getApprovalContext(experimental_context, "edit");
       // Always need approval if outside working directory (even in background mode)
       if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
         return true;
@@ -237,7 +237,7 @@ EXAMPLES:
       { filePath, oldString, newString, replaceAll = false },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "edit");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

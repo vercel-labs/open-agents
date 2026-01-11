@@ -138,7 +138,7 @@ function pathMatchesApprovalRule(
 export const globTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
+      const ctx = getApprovalContext(experimental_context, "glob");
       // If no path is provided, it defaults to working directory (no approval needed)
       if (!args.path) {
         return false;
@@ -148,6 +148,10 @@ export const globTool = () =>
         : path.resolve(ctx.workingDirectory, args.path);
       // Check if within working directory - no approval needed
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+        return false;
+      }
+      // Auto-approve when autoApprove is "all"
+      if (ctx.autoApprove === "all") {
         return false;
       }
       // Outside working directory - check if a rule matches
@@ -195,7 +199,7 @@ EXAMPLES:
       { pattern, path: basePath, limit = 100 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "glob");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

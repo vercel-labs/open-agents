@@ -99,7 +99,11 @@ ${options.instructions}
 - You CANNOT ask questions - no one will respond
 - This is READ-ONLY - do NOT create, modify, or delete any files
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
-      experimental_context: { sandbox },
+      experimental_context: {
+        sandbox,
+        workingDirectory: sandbox.workingDirectory,
+        autoApprove: "all",
+      },
     };
   },
 });

@@ -32,14 +32,23 @@ export function isPathWithinDirectory(
  * Throws a descriptive error if sandbox is not initialized.
  *
  * @param experimental_context - The context passed to tool execute functions
+ * @param toolName - Optional tool name for better error messages
  * @returns The sandbox instance
  * @throws Error if sandbox is not available in context
  */
-export function getSandbox(experimental_context: unknown): Sandbox {
+export function getSandbox(
+  experimental_context: unknown,
+  toolName?: string,
+): Sandbox {
   const context = experimental_context as AgentContext | undefined;
   if (!context?.sandbox) {
+    const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+    const contextInfo = context
+      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
+      : "Context is undefined or null";
     throw new Error(
-      "Sandbox not initialized in context. Ensure the agent is configured with a sandbox.",
+      `Sandbox not initialized in context${toolInfo}. ${contextInfo}. ` +
+        "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
   }
   return context.sandbox;
@@ -73,9 +82,13 @@ export function isBackgroundMode(experimental_context: unknown): boolean {
  * Used by needsApproval functions to access mode, autoApprove, and approvalRules.
  *
  * @param experimental_context - The context passed to needsApproval functions
+ * @param toolName - Optional tool name for better error messages
  * @returns Object with sandbox, mode, autoApprove, and approvalRules
  */
-export function getApprovalContext(experimental_context: unknown): {
+export function getApprovalContext(
+  experimental_context: unknown,
+  toolName?: string,
+): {
   sandbox: Sandbox;
   workingDirectory: string;
   mode: AgentMode;
@@ -84,8 +97,13 @@ export function getApprovalContext(experimental_context: unknown): {
 } {
   const context = experimental_context as AgentContext | undefined;
   if (!context?.sandbox) {
+    const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+    const contextInfo = context
+      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
+      : "Context is undefined or null";
     throw new Error(
-      "Context not initialized. Ensure the agent is configured with experimental_context.",
+      `Approval context not initialized${toolInfo}. ${contextInfo}. ` +
+        "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
   }
   return {

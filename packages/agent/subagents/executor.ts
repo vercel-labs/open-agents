@@ -88,7 +88,11 @@ ${options.instructions}
 - You CANNOT ask questions - no one will respond
 - Complete the task fully before returning
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
-      experimental_context: { sandbox },
+      experimental_context: {
+        sandbox,
+        workingDirectory: sandbox.workingDirectory,
+        autoApprove: "all",
+      },
     };
   },
 });

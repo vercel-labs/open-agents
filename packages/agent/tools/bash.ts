@@ -130,17 +130,21 @@ export function commandNeedsApproval(command: string): boolean {
 export const bashTool = (options?: ToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
-      // Always need approval if cwd is outside working directory (even in background mode)
+      const ctx = getApprovalContext(experimental_context, "bash");
+      // Auto-approve all bash commands when autoApprove is "all"
+      // In subagents, the user grants permission at the top level for all changes,
+      // so we bypass directory boundary checks here.
+      // TODO: This is specifically for working with monorepos and calling within
+      // nested files, but we should probably revert this change.
+      if (ctx.autoApprove === "all") {
+        return false;
+      }
+      // Need approval if cwd is outside working directory (even in background mode)
       if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
         return true;
       }
       // In background mode, auto-approve all operations within working directory
       if (ctx.mode === "background") {
-        return false;
-      }
-      // Auto-approve all bash commands when autoApprove is "all"
-      if (ctx.autoApprove === "all") {
         return false;
       }
       // Check if command matches any saved approval rules
@@ -196,7 +200,7 @@ EXAMPLES:
 - List files in src: command: "ls -la", cwd: "/Users/username/project/src"`,
     inputSchema: bashInputSchema,
     execute: async ({ command, cwd }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "bash");
       const workingDirectory = sandbox.workingDirectory;
 
       // Resolve the working directory

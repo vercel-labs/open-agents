@@ -44,7 +44,7 @@ export const taskTool = tool({
   // Executor subagent has full write access, so require approval
   // Explorer is read-only, so no approval needed
   needsApproval: ({ subagentType }, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context);
+    const ctx = getApprovalContext(experimental_context, "task");
     // Explorer never needs approval
     if (subagentType !== "executor") {
       return false;
@@ -113,7 +113,7 @@ NOTE: The executor subagent requires user approval before running because it has
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
-    const sandbox = getSandbox(experimental_context);
+    const sandbox = getSandbox(experimental_context, "task");
 
     const subagent =
       subagentType === "explorer" ? explorerSubagent : executorSubagent;

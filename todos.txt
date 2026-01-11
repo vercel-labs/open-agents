@@ -35,6 +35,11 @@
 - [x] diff viewer shouldn't show diff if creating file! 
 - [ ] add askUserQuestion tool!
 
+- [ ] introduce concept of user approval and machine approval
+  - there are things that should have an auto approve / reject
+  - e.g. subagent running a command it shouldnt, should just reject the tool call (add tool result)
+
+
 ---
 sandbox related:
 - [ ] /slash command for selecting sandbox

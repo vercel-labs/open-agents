@@ -129,12 +129,16 @@ function pathMatchesApprovalRule(
 export const grepTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context);
+      const ctx = getApprovalContext(experimental_context, "grep");
       const absolutePath = path.isAbsolute(args.path)
         ? args.path
         : path.resolve(ctx.workingDirectory, args.path);
       // Check if within working directory - no approval needed
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+        return false;
+      }
+      // Auto-approve when autoApprove is "all"
+      if (ctx.autoApprove === "all") {
         return false;
       }
       // Outside working directory - check if a rule matches
@@ -182,7 +186,7 @@ EXAMPLES:
       { pattern, path: searchPath, glob, caseSensitive = true },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context);
+      const sandbox = getSandbox(experimental_context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
