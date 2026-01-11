@@ -84,7 +84,9 @@ export const getCachedGitHubRepos = unstable_cache(
   async (userId: string, token: string, owner: string) => {
     // Check if owner is the authenticated user
     const currentUser = await fetchGitHubAPI<{ login: string }>("/user", token);
-    const isAuthenticatedUser = currentUser?.login === owner;
+    if (!currentUser) return null;
+
+    const isAuthenticatedUser = currentUser.login === owner;
 
     // Determine endpoint type
     let apiEndpointType: "user" | "org" | "other" = "other";
@@ -118,7 +120,12 @@ export const getCachedGitHubRepos = unstable_cache(
       }
 
       const repos = await fetchGitHubAPI<GitHubRepo[]>(endpoint, token);
-      if (!repos || repos.length === 0) break;
+      if (!repos) {
+        // API error on first page means failure; on subsequent pages, return what we have
+        if (page === 1) return null;
+        break;
+      }
+      if (repos.length === 0) break;
 
       allRepos.push(...repos);
       if (repos.length < perPage) break;
@@ -155,7 +162,9 @@ export const getCachedGitHubBranches = unstable_cache(
       `/repos/${owner}/${repo}`,
       token,
     );
-    const defaultBranch = repoInfo?.default_branch ?? "main";
+    if (!repoInfo) return null;
+
+    const defaultBranch = repoInfo.default_branch;
 
     // Fetch all branches with pagination
     const allBranches: string[] = [];
@@ -169,7 +178,13 @@ export const getCachedGitHubBranches = unstable_cache(
         token,
       );
 
-      if (!branches || branches.length === 0) break;
+      if (!branches) {
+        // API error on first page means failure; on subsequent pages, return what we have
+        if (page === 1) return null;
+        break;
+      }
+      if (branches.length === 0) break;
+
       allBranches.push(...branches.map((b) => b.name));
       if (branches.length < perPage) break;
       page++;
