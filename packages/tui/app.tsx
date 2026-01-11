@@ -98,16 +98,19 @@ function ToolPartWrapper({
   part,
   activeApprovalId,
   isExpanded,
+  isStreaming,
 }: {
   part: TUIAgentUIToolPart;
   activeApprovalId: string | null;
   isExpanded: boolean;
+  isStreaming: boolean;
 }) {
   return (
     <ToolCall
       part={part}
       activeApprovalId={activeApprovalId}
       isExpanded={isExpanded}
+      isStreaming={isStreaming}
     />
   );
 }
@@ -147,7 +150,8 @@ function renderPart(
   key: string,
   options: RenderPartOptions,
 ) {
-  const { activeApprovalId, isExpanded, timestamp, model } = options;
+  const { activeApprovalId, isStreaming, isExpanded, timestamp, model } =
+    options;
 
   if (isToolUIPart(part)) {
     return (
@@ -156,6 +160,7 @@ function renderPart(
         part={part}
         activeApprovalId={activeApprovalId}
         isExpanded={isExpanded}
+        isStreaming={isStreaming}
       />
     );
   }
@@ -328,7 +333,6 @@ const AssistantMessage = memo(function AssistantMessage({
             <TaskGroupView
               key={`task-group-${group.startIndex}`}
               taskParts={group.tasks}
-              activeApprovalId={activeApprovalId}
               isStreaming={isStreaming}
             />
           );

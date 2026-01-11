@@ -49,6 +49,7 @@ sandbox related:
 - [ ] update suggestions (tui) to show files in sandbox
 - [ ] always start agent in auto accept mode if using sandbox
 - [ ] if we expose the timeout, could explore forcing a tool call at a certain point that is like, extend sandbox or push changes
+- [ ] add base url so that we can see dev server
 
 ---
 

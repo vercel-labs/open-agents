@@ -1,43 +1,191 @@
-# Deep Agent - AI SDK Coding Agent
+# AGENTS.md
+
+This file provides guidance for AI coding agents working in this repository.
 
 ## Commands
-- `turbo dev` - Run CLI agent (from root)
-- `turbo typecheck` - Type check all packages
-- `turbo lint` - Lint all packages with oxlint
-- `turbo lint:fix` - Lint and auto-fix issues
-- `bun run format` - Format with Biome
-- `bun run format:check` - Check formatting
-- `bun test` - Run all tests
-- `bun test path/to/file.test.ts` - Run single test
 
-## After Making Changes
-Always run these commands after modifying code:
-1. `bun run format` - Format code
-2. `turbo lint:fix` - Fix linting issues
-3. `turbo typecheck` - Verify types
+```bash
+# Development
+turbo dev              # Run CLI agent (from root)
+bun run cli            # Alternative: run CLI directly
+bun run web            # Run web app
 
-## Monorepo Architecture
-This is a Turborepo monorepo with the following structure:
+# Quality checks (run after making changes)
+turbo typecheck                            # Type check all packages
+turbo lint                                 # Lint all packages with oxlint
+turbo lint:fix                             # Lint and auto-fix all packages
 
-### Apps
-- `apps/cli/` - CLI entry point application
+# Filter by package (use --filter)
+turbo typecheck --filter=web               # Type check web app only
+turbo typecheck --filter=@open-harness/cli # Type check CLI only
+turbo lint:fix --filter=web                # Lint web app only
+turbo lint:fix --filter=@open-harness/cli  # Lint CLI only
 
-### Packages
-- `packages/agent/` - Core agent: deep-agent.ts (main), system-prompt.ts, types.ts
-  - `tools/` - Tools: file-system, memory, planning, task-delegation
-  - `sandbox/` - Sandbox execution (local, vercel, just-bash)
-  - `context-management/` - Context and token management
-  - `subagents/` - Sub-agent implementations
-  - `models.ts` - Model configuration using AI SDK
-- `packages/tui/` - Terminal UI with Ink/React
-  - `components/` - UI components
-  - `lib/` - Utility functions
-- `packages/tsconfig/` - Shared TypeScript configurations
+# Formatting (Biome - run from root)
+bun run format                             # Format all files
+bun run format:check                       # Check formatting without writing
+
+# Testing
+bun test                        # Run all tests
+bun test path/to/file.test.ts   # Run single test file
+bun test --watch                # Watch mode
+```
+
+## Architecture
+
+This is a Turborepo monorepo for "Open Harness" - an AI coding agent built with AI SDK.
+
+### Core Flow
+
+```
+CLI (apps/cli) -> TUI (packages/tui) -> Agent (packages/agent) -> Sandbox (packages/sandbox)
+```
+
+1. **CLI** parses args, creates sandbox, loads AGENTS.md files, and starts the TUI
+2. **TUI** renders the terminal UI with Ink/React, manages chat state via `ChatTransport`
+3. **Agent** (`deepAgent`) is a `ToolLoopAgent` with tools for file ops, bash, and task delegation
+4. **Sandbox** abstracts file system and shell operations (local fs or remote like Vercel)
+
+### Key Packages
+
+- **packages/agent/** - Core agent implementation with tools, subagents, and context management
+- **packages/sandbox/** - Execution environment abstraction (local/remote)
+- **packages/tui/** - Terminal UI with Ink/React components
+- **packages/shared/** - Shared utilities across packages
+
+### Subagent Pattern
+
+The `task` tool delegates to specialized subagents:
+- **explorer**: Read-only, for codebase research (grep, glob, read, safe bash)
+- **executor**: Full access, for implementation tasks (all tools)
 
 ## Code Style
-- Use Bun exclusively (not Node, npm, pnpm, vite, express, ws, dotenv)
-- Testing: `import { test, expect } from "bun:test"`
-- Prefer Bun APIs: `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` for shell
-- Use AI SDK patterns: tool definitions with Zod schemas
-- TypeScript strict mode, Zod for runtime validation
-- Dependencies: ai, @ai-sdk/anthropic, ink, zod
+
+### Package Manager
+- Use **Bun exclusively** (not Node/npm/pnpm)
+- The monorepo uses `bun@1.2.14` as the package manager
+
+### TypeScript Configuration
+- Strict mode enabled
+- Target: ESNext with module "Preserve"
+- `noUncheckedIndexedAccess: true` - always check indexed access
+- `verbatimModuleSyntax: true` - use explicit type imports
+
+### Formatting (Biome)
+- Indent: 2 spaces
+- Quote style: double quotes for JavaScript/TypeScript
+- Organize imports: enabled via Biome assist
+- Run `bun run format` before committing
+
+### Naming Conventions
+- **Files**: kebab-case (e.g., `deep-agent.ts`, `paste-blocks.ts`)
+- **Types/Interfaces**: PascalCase (e.g., `TodoItem`, `AgentContext`)
+- **Functions/Variables**: camelCase (e.g., `getSandbox`, `workingDirectory`)
+- **Constants**: UPPER_SNAKE_CASE for true constants (e.g., `TIMEOUT_MS`, `SAFE_COMMAND_PREFIXES`)
+
+### Imports
+- Use explicit `.js` extension for relative imports (e.g., `import { foo } from "./utils.js"`)
+- Prefer named exports over default exports
+- Group imports: external packages first, then internal packages, then relative imports
+- Use type imports when importing only types: `import type { Foo } from "./types"`
+
+### Types
+- **Never use `any`** - use `unknown` and narrow with type guards
+- Define schemas with Zod, then derive types: `type Foo = z.infer<typeof fooSchema>`
+- Prefer interfaces for object shapes, types for unions/intersections
+- Export types alongside their related functions
+
+### Error Handling
+- Return structured error objects rather than throwing when possible:
+  ```typescript
+  return { success: false, error: `Failed to read file: ${message}` };
+  ```
+- When catching errors, extract message safely:
+  ```typescript
+  const message = error instanceof Error ? error.message : String(error);
+  ```
+- Use descriptive error messages that include context (tool name, file path, etc.)
+
+### Testing
+- Use Bun's test runner: `import { test, expect } from "bun:test"`
+- Test files use `.test.ts` suffix
+- Colocate tests with source files
+
+### Bun APIs
+- Prefer Bun APIs over Node when available:
+  - `Bun.file()` for file operations
+  - `Bun.serve()` for HTTP servers
+  - `Bun.$` for shell commands in scripts
+
+### AI SDK Patterns
+- Tools are defined with Zod schemas for input validation
+- Use `ToolLoopAgent` for agent implementations
+- Tools receive context via `experimental_context` parameter
+- Implement `needsApproval` as boolean or function for tool approval logic
+
+## Tool Implementation Patterns
+
+When creating tools in `packages/agent/tools/`:
+
+```typescript
+import { tool } from "ai";
+import { z } from "zod";
+import { getSandbox, getApprovalContext } from "./utils";
+
+const inputSchema = z.object({
+  param: z.string().describe("Description for the agent"),
+});
+
+export const myTool = (options?: { needsApproval?: boolean }) =>
+  tool({
+    needsApproval: (args, { experimental_context }) => {
+      const ctx = getApprovalContext(experimental_context, "myTool");
+      // Return true if approval needed, false otherwise
+      return options?.needsApproval ?? true;
+    },
+    description: `Tool description with USAGE, WHEN TO USE, EXAMPLES sections`,
+    inputSchema,
+    execute: async (args, { experimental_context }) => {
+      const sandbox = getSandbox(experimental_context, "myTool");
+      // Implementation using sandbox methods
+      return { success: true, result: "..." };
+    },
+  });
+```
+
+## Workspace Structure
+
+```
+apps/
+  cli/           # CLI entry point (@open-harness/cli)
+  web/           # Web interface
+packages/
+  agent/         # Core agent logic (@open-harness/agent)
+  sandbox/       # Sandbox abstraction (@open-harness/sandbox)
+  tui/           # Terminal UI (@open-harness/tui)
+  shared/        # Shared utilities (@open-harness/shared)
+  tsconfig/      # Shared TypeScript configs
+```
+
+## Common Patterns
+
+### Workspace Dependencies
+Use `workspace:*` for internal packages:
+```json
+{
+  "dependencies": {
+    "@open-harness/sandbox": "workspace:*"
+  }
+}
+```
+
+### Catalog Dependencies
+Use `catalog:` for shared external versions:
+```json
+{
+  "dependencies": {
+    "ai": "catalog:",
+    "zod": "catalog:"
+  }
+}
+```

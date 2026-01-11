@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { Box, Text } from "ink";
 import { getToolName, isToolUIPart } from "ai";
 import type { TaskToolUIPart } from "../../agent/tools/task.js";
-import { ApprovalButtons } from "./tool-call.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -154,12 +153,10 @@ function TaskStatusIndicator({ status }: { status: TaskStatus }) {
 function TaskItem({
   part,
   isLast,
-  activeApprovalId,
   isStreaming,
 }: {
   part: TaskToolUIPart;
   isLast: boolean;
-  activeApprovalId: string | null;
   isStreaming: boolean;
 }) {
   const status = getTaskStatus(part, isStreaming);
@@ -170,13 +167,8 @@ function TaskItem({
 
   const desc = part.input?.task ?? "Task";
 
-  const subagentType = part.input?.subagentType;
-
   // Handle approval state
   const approvalRequested = part.state === "approval-requested";
-  const approvalId = approvalRequested ? part.approval?.id : undefined;
-  const isActiveApproval =
-    approvalId != null && approvalId === activeApprovalId;
 
   // Handle denial
   const denied = part.state === "output-denied";
@@ -228,23 +220,8 @@ function TaskItem({
         )}
       </Box>
 
-      {/* Executor approval warning */}
-      {approvalRequested && subagentType === "executor" && (
-        <Box paddingLeft={4}>
-          <Text color="yellow">
-            This executor has full write access and can create, modify, and
-            delete files.
-          </Text>
-        </Box>
-      )}
-
-      {/* Approval buttons */}
-      {isActiveApproval && approvalId && (
-        <ApprovalButtons approvalId={approvalId} />
-      )}
-
-      {/* Nested status line - only show if not showing approval buttons */}
-      {nestedStatus && !isActiveApproval && (
+      {/* Nested status line */}
+      {nestedStatus && (
         <Box>
           <Text color="gray">{continueChar}└ </Text>
           <Text
@@ -262,15 +239,10 @@ function TaskItem({
 
 type TaskGroupViewProps = {
   taskParts: TaskToolUIPart[];
-  activeApprovalId: string | null;
   isStreaming: boolean;
 };
 
-export function TaskGroupView({
-  taskParts,
-  activeApprovalId,
-  isStreaming,
-}: TaskGroupViewProps) {
+export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
   if (taskParts.length === 0) return null;
 
   // Count different states
@@ -328,7 +300,6 @@ export function TaskGroupView({
             key={part.toolCallId}
             part={part}
             isLast={index === taskParts.length - 1}
-            activeApprovalId={activeApprovalId}
             isStreaming={isStreaming}
           />
         ))}

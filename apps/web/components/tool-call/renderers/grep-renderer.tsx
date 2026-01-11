@@ -1,0 +1,100 @@
+"use client";
+
+import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import { ToolLayout } from "../tool-layout";
+
+type GrepInput = {
+  pattern?: string;
+  path?: string;
+  include?: string;
+};
+
+type GrepMatch = {
+  file: string;
+  line: number;
+  content?: string;
+};
+
+type GrepOutput = {
+  matches?: GrepMatch[];
+};
+
+export function GrepRenderer({
+  part,
+  state,
+  onApprove,
+  onDeny,
+}: {
+  part: { input?: unknown; state: string; output?: unknown };
+  state: ToolRenderState;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string, reason?: string) => void;
+}) {
+  const input = part.input as GrepInput | undefined;
+  const pattern = input?.pattern ?? "...";
+  const path = input?.path;
+  const include = input?.include;
+
+  const output =
+    part.state === "output-available" ? (part.output as GrepOutput) : undefined;
+  const matches = output?.matches ?? [];
+
+  // Show expanded content if there are matches
+  const hasExpandedContent = matches.length > 0;
+
+  const expandedContent = hasExpandedContent ? (
+    <div className="space-y-3">
+      <div className="space-y-1 text-sm">
+        <div>
+          <span className="text-muted-foreground">Pattern: </span>
+          <code className="text-foreground">{pattern}</code>
+        </div>
+        {path && (
+          <div>
+            <span className="text-muted-foreground">Path: </span>
+            <code className="text-foreground">{path}</code>
+          </div>
+        )}
+        {include && (
+          <div>
+            <span className="text-muted-foreground">Include: </span>
+            <code className="text-foreground">{include}</code>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium text-muted-foreground">
+          Matches ({matches.length})
+        </div>
+        <div className="max-h-64 space-y-1 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
+          {matches.map((match, i) => (
+            <div key={i} className="text-foreground">
+              <span className="text-muted-foreground">{match.file}</span>
+              <span className="text-yellow-500">:{match.line}</span>
+              {match.content && (
+                <span className="ml-2 text-foreground">
+                  {match.content.slice(0, 100)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : undefined;
+
+  return (
+    <ToolLayout
+      name="Grep"
+      summary={`"${pattern}"`}
+      state={state}
+      output={
+        matches.length > 0 ? `Found ${matches.length} matches` : undefined
+      }
+      expandedContent={expandedContent}
+      onApprove={onApprove}
+      onDeny={onDeny}
+    />
+  );
+}

@@ -7,6 +7,10 @@
  */
 import React from "react";
 import type { TUIAgentUIToolPart } from "../types.js";
+import {
+  extractRenderState,
+  type ToolRenderState,
+} from "@open-harness/shared/lib/tool-state";
 
 // Import all renderers
 import { ReadRenderer } from "../components/tool-renderers/read-renderer.js";
@@ -38,26 +42,6 @@ export type ExtractToolPart<T extends ToolPartType> = Extract<
 >;
 
 /**
- * Common state derived from a tool part for renderers.
- */
-export type ToolRenderState = {
-  /** Whether the tool is currently running */
-  running: boolean;
-  /** Error message if the tool failed */
-  error?: string;
-  /** Whether the tool was denied by the user */
-  denied: boolean;
-  /** Reason for denial if provided */
-  denialReason?: string;
-  /** Whether approval is being requested */
-  approvalRequested: boolean;
-  /** Approval ID if approval is requested */
-  approvalId?: string;
-  /** Whether this is the currently active approval */
-  isActiveApproval: boolean;
-};
-
-/**
  * Props for a tool renderer component.
  */
 export type ToolRendererProps<T extends ToolPartType> = {
@@ -67,34 +51,8 @@ export type ToolRendererProps<T extends ToolPartType> = {
   isExpanded?: boolean;
 };
 
-/**
- * Extract render state from a tool part.
- */
-export function extractRenderState(
-  part: TUIAgentUIToolPart,
-  activeApprovalId: string | null,
-): ToolRenderState {
-  const running =
-    part.state === "input-streaming" || part.state === "input-available";
-  const approval = part.approval;
-  const denied = part.state === "output-denied" || approval?.approved === false;
-  const denialReason = denied ? approval?.reason : undefined;
-  const approvalRequested = part.state === "approval-requested" && !denied;
-  const error = part.state === "output-error" ? part.errorText : undefined;
-  const approvalId = approvalRequested ? approval?.id : undefined;
-  const isActiveApproval =
-    approvalId != null && approvalId === activeApprovalId;
-
-  return {
-    running,
-    error,
-    denied,
-    denialReason,
-    approvalRequested,
-    approvalId,
-    isActiveApproval,
-  };
-}
+// Re-export extractRenderState and ToolRenderState for convenience
+export { extractRenderState, type ToolRenderState };
 
 /**
  * Render a tool part using a switch statement.

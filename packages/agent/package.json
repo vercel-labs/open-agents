@@ -13,10 +13,10 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.1",
+    "@ai-sdk/anthropic": "catalog:",
     "@open-harness/sandbox": "workspace:*",
-    "ai": "^6.0.3",
-    "zod": "^3.24.0"
+    "ai": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@ai-sdk/devtools": "^0.0.2",

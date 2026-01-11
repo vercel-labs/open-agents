@@ -1,0 +1,108 @@
+"use client";
+
+/**
+ * Tool call component that renders tool invocations for the web app.
+ */
+import type { WebAgentUIToolPart } from "@/app/types";
+import {
+  extractRenderState,
+  getToolName,
+  type ToolRenderState,
+} from "@/app/lib/render-tool";
+import { ToolLayout } from "./tool-layout";
+import { BashRenderer } from "./renderers/bash-renderer";
+import { ReadRenderer } from "./renderers/read-renderer";
+import { WriteRenderer } from "./renderers/write-renderer";
+import { EditRenderer } from "./renderers/edit-renderer";
+import { GlobRenderer } from "./renderers/glob-renderer";
+import { GrepRenderer } from "./renderers/grep-renderer";
+import { TaskRenderer } from "./renderers/task-renderer";
+
+export type ToolCallProps = {
+  part: WebAgentUIToolPart;
+  activeApprovalId?: string | null;
+  cwd?: string;
+  isStreaming?: boolean;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string, reason?: string) => void;
+};
+
+/**
+ * Render a tool call based on its type.
+ */
+export function ToolCall({
+  part,
+  activeApprovalId = null,
+  cwd = "",
+  isStreaming = false,
+  onApprove,
+  onDeny,
+}: ToolCallProps) {
+  const state = extractRenderState(part, activeApprovalId, isStreaming);
+  const toolName = getToolName(part);
+  const approvalProps = { onApprove, onDeny };
+
+  switch (toolName) {
+    case "bash":
+      return <BashRenderer part={part} state={state} {...approvalProps} />;
+    case "read":
+      return (
+        <ReadRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
+      );
+    case "write":
+      return (
+        <WriteRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
+      );
+    case "edit":
+      return (
+        <EditRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
+      );
+    case "glob":
+      return <GlobRenderer part={part} state={state} {...approvalProps} />;
+    case "grep":
+      return <GrepRenderer part={part} state={state} {...approvalProps} />;
+    case "task":
+      return <TaskRenderer part={part} state={state} {...approvalProps} />;
+    default:
+      return (
+        <DefaultRenderer
+          part={part}
+          state={state}
+          toolName={toolName}
+          {...approvalProps}
+        />
+      );
+  }
+}
+
+function DefaultRenderer({
+  part,
+  state,
+  toolName,
+  onApprove,
+  onDeny,
+}: {
+  part: WebAgentUIToolPart;
+  state: ToolRenderState;
+  toolName: string;
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string, reason?: string) => void;
+}) {
+  const name = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+  const input = part.input as Record<string, unknown> | undefined;
+  const summary = input ? JSON.stringify(input).slice(0, 40) : "...";
+
+  return (
+    <ToolLayout
+      name={name}
+      summary={summary}
+      state={state}
+      output={part.state === "output-available" ? "Done" : undefined}
+      onApprove={onApprove}
+      onDeny={onDeny}
+    />
+  );
+}
+
+export { ToolLayout } from "./tool-layout";
+export type { ToolRenderState } from "@/app/lib/render-tool";
