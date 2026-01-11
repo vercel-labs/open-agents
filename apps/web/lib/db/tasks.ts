@@ -46,6 +46,12 @@ export async function createTaskMessage(data: NewTaskMessage) {
   return message;
 }
 
+export async function getTaskMessageById(messageId: string) {
+  return db.query.taskMessages.findFirst({
+    where: eq(taskMessages.id, messageId),
+  });
+}
+
 export async function getTaskMessages(taskId: string) {
   return db.query.taskMessages.findMany({
     where: eq(taskMessages.taskId, taskId),

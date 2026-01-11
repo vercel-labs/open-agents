@@ -50,6 +50,23 @@ export async function POST(req: Request) {
     return Response.json({ error: "Branch name is required" }, { status: 400 });
   }
 
+  if (!baseBranch) {
+    return Response.json({ error: "Base branch is required" }, { status: 400 });
+  }
+
+  // Validate baseBranch to prevent command injection
+  const safeBranchPattern = /^[\w\-/.]+$/;
+  if (!safeBranchPattern.test(baseBranch)) {
+    return Response.json(
+      { error: "Invalid base branch name" },
+      { status: 400 },
+    );
+  }
+
+  if (!safeBranchPattern.test(branchName)) {
+    return Response.json({ error: "Invalid branch name" }, { status: 400 });
+  }
+
   // 3. Connect to sandbox
   const sandbox = await connectVercelSandbox({ sandboxId });
   const cwd = sandbox.workingDirectory;
@@ -190,7 +207,16 @@ ${diffStatsResult.stdout}
 Commits:
 ${commitLogResult.stdout}`,
     });
-    prContent = output;
+
+    // Handle case where output is undefined (model failed to generate valid object)
+    if (!output) {
+      prContent = {
+        title: taskTitle,
+        body: `## Changes\n\n${diffStatsResult.stdout}\n\n## Commits\n\n${commitLogResult.stdout}`,
+      };
+    } else {
+      prContent = output;
+    }
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error)) {
       // Fallback if structured output generation fails

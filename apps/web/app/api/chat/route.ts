@@ -4,7 +4,14 @@ import { convertToModelMessages } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { updateTask, createTaskMessage } from "@/lib/db/tasks";
+import {
+  updateTask,
+  createTaskMessage,
+  getTaskById,
+  getTaskMessageById,
+} from "@/lib/db/tasks";
+
+import { getServerSession } from "@/lib/session/get-server-session";
 
 // Allow streaming responses up to 5 minutes (matching sandbox timeout)
 export const maxDuration = 300;
@@ -16,7 +23,24 @@ interface ChatRequestBody {
 }
 
 export async function POST(req: Request) {
+  // 1. Validate session
+  const session = await getServerSession();
+  if (!session?.user) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const { messages, sandboxId, taskId }: ChatRequestBody = await req.json();
+
+  // 2. Verify task ownership if taskId is provided
+  if (taskId) {
+    const task = await getTaskById(taskId);
+    if (!task) {
+      return Response.json({ error: "Task not found" }, { status: 404 });
+    }
+    if (task.userId !== session.user.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 403 });
+    }
+  }
 
   // If this is a task-based chat, update the task with the sandbox ID
   if (taskId && sandboxId) {
@@ -41,15 +65,20 @@ export async function POST(req: Request) {
   });
 
   // Save user message immediately (incremental persistence)
+  // Only save if the message has an ID and hasn't been persisted yet
   if (taskId && messages.length > 0) {
     const userMessage = messages[messages.length - 1];
-    if (userMessage && userMessage.role === "user") {
-      await createTaskMessage({
-        id: userMessage.id ?? nanoid(),
-        taskId,
-        role: "user",
-        parts: userMessage,
-      });
+    if (userMessage && userMessage.role === "user" && userMessage.id) {
+      // Check if message already exists to avoid duplicates
+      const existingMessage = await getTaskMessageById(userMessage.id);
+      if (!existingMessage) {
+        await createTaskMessage({
+          id: userMessage.id,
+          taskId,
+          role: "user",
+          parts: userMessage,
+        });
+      }
     }
   }
 

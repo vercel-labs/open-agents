@@ -31,6 +31,8 @@ type TaskChatContextValue = {
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   archiveTask: () => Promise<void>;
+  /** Whether the task had persisted messages when it was loaded */
+  hadInitialMessages: boolean;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -97,6 +99,9 @@ export function TaskChatProvider({
     setTask(data.task);
   }, [task.id]);
 
+  // Track whether we started with persisted messages (for initial message logic)
+  const hadInitialMessages = initialMessages.length > 0;
+
   return (
     <TaskChatContext.Provider
       value={{
@@ -106,6 +111,7 @@ export function TaskChatProvider({
         setSandboxInfo,
         clearSandboxInfo,
         archiveTask,
+        hadInitialMessages,
       }}
     >
       {children}

@@ -42,10 +42,18 @@ export async function POST(req: Request) {
   });
 
   if (!result.success) {
-    return Response.json(
-      { error: result.error || "Failed to create pull request" },
-      { status: 400 },
-    );
+    const error = result.error || "Failed to create pull request";
+
+    // Determine appropriate status code based on error type
+    // Client errors (400): invalid input, PR already exists
+    // Server errors (502): GitHub API failures, network issues
+    const isClientError =
+      error.includes("Invalid") ||
+      error.includes("already exists") ||
+      error.includes("not found") ||
+      error.includes("not connected");
+
+    return Response.json({ error }, { status: isClientError ? 400 : 502 });
   }
 
   // 4. Update task with PR info

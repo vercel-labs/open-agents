@@ -169,7 +169,6 @@ export function TaskDetailContent() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
-  const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
@@ -181,6 +180,7 @@ export function TaskDetailContent() {
     setSandboxInfo,
     clearSandboxInfo,
     archiveTask,
+    hadInitialMessages,
   } = useTaskChatContext();
   const {
     messages,
@@ -217,7 +217,8 @@ export function TaskDetailContent() {
   }, [status]);
 
   // Auto-send initial message when task loads and no messages exist
-  const hasSentInitialMessage = useRef(false);
+  // Use hadInitialMessages to prevent race condition on remount
+  const hasSentInitialMessage = useRef(hadInitialMessages);
   useEffect(() => {
     if (messages.length === 0 && !hasSentInitialMessage.current) {
       hasSentInitialMessage.current = true;
@@ -560,38 +561,6 @@ export function TaskDetailContent() {
           </div>
         </div>
       </div>
-
-      {/* Diff panel placeholder */}
-      {showDiffPanel && (
-        <div className="w-[500px] border-l border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                className="text-sm font-medium text-foreground"
-              >
-                Diff
-              </button>
-              <button
-                type="button"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
-                Logs
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowDiffPanel(false)}
-              className="rounded p-1 hover:bg-muted"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="p-4 text-center text-muted-foreground">
-            Diff panel coming soon
-          </div>
-        </div>
-      )}
 
       {/* Create PR Dialog */}
       {task && (
