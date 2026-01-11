@@ -7,7 +7,6 @@ import {
   useState,
   useCallback,
   useRef,
-  useEffect,
   type ReactNode,
 } from "react";
 import {
@@ -31,8 +30,6 @@ export type RepoInfo = {
   cloneUrl: string;
   branch: string;
 };
-
-const REPO_STORAGE_KEY = "open-harness-repo";
 
 type ChatState = {
   model?: string;
@@ -103,38 +100,14 @@ export function ChatProvider({
     setSandboxInfoState(null);
   }, []);
 
-  // Repo state with localStorage persistence
   const [repoInfo, setRepoInfoState] = useState<RepoInfo | null>(null);
-
-  // Load repo from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(REPO_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as RepoInfo;
-        setRepoInfoState(parsed);
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }, []);
 
   const setRepoInfo = useCallback((info: RepoInfo) => {
     setRepoInfoState(info);
-    try {
-      localStorage.setItem(REPO_STORAGE_KEY, JSON.stringify(info));
-    } catch {
-      // Ignore storage errors
-    }
   }, []);
 
   const clearRepoInfo = useCallback(() => {
     setRepoInfoState(null);
-    try {
-      localStorage.removeItem(REPO_STORAGE_KEY);
-    } catch {
-      // Ignore storage errors
-    }
   }, []);
 
   return (

@@ -51,6 +51,11 @@ sandbox related:
 - [ ] if we expose the timeout, could explore forcing a tool call at a certain point that is like, extend sandbox or push changes
 - [ ] add base url so that we can see dev server
 
+- have tabs for either starting from an existing repo or fresh (empty sandbox)
+- have concept of workspaces which are sandboxes that start (and tabs in the sidebar) - e.g. the equivalent of chats
+- like conductor, each workspace could have multiple chats? so we could referense one, that would be cool
+
+
 ---
 
 Turn this into full OSS end-to-end CC
