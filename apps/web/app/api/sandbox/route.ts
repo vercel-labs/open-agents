@@ -1,12 +1,16 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { updateTask } from "@/lib/db/tasks";
 
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 
 interface CreateSandboxRequest {
   repoUrl: string;
   branch?: string;
+  isNewBranch?: boolean;
+  taskId?: string;
+  sandboxId?: string; // Existing sandbox ID if any
 }
 
 export async function POST(req: Request) {
@@ -17,7 +21,13 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { repoUrl, branch = "main" } = body;
+  const {
+    repoUrl,
+    branch = "main",
+    isNewBranch = false,
+    taskId,
+    sandboxId: existingSandboxId,
+  } = body;
 
   if (!repoUrl) {
     return Response.json({ error: "repoUrl is required" }, { status: 400 });
@@ -35,12 +45,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  // Determine if we should create a new branch
+  // Only create new branch on first sandbox creation (no existing sandboxId)
+  const shouldCreateNewBranch = isNewBranch && !existingSandboxId;
+
   const sandbox = await connectVercelSandbox({
     timeout: DEFAULT_TIMEOUT,
     source: {
       url: repoUrl,
-      branch,
       token: githubToken,
+      // If creating new branch: don't specify branch (clone default), use newBranch
+      // Otherwise: clone the specified branch
+      ...(shouldCreateNewBranch ? { newBranch: branch } : { branch }),
     },
     gitUser: {
       name: session.user.name ?? session.user.username,
@@ -52,6 +68,11 @@ export async function POST(req: Request) {
       GITHUB_TOKEN: githubToken,
     },
   });
+
+  // Update task with sandboxId if this is a new sandbox
+  if (taskId && !existingSandboxId) {
+    await updateTask(taskId, { sandboxId: sandbox.id });
+  }
 
   return Response.json({
     sandboxId: sandbox.id,

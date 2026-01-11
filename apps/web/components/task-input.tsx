@@ -13,6 +13,7 @@ interface TaskInputProps {
     repoName?: string;
     branch?: string;
     cloneUrl?: string;
+    isNewBranch: boolean;
   }) => void;
   isLoading?: boolean;
 }
@@ -22,7 +23,8 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
   const [prompt, setPrompt] = useState("");
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [isNewBranch, setIsNewBranch] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +57,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
         selectedOwner && selectedRepo
           ? `https://github.com/${selectedOwner}/${selectedRepo}`
           : undefined,
+      isNewBranch,
     });
     setPrompt("");
   };
@@ -69,7 +72,13 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
   const handleRepoSelect = (owner: string, repo: string) => {
     setSelectedOwner(owner);
     setSelectedRepo(repo);
-    setSelectedBranch(""); // Reset branch when repo changes
+    setSelectedBranch(null); // Reset branch when repo changes
+    setIsNewBranch(false);
+  };
+
+  const handleBranchChange = (branch: string | null, newBranch: boolean) => {
+    setSelectedBranch(branch);
+    setIsNewBranch(newBranch);
   };
 
   return (
@@ -119,7 +128,8 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
               owner={selectedOwner}
               repo={selectedRepo}
               value={selectedBranch}
-              onChange={setSelectedBranch}
+              isNewBranch={isNewBranch}
+              onChange={handleBranchChange}
             />
           )}
         </div>

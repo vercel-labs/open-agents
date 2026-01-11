@@ -15,6 +15,13 @@
       "when": 1768165182549,
       "tag": "0001_ambitious_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768167365004,
+      "tag": "0002_uneven_aaron_stack",
+      "breakpoints": true
     }
   ]
 }

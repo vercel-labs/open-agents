@@ -10,6 +10,7 @@ interface CreateTaskInput {
   branch?: string;
   cloneUrl?: string;
   sandboxId?: string;
+  isNewBranch?: boolean;
 }
 
 export function useTasks() {

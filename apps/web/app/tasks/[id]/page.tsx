@@ -61,7 +61,10 @@ interface TaskPageProps {
 
 async function createSandbox(
   cloneUrl: string,
-  branch?: string,
+  branch: string | undefined,
+  isNewBranch: boolean,
+  taskId: string,
+  existingSandboxId: string | undefined,
 ): Promise<SandboxInfo> {
   const response = await fetch("/api/sandbox", {
     method: "POST",
@@ -69,6 +72,9 @@ async function createSandbox(
     body: JSON.stringify({
       repoUrl: cloneUrl,
       branch: branch ?? "main",
+      isNewBranch,
+      taskId,
+      sandboxId: existingSandboxId,
     }),
   });
   if (!response.ok) {
@@ -237,6 +243,9 @@ function TaskDetailContent() {
             const newSandbox = await createSandbox(
               task.cloneUrl,
               task.branch ?? undefined,
+              task.isNewBranch,
+              task.id,
+              task.sandboxId ?? undefined,
             );
             setSandboxInfo(newSandbox);
           } catch (err) {
@@ -513,6 +522,9 @@ function TaskDetailContent() {
                     const newSandbox = await createSandbox(
                       task.cloneUrl,
                       task.branch ?? undefined,
+                      task.isNewBranch,
+                      task.id,
+                      task.sandboxId ?? undefined,
                     );
                     setSandboxInfo(newSandbox);
                   } catch {

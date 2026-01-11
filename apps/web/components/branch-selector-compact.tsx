@@ -17,14 +17,13 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 
 interface BranchSelectorCompactProps {
   owner: string;
   repo: string;
-  value: string;
-  onChange: (branch: string) => void;
+  value: string | null;
+  isNewBranch: boolean;
+  onChange: (branch: string | null, isNewBranch: boolean) => void;
 }
 
 interface BranchesResponse {
@@ -36,19 +35,20 @@ export function BranchSelectorCompact({
   owner,
   repo,
   value,
+  isNewBranch,
   onChange,
 }: BranchSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
   const [defaultBranch, setDefaultBranch] = useState("main");
   const [loading, setLoading] = useState(false);
-  const [creatingNew, setCreatingNew] = useState(false);
-  const [newBranchName, setNewBranchName] = useState("");
 
   // Use refs to avoid dependency issues in useEffect
   const valueRef = useRef(value);
+  const isNewBranchRef = useRef(isNewBranch);
   const onChangeRef = useRef(onChange);
   valueRef.current = value;
+  isNewBranchRef.current = isNewBranch;
   onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -69,9 +69,9 @@ export function BranchSelectorCompact({
         const data = (await response.json()) as BranchesResponse;
         setBranches(data.branches);
         setDefaultBranch(data.defaultBranch);
-        // Auto-select default branch if no value is set
-        if (!valueRef.current) {
-          onChangeRef.current(data.defaultBranch);
+        // Auto-select default branch if no value is set and not creating new branch
+        if (!valueRef.current && !isNewBranchRef.current) {
+          onChangeRef.current(data.defaultBranch, false);
         }
       } catch (err) {
         console.error("Failed to fetch branches:", err);
@@ -85,55 +85,21 @@ export function BranchSelectorCompact({
   }, [owner, repo]);
 
   const handleSelectBranch = (branch: string) => {
-    onChange(branch);
+    onChange(branch, false);
     setOpen(false);
-    setCreatingNew(false);
   };
 
-  const handleSubmitNewBranch = () => {
-    if (newBranchName.trim()) {
-      onChange(newBranchName.trim());
-      setNewBranchName("");
-      setCreatingNew(false);
-      setOpen(false);
-    }
+  const handleSelectNewBranch = () => {
+    onChange(null, true);
+    setOpen(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmitNewBranch();
-    } else if (e.key === "Escape") {
-      setCreatingNew(false);
-    }
+  // Determine display text
+  const getDisplayText = () => {
+    if (loading) return "Loading...";
+    if (isNewBranch) return "New branch (auto)";
+    return value || defaultBranch || "main";
   };
-
-  if (creatingNew) {
-    return (
-      <div className="flex items-center gap-2">
-        <Input
-          value={newBranchName}
-          onChange={(e) => setNewBranchName(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Branch name"
-          className="h-8 w-36"
-        />
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleSubmitNewBranch}
-          disabled={!newBranchName.trim()}
-        >
-          Use
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setCreatingNew(false)}>
-          Cancel
-        </Button>
-      </div>
-    );
-  }
-
-  const displayBranch = value || defaultBranch || "main";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -143,9 +109,7 @@ export function BranchSelectorCompact({
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
         >
           <GitBranch className="h-4 w-4" />
-          <span className="max-w-[100px] truncate">
-            {loading ? "Loading..." : displayBranch}
-          </span>
+          <span className="max-w-[120px] truncate">{getDisplayText()}</span>
           <ChevronDown className="h-3 w-3" />
         </button>
       </PopoverTrigger>
@@ -166,7 +130,9 @@ export function BranchSelectorCompact({
                   <CheckIcon
                     className={cn(
                       "mr-2 size-4",
-                      value === branch ? "opacity-100" : "opacity-0",
+                      value === branch && !isNewBranch
+                        ? "opacity-100"
+                        : "opacity-0",
                     )}
                   />
                   <span className="truncate">{branch}</span>
@@ -180,9 +146,15 @@ export function BranchSelectorCompact({
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup>
-              <CommandItem onSelect={() => setCreatingNew(true)}>
+              <CommandItem onSelect={handleSelectNewBranch}>
+                <CheckIcon
+                  className={cn(
+                    "mr-2 size-4",
+                    isNewBranch ? "opacity-100" : "opacity-0",
+                  )}
+                />
                 <PlusIcon className="mr-2 size-4" />
-                Create new branch...
+                New branch (auto-generated)
               </CommandItem>
             </CommandGroup>
           </CommandList>

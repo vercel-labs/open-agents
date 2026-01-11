@@ -9,6 +9,25 @@ interface CreateTaskRequest {
   branch?: string;
   cloneUrl?: string;
   sandboxId?: string;
+  isNewBranch?: boolean;
+}
+
+function generateBranchName(username: string, name?: string | null): string {
+  let initials = "nb"; // fallback
+  if (name) {
+    // "Nico Albanese" -> "na"
+    initials =
+      name
+        .split(" ")
+        .map((n) => n[0]?.toLowerCase() ?? "")
+        .join("")
+        .slice(0, 2) || "nb";
+  } else if (username) {
+    // "nicoalbanese" -> "ni"
+    initials = username.slice(0, 2).toLowerCase();
+  }
+  const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  return `${initials}/${randomSuffix}`;
 }
 
 export async function GET() {
@@ -34,10 +53,24 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { title, repoOwner, repoName, branch, cloneUrl, sandboxId } = body;
+  const {
+    title,
+    repoOwner,
+    repoName,
+    branch,
+    cloneUrl,
+    sandboxId,
+    isNewBranch,
+  } = body;
 
   if (!title) {
     return Response.json({ error: "title is required" }, { status: 400 });
+  }
+
+  // Generate branch name if creating a new branch
+  let finalBranch = branch;
+  if (isNewBranch) {
+    finalBranch = generateBranchName(session.user.username, session.user.name);
   }
 
   const task = await createTask({
@@ -47,9 +80,10 @@ export async function POST(req: Request) {
     status: "running",
     repoOwner,
     repoName,
-    branch,
+    branch: finalBranch,
     cloneUrl,
     sandboxId,
+    isNewBranch: isNewBranch ?? false,
   });
 
   return Response.json({ task });

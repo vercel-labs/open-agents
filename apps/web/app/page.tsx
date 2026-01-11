@@ -21,6 +21,7 @@ function HomePage() {
     repoName?: string;
     branch?: string;
     cloneUrl?: string;
+    isNewBranch: boolean;
   }) => {
     setIsCreating(true);
     try {
@@ -30,6 +31,7 @@ function HomePage() {
         repoName: input.repoName,
         branch: input.branch,
         cloneUrl: input.cloneUrl,
+        isNewBranch: input.isNewBranch,
       });
       // Navigate to the task detail page
       router.push(`/tasks/${task.id}`);
