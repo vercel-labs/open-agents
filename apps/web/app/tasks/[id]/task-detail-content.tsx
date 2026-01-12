@@ -32,6 +32,8 @@ import type { TaskToolUIPart } from "@open-harness/agent";
 
 import { useTaskChatContext, type SandboxInfo } from "./task-context";
 import { DiffViewer } from "./diff-viewer";
+import { useFileSuggestions } from "@/hooks/use-file-suggestions";
+import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -176,6 +178,7 @@ export function TaskDetailContent() {
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -189,6 +192,9 @@ export function TaskDetailContent() {
     hadInitialMessages,
     diffRefreshKey,
     triggerDiffRefresh,
+    fileCache,
+    fetchFiles,
+    triggerFileRefresh,
   } = useTaskChatContext();
   const {
     messages,
@@ -198,6 +204,40 @@ export function TaskDetailContent() {
     addToolApprovalResponse,
     stop,
   } = chat;
+
+  const handleFileSelect = (
+    value: string,
+    mentionStart: number,
+    cursorPos: number,
+  ) => {
+    const before = input.slice(0, mentionStart);
+    const after = input.slice(cursorPos);
+    const newInput = `${before}@${value} ${after}`;
+    setInput(newInput);
+    // Move cursor to after the inserted value + space
+    const newCursorPos = mentionStart + value.length + 2; // @ + value + space
+    setCursorPosition(newCursorPos);
+    // Focus input and set cursor position
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const {
+    showSuggestions,
+    suggestions,
+    selectedIndex,
+    handleKeyDown: handleSuggestionsKeyDown,
+    mentionInfo,
+  } = useFileSuggestions({
+    inputValue: input,
+    cursorPosition,
+    files: fileCache.data,
+    onSelect: handleFileSelect,
+  });
 
   const handleKillSandbox = async () => {
     if (!sandboxInfo) return;
@@ -327,6 +367,7 @@ export function TaskDetailContent() {
       }
       // Always invalidate cache when files change
       triggerDiffRefresh();
+      triggerFileRefresh();
     }
   }, [
     currentToolStates,
@@ -334,7 +375,15 @@ export function TaskDetailContent() {
     showDiffPanel,
     sandboxInfo,
     triggerDiffRefresh,
+    triggerFileRefresh,
   ]);
+
+  // Fetch files when sandbox becomes available
+  useEffect(() => {
+    if (sandboxInfo && !fileCache.data && !fileCache.isLoading) {
+      fetchFiles(sandboxInfo.sandboxId);
+    }
+  }, [sandboxInfo, fileCache.data, fileCache.isLoading, fetchFiles]);
 
   if (error) {
     return (
@@ -640,13 +689,49 @@ export function TaskDetailContent() {
 
                 sendMessage({ text: messageText });
               }}
-              className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
+              className="relative flex items-center gap-2 rounded-full bg-muted px-4 py-2"
             >
+              {showSuggestions && (
+                <FileSuggestionsDropdown
+                  suggestions={suggestions}
+                  selectedIndex={selectedIndex}
+                  onSelect={(suggestion) => {
+                    if (mentionInfo) {
+                      handleFileSelect(
+                        suggestion.value,
+                        mentionInfo.mentionStart,
+                        cursorPosition,
+                      );
+                    }
+                  }}
+                  isLoading={fileCache.isLoading}
+                />
+              )}
               <input
                 ref={inputRef}
                 value={input}
                 placeholder="Request changes or ask a ..."
-                onChange={(e) => setInput(e.currentTarget.value)}
+                onChange={(e) => {
+                  setInput(e.currentTarget.value);
+                  setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                }}
+                onKeyDown={(e) => {
+                  // Let suggestions handle keyboard events first
+                  if (handleSuggestionsKeyDown(e)) {
+                    return;
+                  }
+                  // Handle form submission
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                onKeyUp={(e) => {
+                  setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                }}
+                onClick={(e) => {
+                  setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                }}
                 disabled={status === "streaming"}
                 className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
