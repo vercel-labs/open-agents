@@ -31,6 +31,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@vercel/blob": "^2.0.0",
     "ai": "catalog:",
     "arctic": "^3.7.0",
     "class-variance-authority": "^0.7.1",

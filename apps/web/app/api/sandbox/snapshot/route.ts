@@ -1,4 +1,5 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
+import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 
@@ -70,9 +71,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // Generate a scoped, short-lived client token for the upload
+    // This is safer than passing the full BLOB_READ_WRITE_TOKEN to the sandbox
     const pathname = `snapshots/${taskId}/${Date.now()}.tgz`;
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      token: blobToken,
+      pathname,
+      allowedContentTypes: ["application/gzip", "application/x-gzip"],
+      maximumSizeInBytes: 500 * 1024 * 1024, // 500MB max
+      validUntil: Date.now() + 5 * 60 * 1000, // 5 minutes
+    });
+
     const result = await sandbox.snapshot({
-      blobToken,
+      blobToken: clientToken,
       pathname,
     });
 

@@ -32,5 +32,8 @@
     "turbo": "^2.5.4",
     "typescript": "^5"
   },
-  "packageManager": "bun@1.2.14"
+  "packageManager": "bun@1.2.14",
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  }
 }
