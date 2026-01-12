@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
@@ -17,6 +17,7 @@ import {
   Share2,
   GitPullRequest,
   MoreVertical,
+  GitCompare,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
 import { useTaskChatContext, type SandboxInfo } from "./task-context";
+import { DiffViewer } from "./diff-viewer";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -170,6 +172,7 @@ export function TaskDetailContent() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -181,6 +184,8 @@ export function TaskDetailContent() {
     clearSandboxInfo,
     archiveTask,
     hadInitialMessages,
+    diffRefreshKey,
+    triggerDiffRefresh,
   } = useTaskChatContext();
   const {
     messages,
@@ -269,6 +274,59 @@ export function TaskDetailContent() {
     task.title,
   ]);
 
+  // Track tool completions to trigger diff refresh
+  const prevToolStatesRef = useRef<Map<string, string>>(new Map());
+
+  // Extract current tool states from messages
+  const currentToolStates = useMemo(() => {
+    const states = new Map<string, string>();
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      for (const part of message.parts) {
+        if (isToolUIPart(part)) {
+          states.set(part.toolCallId, part.state);
+        }
+      }
+    }
+    return states;
+  }, [messages]);
+
+  useEffect(() => {
+    // Only trigger refresh if diff panel is visible
+    if (!showDiffPanel) {
+      prevToolStatesRef.current = currentToolStates;
+      return;
+    }
+
+    let shouldRefresh = false;
+    const fileModifyingTools = ["tool-write", "tool-edit", "tool-bash"];
+
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+
+      for (const part of message.parts) {
+        if (!isToolUIPart(part)) continue;
+
+        const toolId = part.toolCallId;
+        const toolState = part.state;
+        const prevState = prevToolStatesRef.current.get(toolId);
+        const isFileModifyingTool = fileModifyingTools.includes(part.type);
+        const justCompleted =
+          toolState === "output-available" && prevState !== "output-available";
+
+        if (isFileModifyingTool && justCompleted) {
+          shouldRefresh = true;
+        }
+      }
+    }
+
+    prevToolStatesRef.current = currentToolStates;
+
+    if (shouldRefresh) {
+      triggerDiffRefresh();
+    }
+  }, [currentToolStates, messages, showDiffPanel, triggerDiffRefresh]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -327,6 +385,15 @@ export function TaskDetailContent() {
             <Button variant="ghost" size="sm">
               <Share2 className="mr-2 h-4 w-4" />
               Share
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDiffPanel(!showDiffPanel)}
+              disabled={!sandboxInfo}
+            >
+              <GitCompare className="mr-2 h-4 w-4" />
+              Diff
             </Button>
             {task?.prNumber ? (
               <Button
@@ -591,6 +658,16 @@ export function TaskDetailContent() {
           onOpenChange={setPrDialogOpen}
           task={task}
           sandboxId={sandboxInfo?.sandboxId ?? null}
+        />
+      )}
+
+      {/* Diff Viewer Panel */}
+      {showDiffPanel && sandboxInfo && (
+        <DiffViewer
+          taskId={task.id}
+          sandboxId={sandboxInfo.sandboxId}
+          refreshKey={diffRefreshKey}
+          onClose={() => setShowDiffPanel(false)}
         />
       )}
     </div>
