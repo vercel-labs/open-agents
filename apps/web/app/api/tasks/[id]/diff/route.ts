@@ -1,0 +1,285 @@
+import { connectVercelSandbox } from "@open-harness/sandbox";
+import { getTaskById } from "@/lib/db/tasks";
+import { getServerSession } from "@/lib/session/get-server-session";
+import type { NextRequest } from "next/server";
+
+export type DiffFile = {
+  path: string;
+  status: "added" | "modified" | "deleted" | "renamed";
+  additions: number;
+  deletions: number;
+  diff: string;
+  oldPath?: string;
+};
+
+export type DiffResponse = {
+  files: DiffFile[];
+  summary: {
+    totalFiles: number;
+    totalAdditions: number;
+    totalDeletions: number;
+  };
+};
+
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+/**
+ * Parse git diff --name-status output to get file statuses
+ * Format: "M\tpath" or "R100\told\tnew" for renames
+ */
+function parseNameStatus(
+  output: string,
+): Map<string, { status: DiffFile["status"]; oldPath?: string }> {
+  const result = new Map<
+    string,
+    { status: DiffFile["status"]; oldPath?: string }
+  >();
+
+  for (const line of output.trim().split("\n")) {
+    if (!line) continue;
+
+    const parts = line.split("\t");
+    const statusCode = parts[0];
+    if (!statusCode) continue;
+
+    if (statusCode.startsWith("R")) {
+      // Rename: R100\told\tnew
+      const oldPath = parts[1];
+      const newPath = parts[2];
+      if (newPath) {
+        result.set(newPath, { status: "renamed", oldPath });
+      }
+    } else if (statusCode === "A") {
+      const path = parts[1];
+      if (path) {
+        result.set(path, { status: "added" });
+      }
+    } else if (statusCode === "D") {
+      const path = parts[1];
+      if (path) {
+        result.set(path, { status: "deleted" });
+      }
+    } else if (statusCode === "M") {
+      const path = parts[1];
+      if (path) {
+        result.set(path, { status: "modified" });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Parse git diff --stat output to get per-file stats
+ * Format: " path/to/file.ts | 10 ++++------"
+ */
+function parseStats(
+  output: string,
+): Map<string, { additions: number; deletions: number }> {
+  const result = new Map<string, { additions: number; deletions: number }>();
+
+  for (const line of output.trim().split("\n")) {
+    // Skip summary line at the end
+    if (
+      line.includes("file changed") ||
+      line.includes("files changed") ||
+      !line.includes("|")
+    ) {
+      continue;
+    }
+
+    const pipeIndex = line.indexOf("|");
+    if (pipeIndex === -1) continue;
+
+    const path = line.slice(0, pipeIndex).trim();
+    const statsSection = line.slice(pipeIndex + 1).trim();
+
+    // Count + and - characters
+    let additions = 0;
+    let deletions = 0;
+    for (const char of statsSection) {
+      if (char === "+") additions++;
+      if (char === "-") deletions++;
+    }
+
+    if (path) {
+      result.set(path, { additions, deletions });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Split full diff output by file
+ * Each file starts with "diff --git a/... b/..."
+ */
+function splitDiffByFile(fullDiff: string): Map<string, string> {
+  const result = new Map<string, string>();
+  const filePattern = /^diff --git a\/.+ b\/(.+)$/gm;
+
+  let lastIndex = 0;
+  let lastPath: string | null = null;
+  let match: RegExpExecArray | null;
+
+  while ((match = filePattern.exec(fullDiff)) !== null) {
+    if (lastPath !== null) {
+      result.set(lastPath, fullDiff.slice(lastIndex, match.index).trim());
+    }
+    lastPath = match[1] ?? null;
+    lastIndex = match.index;
+  }
+
+  // Don't forget the last file
+  if (lastPath !== null) {
+    result.set(lastPath, fullDiff.slice(lastIndex).trim());
+  }
+
+  return result;
+}
+
+export async function GET(req: NextRequest, context: RouteContext) {
+  const session = await getServerSession();
+  if (!session?.user) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { id: taskId } = await context.params;
+  const sandboxId = req.nextUrl.searchParams.get("sandboxId");
+
+  if (!sandboxId) {
+    return Response.json(
+      { error: "sandboxId query parameter is required" },
+      { status: 400 },
+    );
+  }
+
+  // Verify task ownership
+  const task = await getTaskById(taskId);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+  if (task.userId !== session.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (task.sandboxId !== sandboxId) {
+    return Response.json(
+      { error: "Sandbox does not belong to this task" },
+      { status: 403 },
+    );
+  }
+
+  try {
+    const sandbox = await connectVercelSandbox({ sandboxId });
+    const cwd = sandbox.workingDirectory;
+
+    // Run git commands in parallel
+    const [nameStatusResult, statResult, diffResult, untrackedResult] =
+      await Promise.all([
+        sandbox.exec("git diff HEAD --name-status", cwd, 30000),
+        sandbox.exec("git diff HEAD --stat", cwd, 30000),
+        sandbox.exec("git diff HEAD", cwd, 60000),
+        // Get untracked files (new files not yet staged)
+        sandbox.exec("git ls-files --others --exclude-standard", cwd, 30000),
+      ]);
+
+    // Parse outputs
+    const fileStatuses = parseNameStatus(nameStatusResult.stdout);
+    const fileStats = parseStats(statResult.stdout);
+    const fileDiffs = splitDiffByFile(diffResult.stdout);
+
+    // Build response
+    const files: DiffFile[] = [];
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+
+    // Add tracked file changes
+    for (const [path, statusInfo] of fileStatuses) {
+      const stats = fileStats.get(path) ?? { additions: 0, deletions: 0 };
+      const diff = fileDiffs.get(path) ?? "";
+
+      totalAdditions += stats.additions;
+      totalDeletions += stats.deletions;
+
+      files.push({
+        path,
+        status: statusInfo.status,
+        additions: stats.additions,
+        deletions: stats.deletions,
+        diff,
+        ...(statusInfo.oldPath && { oldPath: statusInfo.oldPath }),
+      });
+    }
+
+    // Add untracked files (new files)
+    const untrackedFiles = untrackedResult.stdout
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0);
+
+    // Fetch content for untracked files to generate diff
+    const untrackedFileContents = await Promise.all(
+      untrackedFiles.map(async (filePath) => {
+        const fullPath = `${cwd}/${filePath}`;
+        try {
+          const content = await sandbox.readFile(fullPath, "utf-8");
+          return { path: filePath, content };
+        } catch {
+          // Skip files we can't read (binary, permissions, etc.)
+          return { path: filePath, content: null };
+        }
+      }),
+    );
+
+    for (const { path, content } of untrackedFileContents) {
+      // Skip binary files or files we couldn't read
+      if (content === null) continue;
+
+      const lines = content.split("\n");
+      const lineCount = lines.length;
+
+      // Generate a synthetic diff for the new file
+      const diffLines = lines.map((line, i) => `+${line}`).join("\n");
+      const syntheticDiff = `diff --git a/${path} b/${path}
+new file mode 100644
+--- /dev/null
++++ b/${path}
+@@ -0,0 +1,${lineCount} @@
+${diffLines}`;
+
+      totalAdditions += lineCount;
+
+      files.push({
+        path,
+        status: "added",
+        additions: lineCount,
+        deletions: 0,
+        diff: syntheticDiff,
+      });
+    }
+
+    // Sort files: modified first, then added, then renamed, then deleted
+    const statusOrder = { modified: 0, added: 1, renamed: 2, deleted: 3 };
+    files.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+
+    const response: DiffResponse = {
+      files,
+      summary: {
+        totalFiles: files.length,
+        totalAdditions,
+        totalDeletions,
+      },
+    };
+
+    return Response.json(response);
+  } catch (error) {
+    console.error("Failed to get diff:", error);
+    return Response.json(
+      { error: "Failed to connect to sandbox" },
+      { status: 500 },
+    );
+  }
+}
