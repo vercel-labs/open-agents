@@ -92,6 +92,10 @@ export const tasks = pgTable("tasks", {
   prStatus: text("pr_status", {
     enum: ["open", "merged", "closed"],
   }),
+  // Snapshot info
+  snapshotUrl: text("snapshot_url"),
+  snapshotCreatedAt: timestamp("snapshot_created_at"),
+  snapshotSizeBytes: integer("snapshot_size_bytes"),
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
