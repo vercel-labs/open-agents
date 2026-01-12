@@ -177,6 +177,16 @@ export class VercelSandbox implements Sandbox {
 
     const workingDirectory = DEFAULT_WORKING_DIRECTORY;
 
+    // Initialize git repo for empty sandboxes (no source provided)
+    // This ensures git commands work consistently (e.g., for diff viewing)
+    if (!source) {
+      await sdk.runCommand({
+        cmd: "git",
+        args: ["init"],
+        cwd: workingDirectory,
+      });
+    }
+
     // Configure git to use the token for push operations if provided
     // We modify the remote URL to embed credentials directly (standard CI/CD approach)
     if (source?.token) {
@@ -205,6 +215,17 @@ export class VercelSandbox implements Sandbox {
       await sdk.runCommand({
         cmd: "git",
         args: ["config", "user.email", gitUser.email],
+        cwd: workingDirectory,
+      });
+    }
+
+    // Create initial empty commit for empty sandboxes so HEAD exists
+    // This is required for git diff HEAD to work (e.g., diff viewer)
+    // Must be done after gitUser config since git commit requires user info
+    if (!source && gitUser) {
+      await sdk.runCommand({
+        cmd: "git",
+        args: ["commit", "--allow-empty", "-m", "Initial commit"],
         cwd: workingDirectory,
       });
     }
