@@ -113,18 +113,34 @@ export function TaskChatProvider({
     lastFetchedKey: -1, // -1 means never fetched
   });
 
+  // Track which refresh key we're currently fetching for (prevents duplicate fetches)
+  const fetchingForKeyRef = useRef<number | null>(null);
+
   const fetchDiff = useCallback(
     async (sandboxId: string) => {
-      // If we already have data for the current refreshKey, skip fetching
-      if (diffCache.lastFetchedKey === diffRefreshKey && !diffCache.isLoading) {
+      // Synchronous check using ref - prevents duplicate fetches for same key
+      if (fetchingForKeyRef.current === diffRefreshKey) {
         return;
       }
+      fetchingForKeyRef.current = diffRefreshKey;
 
-      setDiffCache((prev) => ({
-        ...prev,
-        isLoading: true,
-        error: null,
-      }));
+      // Check if we already have cached data for this key
+      let shouldFetch = false;
+      setDiffCache((prev) => {
+        if (prev.lastFetchedKey === diffRefreshKey) {
+          return prev; // Already have data for this key
+        }
+        shouldFetch = true;
+        return {
+          ...prev,
+          isLoading: true,
+          error: null,
+        };
+      });
+
+      if (!shouldFetch) {
+        return;
+      }
 
       try {
         const res = await fetch(
@@ -137,22 +153,29 @@ export function TaskChatProvider({
         }
 
         const data = (await res.json()) as DiffResponse;
-        setDiffCache({
-          data,
-          error: null,
-          isLoading: false,
-          lastFetchedKey: diffRefreshKey,
-        });
+
+        // Only update state if this fetch is still relevant
+        // (a newer fetch might have started while we were waiting)
+        if (fetchingForKeyRef.current === diffRefreshKey) {
+          setDiffCache({
+            data,
+            error: null,
+            isLoading: false,
+            lastFetchedKey: diffRefreshKey,
+          });
+        }
       } catch (err) {
-        setDiffCache((prev) => ({
-          ...prev,
-          error: err instanceof Error ? err.message : "Failed to fetch diff",
-          isLoading: false,
-          lastFetchedKey: diffRefreshKey,
-        }));
+        if (fetchingForKeyRef.current === diffRefreshKey) {
+          setDiffCache((prev) => ({
+            ...prev,
+            error: err instanceof Error ? err.message : "Failed to fetch diff",
+            isLoading: false,
+            lastFetchedKey: diffRefreshKey,
+          }));
+        }
       }
     },
-    [task.id, diffRefreshKey, diffCache.lastFetchedKey, diffCache.isLoading],
+    [task.id, diffRefreshKey],
   );
 
   const archiveTask = useCallback(async () => {
