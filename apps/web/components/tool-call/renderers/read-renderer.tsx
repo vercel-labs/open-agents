@@ -13,6 +13,8 @@ type ReadInput = {
 };
 
 type ReadOutput = {
+  success?: boolean;
+  error?: string;
   totalLines?: number;
 };
 
@@ -39,6 +41,12 @@ export function ReadRenderer({
   const output =
     part.state === "output-available" ? (part.output as ReadOutput) : undefined;
   const lines = output?.totalLines;
+  const outputError =
+    output?.success === false ? (output?.error ?? "Read failed") : undefined;
+
+  const mergedState = outputError
+    ? { ...state, error: state.error ?? outputError }
+    : state;
 
   // Show expanded content if there are additional parameters
   const hasExpandedContent = offset !== undefined || limit !== undefined;
@@ -74,8 +82,8 @@ export function ReadRenderer({
     <ToolLayout
       name="Read"
       summary={lines ? `${filePath} (${lines} lines)` : filePath}
-      state={state}
-      output={lines ? `Read ${lines} lines` : undefined}
+      state={mergedState}
+      output={outputError ?? (lines ? `Read ${lines} lines` : undefined)}
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}
