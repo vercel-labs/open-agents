@@ -180,3 +180,67 @@ export async function getPullRequestStatus(params: {
     return { success: false, error: "Failed to get PR status" };
   }
 }
+
+export async function createRepository(params: {
+  name: string;
+  description?: string;
+  isPrivate?: boolean;
+}): Promise<{
+  success: boolean;
+  repoUrl?: string;
+  cloneUrl?: string;
+  owner?: string;
+  repoName?: string;
+  error?: string;
+}> {
+  const { name, description = "", isPrivate = false } = params;
+
+  try {
+    const result = await getOctokit();
+
+    if (!result.authenticated) {
+      return { success: false, error: "GitHub account not connected" };
+    }
+
+    // Validate repo name
+    if (!/^[\w.-]+$/.test(name)) {
+      return {
+        success: false,
+        error:
+          "Invalid repository name. Use only letters, numbers, hyphens, underscores, and periods.",
+      };
+    }
+
+    const response = await result.octokit.rest.repos.createForAuthenticatedUser(
+      {
+        name,
+        description,
+        private: isPrivate,
+        auto_init: false, // Don't initialize with README - we'll push our content
+      },
+    );
+
+    return {
+      success: true,
+      repoUrl: response.data.html_url,
+      cloneUrl: response.data.clone_url,
+      owner: response.data.owner.login,
+      repoName: response.data.name,
+    };
+  } catch (error: unknown) {
+    console.error("Error creating repository:", error);
+
+    const httpError = error as { status?: number };
+    if (httpError.status === 422) {
+      return {
+        success: false,
+        error: "Repository name already exists or is invalid",
+      };
+    }
+    if (httpError.status === 403) {
+      return { success: false, error: "Permission denied" };
+    }
+
+    return { success: false, error: "Failed to create repository" };
+  }
+}
