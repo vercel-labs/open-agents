@@ -276,6 +276,8 @@ export function TaskDetailContent() {
 
   // Track tool completions to trigger diff refresh
   const prevToolStatesRef = useRef<Map<string, string>>(new Map());
+  // Track if we've auto-opened the diff panel (don't re-open if user closed it)
+  const hasAutoOpenedDiffRef = useRef(false);
 
   // Extract current tool states from messages
   const currentToolStates = useMemo(() => {
@@ -292,13 +294,7 @@ export function TaskDetailContent() {
   }, [messages]);
 
   useEffect(() => {
-    // Only trigger refresh if diff panel is visible
-    if (!showDiffPanel) {
-      prevToolStatesRef.current = currentToolStates;
-      return;
-    }
-
-    let shouldRefresh = false;
+    let hasFileChange = false;
     const fileModifyingTools = ["tool-write", "tool-edit", "tool-bash"];
 
     for (const message of messages) {
@@ -315,17 +311,29 @@ export function TaskDetailContent() {
           toolState === "output-available" && prevState !== "output-available";
 
         if (isFileModifyingTool && justCompleted) {
-          shouldRefresh = true;
+          hasFileChange = true;
         }
       }
     }
 
     prevToolStatesRef.current = currentToolStates;
 
-    if (shouldRefresh) {
+    if (hasFileChange) {
+      // Auto-open diff panel on first file change
+      if (!showDiffPanel && !hasAutoOpenedDiffRef.current && sandboxInfo) {
+        hasAutoOpenedDiffRef.current = true;
+        setShowDiffPanel(true);
+      }
+      // Always invalidate cache when files change
       triggerDiffRefresh();
     }
-  }, [currentToolStates, messages, showDiffPanel, triggerDiffRefresh]);
+  }, [
+    currentToolStates,
+    messages,
+    showDiffPanel,
+    sandboxInfo,
+    triggerDiffRefresh,
+  ]);
 
   if (error) {
     return (
@@ -664,7 +672,6 @@ export function TaskDetailContent() {
       {/* Diff Viewer Panel */}
       {showDiffPanel && sandboxInfo && (
         <DiffViewer
-          taskId={task.id}
           sandboxId={sandboxInfo.sandboxId}
           refreshKey={diffRefreshKey}
           onClose={() => setShowDiffPanel(false)}
