@@ -172,12 +172,19 @@ export async function POST(req: Request) {
   await sandbox.exec("git remote remove origin 2>/dev/null || true", cwd, 5000);
 
   // Add origin with token for auth
-  const authUrl = repoResult.cloneUrl?.replace(
+  if (!repoResult.cloneUrl) {
+    return Response.json(
+      { error: "Repository clone URL is missing" },
+      { status: 500 },
+    );
+  }
+
+  const authUrl = repoResult.cloneUrl.replace(
     "https://",
     `https://${githubToken}@`,
   );
   const addRemoteResult = await sandbox.exec(
-    `git remote add origin ${authUrl}`,
+    `git remote add origin "${authUrl}"`,
     cwd,
     5000,
   );
