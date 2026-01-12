@@ -33,6 +33,10 @@ type TaskChatContextValue = {
   archiveTask: () => Promise<void>;
   /** Whether the task had persisted messages when it was loaded */
   hadInitialMessages: boolean;
+  /** Counter that increments when diff should be refreshed */
+  diffRefreshKey: number;
+  /** Trigger a diff refresh */
+  triggerDiffRefresh: () => void;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -83,6 +87,12 @@ export function TaskChatProvider({
     setSandboxInfoState(null);
   }, []);
 
+  const [diffRefreshKey, setDiffRefreshKey] = useState(0);
+
+  const triggerDiffRefresh = useCallback(() => {
+    setDiffRefreshKey((prev) => prev + 1);
+  }, []);
+
   const archiveTask = useCallback(async () => {
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
@@ -114,6 +124,8 @@ export function TaskChatProvider({
         clearSandboxInfo,
         archiveTask,
         hadInitialMessages,
+        diffRefreshKey,
+        triggerDiffRefresh,
       }}
     >
       {children}
