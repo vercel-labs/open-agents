@@ -242,7 +242,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       const lineCount = lines.length;
 
       // Generate a synthetic diff for the new file
-      const diffLines = lines.map((line, i) => `+${line}`).join("\n");
+      const diffLines = lines.map((line) => `+${line}`).join("\n");
       const syntheticDiff = `diff --git a/${path} b/${path}
 new file mode 100644
 --- /dev/null
