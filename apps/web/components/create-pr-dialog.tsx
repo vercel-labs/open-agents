@@ -43,6 +43,8 @@ interface GitActions {
   pushed?: boolean;
 }
 
+type WizardStep = "create-branch" | "commit" | "generate";
+
 export function CreatePRDialog({
   open,
   onOpenChange,
@@ -64,6 +66,10 @@ export function CreatePRDialog({
   const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false);
   const [isDetachedHead, setIsDetachedHead] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [step, setStep] = useState<WizardStep>("generate");
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [uncommittedFileCount, setUncommittedFileCount] = useState(0);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -77,6 +83,9 @@ export function CreatePRDialog({
       setIsCreatingBranch(false);
       setHasUncommittedChanges(false);
       setIsDetachedHead(false);
+      setStep("generate");
+      setUncommittedFileCount(0);
+      setHasGenerated(false);
     }
   }, [open]);
 
@@ -94,6 +103,7 @@ export function CreatePRDialog({
         const data = await res.json();
         setHasUncommittedChanges(data.hasUncommittedChanges ?? false);
         setIsDetachedHead(data.isDetachedHead ?? false);
+        setUncommittedFileCount(data.uncommittedFiles ?? 0);
         if (data.branch && data.branch !== "HEAD") {
           setResolvedBranch(data.branch);
         }
@@ -110,6 +120,24 @@ export function CreatePRDialog({
       checkGitStatus();
     }
   }, [open, sandboxId, checkGitStatus]);
+
+  // Determine which step to show after git status check completes
+  const currentBranch = resolvedBranch ?? task.branch ?? baseBranch;
+  const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
+  const isOnBaseBranch = displayBranch === baseBranch;
+  const needsNewBranch = isOnBaseBranch || isDetachedHead;
+
+  useEffect(() => {
+    if (!isCheckingStatus && open) {
+      if (needsNewBranch) {
+        setStep("create-branch");
+      } else if (hasUncommittedChanges) {
+        setStep("commit");
+      } else {
+        setStep("generate");
+      }
+    }
+  }, [isCheckingStatus, open, needsNewBranch, hasUncommittedChanges]);
 
   const fetchBranches = useCallback(async () => {
     setIsLoadingBranches(true);
@@ -173,11 +201,60 @@ export function CreatePRDialog({
         setResolvedBranch(data.branchName as string);
         // Branch created successfully, no longer in detached HEAD state
         setIsDetachedHead(false);
+        // Advance to next step
+        if (hasUncommittedChanges) {
+          setStep("commit");
+        } else {
+          setStep("generate");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create branch");
     } finally {
       setIsCreatingBranch(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!sandboxId) {
+      setError("Sandbox not active. Please wait for sandbox to start.");
+      return;
+    }
+    setIsCommitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/generate-pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: task.id,
+          sandboxId,
+          taskTitle: task.title,
+          baseBranch,
+          branchName: displayBranch,
+          commitOnly: true,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to commit changes");
+      }
+
+      if (data.gitActions) {
+        setGitActions(data.gitActions);
+      }
+      if (data.branchName && data.branchName !== "HEAD") {
+        setResolvedBranch(data.branchName as string);
+      }
+      // Advance to generate step
+      setHasUncommittedChanges(false);
+      setStep("generate");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to commit changes");
+    } finally {
+      setIsCommitting(false);
     }
   };
 
@@ -205,6 +282,7 @@ export function CreatePRDialog({
 
       setTitle(data.title);
       setBody(data.body);
+      setHasGenerated(true);
       if (data.gitActions) {
         setGitActions(data.gitActions);
       }
@@ -249,13 +327,12 @@ export function CreatePRDialog({
     }
   };
 
-  const currentBranch = resolvedBranch ?? task.branch ?? baseBranch;
-  const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
-  const isOnBaseBranch = displayBranch === baseBranch;
-  // Need new branch if on base branch OR in detached HEAD state
-  const needsNewBranch = isOnBaseBranch || isDetachedHead;
   const isDisabled =
-    isGenerating || isCreating || isCreatingBranch || isCheckingStatus;
+    isGenerating ||
+    isCreating ||
+    isCreatingBranch ||
+    isCheckingStatus ||
+    isCommitting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -292,129 +369,120 @@ export function CreatePRDialog({
             </Button>
           </div>
         ) : (
-          // Form state
+          // Wizard steps
           <>
             <div className="grid gap-4 py-4">
-              {/* Base Branch Select */}
-              <div className="grid gap-2">
-                <Label htmlFor="base-branch">Base branch</Label>
-                <Select
-                  value={baseBranch}
-                  onValueChange={setBaseBranch}
-                  disabled={isDisabled || isLoadingBranches}
-                >
-                  <SelectTrigger id="base-branch" className="w-full">
-                    <SelectValue placeholder="Select base branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isLoadingBranches ? (
-                      <SelectItem value="loading" disabled>
-                        Loading branches...
-                      </SelectItem>
-                    ) : (
-                      branches.map((branch) => (
-                        <SelectItem key={branch} value={branch}>
-                          {branch}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Step: Create Branch */}
+              {step === "create-branch" && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="base-branch">Base branch</Label>
+                    <Select
+                      value={baseBranch}
+                      onValueChange={setBaseBranch}
+                      disabled={isDisabled || isLoadingBranches}
+                    >
+                      <SelectTrigger id="base-branch" className="w-full">
+                        <SelectValue placeholder="Select base branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingBranches ? (
+                          <SelectItem value="loading" disabled>
+                            Loading branches...
+                          </SelectItem>
+                        ) : (
+                          branches.map((branch) => (
+                            <SelectItem key={branch} value={branch}>
+                              {branch}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {needsNewBranch && (
-                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                  <div className="flex flex-col gap-2">
+                  <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
                     <p>
                       {isDetachedHead
-                        ? "You're in detached HEAD state. Create a new branch before generating the PR."
-                        : "You're on the base branch. Create a new branch before generating the PR."}
+                        ? "You're in detached HEAD state. Create a new branch to continue."
+                        : "You're on the base branch. Create a new branch to continue."}
                     </p>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleCreateBranch}
-                      disabled={isDisabled || !sandboxId}
-                      className="w-fit"
-                    >
-                      {isCreatingBranch ? (
-                        <>
-                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                          Creating branch...
-                        </>
-                      ) : (
-                        "Create new branch"
-                      )}
-                    </Button>
                   </div>
-                </div>
+                </>
               )}
 
-              {/* Title Input */}
-              <div className="grid gap-2">
-                <Label htmlFor="pr-title">Title</Label>
-                <Input
-                  id="pr-title"
-                  placeholder="Enter PR title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={isDisabled}
-                />
-              </div>
-
-              {/* Body Textarea */}
-              <div className="grid gap-2">
-                <Label htmlFor="pr-body">Description</Label>
-                <Textarea
-                  id="pr-body"
-                  placeholder="Enter PR description (optional)"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  disabled={isDisabled}
-                  rows={6}
-                  className="resize-y"
-                />
-              </div>
-
-              {/* Uncommitted Changes Warning */}
-              {hasUncommittedChanges && !gitActions?.committed && (
+              {/* Step: Commit Changes */}
+              {step === "commit" && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                   <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
                   <div>
                     <p className="font-medium text-amber-700 dark:text-amber-400">
-                      Uncommitted changes detected
+                      {uncommittedFileCount > 0
+                        ? `${uncommittedFileCount} uncommitted ${uncommittedFileCount === 1 ? "file" : "files"}`
+                        : "Uncommitted changes detected"}
                     </p>
                     <p className="text-muted-foreground">
-                      These will be committed automatically when you generate.
+                      Commit your changes before creating a pull request.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Git Actions Banner */}
-              {gitActions && (gitActions.committed || gitActions.pushed) && (
-                <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
-                  <GitCommit className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  <div className="space-y-1">
-                    {gitActions.committed && (
-                      <p>
-                        <span className="font-medium">Committed:</span>{" "}
-                        <code className="rounded bg-background px-1 py-0.5 text-xs">
-                          {gitActions.commitMessage}
-                        </code>
-                      </p>
+              {/* Step: Generate PR */}
+              {step === "generate" && (
+                <>
+                  {/* Git Actions Banner */}
+                  {gitActions &&
+                    (gitActions.committed || gitActions.pushed) && (
+                      <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
+                        <GitCommit className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                        <div className="space-y-1">
+                          {gitActions.committed && (
+                            <p>
+                              <span className="font-medium">Committed:</span>{" "}
+                              <code className="rounded bg-background px-1 py-0.5 text-xs">
+                                {gitActions.commitMessage}
+                              </code>
+                            </p>
+                          )}
+                          {gitActions.pushed && (
+                            <p className="text-muted-foreground">
+                              Branch pushed to origin
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    {gitActions.pushed && (
-                      <p className="text-muted-foreground">
-                        Branch pushed to origin
-                      </p>
-                    )}
+
+                  {/* Title Input */}
+                  <div className="grid gap-2">
+                    <Label htmlFor="pr-title">Title</Label>
+                    <Input
+                      id="pr-title"
+                      placeholder="Enter PR title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={isDisabled}
+                    />
                   </div>
-                </div>
+
+                  {/* Body Textarea */}
+                  <div className="grid gap-2">
+                    <Label htmlFor="pr-body">Description</Label>
+                    <Textarea
+                      id="pr-body"
+                      placeholder="Enter PR description (optional)"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      disabled={isDisabled}
+                      rows={6}
+                      className="resize-y"
+                    />
+                  </div>
+                </>
               )}
 
-              {/* Error Alert */}
+              {/* Error Alert - shown on all steps */}
               {error && (
                 <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
@@ -423,45 +491,85 @@ export function CreatePRDialog({
             </div>
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={handleGenerate}
-                disabled={isDisabled || !sandboxId}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {hasUncommittedChanges
-                      ? "Committing & generating..."
-                      : "Generating..."}
-                  </>
-                ) : isCheckingStatus ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Checking...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    {hasUncommittedChanges
-                      ? "Commit & Generate PR"
-                      : "Generate with AI"}
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={isDisabled || !title.trim()}
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create PR"
-                )}
-              </Button>
+              {/* Step: Create Branch - Footer */}
+              {step === "create-branch" && (
+                <Button
+                  onClick={handleCreateBranch}
+                  disabled={isDisabled || !sandboxId}
+                >
+                  {isCreatingBranch ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating branch...
+                    </>
+                  ) : isCheckingStatus ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    "Create new branch"
+                  )}
+                </Button>
+              )}
+
+              {/* Step: Commit - Footer */}
+              {step === "commit" && (
+                <Button
+                  onClick={handleCommit}
+                  disabled={isDisabled || !sandboxId}
+                >
+                  {isCommitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Committing...
+                    </>
+                  ) : (
+                    "Commit changes"
+                  )}
+                </Button>
+              )}
+
+              {/* Step: Generate PR - Footer */}
+              {step === "generate" && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerate}
+                    disabled={isDisabled || !sandboxId || hasGenerated}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : hasGenerated ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Generated
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Auto-generate with AI
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={isDisabled || !title.trim()}
+                  >
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create PR"
+                    )}
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </>
         )}
