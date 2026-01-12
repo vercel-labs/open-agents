@@ -238,7 +238,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
       // Skip binary files or files we couldn't read
       if (content === null) continue;
 
-      const lines = content.split("\n");
+      // Remove trailing newlines before splitting to get accurate line count
+      const trimmed = content.trimEnd();
+      const lines = trimmed.length === 0 ? [] : trimmed.split("\n");
       const lineCount = lines.length;
 
       // Generate a synthetic diff for the new file
