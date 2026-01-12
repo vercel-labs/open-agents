@@ -140,7 +140,9 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
         const file = item.getAsFile();
         if (file) {
           e.preventDefault();
-          addImage(file);
+          addImage(file).catch(() => {
+            // Silently ignore paste errors - rare edge case
+          });
         }
       }
     }
@@ -153,7 +155,14 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    // Only set isDragging to false if we're leaving the container entirely
+    // (not just moving to a child element)
+    if (
+      containerRef.current &&
+      !containerRef.current.contains(e.relatedTarget as Node)
+    ) {
+      setIsDragging(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {

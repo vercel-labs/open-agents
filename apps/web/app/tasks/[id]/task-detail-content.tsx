@@ -950,7 +950,11 @@ export function TaskDetailContent() {
               }}
               onDragLeave={(e) => {
                 e.preventDefault();
-                setIsDragging(false);
+                // Only set isDragging to false if we're leaving the form entirely
+                // (not just moving to a child element)
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setIsDragging(false);
+                }
               }}
               onDrop={(e) => {
                 e.preventDefault();
@@ -988,7 +992,9 @@ export function TaskDetailContent() {
                         const file = item.getAsFile();
                         if (file) {
                           e.preventDefault();
-                          addImage(file);
+                          addImage(file).catch(() => {
+                            // Silently ignore paste errors - rare edge case
+                          });
                         }
                       }
                     }

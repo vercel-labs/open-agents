@@ -40,6 +40,9 @@ export function fileToDataUrl(file: File): Promise<string> {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(reader.result as string));
     reader.addEventListener("error", () => reject(reader.error));
+    reader.addEventListener("abort", () =>
+      reject(new Error("File read aborted")),
+    );
     reader.readAsDataURL(file);
   });
 }
