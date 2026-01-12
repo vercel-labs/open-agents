@@ -39,6 +39,9 @@
   - there are things that should have an auto approve / reject
   - e.g. subagent running a command it shouldnt, should just reject the tool call (add tool result)
 
+- [ ] change button to be create repo if no repo exists
+  - also need to add support for starting up sandbox with no repo / branch
+
 
 ---
 sandbox related:
