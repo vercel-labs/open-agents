@@ -16,12 +16,21 @@ import {
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { Task } from "@/lib/db/schema";
+import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
 
 export type SandboxInfo = {
   sandboxId: string;
   createdAt: number;
   timeout: number;
   currentBranch?: string;
+};
+
+type DiffCacheState = {
+  data: DiffResponse | null;
+  error: string | null;
+  isLoading: boolean;
+  /** The refreshKey value when this data was last fetched */
+  lastFetchedKey: number;
 };
 
 type TaskChatContextValue = {
@@ -35,8 +44,12 @@ type TaskChatContextValue = {
   hadInitialMessages: boolean;
   /** Counter that increments when diff should be refreshed */
   diffRefreshKey: number;
-  /** Trigger a diff refresh */
+  /** Trigger a diff refresh (invalidates cache) */
   triggerDiffRefresh: () => void;
+  /** Cached diff state */
+  diffCache: DiffCacheState;
+  /** Fetch diff data (uses cache if valid) */
+  fetchDiff: (sandboxId: string) => Promise<void>;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -93,6 +106,55 @@ export function TaskChatProvider({
     setDiffRefreshKey((prev) => prev + 1);
   }, []);
 
+  const [diffCache, setDiffCache] = useState<DiffCacheState>({
+    data: null,
+    error: null,
+    isLoading: false,
+    lastFetchedKey: -1, // -1 means never fetched
+  });
+
+  const fetchDiff = useCallback(
+    async (sandboxId: string) => {
+      // If we already have data for the current refreshKey, skip fetching
+      if (diffCache.lastFetchedKey === diffRefreshKey && !diffCache.isLoading) {
+        return;
+      }
+
+      setDiffCache((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
+
+      try {
+        const res = await fetch(
+          `/api/tasks/${task.id}/diff?sandboxId=${sandboxId}`,
+        );
+
+        if (!res.ok) {
+          const errorData = (await res.json()) as { error?: string };
+          throw new Error(errorData.error ?? "Failed to fetch diff");
+        }
+
+        const data = (await res.json()) as DiffResponse;
+        setDiffCache({
+          data,
+          error: null,
+          isLoading: false,
+          lastFetchedKey: diffRefreshKey,
+        });
+      } catch (err) {
+        setDiffCache((prev) => ({
+          ...prev,
+          error: err instanceof Error ? err.message : "Failed to fetch diff",
+          isLoading: false,
+          lastFetchedKey: diffRefreshKey,
+        }));
+      }
+    },
+    [task.id, diffRefreshKey, diffCache.lastFetchedKey, diffCache.isLoading],
+  );
+
   const archiveTask = useCallback(async () => {
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
@@ -126,6 +188,8 @@ export function TaskChatProvider({
         hadInitialMessages,
         diffRefreshKey,
         triggerDiffRefresh,
+        diffCache,
+        fetchDiff,
       }}
     >
       {children}
