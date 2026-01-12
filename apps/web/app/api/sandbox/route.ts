@@ -6,7 +6,7 @@ import { getTaskById, updateTask } from "@/lib/db/tasks";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 
 interface CreateSandboxRequest {
-  repoUrl: string;
+  repoUrl?: string;
   branch?: string;
   isNewBranch?: boolean;
   taskId?: string;
@@ -28,10 +28,6 @@ export async function POST(req: Request) {
     taskId,
     sandboxId: providedSandboxId,
   } = body;
-
-  if (!repoUrl) {
-    return Response.json({ error: "repoUrl is required" }, { status: 400 });
-  }
 
   // Get user's GitHub token
   const githubToken = await getUserGitHubToken();
@@ -75,15 +71,9 @@ export async function POST(req: Request) {
   // Only create new branch on first sandbox creation (no existing sandboxId)
   const shouldCreateNewBranch = isNewBranch && !taskSandboxId;
 
-  const sandbox = await connectVercelSandbox({
+  // Build sandbox options - source is only included when repoUrl is provided
+  const sandboxOptions: Parameters<typeof connectVercelSandbox>[0] = {
     timeout: DEFAULT_TIMEOUT,
-    source: {
-      url: repoUrl,
-      token: githubToken,
-      // If creating new branch: don't specify branch (clone default), use newBranch
-      // Otherwise: clone the specified branch
-      ...(shouldCreateNewBranch ? { newBranch: branch } : { branch }),
-    },
     gitUser: {
       name: session.user.name ?? session.user.username,
       email:
@@ -93,7 +83,20 @@ export async function POST(req: Request) {
     env: {
       GITHUB_TOKEN: githubToken,
     },
-  });
+  };
+
+  // Only add source when we have a repo to clone
+  if (repoUrl) {
+    sandboxOptions.source = {
+      url: repoUrl,
+      token: githubToken,
+      // If creating new branch: don't specify branch (clone default), use newBranch
+      // Otherwise: clone the specified branch
+      ...(shouldCreateNewBranch ? { newBranch: branch } : { branch }),
+    };
+  }
+
+  const sandbox = await connectVercelSandbox(sandboxOptions);
 
   // Update task with sandboxId if this is a new sandbox
   // Verify task ownership before updating
