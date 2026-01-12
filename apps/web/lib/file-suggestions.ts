@@ -12,6 +12,7 @@ export function extractMention(
   let atIndex = -1;
   for (let i = cursorPosition - 1; i >= 0; i--) {
     const char = text[i];
+    if (char === undefined) break;
     // Stop at whitespace - no mention
     if (char === " " || char === "\t" || char === "\n") {
       break;
