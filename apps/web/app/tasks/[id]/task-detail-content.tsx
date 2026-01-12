@@ -16,6 +16,7 @@ import {
   Archive,
   Share2,
   GitPullRequest,
+  FolderGit2,
   MoreVertical,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
+import { CreateRepoDialog } from "@/components/create-repo-dialog";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
@@ -52,7 +54,7 @@ const shikiThemes = ["github-dark", "github-dark"] as [
 ];
 
 async function createSandbox(
-  cloneUrl: string,
+  cloneUrl: string | undefined,
   branch: string | undefined,
   isNewBranch: boolean,
   taskId: string,
@@ -63,8 +65,8 @@ async function createSandbox(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       repoUrl: cloneUrl,
-      branch: branch ?? "main",
-      isNewBranch,
+      branch: cloneUrl ? (branch ?? "main") : undefined,
+      isNewBranch: cloneUrl ? isNewBranch : false,
       taskId,
       sandboxId: existingSandboxId,
     }),
@@ -170,6 +172,7 @@ export function TaskDetailContent() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -228,31 +231,29 @@ export function TaskDetailContent() {
 
       // Create sandbox and send first message
       const initTask = async () => {
-        if (task.cloneUrl) {
-          setIsCreatingSandbox(true);
-          try {
-            // Only create new branch on first sandbox creation
-            // If task already has a sandboxId, branch was already created
-            const shouldCreateNewBranch = task.isNewBranch && !task.sandboxId;
-            const newSandbox = await createSandbox(
-              task.cloneUrl,
-              task.branch ?? undefined,
-              shouldCreateNewBranch,
-              task.id,
-              task.sandboxId ?? undefined,
-            );
-            setSandboxInfo(newSandbox);
-          } catch (err) {
-            console.error("Failed to create sandbox:", err);
-            return;
-          } finally {
-            setIsCreatingSandbox(false);
-          }
+        // Always create a sandbox - either with repo or empty
+        setIsCreatingSandbox(true);
+        try {
+          // Only create new branch on first sandbox creation
+          // If task already has a sandboxId, branch was already created
+          const shouldCreateNewBranch = task.isNewBranch && !task.sandboxId;
+          const newSandbox = await createSandbox(
+            task.cloneUrl ?? undefined,
+            task.branch ?? undefined,
+            shouldCreateNewBranch,
+            task.id,
+            task.sandboxId ?? undefined,
+          );
+          setSandboxInfo(newSandbox);
+        } catch (err) {
+          console.error("Failed to create sandbox:", err);
+          return;
+        } finally {
+          setIsCreatingSandbox(false);
         }
 
-        if (task.cloneUrl || task.sandboxId) {
-          sendMessage({ text: task.title });
-        }
+        // Send initial message for all tasks (with or without repo)
+        sendMessage({ text: task.title });
       };
 
       initTask();
@@ -328,27 +329,40 @@ export function TaskDetailContent() {
               <Share2 className="mr-2 h-4 w-4" />
               Share
             </Button>
-            {task?.prNumber ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const prUrl = `https://github.com/${task.repoOwner}/${task.repoName}/pull/${task.prNumber}`;
-                  window.open(prUrl, "_blank");
-                }}
-              >
-                <GitPullRequest className="mr-2 h-4 w-4" />
-                View PR #{task.prNumber}
-              </Button>
+            {task?.cloneUrl ? (
+              // Task has a repo - show PR buttons
+              task?.prNumber ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const prUrl = `https://github.com/${task.repoOwner}/${task.repoName}/pull/${task.prNumber}`;
+                    window.open(prUrl, "_blank");
+                  }}
+                >
+                  <GitPullRequest className="mr-2 h-4 w-4" />
+                  View PR #{task.prNumber}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPrDialogOpen(true)}
+                  disabled={!task?.branch}
+                >
+                  <GitPullRequest className="mr-2 h-4 w-4" />
+                  Create PR
+                </Button>
+              )
             ) : (
+              // Task has no repo - show Create Repo button
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPrDialogOpen(true)}
-                disabled={!task?.branch || !task?.cloneUrl}
+                onClick={() => setRepoDialogOpen(true)}
               >
-                <GitPullRequest className="mr-2 h-4 w-4" />
-                Create PR
+                <FolderGit2 className="mr-2 h-4 w-4" />
+                Create Repo
               </Button>
             )}
             <Button variant="ghost" size="icon">
@@ -525,7 +539,8 @@ export function TaskDetailContent() {
                 const messageText = input;
                 setInput("");
 
-                if (!isSandboxValid(sandboxInfo) && task.cloneUrl) {
+                // Recreate sandbox if expired
+                if (!isSandboxValid(sandboxInfo)) {
                   setIsCreatingSandbox(true);
                   try {
                     // Only create new branch on first sandbox creation
@@ -533,7 +548,7 @@ export function TaskDetailContent() {
                     const shouldCreateNewBranch =
                       task.isNewBranch && !task.sandboxId;
                     const newSandbox = await createSandbox(
-                      task.cloneUrl,
+                      task.cloneUrl ?? undefined,
                       task.branch ?? undefined,
                       shouldCreateNewBranch,
                       task.id,
@@ -589,6 +604,16 @@ export function TaskDetailContent() {
         <CreatePRDialog
           open={prDialogOpen}
           onOpenChange={setPrDialogOpen}
+          task={task}
+          sandboxId={sandboxInfo?.sandboxId ?? null}
+        />
+      )}
+
+      {/* Create Repo Dialog */}
+      {task && (
+        <CreateRepoDialog
+          open={repoDialogOpen}
+          onOpenChange={setRepoDialogOpen}
           task={task}
           sandboxId={sandboxInfo?.sandboxId ?? null}
         />
