@@ -199,6 +199,20 @@ export async function GET(req: NextRequest, context: RouteContext) {
         sandbox.exec("git ls-files --others --exclude-standard", cwd, 30000),
       ]);
 
+    // Check if git commands failed (e.g., not a git repo or HEAD doesn't exist)
+    if (!nameStatusResult.success || !diffResult.success) {
+      const stderr =
+        nameStatusResult.stderr || diffResult.stderr || "Unknown git error";
+      console.error("Git command failed:", stderr);
+      return Response.json(
+        {
+          error:
+            "Git command failed. Ensure this is a git repository with at least one commit.",
+        },
+        { status: 400 },
+      );
+    }
+
     // Parse outputs
     const fileStatuses = parseNameStatus(nameStatusResult.stdout);
     const fileStats = parseStats(numstatResult.stdout);
