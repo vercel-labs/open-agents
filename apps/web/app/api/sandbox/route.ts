@@ -68,8 +68,11 @@ export async function POST(req: Request) {
   }
 
   // Determine if we should create a new branch
-  // Only create new branch on first sandbox creation (no existing sandboxId)
-  const shouldCreateNewBranch = isNewBranch && !taskSandboxId;
+  // Frontend is responsible for deciding when to pass isNewBranch: true based on:
+  // - First sandbox creation for a new branch task
+  // - Snapshot restore when branch doesn't exist on origin (no PR created yet)
+  // - Expired sandbox recreation when branch doesn't exist on origin
+  const shouldCreateNewBranch = isNewBranch;
 
   // Build sandbox options - source is only included when repoUrl is provided
   const sandboxOptions: Parameters<typeof connectVercelSandbox>[0] = {
@@ -99,8 +102,8 @@ export async function POST(req: Request) {
   const sandbox = await connectVercelSandbox(sandboxOptions);
 
   // Update task with sandboxId if this is a new sandbox
-  // Verify task ownership before updating
-  if (taskId && !taskSandboxId) {
+  // This handles both first-time creation and sandbox recreation after expiry/restore
+  if (taskId && sandbox.id !== taskSandboxId) {
     await updateTask(taskId, { sandboxId: sandbox.id });
   }
 
@@ -158,6 +161,9 @@ export async function DELETE(req: Request) {
 
   const sandbox = await connectVercelSandbox({ sandboxId });
   await sandbox.stop();
+
+  // Clear sandboxId from task so future sandbox creation doesn't fail validation
+  await updateTask(taskId, { sandboxId: null });
 
   return Response.json({ success: true });
 }

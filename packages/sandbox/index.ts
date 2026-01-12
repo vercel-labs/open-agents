@@ -4,6 +4,9 @@ export type {
   ExecResult,
   SandboxHook,
   SandboxHooks,
+  SnapshotOptions,
+  SnapshotResult,
+  RestoreOptions,
 } from "./interface";
 export { LocalSandbox, createLocalSandbox } from "./local";
 export {
