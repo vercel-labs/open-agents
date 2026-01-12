@@ -293,6 +293,7 @@ export function TaskDetailContent() {
     getFileParts,
     fileInputRef,
     openFilePicker,
+    addImageAttachments,
   } = useImageAttachments();
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -913,6 +914,7 @@ export function TaskDetailContent() {
                 if (!hasContent) return;
 
                 const messageText = input;
+                const savedImages = images;
                 const files = getFileParts();
                 setInput("");
                 clearImages();
@@ -936,6 +938,7 @@ export function TaskDetailContent() {
                     setSandboxInfo(newSandbox);
                   } catch {
                     setInput(messageText);
+                    addImageAttachments(savedImages);
                     return;
                   } finally {
                     setIsCreatingSandbox(false);

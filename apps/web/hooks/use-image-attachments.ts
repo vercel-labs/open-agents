@@ -55,6 +55,10 @@ export function useImageAttachments() {
     fileInputRef.current?.click();
   }, []);
 
+  const addImageAttachments = useCallback((attachments: ImageAttachment[]) => {
+    setImages((prev) => [...prev, ...attachments]);
+  }, []);
+
   return {
     images,
     addImage,
@@ -64,6 +68,7 @@ export function useImageAttachments() {
     getFileParts,
     fileInputRef,
     openFilePicker,
+    addImageAttachments,
     hasImages: images.length > 0,
   };
 }
