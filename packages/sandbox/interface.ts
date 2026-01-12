@@ -141,13 +141,16 @@ export interface Sandbox {
   /**
    * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
    * For remote sandboxes, this is when the sandbox will call stop() before SDK timeout.
+   * This value is updated when timeout is extended via extendTimeout().
    * For local sandboxes, this is undefined (no timeout).
    */
   readonly expiresAt?: number;
 
   /**
-   * The configured proactive timeout duration in milliseconds.
-   * For remote sandboxes, this is the time until proactive stop (SDK timeout - buffer).
+   * The initial configured proactive timeout duration in milliseconds.
+   * For remote sandboxes, this is the original time until proactive stop (SDK timeout - buffer).
+   * Note: This is the original timeout value, not affected by extendTimeout() calls.
+   * Use expiresAt to get the current expiration time.
    * For local sandboxes, this is undefined (no timeout).
    */
   readonly timeout?: number;

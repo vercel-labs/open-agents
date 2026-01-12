@@ -99,13 +99,16 @@ export class VercelSandbox implements Sandbox {
 
   /**
    * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
+   * This value is updated when timeout is extended via extendTimeout().
    */
   get expiresAt(): number | undefined {
     return this._expiresAt;
   }
 
   /**
-   * The configured proactive timeout duration in milliseconds.
+   * The initial configured proactive timeout duration in milliseconds.
+   * Note: This is the original timeout value, not affected by extendTimeout() calls.
+   * Use expiresAt to get the current expiration time.
    */
   get timeout(): number | undefined {
     return this._timeout;
@@ -154,14 +157,21 @@ export class VercelSandbox implements Sandbox {
         if (this.hooks?.onTimeout) {
           try {
             await this.hooks.onTimeout(this);
-          } catch {
-            // Ignore errors - we still need to stop
+          } catch (error) {
+            console.error(
+              "[VercelSandbox] onTimeout hook failed:",
+              error instanceof Error ? error.message : error,
+            );
           }
         }
 
         await this.stop();
-      } catch {
-        // Ignore errors - sandbox may already be stopped by SDK
+      } catch (error) {
+        // Sandbox may already be stopped by SDK
+        console.warn(
+          "[VercelSandbox] Proactive stop failed (sandbox may already be stopped):",
+          error instanceof Error ? error.message : error,
+        );
       }
     }, msUntilTimeout);
   }
@@ -192,12 +202,18 @@ export class VercelSandbox implements Sandbox {
       throw new Error("Timeout tracking not enabled for this sandbox");
     }
 
+    // Check if SDK supports extendTimeout
+    if (typeof this.sdk.extendTimeout !== "function") {
+      throw new Error(
+        "extendTimeout is not supported by this version of @vercel/sandbox",
+      );
+    }
+
     // Call Vercel SDK to extend
     await this.sdk.extendTimeout(additionalMs);
 
     // Update internal state
     this._expiresAt += additionalMs;
-    this._timeout = (this._timeout ?? 0) + additionalMs;
 
     // Reschedule proactive stop timer
     this.rescheduleProactiveStop();
@@ -365,15 +381,20 @@ export class VercelSandbox implements Sandbox {
     options: {
       env?: Record<string, string>;
       hooks?: SandboxHooks;
-      /** Optional remaining timeout in ms. If not provided, queries SDK for remaining time. */
+      /**
+       * Remaining timeout in ms for this sandbox.
+       * Required for timeout tracking on reconnected sandboxes.
+       * If not provided, timeout tracking will be disabled.
+       */
       remainingTimeout?: number;
     } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
 
-    // Use SDK's timeout if remainingTimeout not provided
-    // Note: sdk.timeout returns remaining time in ms
-    const remainingTimeout = options.remainingTimeout ?? sdk.timeout;
+    // Only enable timeout tracking if remainingTimeout is explicitly provided.
+    // We don't use sdk.timeout as a fallback because its semantics may vary
+    // (original timeout vs remaining time) depending on SDK version.
+    const remainingTimeout = options.remainingTimeout;
     const startTime = remainingTimeout !== undefined ? Date.now() : undefined;
 
     const sandbox = new VercelSandbox(
@@ -611,8 +632,11 @@ export class VercelSandbox implements Sandbox {
     if (this.hooks?.beforeStop) {
       try {
         await this.hooks.beforeStop(this);
-      } catch {
-        // Log but don't fail - we still need to stop the sandbox
+      } catch (error) {
+        console.error(
+          "[VercelSandbox] beforeStop hook failed:",
+          error instanceof Error ? error.message : error,
+        );
       }
     }
 
@@ -631,8 +655,9 @@ export interface VercelSandboxConnectConfig {
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;
   /**
-   * Optional remaining timeout in milliseconds.
-   * Without this, timeout tracking is disabled for reconnected sandboxes.
+   * Remaining timeout in milliseconds for this sandbox.
+   * Required for timeout tracking and proactive stop on reconnected sandboxes.
+   * If not provided, timeout tracking will be disabled (no proactive stop, no hooks on timeout).
    */
   remainingTimeout?: number;
 }
