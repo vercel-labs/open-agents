@@ -90,18 +90,26 @@ export class VercelSandbox implements Sandbox {
    */
   readonly currentBranch?: string;
   readonly hooks?: SandboxHooks;
-  /**
-   * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
-   */
-  readonly expiresAt?: number;
-  /**
-   * The configured proactive timeout duration in milliseconds.
-   */
-  readonly timeout?: number;
 
   private sdk: VercelSandboxSDK;
   private timeoutTimer?: ReturnType<typeof setTimeout>;
   private isStopped = false;
+  private _expiresAt?: number;
+  private _timeout?: number;
+
+  /**
+   * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
+   */
+  get expiresAt(): number | undefined {
+    return this._expiresAt;
+  }
+
+  /**
+   * The configured proactive timeout duration in milliseconds.
+   */
+  get timeout(): number | undefined {
+    return this._timeout;
+  }
 
   private constructor(
     sdk: VercelSandboxSDK,
@@ -122,8 +130,8 @@ export class VercelSandbox implements Sandbox {
 
     // Set timeout tracking for proactive stop
     if (timeout !== undefined && startTime !== undefined) {
-      this.timeout = timeout;
-      this.expiresAt = startTime + timeout;
+      this._timeout = timeout;
+      this._expiresAt = startTime + timeout;
       this.scheduleProactiveStop();
     }
   }
@@ -133,9 +141,9 @@ export class VercelSandbox implements Sandbox {
    * This ensures beforeStop hook has time to run.
    */
   private scheduleProactiveStop(): void {
-    if (this.expiresAt === undefined) return;
+    if (this._expiresAt === undefined) return;
 
-    const msUntilTimeout = this.expiresAt - Date.now();
+    const msUntilTimeout = this._expiresAt - Date.now();
     if (msUntilTimeout <= 0) return;
 
     this.timeoutTimer = setTimeout(async () => {
@@ -156,6 +164,50 @@ export class VercelSandbox implements Sandbox {
         // Ignore errors - sandbox may already be stopped by SDK
       }
     }, msUntilTimeout);
+  }
+
+  /**
+   * Clear existing timeout timer and schedule a new one.
+   */
+  private rescheduleProactiveStop(): void {
+    // Clear existing timer
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
+    }
+    // Schedule new timer
+    this.scheduleProactiveStop();
+  }
+
+  /**
+   * Extend the sandbox timeout by the specified duration.
+   * @param additionalMs - Additional time in milliseconds
+   * @returns New expiration timestamp
+   */
+  async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
+    if (this.isStopped) {
+      throw new Error("Cannot extend timeout on stopped sandbox");
+    }
+    if (this._expiresAt === undefined) {
+      throw new Error("Timeout tracking not enabled for this sandbox");
+    }
+
+    // Call Vercel SDK to extend
+    await this.sdk.extendTimeout(additionalMs);
+
+    // Update internal state
+    this._expiresAt += additionalMs;
+    this._timeout = (this._timeout ?? 0) + additionalMs;
+
+    // Reschedule proactive stop timer
+    this.rescheduleProactiveStop();
+
+    // Call hook if provided
+    if (this.hooks?.onTimeoutExtended) {
+      await this.hooks.onTimeoutExtended(this, additionalMs);
+    }
+
+    return { expiresAt: this._expiresAt };
   }
 
   /**
@@ -313,15 +365,16 @@ export class VercelSandbox implements Sandbox {
     options: {
       env?: Record<string, string>;
       hooks?: SandboxHooks;
-      /** Optional remaining timeout in ms. Without this, timeout tracking is disabled. */
+      /** Optional remaining timeout in ms. If not provided, queries SDK for remaining time. */
       remainingTimeout?: number;
     } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
 
-    // Set up timeout tracking if remainingTimeout provided
-    const startTime =
-      options.remainingTimeout !== undefined ? Date.now() : undefined;
+    // Use SDK's timeout if remainingTimeout not provided
+    // Note: sdk.timeout returns remaining time in ms
+    const remainingTimeout = options.remainingTimeout ?? sdk.timeout;
+    const startTime = remainingTimeout !== undefined ? Date.now() : undefined;
 
     const sandbox = new VercelSandbox(
       sdk,
@@ -330,7 +383,7 @@ export class VercelSandbox implements Sandbox {
       options.env,
       undefined,
       options.hooks,
-      options.remainingTimeout,
+      remainingTimeout,
       startTime,
     );
 
