@@ -5,6 +5,9 @@ import type {
   SandboxStats,
   ExecResult,
   SandboxHooks,
+  SnapshotOptions,
+  SnapshotResult,
+  RestoreOptions,
 } from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
@@ -642,6 +645,99 @@ export class VercelSandbox implements Sandbox {
    */
   domain(port: number): string {
     return this.sdk.domain(port);
+  }
+
+  /**
+   * Create a snapshot of the sandbox filesystem and upload to Vercel Blob.
+   */
+  async snapshot(options: SnapshotOptions): Promise<SnapshotResult> {
+    const cwd = options.workingDirectory ?? this.workingDirectory;
+    const archivePath = options.archivePath ?? "/tmp/sandbox-snapshot.tgz";
+    const timeoutMs = options.timeoutMs ?? 120_000;
+
+    // Build exclude flags
+    const defaultExclude = [
+      "./node_modules",
+      "*/node_modules",
+      "./dist*",
+      "./.next",
+    ];
+    const exclude = options.exclude ?? defaultExclude;
+    const excludeFlags = exclude.map((p) => `--exclude="${p}"`).join(" ");
+
+    // Create tarball
+    const tarCommand = `tar -czf "${archivePath}" ${excludeFlags} -C "${cwd}" .`;
+    const tarResult = await this.exec(tarCommand, cwd, timeoutMs);
+    if (!tarResult.success) {
+      throw new Error(
+        `Failed to create snapshot archive: ${tarResult.stderr || tarResult.stdout}`,
+      );
+    }
+
+    // Helper to clean up temporary archive
+    const cleanup = async () => {
+      await this.exec(`rm -f "${archivePath}"`, cwd, 10_000);
+    };
+
+    // Upload to Vercel Blob via curl
+    const encodedPathname = encodeURIComponent(options.pathname);
+    const uploadCommand = `curl -fsSL -X PUT \
+      -H "Authorization: Bearer ${options.blobToken}" \
+      -H "x-api-version: 11" \
+      -H "x-add-random-suffix: 0" \
+      -H "Content-Type: application/gzip" \
+      --data-binary "@${archivePath}" \
+      "https://vercel.com/api/blob/?pathname=${encodedPathname}"`;
+
+    const uploadResult = await this.exec(uploadCommand, cwd, timeoutMs);
+    if (!uploadResult.success) {
+      await cleanup();
+      throw new Error(
+        `Failed to upload snapshot: ${uploadResult.stderr || uploadResult.stdout}`,
+      );
+    }
+
+    // Clean up temporary archive after successful upload
+    await cleanup();
+
+    // Parse response
+    let response: { url: string; downloadUrl: string };
+    try {
+      response = JSON.parse(uploadResult.stdout) as {
+        url: string;
+        downloadUrl: string;
+      };
+    } catch {
+      throw new Error(
+        `Failed to parse upload response (expected JSON): ${uploadResult.stdout.slice(0, 500)}`,
+      );
+    }
+    return {
+      url: response.url,
+      downloadUrl: response.downloadUrl,
+    };
+  }
+
+  /**
+   * Restore a snapshot from Vercel Blob into the sandbox filesystem.
+   */
+  async restoreSnapshot(options: RestoreOptions): Promise<void> {
+    const cwd = options.workingDirectory ?? this.workingDirectory;
+    const timeoutMs = options.timeoutMs ?? 120_000;
+
+    // Optionally clean directory first
+    if (options.clean) {
+      await this.exec(`rm -rf "${cwd}"/*`, cwd, 30_000);
+    }
+
+    // Download and extract
+    const restoreCommand = `curl -fsSL "${options.downloadUrl}" | tar -xzf - -C "${cwd}"`;
+    const result = await this.exec(restoreCommand, cwd, timeoutMs);
+    if (!result.success) {
+      throw new Error(
+        `Failed to restore snapshot: ${result.stderr || result.stdout}`,
+      );
+    }
   }
 
   /**

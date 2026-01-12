@@ -28,29 +28,39 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { messages, sandboxId, taskId }: ChatRequestBody = await req.json();
+  let body: ChatRequestBody;
+  try {
+    body = (await req.json()) as ChatRequestBody;
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  // 2. Verify task ownership if taskId is provided
-  if (taskId) {
-    const task = await getTaskById(taskId);
-    if (!task) {
-      return Response.json({ error: "Task not found" }, { status: 404 });
-    }
-    if (task.userId !== session.user.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 403 });
-    }
-    if (!task.sandboxId) {
-      return Response.json(
-        { error: "Sandbox not linked to task" },
-        { status: 400 },
-      );
-    }
-    if (task.sandboxId !== sandboxId) {
-      return Response.json(
-        { error: "Sandbox does not belong to this task" },
-        { status: 403 },
-      );
-    }
+  const { messages, sandboxId, taskId } = body;
+
+  // 2. Require taskId to ensure sandbox ownership verification
+  if (!taskId) {
+    return Response.json({ error: "taskId is required" }, { status: 400 });
+  }
+
+  // 3. Verify task ownership and sandbox association
+  const task = await getTaskById(taskId);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+  if (task.userId !== session.user.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  if (!task.sandboxId) {
+    return Response.json(
+      { error: "Sandbox not linked to task" },
+      { status: 400 },
+    );
+  }
+  if (task.sandboxId !== sandboxId) {
+    return Response.json(
+      { error: "Sandbox does not belong to this task" },
+      { status: 403 },
+    );
   }
 
   const modelMessages = await convertToModelMessages(messages, {
