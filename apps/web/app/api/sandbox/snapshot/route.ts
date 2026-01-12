@@ -129,6 +129,12 @@ export async function PUT(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (task.sandboxId !== sandboxId) {
+    return Response.json(
+      { error: "Sandbox does not belong to this task" },
+      { status: 403 },
+    );
+  }
   if (!task.snapshotUrl) {
     return Response.json(
       { error: "No snapshot available for this task" },

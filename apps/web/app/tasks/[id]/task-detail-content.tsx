@@ -316,15 +316,15 @@ export function TaskDetailContent() {
     }
   };
 
-  const handleSaveSnapshot = async () => {
-    if (!sandboxInfo) return;
-    setIsSavingSnapshot(true);
+  const saveSnapshot = async (
+    sandboxId: string,
+  ): Promise<{ success: boolean }> => {
     try {
       const response = await fetch("/api/sandbox/snapshot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sandboxId: sandboxInfo.sandboxId,
+          sandboxId,
           taskId: task.id,
         }),
       });
@@ -332,9 +332,20 @@ export function TaskDetailContent() {
       if (!response.ok) {
         const error = (await response.json()) as { error?: string };
         console.error("Failed to save snapshot:", error.error);
+        return { success: false };
       }
+      return { success: true };
     } catch (err) {
       console.error("Failed to save snapshot:", err);
+      return { success: false };
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!sandboxInfo) return;
+    setIsSavingSnapshot(true);
+    try {
+      await saveSnapshot(sandboxInfo.sandboxId);
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -344,21 +355,7 @@ export function TaskDetailContent() {
     if (!sandboxInfo) return;
     setIsSavingSnapshot(true);
     try {
-      const response = await fetch("/api/sandbox/snapshot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sandboxId: sandboxInfo.sandboxId,
-          taskId: task.id,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        console.error("Failed to save snapshot:", error.error);
-      }
-    } catch (err) {
-      console.error("Failed to save snapshot:", err);
+      await saveSnapshot(sandboxInfo.sandboxId);
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -366,13 +363,18 @@ export function TaskDetailContent() {
     await handleKillSandbox();
   };
 
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
   const handleRestoreSnapshot = async () => {
     if (!task.snapshotUrl) return;
 
     setIsRestoringSnapshot(true);
+    setRestoreError(null);
+
+    let newSandbox: SandboxInfo | null = null;
     try {
       // First create a new sandbox
-      const newSandbox = await createSandbox(
+      newSandbox = await createSandbox(
         task.cloneUrl ?? undefined,
         task.branch ?? undefined,
         false, // Don't create new branch when restoring
@@ -393,10 +395,23 @@ export function TaskDetailContent() {
 
       if (!response.ok) {
         const error = (await response.json()) as { error?: string };
-        console.error("Failed to restore snapshot:", error.error);
+        const errorMsg = error.error ?? "Unknown error";
+        console.error("Failed to restore snapshot:", errorMsg);
+        setRestoreError(
+          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
+        );
       }
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
       console.error("Failed to restore snapshot:", err);
+      // If sandbox was created but restore failed, show warning
+      if (newSandbox) {
+        setRestoreError(
+          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
+        );
+      } else {
+        setRestoreError(`Failed to create sandbox: ${errorMsg}`);
+      }
     } finally {
       setIsRestoringSnapshot(false);
     }
@@ -786,6 +801,18 @@ export function TaskDetailContent() {
         {/* Input */}
         <div className="p-4 pb-8">
           <div className="mx-auto max-w-3xl space-y-2">
+            {restoreError && (
+              <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <span>{restoreError}</span>
+                <button
+                  type="button"
+                  onClick={() => setRestoreError(null)}
+                  className="ml-2 rounded p-0.5 hover:bg-destructive/20"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <div className="flex justify-end px-2">
               <SandboxStatus
                 sandboxInfo={sandboxInfo}

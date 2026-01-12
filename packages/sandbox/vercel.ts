@@ -674,6 +674,11 @@ export class VercelSandbox implements Sandbox {
       );
     }
 
+    // Helper to clean up temporary archive
+    const cleanup = async () => {
+      await this.exec(`rm -f "${archivePath}"`, cwd, 10_000);
+    };
+
     // Upload to Vercel Blob via curl
     const encodedPathname = encodeURIComponent(options.pathname);
     const uploadCommand = `curl -fsSL -X PUT \
@@ -686,10 +691,14 @@ export class VercelSandbox implements Sandbox {
 
     const uploadResult = await this.exec(uploadCommand, cwd, timeoutMs);
     if (!uploadResult.success) {
+      await cleanup();
       throw new Error(
         `Failed to upload snapshot: ${uploadResult.stderr || uploadResult.stdout}`,
       );
     }
+
+    // Clean up temporary archive after successful upload
+    await cleanup();
 
     // Parse response
     const response = JSON.parse(uploadResult.stdout) as {
