@@ -45,6 +45,36 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [prompt]);
 
+  // Auto-resize textarea up to 7 lines
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    // Get actual line height from computed styles
+    const computedStyle = getComputedStyle(textarea);
+    const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+    const maxLines = 7;
+    const maxHeight = lineHeight * maxLines;
+
+    // Store current height to avoid flicker
+    const currentHeight = textarea.offsetHeight;
+
+    // Temporarily set height to 0 to measure scrollHeight accurately
+    // Using 0 instead of 'auto' prevents visible collapse
+    textarea.style.height = "0";
+    const scrollHeight = textarea.scrollHeight;
+
+    // Set new height, capped at max
+    const newHeight = Math.min(scrollHeight, maxHeight);
+
+    // Only update if height actually changed to minimize reflows
+    if (Math.abs(newHeight - currentHeight) > 1) {
+      textarea.style.height = `${newHeight}px`;
+    } else {
+      textarea.style.height = `${currentHeight}px`;
+    }
+  }, [prompt]);
+
   const handleSubmit = () => {
     if (!prompt.trim() || isLoading) return;
 
@@ -99,10 +129,9 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="Ask a question with /plan"
           rows={1}
-          className="w-full resize-none bg-transparent text-base text-foreground placeholder:text-neutral-500 focus:outline-none"
+          className="w-full resize-none overflow-y-auto bg-transparent text-base text-foreground placeholder:text-neutral-500 focus:outline-none"
           style={{
             minHeight: "24px",
-            height: "auto",
           }}
         />
       </div>

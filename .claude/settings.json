@@ -3,6 +3,8 @@
     "allow": [
       "Bash(bun add:*)",
       "Bash(bun run typecheck:*)",
+      "Bash(bun run format:*)",
+      "Bash(turbo:*)",
       "Bash(ls:*)",
       "Bash(bun -e:*)",
       "WebSearch",

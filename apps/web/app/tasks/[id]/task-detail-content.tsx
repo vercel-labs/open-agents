@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
@@ -18,6 +18,7 @@ import {
   GitPullRequest,
   FolderGit2,
   MoreVertical,
+  GitCompare,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
 import { useTaskChatContext, type SandboxInfo } from "./task-context";
+import { DiffViewer } from "./diff-viewer";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -173,6 +175,7 @@ export function TaskDetailContent() {
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -184,6 +187,8 @@ export function TaskDetailContent() {
     clearSandboxInfo,
     archiveTask,
     hadInitialMessages,
+    diffRefreshKey,
+    triggerDiffRefresh,
   } = useTaskChatContext();
   const {
     messages,
@@ -270,6 +275,67 @@ export function TaskDetailContent() {
     task.title,
   ]);
 
+  // Track tool completions to trigger diff refresh
+  const prevToolStatesRef = useRef<Map<string, string>>(new Map());
+  // Track if we've auto-opened the diff panel (don't re-open if user closed it)
+  const hasAutoOpenedDiffRef = useRef(false);
+
+  // Extract current tool states from messages
+  const currentToolStates = useMemo(() => {
+    const states = new Map<string, string>();
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      for (const part of message.parts) {
+        if (isToolUIPart(part)) {
+          states.set(part.toolCallId, part.state);
+        }
+      }
+    }
+    return states;
+  }, [messages]);
+
+  useEffect(() => {
+    let hasFileChange = false;
+    const fileModifyingTools = ["tool-write", "tool-edit"];
+
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+
+      for (const part of message.parts) {
+        if (!isToolUIPart(part)) continue;
+
+        const toolId = part.toolCallId;
+        const toolState = part.state;
+        const prevState = prevToolStatesRef.current.get(toolId);
+        const isFileModifyingTool = fileModifyingTools.includes(part.type);
+        const justCompleted =
+          toolState === "output-available" && prevState !== "output-available";
+
+        if (isFileModifyingTool && justCompleted) {
+          hasFileChange = true;
+        }
+      }
+    }
+
+    prevToolStatesRef.current = currentToolStates;
+
+    if (hasFileChange) {
+      // Auto-open diff panel on first file change
+      if (!showDiffPanel && !hasAutoOpenedDiffRef.current && sandboxInfo) {
+        hasAutoOpenedDiffRef.current = true;
+        setShowDiffPanel(true);
+      }
+      // Always invalidate cache when files change
+      triggerDiffRefresh();
+    }
+  }, [
+    currentToolStates,
+    messages,
+    showDiffPanel,
+    sandboxInfo,
+    triggerDiffRefresh,
+  ]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -328,6 +394,15 @@ export function TaskDetailContent() {
             <Button variant="ghost" size="sm">
               <Share2 className="mr-2 h-4 w-4" />
               Share
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDiffPanel(!showDiffPanel)}
+              disabled={!sandboxInfo}
+            >
+              <GitCompare className="mr-2 h-4 w-4" />
+              Diff
             </Button>
             {task?.cloneUrl ? (
               // Task has a repo - show PR buttons
@@ -616,6 +691,15 @@ export function TaskDetailContent() {
           onOpenChange={setRepoDialogOpen}
           task={task}
           sandboxId={sandboxInfo?.sandboxId ?? null}
+        />
+      )}
+
+      {/* Diff Viewer Panel */}
+      {showDiffPanel && sandboxInfo && (
+        <DiffViewer
+          sandboxId={sandboxInfo.sandboxId}
+          refreshKey={diffRefreshKey}
+          onClose={() => setShowDiffPanel(false)}
         />
       )}
     </div>
