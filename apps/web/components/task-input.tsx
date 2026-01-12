@@ -45,6 +45,23 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [prompt]);
 
+  // Auto-resize textarea up to 7 lines
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get accurate scrollHeight
+    textarea.style.height = "auto";
+
+    // Calculate max height (7 lines, ~24px per line for text-base)
+    const lineHeight = 24;
+    const maxHeight = lineHeight * 7;
+
+    // Set new height, capped at max
+    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+    textarea.style.height = `${newHeight}px`;
+  }, [prompt]);
+
   const handleSubmit = () => {
     if (!prompt.trim() || isLoading) return;
 
@@ -99,10 +116,9 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="Ask a question with /plan"
           rows={1}
-          className="w-full resize-none bg-transparent text-base text-foreground placeholder:text-neutral-500 focus:outline-none"
+          className="w-full resize-none overflow-y-auto bg-transparent text-base text-foreground placeholder:text-neutral-500 focus:outline-none"
           style={{
             minHeight: "24px",
-            height: "auto",
           }}
         />
       </div>
