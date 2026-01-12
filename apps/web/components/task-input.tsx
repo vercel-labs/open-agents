@@ -50,16 +50,29 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     const textarea = inputRef.current;
     if (!textarea) return;
 
-    // Reset height to auto to get accurate scrollHeight
-    textarea.style.height = "auto";
+    // Get actual line height from computed styles
+    const computedStyle = getComputedStyle(textarea);
+    const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+    const maxLines = 7;
+    const maxHeight = lineHeight * maxLines;
 
-    // Calculate max height (7 lines, ~24px per line for text-base)
-    const lineHeight = 24;
-    const maxHeight = lineHeight * 7;
+    // Store current height to avoid flicker
+    const currentHeight = textarea.offsetHeight;
+
+    // Temporarily set height to 0 to measure scrollHeight accurately
+    // Using 0 instead of 'auto' prevents visible collapse
+    textarea.style.height = "0";
+    const scrollHeight = textarea.scrollHeight;
 
     // Set new height, capped at max
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
+    const newHeight = Math.min(scrollHeight, maxHeight);
+
+    // Only update if height actually changed to minimize reflows
+    if (Math.abs(newHeight - currentHeight) > 1) {
+      textarea.style.height = `${newHeight}px`;
+    } else {
+      textarea.style.height = `${currentHeight}px`;
+    }
   }, [prompt]);
 
   const handleSubmit = () => {
