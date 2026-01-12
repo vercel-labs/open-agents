@@ -701,10 +701,17 @@ export class VercelSandbox implements Sandbox {
     await cleanup();
 
     // Parse response
-    const response = JSON.parse(uploadResult.stdout) as {
-      url: string;
-      downloadUrl: string;
-    };
+    let response: { url: string; downloadUrl: string };
+    try {
+      response = JSON.parse(uploadResult.stdout) as {
+        url: string;
+        downloadUrl: string;
+      };
+    } catch {
+      throw new Error(
+        `Failed to parse upload response (expected JSON): ${uploadResult.stdout.slice(0, 500)}`,
+      );
+    }
     return {
       url: response.url,
       downloadUrl: response.downloadUrl,
