@@ -247,7 +247,9 @@ export function TaskDetailContent() {
           }
         }
 
-        sendMessage({ text: task.title });
+        if (task.cloneUrl || task.sandboxId) {
+          sendMessage({ text: task.title });
+        }
       };
 
       initTask();
