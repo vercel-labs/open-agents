@@ -1,6 +1,48 @@
 import type { Dirent } from "fs";
 
 /**
+ * Options for creating a snapshot of the sandbox filesystem.
+ */
+export interface SnapshotOptions {
+  /** Vercel Blob read-write token for upload */
+  blobToken: string;
+  /** Blob pathname for the snapshot (e.g., "snapshots/task-123/snapshot.tgz") */
+  pathname: string;
+  /** Working directory to snapshot (defaults to sandbox.workingDirectory) */
+  workingDirectory?: string;
+  /** Local path for temporary archive (defaults to /tmp/sandbox-snapshot.tgz) */
+  archivePath?: string;
+  /** Glob patterns to exclude from snapshot */
+  exclude?: string[];
+  /** Timeout in milliseconds */
+  timeoutMs?: number;
+}
+
+/**
+ * Result of a successful snapshot operation.
+ */
+export interface SnapshotResult {
+  /** Public URL of the uploaded snapshot */
+  url: string;
+  /** Download URL with Content-Disposition: attachment */
+  downloadUrl: string;
+}
+
+/**
+ * Options for restoring a snapshot to the sandbox filesystem.
+ */
+export interface RestoreOptions {
+  /** Download URL of the snapshot to restore */
+  downloadUrl: string;
+  /** Working directory to restore into (defaults to sandbox.workingDirectory) */
+  workingDirectory?: string;
+  /** Timeout in milliseconds */
+  timeoutMs?: number;
+  /** If true, clean the directory before restoring */
+  clean?: boolean;
+}
+
+/**
  * Lifecycle hook that receives the sandbox instance.
  * Use these to run arbitrary setup or teardown code.
  */
@@ -207,4 +249,21 @@ export interface Sandbox {
    * @returns New expiration timestamp
    */
   extendTimeout?(additionalMs: number): Promise<{ expiresAt: number }>;
+
+  /**
+   * Create a snapshot of the sandbox filesystem and upload to Vercel Blob.
+   * The snapshot is a tarball of the working directory.
+   * Only supported by sandboxes with shell access (Vercel, Local).
+   * @param options - Snapshot configuration including blob token and pathname
+   * @returns URLs for accessing the uploaded snapshot
+   */
+  snapshot?(options: SnapshotOptions): Promise<SnapshotResult>;
+
+  /**
+   * Restore a snapshot from Vercel Blob into the sandbox filesystem.
+   * Downloads and extracts the tarball into the working directory.
+   * Only supported by sandboxes with shell access (Vercel, Local).
+   * @param options - Restore configuration including download URL
+   */
+  restoreSnapshot?(options: RestoreOptions): Promise<void>;
 }
