@@ -13,6 +13,30 @@ const prContentSchema = z.object({
     ),
 });
 
+function generateBranchName(username: string, name?: string | null): string {
+  let initials = "nb";
+  if (name) {
+    initials =
+      name
+        .split(" ")
+        .map((part) => part[0]?.toLowerCase() ?? "")
+        .join("")
+        .slice(0, 2) || "nb";
+  } else if (username) {
+    initials = username.slice(0, 2).toLowerCase();
+  }
+  const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  return `${initials}/${randomSuffix}`;
+}
+
+/**
+ * Detects if a string looks like a git commit hash (detached HEAD state).
+ * Git short hashes are 7+ hex chars, full hashes are 40.
+ */
+function looksLikeCommitHash(str: string): boolean {
+  return /^[0-9a-f]{7,40}$/i.test(str);
+}
+
 // Allow up to 2 minutes for AI generation and git operations
 export const maxDuration = 120;
 
@@ -22,6 +46,7 @@ interface GeneratePRRequest {
   taskTitle: string;
   baseBranch: string;
   branchName: string;
+  createBranchOnly?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -39,7 +64,14 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId, sandboxId, taskTitle, baseBranch, branchName } = body;
+  const {
+    taskId,
+    sandboxId,
+    taskTitle,
+    baseBranch,
+    branchName,
+    createBranchOnly,
+  } = body;
 
   if (!taskId) {
     return Response.json({ error: "Task ID is required" }, { status: 400 });
@@ -94,15 +126,137 @@ export async function POST(req: Request) {
   const cwd = sandbox.workingDirectory;
 
   // 3a. Resolve live branch from sandbox
-  let resolvedBranch = branchName;
+  let resolvedBranch = branchName === "HEAD" ? baseBranch : branchName;
   const branchResult = await sandbox.exec(
-    "git rev-parse --abbrev-ref HEAD",
+    "git symbolic-ref --short HEAD",
     cwd,
     10000,
   );
   const liveBranch = branchResult.stdout.trim();
-  if (branchResult.success && liveBranch) {
+  if (branchResult.success && liveBranch && liveBranch !== "HEAD") {
     resolvedBranch = liveBranch;
+  }
+
+  // 3b. Fetch latest from origin to ensure we have up-to-date refs
+  // Explicitly fetch the base branch to ensure we have the ref
+  const fetchResult = await sandbox.exec(
+    `git fetch origin ${baseBranch}:refs/remotes/origin/${baseBranch}`,
+    cwd,
+    30000,
+  );
+  console.log(
+    `[generate-pr] Fetch result: success=${fetchResult.success}, stdout=${fetchResult.stdout.trim()}, stderr=${fetchResult.stderr?.trim() ?? ""}`,
+  );
+
+  // 3c. Check for uncommitted changes
+  const statusResult = await sandbox.exec("git status --porcelain", cwd, 10000);
+  const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+
+  // Debug: log initial state
+  console.log(
+    `[generate-pr] Initial state - branch: ${resolvedBranch}, baseBranch: ${baseBranch}, uncommitted: ${hasUncommittedChanges}`,
+  );
+  console.log(`[generate-pr] Status output: "${statusResult.stdout.trim()}"`);
+
+  // 3d. Determine baseRef - prefer origin/<base> for accurate comparison
+  // Try multiple methods to find the remote base ref
+  let baseRef = baseBranch;
+
+  // Method 1: Check if origin/<base> exists via rev-parse (more reliable than show-ref)
+  const originRefCheck = await sandbox.exec(
+    `git rev-parse --verify origin/${baseBranch}`,
+    cwd,
+    10000,
+  );
+  if (originRefCheck.success && originRefCheck.stdout.trim()) {
+    baseRef = `origin/${baseBranch}`;
+    console.log(
+      `[generate-pr] Found origin/${baseBranch} at ${originRefCheck.stdout.trim().slice(0, 8)}`,
+    );
+  } else {
+    // Method 2: Check if local base branch exists
+    const localRefCheck = await sandbox.exec(
+      `git rev-parse --verify ${baseBranch}`,
+      cwd,
+      10000,
+    );
+    if (localRefCheck.success && localRefCheck.stdout.trim()) {
+      baseRef = baseBranch;
+      console.log(
+        `[generate-pr] Found local ${baseBranch} at ${localRefCheck.stdout.trim().slice(0, 8)}`,
+      );
+    } else {
+      // Method 3: List available remote refs for debugging
+      const refsResult = await sandbox.exec(
+        "git for-each-ref --format='%(refname:short)' refs/remotes/origin/",
+        cwd,
+        10000,
+      );
+      console.log(
+        `[generate-pr] Available remote refs: ${refsResult.stdout.trim() || "none"}`,
+      );
+
+      // Method 4: Try to use FETCH_HEAD as last resort (points to what was just fetched)
+      const fetchHeadCheck = await sandbox.exec(
+        "git rev-parse FETCH_HEAD",
+        cwd,
+        10000,
+      );
+      if (fetchHeadCheck.success && fetchHeadCheck.stdout.trim()) {
+        baseRef = "FETCH_HEAD";
+        console.log(
+          `[generate-pr] Using FETCH_HEAD as base: ${fetchHeadCheck.stdout.trim().slice(0, 8)}`,
+        );
+      } else {
+        console.log(
+          `[generate-pr] WARNING: Could not find base ref ${baseBranch} locally or on origin`,
+        );
+      }
+    }
+  }
+  console.log(`[generate-pr] Using baseRef: ${baseRef}`);
+
+  const commitsAheadResult = await sandbox.exec(
+    `git rev-list ${baseRef}..HEAD`,
+    cwd,
+    10000,
+  );
+  const hasCommitsAhead = commitsAheadResult.stdout.trim().length > 0;
+  console.log(
+    `[generate-pr] Commits ahead of ${baseRef}: ${commitsAheadResult.stdout.trim() || "none"}`,
+  );
+
+  // Need to create branch if on base branch OR if branch name looks like a commit hash (detached HEAD)
+  const isDetachedOrOnBase =
+    resolvedBranch === baseBranch || looksLikeCommitHash(resolvedBranch);
+
+  console.log(
+    `[generate-pr] isDetachedOrOnBase: ${isDetachedOrOnBase} (resolved: ${resolvedBranch}, base: ${baseBranch})`,
+  );
+
+  const shouldCreateBranch =
+    isDetachedOrOnBase &&
+    (createBranchOnly || hasUncommittedChanges || hasCommitsAhead);
+
+  if (shouldCreateBranch) {
+    const generatedBranch = generateBranchName(
+      session.user.username,
+      session.user.name,
+    );
+    const checkoutResult = await sandbox.exec(
+      `git checkout -b ${generatedBranch}`,
+      cwd,
+      10000,
+    );
+    if (!checkoutResult.success) {
+      return Response.json(
+        {
+          error: `Failed to create branch: ${checkoutResult.stdout}`,
+        },
+        { status: 500 },
+      );
+    }
+    resolvedBranch = generatedBranch;
   }
 
   if (!safeBranchPattern.test(resolvedBranch)) {
@@ -115,15 +269,15 @@ export async function POST(req: Request) {
     });
   }
 
+  if (createBranchOnly) {
+    return Response.json({ branchName: resolvedBranch });
+  }
+
   const gitActions: {
     committed?: boolean;
     commitMessage?: string;
     pushed?: boolean;
   } = {};
-
-  // 4. Check for uncommitted changes
-  const statusResult = await sandbox.exec("git status --porcelain", cwd, 10000);
-  const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
 
   if (hasUncommittedChanges) {
     // 4a. Get diff for commit message generation
@@ -176,6 +330,12 @@ Respond with ONLY the commit message, nothing else.`,
       );
     }
 
+    console.log(`[generate-pr] Committed successfully: ${commitMessage}`);
+    const postCommitHead = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
+    console.log(
+      `[generate-pr] HEAD after commit: ${postCommitHead.stdout.trim()}`,
+    );
+
     gitActions.committed = true;
     gitActions.commitMessage = commitMessage;
   }
@@ -192,7 +352,18 @@ Respond with ONLY the commit message, nothing else.`,
     trackingResult.stdout.trim().length > 0;
 
   if (needsPush) {
-    // 5a. Push branch
+    // 5a. Fetch latest from origin to check for conflicts
+    await sandbox.exec("git fetch origin", cwd, 30000);
+
+    // 5b. Check if branch exists on remote
+    const remoteBranchCheck = await sandbox.exec(
+      `git ls-remote --heads origin ${resolvedBranch}`,
+      cwd,
+      10000,
+    );
+    const branchExistsOnRemote = remoteBranchCheck.stdout.trim().length > 0;
+
+    // 5c. Push branch
     const pushResult = await sandbox.exec(
       `git push -u origin ${resolvedBranch}`,
       cwd,
@@ -200,35 +371,176 @@ Respond with ONLY the commit message, nothing else.`,
     );
 
     if (!pushResult.success) {
-      return Response.json(
-        {
-          error: `Failed to push: ${pushResult.stdout}. You may need to resolve conflicts manually.`,
-        },
-        { status: 500 },
-      );
+      const pushOutput = pushResult.stdout.trim() + pushResult.stderr;
+      let errorMessage = "Failed to push branch.";
+
+      if (
+        pushOutput.includes("rejected") ||
+        pushOutput.includes("non-fast-forward")
+      ) {
+        if (branchExistsOnRemote) {
+          errorMessage = `Branch '${resolvedBranch}' already exists on remote with different commits. Try creating a new branch or pull the latest changes.`;
+        } else {
+          errorMessage = `Push rejected. The remote may have changes that conflict with your local branch.`;
+        }
+      } else if (
+        pushOutput.includes("permission") ||
+        pushOutput.includes("403")
+      ) {
+        errorMessage = "Permission denied. Check your GitHub access.";
+      } else {
+        errorMessage = `Push failed: ${pushOutput.slice(0, 200)}`;
+      }
+
+      return Response.json({ error: errorMessage }, { status: 500 });
     }
 
     gitActions.pushed = true;
   }
 
-  // 6. Get diff stats for PR generation
-  const diffStatsResult = await sandbox.exec(
-    `git diff ${baseBranch}...HEAD --stat`,
+  // 6. Determine the best base ref for comparison
+  // Reuse the baseRef we determined earlier, but re-check after push
+  // since origin/<base> should now be available
+  let finalBaseRef = baseRef;
+
+  // After push, try again to get origin/<base> (might be available now)
+  if (finalBaseRef === baseBranch || finalBaseRef === "FETCH_HEAD") {
+    const remoteRefResult = await sandbox.exec(
+      `git rev-parse --verify origin/${baseBranch}`,
+      cwd,
+      10000,
+    );
+    if (remoteRefResult.success && remoteRefResult.stdout.trim()) {
+      finalBaseRef = `origin/${baseBranch}`;
+      console.log(
+        `[generate-pr] After push, found origin/${baseBranch} at ${remoteRefResult.stdout.trim().slice(0, 8)}`,
+      );
+    }
+  }
+
+  // Debug: log current state
+  const debugHead = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
+  const debugBase = await sandbox.exec(
+    `git rev-parse ${finalBaseRef}`,
     cwd,
-    30000,
+    5000,
+  );
+  const baseResolved = debugBase.success
+    ? debugBase.stdout.trim().slice(0, 8)
+    : "not found";
+  console.log(
+    `[generate-pr] HEAD: ${debugHead.stdout.trim()}, finalBaseRef: ${finalBaseRef} -> ${baseResolved}`,
   );
 
-  const commitLogResult = await sandbox.exec(
-    `git log ${baseBranch}..HEAD --oneline`,
+  // If base ref still can't be resolved, we have a problem
+  if (!debugBase.success || !debugBase.stdout.trim()) {
+    return Response.json(
+      {
+        error: `Cannot find base branch '${baseBranch}'. Make sure the branch exists on the remote repository.`,
+      },
+      { status: 400 },
+    );
+  }
+
+  // Get the merge-base between base and HEAD to find the common ancestor
+  const mergeBaseResult = await sandbox.exec(
+    `git merge-base ${finalBaseRef} HEAD`,
     cwd,
     10000,
   );
+  const mergeBase = mergeBaseResult.success
+    ? mergeBaseResult.stdout.trim()
+    : "";
+  console.log(`[generate-pr] merge-base: ${mergeBase || "none"}`);
+
+  // 6a. Get diff stats for PR generation
+  // Compare from merge-base to HEAD to show all changes
+  let diffStats = "";
+  if (mergeBase) {
+    const diffStatsResult = await sandbox.exec(
+      `git diff ${mergeBase}..HEAD --stat`,
+      cwd,
+      30000,
+    );
+    diffStats = diffStatsResult.stdout;
+  }
+
+  // Fallback: try direct comparison if merge-base approach didn't work
+  if (!diffStats.trim()) {
+    const directDiffResult = await sandbox.exec(
+      `git diff ${finalBaseRef}..HEAD --stat`,
+      cwd,
+      30000,
+    );
+    diffStats = directDiffResult.stdout;
+  }
+
+  // 6b. Get commit log
+  let commitLog = "";
+  if (mergeBase) {
+    const commitLogResult = await sandbox.exec(
+      `git log ${mergeBase}..HEAD --oneline`,
+      cwd,
+      10000,
+    );
+    commitLog = commitLogResult.stdout;
+  }
+
+  // Fallback for commit log
+  if (!commitLog.trim()) {
+    const directLogResult = await sandbox.exec(
+      `git log ${finalBaseRef}..HEAD --oneline`,
+      cwd,
+      10000,
+    );
+    commitLog = directLogResult.stdout;
+  }
 
   // 7. Check if there are changes to PR
-  if (!diffStatsResult.stdout.trim() && !commitLogResult.stdout.trim()) {
+  if (!diffStats.trim() && !commitLog.trim()) {
+    // Debug: check what branches/refs we're comparing
+    const headRefResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
+    const baseRefParsed = await sandbox.exec(
+      `git rev-parse ${finalBaseRef} 2>/dev/null || echo "unknown"`,
+      cwd,
+      5000,
+    );
+    const headCommit = headRefResult.stdout.trim().slice(0, 8) || "unknown";
+    const baseCommit = baseRefParsed.stdout.trim().slice(0, 8) || "unknown";
+
+    // If HEAD and base resolve to the same commit, there truly are no changes
+    if (
+      headRefResult.stdout.trim() &&
+      baseRefParsed.stdout.trim() &&
+      headRefResult.stdout.trim() === baseRefParsed.stdout.trim()
+    ) {
+      return Response.json(
+        {
+          error: `No changes found: branch '${resolvedBranch}' is at the same commit as '${baseBranch}'. Make some changes first.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Check if there are uncommitted changes that weren't committed
+    const uncommittedStatus = await sandbox.exec(
+      "git status --porcelain",
+      cwd,
+      5000,
+    );
+    if (uncommittedStatus.stdout.trim()) {
+      return Response.json(
+        {
+          error: `There are uncommitted changes but they couldn't be committed. Please check if there are git issues in the sandbox.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Otherwise something unexpected happened
     return Response.json(
       {
-        error: `No changes found compared to ${baseBranch}. Nothing to create a PR for.`,
+        error: `No changes detected between '${resolvedBranch}' and '${baseBranch}'. HEAD: ${headCommit}, base (${finalBaseRef}): ${baseCommit}, merge-base: ${mergeBase?.slice(0, 8) || "none"}`,
       },
       { status: 400 },
     );
@@ -248,17 +560,17 @@ Task: ${taskTitle}
 Branch: ${resolvedBranch} -> ${baseBranch}
 
 Changes summary:
-${diffStatsResult.stdout}
+${diffStats}
 
 Commits:
-${commitLogResult.stdout}`,
+${commitLog}`,
     });
 
     // Handle case where output is undefined (model failed to generate valid object)
     if (!output) {
       prContent = {
         title: taskTitle,
-        body: `## Changes\n\n${diffStatsResult.stdout}\n\n## Commits\n\n${commitLogResult.stdout}`,
+        body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
       };
     } else {
       prContent = output;
@@ -268,7 +580,7 @@ ${commitLogResult.stdout}`,
       // Fallback if structured output generation fails
       prContent = {
         title: taskTitle,
-        body: `## Changes\n\n${diffStatsResult.stdout}\n\n## Commits\n\n${commitLogResult.stdout}`,
+        body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
       };
     } else {
       throw error;
