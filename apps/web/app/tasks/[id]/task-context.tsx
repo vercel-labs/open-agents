@@ -17,6 +17,7 @@ import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { Task } from "@/lib/db/schema";
 import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
+import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
 
 export type SandboxInfo = {
   sandboxId: string;
@@ -27,6 +28,14 @@ export type SandboxInfo = {
 
 type DiffCacheState = {
   data: DiffResponse | null;
+  error: string | null;
+  isLoading: boolean;
+  /** The refreshKey value when this data was last fetched */
+  lastFetchedKey: number;
+};
+
+type FileCacheState = {
+  data: FileSuggestion[] | null;
   error: string | null;
   isLoading: boolean;
   /** The refreshKey value when this data was last fetched */
@@ -50,6 +59,14 @@ type TaskChatContextValue = {
   diffCache: DiffCacheState;
   /** Fetch diff data (uses cache if valid) */
   fetchDiff: (sandboxId: string) => Promise<void>;
+  /** Counter that increments when file list should be refreshed */
+  fileRefreshKey: number;
+  /** Trigger a file list refresh (invalidates cache) */
+  triggerFileRefresh: () => void;
+  /** Cached file list state */
+  fileCache: FileCacheState;
+  /** Fetch file list (uses cache if valid) */
+  fetchFiles: (sandboxId: string) => Promise<void>;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -177,6 +194,78 @@ export function TaskChatProvider({
     [task.id, diffRefreshKey],
   );
 
+  // File cache state (mirrors diff cache pattern)
+  const [fileRefreshKey, setFileRefreshKey] = useState(0);
+
+  const triggerFileRefresh = useCallback(() => {
+    setFileRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const [fileCache, setFileCache] = useState<FileCacheState>({
+    data: null,
+    error: null,
+    isLoading: false,
+    lastFetchedKey: -1,
+  });
+
+  const fileFetchCounterRef = useRef(0);
+  const fileLastFetchedKeyRef = useRef<number>(-1);
+  const fileFetchingKeyRef = useRef<number | null>(null);
+
+  const fetchFiles = useCallback(
+    async (sandboxId: string) => {
+      if (
+        fileLastFetchedKeyRef.current === fileRefreshKey ||
+        fileFetchingKeyRef.current === fileRefreshKey
+      ) {
+        return;
+      }
+      fileFetchingKeyRef.current = fileRefreshKey;
+
+      const thisFetchId = ++fileFetchCounterRef.current;
+
+      setFileCache((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
+
+      try {
+        const res = await fetch(
+          `/api/tasks/${task.id}/files?sandboxId=${sandboxId}`,
+        );
+
+        if (!res.ok) {
+          const errorData = (await res.json()) as { error?: string };
+          throw new Error(errorData.error ?? "Failed to fetch files");
+        }
+
+        const data = (await res.json()) as { files: FileSuggestion[] };
+
+        if (thisFetchId === fileFetchCounterRef.current) {
+          fileLastFetchedKeyRef.current = fileRefreshKey;
+          setFileCache({
+            data: data.files,
+            error: null,
+            isLoading: false,
+            lastFetchedKey: fileRefreshKey,
+          });
+        }
+      } catch (err) {
+        if (thisFetchId === fileFetchCounterRef.current) {
+          fileLastFetchedKeyRef.current = fileRefreshKey;
+          setFileCache((prev) => ({
+            ...prev,
+            error: err instanceof Error ? err.message : "Failed to fetch files",
+            isLoading: false,
+            lastFetchedKey: fileRefreshKey,
+          }));
+        }
+      }
+    },
+    [task.id, fileRefreshKey],
+  );
+
   const archiveTask = useCallback(async () => {
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
@@ -212,6 +301,10 @@ export function TaskChatProvider({
         triggerDiffRefresh,
         diffCache,
         fetchDiff,
+        fileRefreshKey,
+        triggerFileRefresh,
+        fileCache,
+        fetchFiles,
       }}
     >
       {children}
