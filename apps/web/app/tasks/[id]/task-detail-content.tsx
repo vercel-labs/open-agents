@@ -295,7 +295,7 @@ export function TaskDetailContent() {
 
   useEffect(() => {
     let hasFileChange = false;
-    const fileModifyingTools = ["tool-write", "tool-edit", "tool-bash"];
+    const fileModifyingTools = ["tool-write", "tool-edit"];
 
     for (const message of messages) {
       if (message.role !== "assistant") continue;
