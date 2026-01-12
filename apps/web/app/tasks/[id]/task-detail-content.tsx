@@ -19,6 +19,7 @@ import {
   FolderGit2,
   MoreVertical,
   GitCompare,
+  Paperclip,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,10 @@ import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { CreateRepoDialog } from "@/components/create-repo-dialog";
+import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
+import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
@@ -176,7 +180,19 @@ export function TaskDetailContent() {
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    images,
+    addImage,
+    addImages,
+    removeImage,
+    clearImages,
+    getFileParts,
+    fileInputRef,
+    openFilePicker,
+  } = useImageAttachments();
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
   const {
@@ -578,6 +594,25 @@ export function TaskDetailContent() {
                       );
                     }
 
+                    // Render image attachments
+                    if (
+                      p.type === "file" &&
+                      p.mediaType?.startsWith("image/")
+                    ) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="flex justify-end">
+                          <div className="max-w-[80%]">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                            <img
+                              src={p.url}
+                              alt={p.filename ?? "Attached image"}
+                              className="max-h-64 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return null;
                   });
                 })}
@@ -606,13 +641,31 @@ export function TaskDetailContent() {
                 onKill={handleKillSandbox}
               />
             </div>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT_IMAGE_TYPES}
+              multiple
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  addImages(files);
+                }
+                e.target.value = "";
+              }}
+              className="hidden"
+            />
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!input.trim()) return;
+                const hasContent = input.trim() || images.length > 0;
+                if (!hasContent) return;
 
                 const messageText = input;
+                const files = getFileParts();
                 setInput("");
+                clearImages();
 
                 // Recreate sandbox if expired
                 if (!isSandboxValid(sandboxInfo)) {
@@ -638,37 +691,80 @@ export function TaskDetailContent() {
                   }
                 }
 
-                sendMessage({ text: messageText });
+                sendMessage({ text: messageText, files });
               }}
-              className="flex items-center gap-2 rounded-full bg-muted px-4 py-2"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                  addImages(files);
+                }
+              }}
+              className={`overflow-hidden rounded-2xl bg-muted transition-colors ${isDragging ? "ring-2 ring-blue-500/50" : ""}`}
             >
-              <input
-                ref={inputRef}
-                value={input}
-                placeholder="Request changes or ask a ..."
-                onChange={(e) => setInput(e.currentTarget.value)}
-                disabled={status === "streaming"}
-                className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
-              />
-              {status === "streaming" ? (
+              {/* Image attachments preview */}
+              <ImageAttachmentsPreview images={images} onRemove={removeImage} />
+
+              <div className="flex items-center gap-2 px-4 py-2">
                 <Button
                   type="button"
+                  variant="ghost"
                   size="icon"
-                  onClick={stop}
-                  className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={openFilePicker}
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
                 >
-                  <Square className="h-3 w-3 fill-current" />
+                  <Paperclip className="h-4 w-4" />
                 </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!input.trim()}
-                  className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-              )}
+                <input
+                  ref={inputRef}
+                  value={input}
+                  placeholder="Request changes or ask a ..."
+                  onChange={(e) => setInput(e.currentTarget.value)}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                      if (isValidImageType(item.type)) {
+                        const file = item.getAsFile();
+                        if (file) {
+                          e.preventDefault();
+                          addImage(file);
+                        }
+                      }
+                    }
+                  }}
+                  disabled={status === "streaming"}
+                  className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                {status === "streaming" ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    onClick={stop}
+                    className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    <Square className="h-3 w-3 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!input.trim() && images.length === 0}
+                    className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </form>
           </div>
         </div>
