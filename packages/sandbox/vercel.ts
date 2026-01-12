@@ -10,6 +10,7 @@ import type {
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 const TIMEOUT_BUFFER_MS = 30_000; // 30 seconds buffer for beforeStop hook
+const DEFAULT_RECONNECT_TIMEOUT_MS = 300_000; // 5 minutes default timeout for reconnected sandboxes
 
 export interface VercelSandboxConfig {
   /**
@@ -385,19 +386,20 @@ export class VercelSandbox implements Sandbox {
       hooks?: SandboxHooks;
       /**
        * Remaining timeout in ms for this sandbox.
-       * Required for timeout tracking on reconnected sandboxes.
-       * If not provided, timeout tracking will be disabled.
+       * If not provided, defaults to DEFAULT_RECONNECT_TIMEOUT_MS (5 minutes).
+       * This ensures timeout tracking and proactive stop work correctly.
        */
       remainingTimeout?: number;
     } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
 
-    // Only enable timeout tracking if remainingTimeout is explicitly provided.
-    // We don't use sdk.timeout as a fallback because its semantics may vary
-    // (original timeout vs remaining time) depending on SDK version.
-    const remainingTimeout = options.remainingTimeout;
-    const startTime = remainingTimeout !== undefined ? Date.now() : undefined;
+    // Use provided remainingTimeout or default to DEFAULT_RECONNECT_TIMEOUT_MS
+    // This ensures timeout tracking is always enabled for reconnected sandboxes,
+    // allowing beforeStop and onTimeout hooks to fire properly.
+    const remainingTimeout =
+      options.remainingTimeout ?? DEFAULT_RECONNECT_TIMEOUT_MS;
+    const startTime = Date.now();
 
     const sandbox = new VercelSandbox(
       sdk,
@@ -658,8 +660,9 @@ export interface VercelSandboxConnectConfig {
   hooks?: SandboxHooks;
   /**
    * Remaining timeout in milliseconds for this sandbox.
-   * Required for timeout tracking and proactive stop on reconnected sandboxes.
-   * If not provided, timeout tracking will be disabled (no proactive stop, no hooks on timeout).
+   * If not provided, defaults to 5 minutes (DEFAULT_RECONNECT_TIMEOUT_MS).
+   * This ensures proactive stop and hooks (beforeStop, onTimeout) work correctly.
+   * Provide an explicit value if you know the exact remaining time.
    */
   remainingTimeout?: number;
 }
