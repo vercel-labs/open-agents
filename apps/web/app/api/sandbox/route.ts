@@ -99,8 +99,8 @@ export async function POST(req: Request) {
   const sandbox = await connectVercelSandbox(sandboxOptions);
 
   // Update task with sandboxId if this is a new sandbox
-  // Verify task ownership before updating
-  if (taskId && !taskSandboxId) {
+  // This handles both first-time creation and sandbox recreation after expiry/restore
+  if (taskId && sandbox.id !== taskSandboxId) {
     await updateTask(taskId, { sandboxId: sandbox.id });
   }
 
