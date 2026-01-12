@@ -12,6 +12,7 @@
 - [ ] implement checkpointing for auto compaction (docs/auto-compaction-checkpoint-idea.md)
 - [x] implement reasoning support (ui and provider options)
 - [ ] add approved commands (auto approve for similar commands)
+- [ ] update task branch when git checkout runs
 - [x] audit the input implementation (suggestions not working and missing chars)
 - [x] support for pasting images
 - [ ] update system prompt to lean heavily on subagents

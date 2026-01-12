@@ -5,7 +5,7 @@ import { getServerSession } from "@/lib/session/get-server-session";
 interface CreatePRRequest {
   taskId: string;
   repoUrl: string;
-  branchName: string;
+  branchName?: string;
   title: string;
   body?: string;
   baseBranch: string;
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   const { taskId, repoUrl, branchName, title, body: prBody, baseBranch } = body;
 
-  if (!taskId || !repoUrl || !branchName || !title || !baseBranch) {
+  if (!taskId || !repoUrl || !title || !baseBranch) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -46,9 +46,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!safeBranchPattern.test(branchName)) {
-    return Response.json({ error: "Invalid branch name" }, { status: 400 });
-  }
 
   // 3. Verify task ownership
   const task = await getTaskById(taskId);
@@ -59,10 +56,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const resolvedBranch = task.branch ?? branchName;
+
+  if (!resolvedBranch) {
+    return Response.json({ error: "Branch name is required" }, { status: 400 });
+  }
+
+  if (!safeBranchPattern.test(resolvedBranch)) {
+    return Response.json({ error: "Invalid branch name" }, { status: 400 });
+  }
+
   // 4. Create PR using existing function
   const result = await createPullRequest({
     repoUrl,
-    branchName,
+    branchName: resolvedBranch,
     title,
     body: prBody || "",
     baseBranch,

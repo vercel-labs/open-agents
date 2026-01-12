@@ -58,6 +58,7 @@ export function CreatePRDialog({
   const [result, setResult] = useState<{ prUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gitActions, setGitActions] = useState<GitActions | null>(null);
+  const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -67,6 +68,7 @@ export function CreatePRDialog({
       setResult(null);
       setError(null);
       setGitActions(null);
+      setResolvedBranch(null);
     }
   }, [open]);
 
@@ -128,6 +130,9 @@ export function CreatePRDialog({
       if (data.gitActions) {
         setGitActions(data.gitActions);
       }
+      if (data.branchName) {
+        setResolvedBranch(data.branchName as string);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate");
     } finally {
@@ -145,7 +150,7 @@ export function CreatePRDialog({
         body: JSON.stringify({
           taskId: task.id,
           repoUrl: task.cloneUrl,
-          branchName: task.branch,
+          branchName: resolvedBranch ?? task.branch,
           title,
           body,
           baseBranch,

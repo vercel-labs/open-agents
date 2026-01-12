@@ -1,6 +1,6 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
-import { getTaskById } from "@/lib/db/tasks";
+import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { z } from "zod";
 
@@ -89,13 +89,31 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!safeBranchPattern.test(branchName)) {
-    return Response.json({ error: "Invalid branch name" }, { status: 400 });
-  }
-
   // 3. Connect to sandbox
   const sandbox = await connectVercelSandbox({ sandboxId });
   const cwd = sandbox.workingDirectory;
+
+  // 3a. Resolve live branch from sandbox
+  let resolvedBranch = branchName;
+  const branchResult = await sandbox.exec(
+    "git rev-parse --abbrev-ref HEAD",
+    cwd,
+    10000,
+  );
+  const liveBranch = branchResult.stdout.trim();
+  if (branchResult.success && liveBranch) {
+    resolvedBranch = liveBranch;
+  }
+
+  if (!safeBranchPattern.test(resolvedBranch)) {
+    return Response.json({ error: "Invalid branch name" }, { status: 400 });
+  }
+
+  if (resolvedBranch !== branchName) {
+    await updateTask(taskId, { branch: resolvedBranch }).catch((error) => {
+      console.error("Failed to update task branch:", error);
+    });
+  }
 
   const gitActions: {
     committed?: boolean;
@@ -176,7 +194,7 @@ Respond with ONLY the commit message, nothing else.`,
   if (needsPush) {
     // 5a. Push branch
     const pushResult = await sandbox.exec(
-      `git push -u origin ${branchName}`,
+      `git push -u origin ${resolvedBranch}`,
       cwd,
       60000,
     );
@@ -227,7 +245,7 @@ Respond with ONLY the commit message, nothing else.`,
       prompt: `Generate a pull request title and body for these changes.
 
 Task: ${taskTitle}
-Branch: ${branchName} -> ${baseBranch}
+Branch: ${resolvedBranch} -> ${baseBranch}
 
 Changes summary:
 ${diffStatsResult.stdout}
@@ -261,6 +279,7 @@ ${commitLogResult.stdout}`,
   return Response.json({
     title: prContent.title,
     body: prContent.body,
+    branchName: resolvedBranch,
     ...(Object.keys(gitActions).length > 0 && { gitActions }),
   });
 }
