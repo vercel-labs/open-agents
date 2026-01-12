@@ -73,8 +73,8 @@ function parseNameStatus(
 }
 
 /**
- * Parse git diff --stat output to get per-file stats
- * Format: " path/to/file.ts | 10 ++++------"
+ * Parse git diff --numstat output to get per-file stats
+ * Format: "<additions>\t<deletions>\t<path>"
  */
 function parseStats(
   output: string,
@@ -82,28 +82,14 @@ function parseStats(
   const result = new Map<string, { additions: number; deletions: number }>();
 
   for (const line of output.trim().split("\n")) {
-    // Skip summary line at the end
-    if (
-      line.includes("file changed") ||
-      line.includes("files changed") ||
-      !line.includes("|")
-    ) {
-      continue;
-    }
+    if (!line) continue;
 
-    const pipeIndex = line.indexOf("|");
-    if (pipeIndex === -1) continue;
+    const parts = line.split("\t");
+    if (parts.length < 3) continue;
 
-    const path = line.slice(0, pipeIndex).trim();
-    const statsSection = line.slice(pipeIndex + 1).trim();
-
-    // Count + and - characters
-    let additions = 0;
-    let deletions = 0;
-    for (const char of statsSection) {
-      if (char === "+") additions++;
-      if (char === "-") deletions++;
-    }
+    const additions = parseInt(parts[0], 10) || 0;
+    const deletions = parseInt(parts[1], 10) || 0;
+    const path = parts[2];
 
     if (path) {
       result.set(path, { additions, deletions });
@@ -177,10 +163,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const cwd = sandbox.workingDirectory;
 
     // Run git commands in parallel
-    const [nameStatusResult, statResult, diffResult, untrackedResult] =
+    const [nameStatusResult, numstatResult, diffResult, untrackedResult] =
       await Promise.all([
         sandbox.exec("git diff HEAD --name-status", cwd, 30000),
-        sandbox.exec("git diff HEAD --stat", cwd, 30000),
+        sandbox.exec("git diff HEAD --numstat", cwd, 30000),
         sandbox.exec("git diff HEAD", cwd, 60000),
         // Get untracked files (new files not yet staged)
         sandbox.exec("git ls-files --others --exclude-standard", cwd, 30000),
@@ -188,7 +174,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // Parse outputs
     const fileStatuses = parseNameStatus(nameStatusResult.stdout);
-    const fileStats = parseStats(statResult.stdout);
+    const fileStats = parseStats(numstatResult.stdout);
     const fileDiffs = splitDiffByFile(diffResult.stdout);
 
     // Build response
