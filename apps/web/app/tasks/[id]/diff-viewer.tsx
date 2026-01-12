@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, X, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { DiffResponse, DiffFile } from "@/app/api/tasks/[id]/diff/route";
+import type { DiffFile } from "@/app/api/tasks/[id]/diff/route";
+import { useTaskChatContext } from "./task-context";
 
 type DiffViewerProps = {
-  taskId: string;
   sandboxId: string;
   refreshKey: number;
   onClose: () => void;
@@ -199,42 +199,20 @@ function FileEntry({
 }
 
 export function DiffViewer({
-  taskId,
   sandboxId,
   refreshKey,
   onClose,
 }: DiffViewerProps) {
-  const [data, setData] = useState<DiffResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { diffCache, fetchDiff, diffRefreshKey } = useTaskChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
+  const { data, error, isLoading } = diffCache;
+
+  // Fetch diff on mount and when refreshKey changes
+  // The fetchDiff function will skip if cache is still valid
   useEffect(() => {
-    async function fetchDiff() {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const res = await fetch(
-          `/api/tasks/${taskId}/diff?sandboxId=${sandboxId}`,
-        );
-
-        if (!res.ok) {
-          const errorData = (await res.json()) as { error?: string };
-          throw new Error(errorData.error ?? "Failed to fetch diff");
-        }
-
-        const diffData = (await res.json()) as DiffResponse;
-        setData(diffData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch diff");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchDiff();
-  }, [taskId, sandboxId, refreshKey]);
+    fetchDiff(sandboxId);
+  }, [fetchDiff, sandboxId, refreshKey, diffRefreshKey]);
 
   const toggleFile = (path: string) => {
     setExpandedFiles((prev) => {
