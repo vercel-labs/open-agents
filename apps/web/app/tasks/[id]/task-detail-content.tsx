@@ -217,9 +217,10 @@ export function TaskDetailContent() {
     // Move cursor to after the inserted value + space
     const newCursorPos = mentionStart + value.length + 2; // @ + value + space
     setCursorPosition(newCursorPos);
-    // Focus input and set cursor position
+    // Focus input and set cursor position after React renders
     setTimeout(() => {
-      if (inputRef.current) {
+      // Only set cursor if input hasn't changed (user didn't type in between)
+      if (inputRef.current && inputRef.current.value === newInput) {
         inputRef.current.focus();
         inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
