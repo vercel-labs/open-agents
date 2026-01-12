@@ -34,6 +34,18 @@ export interface SandboxHooks {
    * }
    */
   beforeStop?: SandboxHook;
+
+  /**
+   * Called when the sandbox is about to timeout (before beforeStop).
+   * Use to differentiate timeout-triggered stops from manual stops.
+   * This hook fires first, then beforeStop runs as part of the stop() call.
+   *
+   * @example
+   * onTimeout: async (sandbox) => {
+   *   console.log("Sandbox timed out, saving work...");
+   * }
+   */
+  onTimeout?: SandboxHook;
 }
 
 /**
@@ -118,6 +130,20 @@ export interface Sandbox {
    * @example "abc123.vercel.run"
    */
   readonly host?: string;
+
+  /**
+   * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
+   * For remote sandboxes, this is when the sandbox will call stop() before SDK timeout.
+   * For local sandboxes, this is undefined (no timeout).
+   */
+  readonly expiresAt?: number;
+
+  /**
+   * The configured proactive timeout duration in milliseconds.
+   * For remote sandboxes, this is the time until proactive stop (SDK timeout - buffer).
+   * For local sandboxes, this is undefined (no timeout).
+   */
+  readonly timeout?: number;
 
   /**
    * Read file contents as UTF-8 string

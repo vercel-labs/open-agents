@@ -19,6 +19,10 @@ export class LocalSandbox implements Sandbox {
   readonly environmentDetails = `- Full shell access with all standard CLI tools
 - Git and GitHub CLI (gh) available
 - Can install packages and run any commands`;
+  /** Local sandboxes do not timeout */
+  readonly expiresAt = undefined;
+  /** Local sandboxes do not timeout */
+  readonly timeout = undefined;
 
   constructor(workingDirectory: string, env?: Record<string, string>) {
     this.workingDirectory = workingDirectory;

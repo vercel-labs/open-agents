@@ -9,6 +9,7 @@ import type {
 
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
+const TIMEOUT_BUFFER_MS = 30_000; // 30 seconds buffer for beforeStop hook
 
 export interface VercelSandboxConfig {
   /**
@@ -89,7 +90,18 @@ export class VercelSandbox implements Sandbox {
    */
   readonly currentBranch?: string;
   readonly hooks?: SandboxHooks;
+  /**
+   * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
+   */
+  readonly expiresAt?: number;
+  /**
+   * The configured proactive timeout duration in milliseconds.
+   */
+  readonly timeout?: number;
+
   private sdk: VercelSandboxSDK;
+  private timeoutTimer?: ReturnType<typeof setTimeout>;
+  private isStopped = false;
 
   private constructor(
     sdk: VercelSandboxSDK,
@@ -98,6 +110,8 @@ export class VercelSandbox implements Sandbox {
     env?: Record<string, string>,
     currentBranch?: string,
     hooks?: SandboxHooks,
+    timeout?: number,
+    startTime?: number,
   ) {
     this.sdk = sdk;
     this.id = id;
@@ -105,6 +119,43 @@ export class VercelSandbox implements Sandbox {
     this.env = env;
     this.currentBranch = currentBranch;
     this.hooks = hooks;
+
+    // Set timeout tracking for proactive stop
+    if (timeout !== undefined && startTime !== undefined) {
+      this.timeout = timeout;
+      this.expiresAt = startTime + timeout;
+      this.scheduleProactiveStop();
+    }
+  }
+
+  /**
+   * Schedule a timer to proactively call stop() before the SDK timeout.
+   * This ensures beforeStop hook has time to run.
+   */
+  private scheduleProactiveStop(): void {
+    if (this.expiresAt === undefined) return;
+
+    const msUntilTimeout = this.expiresAt - Date.now();
+    if (msUntilTimeout <= 0) return;
+
+    this.timeoutTimer = setTimeout(async () => {
+      try {
+        if (this.isStopped) return;
+
+        // Call onTimeout hook first
+        if (this.hooks?.onTimeout) {
+          try {
+            await this.hooks.onTimeout(this);
+          } catch {
+            // Ignore errors - we still need to stop
+          }
+        }
+
+        await this.stop();
+      } catch {
+        // Ignore errors - sandbox may already be stopped by SDK
+      }
+    }, msUntilTimeout);
   }
 
   /**
@@ -167,10 +218,14 @@ export class VercelSandbox implements Sandbox {
           }
       : undefined;
 
+    // Calculate SDK timeout with buffer for beforeStop hook
+    const sdkTimeout = timeout + TIMEOUT_BUFFER_MS;
+    const startTime = Date.now();
+
     const sdk = await VercelSandboxSDK.create({
       ...(sourceConfig && { source: sourceConfig }),
       resources: { vcpus },
-      timeout,
+      timeout: sdkTimeout,
       runtime,
       ...(ports && { ports }),
     });
@@ -238,6 +293,8 @@ export class VercelSandbox implements Sandbox {
       env,
       currentBranch,
       hooks,
+      timeout,
+      startTime,
     );
 
     // Call afterStart hook if provided
@@ -253,9 +310,18 @@ export class VercelSandbox implements Sandbox {
    */
   static async connect(
     sandboxId: string,
-    options: { env?: Record<string, string>; hooks?: SandboxHooks } = {},
+    options: {
+      env?: Record<string, string>;
+      hooks?: SandboxHooks;
+      /** Optional remaining timeout in ms. Without this, timeout tracking is disabled. */
+      remainingTimeout?: number;
+    } = {},
   ): Promise<VercelSandbox> {
     const sdk = await VercelSandboxSDK.get({ sandboxId });
+
+    // Set up timeout tracking if remainingTimeout provided
+    const startTime =
+      options.remainingTimeout !== undefined ? Date.now() : undefined;
 
     const sandbox = new VercelSandbox(
       sdk,
@@ -264,6 +330,8 @@ export class VercelSandbox implements Sandbox {
       options.env,
       undefined,
       options.hooks,
+      options.remainingTimeout,
+      startTime,
     );
 
     // Call afterStart hook if provided (useful for reconnection setup)
@@ -473,11 +541,28 @@ export class VercelSandbox implements Sandbox {
   /**
    * Stop and clean up the sandbox.
    * Calls beforeStop hook if provided before stopping the sandbox.
+   * This method is idempotent - calling it multiple times is safe.
    */
   async stop(): Promise<void> {
-    if (this.hooks?.beforeStop) {
-      await this.hooks.beforeStop(this);
+    // Ensure stop() only runs once
+    if (this.isStopped) return;
+    this.isStopped = true;
+
+    // Clear proactive timeout timer
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
     }
+
+    // Run beforeStop hook
+    if (this.hooks?.beforeStop) {
+      try {
+        await this.hooks.beforeStop(this);
+      } catch {
+        // Log but don't fail - we still need to stop the sandbox
+      }
+    }
+
     await this.sdk.stop();
   }
 }
@@ -492,6 +577,11 @@ export interface VercelSandboxConnectConfig {
   env?: Record<string, string>;
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;
+  /**
+   * Optional remaining timeout in milliseconds.
+   * Without this, timeout tracking is disabled for reconnected sandboxes.
+   */
+  remainingTimeout?: number;
 }
 
 /**
@@ -550,6 +640,7 @@ export async function connectVercelSandbox(
     return VercelSandbox.connect(config.sandboxId, {
       env: config.env,
       hooks: config.hooks,
+      remainingTimeout: config.remainingTimeout,
     });
   }
   return VercelSandbox.create(config);

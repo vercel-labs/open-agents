@@ -74,6 +74,10 @@ export class JustBashSandbox implements Sandbox {
 - Git is NOT available - do not attempt git operations
 - Limited to basic file operations and shell commands
 - No package installation or network access`;
+  /** JustBash sandboxes do not timeout */
+  readonly expiresAt = undefined;
+  /** JustBash sandboxes do not timeout */
+  readonly timeout = undefined;
 
   private bash: Bash;
   private mode: "memory" | "overlay";
