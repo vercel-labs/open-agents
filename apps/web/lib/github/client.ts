@@ -1,22 +1,28 @@
 import { Octokit } from "@octokit/rest";
 import { getUserGitHubToken } from "./user-token";
 
-export async function getOctokit(): Promise<Octokit> {
+type OctokitResult =
+  | { octokit: Octokit; authenticated: true }
+  | { octokit: null; authenticated: false };
+
+export async function getOctokit(): Promise<OctokitResult> {
   const userToken = await getUserGitHubToken();
 
   if (!userToken) {
     console.warn("No GitHub token - user needs to connect GitHub");
+    return { octokit: null, authenticated: false };
   }
 
-  return new Octokit({
-    auth: userToken || undefined,
-  });
+  return {
+    octokit: new Octokit({ auth: userToken }),
+    authenticated: true,
+  };
 }
 
 export function parseGitHubUrl(
   repoUrl: string,
 ): { owner: string; repo: string } | null {
-  const match = repoUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+?)(\.git)?$/);
+  const match = repoUrl.match(/github\.com[/:]([.\w-]+)\/([.\w-]+?)(\.git)?$/);
   if (match && match[1] && match[2]) {
     return { owner: match[1], repo: match[2] };
   }
@@ -38,9 +44,9 @@ export async function createPullRequest(params: {
   const { repoUrl, branchName, title, body = "", baseBranch = "main" } = params;
 
   try {
-    const octokit = await getOctokit();
+    const result = await getOctokit();
 
-    if (!octokit.auth) {
+    if (!result.authenticated) {
       return { success: false, error: "GitHub account not connected" };
     }
 
@@ -51,7 +57,7 @@ export async function createPullRequest(params: {
 
     const { owner, repo } = parsed;
 
-    const response = await octokit.rest.pulls.create({
+    const response = await result.octokit.rest.pulls.create({
       owner,
       repo,
       title,
@@ -91,9 +97,9 @@ export async function mergePullRequest(params: {
   const { repoUrl, prNumber, mergeMethod = "squash" } = params;
 
   try {
-    const octokit = await getOctokit();
+    const result = await getOctokit();
 
-    if (!octokit.auth) {
+    if (!result.authenticated) {
       return { success: false, error: "GitHub account not connected" };
     }
 
@@ -104,7 +110,7 @@ export async function mergePullRequest(params: {
 
     const { owner, repo } = parsed;
 
-    const response = await octokit.rest.pulls.merge({
+    const response = await result.octokit.rest.pulls.merge({
       owner,
       repo,
       pull_number: prNumber,
@@ -141,9 +147,9 @@ export async function getPullRequestStatus(params: {
   const { repoUrl, prNumber } = params;
 
   try {
-    const octokit = await getOctokit();
+    const result = await getOctokit();
 
-    if (!octokit.auth) {
+    if (!result.authenticated) {
       return { success: false, error: "GitHub account not connected" };
     }
 
@@ -154,7 +160,7 @@ export async function getPullRequestStatus(params: {
 
     const { owner, repo } = parsed;
 
-    const response = await octokit.rest.pulls.get({
+    const response = await result.octokit.rest.pulls.get({
       owner,
       repo,
       pull_number: prNumber,
