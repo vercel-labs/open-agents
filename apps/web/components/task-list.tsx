@@ -54,12 +54,14 @@ function DiffStats({
   added: number | null;
   removed: number | null;
 }) {
-  if (!added && !removed) return null;
+  if (added === null && removed === null) return null;
 
   return (
     <div className="flex items-center gap-1 text-sm font-mono">
-      {added ? <span className="text-green-500">+{added}</span> : null}
-      {removed ? <span className="text-red-400">-{removed}</span> : null}
+      {added !== null ? <span className="text-green-500">+{added}</span> : null}
+      {removed !== null ? (
+        <span className="text-red-400">-{removed}</span>
+      ) : null}
     </div>
   );
 }

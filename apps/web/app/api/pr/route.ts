@@ -32,6 +32,12 @@ export async function POST(req: Request) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Validate repoUrl format (GitHub URLs only)
+  const githubUrlPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(\.git)?$/;
+  if (!githubUrlPattern.test(repoUrl)) {
+    return Response.json({ error: "Invalid repository URL" }, { status: 400 });
+  }
+
   // Validate branch names to prevent injection
   const safeBranchPattern = /^[\w\-/.]+$/;
   if (!safeBranchPattern.test(baseBranch)) {

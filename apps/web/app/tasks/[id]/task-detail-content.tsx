@@ -252,7 +252,17 @@ export function TaskDetailContent() {
 
       initTask();
     }
-  }, [messages.length, sendMessage, setSandboxInfo, task]);
+  }, [
+    messages.length,
+    sendMessage,
+    setSandboxInfo,
+    task.id,
+    task.cloneUrl,
+    task.branch,
+    task.isNewBranch,
+    task.sandboxId,
+    task.title,
+  ]);
 
   if (error) {
     return (

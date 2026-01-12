@@ -65,10 +65,15 @@ export async function POST(req: Request) {
   });
 
   // Save user message immediately (incremental persistence)
-  // Only save if the message has an ID and hasn't been persisted yet
+  // Only save if the message has an ID (non-empty string) and hasn't been persisted yet
   if (taskId && messages.length > 0) {
     const userMessage = messages[messages.length - 1];
-    if (userMessage && userMessage.role === "user" && userMessage.id) {
+    if (
+      userMessage &&
+      userMessage.role === "user" &&
+      typeof userMessage.id === "string" &&
+      userMessage.id.length > 0
+    ) {
       try {
         // Use idempotent insert to handle race conditions gracefully
         await createTaskMessageIfNotExists({
