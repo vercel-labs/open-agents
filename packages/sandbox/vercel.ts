@@ -288,7 +288,6 @@ export class VercelSandbox implements Sandbox {
 
     // Calculate SDK timeout with buffer for beforeStop hook
     const sdkTimeout = timeout + TIMEOUT_BUFFER_MS;
-    const startTime = Date.now();
 
     const sdk = await VercelSandboxSDK.create({
       ...(sourceConfig && { source: sourceConfig }),
@@ -353,6 +352,9 @@ export class VercelSandbox implements Sandbox {
     } else if (source?.branch) {
       currentBranch = source.branch;
     }
+
+    // Capture startTime AFTER all setup operations so users get their full timeout duration
+    const startTime = Date.now();
 
     const sandbox = new VercelSandbox(
       sdk,
