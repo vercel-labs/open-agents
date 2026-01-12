@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     branch = "main",
     isNewBranch = false,
     taskId,
-    sandboxId: existingSandboxId,
+    sandboxId: providedSandboxId,
   } = body;
 
   if (!repoUrl) {
@@ -45,9 +45,35 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  let taskSandboxId = providedSandboxId;
+
+  if (taskId) {
+    const task = await getTaskById(taskId);
+    if (!task) {
+      return Response.json({ error: "Task not found" }, { status: 404 });
+    }
+    if (task.userId !== session.user.id) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (task.sandboxId) {
+      if (providedSandboxId && task.sandboxId !== providedSandboxId) {
+        return Response.json(
+          { error: "Sandbox does not belong to this task" },
+          { status: 403 },
+        );
+      }
+      taskSandboxId = task.sandboxId;
+    } else if (providedSandboxId) {
+      return Response.json(
+        { error: "Sandbox does not belong to this task" },
+        { status: 403 },
+      );
+    }
+  }
+
   // Determine if we should create a new branch
   // Only create new branch on first sandbox creation (no existing sandboxId)
-  const shouldCreateNewBranch = isNewBranch && !existingSandboxId;
+  const shouldCreateNewBranch = isNewBranch && !taskSandboxId;
 
   const sandbox = await connectVercelSandbox({
     timeout: DEFAULT_TIMEOUT,
@@ -71,14 +97,7 @@ export async function POST(req: Request) {
 
   // Update task with sandboxId if this is a new sandbox
   // Verify task ownership before updating
-  if (taskId && !existingSandboxId) {
-    const task = await getTaskById(taskId);
-    if (!task) {
-      return Response.json({ error: "Task not found" }, { status: 404 });
-    }
-    if (task.userId !== session.user.id) {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
+  if (taskId && !taskSandboxId) {
     await updateTask(taskId, { sandboxId: sandbox.id });
   }
 
@@ -108,28 +127,30 @@ export async function DELETE(req: Request) {
     !body ||
     typeof body !== "object" ||
     !("sandboxId" in body) ||
-    typeof (body as Record<string, unknown>).sandboxId !== "string"
+    typeof (body as Record<string, unknown>).sandboxId !== "string" ||
+    !("taskId" in body) ||
+    typeof (body as Record<string, unknown>).taskId !== "string"
   ) {
-    return Response.json({ error: "Missing sandboxId" }, { status: 400 });
+    return Response.json(
+      { error: "Missing sandboxId or taskId" },
+      { status: 400 },
+    );
   }
 
-  const { sandboxId, taskId } = body as { sandboxId: string; taskId?: string };
+  const { sandboxId, taskId } = body as { sandboxId: string; taskId: string };
 
-  // Verify ownership via task if taskId is provided
-  if (taskId) {
-    const task = await getTaskById(taskId);
-    if (!task) {
-      return Response.json({ error: "Task not found" }, { status: 404 });
-    }
-    if (task.userId !== session.user.id) {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (task.sandboxId !== sandboxId) {
-      return Response.json(
-        { error: "Sandbox does not belong to this task" },
-        { status: 403 },
-      );
-    }
+  const task = await getTaskById(taskId);
+  if (!task) {
+    return Response.json({ error: "Task not found" }, { status: 404 });
+  }
+  if (task.userId !== session.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (task.sandboxId !== sandboxId) {
+    return Response.json(
+      { error: "Sandbox does not belong to this task" },
+      { status: 403 },
+    );
   }
 
   const sandbox = await connectVercelSandbox({ sandboxId });

@@ -5,7 +5,6 @@ import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
-  updateTask,
   createTaskMessage,
   createTaskMessageIfNotExists,
   getTaskById,
@@ -40,14 +39,17 @@ export async function POST(req: Request) {
     if (task.userId !== session.user.id) {
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
-  }
-
-  // If this is a task-based chat, update the task with the sandbox ID
-  if (taskId && sandboxId) {
-    try {
-      await updateTask(taskId, { sandboxId });
-    } catch (error) {
-      console.error("Failed to update task with sandbox ID:", error);
+    if (!task.sandboxId) {
+      return Response.json(
+        { error: "Sandbox not linked to task" },
+        { status: 400 },
+      );
+    }
+    if (task.sandboxId !== sandboxId) {
+      return Response.json(
+        { error: "Sandbox does not belong to this task" },
+        { status: 403 },
+      );
     }
   }
 

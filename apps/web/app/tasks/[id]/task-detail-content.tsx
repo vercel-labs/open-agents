@@ -197,7 +197,10 @@ export function TaskDetailContent() {
       await fetch("/api/sandbox", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sandboxId: sandboxInfo.sandboxId }),
+        body: JSON.stringify({
+          sandboxId: sandboxInfo.sandboxId,
+          taskId: task.id,
+        }),
       });
     } finally {
       clearSandboxInfo();

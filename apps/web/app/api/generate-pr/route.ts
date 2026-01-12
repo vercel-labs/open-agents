@@ -53,11 +53,22 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-
   if (!sandboxId) {
     return Response.json(
       { error: "Sandbox not active. Please wait for sandbox to start." },
       { status: 400 },
+    );
+  }
+  if (!task.sandboxId) {
+    return Response.json(
+      { error: "Sandbox not linked to task" },
+      { status: 400 },
+    );
+  }
+  if (task.sandboxId !== sandboxId) {
+    return Response.json(
+      { error: "Sandbox does not belong to this task" },
+      { status: 403 },
     );
   }
 
