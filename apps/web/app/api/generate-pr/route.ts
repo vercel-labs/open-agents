@@ -47,6 +47,7 @@ interface GeneratePRRequest {
   baseBranch: string;
   branchName: string;
   createBranchOnly?: boolean;
+  commitOnly?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
     baseBranch,
     branchName,
     createBranchOnly,
+    commitOnly,
   } = body;
 
   if (!taskId) {
@@ -396,6 +398,14 @@ Respond with ONLY the commit message, nothing else.`,
     }
 
     gitActions.pushed = true;
+  }
+
+  // If commitOnly, return early without generating PR content
+  if (commitOnly) {
+    return Response.json({
+      branchName: resolvedBranch,
+      gitActions,
+    });
   }
 
   // 6. Determine the best base ref for comparison
