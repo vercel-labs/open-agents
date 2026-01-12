@@ -19,6 +19,8 @@ import {
   FolderGit2,
   MoreVertical,
   GitCompare,
+  Save,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -99,13 +101,26 @@ function formatTimeRemaining(ms: number): string {
 function SandboxStatus({
   sandboxInfo,
   isCreating,
+  isSavingSnapshot,
+  isRestoring,
+  hasSnapshot,
   onKill,
+  onSaveAndKill,
+  onSaveSnapshot,
+  onRestore,
 }: {
   sandboxInfo: SandboxInfo | null;
   isCreating: boolean;
+  isSavingSnapshot: boolean;
+  isRestoring: boolean;
+  hasSnapshot: boolean;
   onKill: () => void;
+  onSaveAndKill: () => void;
+  onSaveSnapshot: () => void;
+  onRestore: () => void;
 }) {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   useEffect(() => {
     if (!sandboxInfo) {
@@ -124,11 +139,30 @@ function SandboxStatus({
     return () => clearInterval(interval);
   }, [sandboxInfo]);
 
-  if (isCreating) {
+  if (isCreating || isRestoring) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
-        <span>Creating sandbox...</span>
+        <span>
+          {isRestoring ? "Restoring snapshot..." : "Creating sandbox..."}
+        </span>
+      </div>
+    );
+  }
+
+  // No sandbox and has snapshot - show restore option
+  if (!sandboxInfo && hasSnapshot) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span>Sandbox stopped</span>
+        <button
+          type="button"
+          onClick={onRestore}
+          className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary hover:bg-primary/20"
+        >
+          <span>Restore snapshot</span>
+        </button>
       </div>
     );
   }
@@ -142,6 +176,57 @@ function SandboxStatus({
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 rounded-full bg-red-500" />
         <span>Sandbox expired</span>
+        {hasSnapshot && (
+          <button
+            type="button"
+            onClick={onRestore}
+            className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary hover:bg-primary/20"
+          >
+            <span>Restore snapshot</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (showStopConfirm) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Save before stopping?</span>
+        <button
+          type="button"
+          onClick={() => {
+            setShowStopConfirm(false);
+            onSaveAndKill();
+          }}
+          disabled={isSavingSnapshot}
+          className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary hover:bg-primary/20 disabled:opacity-50"
+        >
+          {isSavingSnapshot ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Save className="h-3 w-3" />
+          )}
+          <span>Save</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowStopConfirm(false);
+            onKill();
+          }}
+          className="rounded px-1.5 py-0.5 hover:bg-muted-foreground/20"
+        >
+          <span>Discard</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowStopConfirm(false)}
+          className="rounded p-0.5 hover:bg-muted-foreground/20"
+          title="Cancel"
+        >
+          <X className="h-3 w-3" />
+        </button>
       </div>
     );
   }
@@ -152,7 +237,21 @@ function SandboxStatus({
       <span>{formatTimeRemaining(timeRemaining)}</span>
       <button
         type="button"
-        onClick={onKill}
+        onClick={onSaveSnapshot}
+        disabled={isSavingSnapshot}
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted-foreground/20 disabled:opacity-50"
+        title="Save snapshot"
+      >
+        {isSavingSnapshot ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Save className="h-3 w-3" />
+        )}
+        <span>Save</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setShowStopConfirm(true)}
         className="rounded p-0.5 hover:bg-muted-foreground/20"
         title="Stop sandbox"
       >
@@ -173,6 +272,8 @@ export function TaskDetailContent() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+  const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -212,6 +313,92 @@ export function TaskDetailContent() {
       });
     } finally {
       clearSandboxInfo();
+    }
+  };
+
+  const handleSaveSnapshot = async () => {
+    if (!sandboxInfo) return;
+    setIsSavingSnapshot(true);
+    try {
+      const response = await fetch("/api/sandbox/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sandboxId: sandboxInfo.sandboxId,
+          taskId: task.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = (await response.json()) as { error?: string };
+        console.error("Failed to save snapshot:", error.error);
+      }
+    } catch (err) {
+      console.error("Failed to save snapshot:", err);
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+  };
+
+  const handleSaveAndKill = async () => {
+    if (!sandboxInfo) return;
+    setIsSavingSnapshot(true);
+    try {
+      const response = await fetch("/api/sandbox/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sandboxId: sandboxInfo.sandboxId,
+          taskId: task.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = (await response.json()) as { error?: string };
+        console.error("Failed to save snapshot:", error.error);
+      }
+    } catch (err) {
+      console.error("Failed to save snapshot:", err);
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+    // Kill sandbox after saving (regardless of save success)
+    await handleKillSandbox();
+  };
+
+  const handleRestoreSnapshot = async () => {
+    if (!task.snapshotUrl) return;
+
+    setIsRestoringSnapshot(true);
+    try {
+      // First create a new sandbox
+      const newSandbox = await createSandbox(
+        task.cloneUrl ?? undefined,
+        task.branch ?? undefined,
+        false, // Don't create new branch when restoring
+        task.id,
+        task.sandboxId ?? undefined,
+      );
+      setSandboxInfo(newSandbox);
+
+      // Then restore the snapshot
+      const response = await fetch("/api/sandbox/snapshot", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sandboxId: newSandbox.sandboxId,
+          taskId: task.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = (await response.json()) as { error?: string };
+        console.error("Failed to restore snapshot:", error.error);
+      }
+    } catch (err) {
+      console.error("Failed to restore snapshot:", err);
+    } finally {
+      setIsRestoringSnapshot(false);
     }
   };
 
@@ -603,7 +790,13 @@ export function TaskDetailContent() {
               <SandboxStatus
                 sandboxInfo={sandboxInfo}
                 isCreating={isCreatingSandbox}
+                isSavingSnapshot={isSavingSnapshot}
+                isRestoring={isRestoringSnapshot}
+                hasSnapshot={!!task.snapshotUrl}
                 onKill={handleKillSandbox}
+                onSaveAndKill={handleSaveAndKill}
+                onSaveSnapshot={handleSaveSnapshot}
+                onRestore={handleRestoreSnapshot}
               />
             </div>
             <form
