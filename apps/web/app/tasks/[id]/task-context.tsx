@@ -113,34 +113,30 @@ export function TaskChatProvider({
     lastFetchedKey: -1, // -1 means never fetched
   });
 
-  // Track which refresh key we're currently fetching for (prevents duplicate fetches)
-  const fetchingForKeyRef = useRef<number | null>(null);
+  // Track the current fetch to prevent duplicates and handle race conditions
+  const fetchCounterRef = useRef(0);
+  const lastFetchedKeyRef = useRef<number>(-1);
+  const fetchingKeyRef = useRef<number | null>(null);
 
   const fetchDiff = useCallback(
     async (sandboxId: string) => {
-      // Synchronous check using ref - prevents duplicate fetches for same key
-      if (fetchingForKeyRef.current === diffRefreshKey) {
+      // Skip if we already have data for this key or are already fetching it
+      if (
+        lastFetchedKeyRef.current === diffRefreshKey ||
+        fetchingKeyRef.current === diffRefreshKey
+      ) {
         return;
       }
-      fetchingForKeyRef.current = diffRefreshKey;
+      fetchingKeyRef.current = diffRefreshKey;
 
-      // Check if we already have cached data for this key
-      let shouldFetch = false;
-      setDiffCache((prev) => {
-        if (prev.lastFetchedKey === diffRefreshKey) {
-          return prev; // Already have data for this key
-        }
-        shouldFetch = true;
-        return {
-          ...prev,
-          isLoading: true,
-          error: null,
-        };
-      });
+      // Increment counter and capture this fetch's ID
+      const thisFetchId = ++fetchCounterRef.current;
 
-      if (!shouldFetch) {
-        return;
-      }
+      setDiffCache((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
 
       try {
         const res = await fetch(
@@ -154,9 +150,9 @@ export function TaskChatProvider({
 
         const data = (await res.json()) as DiffResponse;
 
-        // Only update state if this fetch is still relevant
-        // (a newer fetch might have started while we were waiting)
-        if (fetchingForKeyRef.current === diffRefreshKey) {
+        // Only update if this is still the latest fetch
+        if (thisFetchId === fetchCounterRef.current) {
+          lastFetchedKeyRef.current = diffRefreshKey;
           setDiffCache({
             data,
             error: null,
@@ -164,8 +160,11 @@ export function TaskChatProvider({
             lastFetchedKey: diffRefreshKey,
           });
         }
+        // If not the latest fetch, don't update - the newer fetch will handle it
       } catch (err) {
-        if (fetchingForKeyRef.current === diffRefreshKey) {
+        // Only update if this is still the latest fetch
+        if (thisFetchId === fetchCounterRef.current) {
+          lastFetchedKeyRef.current = diffRefreshKey;
           setDiffCache((prev) => ({
             ...prev,
             error: err instanceof Error ? err.message : "Failed to fetch diff",
