@@ -221,7 +221,14 @@ export class VercelSandbox implements Sandbox {
 
     // Call hook if provided
     if (this.hooks?.onTimeoutExtended) {
-      await this.hooks.onTimeoutExtended(this, additionalMs);
+      try {
+        await this.hooks.onTimeoutExtended(this, additionalMs);
+      } catch (error) {
+        console.error(
+          "[VercelSandbox] onTimeoutExtended hook failed:",
+          error instanceof Error ? error.message : error,
+        );
+      }
     }
 
     return { expiresAt: this._expiresAt };
