@@ -8,6 +8,9 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 // Allow up to 2 minutes for git operations
 export const maxDuration = 120;
 
+// Escape shell metacharacters to prevent command injection
+const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
+
 interface CreateRepoRequest {
   taskId: string;
   sandboxId: string;
@@ -117,6 +120,23 @@ export async function POST(req: Request) {
     );
   }
 
+  // Ensure we have required fields from repo creation
+  if (!repoResult.cloneUrl || !repoResult.owner || !repoResult.repoName) {
+    return Response.json(
+      { error: "Repository created but missing required fields" },
+      { status: 500 },
+    );
+  }
+
+  // Helper to create error response with context about created repo
+  const repoCreatedError = (message: string) =>
+    Response.json(
+      {
+        error: `${message}. Note: Repository "${repoResult.owner}/${repoResult.repoName}" was created on GitHub. You may need to delete it manually before retrying.`,
+      },
+      { status: 500 },
+    );
+
   // 8. Initialize git if not already initialized
   const gitCheckResult = await sandbox.exec(
     "git rev-parse --git-dir",
@@ -127,21 +147,22 @@ export async function POST(req: Request) {
     // Initialize git
     const initResult = await sandbox.exec("git init", cwd, 10000);
     if (!initResult.success) {
-      return Response.json(
-        { error: "Failed to initialize git repository" },
-        { status: 500 },
-      );
+      return repoCreatedError("Failed to initialize git repository");
     }
   }
 
   // 9. Configure git user (in case not already configured)
+  const userName = session.user.name ?? session.user.username;
+  const userEmail =
+    session.user.email ?? `${session.user.username}@users.noreply.github.com`;
+
   await sandbox.exec(
-    `git config user.name "${session.user.name ?? session.user.username}"`,
+    `git config user.name ${escapeShellArg(userName)}`,
     cwd,
     5000,
   );
   await sandbox.exec(
-    `git config user.email "${session.user.email ?? `${session.user.username}@users.noreply.github.com`}"`,
+    `git config user.email ${escapeShellArg(userEmail)}`,
     cwd,
     5000,
   );
@@ -161,28 +182,30 @@ export async function POST(req: Request) {
     5000,
   );
   if (!addRemoteResult.success) {
-    return Response.json(
-      { error: "Failed to add remote origin" },
-      { status: 500 },
-    );
+    return repoCreatedError("Failed to add remote origin");
   }
 
   // 11. Stage all files
   const addResult = await sandbox.exec("git add -A", cwd, 10000);
   if (!addResult.success) {
-    return Response.json({ error: "Failed to stage files" }, { status: 500 });
+    return repoCreatedError("Failed to stage files");
   }
 
   // 12. Generate commit message with AI
   const diffResult = await sandbox.exec("git diff --cached --stat", cwd, 30000);
   let commitMessage = "Initial commit";
 
+  // Sanitize taskTitle to prevent prompt injection and limit length
+  const sanitizedTaskTitle = taskTitle
+    .slice(0, 200)
+    .replace(/[^\w\s.,!?-]/g, "");
+
   try {
     const commitMsgResult = await generateText({
       model: gateway("anthropic/claude-haiku-4.5"),
       prompt: `Generate a concise git commit message for an initial commit of a new project. Use conventional commit format. One line only, max 72 characters.
 
-Task context: ${taskTitle}
+Task context: ${sanitizedTaskTitle}
 
 Files being committed:
 ${diffResult.stdout.slice(0, 4000)}
@@ -203,9 +226,8 @@ Respond with ONLY the commit message, nothing else.`,
     10000,
   );
   if (!commitResult.success) {
-    return Response.json(
-      { error: `Failed to commit: ${commitResult.stdout}` },
-      { status: 500 },
+    return repoCreatedError(
+      `Failed to commit: ${commitResult.stdout.slice(0, 100)}`,
     );
   }
 
@@ -216,10 +238,7 @@ Respond with ONLY the commit message, nothing else.`,
   const pushResult = await sandbox.exec("git push -u origin main", cwd, 60000);
   if (!pushResult.success) {
     const pushOutput = pushResult.stdout + (pushResult.stderr ?? "");
-    return Response.json(
-      { error: `Failed to push: ${pushOutput.slice(0, 200)}` },
-      { status: 500 },
-    );
+    return repoCreatedError(`Failed to push: ${pushOutput.slice(0, 100)}`);
   }
 
   // 16. Update task with new repo info

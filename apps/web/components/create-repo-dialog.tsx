@@ -177,7 +177,7 @@ export function CreateRepoDialog({
                   disabled={isCreating}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use letters, numbers, hyphens, and underscores only.
+                  Use letters, numbers, hyphens, underscores, and periods only.
                 </p>
               </div>
 
