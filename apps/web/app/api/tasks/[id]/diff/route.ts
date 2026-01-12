@@ -26,8 +26,24 @@ type RouteContext = {
 };
 
 /**
+ * Unescape C-style escape sequences in git quoted paths
+ * Git uses C-style quoting for special chars: \n, \t, \\, \", etc.
+ * Handles both fully quoted paths ("path") and already-unquoted escaped content
+ */
+function unescapeGitPath(path: string): string {
+  // If path is surrounded by quotes, strip them first
+  if (path.startsWith('"') && path.endsWith('"')) {
+    return path.slice(1, -1).replace(/\\(.)/g, "$1");
+  }
+  // For paths captured from inside quotes (e.g., by regex), still unescape
+  // For truly unquoted paths (no special chars), this is a no-op
+  return path.replace(/\\(.)/g, "$1");
+}
+
+/**
  * Parse git diff --name-status output to get file statuses
  * Format: "M\tpath" or "R100\told\tnew" for renames
+ * Paths may be quoted if they contain special characters
  */
 function parseNameStatus(
   output: string,
@@ -49,22 +65,25 @@ function parseNameStatus(
       const oldPath = parts[1];
       const newPath = parts[2];
       if (newPath) {
-        result.set(newPath, { status: "renamed", oldPath });
+        result.set(unescapeGitPath(newPath), {
+          status: "renamed",
+          oldPath: oldPath ? unescapeGitPath(oldPath) : undefined,
+        });
       }
     } else if (statusCode === "A") {
       const path = parts[1];
       if (path) {
-        result.set(path, { status: "added" });
+        result.set(unescapeGitPath(path), { status: "added" });
       }
     } else if (statusCode === "D") {
       const path = parts[1];
       if (path) {
-        result.set(path, { status: "deleted" });
+        result.set(unescapeGitPath(path), { status: "deleted" });
       }
     } else if (statusCode === "M") {
       const path = parts[1];
       if (path) {
-        result.set(path, { status: "modified" });
+        result.set(unescapeGitPath(path), { status: "modified" });
       }
     }
   }
@@ -75,6 +94,7 @@ function parseNameStatus(
 /**
  * Parse git diff --numstat output to get per-file stats
  * Format: "<additions>\t<deletions>\t<path>"
+ * Paths may be quoted if they contain special characters
  */
 function parseStats(
   output: string,
@@ -92,7 +112,7 @@ function parseStats(
     const path = parts[2];
 
     if (path) {
-      result.set(path, { additions, deletions });
+      result.set(unescapeGitPath(path), { additions, deletions });
     }
   }
 
@@ -102,10 +122,15 @@ function parseStats(
 /**
  * Split full diff output by file
  * Each file starts with "diff --git a/... b/..."
+ * Handles both quoted paths (for special chars) and unquoted paths
  */
 function splitDiffByFile(fullDiff: string): Map<string, string> {
   const result = new Map<string, string>();
-  const filePattern = /^diff --git a\/.+ b\/(.+)$/gm;
+  // Match both quoted and unquoted paths:
+  // - "a/..." (quoted) or a/... (unquoted) for source
+  // - "b/..." (quoted, capture group 1) or b/... (unquoted, capture group 2) for destination
+  const filePattern =
+    /^diff --git (?:"a\/.*?"|a\/\S*) (?:"b\/(.*?)"|b\/(\S+))$/gm;
 
   let lastIndex = 0;
   let lastPath: string | null = null;
@@ -115,7 +140,9 @@ function splitDiffByFile(fullDiff: string): Map<string, string> {
     if (lastPath !== null) {
       result.set(lastPath, fullDiff.slice(lastIndex, match.index).trim());
     }
-    lastPath = match[1] ?? null;
+    // Use quoted path (group 1) if present, otherwise unquoted (group 2)
+    const rawPath = match[1] ?? match[2] ?? null;
+    lastPath = rawPath ? unescapeGitPath(rawPath) : null;
     lastIndex = match.index;
   }
 
