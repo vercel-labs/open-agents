@@ -290,6 +290,7 @@ export function TaskDetailContent() {
     hadInitialMessages,
     diffRefreshKey,
     triggerDiffRefresh,
+    updateTaskSnapshot,
   } = useTaskChatContext();
   const {
     messages,
@@ -318,7 +319,11 @@ export function TaskDetailContent() {
 
   const saveSnapshot = async (
     sandboxId: string,
-  ): Promise<{ success: boolean }> => {
+  ): Promise<{
+    success: boolean;
+    downloadUrl?: string;
+    createdAt?: number;
+  }> => {
     try {
       const response = await fetch("/api/sandbox/snapshot", {
         method: "POST",
@@ -334,7 +339,15 @@ export function TaskDetailContent() {
         console.error("Failed to save snapshot:", error.error);
         return { success: false };
       }
-      return { success: true };
+      const data = (await response.json()) as {
+        downloadUrl: string;
+        createdAt: number;
+      };
+      return {
+        success: true,
+        downloadUrl: data.downloadUrl,
+        createdAt: data.createdAt,
+      };
     } catch (err) {
       console.error("Failed to save snapshot:", err);
       return { success: false };
@@ -345,7 +358,10 @@ export function TaskDetailContent() {
     if (!sandboxInfo) return;
     setIsSavingSnapshot(true);
     try {
-      await saveSnapshot(sandboxInfo.sandboxId);
+      const result = await saveSnapshot(sandboxInfo.sandboxId);
+      if (result.success && result.downloadUrl && result.createdAt) {
+        updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
+      }
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -355,7 +371,10 @@ export function TaskDetailContent() {
     if (!sandboxInfo) return;
     setIsSavingSnapshot(true);
     try {
-      await saveSnapshot(sandboxInfo.sandboxId);
+      const result = await saveSnapshot(sandboxInfo.sandboxId);
+      if (result.success && result.downloadUrl && result.createdAt) {
+        updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
+      }
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -374,12 +393,14 @@ export function TaskDetailContent() {
     let newSandbox: SandboxInfo | null = null;
     try {
       // First create a new sandbox
+      // Don't pass task.sandboxId - we're creating a fresh sandbox for restore,
+      // and the React state may be stale (not synced with DB after discard)
       newSandbox = await createSandbox(
         task.cloneUrl ?? undefined,
         task.branch ?? undefined,
         false, // Don't create new branch when restoring
         task.id,
-        task.sandboxId ?? undefined,
+        undefined,
       );
       setSandboxInfo(newSandbox);
 

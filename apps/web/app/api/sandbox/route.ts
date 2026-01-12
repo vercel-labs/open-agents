@@ -159,5 +159,8 @@ export async function DELETE(req: Request) {
   const sandbox = await connectVercelSandbox({ sandboxId });
   await sandbox.stop();
 
+  // Clear sandboxId from task so future sandbox creation doesn't fail validation
+  await updateTask(taskId, { sandboxId: null });
+
   return Response.json({ success: true });
 }

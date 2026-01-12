@@ -50,6 +50,8 @@ type TaskChatContextValue = {
   diffCache: DiffCacheState;
   /** Fetch diff data (uses cache if valid) */
   fetchDiff: (sandboxId: string) => Promise<void>;
+  /** Update task snapshot info after saving */
+  updateTaskSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -93,12 +95,23 @@ export function TaskChatProvider({
   const setSandboxInfo = useCallback((info: SandboxInfo) => {
     sandboxIdRef.current = info.sandboxId;
     setSandboxInfoState(info);
+    // Keep task.sandboxId in sync so it doesn't become stale
+    setTask((prev) => ({ ...prev, sandboxId: info.sandboxId }));
   }, []);
 
   const clearSandboxInfo = useCallback(() => {
     sandboxIdRef.current = null;
     setSandboxInfoState(null);
+    // Keep task.sandboxId in sync so it doesn't become stale
+    setTask((prev) => ({ ...prev, sandboxId: null }));
   }, []);
+
+  const updateTaskSnapshot = useCallback(
+    (snapshotUrl: string, snapshotCreatedAt: Date) => {
+      setTask((prev) => ({ ...prev, snapshotUrl, snapshotCreatedAt }));
+    },
+    [],
+  );
 
   const [diffRefreshKey, setDiffRefreshKey] = useState(0);
 
@@ -212,6 +225,7 @@ export function TaskChatProvider({
         triggerDiffRefresh,
         diffCache,
         fetchDiff,
+        updateTaskSnapshot,
       }}
     >
       {children}
