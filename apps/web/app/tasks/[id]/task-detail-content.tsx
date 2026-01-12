@@ -395,10 +395,17 @@ export function TaskDetailContent() {
       // First create a new sandbox
       // Don't pass task.sandboxId - we're creating a fresh sandbox for restore,
       // and the React state may be stale (not synced with DB after discard)
+      //
+      // For isNewBranch tasks: if no PR exists, the branch was never pushed to origin.
+      // We need to use the newBranch pattern (clone default, create branch locally).
+      // If a PR exists, the branch was pushed and we can clone it directly.
+      const branchExistsOnOrigin = task.prNumber != null;
+      const useNewBranch = task.isNewBranch && !branchExistsOnOrigin;
+
       newSandbox = await createSandbox(
         task.cloneUrl ?? undefined,
         task.branch ?? undefined,
-        false, // Don't create new branch when restoring
+        useNewBranch,
         task.id,
         undefined,
       );
@@ -462,9 +469,11 @@ export function TaskDetailContent() {
         // Always create a sandbox - either with repo or empty
         setIsCreatingSandbox(true);
         try {
-          // Only create new branch on first sandbox creation
-          // If task already has a sandboxId, branch was already created
-          const shouldCreateNewBranch = task.isNewBranch && !task.sandboxId;
+          // For isNewBranch tasks: use newBranch pattern if branch doesn't exist on origin.
+          // Branch only exists on origin if a PR was created (which pushes the branch).
+          const branchExistsOnOrigin = task.prNumber != null;
+          const shouldCreateNewBranch =
+            task.isNewBranch && !branchExistsOnOrigin;
           const newSandbox = await createSandbox(
             task.cloneUrl ?? undefined,
             task.branch ?? undefined,
@@ -859,10 +868,11 @@ export function TaskDetailContent() {
                 if (!isSandboxValid(sandboxInfo)) {
                   setIsCreatingSandbox(true);
                   try {
-                    // Only create new branch on first sandbox creation
-                    // If task already has a sandboxId, branch was already created
+                    // For isNewBranch tasks: use newBranch pattern if branch doesn't exist on origin.
+                    // Branch only exists on origin if a PR was created (which pushes the branch).
+                    const branchExistsOnOrigin = task.prNumber != null;
                     const shouldCreateNewBranch =
-                      task.isNewBranch && !task.sandboxId;
+                      task.isNewBranch && !branchExistsOnOrigin;
                     const newSandbox = await createSandbox(
                       task.cloneUrl ?? undefined,
                       task.branch ?? undefined,

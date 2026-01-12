@@ -68,8 +68,11 @@ export async function POST(req: Request) {
   }
 
   // Determine if we should create a new branch
-  // Only create new branch on first sandbox creation (no existing sandboxId)
-  const shouldCreateNewBranch = isNewBranch && !taskSandboxId;
+  // Frontend is responsible for deciding when to pass isNewBranch: true based on:
+  // - First sandbox creation for a new branch task
+  // - Snapshot restore when branch doesn't exist on origin (no PR created yet)
+  // - Expired sandbox recreation when branch doesn't exist on origin
+  const shouldCreateNewBranch = isNewBranch;
 
   // Build sandbox options - source is only included when repoUrl is provided
   const sandboxOptions: Parameters<typeof connectVercelSandbox>[0] = {
