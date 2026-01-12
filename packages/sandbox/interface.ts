@@ -46,6 +46,13 @@ export interface SandboxHooks {
    * }
    */
   onTimeout?: SandboxHook;
+
+  /**
+   * Called after timeout is successfully extended.
+   * @param sandbox - The sandbox instance
+   * @param additionalMs - How much time was added
+   */
+  onTimeoutExtended?: (sandbox: Sandbox, additionalMs: number) => Promise<void>;
 }
 
 /**
@@ -189,4 +196,12 @@ export interface Sandbox {
    * For remote sandboxes, this releases resources.
    */
   stop(): Promise<void>;
+
+  /**
+   * Extend the sandbox timeout by the specified duration.
+   * Only supported by remote sandboxes (Vercel). Local sandboxes don't timeout.
+   * @param additionalMs - Additional time in milliseconds
+   * @returns New expiration timestamp
+   */
+  extendTimeout?(additionalMs: number): Promise<{ expiresAt: number }>;
 }
