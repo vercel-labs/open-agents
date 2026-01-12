@@ -105,7 +105,7 @@ const sandbox = await connectVercelSandbox({
 });
 ```
 
-**Note:** This requires `taskId` to be available in the hook context. We'll need to capture it in a closure.
+**Note:** This requires `taskId` to be available in the hook context. We'll need to capture it in a closure. Also pass the same hook when reconnecting to stop a sandbox so manual stops persist state too.
 
 ---
 
@@ -167,6 +167,8 @@ return Response.json({
 });
 ```
 
+**Also:** Update the task's `sandboxId` on every new sandbox creation (not just the first) so subsequent API calls validate correctly.
+
 ---
 
 ### Phase 7: Client-Side UI Feedback
@@ -177,6 +179,7 @@ When `createSandbox` is called:
 1. Show "Restoring workspace..." text during sandbox creation (if task has messages)
 2. If `stateRestored: true` in response, continue normally
 3. If restoration failed, show subtle warning but continue
+4. Extend sandbox status UI to show stopped/expired state and provide a "Start new sandbox" / restart action
 
 ---
 
