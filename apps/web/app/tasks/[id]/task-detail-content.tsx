@@ -127,6 +127,7 @@ function SandboxStatus({
 }) {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const hasAutoSavedRef = useRef(false);
 
   useEffect(() => {
     if (!sandboxInfo) {
@@ -144,6 +145,24 @@ function SandboxStatus({
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, [sandboxInfo]);
+
+  // Reset auto-save flag when sandbox changes
+  useEffect(() => {
+    hasAutoSavedRef.current = false;
+  }, [sandboxInfo?.sandboxId]);
+
+  // Auto-save when timeout reached (buffer in vercel.ts gives 30s extra)
+  useEffect(() => {
+    if (
+      timeRemaining !== null &&
+      timeRemaining <= 0 &&
+      !hasAutoSavedRef.current &&
+      !isSavingSnapshot
+    ) {
+      hasAutoSavedRef.current = true;
+      onSaveAndKill();
+    }
+  }, [timeRemaining, isSavingSnapshot, onSaveAndKill]);
 
   if (isCreating || isRestoring) {
     return (
