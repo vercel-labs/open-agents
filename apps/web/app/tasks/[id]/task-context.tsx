@@ -145,6 +145,13 @@ export function TaskChatProvider({
       const response = await fetch(
         `/api/sandbox/reconnect?taskId=${task.id}`,
       );
+
+      if (!response.ok) {
+        console.error("Reconnection request failed:", response.status);
+        setReconnectionStatus("failed");
+        return;
+      }
+
       const data = (await response.json()) as ReconnectResponse;
 
       if (data.status === "connected") {
@@ -156,9 +163,15 @@ export function TaskChatProvider({
         });
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {
+        // Clear stale sandboxId from local state
+        sandboxIdRef.current = null;
+        setTask((prev) => ({ ...prev, sandboxId: null }));
         setReconnectionStatus("no_sandbox");
       } else {
-        // expired or not_found
+        // expired or not_found - server has already cleared sandbox metadata
+        // Clear stale sandboxId from local state to prevent 403 errors on next sandbox creation
+        sandboxIdRef.current = null;
+        setTask((prev) => ({ ...prev, sandboxId: null }));
         setReconnectionStatus("failed");
       }
     } catch (error) {

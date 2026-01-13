@@ -192,12 +192,21 @@ function SandboxStatus({
     );
   }
 
-  // No sandbox was ever created for this task
+  // No sandbox was ever created for this task (or it was cleared)
   if (reconnectionStatus === "no_sandbox") {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 rounded-full bg-gray-400" />
         <span>No active sandbox</span>
+        {hasSnapshot && (
+          <button
+            type="button"
+            onClick={onRestore}
+            className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary hover:bg-primary/20"
+          >
+            <span>Restore snapshot</span>
+          </button>
+        )}
       </div>
     );
   }
