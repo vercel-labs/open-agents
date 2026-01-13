@@ -41,8 +41,8 @@ export interface AgentContext {
  * Approval rules for auto-approving tool operations within a session.
  * Rules are matched against tool arguments to skip manual approval.
  *
- * Note: Rules only apply to paths within the working directory.
- * Outside-cwd operations always require explicit approval regardless of rules.
+ * Path-glob rules can match paths both inside and outside the working directory.
+ * This allows users to grant persistent approval for specific external paths.
  */
 export const approvalRuleSchema = z.discriminatedUnion("type", [
   z.object({
