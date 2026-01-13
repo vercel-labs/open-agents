@@ -454,7 +454,7 @@ export function TaskDetailContent() {
     onSelect: handleFileSelect,
   });
 
-  const handleKillSandbox = async () => {
+  const handleKillSandbox = useCallback(async () => {
     if (!sandboxInfo) return;
     try {
       await fetch("/api/sandbox", {
@@ -468,7 +468,7 @@ export function TaskDetailContent() {
     } finally {
       clearSandboxInfo();
     }
-  };
+  }, [sandboxInfo, task.id, clearSandboxInfo]);
 
   const saveSnapshot = async (
     sandboxId: string,
@@ -507,8 +507,9 @@ export function TaskDetailContent() {
     }
   };
 
-  const handleSaveAndKill = async () => {
-    if (!sandboxInfo) return;
+  const handleSaveAndKill = useCallback(async () => {
+    if (!sandboxInfo || isSavingSnapshotRef.current) return;
+    isSavingSnapshotRef.current = true;
     setIsSavingSnapshot(true);
     try {
       const result = await saveSnapshot(sandboxInfo.sandboxId);
@@ -517,10 +518,11 @@ export function TaskDetailContent() {
       }
     } finally {
       setIsSavingSnapshot(false);
+      isSavingSnapshotRef.current = false;
     }
     // Kill sandbox after saving (regardless of save success)
     await handleKillSandbox();
-  };
+  }, [sandboxInfo, updateTaskSnapshot, handleKillSandbox]);
 
   const handleExtendSandbox = async () => {
     if (!sandboxInfo) return;
@@ -547,10 +549,12 @@ export function TaskDetailContent() {
       };
 
       // Update sandbox info with new expiration
+      // Use a single timestamp to avoid drift between createdAt and timeout calculation
+      const now = Date.now();
       setSandboxInfo({
         ...sandboxInfo,
-        createdAt: Date.now(),
-        timeout: data.expiresAt - Date.now(),
+        createdAt: now,
+        timeout: data.expiresAt - now,
       });
     } catch (err) {
       console.error("Failed to extend sandbox:", err);
@@ -560,6 +564,7 @@ export function TaskDetailContent() {
   };
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const isSavingSnapshotRef = useRef(false);
 
   const handleRestoreSnapshot = async () => {
     if (!task.snapshotUrl) return;
