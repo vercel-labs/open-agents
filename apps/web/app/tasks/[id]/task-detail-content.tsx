@@ -20,9 +20,7 @@ import {
   MoreVertical,
   GitCompare,
   Paperclip,
-  Save,
   Loader2,
-  Pause,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -102,14 +100,6 @@ function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
   return Date.now() < expiresAt - 10_000;
 }
 
-function formatTimeRemaining(ms: number): string {
-  if (ms <= 0) return "0:00";
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
-
 function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
@@ -133,21 +123,25 @@ function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
   return timeRemaining;
 }
 
+const WARNING_THRESHOLD_MS = 60_000; // Show warning when < 1 minute remaining
+
 function SandboxHeaderBadge({
   sandboxInfo,
   isCreating,
   isSavingSnapshot,
   isRestoring,
+  isExtending,
   timeRemaining,
-  onSaveSnapshot,
+  onExtend,
   onSaveAndKill,
 }: {
   sandboxInfo: SandboxInfo | null;
   isCreating: boolean;
   isSavingSnapshot: boolean;
   isRestoring: boolean;
+  isExtending: boolean;
   timeRemaining: number | null;
-  onSaveSnapshot: () => void;
+  onExtend: () => void;
   onSaveAndKill: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -233,20 +227,55 @@ function SandboxHeaderBadge({
     );
   }
 
-  // Active - show green dot with hover controls
+  const isWarning = timeRemaining < WARNING_THRESHOLD_MS;
+  const secondsRemaining = Math.ceil(timeRemaining / 1000);
+
+  // Warning state - show message with extend and close buttons
+  if (isWarning) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-orange-500">
+          Pausing in {secondsRemaining}s
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onExtend}
+          disabled={isExtending}
+          className="h-6 px-2 text-xs"
+        >
+          {isExtending ? <Loader2 className="size-3 animate-spin" /> : "Extend"}
+        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleStop}
+              disabled={isSavingSnapshot}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <X className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8}>
+            Save and pause
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  // Active - show green dot with X on hover
   return (
     <div
-      className="flex items-center gap-1.5"
+      className="flex items-center gap-1"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1.5 p-1">
+          <div className="flex items-center p-1">
             <span className="size-2.5 rounded-full bg-green-500" />
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {formatTimeRemaining(timeRemaining)}
-            </span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
@@ -254,45 +283,23 @@ function SandboxHeaderBadge({
         </TooltipContent>
       </Tooltip>
 
-      {/* Hover controls */}
+      {/* X button on hover */}
       {isHovered && (
-        <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onSaveSnapshot}
-                disabled={isSavingSnapshot}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-              >
-                {isSavingSnapshot ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Save className="size-3.5" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8}>
-              Save snapshot
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleStop}
-                disabled={isSavingSnapshot}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-              >
-                <Pause className="size-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={8}>
-              Save and pause
-            </TooltipContent>
-          </Tooltip>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleStop}
+              disabled={isSavingSnapshot}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <X className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8}>
+            Save and pause
+          </TooltipContent>
+        </Tooltip>
       )}
     </div>
   );
@@ -367,6 +374,7 @@ export function TaskDetailContent() {
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
+  const [isExtendingSandbox, setIsExtendingSandbox] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -499,19 +507,6 @@ export function TaskDetailContent() {
     }
   };
 
-  const handleSaveSnapshot = async () => {
-    if (!sandboxInfo) return;
-    setIsSavingSnapshot(true);
-    try {
-      const result = await saveSnapshot(sandboxInfo.sandboxId);
-      if (result.success && result.downloadUrl && result.createdAt) {
-        updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
-      }
-    } finally {
-      setIsSavingSnapshot(false);
-    }
-  };
-
   const handleSaveAndKill = async () => {
     if (!sandboxInfo) return;
     setIsSavingSnapshot(true);
@@ -525,6 +520,43 @@ export function TaskDetailContent() {
     }
     // Kill sandbox after saving (regardless of save success)
     await handleKillSandbox();
+  };
+
+  const handleExtendSandbox = async () => {
+    if (!sandboxInfo) return;
+    setIsExtendingSandbox(true);
+    try {
+      const response = await fetch("/api/sandbox/extend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sandboxId: sandboxInfo.sandboxId,
+          taskId: task.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = (await response.json()) as { error?: string };
+        console.error("Failed to extend sandbox:", error.error);
+        return;
+      }
+
+      const data = (await response.json()) as {
+        expiresAt: number;
+        extendedBy: number;
+      };
+
+      // Update sandbox info with new expiration
+      setSandboxInfo({
+        ...sandboxInfo,
+        createdAt: Date.now(),
+        timeout: data.expiresAt - Date.now(),
+      });
+    } catch (err) {
+      console.error("Failed to extend sandbox:", err);
+    } finally {
+      setIsExtendingSandbox(false);
+    }
   };
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -799,8 +831,9 @@ export function TaskDetailContent() {
               isCreating={isCreatingSandbox}
               isSavingSnapshot={isSavingSnapshot}
               isRestoring={isRestoringSnapshot}
+              isExtending={isExtendingSandbox}
               timeRemaining={sandboxTimeRemaining}
-              onSaveSnapshot={handleSaveSnapshot}
+              onExtend={handleExtendSandbox}
               onSaveAndKill={handleSaveAndKill}
             />
           </div>
