@@ -106,6 +106,8 @@ const grepInputSchema = z.object({
 
 /**
  * Check if a path matches any path-glob approval rules for grep operations.
+ * Grep approval rules apply to paths OUTSIDE the working directory, so we need
+ * to allow matching outside the base directory.
  */
 function pathMatchesApprovalRule(
   searchPath: string,
@@ -118,7 +120,13 @@ function pathMatchesApprovalRule(
 
   for (const rule of approvalRules) {
     if (rule.type === "path-glob" && rule.tool === "grep") {
-      if (pathMatchesGlob(absolutePath, rule.glob, workingDirectory)) {
+      // Grep rules apply to paths outside the working directory,
+      // so we must allow matching outside the base
+      if (
+        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
+          allowOutsideBase: true,
+        })
+      ) {
         return true;
       }
     }

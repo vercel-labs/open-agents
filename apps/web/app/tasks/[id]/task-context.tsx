@@ -18,6 +18,7 @@ import type { WebAgentUIMessage } from "@/app/types";
 import type { Task } from "@/lib/db/schema";
 import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
 import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
+import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
 
 export type SandboxInfo = {
   sandboxId: string;
@@ -25,6 +26,13 @@ export type SandboxInfo = {
   timeout: number;
   currentBranch?: string;
 };
+
+export type ReconnectionStatus =
+  | "idle"
+  | "checking"
+  | "connected"
+  | "failed"
+  | "no_sandbox";
 
 type DiffCacheState = {
   data: DiffResponse | null;
@@ -69,6 +77,10 @@ type TaskChatContextValue = {
   fetchFiles: (sandboxId: string) => Promise<void>;
   /** Update task snapshot info after saving */
   updateTaskSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
+  /** Current status of sandbox reconnection attempt */
+  reconnectionStatus: ReconnectionStatus;
+  /** Attempt to reconnect to an existing sandbox */
+  attemptReconnection: () => Promise<void>;
 };
 
 const TaskChatContext = createContext<TaskChatContextValue | undefined>(
@@ -122,6 +134,51 @@ export function TaskChatProvider({
     // Keep task.sandboxId in sync so it doesn't become stale
     setTask((prev) => ({ ...prev, sandboxId: null }));
   }, []);
+
+  const [reconnectionStatus, setReconnectionStatus] =
+    useState<ReconnectionStatus>("idle");
+
+  const attemptReconnection = useCallback(async () => {
+    setReconnectionStatus("checking");
+
+    try {
+      const response = await fetch(
+        `/api/sandbox/reconnect?taskId=${task.id}`,
+      );
+
+      if (!response.ok) {
+        console.error("Reconnection request failed:", response.status);
+        setReconnectionStatus("failed");
+        return;
+      }
+
+      const data = (await response.json()) as ReconnectResponse;
+
+      if (data.status === "connected") {
+        sandboxIdRef.current = data.sandboxId;
+        setSandboxInfoState({
+          sandboxId: data.sandboxId,
+          createdAt: data.createdAt,
+          timeout: data.timeout,
+        });
+        setReconnectionStatus("connected");
+      } else if (data.status === "no_sandbox") {
+        // Clear stale sandboxId from local state
+        sandboxIdRef.current = null;
+        setTask((prev) => ({ ...prev, sandboxId: null }));
+        setReconnectionStatus("no_sandbox");
+      } else {
+        // expired or not_found - server has already cleared sandbox metadata
+        // Clear stale sandboxId from local state to prevent 403 errors on next sandbox creation
+        sandboxIdRef.current = null;
+        setTask((prev) => ({ ...prev, sandboxId: null }));
+        setReconnectionStatus("failed");
+      }
+    } catch (error) {
+      console.error("Failed to reconnect to sandbox:", error);
+      setReconnectionStatus("failed");
+    }
+  }, [task.id]);
 
   const updateTaskSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
@@ -319,6 +376,8 @@ export function TaskChatProvider({
         fileCache,
         fetchFiles,
         updateTaskSnapshot,
+        reconnectionStatus,
+        attemptReconnection,
       }}
     >
       {children}

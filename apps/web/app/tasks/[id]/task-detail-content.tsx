@@ -40,7 +40,11 @@ import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
-import { useTaskChatContext, type SandboxInfo } from "./task-context";
+import {
+  useTaskChatContext,
+  type SandboxInfo,
+  type ReconnectionStatus,
+} from "./task-context";
 import { DiffViewer } from "./diff-viewer";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
@@ -403,6 +407,8 @@ export function TaskDetailContent() {
     fetchFiles,
     triggerFileRefresh,
     updateTaskSnapshot,
+    reconnectionStatus,
+    attemptReconnection,
   } = useTaskChatContext();
   const sandboxTimeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const {
@@ -661,6 +667,32 @@ export function TaskDetailContent() {
       inputRef.current?.focus();
     }
   }, [status]);
+
+  // Attempt to reconnect to existing sandbox on page refresh
+  useEffect(() => {
+    // Only attempt reconnection if:
+    // 1. We have initial messages (returning to an existing conversation)
+    // 2. Task has a sandboxId (sandbox was created before)
+    // 3. No current sandboxInfo (haven't reconnected yet)
+    // 4. Not already creating a sandbox
+    // 5. Reconnection status is idle (haven't tried yet)
+    if (
+      hadInitialMessages &&
+      task.sandboxId &&
+      !sandboxInfo &&
+      !isCreatingSandbox &&
+      reconnectionStatus === "idle"
+    ) {
+      attemptReconnection();
+    }
+  }, [
+    hadInitialMessages,
+    task.sandboxId,
+    sandboxInfo,
+    isCreatingSandbox,
+    reconnectionStatus,
+    attemptReconnection,
+  ]);
 
   // Auto-send initial message when task loads and no messages exist
   // Use hadInitialMessages to prevent race condition on remount

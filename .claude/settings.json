@@ -3,8 +3,11 @@
     "allow": [
       "Bash(bun add:*)",
       "Bash(bun run typecheck:*)",
+      "Bash(cd * && bun run typecheck:*)",
       "Bash(bun run format:*)",
+      "Bash(cd * && bun run format:*)",
       "Bash(turbo:*)",
+      "Bash(cd * && turbo:*)",
       "Bash(ls:*)",
       "Bash(bun -e:*)",
       "WebSearch",
@@ -12,7 +15,8 @@
       "Bash(tree:*)",
       "Bash(cat:*)",
       "Bash(jq:*)",
-      "Bash(python3 -c:*)"
+      "Bash(python3 -c:*)",
+      "Bash(git commit:*)"
     ]
   },
   "hooks": {

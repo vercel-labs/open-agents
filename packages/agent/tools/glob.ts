@@ -115,6 +115,8 @@ const globInputSchema = z.object({
 
 /**
  * Check if a path matches any path-glob approval rules for glob operations.
+ * Glob approval rules apply to paths OUTSIDE the working directory, so we need
+ * to allow matching outside the base directory.
  */
 function pathMatchesApprovalRule(
   searchPath: string,
@@ -127,7 +129,13 @@ function pathMatchesApprovalRule(
 
   for (const rule of approvalRules) {
     if (rule.type === "path-glob" && rule.tool === "glob") {
-      if (pathMatchesGlob(absolutePath, rule.glob, workingDirectory)) {
+      // Glob rules apply to paths outside the working directory,
+      // so we must allow matching outside the base
+      if (
+        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
+          allowOutsideBase: true,
+        })
+      ) {
         return true;
       }
     }

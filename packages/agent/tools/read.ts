@@ -2,7 +2,13 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import * as fs from "fs";
-import { isPathWithinDirectory, getSandbox, getApprovalContext } from "./utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  getApprovalContext,
+  pathMatchesGlob,
+} from "./utils";
+import type { ApprovalRule } from "../types";
 
 const readInputSchema = z.object({
   filePath: z
@@ -52,6 +58,36 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
   return absolutePath;
 }
 
+/**
+ * Check if a file path matches any path-glob approval rules for read operations.
+ * Read approval rules apply to paths OUTSIDE the working directory, so we need
+ * to allow matching outside the base directory.
+ */
+function pathMatchesApprovalRule(
+  filePath: string,
+  workingDirectory: string,
+  approvalRules: ApprovalRule[],
+): boolean {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(workingDirectory, filePath);
+
+  for (const rule of approvalRules) {
+    if (rule.type === "path-glob" && rule.tool === "read") {
+      // Read rules apply to paths outside the working directory,
+      // so we must allow matching outside the base
+      if (
+        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
+          allowOutsideBase: true,
+        })
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export const readFileTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
@@ -65,7 +101,17 @@ export const readFileTool = () =>
       if (ctx.autoApprove === "all") {
         return false;
       }
-      // Outside working directory - always requires approval
+      // Check if path matches any saved approval rules
+      if (
+        pathMatchesApprovalRule(
+          args.filePath,
+          ctx.workingDirectory,
+          ctx.approvalRules,
+        )
+      ) {
+        return false;
+      }
+      // Outside working directory - requires approval
       return true;
     },
     description: `Read a file from the filesystem.

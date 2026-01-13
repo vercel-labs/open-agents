@@ -59,6 +59,8 @@ function isOutsideWorkingDirectory(
 
 /**
  * Check if a file path matches any path-glob approval rules for a specific tool.
+ * Write/edit approval rules can apply to paths outside the working directory,
+ * so we allow matching outside the base directory.
  */
 function pathMatchesApprovalRule(
   filePath: string,
@@ -72,7 +74,13 @@ function pathMatchesApprovalRule(
 
   for (const rule of approvalRules) {
     if (rule.type === "path-glob" && rule.tool === toolName) {
-      if (pathMatchesGlob(absolutePath, rule.glob, workingDirectory)) {
+      // Rules can apply to paths outside the working directory,
+      // so we must allow matching outside the base
+      if (
+        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
+          allowOutsideBase: true,
+        })
+      ) {
         return true;
       }
     }
@@ -84,19 +92,11 @@ export const writeFileTool = (options?: WriteToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "write");
-      // Always need approval if outside working directory (even in background mode)
-      if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
-        return true;
-      }
-      // In background mode, auto-approve all operations within working directory
-      if (ctx.mode === "background") {
-        return false;
-      }
-      // Auto-approve edits when autoApprove is "edits" or "all"
-      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-        return false;
-      }
-      // Check if path matches any saved approval rules
+      const isOutside = isOutsideWorkingDirectory(
+        args.filePath,
+        ctx.workingDirectory,
+      );
+      // Check if path matches any saved approval rules (works for both inside and outside paths)
       if (
         pathMatchesApprovalRule(
           args.filePath,
@@ -105,6 +105,18 @@ export const writeFileTool = (options?: WriteToolOptions) =>
           ctx.approvalRules,
         )
       ) {
+        return false;
+      }
+      // If outside working directory and no approval rule matched, require approval
+      if (isOutside) {
+        return true;
+      }
+      // In background mode, auto-approve all operations within working directory
+      if (ctx.mode === "background") {
+        return false;
+      }
+      // Auto-approve edits when autoApprove is "edits" or "all"
+      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
         return false;
       }
       // Otherwise use the configured approval setting
@@ -175,19 +187,11 @@ export const editFileTool = (options?: EditToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "edit");
-      // Always need approval if outside working directory (even in background mode)
-      if (isOutsideWorkingDirectory(args.filePath, ctx.workingDirectory)) {
-        return true;
-      }
-      // In background mode, auto-approve all operations within working directory
-      if (ctx.mode === "background") {
-        return false;
-      }
-      // Auto-approve edits when autoApprove is "edits" or "all"
-      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-        return false;
-      }
-      // Check if path matches any saved approval rules
+      const isOutside = isOutsideWorkingDirectory(
+        args.filePath,
+        ctx.workingDirectory,
+      );
+      // Check if path matches any saved approval rules (works for both inside and outside paths)
       if (
         pathMatchesApprovalRule(
           args.filePath,
@@ -196,6 +200,18 @@ export const editFileTool = (options?: EditToolOptions) =>
           ctx.approvalRules,
         )
       ) {
+        return false;
+      }
+      // If outside working directory and no approval rule matched, require approval
+      if (isOutside) {
+        return true;
+      }
+      // In background mode, auto-approve all operations within working directory
+      if (ctx.mode === "background") {
+        return false;
+      }
+      // Auto-approve edits when autoApprove is "edits" or "all"
+      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
         return false;
       }
       // Otherwise use the configured approval setting
