@@ -322,12 +322,7 @@ function SandboxInputOverlay({
   onRestore: () => void;
   onCreateNew: () => void;
 }) {
-  const isActive =
-    !isCreating &&
-    !isRestoring &&
-    sandboxInfo !== null &&
-    timeRemaining !== null &&
-    timeRemaining > 0;
+  const isActive = !isCreating && !isRestoring && isSandboxValid(sandboxInfo);
 
   if (isActive) {
     return null;
