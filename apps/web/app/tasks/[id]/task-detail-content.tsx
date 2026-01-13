@@ -36,7 +36,11 @@ import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
-import { useTaskChatContext, type SandboxInfo } from "./task-context";
+import {
+  useTaskChatContext,
+  type SandboxInfo,
+  type ReconnectionStatus,
+} from "./task-context";
 import { DiffViewer } from "./diff-viewer";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
@@ -107,6 +111,8 @@ function formatTimeRemaining(ms: number): string {
 function SandboxStatus({
   sandboxInfo,
   isCreating,
+  isReconnecting,
+  reconnectionStatus,
   isSavingSnapshot,
   isRestoring,
   hasSnapshot,
@@ -117,6 +123,8 @@ function SandboxStatus({
 }: {
   sandboxInfo: SandboxInfo | null;
   isCreating: boolean;
+  isReconnecting: boolean;
+  reconnectionStatus: ReconnectionStatus;
   isSavingSnapshot: boolean;
   isRestoring: boolean;
   hasSnapshot: boolean;
@@ -152,6 +160,44 @@ function SandboxStatus({
         <span>
           {isRestoring ? "Restoring snapshot..." : "Creating sandbox..."}
         </span>
+      </div>
+    );
+  }
+
+  if (isReconnecting) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+        <span>Reconnecting to sandbox...</span>
+      </div>
+    );
+  }
+
+  // Reconnection failed - show appropriate state
+  if (reconnectionStatus === "failed") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span>Sandbox expired</span>
+        {hasSnapshot && (
+          <button
+            type="button"
+            onClick={onRestore}
+            className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary hover:bg-primary/20"
+          >
+            <span>Restore snapshot</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // No sandbox was ever created for this task
+  if (reconnectionStatus === "no_sandbox") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-gray-400" />
+        <span>No active sandbox</span>
       </div>
     );
   }
@@ -314,6 +360,8 @@ export function TaskDetailContent() {
     fetchFiles,
     triggerFileRefresh,
     updateTaskSnapshot,
+    reconnectionStatus,
+    attemptReconnection,
   } = useTaskChatContext();
   const {
     messages,
@@ -515,6 +563,32 @@ export function TaskDetailContent() {
     }
   }, [status]);
 
+  // Attempt to reconnect to existing sandbox on page refresh
+  useEffect(() => {
+    // Only attempt reconnection if:
+    // 1. We have initial messages (returning to an existing conversation)
+    // 2. Task has a sandboxId (sandbox was created before)
+    // 3. No current sandboxInfo (haven't reconnected yet)
+    // 4. Not already creating a sandbox
+    // 5. Reconnection status is idle (haven't tried yet)
+    if (
+      hadInitialMessages &&
+      task.sandboxId &&
+      !sandboxInfo &&
+      !isCreatingSandbox &&
+      reconnectionStatus === "idle"
+    ) {
+      attemptReconnection();
+    }
+  }, [
+    hadInitialMessages,
+    task.sandboxId,
+    sandboxInfo,
+    isCreatingSandbox,
+    reconnectionStatus,
+    attemptReconnection,
+  ]);
+
   // Auto-send initial message when task loads and no messages exist
   // Use hadInitialMessages to prevent race condition on remount
   const hasSentInitialMessage = useRef(hadInitialMessages);
@@ -561,6 +635,7 @@ export function TaskDetailContent() {
     task.cloneUrl,
     task.branch,
     task.isNewBranch,
+    task.prNumber,
     task.sandboxId,
     task.title,
   ]);
@@ -933,6 +1008,8 @@ export function TaskDetailContent() {
               <SandboxStatus
                 sandboxInfo={sandboxInfo}
                 isCreating={isCreatingSandbox}
+                isReconnecting={reconnectionStatus === "checking"}
+                reconnectionStatus={reconnectionStatus}
                 isSavingSnapshot={isSavingSnapshot}
                 isRestoring={isRestoringSnapshot}
                 hasSnapshot={!!task.snapshotUrl}

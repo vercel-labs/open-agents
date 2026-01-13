@@ -41,8 +41,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let taskSandboxId = providedSandboxId;
-
+  // Validate task ownership and sandbox association
   if (taskId) {
     const task = await getTaskById(taskId);
     if (!task) {
@@ -51,15 +50,8 @@ export async function POST(req: Request) {
     if (task.userId !== session.user.id) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (task.sandboxId) {
-      if (providedSandboxId && task.sandboxId !== providedSandboxId) {
-        return Response.json(
-          { error: "Sandbox does not belong to this task" },
-          { status: 403 },
-        );
-      }
-      taskSandboxId = task.sandboxId;
-    } else if (providedSandboxId) {
+    // Validate provided sandboxId matches task's sandbox (if any)
+    if (providedSandboxId && task.sandboxId !== providedSandboxId) {
       return Response.json(
         { error: "Sandbox does not belong to this task" },
         { status: 403 },
@@ -101,10 +93,15 @@ export async function POST(req: Request) {
 
   const sandbox = await connectVercelSandbox(sandboxOptions);
 
-  // Update task with sandboxId if this is a new sandbox
+  // Update task with sandbox metadata
   // This handles both first-time creation and sandbox recreation after expiry/restore
-  if (taskId && sandbox.id !== taskSandboxId) {
-    await updateTask(taskId, { sandboxId: sandbox.id });
+  const sandboxCreatedAt = new Date();
+  if (taskId) {
+    await updateTask(taskId, {
+      sandboxId: sandbox.id,
+      sandboxCreatedAt,
+      sandboxTimeout: DEFAULT_TIMEOUT,
+    });
   }
 
   return Response.json({
@@ -162,8 +159,12 @@ export async function DELETE(req: Request) {
   const sandbox = await connectVercelSandbox({ sandboxId });
   await sandbox.stop();
 
-  // Clear sandboxId from task so future sandbox creation doesn't fail validation
-  await updateTask(taskId, { sandboxId: null });
+  // Clear sandbox metadata from task so future sandbox creation doesn't fail validation
+  await updateTask(taskId, {
+    sandboxId: null,
+    sandboxCreatedAt: null,
+    sandboxTimeout: null,
+  });
 
   return Response.json({ success: true });
 }

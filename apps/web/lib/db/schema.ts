@@ -84,6 +84,8 @@ export const tasks = pgTable("tasks", {
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
   // Sandbox info
   sandboxId: text("sandbox_id"),
+  sandboxCreatedAt: timestamp("sandbox_created_at"),
+  sandboxTimeout: integer("sandbox_timeout"),
   // Git stats (for display in task list)
   linesAdded: integer("lines_added").default(0),
   linesRemoved: integer("lines_removed").default(0),
