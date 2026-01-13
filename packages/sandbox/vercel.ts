@@ -144,8 +144,9 @@ export class VercelSandbox implements Sandbox {
   }
 
   /**
-   * Schedule a timer to proactively call stop() before the SDK timeout.
-   * This ensures beforeStop hook has time to run.
+   * Schedule a timer to call onTimeout hook before the SDK timeout.
+   * Note: This does NOT call stop() - the client is responsible for stopping.
+   * The TIMEOUT_BUFFER_MS gives the client time to save and stop after their countdown ends.
    */
   private scheduleProactiveStop(): void {
     if (this._expiresAt === undefined) return;
@@ -157,7 +158,7 @@ export class VercelSandbox implements Sandbox {
       try {
         if (this.isStopped) return;
 
-        // Call onTimeout hook first
+        // Call onTimeout hook if configured (for CLI usage)
         if (this.hooks?.onTimeout) {
           try {
             await this.hooks.onTimeout(this);
@@ -169,11 +170,11 @@ export class VercelSandbox implements Sandbox {
           }
         }
 
-        await this.stop();
+        // Don't call stop() here - let the client handle it.
+        // The SDK timeout (with TIMEOUT_BUFFER_MS) is the safety net.
       } catch (error) {
-        // Sandbox may already be stopped by SDK
         console.warn(
-          "[VercelSandbox] Proactive stop failed (sandbox may already be stopped):",
+          "[VercelSandbox] onTimeout handler failed:",
           error instanceof Error ? error.message : error,
         );
       }

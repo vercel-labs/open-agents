@@ -151,7 +151,8 @@ function SandboxStatus({
     hasAutoSavedRef.current = false;
   }, [sandboxInfo?.sandboxId]);
 
-  // Auto-save when timeout reached (buffer in vercel.ts gives 30s extra)
+  // Auto-save when timeout reached
+  // The TIMEOUT_BUFFER_MS in vercel.ts gives 30s extra sandbox life for this to complete
   useEffect(() => {
     if (
       timeRemaining !== null &&
