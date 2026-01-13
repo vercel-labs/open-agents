@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
@@ -138,6 +138,7 @@ function SandboxHeaderBadge({
   isCreating,
   isSavingSnapshot,
   isRestoring,
+  timeRemaining,
   onSaveSnapshot,
   onSaveAndKill,
 }: {
@@ -145,10 +146,10 @@ function SandboxHeaderBadge({
   isCreating: boolean;
   isSavingSnapshot: boolean;
   isRestoring: boolean;
+  timeRemaining: number | null;
   onSaveSnapshot: () => void;
   onSaveAndKill: () => void;
 }) {
-  const timeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const [isHovered, setIsHovered] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const hasAutoSavedRef = useRef(false);
@@ -301,6 +302,7 @@ function SandboxInputOverlay({
   sandboxInfo,
   isCreating,
   isRestoring,
+  timeRemaining,
   hasSnapshot,
   onRestore,
   onCreateNew,
@@ -308,11 +310,11 @@ function SandboxInputOverlay({
   sandboxInfo: SandboxInfo | null;
   isCreating: boolean;
   isRestoring: boolean;
+  timeRemaining: number | null;
   hasSnapshot: boolean;
   onRestore: () => void;
   onCreateNew: () => void;
 }) {
-  const timeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const isActive =
     !isCreating &&
     !isRestoring &&
@@ -399,6 +401,7 @@ export function TaskDetailContent() {
     triggerFileRefresh,
     updateTaskSnapshot,
   } = useTaskChatContext();
+  const sandboxTimeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const {
     messages,
     error,
@@ -587,7 +590,7 @@ export function TaskDetailContent() {
     }
   };
 
-  const handleCreateNewSandbox = async () => {
+  const handleCreateNewSandbox = useCallback(async () => {
     setIsCreatingSandbox(true);
     try {
       const branchExistsOnOrigin = task.prNumber != null;
@@ -605,7 +608,15 @@ export function TaskDetailContent() {
     } finally {
       setIsCreatingSandbox(false);
     }
-  };
+  }, [
+    task.prNumber,
+    task.isNewBranch,
+    task.cloneUrl,
+    task.branch,
+    task.id,
+    task.sandboxId,
+    setSandboxInfo,
+  ]);
 
   useEffect(() => {
     if (isAtBottom) {
@@ -788,6 +799,7 @@ export function TaskDetailContent() {
               isCreating={isCreatingSandbox}
               isSavingSnapshot={isSavingSnapshot}
               isRestoring={isRestoringSnapshot}
+              timeRemaining={sandboxTimeRemaining}
               onSaveSnapshot={handleSaveSnapshot}
               onSaveAndKill={handleSaveAndKill}
             />
@@ -1098,6 +1110,7 @@ export function TaskDetailContent() {
                 sandboxInfo={sandboxInfo}
                 isCreating={isCreatingSandbox}
                 isRestoring={isRestoringSnapshot}
+                timeRemaining={sandboxTimeRemaining}
                 hasSnapshot={!!task.snapshotUrl}
                 onRestore={handleRestoreSnapshot}
                 onCreateNew={handleCreateNewSandbox}
