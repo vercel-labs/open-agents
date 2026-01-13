@@ -196,18 +196,32 @@ export function TaskChatProvider({
     setDiffRefreshKey((prev) => prev + 1);
   }, []);
 
-  const [diffCache, setDiffCache] = useState<DiffCacheState>({
-    data: null,
-    error: null,
-    isLoading: false,
-    lastFetchedKey: -1, // -1 means never fetched
-    isStale: false,
-    cachedAt: null,
+  // Initialize diff cache with task's cached diff if available (no layout shift)
+  const [diffCache, setDiffCache] = useState<DiffCacheState>(() => {
+    if (initialTask.cachedDiff) {
+      return {
+        data: initialTask.cachedDiff as DiffResponse,
+        error: null,
+        isLoading: false,
+        lastFetchedKey: 0,
+        isStale: true,
+        cachedAt: initialTask.cachedDiffUpdatedAt ?? null,
+      };
+    }
+    return {
+      data: null,
+      error: null,
+      isLoading: false,
+      lastFetchedKey: -1, // -1 means never fetched
+      isStale: false,
+      cachedAt: null,
+    };
   });
 
   // Track the current fetch to prevent duplicates and handle race conditions
   const fetchCounterRef = useRef(0);
-  const lastFetchedKeyRef = useRef<number>(-1);
+  // Initialize to 0 if we have cached data (matches lastFetchedKey in state)
+  const lastFetchedKeyRef = useRef<number>(initialTask.cachedDiff ? 0 : -1);
   const fetchingKeyRef = useRef<number | null>(null);
 
   const fetchDiff = useCallback(

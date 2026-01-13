@@ -14,7 +14,6 @@ import {
   Square,
   X,
   Archive,
-  Share2,
   GitPullRequest,
   FolderGit2,
   MoreVertical,
@@ -399,6 +398,8 @@ export function TaskDetailContent() {
     hadInitialMessages,
     diffRefreshKey,
     triggerDiffRefresh,
+    diffCache,
+    fetchDiff,
     fileCache,
     fetchFiles,
     triggerFileRefresh,
@@ -814,6 +815,20 @@ export function TaskDetailContent() {
     }
   }, [sandboxInfo, fileCache.data, fileCache.isLoading, fetchFiles]);
 
+  // Fetch diff proactively (from sandbox or cached) to show stats in header
+  useEffect(() => {
+    // Fetch on mount (for cached data) or when sandbox/diffRefreshKey changes
+    if (!diffCache.isLoading && diffCache.lastFetchedKey !== diffRefreshKey) {
+      fetchDiff(sandboxInfo?.sandboxId);
+    }
+  }, [
+    sandboxInfo?.sandboxId,
+    diffRefreshKey,
+    diffCache.isLoading,
+    diffCache.lastFetchedKey,
+    fetchDiff,
+  ]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -880,10 +895,6 @@ export function TaskDetailContent() {
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>
-            <Button variant="ghost" size="sm">
-              <Share2 className="mr-2 h-4 w-4" />
-              Share
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -892,6 +903,18 @@ export function TaskDetailContent() {
             >
               <GitCompare className="mr-2 h-4 w-4" />
               Diff
+              {diffCache.data &&
+                (diffCache.data.summary.totalAdditions > 0 ||
+                  diffCache.data.summary.totalDeletions > 0) && (
+                  <span className="ml-2 text-xs">
+                    <span className="text-green-500">
+                      +{diffCache.data.summary.totalAdditions}
+                    </span>{" "}
+                    <span className="text-red-400">
+                      -{diffCache.data.summary.totalDeletions}
+                    </span>
+                  </span>
+                )}
             </Button>
             {task?.cloneUrl ? (
               // Task has a repo - show PR buttons
