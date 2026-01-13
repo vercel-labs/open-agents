@@ -308,7 +308,6 @@ function SandboxInputOverlay({
   sandboxInfo,
   isCreating,
   isRestoring,
-  _timeRemaining,
   hasSnapshot,
   onRestore,
   onCreateNew,
@@ -316,7 +315,6 @@ function SandboxInputOverlay({
   sandboxInfo: SandboxInfo | null;
   isCreating: boolean;
   isRestoring: boolean;
-  _timeRemaining: number | null;
   hasSnapshot: boolean;
   onRestore: () => void;
   onCreateNew: () => void;
@@ -899,7 +897,7 @@ export function TaskDetailContent() {
               variant="ghost"
               size="sm"
               onClick={() => setShowDiffPanel(!showDiffPanel)}
-              disabled={!sandboxInfo && (!task.cachedDiff as boolean)}
+              disabled={!sandboxInfo && !task.cachedDiff}
             >
               <GitCompare className="mr-2 h-4 w-4" />
               Diff
@@ -1197,7 +1195,6 @@ export function TaskDetailContent() {
                 sandboxInfo={sandboxInfo}
                 isCreating={isCreatingSandbox}
                 isRestoring={isRestoringSnapshot}
-                _timeRemaining={sandboxTimeRemaining}
                 hasSnapshot={!!task.snapshotUrl}
                 onRestore={handleRestoreSnapshot}
                 onCreateNew={handleCreateNewSandbox}

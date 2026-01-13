@@ -197,6 +197,8 @@ export function TaskChatProvider({
   }, []);
 
   // Initialize diff cache with task's cached diff if available (no layout shift)
+  // Note: cachedDiff is stored as jsonb and cast to DiffResponse without runtime validation.
+  // This is safe as long as the schema is only written by our own diff route.
   const [diffCache, setDiffCache] = useState<DiffCacheState>(() => {
     if (initialTask.cachedDiff) {
       return {

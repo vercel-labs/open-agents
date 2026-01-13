@@ -35,6 +35,8 @@ export async function GET(_req: Request, context: RouteContext) {
     );
   }
 
+  // Note: cachedDiff is stored as jsonb and cast to DiffResponse without runtime validation.
+  // This is safe as long as the schema is only written by our own diff route.
   const response: CachedDiffResponse = {
     data: task.cachedDiff as DiffResponse,
     cachedAt:

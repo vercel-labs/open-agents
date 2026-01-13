@@ -232,7 +232,7 @@ export function DiffViewer({
   const { diffCache, fetchDiff, diffRefreshKey } = useTaskChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  const { data, error, isLoading, isStale: _isStale, cachedAt } = diffCache;
+  const { data, error, isLoading, cachedAt } = diffCache;
 
   // Show stale indicator if sandbox is offline (even if data came from a live fetch earlier)
   const showStaleIndicator = !sandboxId && data !== null;
