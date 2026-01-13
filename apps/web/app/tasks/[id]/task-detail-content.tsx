@@ -22,9 +22,15 @@ import {
   Paperclip,
   Save,
   Loader2,
+  Pause,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
@@ -143,13 +149,21 @@ function SandboxHeaderBadge({
   onSaveAndKill: () => void;
 }) {
   const timeRemaining = useSandboxTimeRemaining(sandboxInfo);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const hasAutoSavedRef = useRef(false);
 
   // Reset auto-save flag when sandbox changes
   useEffect(() => {
     hasAutoSavedRef.current = false;
   }, [sandboxInfo?.sandboxId]);
+
+  // Reset stopping state when sandbox becomes inactive
+  useEffect(() => {
+    if (!sandboxInfo) {
+      setIsStopping(false);
+    }
+  }, [sandboxInfo]);
 
   // Auto-save when timeout reached
   useEffect(() => {
@@ -160,83 +174,125 @@ function SandboxHeaderBadge({
       !isSavingSnapshot
     ) {
       hasAutoSavedRef.current = true;
+      setIsStopping(true);
       onSaveAndKill();
     }
   }, [timeRemaining, isSavingSnapshot, onSaveAndKill]);
 
+  const handleStop = () => {
+    setIsStopping(true);
+    onSaveAndKill();
+  };
+
+  // Creating or restoring - show spinner dot
   if (isCreating || isRestoring) {
     return (
-      <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-        <span>{isRestoring ? "Restoring..." : "Creating..."}</span>
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center justify-center">
+            <Loader2 className="size-3 animate-spin text-yellow-500" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={8}>
+          {isRestoring ? "Restoring sandbox..." : "Creating sandbox..."}
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
+  // Stopping - show optimistic pausing state
+  if (isStopping && sandboxInfo) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center justify-center">
+            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={8}>
+          Pausing sandbox...
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  // Inactive - show gray dot
   if (!sandboxInfo || timeRemaining === null || timeRemaining <= 0) {
     return (
-      <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
-        <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
-        <span>Sandbox inactive</span>
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center justify-center p-1">
+            <span className="size-2.5 rounded-full bg-muted-foreground/40" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={8}>
+          Sandbox inactive
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
-  if (showStopConfirm) {
-    return (
-      <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-        <span>Save?</span>
-        <button
-          type="button"
-          onClick={() => {
-            setShowStopConfirm(false);
-            onSaveAndKill();
-          }}
-          disabled={isSavingSnapshot}
-          className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary hover:bg-primary/20 disabled:opacity-50"
-        >
-          {isSavingSnapshot ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Save className="h-3 w-3" />
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowStopConfirm(false)}
-          className="rounded-full p-1 hover:bg-muted-foreground/20"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
-    );
-  }
-
+  // Active - show green dot with hover controls
   return (
-    <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
-      <span className="h-2 w-2 rounded-full bg-green-500" />
-      <span>{formatTimeRemaining(timeRemaining)}</span>
-      <button
-        type="button"
-        onClick={onSaveSnapshot}
-        disabled={isSavingSnapshot}
-        className="rounded-full p-0.5 hover:bg-muted-foreground/20 disabled:opacity-50"
-        title="Save snapshot"
-      >
-        {isSavingSnapshot ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <Save className="h-3 w-3" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={() => setShowStopConfirm(true)}
-        className="rounded-full p-0.5 hover:bg-muted-foreground/20"
-        title="Stop sandbox"
-      >
-        <X className="h-3 w-3" />
-      </button>
+    <div
+      className="flex items-center gap-1.5"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1.5 p-1">
+            <span className="size-2.5 rounded-full bg-green-500" />
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatTimeRemaining(timeRemaining)}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={8}>
+          Sandbox active
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Hover controls */}
+      {isHovered && (
+        <div className="flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onSaveSnapshot}
+                disabled={isSavingSnapshot}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {isSavingSnapshot ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Save className="size-3.5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8}>
+              Save snapshot
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleStop}
+                disabled={isSavingSnapshot}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                <Pause className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8}>
+              Save and pause
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }
