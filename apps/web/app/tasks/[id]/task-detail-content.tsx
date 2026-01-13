@@ -762,25 +762,26 @@ export function TaskDetailContent() {
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <div>
-              <h1 className="font-medium">{task.title}</h1>
-              <p className="text-sm text-muted-foreground">
-                {formatDate(new Date(task.createdAt))}
-                {task.repoName && (
-                  <>
-                    {" "}
-                    <span className="text-muted-foreground/50">-</span>{" "}
-                    {task.repoOwner}/{task.repoName}
-                  </>
-                )}
-                {task.branch && (
-                  <>
-                    {" "}
-                    <span className="text-muted-foreground/50">-</span>{" "}
-                    {task.branch}
-                  </>
-                )}
-              </p>
+            <div className="flex items-center gap-2 text-sm">
+              {task.repoName ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {task.repoName}
+                  </span>
+                  {task.branch && (
+                    <>
+                      <span className="text-muted-foreground/40">/</span>
+                      <span className="text-muted-foreground">
+                        {task.branch}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  {formatDate(new Date(task.createdAt))}
+                </span>
+              )}
             </div>
             <SandboxHeaderBadge
               sandboxInfo={sandboxInfo}
