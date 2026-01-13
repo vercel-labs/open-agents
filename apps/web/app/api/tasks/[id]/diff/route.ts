@@ -1,5 +1,5 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
-import { getTaskById } from "@/lib/db/tasks";
+import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
 import type { NextRequest } from "next/server";
 
@@ -302,6 +302,14 @@ ${diffLines}`;
         totalDeletions,
       },
     };
+
+    // Cache diff for offline viewing (fire-and-forget)
+    updateTask(taskId, {
+      cachedDiff: response,
+      cachedDiffUpdatedAt: new Date(),
+      linesAdded: response.summary.totalAdditions,
+      linesRemoved: response.summary.totalDeletions,
+    }).catch((err) => console.error("Failed to cache diff:", err));
 
     return Response.json(response);
   } catch (error) {

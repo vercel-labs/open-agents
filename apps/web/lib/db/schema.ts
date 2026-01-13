@@ -98,6 +98,9 @@ export const tasks = pgTable("tasks", {
   snapshotUrl: text("snapshot_url"),
   snapshotCreatedAt: timestamp("snapshot_created_at"),
   snapshotSizeBytes: integer("snapshot_size_bytes"),
+  // Cached diff for offline viewing
+  cachedDiff: jsonb("cached_diff"),
+  cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

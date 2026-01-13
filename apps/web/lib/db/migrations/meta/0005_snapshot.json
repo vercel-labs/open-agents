@@ -1,6 +1,6 @@
 {
-  "id": "a6149c21-4f1e-4c22-8618-17478c55986d",
-  "prevId": "3a3787f3-0643-4b9d-9c8a-451aeb0bf25d",
+  "id": "454022f9-1321-4b91-99cd-67a16ee573fb",
+  "prevId": "a6149c21-4f1e-4c22-8618-17478c55986d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -291,6 +291,18 @@
         "snapshot_size_bytes": {
           "name": "snapshot_size_bytes",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cached_diff": {
+          "name": "cached_diff",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cached_diff_updated_at": {
+          "name": "cached_diff_updated_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

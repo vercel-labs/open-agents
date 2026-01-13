@@ -8,7 +8,7 @@ import type { DiffFile } from "@/app/api/tasks/[id]/diff/route";
 import { useTaskChatContext } from "./task-context";
 
 type DiffViewerProps = {
-  sandboxId: string;
+  sandboxId?: string;
   refreshKey: number;
   onClose: () => void;
 };
@@ -67,6 +67,32 @@ function parseDiffContent(diff: string): ParsedDiffLine[] {
   }
 
   return lines;
+}
+
+function formatTimestamp(date: Date) {
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function StaleBanner({ cachedAt }: { cachedAt: Date | null }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border bg-amber-950/30 px-4 py-2 text-xs text-amber-400">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+      <span>
+        Viewing cached changes - sandbox is offline
+        {cachedAt && (
+          <span className="text-amber-400/70">
+            {" "}
+            (saved {formatTimestamp(cachedAt)})
+          </span>
+        )}
+      </span>
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: DiffFile["status"] }) {
@@ -206,7 +232,10 @@ export function DiffViewer({
   const { diffCache, fetchDiff, diffRefreshKey } = useTaskChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  const { data, error, isLoading } = diffCache;
+  const { data, error, isLoading, isStale: _isStale, cachedAt } = diffCache;
+
+  // Show stale indicator if sandbox is offline (even if data came from a live fetch earlier)
+  const showStaleIndicator = !sandboxId && data !== null;
 
   // Fetch diff on mount and when refreshKey changes
   // The fetchDiff function will skip if cache is still valid
@@ -285,8 +314,16 @@ export function DiffViewer({
         </div>
       </div>
 
+      {/* Staleness indicator */}
+      {showStaleIndicator && <StaleBanner cachedAt={cachedAt} />}
+
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto",
+          showStaleIndicator && "opacity-90",
+        )}
+      >
         {isLoading && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
