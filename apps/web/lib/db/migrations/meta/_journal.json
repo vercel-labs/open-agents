@@ -43,6 +43,13 @@
       "when": 1768341978785,
       "tag": "0005_crazy_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768406726792,
+      "tag": "0006_curvy_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

@@ -902,11 +902,11 @@ export function TaskDetailContent() {
                   <span className="font-medium text-foreground">
                     {task.repoName}
                   </span>
-                  {task.branch && (
+                  {(task.branch ?? sandboxInfo?.currentBranch) && (
                     <>
                       <span className="text-muted-foreground/40">/</span>
                       <span className="text-muted-foreground">
-                        {task.branch}
+                        {task.branch ?? sandboxInfo?.currentBranch}
                       </span>
                     </>
                   )}
@@ -1324,15 +1324,22 @@ export function TaskDetailContent() {
 
                 {/* Bottom toolbar */}
                 <div className="flex items-center justify-between px-3 pb-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={openFilePicker}
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={openFilePicker}
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    {task.modelId && (
+                      <span className="text-xs text-muted-foreground/60">
+                        {task.modelId}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1">
                     <Button

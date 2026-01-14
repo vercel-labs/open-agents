@@ -1,6 +1,7 @@
 import { getServerSession } from "@/lib/session/get-server-session";
 import { createTask, getTasksByUserId } from "@/lib/db/tasks";
 import { nanoid } from "nanoid";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 
 interface CreateTaskRequest {
   title: string;
@@ -10,6 +11,7 @@ interface CreateTaskRequest {
   cloneUrl?: string;
   sandboxId?: string;
   isNewBranch?: boolean;
+  modelId?: string;
 }
 
 function generateBranchName(username: string, name?: string | null): string {
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
     cloneUrl,
     sandboxId,
     isNewBranch,
+    modelId,
   } = body;
 
   if (!title) {
@@ -85,6 +88,7 @@ export async function POST(req: Request) {
       cloneUrl,
       sandboxId,
       isNewBranch: isNewBranch ?? false,
+      modelId: modelId ?? DEFAULT_MODEL_ID,
     });
 
     return Response.json({ task });

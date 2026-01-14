@@ -22,6 +22,7 @@ function HomePage() {
     branch?: string;
     cloneUrl?: string;
     isNewBranch: boolean;
+    modelId: string;
   }) => {
     setIsCreating(true);
     try {
@@ -32,6 +33,7 @@ function HomePage() {
         branch: input.branch,
         cloneUrl: input.cloneUrl,
         isNewBranch: input.isNewBranch,
+        modelId: input.modelId,
       });
       // Navigate to the task detail page
       router.push(`/tasks/${task.id}`);

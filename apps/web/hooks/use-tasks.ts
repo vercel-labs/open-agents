@@ -11,6 +11,7 @@ interface CreateTaskInput {
   cloneUrl?: string;
   sandboxId?: string;
   isNewBranch?: boolean;
+  modelId?: string;
 }
 
 export function useTasks() {

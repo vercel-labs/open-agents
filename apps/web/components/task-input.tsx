@@ -9,7 +9,9 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { RepoSelectorCompact } from "./repo-selector-compact";
 import { BranchSelectorCompact } from "./branch-selector-compact";
+import { ModelSelectorCompact } from "./model-selector-compact";
 import { ImageAttachmentsPreview } from "./image-attachments-preview";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 
 interface TaskInputProps {
   onSubmit: (task: {
@@ -20,6 +22,7 @@ interface TaskInputProps {
     cloneUrl?: string;
     isNewBranch: boolean;
     files?: FileUIPart[];
+    modelId: string;
   }) => void;
   isLoading?: boolean;
 }
@@ -31,6 +34,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,6 +130,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           : undefined,
       isNewBranch,
       files: getFileParts(),
+      modelId: selectedModel,
     });
     setPrompt("");
     clearImages();
@@ -257,6 +262,11 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           >
             <Plus className="h-4 w-4" />
           </button>
+
+          <ModelSelectorCompact
+            value={selectedModel}
+            onChange={setSelectedModel}
+          />
 
           <RepoSelectorCompact
             selectedOwner={selectedOwner}

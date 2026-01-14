@@ -1,5 +1,5 @@
 import { connectVercelSandbox } from "@open-harness/sandbox";
-import { convertToModelMessages } from "ai";
+import { convertToModelMessages, gateway } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { webAgent } from "@/app/config";
@@ -9,6 +9,7 @@ import {
   createTaskMessageIfNotExists,
   getTaskById,
 } from "@/lib/db/tasks";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -100,11 +101,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // Resolve model from task's modelId
+  const modelId = task.modelId ?? DEFAULT_MODEL_ID;
+  const model = gateway(modelId);
+
   const result = await webAgent.stream({
     messages: modelMessages,
     options: {
       sandbox,
       mode: "interactive",
+      model,
       // TODO: consider enabling approvals for non-cloud-sandbox environments
       approvals: { autoApprove: "all" },
     },

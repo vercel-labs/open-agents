@@ -80,6 +80,8 @@ export const tasks = pgTable("tasks", {
   repoName: text("repo_name"),
   branch: text("branch"),
   cloneUrl: text("clone_url"),
+  // Model configuration
+  modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
   // Whether this task uses a new auto-generated branch
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
   // Sandbox info
