@@ -103,10 +103,10 @@ export async function POST(req: Request) {
   const result = await deepAgent.stream({
     messages: modelMessages,
     options: {
-      workingDirectory: sandbox.workingDirectory,
       sandbox,
+      mode: "interactive",
       // TODO: consider enabling approvals for non-cloud-sandbox environments
-      autoApprove: "all",
+      approvals: { autoApprove: "all" },
     },
     abortSignal: req.signal,
   });

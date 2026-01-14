@@ -14,18 +14,21 @@ import { buildSystemPrompt } from "./system-prompt";
 import type { TodoItem, AgentMode, ApprovalRule } from "./types";
 import { approvalRuleSchema } from "./types";
 import { addCacheControl, compactContext } from "./context-management";
-import { createLocalSandbox, type Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-harness/sandbox";
 
 const agentModeSchema = z.enum(["interactive", "background"]);
 const autoApproveSchema = z.enum(["off", "edits", "all"]);
 
-const callOptionsSchema = z.object({
-  workingDirectory: z.string(),
-  mode: agentModeSchema.optional(),
-  customInstructions: z.string().optional(),
-  sandbox: z.custom<Sandbox>().optional(),
+const approvalsSchema = z.object({
   autoApprove: autoApproveSchema.optional(),
-  approvalRules: z.array(approvalRuleSchema).optional(),
+  rules: z.array(approvalRuleSchema).optional(),
+});
+
+const callOptionsSchema = z.object({
+  sandbox: z.custom<Sandbox>(),
+  mode: agentModeSchema,
+  customInstructions: z.string().optional(),
+  approvals: approvalsSchema.optional(),
 });
 
 export type DeepAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -59,15 +62,14 @@ export const deepAgent = new ToolLoopAgent({
     }),
   }),
   prepareCall: ({ options, model, ...settings }) => {
-    const workingDirectory = options?.workingDirectory ?? process.cwd();
-    const mode: AgentMode = options?.mode ?? "interactive";
-    const autoApprove = options?.autoApprove ?? "off";
-    const approvalRules: ApprovalRule[] = options?.approvalRules ?? [];
-
-    const customInstructions = options?.customInstructions;
-
-    // Use provided sandbox, or create a local sandbox with the working directory
-    const sandbox = options?.sandbox ?? createLocalSandbox(workingDirectory);
+    if (!options) {
+      throw new Error("Deep agent requires call options with sandbox and mode.");
+    }
+    const mode: AgentMode = options.mode;
+    const autoApprove = options.approvals?.autoApprove ?? "off";
+    const approvalRules: ApprovalRule[] = options.approvals?.rules ?? [];
+    const customInstructions = options.customInstructions;
+    const sandbox = options.sandbox;
 
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,

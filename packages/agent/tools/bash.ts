@@ -131,12 +131,8 @@ export const bashTool = (options?: ToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "bash");
-      // Auto-approve all bash commands when autoApprove is "all"
-      // In subagents, the user grants permission at the top level for all changes,
-      // so we bypass directory boundary checks here.
-      // TODO: This is specifically for working with monorepos and calling within
-      // nested files, but we should probably revert this change.
-      if (ctx.autoApprove === "all") {
+      // Check if command matches any saved approval rules
+      if (commandMatchesApprovalRule(args.command, ctx.approvalRules)) {
         return false;
       }
       // Need approval if cwd is outside working directory (even in background mode)
@@ -147,8 +143,8 @@ export const bashTool = (options?: ToolOptions) =>
       if (ctx.mode === "background") {
         return false;
       }
-      // Check if command matches any saved approval rules
-      if (commandMatchesApprovalRule(args.command, ctx.approvalRules)) {
+      // Auto-approve bash commands within working directory in interactive mode
+      if (ctx.mode === "interactive" && ctx.autoApprove === "all") {
         return false;
       }
       // Check command safety

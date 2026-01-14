@@ -28,25 +28,36 @@ export {
  * import { createTUI } from './tui';
  *
  * // Interactive mode
- * await createTUI({ workingDirectory: process.cwd() });
+ * await createTUI({
+ *   sandbox,
+ *   workingDirectory: sandbox.workingDirectory,
+ * });
  *
  * // One-shot mode with initial prompt
  * await createTUI({
+ *   sandbox,
  *   initialPrompt: "Explain this codebase",
- *   workingDirectory: process.cwd(),
+ *   workingDirectory: sandbox.workingDirectory,
  * });
  * ```
  */
 export async function createTUI(options: TUIOptions): Promise<void> {
+  if (!options.agentOptions && !options.sandbox) {
+    throw new Error("createTUI requires agentOptions or a sandbox.");
+  }
+
   const agentOptions =
     options.agentOptions ??
-    createDefaultAgentOptions(options.workingDirectory ?? process.cwd());
+    createDefaultAgentOptions(options.sandbox!);
+
+  const workingDirectory =
+    options.workingDirectory ?? options.sandbox?.workingDirectory;
 
   const { waitUntilExit } = render(
     <ChatProvider
       agentOptions={agentOptions}
       model={options.header?.model ?? tuiAgentModelId}
-      workingDirectory={options.workingDirectory}
+      workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
       <ReasoningProvider>
@@ -67,15 +78,22 @@ export async function createTUI(options: TUIOptions): Promise<void> {
  * Useful for programmatic control.
  */
 export function renderTUI(options: TUIOptions) {
+  if (!options.agentOptions && !options.sandbox) {
+    throw new Error("renderTUI requires agentOptions or a sandbox.");
+  }
+
   const agentOptions =
     options.agentOptions ??
-    createDefaultAgentOptions(options.workingDirectory ?? process.cwd());
+    createDefaultAgentOptions(options.sandbox!);
+
+  const workingDirectory =
+    options.workingDirectory ?? options.sandbox?.workingDirectory;
 
   return render(
     <ChatProvider
       agentOptions={agentOptions}
       model={options.header?.model ?? tuiAgentModelId}
-      workingDirectory={options.workingDirectory}
+      workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
       <ReasoningProvider>

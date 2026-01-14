@@ -136,8 +136,8 @@ async function main() {
         version: "0.1.0",
       },
       agentOptions: {
-        workingDirectory: sandbox.workingDirectory,
         sandbox,
+        mode: "interactive",
         ...(agentsMd?.content && {
           customInstructions: agentsMd.content,
         }),

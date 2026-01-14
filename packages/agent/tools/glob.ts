@@ -158,10 +158,6 @@ export const globTool = () =>
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
         return false;
       }
-      // Auto-approve when autoApprove is "all"
-      if (ctx.autoApprove === "all") {
-        return false;
-      }
       // Outside working directory - check if a rule matches
       if (
         pathMatchesApprovalRule(

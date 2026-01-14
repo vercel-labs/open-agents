@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@open-harness/agent": "workspace:*",
+    "@open-harness/sandbox": "workspace:*",
     "@open-harness/shared": "workspace:*",
     "cli-highlight": "^2.1.11",
     "ink": "^6.6.0",

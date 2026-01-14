@@ -5,7 +5,8 @@ import type {
   LanguageModelUsage,
   ToolUIPart,
 } from "ai";
-import type { tuiAgent } from "./config";
+import type { Sandbox } from "@open-harness/sandbox";
+import type { tuiAgent } from "./config.js";
 
 export type TUIAgent = typeof tuiAgent;
 export type TUIAgentCallOptions = Parameters<
@@ -37,8 +38,10 @@ export type { ApprovalRule } from "@open-harness/agent";
 export type TUIOptions = {
   /** Initial prompt to run (for one-shot mode) */
   initialPrompt?: string;
-  /** Working directory for the agent */
+  /** Working directory for display/approval context */
   workingDirectory?: string;
+  /** Sandbox to use when agentOptions are not provided */
+  sandbox?: Sandbox;
   /** Custom agent options (defaults provided if not specified) */
   agentOptions?: TUIAgentCallOptions;
   /** Header configuration */

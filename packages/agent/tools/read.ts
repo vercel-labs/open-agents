@@ -97,10 +97,6 @@ export const readFileTool = () =>
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
         return false;
       }
-      // Auto-approve when autoApprove is "all"
-      if (ctx.autoApprove === "all") {
-        return false;
-      }
       // Check if path matches any saved approval rules
       if (
         pathMatchesApprovalRule(
