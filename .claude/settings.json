@@ -16,7 +16,9 @@
       "Bash(cat:*)",
       "Bash(jq:*)",
       "Bash(python3 -c:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(xargs cat:*)"
     ]
   },
   "hooks": {
