@@ -46,9 +46,15 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     openFilePicker,
   } = useImageAttachments();
 
-  const { state: recordingState, toggleRecording } = useAudioRecording();
+  const {
+    state: recordingState,
+    error: recordingError,
+    clearError: clearRecordingError,
+    toggleRecording,
+  } = useAudioRecording();
 
   const handleMicClick = async () => {
+    clearRecordingError();
     const transcribedText = await toggleRecording();
     if (transcribedText) {
       setPrompt((prev) =>
@@ -308,6 +314,13 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           </button>
         </div>
       </div>
+
+      {/* Recording error message */}
+      {recordingError && (
+        <div className="px-5 pb-3">
+          <p className="text-sm text-red-400">{recordingError}</p>
+        </div>
+      )}
     </div>
   );
 }

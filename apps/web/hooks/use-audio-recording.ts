@@ -28,6 +28,17 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+function getSupportedMimeType(): string {
+  const mimeTypes = ["audio/webm", "audio/mp4", "audio/ogg", "audio/wav"];
+  for (const mimeType of mimeTypes) {
+    if (MediaRecorder.isTypeSupported(mimeType)) {
+      return mimeType;
+    }
+  }
+  // Fallback - let the browser choose
+  return "";
+}
+
 export function useAudioRecording() {
   const [state, setState] = useState<RecordingState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +46,7 @@ export function useAudioRecording() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const mimeTypeRef = useRef<string>("");
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -43,9 +55,13 @@ export function useAudioRecording() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
-      });
+      const mimeType = getSupportedMimeType();
+      mimeTypeRef.current = mimeType;
+
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -87,8 +103,9 @@ export function useAudioRecording() {
 
         setState("processing");
 
+        const mimeType = mimeTypeRef.current || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
+          type: mimeType,
         });
 
         try {
@@ -99,7 +116,7 @@ export function useAudioRecording() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               audio: base64Audio,
-              mimeType: "audio/webm",
+              mimeType,
             }),
           });
 
@@ -136,9 +153,14 @@ export function useAudioRecording() {
     return null;
   }, [state, startRecording, stopRecording]);
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
     state,
     error,
+    clearError,
     startRecording,
     stopRecording,
     toggleRecording,

@@ -4,7 +4,7 @@ import { getServerSession } from "@/lib/session/get-server-session";
 
 interface TranscribeRequestBody {
   audio: string; // base64-encoded audio data
-  mimeType: string; // e.g., "audio/webm"
+  mimeType?: string; // e.g., "audio/webm" - accepted but not currently used
 }
 
 export async function POST(req: Request) {
@@ -20,12 +20,21 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { audio, mimeType } = body;
+  const { audio } = body;
 
-  if (!audio || !mimeType) {
+  if (!audio) {
     return Response.json(
-      { error: "Missing required fields: audio, mimeType" },
+      { error: "Missing required field: audio" },
       { status: 400 },
+    );
+  }
+
+  // Limit audio size to ~7.5MB of raw audio (10MB base64)
+  const maxBase64Length = 10 * 1024 * 1024;
+  if (audio.length > maxBase64Length) {
+    return Response.json(
+      { error: "Audio file too large. Maximum size is approximately 7.5MB." },
+      { status: 413 },
     );
   }
 

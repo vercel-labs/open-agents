@@ -375,9 +375,15 @@ export function TaskDetailContent() {
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { state: recordingState, toggleRecording } = useAudioRecording();
+  const {
+    state: recordingState,
+    error: recordingError,
+    clearError: clearRecordingError,
+    toggleRecording,
+  } = useAudioRecording();
 
   const handleMicClick = async () => {
+    clearRecordingError();
     const transcribedText = await toggleRecording();
     if (transcribedText) {
       setInput((prev) =>
@@ -397,10 +403,22 @@ export function TaskDetailContent() {
     const maxLines = 3;
     const maxHeight = lineHeight * maxLines;
 
+    // Store current height to avoid flicker
+    const currentHeight = textarea.offsetHeight;
+
+    // Temporarily set height to 0 to measure scrollHeight accurately
     textarea.style.height = "0";
     const scrollHeight = textarea.scrollHeight;
+
+    // Set new height, capped at max
     const newHeight = Math.min(scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
+
+    // Only update if height actually changed to minimize reflows
+    if (Math.abs(newHeight - currentHeight) > 1) {
+      textarea.style.height = `${newHeight}px`;
+    } else {
+      textarea.style.height = `${currentHeight}px`;
+    }
   }, [input]);
 
   const {
@@ -1314,15 +1332,17 @@ export function TaskDetailContent() {
                   </Button>
 
                   <div className="flex items-center gap-1">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={handleMicClick}
                       disabled={recordingState === "processing"}
-                      className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                      className={`relative h-8 w-8 rounded-full ${
                         recordingState === "recording"
                           ? "text-red-500"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      } ${recordingState === "processing" ? "cursor-not-allowed opacity-50" : ""}`}
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
                     >
                       {recordingState === "recording" && (
                         <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
@@ -1332,7 +1352,7 @@ export function TaskDetailContent() {
                       ) : (
                         <Mic className="h-5 w-5" />
                       )}
-                    </button>
+                    </Button>
 
                     {status === "streaming" ? (
                       <Button
@@ -1356,6 +1376,13 @@ export function TaskDetailContent() {
                   </div>
                 </div>
               </form>
+
+              {/* Recording error message */}
+              {recordingError && (
+                <p className="mt-2 text-sm text-destructive">
+                  {recordingError}
+                </p>
+              )}
             </div>
           </div>
         </div>
