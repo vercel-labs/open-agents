@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, ChevronDown, CheckIcon } from "lucide-react";
+import { ChevronDown, CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -19,7 +19,6 @@ import {
 import {
   type AvailableModel,
   DEFAULT_MODEL_ID,
-  getAvailableModels,
   getModelDisplayName,
 } from "@/lib/models";
 
@@ -40,8 +39,12 @@ export function ModelSelectorCompact({
     const fetchModels = async () => {
       setLoading(true);
       try {
-        const availableModels = await getAvailableModels();
-        setModels(availableModels);
+        const response = await fetch("/api/models");
+        if (!response.ok) {
+          throw new Error("Failed to fetch models");
+        }
+        const data = (await response.json()) as { models: AvailableModel[] };
+        setModels(data.models);
       } catch (err) {
         console.error("Failed to fetch models:", err);
         setModels([]);
@@ -72,7 +75,6 @@ export function ModelSelectorCompact({
           type="button"
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
         >
-          <Sparkles className="h-4 w-4" />
           <span className="max-w-[140px] truncate">{displayText}</span>
           <ChevronDown className="h-3 w-3" />
         </button>
