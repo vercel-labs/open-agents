@@ -1055,6 +1055,9 @@ export function TaskDetailContent() {
                           ) : (
                             <div className="max-w-[80%]">
                               <Streamdown
+                                mode={
+                                  isMessageStreaming ? "streaming" : "static"
+                                }
                                 isAnimating={isMessageStreaming}
                                 shikiTheme={shikiThemes}
                                 components={customComponents}
