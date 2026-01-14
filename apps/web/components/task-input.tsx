@@ -284,7 +284,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
             )}
           >
             {recordingState === "recording" && (
-              <span className="absolute inset-0 animate-ping rounded-full bg-red-500/20" />
+              <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
             )}
             {recordingState === "processing" ? (
               <Loader2 className="h-5 w-5 animate-spin" />
