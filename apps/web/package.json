@@ -15,6 +15,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@ai-sdk/elevenlabs": "^2.0.5",
     "@ai-sdk/react": "catalog:",
     "@hookform/resolvers": "^5.2.2",
     "@octokit/rest": "^22.0.1",

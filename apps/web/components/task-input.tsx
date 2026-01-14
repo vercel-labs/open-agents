@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { FileUIPart } from "ai";
-import { Plus, Mic, ArrowUp } from "lucide-react";
+import { Plus, Mic, ArrowUp, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { RepoSelectorCompact } from "./repo-selector-compact";
 import { BranchSelectorCompact } from "./branch-selector-compact";
 import { ImageAttachmentsPreview } from "./image-attachments-preview";
@@ -44,6 +45,17 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
     fileInputRef,
     openFilePicker,
   } = useImageAttachments();
+
+  const { state: recordingState, toggleRecording } = useAudioRecording();
+
+  const handleMicClick = async () => {
+    const transcribedText = await toggleRecording();
+    if (transcribedText) {
+      setPrompt((prev) =>
+        prev ? `${prev} ${transcribedText}` : transcribedText,
+      );
+    }
+  };
 
   // Handle click outside to collapse
   useEffect(() => {
@@ -259,9 +271,25 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
+            onClick={handleMicClick}
+            disabled={recordingState === "processing"}
+            className={cn(
+              "relative flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+              recordingState === "recording"
+                ? "text-red-500"
+                : "text-neutral-500 hover:bg-white/5 hover:text-neutral-300",
+              recordingState === "processing" &&
+                "cursor-not-allowed opacity-50",
+            )}
           >
-            <Mic className="h-5 w-5" />
+            {recordingState === "recording" && (
+              <span className="absolute inset-0 animate-ping rounded-md bg-red-500/20" />
+            )}
+            {recordingState === "processing" ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
           </button>
 
           <button
