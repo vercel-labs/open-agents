@@ -46,10 +46,10 @@ export function createAgentTransport({
       // Get current settings at request time
       const autoApprove = getAutoApprove
         ? getAutoApprove()
-        : agentOptions.approvals?.autoApprove ?? "off";
+        : (agentOptions.approvals?.autoApprove ?? "off");
       const approvalRules = getApprovalRules
         ? getApprovalRules()
-        : agentOptions.approvals?.rules ?? [];
+        : (agentOptions.approvals?.rules ?? []);
       const approvals = {
         ...agentOptions.approvals,
         autoApprove,
