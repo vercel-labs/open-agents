@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { defaultModelLabel } from "@open-harness/agent";
 import { createTUI } from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md.js";
 import { onCleanup, cleanup } from "./cleanup-handler.js";
@@ -134,6 +135,7 @@ async function main() {
       header: {
         name: "Open Harness",
         version: "0.1.0",
+        model: defaultModelLabel,
       },
       agentOptions: {
         sandbox,
