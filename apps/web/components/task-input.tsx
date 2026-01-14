@@ -54,6 +54,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
       setPrompt((prev) =>
         prev ? `${prev} ${transcribedText}` : transcribedText,
       );
+      inputRef.current?.focus();
     }
   };
 
@@ -274,7 +275,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
             onClick={handleMicClick}
             disabled={recordingState === "processing"}
             className={cn(
-              "relative flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+              "relative flex h-8 w-8 items-center justify-center rounded-full transition-colors",
               recordingState === "recording"
                 ? "text-red-500"
                 : "text-neutral-500 hover:bg-white/5 hover:text-neutral-300",
@@ -283,7 +284,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
             )}
           >
             {recordingState === "recording" && (
-              <span className="absolute inset-0 animate-ping rounded-md bg-red-500/20" />
+              <span className="absolute inset-0 animate-ping rounded-full bg-red-500/20" />
             )}
             {recordingState === "processing" ? (
               <Loader2 className="h-5 w-5 animate-spin" />
