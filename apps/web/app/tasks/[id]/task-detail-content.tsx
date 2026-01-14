@@ -20,6 +20,7 @@ import {
   GitCompare,
   Paperclip,
   Loader2,
+  Mic,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import { CreateRepoDialog } from "@/components/create-repo-dialog";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
@@ -372,7 +374,34 @@ export function TaskDetailContent() {
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { state: recordingState, toggleRecording } = useAudioRecording();
+
+  const handleMicClick = async () => {
+    const transcribedText = await toggleRecording();
+    if (transcribedText) {
+      setInput((prev) =>
+        prev ? `${prev} ${transcribedText}` : transcribedText,
+      );
+      inputRef.current?.focus();
+    }
+  };
+
+  // Auto-resize textarea up to 3 lines
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    const computedStyle = getComputedStyle(textarea);
+    const lineHeight = parseFloat(computedStyle.lineHeight) || 24;
+    const maxLines = 3;
+    const maxHeight = lineHeight * maxLines;
+
+    textarea.style.height = "0";
+    const scrollHeight = textarea.scrollHeight;
+    const newHeight = Math.min(scrollHeight, maxHeight);
+    textarea.style.height = `${newHeight}px`;
+  }, [input]);
 
   const {
     images,
@@ -1220,20 +1249,13 @@ export function TaskDetailContent() {
                 />
               )}
 
-              <div className="flex items-center gap-2 px-4 py-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={openFilePicker}
-                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <input
+              {/* Textarea area */}
+              <div className="px-4 pb-2 pt-3">
+                <textarea
                   ref={inputRef}
                   value={input}
-                  placeholder="Request changes or ask a ..."
+                  placeholder="Request changes or ask a question..."
+                  rows={1}
                   onChange={(e) => {
                     setInput(e.currentTarget.value);
                     setCursorPosition(e.currentTarget.selectionStart ?? 0);
@@ -1271,27 +1293,64 @@ export function TaskDetailContent() {
                     }
                   }}
                   disabled={status === "streaming"}
-                  className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  style={{ minHeight: "24px" }}
                 />
-                {status === "streaming" ? (
-                  <Button
+              </div>
+
+              {/* Bottom toolbar */}
+              <div className="flex items-center justify-between px-3 pb-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={openFilePicker}
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  <button
                     type="button"
-                    size="icon"
-                    onClick={stop}
-                    className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={handleMicClick}
+                    disabled={recordingState === "processing"}
+                    className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                      recordingState === "recording"
+                        ? "text-red-500"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    } ${recordingState === "processing" ? "cursor-not-allowed opacity-50" : ""}`}
                   >
-                    <Square className="h-3 w-3 fill-current" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!input.trim() && images.length === 0}
-                    className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                )}
+                    {recordingState === "recording" && (
+                      <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
+                    )}
+                    {recordingState === "processing" ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Mic className="h-5 w-5" />
+                    )}
+                  </button>
+
+                  {status === "streaming" ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={stop}
+                      className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      <Square className="h-3 w-3 fill-current" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={!input.trim() && images.length === 0}
+                      className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </form>
           </div>
