@@ -1,8 +1,8 @@
-import { deepAgent } from "@open-harness/agent";
 import { connectVercelSandbox } from "@open-harness/sandbox";
 import { convertToModelMessages } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
+import { webAgent } from "@/app/config";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
   createTaskMessage,
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
   const modelMessages = await convertToModelMessages(messages, {
     ignoreIncompleteToolCalls: true,
-    tools: deepAgent.tools,
+    tools: webAgent.tools,
   });
 
   // Get the GitHub token to pass as env var when reconnecting
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const result = await deepAgent.stream({
+  const result = await webAgent.stream({
     messages: modelMessages,
     options: {
       sandbox,
