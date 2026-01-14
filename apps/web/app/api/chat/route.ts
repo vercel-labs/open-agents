@@ -101,9 +101,18 @@ export async function POST(req: Request) {
     }
   }
 
-  // Resolve model from task's modelId
+  // Resolve model from task's modelId, falling back to default if invalid
   const modelId = task.modelId ?? DEFAULT_MODEL_ID;
-  const model = gateway(modelId);
+  let model;
+  try {
+    model = gateway(modelId);
+  } catch (error) {
+    console.error(
+      `Invalid model ID "${modelId}", falling back to default:`,
+      error,
+    );
+    model = gateway(DEFAULT_MODEL_ID);
+  }
 
   const result = await webAgent.stream({
     messages: modelMessages,
