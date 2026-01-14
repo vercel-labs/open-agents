@@ -15,7 +15,8 @@ import { TaskGroupView } from "./components/task-group-view.js";
 import { StatusBar, StandaloneTodoList } from "./components/status-bar.js";
 import { InputBox } from "./components/input-box.js";
 import { Header } from "./components/header.js";
-import { pasteCollapseLineThreshold, tuiAgentModelId } from "./config.js";
+import { defaultModelLabel } from "@open-harness/agent";
+import { pasteCollapseLineThreshold } from "./config.js";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos.js";
 import type {
   TUIOptions,
@@ -600,7 +601,7 @@ function AppContent({ options }: AppProps) {
       <Header
         name={options?.header?.name}
         version={options?.header?.version}
-        model={options?.header?.model ?? tuiAgentModelId}
+        model={options?.header?.model ?? defaultModelLabel}
         cwd={state.workingDirectory}
       />
 

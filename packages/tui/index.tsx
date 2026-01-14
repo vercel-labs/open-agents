@@ -7,16 +7,13 @@ import {
   ExpandedViewProvider,
   TodoViewProvider,
 } from "@open-harness/shared";
-import { tuiAgentModelId, createDefaultAgentOptions } from "./config.js";
+import { defaultModelLabel } from "@open-harness/agent";
+import { createDefaultAgentOptions } from "./config.js";
 import type { TUIOptions } from "./types.js";
 
 export type { TUIOptions, AutoAcceptMode } from "./types.js";
 export { useChatContext, ChatProvider } from "./chat-context.js";
-export {
-  tuiAgent,
-  tuiAgentModelId,
-  createDefaultAgentOptions,
-} from "./config.js";
+export { tuiAgent, createDefaultAgentOptions } from "./config.js";
 
 /**
  * Create a Claude Code-style TUI.
@@ -47,8 +44,7 @@ export async function createTUI(options: TUIOptions): Promise<void> {
   }
 
   const agentOptions =
-    options.agentOptions ??
-    createDefaultAgentOptions(options.sandbox!);
+    options.agentOptions ?? createDefaultAgentOptions(options.sandbox!);
 
   const workingDirectory =
     options.workingDirectory ?? options.sandbox?.workingDirectory;
@@ -56,7 +52,7 @@ export async function createTUI(options: TUIOptions): Promise<void> {
   const { waitUntilExit } = render(
     <ChatProvider
       agentOptions={agentOptions}
-      model={options.header?.model ?? tuiAgentModelId}
+      model={options.header?.model ?? defaultModelLabel}
       workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
@@ -83,8 +79,7 @@ export function renderTUI(options: TUIOptions) {
   }
 
   const agentOptions =
-    options.agentOptions ??
-    createDefaultAgentOptions(options.sandbox!);
+    options.agentOptions ?? createDefaultAgentOptions(options.sandbox!);
 
   const workingDirectory =
     options.workingDirectory ?? options.sandbox?.workingDirectory;
@@ -92,7 +87,7 @@ export function renderTUI(options: TUIOptions) {
   return render(
     <ChatProvider
       agentOptions={agentOptions}
-      model={options.header?.model ?? tuiAgentModelId}
+      model={options.header?.model ?? defaultModelLabel}
       workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
     >
