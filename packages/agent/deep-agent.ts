@@ -1,4 +1,11 @@
-import { ToolLoopAgent, stepCountIs, type TypedToolResult, gateway } from "ai";
+import {
+  ToolLoopAgent,
+  stepCountIs,
+  type LanguageModel,
+  type ToolSet,
+  type TypedToolResult,
+  gateway,
+} from "ai";
 import { z } from "zod";
 import {
   todoWriteTool,
@@ -27,32 +34,31 @@ const approvalsSchema = z.object({
 const callOptionsSchema = z.object({
   sandbox: z.custom<Sandbox>(),
   mode: agentModeSchema,
+  model: z.custom<LanguageModel>().optional(),
   customInstructions: z.string().optional(),
   approvals: approvalsSchema.optional(),
 });
 
 export type DeepAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
-const model = gateway("anthropic/claude-haiku-4.5");
+export const defaultModel = gateway("anthropic/claude-haiku-4.5");
+export const defaultModelLabel = defaultModel.modelId;
 
-export const deepAgentModelId = model.modelId;
+const tools = {
+  todo_write: todoWriteTool,
+  read: readFileTool(),
+  write: writeFileTool({ needsApproval: true }),
+  edit: editFileTool({ needsApproval: true }),
+  grep: grepTool(),
+  glob: globTool(),
+  bash: bashTool({ needsApproval: true }),
+  task: taskTool,
+} satisfies ToolSet;
 
 export const deepAgent = new ToolLoopAgent({
-  model,
+  model: defaultModel,
   instructions: buildSystemPrompt({}),
-  tools: addCacheControl({
-    tools: {
-      todo_write: todoWriteTool,
-      read: readFileTool(),
-      write: writeFileTool({ needsApproval: true }),
-      edit: editFileTool({ needsApproval: true }),
-      grep: grepTool(),
-      glob: globTool(),
-      bash: bashTool({ needsApproval: true }),
-      task: taskTool,
-    },
-    model,
-  }),
+  tools,
   stopWhen: stepCountIs(50),
   callOptionsSchema,
   prepareStep: ({ messages, model, steps }) => ({
@@ -63,9 +69,12 @@ export const deepAgent = new ToolLoopAgent({
   }),
   prepareCall: ({ options, model, ...settings }) => {
     if (!options) {
-      throw new Error("Deep agent requires call options with sandbox and mode.");
+      throw new Error(
+        "Deep agent requires call options with sandbox and mode.",
+      );
     }
     const mode: AgentMode = options.mode;
+    const callModel = options.model ?? model;
     const autoApprove = options.approvals?.autoApprove ?? "off";
     const approvalRules: ApprovalRule[] = options.approvals?.rules ?? [];
     const customInstructions = options.customInstructions;
@@ -81,7 +90,11 @@ export const deepAgent = new ToolLoopAgent({
 
     return {
       ...settings,
-      model,
+      model: callModel,
+      tools: addCacheControl({
+        tools: settings.tools ?? tools,
+        model: callModel,
+      }),
       instructions,
       experimental_context: { sandbox, mode, autoApprove, approvalRules },
     };
