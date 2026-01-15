@@ -107,12 +107,6 @@ function HomePage() {
                 Tasks
               </TabsTrigger>
               <TabsTrigger
-                value="reviews"
-                className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
-              >
-                Code reviews
-              </TabsTrigger>
-              <TabsTrigger
                 value="archive"
                 className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
               >
@@ -130,11 +124,6 @@ function HomePage() {
                   onTaskClick={handleTaskClick}
                 />
               )}
-            </TabsContent>
-            <TabsContent value="reviews" className="mt-6">
-              <div className="py-8 text-center text-muted-foreground">
-                Code reviews coming soon
-              </div>
             </TabsContent>
             <TabsContent value="archive" className="mt-6">
               {loading ? (
