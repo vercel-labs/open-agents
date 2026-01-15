@@ -19,4 +19,5 @@ export {
   JustBashSandbox,
   createJustBashSandbox,
   type JustBashSandboxConfig,
+  type JustBashSnapshot,
 } from "./just-bash";

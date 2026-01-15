@@ -1,4 +1,4 @@
-import { Bash, OverlayFs } from "just-bash";
+import { Bash, OverlayFs, type FsEntry } from "just-bash";
 import type { Dirent } from "fs";
 import type {
   Sandbox,
@@ -8,6 +8,33 @@ import type {
 } from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
+
+/**
+ * File entry in a JustBash snapshot.
+ */
+interface SnapshotFileEntry {
+  type: "file" | "directory" | "symlink";
+  /** File content (UTF-8 text or base64 for binary) */
+  content?: string;
+  /** Set to "base64" for binary files */
+  encoding?: "base64";
+  /** File permissions */
+  mode?: number;
+  /** Symlink target path */
+  target?: string;
+}
+
+/**
+ * Snapshot format for persisting JustBash state across serverless invocations.
+ *
+ * Only files under the working directory are included - system files
+ * (`/bin`, `/proc`, `/dev`, `/usr`) are recreated automatically by JustBash.
+ */
+export interface JustBashSnapshot {
+  workingDirectory: string;
+  env: Record<string, string>;
+  files: Record<string, SnapshotFileEntry>;
+}
 
 export interface JustBashSandboxConfig {
   /**
@@ -324,6 +351,111 @@ export class JustBashSandbox implements Sandbox {
     }
     // No resources to clean up for just-bash
   }
+
+  /**
+   * Serialize the sandbox state to a JSON-compatible snapshot.
+   *
+   * Only serializes files under the working directory - system files
+   * (`/bin`, `/proc`, `/dev`, `/usr`) are recreated automatically.
+   *
+   * Note: Only supported for memory mode sandboxes.
+   */
+  serialize(): JustBashSnapshot {
+    if (this.mode !== "memory") {
+      throw new Error(
+        "Serialization is only supported for memory mode sandboxes",
+      );
+    }
+
+    const snapshot: JustBashSnapshot = {
+      workingDirectory: this.bash.getCwd(),
+      env: this.bash.getEnv(),
+      files: {},
+    };
+
+    const fsData = this.bash.fs.data as Map<string, FsEntry>;
+
+    for (const [path, entry] of fsData) {
+      // Skip system files - only include files under the working directory
+      if (
+        !path.startsWith(this.workingDirectory) &&
+        path !== this.workingDirectory
+      ) {
+        continue;
+      }
+
+      if (entry.type === "file" && entry.content) {
+        try {
+          // Try to decode as UTF-8 text
+          const content = new TextDecoder("utf-8", { fatal: true }).decode(
+            entry.content,
+          );
+          snapshot.files[path] = { type: "file", content, mode: entry.mode };
+        } catch {
+          // Binary file - encode as base64
+          const base64 = Buffer.from(entry.content).toString("base64");
+          snapshot.files[path] = {
+            type: "file",
+            content: base64,
+            encoding: "base64",
+            mode: entry.mode,
+          };
+        }
+      } else if (entry.type === "directory") {
+        snapshot.files[path] = { type: "directory", mode: entry.mode };
+      } else if (entry.type === "symlink" && entry.target) {
+        snapshot.files[path] = { type: "symlink", target: entry.target };
+      }
+    }
+
+    return snapshot;
+  }
+
+  /**
+   * Restore a sandbox from a previously serialized snapshot.
+   *
+   * @param snapshot - The snapshot to restore from
+   * @param hooks - Optional lifecycle hooks
+   */
+  static async fromSnapshot(
+    snapshot: JustBashSnapshot,
+    hooks?: SandboxHooks,
+  ): Promise<JustBashSandbox> {
+    // Convert snapshot to Bash's expected files format
+    const files: Record<string, string> = {};
+
+    for (const [path, entry] of Object.entries(snapshot.files)) {
+      if (entry.type === "file" && entry.content) {
+        if (entry.encoding === "base64") {
+          files[path] = Buffer.from(entry.content, "base64").toString("utf-8");
+        } else {
+          files[path] = entry.content;
+        }
+      }
+      // Directories are created implicitly when files are written
+    }
+
+    const bash = new Bash({
+      files,
+      cwd: snapshot.workingDirectory,
+      env: snapshot.env,
+    });
+
+    const sandbox = new JustBashSandbox(
+      snapshot.workingDirectory,
+      bash,
+      "memory",
+      snapshot.env,
+      hooks,
+    );
+
+    // Run afterStart hook if provided
+    if (hooks?.afterStart) {
+      await hooks.afterStart(sandbox);
+    }
+
+    return sandbox;
+  }
 }
 
 /**
@@ -345,6 +477,6 @@ export class JustBashSandbox implements Sandbox {
  */
 export async function createJustBashSandbox(
   config: JustBashSandboxConfig,
-): Promise<Sandbox> {
+): Promise<JustBashSandbox> {
   return JustBashSandbox.create(config);
 }

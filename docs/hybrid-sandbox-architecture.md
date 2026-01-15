@@ -314,6 +314,7 @@ This eliminates the need for path remapping during handoff since both sandboxes 
 3. ~~Prototype the handoff mechanism~~ ✅ Done (`apps/web/hybrid-sandbox-handoff-test.ts`)
 4. ~~Research JustBash state serialization for serverless persistence~~ ✅ Done (`apps/web/justbash-serialization-test.ts`)
 5. ~~Validate pending ops replay to Vercel~~ ✅ Done (`apps/web/pending-ops-replay-test.ts`)
+6. ~~Implement serialization API on JustBashSandbox~~ ✅ Done (`packages/sandbox/just-bash.ts`) - See [Serialization API Design](#serialization-api-design)
 
 ### Web Integration Phase (Incremental)
 
@@ -750,3 +751,39 @@ The `createJustBashSandbox()` factory function will return `Promise<JustBashSand
 2. **No versioning**: Snapshots don't include a version field. State is overwritten at each persistence boundary, so migration isn't needed.
 
 3. **System files excluded**: Only files under the working directory are serialized. System files (`/bin`, `/proc`, `/dev`, `/usr`) are recreated automatically by `new Bash()`
+
+### Implementation Status ✅
+
+Implemented on 2025-01-15 in `packages/sandbox/just-bash.ts`.
+
+**Changes made:**
+
+1. **Added `serialize()` instance method** - Exports sandbox state to `JustBashSnapshot`. Only works for memory mode sandboxes (throws for overlay mode).
+
+2. **Added `fromSnapshot()` static factory** - Restores a sandbox from a previously serialized snapshot. Accepts optional `SandboxHooks` parameter.
+
+3. **Updated `createJustBashSandbox()` return type** - Now returns `Promise<JustBashSandbox>` instead of `Promise<Sandbox>` for direct access to serialization methods.
+
+4. **Exported `JustBashSnapshot` type** - Available from `@open-harness/sandbox` package.
+
+5. **Uses `FsEntry` type from `just-bash`** - No manual type maintenance required; types are derived directly from the library.
+
+**Usage example:**
+
+```typescript
+import { createJustBashSandbox, JustBashSandbox, type JustBashSnapshot } from "@open-harness/sandbox";
+
+// Create and use sandbox
+const sandbox = await createJustBashSandbox({
+  workingDirectory: "/workspace",
+  files: { "/workspace/file.txt": "content" },
+  mode: "memory",
+});
+
+// Serialize for persistence (e.g., to database)
+const snapshot: JustBashSnapshot = sandbox.serialize();
+const json = JSON.stringify(snapshot);
+
+// Later: restore from snapshot
+const restored = await JustBashSandbox.fromSnapshot(JSON.parse(json));
+```
