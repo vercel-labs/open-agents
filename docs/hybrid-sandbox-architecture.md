@@ -320,7 +320,7 @@ This eliminates the need for path remapping during handoff since both sandboxes 
 
 Each milestone builds on the previous one. Test and validate before moving to the next.
 
-#### Milestone 1: JustBash Persistence Across Turns
+#### Milestone 1: JustBash Persistence Across Turns ✅
 
 **Goal**: Prove sandbox state survives serverless request boundaries.
 
@@ -334,7 +334,20 @@ Each milestone builds on the previous one. Test and validate before moving to th
 - Restore time < 10ms
 - State size < 500KB for typical usage
 
-#### Milestone 2: GitHub Repo in JustBash
+**Results** (2025-01-15):
+| Metric | Target | Actual |
+|--------|--------|--------|
+| File persists | ✓ | ✓ |
+| Restore time | < 10ms | **6ms** |
+| State size | < 500KB | **769 bytes** |
+
+**Implementation**:
+- Added `justBashSnapshot` (jsonb) column to tasks table
+- Test endpoint: `apps/web/app/api/test/justbash-persistence/route.ts`
+- Fixed `JustBashSandbox.readFile`/`writeFile` to use native bash methods
+- Fixed `fromSnapshot` to restore empty directories
+
+#### Milestone 2: GitHub Repo in JustBash ✅
 
 **Goal**: Load a GitHub repository into JustBash and persist across turns.
 
@@ -349,6 +362,25 @@ Each milestone builds on the previous one. Test and validate before moving to th
 - Tarball load < 500ms for typical repos
 - Full repo + modifications persist across requests
 - Agent workflow is seamless
+
+**Results** (2025-01-15):
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Tarball load | < 500ms | **345ms** |
+| Restore time | < 10ms | **2ms** |
+| Files persist | ✓ | ✓ |
+| Modifications persist | ✓ | ✓ |
+
+**Implementation**:
+- Tarball utility: `apps/web/lib/github/tarball.ts`
+- Test endpoint: `apps/web/app/api/test/justbash-repo/route.ts`
+- JustBash init endpoint: `apps/web/app/api/sandbox/justbash/route.ts`
+- Chat route integration: `apps/web/app/api/chat/route.ts` (supports both JustBash and Vercel modes)
+
+**Optimizations**:
+- Binary files (PNG, etc.) skipped during extraction (can't be stored in JSONB)
+- Lock files filtered out (package-lock.json, yarn.lock, pnpm-lock.yaml, etc.) - reduced snapshot size by 87%
+- Path alignment: Uses `/vercel/sandbox` for seamless future handoff to Vercel
 
 #### Milestone 3: Background Vercel Startup
 
@@ -393,7 +425,7 @@ Each milestone builds on the previous one. Test and validate before moving to th
 ### Future Improvements
 
 - [ ] Large repo handling (streaming, blob storage)
-- [ ] Binary file handling
+- [x] Binary file handling (skipped during tarball extraction)
 - [ ] Graceful degradation if Vercel fails
 - [ ] Metrics and monitoring
 

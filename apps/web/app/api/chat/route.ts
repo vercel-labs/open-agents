@@ -1,4 +1,9 @@
-import { connectVercelSandbox } from "@open-harness/sandbox";
+import {
+  connectVercelSandbox,
+  JustBashSandbox,
+  type JustBashSnapshot,
+  type Sandbox,
+} from "@open-harness/sandbox";
 import { convertToModelMessages, gateway } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
@@ -8,6 +13,7 @@ import {
   createTaskMessage,
   createTaskMessageIfNotExists,
   getTaskById,
+  updateTask,
 } from "@/lib/db/tasks";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 
@@ -18,7 +24,7 @@ export const maxDuration = 300;
 
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
-  sandboxId: string;
+  sandboxId?: string; // Optional for JustBash mode
   taskId?: string;
 }
 
@@ -43,7 +49,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  // 3. Verify task ownership and sandbox association
+  // 3. Verify task ownership
   const task = await getTaskById(taskId);
   if (!task) {
     return Response.json({ error: "Task not found" }, { status: 404 });
@@ -51,17 +57,24 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
-  if (!task.sandboxId) {
-    return Response.json(
-      { error: "Sandbox not linked to task" },
-      { status: 400 },
-    );
-  }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+
+  // Determine sandbox mode: JustBash (if snapshot exists) or Vercel
+  const useJustBash = !!task.justBashSnapshot;
+
+  // For Vercel mode, validate sandbox association
+  if (!useJustBash) {
+    if (!task.sandboxId) {
+      return Response.json(
+        { error: "Sandbox not linked to task" },
+        { status: 400 },
+      );
+    }
+    if (task.sandboxId !== sandboxId) {
+      return Response.json(
+        { error: "Sandbox does not belong to this task" },
+        { status: 403 },
+      );
+    }
   }
 
   const modelMessages = await convertToModelMessages(messages, {
@@ -72,10 +85,22 @@ export async function POST(req: Request) {
   // Get the GitHub token to pass as env var when reconnecting
   const githubToken = await getUserGitHubToken();
 
-  const sandbox = await connectVercelSandbox({
-    sandboxId,
-    env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
-  });
+  // Create sandbox based on mode
+  let sandbox: Sandbox;
+  let justBashSandbox: JustBashSandbox | null = null;
+
+  if (useJustBash) {
+    // Restore JustBash sandbox from snapshot
+    const snapshot = task.justBashSnapshot as JustBashSnapshot;
+    justBashSandbox = await JustBashSandbox.fromSnapshot(snapshot);
+    sandbox = justBashSandbox;
+  } else {
+    // Connect to Vercel sandbox
+    sandbox = await connectVercelSandbox({
+      sandboxId: sandboxId!,
+      env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
+    });
+  }
 
   // Save user message immediately (incremental persistence)
   // Only save if the message has an ID (non-empty string) and hasn't been persisted yet
@@ -126,12 +151,13 @@ export async function POST(req: Request) {
     abortSignal: req.signal,
   });
 
-  // Save assistant message on finish
+  // Save assistant message on finish, and persist JustBash snapshot if applicable
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
     generateMessageId: nanoid,
     onFinish: async ({ responseMessage }) => {
       if (taskId) {
+        // Save assistant message
         try {
           await createTaskMessage({
             id: responseMessage.id,
@@ -141,6 +167,18 @@ export async function POST(req: Request) {
           });
         } catch (error) {
           console.error("Failed to save assistant message:", error);
+        }
+
+        // Persist JustBash snapshot if in JustBash mode
+        if (justBashSandbox) {
+          try {
+            const updatedSnapshot = justBashSandbox.serialize();
+            await updateTask(taskId, {
+              justBashSnapshot: updatedSnapshot,
+            });
+          } catch (error) {
+            console.error("Failed to persist JustBash snapshot:", error);
+          }
         }
       }
     },
