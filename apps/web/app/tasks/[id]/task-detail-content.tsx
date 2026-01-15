@@ -16,7 +16,6 @@ import {
   Archive,
   GitPullRequest,
   FolderGit2,
-  MoreVertical,
   GitCompare,
   Paperclip,
   Loader2,
@@ -997,9 +996,6 @@ export function TaskDetailContent() {
                 Create Repo
               </Button>
             )}
-            <Button variant="ghost" size="icon">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
           </div>
         </header>
 
