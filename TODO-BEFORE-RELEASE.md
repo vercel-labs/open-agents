@@ -1,5 +1,20 @@
 # TODO Before Release
 
+## Workflow
+
+To work through these todos, follow this pattern:
+
+1. Find the first pending `[ ]` item
+2. Ask: "Want me to tackle this one?"
+3. Research the codebase to understand the current implementation
+4. Implement the solution
+5. Run typecheck and lint to verify
+6. Ask the user to test
+7. Once confirmed working, commit the changes and mark item as `[x]`
+8. Move to the next pending item
+
+---
+
 ## Web App
 
 ### Critical
