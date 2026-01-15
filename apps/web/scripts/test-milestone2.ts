@@ -10,7 +10,7 @@
  */
 
 import { db } from "../lib/db/client";
-import { tasks, users } from "../lib/db/schema";
+import { tasks } from "../lib/db/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 

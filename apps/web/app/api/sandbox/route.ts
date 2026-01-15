@@ -69,11 +69,13 @@ export async function POST(req: Request) {
   // HYBRID SANDBOX: Fast startup with JustBash
   // ============================================
   //
-  // For new tasks with a repo, use hybrid approach:
+  // For NEW tasks with a repo, use hybrid approach:
   // 1. Create JustBash immediately (~100-500ms) - user can start chatting
   // 2. Start Vercel in background - auto-handoff when ready
   //
-  // For reconnecting to existing sandbox or no repo, use Vercel directly.
+  // For RECONNECTS (providedSandboxId exists), use Vercel directly.
+  // This preserves uncommitted changes from the previous session.
+  // TODO: Consider hybrid reconnect with Vercel snapshot restoration.
 
   const useHybridApproach = repoUrl && taskId && !providedSandboxId;
 

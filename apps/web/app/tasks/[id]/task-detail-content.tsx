@@ -933,6 +933,10 @@ export function TaskDetailContent() {
               variant="ghost"
               size="sm"
               onClick={async () => {
+                // Stop sandbox if active (save snapshot first)
+                if (sandboxInfo) {
+                  await handleSaveAndKill();
+                }
                 await archiveTask();
                 router.push("/");
               }}

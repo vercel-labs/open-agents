@@ -22,7 +22,6 @@ import {
   createJustBashSandbox,
   connectVercelSandbox,
   type JustBashSandbox,
-  type JustBashSnapshot,
 } from "@open-harness/sandbox";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";

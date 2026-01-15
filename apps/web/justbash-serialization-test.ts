@@ -9,7 +9,7 @@
  */
 
 import { Bash } from "just-bash";
-import { createJustBashSandbox, type Sandbox } from "@open-harness/sandbox";
+import { createJustBashSandbox } from "@open-harness/sandbox";
 
 // ============================================================================
 // Types

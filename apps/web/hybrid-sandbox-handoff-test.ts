@@ -574,42 +574,6 @@ async function runScenario3_HandoffOnDemand(
   }
 }
 
-async function runScenario4_AutoHandoffOnGit(
-  sandbox: HybridSandbox,
-): Promise<void> {
-  console.log(`\n${"─".repeat(60)}`);
-  console.log(`Scenario 4: Auto-handoff when git command is issued`);
-  console.log(`${"─".repeat(60)}\n`);
-
-  // Ensure we're back on JustBash for this test
-  if (sandbox.getState() !== "justbash") {
-    console.log(`[Skip] Already on Vercel, skipping auto-handoff test`);
-    return;
-  }
-
-  // Wait for Vercel to be ready first
-  console.log(`[Test] Waiting for Vercel to be ready...`);
-  while (!sandbox.isVercelReady()) {
-    await sleep(500);
-    process.stdout.write(".");
-  }
-  console.log(` Ready!`);
-
-  // Issue a git command (should trigger auto-handoff)
-  console.log(`\n[Agent] Running git status...`);
-  const result = await sandbox.exec(
-    "git status",
-    sandbox.workingDirectory,
-    10000,
-  );
-
-  console.log(`[Agent] git status result:`);
-  console.log(result.stdout.split("\n").slice(0, 5).join("\n"));
-
-  console.log(`\n[Result] State: ${sandbox.getState()}`);
-  console.log(`[Result] Auto-handoff occurred before git command`);
-}
-
 // ============================================================================
 // Main
 // ============================================================================

@@ -205,26 +205,6 @@ function serializeJustBash(bash: Bash, workingDir: string): JustBashSnapshot {
   return snapshot;
 }
 
-function deserializeJustBash(snapshot: JustBashSnapshot): Bash {
-  const files: Record<string, string> = {};
-
-  for (const [path, entry] of Object.entries(snapshot.files)) {
-    if (entry.type === "file" && entry.content) {
-      if (entry.encoding === "base64") {
-        files[path] = Buffer.from(entry.content, "base64").toString("utf-8");
-      } else {
-        files[path] = entry.content;
-      }
-    }
-  }
-
-  return new Bash({
-    files,
-    cwd: snapshot.workingDirectory,
-    env: snapshot.env,
-  });
-}
-
 // ============================================================================
 // Pending Operations Replay
 // ============================================================================
@@ -494,7 +474,7 @@ This file was created during the pending operations replay test.
           `  Expected length: ${expectedContent.length}, Got: ${content.length}`,
         );
       }
-    } catch (error) {
+    } catch {
       verifications.push({ file: path, exists: false, contentMatch: false });
       console.log(`[Verify] ${path.split("/").pop()}: MISSING ✗`);
     }

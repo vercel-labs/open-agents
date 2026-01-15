@@ -156,7 +156,7 @@ export async function POST(request: Request) {
         githubToken,
         WORKING_DIR,
       );
-    } catch (tokenError) {
+    } catch {
       // If token fails (403/401), try without token for public repos
       addEvent("tarball_token_failed_retrying_without");
       tarballResult = await downloadAndExtractTarball(
