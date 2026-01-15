@@ -523,6 +523,50 @@ type PendingOperation =
 | Handoff time | **2.98s** |
 | Total test time | **15.81s** |
 
+#### Milestone 5: Chat Route Integration
+
+**Goal**: Integrate HybridSandbox into the web chat route for seamless user experience.
+
+**Current State**: Chat route uses JustBash OR Vercel separately, with no automatic handoff.
+
+**Implementation Steps**:
+
+1. **Wrap JustBash in HybridSandbox**
+   - Import `HybridSandbox` from `@/lib/sandbox/hybrid-sandbox`
+   - When restoring from `justBashSnapshot`, wrap in `HybridSandbox`
+   - Pass existing `pendingOperations` from task to restore tracking state
+
+2. **Persist pending operations after each turn**
+   - In `onFinish` callback, save both `justBashSnapshot` and `pendingOperations`
+   - Update task with: `{ justBashSnapshot, pendingOperations: hybrid.pendingOperations }`
+
+3. **Check Vercel readiness and trigger handoff**
+   - Before agent runs, check if `task.vercelStatus === "ready"` and `task.sandboxMode === "justbash"`
+   - If ready, call handoff endpoint or perform inline handoff
+   - After handoff: clear `justBashSnapshot`, clear `pendingOperations`, set `sandboxMode: "vercel"`
+
+4. **Handle Vercel-required commands gracefully**
+   - `HybridSandbox.exec()` detects git/npm commands and returns helpful error
+   - Option A: Auto-trigger handoff if Vercel ready
+   - Option B: Return message asking user to wait for Vercel
+
+5. **Update frontend to show sandbox status**
+   - Display "JustBash (fast start)" vs "Vercel (full features)"
+   - Show "Switching to Vercel..." during handoff
+   - Indicate when git/npm commands become available
+
+**Success Criteria**:
+- User starts task and can interact within ~1s (JustBash)
+- Agent can read/write files immediately
+- When agent tries git/npm, handoff occurs automatically (if Vercel ready)
+- All file changes persist after handoff
+- No user action required for handoff
+
+**Files to modify**:
+- `apps/web/app/api/chat/route.ts` - Main integration point
+- `apps/web/app/api/sandbox/justbash/route.ts` - Initialize with pending ops tracking
+- Frontend components (optional) - Status display
+
 ### Future Improvements
 
 - [ ] Large repo handling (streaming, blob storage)
@@ -530,6 +574,7 @@ type PendingOperation =
 - [ ] Graceful degradation if Vercel fails
 - [ ] Metrics and monitoring
 - [x] Seamless handoff from JustBash to Vercel (Milestone 4)
+- [ ] Chat route integration with automatic handoff (Milestone 5)
 
 ## Serverless Persistence
 
