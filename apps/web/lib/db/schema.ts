@@ -84,10 +84,16 @@ export const tasks = pgTable("tasks", {
   modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
   // Whether this task uses a new auto-generated branch
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
-  // Sandbox info
+  // Sandbox info (Vercel)
   sandboxId: text("sandbox_id"),
   sandboxCreatedAt: timestamp("sandbox_created_at"),
   sandboxTimeout: integer("sandbox_timeout"),
+  // Vercel background startup tracking (Hybrid Sandbox Milestone 3)
+  vercelStatus: text("vercel_status", {
+    enum: ["starting", "ready", "failed"],
+  }),
+  vercelStartedAt: timestamp("vercel_started_at"),
+  vercelError: text("vercel_error"),
   // Git stats (for display in task list)
   linesAdded: integer("lines_added").default(0),
   linesRemoved: integer("lines_removed").default(0),
