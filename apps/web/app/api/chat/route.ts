@@ -126,10 +126,21 @@ export async function POST(req: Request) {
     abortSignal: req.signal,
   });
 
+  result.consumeStream();
+
   // Save assistant message on finish
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
     generateMessageId: nanoid,
+    messageMetadata: ({ part }) => {
+      if (part.type === "finish") {
+        return { usage: part.totalUsage };
+      }
+      if (part.type === "finish-step") {
+        return { usage: part.usage };
+      }
+      return undefined;
+    },
     onFinish: async ({ responseMessage }) => {
       if (taskId) {
         try {

@@ -127,6 +127,109 @@ function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
 
 const WARNING_THRESHOLD_MS = 60_000; // Show warning when < 1 minute remaining
 
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}
+
+function CircularProgress({
+  percentage,
+  size = 16,
+  strokeWidth = 2,
+}: {
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      {/* Background circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        className="text-muted-foreground/20"
+      />
+      {/* Progress circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        className="text-muted-foreground"
+      />
+    </svg>
+  );
+}
+
+function ContextUsageIndicator({
+  inputTokens,
+  outputTokens,
+  contextLimit,
+}: {
+  inputTokens: number;
+  outputTokens: number;
+  contextLimit: number;
+}) {
+  if (inputTokens === 0) {
+    return null;
+  }
+
+  const percentage =
+    contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
+
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>
+        <div className="flex cursor-default items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
+          <span>{percentage}%</span>
+          <CircularProgress percentage={percentage} size={14} strokeWidth={2} />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="min-w-[160px] p-0">
+        <div className="p-3">
+          {/* Header with percentage and token count */}
+          <div className="flex items-center justify-between gap-6">
+            <span className="text-sm font-medium">{percentage}%</span>
+            <span className="text-xs opacity-60">
+              {formatTokens(inputTokens)} / {formatTokens(contextLimit)}
+            </span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-current opacity-10" />
+
+        {/* Breakdown */}
+        <div className="space-y-1 p-3 text-xs">
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Input</span>
+            <span>{formatTokens(inputTokens)}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Output</span>
+            <span>{formatTokens(outputTokens)}</span>
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function SandboxHeaderBadge({
   sandboxInfo,
   isCreating,
@@ -880,6 +983,23 @@ export function TaskDetailContent() {
     fetchDiff,
   ]);
 
+  // Compute total token usage from all assistant messages
+  const tokenUsage = useMemo(() => {
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      const usage = message.metadata?.usage;
+      if (usage) {
+        inputTokens += usage.inputTokens ?? 0;
+        outputTokens += usage.outputTokens ?? 0;
+      }
+    }
+
+    return { inputTokens, outputTokens };
+  }, [messages]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -1400,6 +1520,11 @@ export function TaskDetailContent() {
                         {task.modelId}
                       </span>
                     )}
+                    <ContextUsageIndicator
+                      inputTokens={tokenUsage.inputTokens}
+                      outputTokens={tokenUsage.outputTokens}
+                      contextLimit={200_000}
+                    />
                   </div>
 
                   <div className="flex items-center gap-1">

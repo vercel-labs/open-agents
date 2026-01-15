@@ -22,8 +22,8 @@ To work through these todos, follow this pattern:
 - [x] Add loading state in repository selection dropdown
 - [x] Three dots menu is non-functional - remove or implement
 - [x] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
-- [ ] Remove unused "Code Review" tab from homepage
-- [ ] Add context window usage / token usage display in task page
+- [x] Remove unused "Code Review" tab from homepage
+- [x] Add context window usage / token usage display in task page
 - [ ] Show todo list inline in chat
 
 ### Performance
