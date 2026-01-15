@@ -24,7 +24,7 @@ To work through these todos, follow this pattern:
 - [x] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
 - [x] Remove unused "Code Review" tab from homepage
 - [x] Add context window usage / token usage display in task page
-- [ ] Show todo list inline in chat
+- [x] Show todo list inline in chat
 
 ### Performance
 - [ ] Sandbox startup time is too slow - add warming (start sandbox when user starts typing)
