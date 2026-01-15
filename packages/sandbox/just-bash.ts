@@ -1,10 +1,10 @@
-import { Bash, OverlayFs } from "just-bash";
 import type { Dirent } from "fs";
+import { Bash, OverlayFs } from "just-bash";
 import type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  Sandbox,
   SandboxHooks,
+  SandboxStats,
 } from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
@@ -65,7 +65,7 @@ export interface JustBashSandboxConfig {
  * - Full lifecycle hook support
  */
 export class JustBashSandbox implements Sandbox {
-  readonly type = "just-bash";
+  readonly type = "in-memory" as const;
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
   readonly hooks?: SandboxHooks;

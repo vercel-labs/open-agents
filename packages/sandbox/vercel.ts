@@ -1,13 +1,13 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Dirent } from "fs";
 import type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  RestoreOptions,
+  Sandbox,
   SandboxHooks,
+  SandboxStats,
   SnapshotOptions,
   SnapshotResult,
-  RestoreOptions,
 } from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
@@ -80,7 +80,7 @@ export interface VercelSandboxConfig {
  * Runs code in isolated Firecracker MicroVMs.
  */
 export class VercelSandbox implements Sandbox {
-  readonly type = "vercel";
+  readonly type = "cloud" as const;
   /**
    * Unique identifier for this sandbox.
    * Use this to reconnect to an existing sandbox via `connectVercelSandbox({ sandboxId })`.

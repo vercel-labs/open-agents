@@ -1,22 +1,23 @@
 export type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  RestoreOptions,
+  Sandbox,
   SandboxHook,
   SandboxHooks,
+  SandboxStats,
+  SandboxType,
   SnapshotOptions,
   SnapshotResult,
-  RestoreOptions,
 } from "./interface";
-export { LocalSandbox, createLocalSandbox } from "./local";
 export {
-  VercelSandbox,
+  createJustBashSandbox,
+  JustBashSandbox,
+  type JustBashSandboxConfig,
+} from "./just-bash";
+export { createLocalSandbox, LocalSandbox } from "./local";
+export {
   connectVercelSandbox,
+  VercelSandbox,
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,
 } from "./vercel";
-export {
-  JustBashSandbox,
-  createJustBashSandbox,
-  type JustBashSandboxConfig,
-} from "./just-bash";

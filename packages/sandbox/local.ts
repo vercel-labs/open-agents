@@ -1,7 +1,7 @@
-import * as fs from "fs/promises";
 import { spawn } from "child_process";
 import type { Dirent } from "fs";
-import type { Sandbox, SandboxStats, ExecResult } from "./interface";
+import * as fs from "fs/promises";
+import type { ExecResult, Sandbox, SandboxStats } from "./interface";
 
 const MAX_OUTPUT_LENGTH = 50_000;
 
@@ -13,7 +13,7 @@ const MAX_OUTPUT_LENGTH = 50_000;
  * Use VercelSandbox for hooks support.
  */
 export class LocalSandbox implements Sandbox {
-  readonly type = "local";
+  readonly type = "local" as const;
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
   readonly environmentDetails = `- Full shell access with all standard CLI tools
