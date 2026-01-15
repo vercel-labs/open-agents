@@ -983,21 +983,19 @@ export function TaskDetailContent() {
     fetchDiff,
   ]);
 
-  // Compute total token usage from all assistant messages
+  // Get token usage from the most recent assistant message (current context usage)
   const tokenUsage = useMemo(() => {
-    let inputTokens = 0;
-    let outputTokens = 0;
-
-    for (const message of messages) {
-      if (message.role !== "assistant") continue;
-      const usage = message.metadata?.usage;
-      if (usage) {
-        inputTokens += usage.inputTokens ?? 0;
-        outputTokens += usage.outputTokens ?? 0;
+    // Find the last assistant message with usage metadata
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message?.role === "assistant" && message.metadata?.usage) {
+        return {
+          inputTokens: message.metadata.usage.inputTokens ?? 0,
+          outputTokens: message.metadata.usage.outputTokens ?? 0,
+        };
       }
     }
-
-    return { inputTokens, outputTokens };
+    return { inputTokens: 0, outputTokens: 0 };
   }, [messages]);
 
   if (error) {
