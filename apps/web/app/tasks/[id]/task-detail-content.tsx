@@ -20,6 +20,8 @@ import {
   Paperclip,
   Loader2,
   Mic,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -354,13 +356,6 @@ function SandboxInputOverlay({
   );
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function TaskDetailContent() {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -373,6 +368,9 @@ export function TaskDetailContent() {
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
     state: recordingState,
@@ -420,6 +418,14 @@ export function TaskDetailContent() {
     }
   }, [input]);
 
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
   const {
     images,
     addImage,
@@ -439,6 +445,7 @@ export function TaskDetailContent() {
     setSandboxInfo,
     clearSandboxInfo,
     archiveTask,
+    updateTaskTitle,
     hadInitialMessages,
     diffRefreshKey,
     triggerDiffRefresh,
@@ -910,10 +917,68 @@ export function TaskDetailContent() {
                     </>
                   )}
                 </>
+              ) : isEditingTitle ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (editedTitle.trim()) {
+                          await updateTaskTitle(editedTitle.trim());
+                        }
+                        setIsEditingTitle(false);
+                      } else if (e.key === "Escape") {
+                        setIsEditingTitle(false);
+                      }
+                    }}
+                    onBlur={async () => {
+                      if (editedTitle.trim() && editedTitle !== task.title) {
+                        await updateTaskTitle(editedTitle.trim());
+                      }
+                      setIsEditingTitle(false);
+                    }}
+                    className="w-40 rounded border border-border bg-transparent px-2 py-0.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (editedTitle.trim()) {
+                        await updateTaskTitle(editedTitle.trim());
+                      }
+                      setIsEditingTitle(false);
+                    }}
+                    className="rounded p-1 hover:bg-muted"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ) : (
-                <span className="text-muted-foreground">
-                  {formatDate(new Date(task.createdAt))}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span
+                    className="max-w-[200px] truncate text-muted-foreground"
+                    title={task.title}
+                  >
+                    {task.title.length > 30 ? "Untitled Workspace" : task.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditedTitle(
+                        task.title.length > 30
+                          ? "Untitled Workspace"
+                          : task.title,
+                      );
+                      setIsEditingTitle(true);
+                    }}
+                    className="rounded p-1 hover:bg-muted"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
               )}
             </div>
             <SandboxHeaderBadge

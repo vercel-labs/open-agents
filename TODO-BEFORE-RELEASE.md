@@ -6,7 +6,7 @@
 - [x] Model selector (in flight)
 - [x] Add loading state in repository selection dropdown
 - [x] Three dots menu is non-functional - remove or implement
-- [ ] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
+- [x] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
 - [ ] Remove unused "Code Review" tab from homepage
 - [ ] Add context window usage / token usage display in task page
 - [ ] Show todo list inline in chat

@@ -62,6 +62,7 @@ type TaskChatContextValue = {
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   archiveTask: () => Promise<void>;
+  updateTaskTitle: (title: string) => Promise<void>;
   /** Whether the task had persisted messages when it was loaded */
   hadInitialMessages: boolean;
   /** Counter that increments when diff should be refreshed */
@@ -444,6 +445,27 @@ export function TaskChatProvider({
     }
   }, [task.id]);
 
+  const updateTaskTitle = useCallback(
+    async (title: string) => {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+
+      const data = (await res.json()) as { task?: Task; error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to update task title");
+      }
+
+      if (data.task) {
+        setTask(data.task);
+      }
+    },
+    [task.id],
+  );
+
   // Track whether we started with persisted messages (for initial message logic)
   const hadInitialMessages = initialMessages.length > 0;
 
@@ -456,6 +478,7 @@ export function TaskChatProvider({
         setSandboxInfo,
         clearSandboxInfo,
         archiveTask,
+        updateTaskTitle,
         hadInitialMessages,
         diffRefreshKey,
         triggerDiffRefresh,
