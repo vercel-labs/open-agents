@@ -1046,7 +1046,11 @@ export function TaskDetailContent() {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (editedTitle.trim()) {
-                          await updateTaskTitle(editedTitle.trim());
+                          try {
+                            await updateTaskTitle(editedTitle.trim());
+                          } catch (err) {
+                            console.error("Failed to update title:", err);
+                          }
                         }
                         setIsEditingTitle(false);
                       } else if (e.key === "Escape") {
@@ -1055,7 +1059,11 @@ export function TaskDetailContent() {
                     }}
                     onBlur={async () => {
                       if (editedTitle.trim() && editedTitle !== task.title) {
-                        await updateTaskTitle(editedTitle.trim());
+                        try {
+                          await updateTaskTitle(editedTitle.trim());
+                        } catch (err) {
+                          console.error("Failed to update title:", err);
+                        }
                       }
                       setIsEditingTitle(false);
                     }}
@@ -1065,7 +1073,11 @@ export function TaskDetailContent() {
                     type="button"
                     onClick={async () => {
                       if (editedTitle.trim()) {
-                        await updateTaskTitle(editedTitle.trim());
+                        try {
+                          await updateTaskTitle(editedTitle.trim());
+                        } catch (err) {
+                          console.error("Failed to update title:", err);
+                        }
                       }
                       setIsEditingTitle(false);
                     }}
@@ -1080,16 +1092,12 @@ export function TaskDetailContent() {
                     className="max-w-[200px] truncate text-muted-foreground"
                     title={task.title}
                   >
-                    {task.title.length > 30 ? "Untitled Workspace" : task.title}
+                    {task.title}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      setEditedTitle(
-                        task.title.length > 30
-                          ? "Untitled Workspace"
-                          : task.title,
-                      );
+                      setEditedTitle(task.title);
                       setIsEditingTitle(true);
                     }}
                     className="rounded p-1 hover:bg-muted"
@@ -1518,6 +1526,7 @@ export function TaskDetailContent() {
                         {task.modelId}
                       </span>
                     )}
+                    {/* TODO: Derive context limit from model ID instead of hardcoding */}
                     <ContextUsageIndicator
                       inputTokens={tokenUsage.inputTokens}
                       outputTokens={tokenUsage.outputTokens}
