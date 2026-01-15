@@ -108,6 +108,12 @@ export const tasks = pgTable("tasks", {
   snapshotSizeBytes: integer("snapshot_size_bytes"),
   // JustBash sandbox state (for hybrid sandbox persistence)
   justBashSnapshot: jsonb("just_bash_snapshot"),
+  // Pending operations to replay during handoff (Hybrid Sandbox Milestone 4)
+  pendingOperations: jsonb("pending_operations"),
+  // Current sandbox mode (Hybrid Sandbox Milestone 4)
+  sandboxMode: text("sandbox_mode", {
+    enum: ["justbash", "vercel"],
+  }),
   // Cached diff for offline viewing
   cachedDiff: jsonb("cached_diff"),
   cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),

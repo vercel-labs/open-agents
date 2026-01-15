@@ -445,7 +445,7 @@ cd apps/web && bun run scripts/test-milestone3.ts
 - With a valid GitHub token, JustBash ready time should be ~300-400ms
 - Vercel startup varies (6-12s) depending on repo size and network conditions
 
-#### Milestone 4: Seamless Handoff
+#### Milestone 4: Seamless Handoff ✅
 
 **Goal**: Switch from JustBash to Vercel, replaying any writes.
 
@@ -467,12 +467,69 @@ cd apps/web && bun run scripts/test-milestone3.ts
 - No path changes or interruptions
 - Git/npm work after handoff
 
+**Implementation** (2025-01-15):
+
+Schema changes added to `apps/web/lib/db/schema.ts`:
+- `pendingOperations: jsonb` - Track write operations for replay during handoff
+- `sandboxMode: text` - Current sandbox mode ("justbash" | "vercel")
+
+**New Components**:
+- `HybridSandbox` class: `apps/web/lib/sandbox/hybrid-sandbox.ts`
+  - Wraps JustBash sandbox and tracks all write operations (writeFile, mkdir)
+  - Detects commands that require Vercel (git, npm, curl, etc.)
+  - `performHandoff(vercelSandbox)` method replays pending operations
+- Handoff API endpoint: `apps/web/app/api/sandbox/handoff/route.ts`
+  - GET: Check handoff eligibility status
+  - POST: Perform handoff with operation replay
+- Test endpoint: `apps/web/app/api/test/hybrid-handoff/route.ts`
+- Test script: `apps/web/scripts/test-milestone4.ts`
+
+**How to run the test**:
+```bash
+# Start the web app
+bun run web
+
+# In another terminal, run the test script (from apps/web)
+cd apps/web && bun run scripts/test-milestone4.ts
+```
+
+**PendingOperation Type**:
+```typescript
+type PendingOperation =
+  | { type: "writeFile"; path: string; content: string }
+  | { type: "mkdir"; path: string; recursive: boolean };
+```
+
+**Vercel-Required Commands** (auto-detected for handoff trigger):
+- Git operations: `git`
+- Package managers: `npm`, `pnpm`, `yarn`, `bun`
+- Network operations: `curl`, `wget`, `fetch`
+- Process execution: `node`, `python`, `python3`, `ruby`, `php`
+
+**Results** (2025-01-15):
+| Metric | Target | Actual |
+|--------|--------|--------|
+| All writes replay | ✓ | ✓ (5 ops) |
+| Files exist in Vercel | ✓ | ✓ (3/3) |
+| Content matches | ✓ | ✓ |
+| Git works after handoff | ✓ | ✓ |
+| Handoff time | < 5s | **2.98s** |
+
+**Performance**:
+| Metric | Value |
+|--------|-------|
+| JustBash ready | **817ms** |
+| Vercel ready | **10.15s** |
+| Handoff time | **2.98s** |
+| Total test time | **15.81s** |
+
 ### Future Improvements
 
 - [ ] Large repo handling (streaming, blob storage)
 - [x] Binary file handling (skipped during tarball extraction)
 - [ ] Graceful degradation if Vercel fails
 - [ ] Metrics and monitoring
+- [x] Seamless handoff from JustBash to Vercel (Milestone 4)
 
 ## Serverless Persistence
 

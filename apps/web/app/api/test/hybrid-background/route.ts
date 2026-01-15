@@ -241,9 +241,7 @@ export async function POST(request: Request) {
           existingUser.email ??
           `${existingUser.username}@users.noreply.github.com`,
       },
-      env: {
-        GITHUB_TOKEN: githubToken,
-      },
+      env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
       source: {
         url: repoUrl,
         token: githubToken,
