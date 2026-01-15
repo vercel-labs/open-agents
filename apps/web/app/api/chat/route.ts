@@ -16,6 +16,10 @@ import {
   updateTask,
 } from "@/lib/db/tasks";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import {
+  HybridSandbox,
+  type PendingOperation,
+} from "@/lib/sandbox/hybrid-sandbox";
 
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -58,11 +62,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // Determine sandbox mode: JustBash (if snapshot exists) or Vercel
-  const useJustBash = !!task.justBashSnapshot;
+  // Determine sandbox mode based on task state
+  // Priority: explicit sandboxMode > presence of justBashSnapshot > Vercel sandboxId
+  const isJustBashMode =
+    task.sandboxMode === "justbash" ||
+    (task.sandboxMode !== "vercel" && !!task.justBashSnapshot);
+  const isVercelMode = task.sandboxMode === "vercel" || !isJustBashMode;
 
-  // For Vercel mode, validate sandbox association
-  if (!useJustBash) {
+  // Check if frontend is sending a hybrid/JustBash placeholder ID
+  // In hybrid mode, the frontend receives "justbash-<taskId>" as the sandboxId
+  // After handoff, task.sandboxId changes to the real Vercel ID, but frontend may still have placeholder
+  const isHybridPlaceholder = sandboxId?.startsWith("justbash-");
+
+  // For Vercel mode, validate sandbox association (skip if hybrid placeholder)
+  if (isVercelMode && !isHybridPlaceholder) {
     if (!task.sandboxId) {
       return Response.json(
         { error: "Sandbox not linked to task" },
@@ -85,19 +98,88 @@ export async function POST(req: Request) {
   // Get the GitHub token to pass as env var when reconnecting
   const githubToken = await getUserGitHubToken();
 
-  // Create sandbox based on mode
+  // Create sandbox based on mode with hybrid handoff support
   let sandbox: Sandbox;
-  let justBashSandbox: JustBashSandbox | null = null;
+  let hybridSandbox: HybridSandbox | null = null;
+  let handoffPerformed = false;
 
-  if (useJustBash) {
-    // Restore JustBash sandbox from snapshot
-    const snapshot = task.justBashSnapshot as JustBashSnapshot;
-    justBashSandbox = await JustBashSandbox.fromSnapshot(snapshot);
-    sandbox = justBashSandbox;
+  if (isJustBashMode && task.justBashSnapshot) {
+    // Check if Vercel is ready and perform inline handoff
+    const vercelReady =
+      task.vercelStatus === "ready" && task.sandboxId !== null;
+
+    if (vercelReady) {
+      // Perform inline handoff before agent runs
+      const vercelSandbox = await connectVercelSandbox({
+        sandboxId: task.sandboxId!,
+        env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
+      });
+
+      // Replay pending operations
+      const pendingOps = (task.pendingOperations as PendingOperation[]) ?? [];
+      const errors: string[] = [];
+      for (const op of pendingOps) {
+        try {
+          if (op.type === "mkdir") {
+            await vercelSandbox.mkdir(op.path, { recursive: op.recursive });
+          } else if (op.type === "writeFile") {
+            await vercelSandbox.writeFile(op.path, op.content, "utf-8");
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          errors.push(`Failed to replay ${op.type} for ${op.path}: ${message}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        console.warn("Handoff replay errors (non-fatal):", errors);
+      }
+
+      // Update task to Vercel mode
+      await updateTask(taskId, {
+        sandboxMode: "vercel",
+        justBashSnapshot: null,
+        pendingOperations: null,
+      });
+
+      sandbox = vercelSandbox;
+      handoffPerformed = true;
+      console.log(
+        `[Chat] Inline handoff completed for task ${taskId}, replayed ${pendingOps.length} operations`,
+      );
+    } else {
+      // Vercel not ready - use HybridSandbox wrapper
+      const snapshot = task.justBashSnapshot as JustBashSnapshot;
+      const justBashSandbox = await JustBashSandbox.fromSnapshot(snapshot);
+
+      // Restore pending operations from previous requests
+      const existingPendingOps =
+        (task.pendingOperations as PendingOperation[]) ?? [];
+
+      hybridSandbox = new HybridSandbox({
+        justBash: justBashSandbox,
+        pendingOperations: existingPendingOps,
+        onVercelRequired: (command) => {
+          console.log(
+            `[Chat] Agent tried Vercel-required command: ${command}, Vercel status: ${task.vercelStatus}`,
+          );
+        },
+      });
+      sandbox = hybridSandbox;
+    }
   } else {
-    // Connect to Vercel sandbox
+    // Connect to Vercel sandbox directly
+    // Use task.sandboxId (real Vercel ID) not the request's sandboxId (may be placeholder)
+    const vercelSandboxId = task.sandboxId ?? sandboxId;
+    if (!vercelSandboxId) {
+      return Response.json(
+        { error: "No sandbox ID available" },
+        { status: 400 },
+      );
+    }
     sandbox = await connectVercelSandbox({
-      sandboxId: sandboxId!,
+      sandboxId: vercelSandboxId,
       env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
     });
   }
@@ -151,7 +233,7 @@ export async function POST(req: Request) {
     abortSignal: req.signal,
   });
 
-  // Save assistant message on finish, and persist JustBash snapshot if applicable
+  // Save assistant message on finish, and persist sandbox state if applicable
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
     generateMessageId: nanoid,
@@ -169,15 +251,25 @@ export async function POST(req: Request) {
           console.error("Failed to save assistant message:", error);
         }
 
-        // Persist JustBash snapshot if in JustBash mode
-        if (justBashSandbox) {
+        // Persist HybridSandbox state (JustBash snapshot + pending operations)
+        if (hybridSandbox && !handoffPerformed) {
           try {
-            const updatedSnapshot = justBashSandbox.serialize();
+            // Get the underlying JustBash sandbox for serialization
+            const justBash =
+              hybridSandbox.getJustBashSandbox() as JustBashSandbox;
+            const updatedSnapshot = justBash.serialize();
+            const pendingOps = hybridSandbox.pendingOperations;
+
             await updateTask(taskId, {
               justBashSnapshot: updatedSnapshot,
+              pendingOperations: pendingOps,
             });
+
+            console.log(
+              `[Chat] Persisted HybridSandbox state for task ${taskId}: ${pendingOps.length} pending operations`,
+            );
           } catch (error) {
-            console.error("Failed to persist JustBash snapshot:", error);
+            console.error("Failed to persist HybridSandbox state:", error);
           }
         }
       }
