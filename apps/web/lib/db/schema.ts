@@ -96,10 +96,12 @@ export const tasks = pgTable("tasks", {
   prStatus: text("pr_status", {
     enum: ["open", "merged", "closed"],
   }),
-  // Snapshot info
+  // Snapshot info (Vercel sandbox)
   snapshotUrl: text("snapshot_url"),
   snapshotCreatedAt: timestamp("snapshot_created_at"),
   snapshotSizeBytes: integer("snapshot_size_bytes"),
+  // JustBash sandbox state (for hybrid sandbox persistence)
+  justBashSnapshot: jsonb("just_bash_snapshot"),
   // Cached diff for offline viewing
   cachedDiff: jsonb("cached_diff"),
   cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),

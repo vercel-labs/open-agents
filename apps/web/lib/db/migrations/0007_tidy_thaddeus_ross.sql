@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "just_bash_snapshot" jsonb;

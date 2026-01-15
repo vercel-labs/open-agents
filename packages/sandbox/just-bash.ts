@@ -179,16 +179,15 @@ export class JustBashSandbox implements Sandbox {
   }
 
   async readFile(path: string, _encoding: "utf-8"): Promise<string> {
-    // Use cat command to read file contents
-    const result = await this.bash.exec(`cat "${path}"`);
-    if (result.exitCode !== 0) {
+    try {
+      return await this.bash.readFile(path);
+    } catch {
       const error = new Error(
-        result.stderr || `ENOENT: no such file or directory, open '${path}'`,
+        `ENOENT: no such file or directory, open '${path}'`,
       );
       (error as NodeJS.ErrnoException).code = "ENOENT";
       throw error;
     }
-    return result.stdout;
   }
 
   async writeFile(
@@ -202,16 +201,8 @@ export class JustBashSandbox implements Sandbox {
       await this.bash.exec(`mkdir -p "${parentDir}"`);
     }
 
-    // Use heredoc to write content (handles special characters)
-    // Escape any single quotes in the content
-    const escapedContent = content.replace(/'/g, "'\\''");
-    const result = await this.bash.exec(
-      `printf '%s' '${escapedContent}' > "${path}"`,
-    );
-
-    if (result.exitCode !== 0) {
-      throw new Error(result.stderr || `Failed to write file: ${path}`);
-    }
+    // Use bash's native writeFile to preserve content exactly
+    await this.bash.writeFile(path, content);
   }
 
   async stat(path: string): Promise<SandboxStats> {
@@ -423,6 +414,7 @@ export class JustBashSandbox implements Sandbox {
   ): Promise<JustBashSandbox> {
     // Convert snapshot to Bash's expected files format
     const files: Record<string, string> = {};
+    const directories: string[] = [];
 
     for (const [path, entry] of Object.entries(snapshot.files)) {
       if (entry.type === "file" && entry.content) {
@@ -431,8 +423,9 @@ export class JustBashSandbox implements Sandbox {
         } else {
           files[path] = entry.content;
         }
+      } else if (entry.type === "directory") {
+        directories.push(path);
       }
-      // Directories are created implicitly when files are written
     }
 
     const bash = new Bash({
@@ -448,6 +441,11 @@ export class JustBashSandbox implements Sandbox {
       snapshot.env,
       hooks,
     );
+
+    // Create empty directories that weren't created implicitly by files
+    for (const dir of directories) {
+      await bash.exec(`mkdir -p "${dir}"`);
+    }
 
     // Run afterStart hook if provided
     if (hooks?.afterStart) {

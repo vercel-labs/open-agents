@@ -50,6 +50,13 @@
       "when": 1768406726792,
       "tag": "0006_curvy_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1768508376500,
+      "tag": "0007_tidy_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }
