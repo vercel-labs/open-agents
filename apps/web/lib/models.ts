@@ -6,13 +6,6 @@ export type AvailableModel = Awaited<
   ReturnType<typeof gateway.getAvailableModels>
 >["models"][number];
 
-export function isValidModelId(
-  modelId: string,
-  models: AvailableModel[],
-): boolean {
-  return models.some((m) => m.id === modelId);
-}
-
 export function getModelDisplayName(model: AvailableModel): string {
   return model.name ?? model.id;
 }
