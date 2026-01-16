@@ -48,6 +48,10 @@
 - [ ] Add plan mode
 - [ ] Add automatic compaction approach as a tool
 
+## Technical Debt
+
+- [ ] Align import extensions across packages - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack. Requires updating tsconfig settings for web-consumed packages. CLI-only packages can keep `.js` extensions.
+
 ## Slack App (New)
 
 - [ ] Explore using Malte's chat SDK (vercel-labs/chat) for Slack interface

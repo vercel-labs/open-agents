@@ -810,3 +810,9 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 6. ~~**Add `getState()` and `status`** to all sandbox implementations~~ - **Done**
 7. **Update web app** to use new API with single `sandboxState` column
 8. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)
+
+---
+
+## Technical Debt
+
+- **Align import extensions across packages** - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack. This requires updating tsconfig settings to allow extensionless imports in packages consumed by the web app. CLI-only packages can keep `.js` extensions.
