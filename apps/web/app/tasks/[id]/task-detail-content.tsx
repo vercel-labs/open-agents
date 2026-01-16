@@ -1054,8 +1054,8 @@ export function TaskDetailContent() {
                   Create PR
                 </Button>
               )
-            ) : (
-              // Task has no repo - show Create Repo button
+            ) : task.sandboxState?.type === "just-bash" ? null : (
+              // Task has no repo - show Create Repo button (not available for in-memory sandboxes)
               <Button
                 variant="outline"
                 size="sm"
