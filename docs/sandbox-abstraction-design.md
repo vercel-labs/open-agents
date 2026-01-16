@@ -4,9 +4,9 @@ This document outlines how to create a unified sandbox interface that any consum
 
 ## Core Principle
 
-**One function to rule them all**: `getSandbox(payload)`
+**One function to rule them all**: `connectSandbox(state)`
 
-Whether you're creating a fresh sandbox or restoring from saved state, it's the same operation. The payload shape determines what happens internally.
+Whether you're creating a fresh sandbox or restoring from saved state, it's the same operation. The state shape determines what happens internally.
 
 The consumer should only care about:
 - **Get** - obtain a sandbox (fresh, restored, or reconnected - same function)
@@ -173,24 +173,24 @@ pendingOperations: jsonb("pending_operations")
 ### The One Function
 
 ```typescript
-import { getSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 
 // Create fresh, restore from files, or reconnect to VM - same function
-const sandbox = await getSandbox(payload);
+const sandbox = await connectSandbox(state);
 ```
 
-### Payload Type (Discriminated Union)
+### SandboxState Type (Flattened Discriminated Union)
 
 ```typescript
-type SandboxPayload =
-  | { type: "just-bash"; state: JustBashState }
-  | { type: "vercel"; state: VercelState }
-  | { type: "hybrid"; state: HybridState };
+type SandboxState =
+  | ({ type: "just-bash" } & JustBashConfig)
+  | ({ type: "vercel" } & VercelConfig)
+  | ({ type: "hybrid" } & HybridConfig);
 ```
 
-### State Types
+### Config Types
 
-Each sandbox type has its own well-defined state shape:
+Each sandbox type has its own well-defined configuration shape:
 
 ```typescript
 interface Source {
@@ -212,9 +212,9 @@ interface PendingOperation =
   | { type: "mkdir"; path: string; recursive: boolean };
 ```
 
-**JustBashState** - Ephemeral in-memory sandbox:
+**JustBashConfig** - Ephemeral in-memory sandbox:
 ```typescript
-interface JustBashState {
+interface JustBashConfig {
   // Where to clone from (omit for empty sandbox, omit when restoring)
   source?: Source;
   // For restore (omit for fresh start)
@@ -224,9 +224,9 @@ interface JustBashState {
 }
 ```
 
-**VercelState** - Persistent cloud VM:
+**VercelConfig** - Persistent cloud VM:
 ```typescript
-interface VercelState {
+interface VercelConfig {
   // Where to clone from (omit for empty sandbox, omit when reconnecting)
   source?: Source;
   // For reconnect to running VM (omit for fresh start)
@@ -236,9 +236,9 @@ interface VercelState {
 }
 ```
 
-**HybridState** - Starts ephemeral, transitions to persistent:
+**HybridConfig** - Starts ephemeral, transitions to persistent:
 ```typescript
-interface HybridState {
+interface HybridConfig {
   // Where to clone from (needed for fresh start or if Vercel not started yet)
   source?: Source;
   // JustBash component (present when in ephemeral phase)
@@ -263,24 +263,24 @@ The `source` field determines WHERE the code comes from, not what kind of sandbo
 ### Consumer API
 
 ```typescript
-import { getSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 
 // Fresh just-bash from repo
-const sandbox = await getSandbox({
+const sandbox = await connectSandbox({
   type: "just-bash",
-  state: { source: { repo: "https://github.com/owner/repo", branch: "main" } },
+  source: { repo: "https://github.com/owner/repo", branch: "main" },
 });
 
 // Fresh vercel from repo
-const sandbox = await getSandbox({
+const sandbox = await connectSandbox({
   type: "vercel",
-  state: { source: { repo: "https://github.com/owner/repo" } },
+  source: { repo: "https://github.com/owner/repo" },
 });
 
 // Fresh hybrid from repo (starts ephemeral, Vercel boots in background)
-const sandbox = await getSandbox({
+const sandbox = await connectSandbox({
   type: "hybrid",
-  state: { source: { repo: "https://github.com/owner/repo" } },
+  source: { repo: "https://github.com/owner/repo" },
 });
 
 // Use it via standard Sandbox interface
@@ -293,7 +293,7 @@ await db.save(taskId, { sandboxState: state });
 
 // Later: restore from saved state (same function!)
 const savedState = await db.load(taskId);
-const sandbox = await getSandbox(savedState);
+const sandbox = await connectSandbox(savedState.sandboxState);
 
 // Close when done
 await sandbox.stop();
@@ -301,15 +301,15 @@ await sandbox.stop();
 
 ### State Round-Trip
 
-The key insight: **what you get from `getState()` is exactly what you pass to `getSandbox()`**.
+The key insight: **what you get from `getState()` is exactly what you pass to `connectSandbox()`**.
 
 **Example: Fresh hybrid → use → save (pre-handoff) → restore → handoff → save (post-handoff)**
 
 ```typescript
 // 1. Create fresh hybrid
-const sandbox = await getSandbox({
+const sandbox = await connectSandbox({
   type: "hybrid",
-  state: { source: { repo: "https://github.com/owner/repo" } },
+  source: { repo: "https://github.com/owner/repo" },
 });
 
 // 2. Use it (Vercel starting in background)
@@ -319,22 +319,20 @@ await sandbox.writeFile("/workspace/file.txt", "content");
 const state = sandbox.getState();
 // → {
 //     type: "hybrid",
-//     state: {
-//       files: { "/workspace/file.txt": { type: "file", content: "content" }, ... },
-//       workingDirectory: "/workspace",
-//       pendingOperations: [{ type: "writeFile", path: "/workspace/file.txt", content: "content" }],
-//       source: { repo: "..." },  // Included because Vercel might not have started
-//     }
+//     files: { "/workspace/file.txt": { type: "file", content: "content" }, ... },
+//     workingDirectory: "/workspace",
+//     pendingOperations: [{ type: "writeFile", path: "/workspace/file.txt", content: "content" }],
+//     source: { repo: "..." },  // Included because Vercel might not have started
 //   }
 
 // 4. Later: restore (handoff happens internally when Vercel is ready)
-const sandbox = await getSandbox(state);
+const sandbox = await connectSandbox(state);
 
 // 5. Save state (post-handoff)
 const state = sandbox.getState();
 // → {
 //     type: "hybrid",
-//     state: { sandboxId: "sbx-abc123" }  // Now just a Vercel reference
+//     sandboxId: "sbx-abc123",  // Now just a Vercel reference
 //   }
 ```
 
@@ -342,9 +340,9 @@ const state = sandbox.getState();
 
 ```typescript
 // 1. Sandbox is running on Vercel
-const sandbox = await getSandbox({
+const sandbox = await connectSandbox({
   type: "vercel",
-  state: { sandboxId: "sbx-abc123" },
+  sandboxId: "sbx-abc123",
 });
 
 // 2. User is idle, VM is about to timeout
@@ -353,21 +351,21 @@ const snapshotId = await sandbox.createSnapshot();
 await db.save(taskId, {
   sandboxState: {
     type: "vercel",
-    state: { snapshotId },  // sandboxId is gone - VM timed out
+    snapshotId,  // sandboxId is gone - VM timed out
   },
 });
 
 // 3. User returns later, we restore from snapshot
 const savedState = await db.load(taskId);
-// → { type: "vercel", state: { snapshotId: "snap-xyz789" } }
+// → { type: "vercel", snapshotId: "snap-xyz789" }
 
-const sandbox = await getSandbox(savedState);
+const sandbox = await connectSandbox(savedState.sandboxState);
 // Internally: spins up new VM, restores from snapshot
 // sandbox.id is now "sbx-newid456"
 
 // 4. Save state with new sandboxId
 await db.save(taskId, { sandboxState: sandbox.getState() });
-// → { type: "vercel", state: { sandboxId: "sbx-newid456" } }
+// → { type: "vercel", sandboxId: "sbx-newid456" }
 ```
 
 ### Status Type
@@ -398,8 +396,8 @@ interface Sandbox {
   // Type identifier
   readonly type: "just-bash" | "vercel" | "hybrid";
 
-  // State for persistence (returns payload that can be passed back to getSandbox)
-  getState(): SandboxPayload;
+  // State for persistence (returns state that can be passed back to connectSandbox)
+  getState(): SandboxState;
 
   // Current status
   readonly status: SandboxStatus;
@@ -442,20 +440,20 @@ export type PendingOperation =
   | { type: "writeFile"; path: string; content: string }
   | { type: "mkdir"; path: string; recursive: boolean };
 
-export interface JustBashState {
+export interface JustBashConfig {
   source?: Source;
   files?: Record<string, FileEntry>;
   workingDirectory?: string;
   env?: Record<string, string>;
 }
 
-export interface VercelState {
+export interface VercelConfig {
   source?: Source;
   sandboxId?: string;
   snapshotId?: string;
 }
 
-export interface HybridState {
+export interface HybridConfig {
   source?: Source;
   files?: Record<string, FileEntry>;
   workingDirectory?: string;
@@ -465,10 +463,10 @@ export interface HybridState {
   pendingOperations?: PendingOperation[];
 }
 
-export type SandboxPayload =
-  | { type: "just-bash"; state: JustBashState }
-  | { type: "vercel"; state: VercelState }
-  | { type: "hybrid"; state: HybridState };
+export type SandboxState =
+  | ({ type: "just-bash" } & JustBashConfig)
+  | ({ type: "vercel" } & VercelConfig)
+  | ({ type: "hybrid" } & HybridConfig);
 
 export type SandboxStatus =
   | "starting"
@@ -504,14 +502,12 @@ export class HybridSandbox implements Sandbox {
 ```typescript
 readonly type = "just-bash" as const;
 
-getState(): SandboxPayload {
+getState(): SandboxState {
   return {
     type: "just-bash",
-    state: {
-      files: this.serializeFiles(),
-      workingDirectory: this.workingDirectory,
-      env: this.env,
-    },
+    files: this.serializeFiles(),
+    workingDirectory: this.workingDirectory,
+    env: this.env,
   };
 }
 
@@ -524,10 +520,10 @@ get status(): SandboxStatus {
 ```typescript
 readonly type = "vercel" as const;
 
-getState(): SandboxPayload {
+getState(): SandboxState {
   return {
     type: "vercel",
-    state: { sandboxId: this.id },
+    sandboxId: this.id,
   };
 }
 
@@ -541,26 +537,24 @@ get status(): SandboxStatus {
 ```typescript
 readonly type = "hybrid" as const;
 
-getState(): SandboxPayload {
+getState(): SandboxState {
   // Post-handoff: just return Vercel reference
   if (this.vercel && !this.justBash) {
     return {
       type: "hybrid",
-      state: { sandboxId: this.vercel.id },
+      sandboxId: this.vercel.id,
     };
   }
 
   // Pre-handoff: return full JustBash state + pending ops
   return {
     type: "hybrid",
-    state: {
-      files: this.justBash?.serializeFiles(),
-      workingDirectory: this.justBash?.workingDirectory,
-      env: this.justBash?.env,
-      sandboxId: this.vercel?.id,
-      pendingOperations: this._pendingOperations,
-      source: this.source, // Needed if Vercel not started yet
-    },
+    files: this.justBash?.serializeFiles(),
+    workingDirectory: this.justBash?.workingDirectory,
+    env: this.justBash?.env,
+    sandboxId: this.vercel?.id,
+    pendingOperations: this._pendingOperations,
+    source: this.source, // Needed if Vercel not started yet
   };
 }
 
@@ -571,68 +565,68 @@ get status(): SandboxStatus {
 }
 ```
 
-### 4. Implement the unified getSandbox function
+### 4. Implement the unified connectSandbox function
 
 ```typescript
 // packages/sandbox/index.ts
 
-export async function getSandbox(payload: SandboxPayload): Promise<Sandbox> {
-  switch (payload.type) {
+export async function connectSandbox(state: SandboxState): Promise<Sandbox> {
+  switch (state.type) {
     case "just-bash":
-      return connectJustBash(payload.state);
+      return connectJustBash(state);
     case "vercel":
-      return connectVercel(payload.state);
+      return connectVercel(state);
     case "hybrid":
-      return connectHybrid(payload.state);
+      return connectHybrid(state);
   }
 }
 
-async function connectJustBash(state: JustBashState): Promise<JustBashSandbox> {
+async function connectJustBash(config: JustBashConfig & { type: "just-bash" }): Promise<JustBashSandbox> {
   // Has files? Restore from them
-  if (state.files) {
-    return JustBashSandbox.fromFiles(state.files, state.workingDirectory, state.env);
+  if (config.files) {
+    return JustBashSandbox.fromFiles(config.files, config.workingDirectory, config.env);
   }
   // Has source? Clone from repo
-  if (state.source) {
-    return JustBashSandbox.fromSource(state.source);
+  if (config.source) {
+    return JustBashSandbox.fromSource(config.source);
   }
   // Empty sandbox
   return JustBashSandbox.empty();
 }
 
-async function connectVercel(state: VercelState): Promise<VercelSandbox> {
+async function connectVercel(config: VercelConfig & { type: "vercel" }): Promise<VercelSandbox> {
   // Has sandboxId? Reconnect to existing VM
-  if (state.sandboxId) {
-    return VercelSandbox.reconnect(state.sandboxId);
+  if (config.sandboxId) {
+    return VercelSandbox.reconnect(config.sandboxId);
   }
   // Has snapshotId? VM timed out, restore from snapshot
-  if (state.snapshotId) {
-    return VercelSandbox.fromSnapshot(state.snapshotId);
+  if (config.snapshotId) {
+    return VercelSandbox.fromSnapshot(config.snapshotId);
   }
   // Has source? Create new VM from repo
-  if (state.source) {
-    return VercelSandbox.fromSource(state.source);
+  if (config.source) {
+    return VercelSandbox.fromSource(config.source);
   }
   // Empty sandbox
   return VercelSandbox.empty();
 }
 
-async function connectHybrid(state: HybridState): Promise<HybridSandbox> {
+async function connectHybrid(config: HybridConfig & { type: "hybrid" }): Promise<HybridSandbox> {
   // Has sandboxId but no files? Post-handoff, reconnect to Vercel
-  if (state.sandboxId && !state.files) {
-    return HybridSandbox.reconnect(state.sandboxId);
+  if (config.sandboxId && !config.files) {
+    return HybridSandbox.reconnect(config.sandboxId);
   }
   // Has snapshotId but no sandboxId? VM timed out, restore from snapshot
-  if (state.snapshotId && !state.sandboxId && !state.files) {
-    return HybridSandbox.fromSnapshot(state.snapshotId);
+  if (config.snapshotId && !config.sandboxId && !config.files) {
+    return HybridSandbox.fromSnapshot(config.snapshotId);
   }
   // Has files? Pre-handoff, restore JustBash + maybe connect Vercel
-  if (state.files) {
-    return HybridSandbox.restore(state);
+  if (config.files) {
+    return HybridSandbox.restore(config);
   }
   // Fresh start from source
-  if (state.source) {
-    return HybridSandbox.fromSource(state.source);
+  if (config.source) {
+    return HybridSandbox.fromSource(config.source);
   }
   // Empty sandbox
   return HybridSandbox.empty();
@@ -644,13 +638,13 @@ async function connectHybrid(state: HybridState): Promise<HybridSandbox> {
 Database schema becomes:
 ```typescript
 // Just one column for sandbox state
-sandboxState: jsonb("sandbox_state"),  // SandboxPayload
+sandboxState: jsonb("sandbox_state"),  // SandboxState
 ```
 
 Chat route becomes:
 ```typescript
 // Connect (works for fresh, restore, or reconnect)
-const sandbox = await getSandbox(task.sandboxState);
+const sandbox = await connectSandbox(task.sandboxState);
 
 // Use it
 const response = await runAgent({ sandbox, messages });
@@ -734,7 +728,7 @@ Options:
 When a Vercel VM times out:
 1. Before timeout, create a snapshot and store `snapshotId`
 2. Set `sandboxId` to undefined (VM is gone)
-3. On next `getSandbox()`, detect `snapshotId` without `sandboxId`
+3. On next `connectSandbox()`, detect `snapshotId` without `sandboxId`
 4. Spin up new VM from snapshot, get new `sandboxId`
 
 Open questions:
@@ -753,6 +747,6 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 1. **Define types** in `packages/sandbox/types.ts`
 2. **Add `getState()` and `status`** to existing JustBash and Vercel implementations
 3. **Move HybridSandbox** from `apps/web` to `packages/sandbox`
-4. **Implement `getSandbox()`** unified factory function
+4. **Implement `connectSandbox()`** unified factory function
 5. **Update web app** to use new API with single `sandboxState` column
 6. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)
