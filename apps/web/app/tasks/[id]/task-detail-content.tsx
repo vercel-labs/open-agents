@@ -16,11 +16,12 @@ import {
   Archive,
   GitPullRequest,
   FolderGit2,
-  MoreVertical,
   GitCompare,
   Paperclip,
   Loader2,
   Mic,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -135,6 +136,109 @@ function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
 }
 
 const WARNING_THRESHOLD_MS = 60_000; // Show warning when < 1 minute remaining
+
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}
+
+function CircularProgress({
+  percentage,
+  size = 16,
+  strokeWidth = 2,
+}: {
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      {/* Background circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        className="text-muted-foreground/20"
+      />
+      {/* Progress circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        className="text-muted-foreground"
+      />
+    </svg>
+  );
+}
+
+function ContextUsageIndicator({
+  inputTokens,
+  outputTokens,
+  contextLimit,
+}: {
+  inputTokens: number;
+  outputTokens: number;
+  contextLimit: number;
+}) {
+  if (inputTokens === 0) {
+    return null;
+  }
+
+  const percentage =
+    contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
+
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>
+        <div className="flex cursor-default items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground">
+          <span>{percentage}%</span>
+          <CircularProgress percentage={percentage} size={14} strokeWidth={2} />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="min-w-[160px] p-0">
+        <div className="p-3">
+          {/* Header with percentage and token count */}
+          <div className="flex items-center justify-between gap-6">
+            <span className="text-sm font-medium">{percentage}%</span>
+            <span className="text-xs opacity-60">
+              {formatTokens(inputTokens)} / {formatTokens(contextLimit)}
+            </span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-current opacity-10" />
+
+        {/* Breakdown */}
+        <div className="space-y-1 p-3 text-xs">
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Input</span>
+            <span>{formatTokens(inputTokens)}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Output</span>
+            <span>{formatTokens(outputTokens)}</span>
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function SandboxHeaderBadge({
   sandboxInfo,
@@ -398,13 +502,6 @@ function SandboxInputOverlay({
   );
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function TaskDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -423,6 +520,9 @@ export function TaskDetailContent() {
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
     state: recordingState,
@@ -470,6 +570,14 @@ export function TaskDetailContent() {
     }
   }, [input]);
 
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
   const {
     images,
     addImage,
@@ -489,6 +597,7 @@ export function TaskDetailContent() {
     setSandboxInfo,
     clearSandboxInfo,
     archiveTask,
+    updateTaskTitle,
     hadInitialMessages,
     diffRefreshKey,
     triggerDiffRefresh,
@@ -921,6 +1030,21 @@ export function TaskDetailContent() {
     fetchDiff,
   ]);
 
+  // Get token usage from the most recent assistant message (current context usage)
+  const tokenUsage = useMemo(() => {
+    // Find the last assistant message with usage metadata
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message?.role === "assistant" && message.metadata?.usage) {
+        return {
+          inputTokens: message.metadata.usage.inputTokens ?? 0,
+          outputTokens: message.metadata.usage.outputTokens ?? 0,
+        };
+      }
+    }
+    return { inputTokens: 0, outputTokens: 0 };
+  }, [messages]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -958,10 +1082,76 @@ export function TaskDetailContent() {
                     </>
                   )}
                 </>
+              ) : isEditingTitle ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (editedTitle.trim()) {
+                          try {
+                            await updateTaskTitle(editedTitle.trim());
+                          } catch (err) {
+                            console.error("Failed to update title:", err);
+                          }
+                        }
+                        setIsEditingTitle(false);
+                      } else if (e.key === "Escape") {
+                        setIsEditingTitle(false);
+                      }
+                    }}
+                    onBlur={async () => {
+                      if (editedTitle.trim() && editedTitle !== task.title) {
+                        try {
+                          await updateTaskTitle(editedTitle.trim());
+                        } catch (err) {
+                          console.error("Failed to update title:", err);
+                        }
+                      }
+                      setIsEditingTitle(false);
+                    }}
+                    className="w-40 rounded border border-border bg-transparent px-2 py-0.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (editedTitle.trim()) {
+                        try {
+                          await updateTaskTitle(editedTitle.trim());
+                        } catch (err) {
+                          console.error("Failed to update title:", err);
+                        }
+                      }
+                      setIsEditingTitle(false);
+                    }}
+                    className="rounded p-1 hover:bg-muted"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ) : (
-                <span className="text-muted-foreground">
-                  {formatDate(new Date(task.createdAt))}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span
+                    className="max-w-[200px] truncate text-muted-foreground"
+                    title={task.title}
+                  >
+                    {task.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditedTitle(task.title);
+                      setIsEditingTitle(true);
+                    }}
+                    className="rounded p-1 hover:bg-muted"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
               )}
             </div>
             <SandboxHeaderBadge
@@ -1065,9 +1255,6 @@ export function TaskDetailContent() {
                 Create Repo
               </Button>
             )}
-            <Button variant="ghost" size="icon">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
           </div>
         </header>
 
@@ -1407,6 +1594,12 @@ export function TaskDetailContent() {
                         {task.modelId}
                       </span>
                     )}
+                    {/* TODO: Derive context limit from model ID instead of hardcoding */}
+                    <ContextUsageIndicator
+                      inputTokens={tokenUsage.inputTokens}
+                      outputTokens={tokenUsage.outputTokens}
+                      contextLimit={200_000}
+                    />
                   </div>
 
                   <div className="flex items-center gap-1">

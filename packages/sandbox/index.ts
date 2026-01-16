@@ -1,13 +1,14 @@
 // interface
 export type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  RestoreOptions,
+  Sandbox,
   SandboxHook,
   SandboxHooks,
+  SandboxStats,
+  SandboxType,
   SnapshotOptions,
   SnapshotResult,
-  RestoreOptions,
 } from "./interface";
 
 // shared types
@@ -32,8 +33,8 @@ export { LocalSandbox, createLocalSandbox } from "./local";
 
 // vercel
 export {
-  VercelSandbox,
   connectVercelSandbox,
+  VercelSandbox,
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,
   type VercelState,

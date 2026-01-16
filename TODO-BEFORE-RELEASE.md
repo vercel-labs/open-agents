@@ -1,15 +1,30 @@
 # TODO Before Release
 
+## Workflow
+
+To work through these todos, follow this pattern:
+
+1. Find the first pending `[ ]` item
+2. Ask: "Want me to tackle this one?"
+3. Research the codebase to understand the current implementation
+4. Implement the solution
+5. Run typecheck and lint to verify
+6. Ask the user to test
+7. Once confirmed working, commit the changes and mark item as `[x]`
+8. Move to the next pending item
+
+---
+
 ## Web App
 
 ### Critical
-- [ ] Add loading state in repository selection dropdown
-- [ ] Three dots menu is non-functional - remove or implement
-- [ ] Model selector (in flight)
-- [ ] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
-- [ ] Remove unused "Code Review" tab from homepage
-- [ ] Add context window usage / token usage display in task page
-- [ ] Show todo list inline in chat
+- [x] Model selector (in flight)
+- [x] Add loading state in repository selection dropdown
+- [x] Three dots menu is non-functional - remove or implement
+- [x] Task with empty sandbox shows date - display "Untitled Workspace" with edit button instead
+- [x] Remove unused "Code Review" tab from homepage
+- [x] Add context window usage / token usage display in task page
+- [x] Show todo list inline in chat
 
 ### Performance
 - [ ] Sandbox startup time is too slow - add warming (start sandbox when user starts typing)

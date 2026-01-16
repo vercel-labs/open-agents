@@ -1,10 +1,10 @@
-import { Bash, OverlayFs, type FsEntry } from "just-bash";
 import type { Dirent } from "fs";
+import { Bash, OverlayFs, type FsEntry } from "just-bash";
 import type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  Sandbox,
   SandboxHooks,
+  SandboxStats,
 } from "../interface";
 import type { JustBashSnapshot } from "./snapshot";
 import type { JustBashState } from "./state";
@@ -68,7 +68,7 @@ export interface JustBashSandboxConfig {
  * - Full lifecycle hook support
  */
 export class JustBashSandbox implements Sandbox {
-  readonly type = "just-bash";
+  readonly type = "in-memory" as const;
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
   readonly hooks?: SandboxHooks;

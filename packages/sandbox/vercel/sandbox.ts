@@ -1,13 +1,13 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Dirent } from "fs";
 import type {
-  Sandbox,
-  SandboxStats,
   ExecResult,
+  RestoreOptions,
+  Sandbox,
   SandboxHooks,
+  SandboxStats,
   SnapshotOptions,
   SnapshotResult,
-  RestoreOptions,
 } from "../interface";
 import type { VercelSandboxConfig, VercelSandboxConnectConfig } from "./config";
 import type { VercelState } from "./state";
@@ -23,7 +23,7 @@ const DEFAULT_RECONNECT_TIMEOUT_MS = 300_000; // 5 minutes default timeout for r
  * Runs code in isolated Firecracker MicroVMs.
  */
 export class VercelSandbox implements Sandbox {
-  readonly type = "vercel";
+  readonly type = "cloud" as const;
   /**
    * Unique identifier for this sandbox.
    * Use this to reconnect to an existing sandbox via `connectVercelSandbox({ sandboxId })`.

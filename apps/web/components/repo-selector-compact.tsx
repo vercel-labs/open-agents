@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Folder, ChevronDown, CheckIcon, LockIcon } from "lucide-react";
+import {
+  Folder,
+  ChevronDown,
+  CheckIcon,
+  LockIcon,
+  Loader2Icon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -120,6 +126,8 @@ export function RepoSelectorCompact({
       : selectedRepo
     : "Select repo...";
 
+  const isInitialLoading = ownersLoading && owners.length === 0;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -127,8 +135,14 @@ export function RepoSelectorCompact({
           type="button"
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
         >
-          <Folder className="h-4 w-4" />
-          <span className="max-w-[150px] truncate">{displayText}</span>
+          {isInitialLoading ? (
+            <Loader2Icon className="h-4 w-4 animate-spin" />
+          ) : (
+            <Folder className="h-4 w-4" />
+          )}
+          <span className="max-w-[150px] truncate">
+            {isInitialLoading ? "Loading..." : displayText}
+          </span>
           <ChevronDown className="h-3 w-3" />
         </button>
       </PopoverTrigger>
@@ -144,50 +158,68 @@ export function RepoSelectorCompact({
 
             {/* Owner selector */}
             <CommandGroup heading="Account">
-              {owners.map((owner) => (
-                <CommandItem
-                  key={owner.login}
-                  value={`owner:${owner.login}`}
-                  onSelect={() => setCurrentOwner(owner.login)}
-                >
-                  <CheckIcon
-                    className={cn(
-                      "mr-2 size-4",
-                      currentOwner === owner.login
-                        ? "opacity-100"
-                        : "opacity-0",
-                    )}
-                  />
-                  <span>{owner.login}</span>
-                </CommandItem>
-              ))}
+              {ownersLoading && owners.length === 0 ? (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                  <Loader2Icon className="size-4 animate-spin" />
+                  <span>Loading accounts...</span>
+                </div>
+              ) : (
+                owners.map((owner) => (
+                  <CommandItem
+                    key={owner.login}
+                    value={`owner:${owner.login}`}
+                    onSelect={() => setCurrentOwner(owner.login)}
+                  >
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-4",
+                        currentOwner === owner.login
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+                    <span>{owner.login}</span>
+                  </CommandItem>
+                ))
+              )}
             </CommandGroup>
 
             <CommandSeparator />
 
             {/* Repos for current owner */}
             <CommandGroup heading="Repositories">
-              {repos.map((repo) => (
-                <CommandItem
-                  key={repo.full_name}
-                  value={repo.name}
-                  onSelect={() => handleRepoSelect(repo)}
-                >
-                  <CheckIcon
-                    className={cn(
-                      "mr-2 size-4",
-                      selectedRepo === repo.name &&
-                        selectedOwner === currentOwner
-                        ? "opacity-100"
-                        : "opacity-0",
+              {reposLoading ? (
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                  <Loader2Icon className="size-4 animate-spin" />
+                  <span>Loading repositories...</span>
+                </div>
+              ) : repos.length === 0 ? (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  No repositories found.
+                </div>
+              ) : (
+                repos.map((repo) => (
+                  <CommandItem
+                    key={repo.full_name}
+                    value={repo.name}
+                    onSelect={() => handleRepoSelect(repo)}
+                  >
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-4",
+                        selectedRepo === repo.name &&
+                          selectedOwner === currentOwner
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">{repo.name}</span>
+                    {repo.private && (
+                      <LockIcon className="ml-auto size-3 text-muted-foreground" />
                     )}
-                  />
-                  <span className="truncate">{repo.name}</span>
-                  {repo.private && (
-                    <LockIcon className="ml-auto size-3 text-muted-foreground" />
-                  )}
-                </CommandItem>
-              ))}
+                  </CommandItem>
+                ))
+              )}
             </CommandGroup>
           </CommandList>
         </Command>

@@ -1,6 +1,15 @@
 import type { Dirent } from "fs";
 
 /**
+ * The type of sandbox environment.
+ * - "local": Local filesystem sandbox using Node.js fs/child_process
+ * - "in-memory": In-memory sandbox using just-bash (no real filesystem)
+ * - "cloud": Remote cloud sandbox (e.g., Vercel Sandbox)
+ * - "hybrid": Hybrid sandbox that starts with in-memory and can upgrade to cloud
+ */
+export type SandboxType = "local" | "in-memory" | "cloud" | "hybrid";
+
+/**
  * Options for creating a snapshot of the sandbox filesystem.
  */
 export interface SnapshotOptions {
@@ -133,7 +142,7 @@ export interface Sandbox {
    * Identifier for the sandbox implementation type.
    * Used to conditionally adjust agent behavior (e.g., disable git instructions).
    */
-  readonly type?: string;
+  readonly type: SandboxType;
 
   /**
    * The working directory for this sandbox.
