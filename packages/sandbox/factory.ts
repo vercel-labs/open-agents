@@ -42,15 +42,13 @@ export interface HybridConnectOptions extends Omit<ConnectOptions, "hooks"> {
   /** Lifecycle hooks including hybrid-specific hooks */
   hooks?: HybridHooks;
   /**
-   * Register a background task that should complete even after the response is sent.
-   * In serverless environments, wire this to your runtime's `waitUntil`:
+   * Schedule background work for cloud sandbox startup.
+   * Wire to your runtime's background task mechanism.
    *
-   * @example
-   * import { waitUntil } from 'next/server';
-   *
-   * registerBackgroundTask: (promise) => waitUntil(promise),
+   * @example Next.js: `(cb) => after(cb)`
+   * @example Vercel: `(cb) => waitUntil(cb())`
    */
-  registerBackgroundTask?: (promise: Promise<unknown>) => void;
+  scheduleBackgroundWork?: (callback: () => Promise<void>) => void;
 }
 
 /**
@@ -84,7 +82,7 @@ export type SandboxConnectConfig =
  *   },
  *   options: {
  *     env: { GITHUB_TOKEN: token },
- *     registerBackgroundTask: (p) => waitUntil(p),
+ *     scheduleBackgroundWork: (cb) => after(cb),
  *     hooks: {
  *       onCloudSandboxReady: async (sandboxId) => {
  *         await persistState({ type: "hybrid", sandboxId });

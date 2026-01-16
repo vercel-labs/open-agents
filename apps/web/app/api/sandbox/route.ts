@@ -4,8 +4,7 @@ import {
   VercelSandbox,
   type FileEntry,
 } from "@open-harness/sandbox";
-// NOTE: To ensure background tasks complete in serverless, install @vercel/functions
-// and use: import { waitUntil } from "@vercel/functions";
+import { after } from "next/server";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
@@ -139,9 +138,7 @@ export async function POST(req: Request) {
       options: {
         env: { GITHUB_TOKEN: githubToken },
         gitUser,
-        // NOTE: To ensure background tasks complete in serverless environments,
-        // install @vercel/functions and add:
-        // registerBackgroundTask: (promise) => waitUntil(promise),
+        scheduleBackgroundWork: (cb) => after(cb),
         hooks: {
           onCloudSandboxReady: async (sandboxId) => {
             // Update task state when cloud sandbox is ready

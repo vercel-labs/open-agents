@@ -16,22 +16,38 @@ export interface HybridConnectOptions {
   /** Lifecycle hooks including hybrid-specific hooks */
   hooks?: HybridHooks;
   /**
-   * Register a background task that should complete even after the response is sent.
-   * In serverless environments, wire this to your runtime's `waitUntil`.
+   * Schedule background work for cloud sandbox startup.
+   * The callback returns a promise that completes when cloud sandbox is ready.
+   * Wire this to your runtime's background task mechanism:
+   *
+   * @example Next.js (after)
+   * import { after } from 'next/server';
+   * scheduleBackgroundWork: (cb) => after(cb),
+   *
+   * @example Vercel Functions (waitUntil)
+   * import { waitUntil } from '@vercel/functions';
+   * scheduleBackgroundWork: (cb) => waitUntil(cb()),
+   *
+   * @example Cloudflare Workers
+   * scheduleBackgroundWork: (cb) => ctx.waitUntil(cb()),
    */
-  registerBackgroundTask?: (promise: Promise<unknown>) => void;
+  scheduleBackgroundWork?: (callback: () => Promise<void>) => void;
 }
 
 /**
- * Start cloud sandbox in background and wire up hooks.
- * Returns the promise so it can be registered with waitUntil.
+ * Start cloud sandbox in background by scheduling work via callback.
+ * The work is deferred until the callback is invoked by the runtime.
  */
 function startCloudSandboxInBackground(
   source: NonNullable<HybridState["source"]>,
   options: HybridConnectOptions | undefined,
   hybrid: HybridSandbox,
-): Promise<void> {
-  const cloudStartupPromise = (async () => {
+): void {
+  if (!options?.scheduleBackgroundWork) {
+    return; // No background scheduler provided
+  }
+
+  options.scheduleBackgroundWork(async () => {
     try {
       const cloudSandbox = await connectVercel(
         { source },
@@ -58,14 +74,7 @@ function startCloudSandboxInBackground(
         await options.hooks.onCloudSandboxFailed(err);
       }
     }
-  })();
-
-  // Register with waitUntil if provided
-  if (options?.registerBackgroundTask) {
-    options.registerBackgroundTask(cloudStartupPromise);
-  }
-
-  return cloudStartupPromise;
+  });
 }
 
 /**
