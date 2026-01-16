@@ -193,5 +193,5 @@ turbo typecheck  # Full monorepo check
 
 The [Sandbox Abstraction Design](./sandbox-abstraction-design.md) can proceed with:
 - Adding `connect.ts` to each folder (state types + connect functions)
-- Adding `state.ts` at package root (SandboxState union + connectSandbox dispatcher)
+- Adding `factory.ts` at package root (SandboxState union + connectSandbox dispatcher)
 - Adding `getState()` method to Sandbox interface

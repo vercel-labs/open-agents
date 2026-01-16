@@ -517,7 +517,7 @@ export interface HybridState {
 
 ### 3. Create SandboxState union and connectSandbox dispatcher
 
-**packages/sandbox/state.ts**:
+**packages/sandbox/factory.ts**:
 ```typescript
 import type { JustBashState } from "./just-bash/connect.js";
 import type { VercelState } from "./vercel/connect.js";
@@ -802,7 +802,7 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 0. **Complete folder restructure** (see [sandbox-folder-restructure.md](./sandbox-folder-restructure.md))
 1. **Define shared types** in `packages/sandbox/types.ts`
 2. **Add state types** to each implementation folder (`*/connect.ts`)
-3. **Create state dispatcher** in `packages/sandbox/state.ts`
+3. **Create factory** in `packages/sandbox/factory.ts`
 4. **Move HybridSandbox** from `apps/web` to `packages/sandbox/hybrid/`
 5. **Add connect functions** to each implementation folder
 6. **Add `getState()` and `status`** to all sandbox implementations
