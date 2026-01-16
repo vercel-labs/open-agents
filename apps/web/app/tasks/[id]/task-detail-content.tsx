@@ -991,8 +991,13 @@ export function TaskDetailContent() {
     prevToolStatesRef.current = currentToolStates;
 
     if (hasFileChange) {
-      // Auto-open diff panel on first file change
-      if (!showDiffPanel && !hasAutoOpenedDiffRef.current && sandboxInfo) {
+      // Auto-open diff panel on first file change (not for in-memory sandboxes)
+      if (
+        !showDiffPanel &&
+        !hasAutoOpenedDiffRef.current &&
+        sandboxInfo &&
+        task.sandboxState?.type !== "just-bash"
+      ) {
         hasAutoOpenedDiffRef.current = true;
         setShowDiffPanel(true);
       }
@@ -1005,6 +1010,7 @@ export function TaskDetailContent() {
     messages,
     showDiffPanel,
     sandboxInfo,
+    task.sandboxState?.type,
     triggerDiffRefresh,
     triggerFileRefresh,
   ]);
