@@ -99,11 +99,24 @@ export class HybridSandbox implements Sandbox {
 
   /**
    * Get the current active sandbox.
+   * @throws Error if neither sandbox is available (should not happen in normal operation)
    */
   private get current(): Sandbox {
-    return this.state === "vercel" && this.vercel
-      ? this.vercel
-      : this.justBash!;
+    // Post-handoff or during switching with vercel available
+    if (
+      (this.state === "vercel" || this.state === "switching") &&
+      this.vercel
+    ) {
+      return this.vercel;
+    }
+    // Pre-handoff or switching without vercel ready yet
+    if (this.justBash) {
+      return this.justBash;
+    }
+    // This should never happen in normal operation
+    throw new Error(
+      `HybridSandbox in invalid state: state=${this.state}, justBash=${!!this.justBash}, vercel=${!!this.vercel}`,
+    );
   }
 
   /**
@@ -320,8 +333,12 @@ export class HybridSandbox implements Sandbox {
    * Returns state that can be passed to `connectSandbox()` to restore this sandbox.
    */
   getState(): { type: "hybrid" } & HybridState {
-    // Post-handoff: just return Vercel reference
-    if (this.state === "vercel" && this.vercel && !this.justBash) {
+    // Post-handoff or switching with vercel ready: return Vercel reference
+    // This ensures we don't lose the vercel connection when persisting during/after handoff
+    if (
+      (this.state === "vercel" || this.state === "switching") &&
+      this.vercel
+    ) {
       const vercelId =
         "id" in this.vercel ? (this.vercel.id as string) : undefined;
       return {
