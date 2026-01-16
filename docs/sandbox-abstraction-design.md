@@ -415,9 +415,41 @@ interface Sandbox {
 
 ---
 
+## Prerequisite: Folder Restructure
+
+Before implementing this abstraction, complete the [Sandbox Folder Restructure](./sandbox-folder-restructure.md) task.
+
+This reorganizes sandbox implementations from single files into self-contained folders:
+
+```
+packages/sandbox/
+  interface.ts          # Sandbox interface (unchanged)
+  types.ts              # Shared primitives (Source, FileEntry, etc.)
+
+  local/
+    index.ts
+    sandbox.ts          # LocalSandbox class
+
+  vercel/
+    index.ts
+    sandbox.ts          # VercelSandbox class
+    config.ts           # VercelSandboxConfig types
+
+  just-bash/
+    index.ts
+    sandbox.ts          # JustBashSandbox class
+    snapshot.ts         # JustBashSnapshot type
+
+  index.ts              # Package exports
+```
+
+This structure enables clean separation between sandbox implementations and their state/connect logic.
+
+---
+
 ## Implementation Plan
 
-### 1. Define the unified types in packages/sandbox
+### 1. Define shared types in packages/sandbox/types.ts
 
 ```typescript
 // packages/sandbox/types.ts
@@ -439,21 +471,40 @@ export interface FileEntry {
 export type PendingOperation =
   | { type: "writeFile"; path: string; content: string }
   | { type: "mkdir"; path: string; recursive: boolean };
+```
 
-export interface JustBashConfig {
+### 2. Add state types to each implementation folder
+
+Each implementation defines its own state type in a `connect.ts` file:
+
+**just-bash/connect.ts**:
+```typescript
+import type { Source, FileEntry } from "../types.js";
+
+export interface JustBashState {
   source?: Source;
   files?: Record<string, FileEntry>;
   workingDirectory?: string;
   env?: Record<string, string>;
 }
+```
 
-export interface VercelConfig {
+**vercel/connect.ts**:
+```typescript
+import type { Source } from "../types.js";
+
+export interface VercelState {
   source?: Source;
   sandboxId?: string;
   snapshotId?: string;
 }
+```
 
-export interface HybridConfig {
+**hybrid/connect.ts**:
+```typescript
+import type { Source, FileEntry, PendingOperation } from "../types.js";
+
+export interface HybridState {
   source?: Source;
   files?: Record<string, FileEntry>;
   workingDirectory?: string;
@@ -462,11 +513,20 @@ export interface HybridConfig {
   snapshotId?: string;
   pendingOperations?: PendingOperation[];
 }
+```
+
+### 3. Create SandboxState union and connectSandbox dispatcher
+
+**packages/sandbox/state.ts**:
+```typescript
+import type { JustBashState } from "./just-bash/connect.js";
+import type { VercelState } from "./vercel/connect.js";
+import type { HybridState } from "./hybrid/connect.js";
 
 export type SandboxState =
-  | ({ type: "just-bash" } & JustBashConfig)
-  | ({ type: "vercel" } & VercelConfig)
-  | ({ type: "hybrid" } & HybridConfig);
+  | ({ type: "just-bash" } & JustBashState)
+  | ({ type: "vercel" } & VercelState)
+  | ({ type: "hybrid" } & HybridState);
 
 export type SandboxStatus =
   | "starting"
@@ -475,14 +535,25 @@ export type SandboxStatus =
   | "ready"
   | "stopping"
   | "stopped";
+
+export async function connectSandbox(state: SandboxState): Promise<Sandbox> {
+  switch (state.type) {
+    case "just-bash":
+      return connectJustBash(state);
+    case "vercel":
+      return connectVercel(state);
+    case "hybrid":
+      return connectHybrid(state);
+  }
+}
 ```
 
-### 2. Move HybridSandbox to packages/sandbox
+### 4. Move HybridSandbox to packages/sandbox/hybrid/
 
-The hybrid sandbox should be a first-class implementation alongside JustBash and Vercel:
+The hybrid sandbox becomes a first-class implementation alongside JustBash and Vercel:
 
 ```typescript
-// packages/sandbox/hybrid.ts
+// packages/sandbox/hybrid/sandbox.ts
 export class HybridSandbox implements Sandbox {
   readonly type = "hybrid" as const;
   private justBash: JustBashSandbox | null;
@@ -496,7 +567,59 @@ export class HybridSandbox implements Sandbox {
 }
 ```
 
-### 3. Add getState() and status to all implementations
+### 5. Add connect functions to each folder
+
+Each implementation folder gets a `connect.ts` with the connection logic:
+
+**just-bash/connect.ts**:
+```typescript
+export async function connectJustBash(state: JustBashState): Promise<JustBashSandbox> {
+  if (state.files) {
+    return JustBashSandbox.fromFiles(state.files, state.workingDirectory, state.env);
+  }
+  if (state.source) {
+    return JustBashSandbox.fromSource(state.source);
+  }
+  return JustBashSandbox.empty();
+}
+```
+
+**vercel/connect.ts**:
+```typescript
+export async function connectVercel(state: VercelState): Promise<VercelSandbox> {
+  if (state.sandboxId) {
+    return VercelSandbox.reconnect(state.sandboxId);
+  }
+  if (state.snapshotId) {
+    return VercelSandbox.fromSnapshot(state.snapshotId);
+  }
+  if (state.source) {
+    return VercelSandbox.fromSource(state.source);
+  }
+  return VercelSandbox.empty();
+}
+```
+
+**hybrid/connect.ts**:
+```typescript
+export async function connectHybrid(state: HybridState): Promise<HybridSandbox> {
+  if (state.sandboxId && !state.files) {
+    return HybridSandbox.reconnect(state.sandboxId);
+  }
+  if (state.snapshotId && !state.sandboxId && !state.files) {
+    return HybridSandbox.fromSnapshot(state.snapshotId);
+  }
+  if (state.files) {
+    return HybridSandbox.restore(state);
+  }
+  if (state.source) {
+    return HybridSandbox.fromSource(state.source);
+  }
+  return HybridSandbox.empty();
+}
+```
+
+### 6. Add getState() and status to all implementations
 
 **JustBashSandbox**:
 ```typescript
@@ -565,75 +688,7 @@ get status(): SandboxStatus {
 }
 ```
 
-### 4. Implement the unified connectSandbox function
-
-```typescript
-// packages/sandbox/index.ts
-
-export async function connectSandbox(state: SandboxState): Promise<Sandbox> {
-  switch (state.type) {
-    case "just-bash":
-      return connectJustBash(state);
-    case "vercel":
-      return connectVercel(state);
-    case "hybrid":
-      return connectHybrid(state);
-  }
-}
-
-async function connectJustBash(config: JustBashConfig & { type: "just-bash" }): Promise<JustBashSandbox> {
-  // Has files? Restore from them
-  if (config.files) {
-    return JustBashSandbox.fromFiles(config.files, config.workingDirectory, config.env);
-  }
-  // Has source? Clone from repo
-  if (config.source) {
-    return JustBashSandbox.fromSource(config.source);
-  }
-  // Empty sandbox
-  return JustBashSandbox.empty();
-}
-
-async function connectVercel(config: VercelConfig & { type: "vercel" }): Promise<VercelSandbox> {
-  // Has sandboxId? Reconnect to existing VM
-  if (config.sandboxId) {
-    return VercelSandbox.reconnect(config.sandboxId);
-  }
-  // Has snapshotId? VM timed out, restore from snapshot
-  if (config.snapshotId) {
-    return VercelSandbox.fromSnapshot(config.snapshotId);
-  }
-  // Has source? Create new VM from repo
-  if (config.source) {
-    return VercelSandbox.fromSource(config.source);
-  }
-  // Empty sandbox
-  return VercelSandbox.empty();
-}
-
-async function connectHybrid(config: HybridConfig & { type: "hybrid" }): Promise<HybridSandbox> {
-  // Has sandboxId but no files? Post-handoff, reconnect to Vercel
-  if (config.sandboxId && !config.files) {
-    return HybridSandbox.reconnect(config.sandboxId);
-  }
-  // Has snapshotId but no sandboxId? VM timed out, restore from snapshot
-  if (config.snapshotId && !config.sandboxId && !config.files) {
-    return HybridSandbox.fromSnapshot(config.snapshotId);
-  }
-  // Has files? Pre-handoff, restore JustBash + maybe connect Vercel
-  if (config.files) {
-    return HybridSandbox.restore(config);
-  }
-  // Fresh start from source
-  if (config.source) {
-    return HybridSandbox.fromSource(config.source);
-  }
-  // Empty sandbox
-  return HybridSandbox.empty();
-}
-```
-
-### 5. Simplify web app
+### 7. Simplify web app
 
 Database schema becomes:
 ```typescript
@@ -660,7 +715,7 @@ No more:
 - Inline handoff logic
 - Type-specific serialization code
 
-### 6. Simplify UI - remove "save sandbox" concept
+### 8. Simplify UI - remove "save sandbox" concept
 
 Users should never be asked "Do you want to save your sandbox?" - state management is automatic and invisible.
 
@@ -744,9 +799,12 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 
 ## Migration Path
 
-1. **Define types** in `packages/sandbox/types.ts`
-2. **Add `getState()` and `status`** to existing JustBash and Vercel implementations
-3. **Move HybridSandbox** from `apps/web` to `packages/sandbox`
-4. **Implement `connectSandbox()`** unified factory function
-5. **Update web app** to use new API with single `sandboxState` column
-6. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)
+0. **Complete folder restructure** (see [sandbox-folder-restructure.md](./sandbox-folder-restructure.md))
+1. **Define shared types** in `packages/sandbox/types.ts`
+2. **Add state types** to each implementation folder (`*/connect.ts`)
+3. **Create state dispatcher** in `packages/sandbox/state.ts`
+4. **Move HybridSandbox** from `apps/web` to `packages/sandbox/hybrid/`
+5. **Add connect functions** to each implementation folder
+6. **Add `getState()` and `status`** to all sandbox implementations
+7. **Update web app** to use new API with single `sandboxState` column
+8. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)
