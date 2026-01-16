@@ -38,6 +38,8 @@
 
 ### Architecture
 - [ ] Evaluate whether TUI package should remain separate or be merged into CLI app
+- [ ] Explore workflows for being able to spin up and leave things running in the background
+- [ ] Explore sandboxes having maximum timeout and then proactively shutting down after inactivity 
 
 ### Nice to Have
 - [ ] Add auth flow to authenticate with web app
