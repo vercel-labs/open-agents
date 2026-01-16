@@ -39,27 +39,35 @@ export interface HybridConnectOptions {
  * The work is deferred until the callback is invoked by the runtime.
  */
 function startCloudSandboxInBackground(
-  source: NonNullable<HybridState["source"]>,
+  source: HybridState["source"],
   options: HybridConnectOptions | undefined,
   hybrid: HybridSandbox,
 ): void {
   if (!options?.scheduleBackgroundWork) {
-    return; // No background scheduler provided
+    console.log(
+      "[HybridSandbox] No scheduleBackgroundWork provided, skipping cloud startup",
+    );
+    return;
   }
 
+  console.log("[HybridSandbox] Scheduling background cloud sandbox startup", {
+    hasSource: !!source,
+  });
   options.scheduleBackgroundWork(async () => {
+    console.log(
+      "[HybridSandbox] Background work starting - connecting to Vercel",
+    );
     try {
-      const cloudSandbox = await connectVercel(
-        { source },
-        {
-          env: options?.env,
-          gitUser: options?.gitUser,
-          hooks: options?.hooks,
-        },
-      );
+      const cloudSandbox = await connectVercel(source ? { source } : {}, {
+        env: options?.env,
+        gitUser: options?.gitUser,
+        hooks: options?.hooks,
+      });
 
       // Perform handoff
+      console.log("[HybridSandbox] Performing handoff to cloud sandbox");
       await hybrid.performHandoff(cloudSandbox);
+      console.log("[HybridSandbox] Handoff complete");
 
       // Notify consumer via hook
       const sandboxId = cloudSandbox.id;
@@ -80,15 +88,14 @@ function startCloudSandboxInBackground(
 /**
  * Connect to a Hybrid sandbox based on the provided state.
  *
- * Hybrid sandboxes start with JustBash (ephemeral) and can transition to
- * a cloud sandbox (persistent) via handoff. The state determines which phase:
+ * Hybrid sandboxes start with JustBash (ephemeral) and transition to
+ * a cloud sandbox (persistent) via background handoff. The state determines which phase:
  *
  * - Post-handoff (sandboxId present, no files): Reconnect directly to cloud
  * - Post-handoff recovery (snapshotId present, no sandboxId, no files): Restore from snapshot
  * - Inline handoff (sandboxId + files): Cloud ready, perform handoff now
- * - Pre-handoff (files present, no sandboxId): Restore JustBash, optionally start cloud
- * - Fresh start (no files, no sandboxId, source present): Create empty JustBash, start cloud in background
- * - Error (no files, no sandboxId, no source): Invalid state
+ * - Pre-handoff (files present, no sandboxId): Restore JustBash, start cloud in background
+ * - Fresh start (no files, no sandboxId): Create empty JustBash, start cloud in background
  */
 export async function connectHybrid(
   state: HybridState,
@@ -185,6 +192,10 @@ export async function connectHybrid(
 
   // Pre-handoff: Create/restore JustBash from files
   if (state.files) {
+    console.log("[HybridSandbox] Pre-handoff: Creating JustBash from files", {
+      hasSource: !!state.source,
+      hasSandboxId: !!state.sandboxId,
+    });
     const justBash = await connectJustBash(
       {
         files: state.files,
@@ -202,39 +213,32 @@ export async function connectHybrid(
       pendingOperations: state.pendingOperations,
     });
 
-    // If source provided and no sandboxId yet, start cloud in background
-    if (state.source && !state.sandboxId) {
+    // Start cloud in background (with or without source)
+    if (!state.sandboxId) {
       startCloudSandboxInBackground(state.source, options, hybrid);
     }
 
     return hybrid;
   }
 
-  // Fresh start: No files but source provided - create empty JustBash and start cloud
-  if (state.source) {
-    const justBash = await connectJustBash(
-      {
-        workingDirectory: state.workingDirectory,
-        env: state.env,
-      },
-      {
-        env: options?.env,
-        hooks: options?.hooks,
-      },
-    );
-
-    const hybrid = new HybridSandbox({
-      justBash,
-    });
-
-    // Start cloud sandbox in background
-    startCloudSandboxInBackground(state.source, options, hybrid);
-
-    return hybrid;
-  }
-
-  // Invalid state: no files and no sandboxId and no source
-  throw new Error(
-    "Invalid HybridState: requires either 'files' for ephemeral mode, 'sandboxId' for cloud mode, or 'source' to start cloud in background",
+  // Fresh start: No files - create empty JustBash and start cloud in background
+  const justBash = await connectJustBash(
+    {
+      workingDirectory: state.workingDirectory,
+      env: state.env,
+    },
+    {
+      env: options?.env,
+      hooks: options?.hooks,
+    },
   );
+
+  const hybrid = new HybridSandbox({
+    justBash,
+  });
+
+  // Start cloud sandbox in background (with or without source)
+  startCloudSandboxInBackground(state.source, options, hybrid);
+
+  return hybrid;
 }

@@ -1,8 +1,7 @@
 import {
   connectSandbox,
-  HybridSandbox,
-  VercelSandbox,
   type FileEntry,
+  type SandboxState,
 } from "@open-harness/sandbox";
 import { after } from "next/server";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -101,10 +100,11 @@ export async function POST(req: Request) {
   // ============================================
   // NEW SANDBOX: Hybrid approach
   // ============================================
-  if (repoUrl && taskId) {
-    const startTime = Date.now();
+  const startTime = Date.now();
 
-    // Client responsibility: Download and extract tarball
+  // Download and extract tarball if repo provided
+  let files: Record<string, FileEntry> = {};
+  if (repoUrl) {
     let tarballResult;
     try {
       tarballResult = await downloadAndExtractTarball(
@@ -122,84 +122,64 @@ export async function POST(req: Request) {
         WORKING_DIR,
       );
     }
-
-    // Connect to hybrid sandbox with files
-    const sandbox = await connectSandbox({
-      state: {
-        type: "hybrid",
-        files: toFileEntries(tarballResult.files),
-        workingDirectory: WORKING_DIR,
-        source: {
-          repo: repoUrl,
-          branch: isNewBranch ? undefined : branch,
-          token: githubToken,
-        },
-      },
-      options: {
-        env: { GITHUB_TOKEN: githubToken },
-        gitUser,
-        scheduleBackgroundWork: (cb) => after(cb),
-        hooks: {
-          onCloudSandboxReady: async (sandboxId) => {
-            // Update task state when cloud sandbox is ready
-            const currentTask = await getTaskById(taskId);
-            if (currentTask?.sandboxState?.type === "hybrid") {
-              await updateTask(taskId, {
-                sandboxState: { type: "hybrid", sandboxId },
-              });
-              console.log(
-                `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
-              );
-            }
-          },
-          onCloudSandboxFailed: async (error) => {
-            console.error(
-              `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
-              error.message,
-            );
-          },
-        },
-      },
-    });
-
-    // Persist initial state (JustBash files + pending ops)
-    if (sandbox instanceof HybridSandbox) {
-      await updateTask(taskId, { sandboxState: sandbox.getState() });
-    }
-
-    const readyMs = Date.now() - startTime;
-
-    return Response.json({
-      createdAt: Date.now(),
-      timeout: DEFAULT_TIMEOUT,
-      currentBranch: branch,
-      mode: "hybrid",
-      timing: { readyMs },
-    });
+    files = toFileEntries(tarballResult.files);
   }
 
-  // ============================================
-  // FALLBACK: Direct cloud sandbox (no repo)
-  // ============================================
   const sandbox = await connectSandbox({
-    state: { type: "vercel", source: undefined },
+    state: {
+      type: "hybrid",
+      files,
+      workingDirectory: WORKING_DIR,
+      source: repoUrl
+        ? {
+            repo: repoUrl,
+            branch: isNewBranch ? undefined : branch,
+            token: githubToken,
+          }
+        : undefined,
+    },
     options: {
       env: { GITHUB_TOKEN: githubToken },
       gitUser,
+      scheduleBackgroundWork: (cb) => after(cb),
+      hooks: taskId
+        ? {
+            onCloudSandboxReady: async (sandboxId) => {
+              const currentTask = await getTaskById(taskId);
+              if (currentTask?.sandboxState?.type === "hybrid") {
+                await updateTask(taskId, {
+                  sandboxState: { type: "hybrid", sandboxId },
+                });
+                console.log(
+                  `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
+                );
+              }
+            },
+            onCloudSandboxFailed: async (error) => {
+              console.error(
+                `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
+                error.message,
+              );
+            },
+          }
+        : undefined,
     },
   });
 
-  if (taskId && sandbox instanceof VercelSandbox) {
-    await updateTask(taskId, { sandboxState: sandbox.getState() });
+  if (taskId && sandbox.getState) {
+    await updateTask(taskId, {
+      sandboxState: sandbox.getState() as SandboxState,
+    });
   }
 
-  const sandboxId = sandbox instanceof VercelSandbox ? sandbox.id : undefined;
+  const readyMs = Date.now() - startTime;
 
   return Response.json({
-    sandboxId,
     createdAt: Date.now(),
     timeout: DEFAULT_TIMEOUT,
-    mode: "vercel",
+    currentBranch: repoUrl ? branch : undefined,
+    mode: "hybrid",
+    timing: { readyMs },
   });
 }
 

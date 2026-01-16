@@ -266,4 +266,11 @@ export interface Sandbox {
    * @param options - Restore configuration including download URL
    */
   restoreSnapshot?(options: RestoreOptions): Promise<void>;
+
+  /**
+   * Get the current state of the sandbox for persistence/restoration.
+   * Returns state that can be passed to `connectSandbox()` to restore.
+   * Not all sandbox implementations support state persistence.
+   */
+  getState?(): unknown;
 }
