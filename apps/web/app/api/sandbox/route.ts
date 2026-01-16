@@ -1,8 +1,11 @@
 import {
   connectSandbox,
-  connectVercelSandbox,
-  createJustBashSandbox,
+  HybridSandbox,
+  VercelSandbox,
+  type FileEntry,
 } from "@open-harness/sandbox";
+// NOTE: To ensure background tasks complete in serverless, install @vercel/functions
+// and use: import { waitUntil } from "@vercel/functions";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
@@ -11,12 +14,25 @@ import { downloadAndExtractTarball } from "@/lib/github/tarball";
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const WORKING_DIR = "/vercel/sandbox";
 
+/**
+ * Convert simple file strings to FileEntry format.
+ */
+function toFileEntries(
+  files: Record<string, string>,
+): Record<string, FileEntry> {
+  const entries: Record<string, FileEntry> = {};
+  for (const [path, content] of Object.entries(files)) {
+    entries[path] = { type: "file", content };
+  }
+  return entries;
+}
+
 interface CreateSandboxRequest {
   repoUrl?: string;
   branch?: string;
   isNewBranch?: boolean;
   taskId?: string;
-  sandboxId?: string; // Existing sandbox ID if any
+  sandboxId?: string;
 }
 
 export async function POST(req: Request) {
@@ -59,24 +75,37 @@ export async function POST(req: Request) {
     }
   }
 
-  // ============================================
-  // HYBRID SANDBOX: Fast startup with JustBash
-  // ============================================
-  //
-  // For NEW tasks with a repo, use hybrid approach:
-  // 1. Create JustBash immediately (~100-500ms) - user can start chatting
-  // 2. Start Vercel in background - auto-handoff when ready
-  //
-  // For RECONNECTS (providedSandboxId exists), use Vercel directly.
-  // This preserves uncommitted changes from the previous session.
-  // TODO: Consider hybrid reconnect with Vercel snapshot restoration.
+  const gitUser = {
+    name: session.user.name ?? session.user.username,
+    email:
+      session.user.email ?? `${session.user.username}@users.noreply.github.com`,
+  };
 
-  const useHybridApproach = repoUrl && taskId && !providedSandboxId;
+  // ============================================
+  // RECONNECT: Existing sandbox
+  // ============================================
+  if (providedSandboxId) {
+    const sandbox = await connectSandbox({
+      state: { type: "hybrid", sandboxId: providedSandboxId },
+      options: { env: { GITHUB_TOKEN: githubToken } },
+    });
 
-  if (useHybridApproach) {
+    return Response.json({
+      sandboxId: providedSandboxId,
+      createdAt: Date.now(),
+      timeout: DEFAULT_TIMEOUT,
+      currentBranch: sandbox.currentBranch,
+      mode: "hybrid",
+    });
+  }
+
+  // ============================================
+  // NEW SANDBOX: Hybrid approach
+  // ============================================
+  if (repoUrl && taskId) {
     const startTime = Date.now();
 
-    // 1. Download tarball and create JustBash (fast path)
+    // Client responsibility: Download and extract tarball
     let tarballResult;
     try {
       tarballResult = await downloadAndExtractTarball(
@@ -86,7 +115,7 @@ export async function POST(req: Request) {
         WORKING_DIR,
       );
     } catch {
-      // If token fails (private repo issue), try without token for public repos
+      // Retry without token for public repos
       tarballResult = await downloadAndExtractTarball(
         repoUrl,
         branch,
@@ -95,192 +124,89 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Create and serialize JustBash sandbox
-    const sandbox = await createJustBashSandbox({
-      workingDirectory: WORKING_DIR,
-      files: tarballResult.files,
-      mode: "memory",
-    });
-    const snapshot = sandbox.serialize();
-    await sandbox.stop();
-
-    // 3. Persist sandbox state to task
-    await updateTask(taskId, {
-      sandboxState: {
+    // Connect to hybrid sandbox with files
+    const sandbox = await connectSandbox({
+      state: {
         type: "hybrid",
-        files: snapshot.files,
-        workingDirectory: snapshot.workingDirectory,
-        pendingOperations: [],
+        files: toFileEntries(tarballResult.files),
+        workingDirectory: WORKING_DIR,
+        source: {
+          repo: repoUrl,
+          branch: isNewBranch ? undefined : branch,
+          token: githubToken,
+        },
+      },
+      options: {
+        env: { GITHUB_TOKEN: githubToken },
+        gitUser,
+        // NOTE: To ensure background tasks complete in serverless environments,
+        // install @vercel/functions and add:
+        // registerBackgroundTask: (promise) => waitUntil(promise),
+        hooks: {
+          onCloudSandboxReady: async (sandboxId) => {
+            // Update task state when cloud sandbox is ready
+            const currentTask = await getTaskById(taskId);
+            if (currentTask?.sandboxState?.type === "hybrid") {
+              await updateTask(taskId, {
+                sandboxState: { type: "hybrid", sandboxId },
+              });
+              console.log(
+                `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
+              );
+            }
+          },
+          onCloudSandboxFailed: async (error) => {
+            console.error(
+              `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
+              error.message,
+            );
+          },
+        },
       },
     });
 
-    const justBashReadyMs = Date.now() - startTime;
+    // Persist initial state (JustBash files + pending ops)
+    if (sandbox instanceof HybridSandbox) {
+      await updateTask(taskId, { sandboxState: sandbox.getState() });
+    }
 
-    // 4. Start Vercel in background (fire-and-forget)
-    // We don't await this - it runs in the background
-    startVercelInBackground({
-      taskId,
-      repoUrl,
-      branch,
-      isNewBranch,
-      githubToken,
-      session,
-    }).catch((error) => {
-      console.error("[Sandbox] Background Vercel startup failed:", error);
-    });
+    const readyMs = Date.now() - startTime;
 
-    // 5. Return immediately - user can start chatting with JustBash
     return Response.json({
       createdAt: Date.now(),
       timeout: DEFAULT_TIMEOUT,
       currentBranch: branch,
       mode: "hybrid",
-      timing: {
-        justBashReadyMs,
-      },
+      timing: { readyMs },
     });
   }
 
   // ============================================
-  // LEGACY PATH: Direct Vercel connection
+  // FALLBACK: Direct cloud sandbox (no repo)
   // ============================================
-  // Used when:
-  // - Reconnecting to existing sandbox (providedSandboxId)
-  // - No repo URL provided
-  // - No taskId provided
-
-  let vercelSandbox;
-
-  // If reconnecting to existing sandbox
-  if (providedSandboxId) {
-    vercelSandbox = await connectVercelSandbox({
-      sandboxId: providedSandboxId,
+  const sandbox = await connectSandbox({
+    state: { type: "vercel", source: undefined },
+    options: {
       env: { GITHUB_TOKEN: githubToken },
-    });
-  } else {
-    // Create new sandbox
-    const sandboxOptions: Parameters<typeof connectVercelSandbox>[0] = {
-      timeout: DEFAULT_TIMEOUT,
-      gitUser: {
-        name: session.user.name ?? session.user.username,
-        email:
-          session.user.email ??
-          `${session.user.username}@users.noreply.github.com`,
-      },
-      env: {
-        GITHUB_TOKEN: githubToken,
-      },
-    };
+      gitUser,
+    },
+  });
 
-    // Only add source when we have a repo to clone
-    if (repoUrl) {
-      sandboxOptions.source = {
-        url: repoUrl,
-        token: githubToken,
-        ...(isNewBranch ? { newBranch: branch } : { branch }),
-      };
-    }
-
-    vercelSandbox = await connectVercelSandbox(sandboxOptions);
+  if (taskId && sandbox instanceof VercelSandbox) {
+    await updateTask(taskId, { sandboxState: sandbox.getState() });
   }
 
-  // Update task with sandbox state
-  if (taskId) {
-    await updateTask(taskId, {
-      sandboxState: {
-        type: "vercel",
-        sandboxId: vercelSandbox.id,
-      },
-    });
-  }
+  const sandboxId = sandbox instanceof VercelSandbox ? sandbox.id : undefined;
 
   return Response.json({
-    sandboxId: vercelSandbox.id,
+    sandboxId,
     createdAt: Date.now(),
     timeout: DEFAULT_TIMEOUT,
-    currentBranch: vercelSandbox.currentBranch,
     mode: "vercel",
   });
 }
 
-/**
- * Start Vercel sandbox in background.
- * This function is fire-and-forget - errors are logged but not thrown.
- *
- * Note: There's a small race window when updating sandboxState. If a chat
- * request updates pendingOperations concurrently, those changes could be
- * overwritten. However, the window is very small (single DB read-write cycle)
- * and the impact is limited (pending ops would be replayed again on next
- * handoff attempt). Proper fix would require atomic JSON field updates.
- */
-async function startVercelInBackground(options: {
-  taskId: string;
-  repoUrl: string;
-  branch: string;
-  isNewBranch: boolean;
-  githubToken: string;
-  session: {
-    user: { name?: string | null; username: string; email?: string | null };
-  };
-}) {
-  const { taskId, repoUrl, branch, isNewBranch, githubToken, session } =
-    options;
-
-  try {
-    const sandbox = await connectVercelSandbox({
-      timeout: DEFAULT_TIMEOUT,
-      gitUser: {
-        name: session.user.name ?? session.user.username,
-        email:
-          session.user.email ??
-          `${session.user.username}@users.noreply.github.com`,
-      },
-      env: {
-        GITHUB_TOKEN: githubToken,
-      },
-      source: {
-        url: repoUrl,
-        token: githubToken,
-        ...(isNewBranch ? { newBranch: branch } : { branch }),
-      },
-    });
-
-    // Update sandboxState with sandboxId - this signals handoff should happen
-    // Re-read task immediately before update to minimize race window
-    const task = await getTaskById(taskId);
-    if (task?.sandboxState?.type === "hybrid" && task.sandboxState.files) {
-      // Only update if still in pre-handoff state (files present)
-      // This prevents updating if handoff already occurred
-      await updateTask(taskId, {
-        sandboxState: {
-          ...task.sandboxState,
-          sandboxId: sandbox.id,
-        },
-      });
-      console.log(
-        `[Sandbox] Vercel ready in background for task ${taskId}: ${sandbox.id}`,
-      );
-    } else {
-      // State changed - sandbox may have already been handed off or cleared
-      console.log(
-        `[Sandbox] Vercel ready but state changed for task ${taskId}, skipping update`,
-      );
-      // Stop the unused sandbox to free resources
-      await sandbox.stop();
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      `[Sandbox] Vercel background startup failed for task ${taskId}:`,
-      message,
-    );
-    // Note: We don't update sandboxState on failure - the hybrid sandbox
-    // will continue working with JustBash
-  }
-}
-
 export async function DELETE(req: Request) {
-  // Validate session
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -315,15 +241,11 @@ export async function DELETE(req: Request) {
     return Response.json({ error: "No sandbox to stop" }, { status: 400 });
   }
 
-  // Connect to sandbox and stop it
+  // Connect and stop using unified API
   const sandbox = await connectSandbox(task.sandboxState);
   await sandbox.stop();
 
-  // Clear sandbox state
-  // TODO: Consider snapshotting before clearing (behavior differs by sandbox type)
-  await updateTask(taskId, {
-    sandboxState: null,
-  });
+  await updateTask(taskId, { sandboxState: null });
 
   return Response.json({ success: true });
 }

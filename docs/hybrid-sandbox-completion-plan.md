@@ -875,16 +875,16 @@ export async function DELETE(req: Request) {
 
 ## Migration Checklist
 
-- [ ] **Step 1**: Create `packages/sandbox/hybrid/hooks.ts`
-- [ ] **Step 2**: Update `packages/sandbox/factory.ts` with discriminated union
-- [ ] **Step 3**: Update `packages/sandbox/hybrid/connect.ts` with background cloud startup
-- [ ] **Step 4**: Update `packages/sandbox/hybrid/state.ts` documentation
-- [ ] **Step 5**: Update package exports (`index.ts` files)
-- [ ] **Step 6**: Migrate `apps/web/app/api/sandbox/route.ts`
-- [ ] **Step 7**: Check and update other consumers
+- [x] **Step 1**: Create `packages/sandbox/hybrid/hooks.ts`
+- [x] **Step 2**: Update `packages/sandbox/factory.ts` with discriminated union
+- [x] **Step 3**: Update `packages/sandbox/hybrid/connect.ts` with background cloud startup
+- [x] **Step 4**: Update `packages/sandbox/hybrid/state.ts` documentation
+- [x] **Step 5**: Update package exports (`index.ts` files)
+- [x] **Step 6**: Migrate `apps/web/app/api/sandbox/route.ts`
+- [x] **Step 7**: Check and update other consumers
 - [ ] **Step 8**: Add/update tests
-- [ ] **Step 9**: Run typecheck: `turbo typecheck`
-- [ ] **Step 10**: Run linter: `turbo lint`
+- [x] **Step 9**: Run typecheck: `turbo typecheck`
+- [x] **Step 10**: Run linter: `turbo lint`
 - [ ] **Step 11**: Manual testing of hybrid sandbox flow
 
 ---

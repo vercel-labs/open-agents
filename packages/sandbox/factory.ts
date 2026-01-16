@@ -2,6 +2,7 @@ import type { Sandbox, SandboxHooks } from "./interface";
 import type { JustBashState } from "./just-bash/state";
 import type { VercelState } from "./vercel/state";
 import type { HybridState } from "./hybrid/state";
+import type { HybridHooks } from "./hybrid/hooks";
 import { connectJustBash } from "./just-bash/connect";
 import { connectVercel } from "./vercel/connect";
 import { connectHybrid } from "./hybrid/connect";
@@ -19,58 +20,118 @@ export type SandboxState =
   | ({ type: "hybrid" } & HybridState);
 
 /**
- * Runtime options for connecting to a sandbox.
- * These are not persisted - they're provided at connect time.
+ * Base connect options for all sandbox types.
  */
 export interface ConnectOptions {
   /** Environment variables (e.g., GITHUB_TOKEN) */
   env?: Record<string, string>;
-  /** Git user for commits (Vercel only) */
+  /** Git user for commits (cloud sandboxes only) */
   gitUser?: { name: string; email: string };
   /** Lifecycle hooks */
   hooks?: SandboxHooks;
 }
 
 /**
- * Connect to a sandbox based on the provided state.
+ * Connect options with hybrid-specific hooks and background task support.
+ */
+export interface HybridConnectOptions extends Omit<ConnectOptions, "hooks"> {
+  /** Environment variables (e.g., GITHUB_TOKEN) */
+  env?: Record<string, string>;
+  /** Git user for commits */
+  gitUser?: { name: string; email: string };
+  /** Lifecycle hooks including hybrid-specific hooks */
+  hooks?: HybridHooks;
+  /**
+   * Register a background task that should complete even after the response is sent.
+   * In serverless environments, wire this to your runtime's `waitUntil`:
+   *
+   * @example
+   * import { waitUntil } from 'next/server';
+   *
+   * registerBackgroundTask: (promise) => waitUntil(promise),
+   */
+  registerBackgroundTask?: (promise: Promise<unknown>) => void;
+}
+
+/**
+ * Configuration for connecting to a sandbox.
+ * Discriminated union ensures type-safe options for each sandbox type.
+ */
+export type SandboxConnectConfig =
+  | { state: { type: "just-bash" } & JustBashState; options?: ConnectOptions }
+  | { state: { type: "vercel" } & VercelState; options?: ConnectOptions }
+  | { state: { type: "hybrid" } & HybridState; options?: HybridConnectOptions };
+
+/**
+ * Connect to a sandbox based on the provided configuration.
  *
  * This is the unified entry point for creating, restoring, or reconnecting
  * to any sandbox type. The `type` field in state determines which implementation
- * is used, and the remaining fields configure how to connect.
+ * is used, and the options are type-checked accordingly.
  *
- * @param state - Persisted state (from DB or fresh config)
- * @param options - Runtime options like env vars and hooks (not persisted)
+ * @param config - State and options for the sandbox (new API)
+ * @param options - Runtime options (legacy API, deprecated)
+ * @returns A connected sandbox instance
  *
  * @example
- * // Fresh just-bash
+ * // New API: Config object with state and options
  * const sandbox = await connectSandbox({
- *   type: "just-bash",
+ *   state: {
+ *     type: "hybrid",
+ *     files: extractedFiles,
+ *     workingDirectory: "/workspace",
+ *     source: { repo: "https://github.com/owner/repo", branch: "main" },
+ *   },
+ *   options: {
+ *     env: { GITHUB_TOKEN: token },
+ *     registerBackgroundTask: (p) => waitUntil(p),
+ *     hooks: {
+ *       onCloudSandboxReady: async (sandboxId) => {
+ *         await persistState({ type: "hybrid", sandboxId });
+ *       },
+ *     },
+ *   },
  * });
  *
  * @example
- * // Reconnect to existing Vercel VM with env vars
+ * // Legacy API: State and options as separate arguments (still supported)
  * const sandbox = await connectSandbox(
  *   { type: "vercel", sandboxId: "sbx-abc123" },
- *   { env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN } }
+ *   { env: { GITHUB_TOKEN: token } }
  * );
- *
- * @example
- * // Restore from saved state
- * const savedState = await db.load(taskId);
- * const sandbox = await connectSandbox(savedState.sandboxState, {
- *   env: { GITHUB_TOKEN: process.env.GITHUB_TOKEN },
- * });
  */
 export async function connectSandbox(
-  state: SandboxState,
-  options?: ConnectOptions,
+  configOrState: SandboxConnectConfig | SandboxState,
+  legacyOptions?: ConnectOptions,
 ): Promise<Sandbox> {
-  switch (state.type) {
-    case "just-bash":
-      return connectJustBash(state, options);
-    case "vercel":
-      return connectVercel(state, options);
-    case "hybrid":
-      return connectHybrid(state, options);
+  // Detect if using new config API or legacy (state, options) API
+  const isNewApi =
+    typeof configOrState === "object" &&
+    "state" in configOrState &&
+    typeof configOrState.state === "object" &&
+    "type" in configOrState.state;
+
+  if (isNewApi) {
+    // New API: { state, options }
+    const config = configOrState as SandboxConnectConfig;
+    switch (config.state.type) {
+      case "just-bash":
+        return connectJustBash(config.state, config.options);
+      case "vercel":
+        return connectVercel(config.state, config.options);
+      case "hybrid":
+        return connectHybrid(config.state, config.options);
+    }
+  } else {
+    // Legacy API: (state, options) as separate arguments
+    const state = configOrState as SandboxState;
+    switch (state.type) {
+      case "just-bash":
+        return connectJustBash(state, legacyOptions);
+      case "vercel":
+        return connectVercel(state, legacyOptions);
+      case "hybrid":
+        return connectHybrid(state, legacyOptions);
+    }
   }
 }

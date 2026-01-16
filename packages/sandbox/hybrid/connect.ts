@@ -1,76 +1,154 @@
-import type { SandboxHooks } from "../interface";
 import type { HybridState } from "./state";
+import type { HybridHooks } from "./hooks";
 import { HybridSandbox } from "./sandbox";
 import { connectJustBash } from "../just-bash/connect";
 import { connectVercel } from "../vercel/connect";
 
-interface ConnectOptions {
+/**
+ * Connect options for hybrid sandbox.
+ * Includes hybrid-specific hooks and background task support.
+ */
+export interface HybridConnectOptions {
+  /** Environment variables (e.g., GITHUB_TOKEN) */
   env?: Record<string, string>;
+  /** Git user for commits (cloud sandboxes only) */
   gitUser?: { name: string; email: string };
-  hooks?: SandboxHooks;
+  /** Lifecycle hooks including hybrid-specific hooks */
+  hooks?: HybridHooks;
+  /**
+   * Register a background task that should complete even after the response is sent.
+   * In serverless environments, wire this to your runtime's `waitUntil`.
+   */
+  registerBackgroundTask?: (promise: Promise<unknown>) => void;
+}
+
+/**
+ * Start cloud sandbox in background and wire up hooks.
+ * Returns the promise so it can be registered with waitUntil.
+ */
+function startCloudSandboxInBackground(
+  source: NonNullable<HybridState["source"]>,
+  options: HybridConnectOptions | undefined,
+  hybrid: HybridSandbox,
+): Promise<void> {
+  const cloudStartupPromise = (async () => {
+    try {
+      const cloudSandbox = await connectVercel(
+        { source },
+        {
+          env: options?.env,
+          gitUser: options?.gitUser,
+          hooks: options?.hooks,
+        },
+      );
+
+      // Perform handoff
+      await hybrid.performHandoff(cloudSandbox);
+
+      // Notify consumer via hook
+      const sandboxId = cloudSandbox.id;
+      if (sandboxId && options?.hooks?.onCloudSandboxReady) {
+        await options.hooks.onCloudSandboxReady(sandboxId, cloudSandbox);
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error("[HybridSandbox] Cloud sandbox startup failed:", err);
+
+      if (options?.hooks?.onCloudSandboxFailed) {
+        await options.hooks.onCloudSandboxFailed(err);
+      }
+    }
+  })();
+
+  // Register with waitUntil if provided
+  if (options?.registerBackgroundTask) {
+    options.registerBackgroundTask(cloudStartupPromise);
+  }
+
+  return cloudStartupPromise;
 }
 
 /**
  * Connect to a Hybrid sandbox based on the provided state.
  *
  * Hybrid sandboxes start with JustBash (ephemeral) and can transition to
- * Vercel (persistent) via handoff. The state determines which phase we're in:
+ * a cloud sandbox (persistent) via handoff. The state determines which phase:
  *
- * - Post-handoff (sandboxId present, no files): Reconnect directly to Vercel
+ * - Post-handoff (sandboxId present, no files): Reconnect directly to cloud
  * - Post-handoff recovery (snapshotId present, no sandboxId, no files): Restore from snapshot
- * - Inline handoff (sandboxId + files): Vercel ready, perform handoff now
- * - Pre-handoff (files present, no sandboxId): Restore JustBash state with pending operations
- * - Fresh start (source present or empty): Create new JustBash sandbox
+ * - Inline handoff (sandboxId + files): Cloud ready, perform handoff now
+ * - Pre-handoff (files present, no sandboxId): Restore JustBash, optionally start cloud
+ * - Fresh start (no files, no sandboxId, source present): Create empty JustBash, start cloud in background
+ * - Error (no files, no sandboxId, no source): Invalid state
  */
 export async function connectHybrid(
   state: HybridState,
-  options?: ConnectOptions,
+  options?: HybridConnectOptions,
 ): Promise<HybridSandbox> {
-  // Post-handoff: Just reconnect to Vercel
+  // Post-handoff: Just reconnect to cloud sandbox
   // (sandboxId present, no files means we've already transitioned)
   if (state.sandboxId && !state.files) {
-    const vercel = await connectVercel({ sandboxId: state.sandboxId }, options);
-    // Create hybrid wrapper that's already in "vercel" state
-    const hybrid = new HybridSandbox({
-      // Create a minimal justBash for the wrapper (will be replaced immediately)
-      justBash: await connectJustBash({
-        workingDirectory: vercel.workingDirectory,
-      }),
-    });
-    // Perform immediate handoff to Vercel
-    await hybrid.performHandoff(vercel);
-    return hybrid;
-  }
-
-  // Post-handoff recovery: VM timed out, restore from snapshot
-  if (state.snapshotId && !state.sandboxId && !state.files) {
-    const vercel = await connectVercel(
-      { snapshotId: state.snapshotId },
-      options,
+    const cloudSandbox = await connectVercel(
+      { sandboxId: state.sandboxId },
+      {
+        env: options?.env,
+        hooks: options?.hooks,
+      },
     );
+
+    // Create hybrid wrapper that's already in "cloud" state
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({
-        workingDirectory: vercel.workingDirectory,
+        workingDirectory: cloudSandbox.workingDirectory,
       }),
     });
-    await hybrid.performHandoff(vercel);
+
+    await hybrid.performHandoff(cloudSandbox);
     return hybrid;
   }
 
-  // Pre-handoff but Vercel ready: Perform inline handoff
-  // (sandboxId + files means Vercel is ready but we haven't switched yet)
-  if (state.sandboxId && state.files) {
-    const vercel = await connectVercel({ sandboxId: state.sandboxId }, options);
+  // Post-handoff recovery: Cloud sandbox timed out, restore from snapshot
+  if (state.snapshotId && !state.sandboxId && !state.files) {
+    const cloudSandbox = await connectVercel(
+      { snapshotId: state.snapshotId },
+      {
+        env: options?.env,
+        gitUser: options?.gitUser,
+        hooks: options?.hooks,
+      },
+    );
 
-    // Replay pending operations with error tracking
+    const hybrid = new HybridSandbox({
+      justBash: await connectJustBash({
+        workingDirectory: cloudSandbox.workingDirectory,
+      }),
+    });
+
+    await hybrid.performHandoff(cloudSandbox);
+    return hybrid;
+  }
+
+  // Pre-handoff but cloud ready: Perform inline handoff
+  // (sandboxId + files means cloud is ready but we haven't switched yet)
+  if (state.sandboxId && state.files) {
+    const cloudSandbox = await connectVercel(
+      { sandboxId: state.sandboxId },
+      {
+        env: options?.env,
+        hooks: options?.hooks,
+      },
+    );
+
+    // Replay pending operations
     const pendingOps = state.pendingOperations ?? [];
     const errors: string[] = [];
+
     for (const op of pendingOps) {
       try {
         if (op.type === "mkdir") {
-          await vercel.mkdir(op.path, { recursive: op.recursive });
+          await cloudSandbox.mkdir(op.path, { recursive: op.recursive });
         } else if (op.type === "writeFile") {
-          await vercel.writeFile(op.path, op.content, "utf-8");
+          await cloudSandbox.writeFile(op.path, op.content, "utf-8");
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -88,14 +166,15 @@ export async function connectHybrid(
     // Create hybrid in post-handoff state
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({
-        workingDirectory: vercel.workingDirectory,
+        workingDirectory: cloudSandbox.workingDirectory,
       }),
     });
-    await hybrid.performHandoff(vercel);
+
+    await hybrid.performHandoff(cloudSandbox);
     return hybrid;
   }
 
-  // Pre-handoff: Restore JustBash state with pending operations
+  // Pre-handoff: Create/restore JustBash from files
   if (state.files) {
     const justBash = await connectJustBash(
       {
@@ -103,26 +182,50 @@ export async function connectHybrid(
         workingDirectory: state.workingDirectory,
         env: state.env,
       },
-      options,
+      {
+        env: options?.env,
+        hooks: options?.hooks,
+      },
     );
 
-    return new HybridSandbox({
+    const hybrid = new HybridSandbox({
       justBash,
       pendingOperations: state.pendingOperations,
     });
+
+    // If source provided and no sandboxId yet, start cloud in background
+    if (state.source && !state.sandboxId) {
+      startCloudSandboxInBackground(state.source, options, hybrid);
+    }
+
+    return hybrid;
   }
 
-  // Fresh start: Create new JustBash sandbox
-  // Note: Vercel booting in background should be handled by the consumer
-  const justBash = await connectJustBash(
-    {
-      workingDirectory: state.workingDirectory,
-      env: state.env,
-    },
-    options,
-  );
+  // Fresh start: No files but source provided - create empty JustBash and start cloud
+  if (state.source) {
+    const justBash = await connectJustBash(
+      {
+        workingDirectory: state.workingDirectory,
+        env: state.env,
+      },
+      {
+        env: options?.env,
+        hooks: options?.hooks,
+      },
+    );
 
-  return new HybridSandbox({
-    justBash,
-  });
+    const hybrid = new HybridSandbox({
+      justBash,
+    });
+
+    // Start cloud sandbox in background
+    startCloudSandboxInBackground(state.source, options, hybrid);
+
+    return hybrid;
+  }
+
+  // Invalid state: no files and no sandboxId and no source
+  throw new Error(
+    "Invalid HybridState: requires either 'files' for ephemeral mode, 'sandboxId' for cloud mode, or 'source' to start cloud in background",
+  );
 }

@@ -23,6 +23,8 @@ export {
   connectSandbox,
   type SandboxState,
   type ConnectOptions,
+  type HybridConnectOptions,
+  type SandboxConnectConfig,
 } from "./factory";
 
 // local
@@ -52,4 +54,5 @@ export {
   requiresVercel,
   type HybridSandboxConfig,
   type HybridState,
+  type HybridHooks,
 } from "./hybrid";
