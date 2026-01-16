@@ -84,7 +84,10 @@ The `task` tool delegates to specialized subagents:
 - **Constants**: UPPER_SNAKE_CASE for true constants (e.g., `TIMEOUT_MS`, `SAFE_COMMAND_PREFIXES`)
 
 ### Imports
-- Use explicit `.js` extension for relative imports (e.g., `import { foo } from "./utils.js"`)
+- **Do NOT use `.js` extensions** in packages consumed by the web app (e.g., `import { foo } from "./utils"` not `"./utils.js"`)
+  - The `.js` extension causes module resolution issues with Next.js/Turbopack
+  - This applies to: `packages/sandbox`, `packages/agent`, `packages/shared`, `apps/web`
+  - Exception: `apps/cli` and `packages/tui` can use `.js` extensions (CLI-only)
 - Prefer named exports over default exports
 - Group imports: external packages first, then internal packages, then relative imports
 - Use type imports when importing only types: `import type { Foo } from "./types"`
