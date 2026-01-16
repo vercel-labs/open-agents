@@ -21,7 +21,7 @@ interface CreateRepoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: Task;
-  sandboxId: string | null;
+  hasSandbox: boolean;
 }
 
 interface CreateRepoResult {
@@ -44,7 +44,7 @@ export function CreateRepoDialog({
   open,
   onOpenChange,
   task,
-  sandboxId,
+  hasSandbox,
 }: CreateRepoDialogProps) {
   const [repoName, setRepoName] = useState("");
   const [description, setDescription] = useState("");
@@ -72,7 +72,7 @@ export function CreateRepoDialog({
       return;
     }
 
-    if (!sandboxId) {
+    if (!hasSandbox) {
       setError("Sandbox not active. Please wait for sandbox to start.");
       return;
     }
@@ -86,7 +86,6 @@ export function CreateRepoDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: task.id,
-          sandboxId,
           repoName: repoName.trim(),
           description: description.trim() || undefined,
           isPrivate,
@@ -229,7 +228,7 @@ export function CreateRepoDialog({
               </Button>
               <Button
                 onClick={handleCreate}
-                disabled={isCreating || !repoName.trim() || !sandboxId}
+                disabled={isCreating || !repoName.trim() || !hasSandbox}
               >
                 {isCreating ? (
                   <>

@@ -7,6 +7,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { SandboxState } from "@open-harness/sandbox";
 
 export const users = pgTable(
   "users",
@@ -84,16 +85,8 @@ export const tasks = pgTable("tasks", {
   modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
   // Whether this task uses a new auto-generated branch
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
-  // Sandbox info (Vercel)
-  sandboxId: text("sandbox_id"),
-  sandboxCreatedAt: timestamp("sandbox_created_at"),
-  sandboxTimeout: integer("sandbox_timeout"),
-  // Vercel background startup tracking (Hybrid Sandbox Milestone 3)
-  vercelStatus: text("vercel_status", {
-    enum: ["starting", "ready", "failed"],
-  }),
-  vercelStartedAt: timestamp("vercel_started_at"),
-  vercelError: text("vercel_error"),
+  // Unified sandbox state
+  sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
   // Git stats (for display in task list)
   linesAdded: integer("lines_added").default(0),
   linesRemoved: integer("lines_removed").default(0),
@@ -102,18 +95,10 @@ export const tasks = pgTable("tasks", {
   prStatus: text("pr_status", {
     enum: ["open", "merged", "closed"],
   }),
-  // Snapshot info (Vercel sandbox)
+  // Snapshot info (for cached snapshots feature)
   snapshotUrl: text("snapshot_url"),
   snapshotCreatedAt: timestamp("snapshot_created_at"),
   snapshotSizeBytes: integer("snapshot_size_bytes"),
-  // JustBash sandbox state (for hybrid sandbox persistence)
-  justBashSnapshot: jsonb("just_bash_snapshot"),
-  // Pending operations to replay during handoff (Hybrid Sandbox Milestone 4)
-  pendingOperations: jsonb("pending_operations"),
-  // Current sandbox mode (Hybrid Sandbox Milestone 4)
-  sandboxMode: text("sandbox_mode", {
-    enum: ["justbash", "vercel"],
-  }),
   // Cached diff for offline viewing
   cachedDiff: jsonb("cached_diff"),
   cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),

@@ -1,6 +1,6 @@
 {
-  "id": "16bbc693-e249-42f6-a341-5c8a1fa093ee",
-  "prevId": "53141576-031a-4a17-b5e2-eaf6b883b232",
+  "id": "a120f3b0-3a83-4eae-a68b-fa17cb1c31e3",
+  "prevId": "16bbc693-e249-42f6-a341-5c8a1fa093ee",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -239,39 +239,9 @@
           "notNull": true,
           "default": false
         },
-        "sandbox_id": {
-          "name": "sandbox_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sandbox_created_at": {
-          "name": "sandbox_created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sandbox_timeout": {
-          "name": "sandbox_timeout",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vercel_status": {
-          "name": "vercel_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vercel_started_at": {
-          "name": "vercel_started_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vercel_error": {
-          "name": "vercel_error",
-          "type": "text",
+        "sandbox_state": {
+          "name": "sandbox_state",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -316,12 +286,6 @@
         "snapshot_size_bytes": {
           "name": "snapshot_size_bytes",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "just_bash_snapshot": {
-          "name": "just_bash_snapshot",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

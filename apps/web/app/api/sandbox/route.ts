@@ -1,4 +1,5 @@
 import {
+  connectSandbox,
   connectVercelSandbox,
   createJustBashSandbox,
 } from "@open-harness/sandbox";
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Validate task ownership and sandbox association
+  // Validate task ownership
   let task;
   if (taskId) {
     task = await getTaskById(taskId);
@@ -55,13 +56,6 @@ export async function POST(req: Request) {
     }
     if (task.userId !== session.user.id) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
-    // Validate provided sandboxId matches task's sandbox (if any)
-    if (providedSandboxId && task.sandboxId !== providedSandboxId) {
-      return Response.json(
-        { error: "Sandbox does not belong to this task" },
-        { status: 403 },
-      );
     }
   }
 
@@ -110,14 +104,14 @@ export async function POST(req: Request) {
     const snapshot = sandbox.serialize();
     await sandbox.stop();
 
-    // 3. Persist JustBash state to task
+    // 3. Persist sandbox state to task
     await updateTask(taskId, {
-      justBashSnapshot: snapshot,
-      sandboxMode: "justbash",
-      pendingOperations: [],
-      // Mark Vercel as starting (will be started in background)
-      vercelStatus: "starting",
-      vercelStartedAt: new Date(),
+      sandboxState: {
+        type: "hybrid",
+        files: snapshot.files,
+        workingDirectory: snapshot.workingDirectory,
+        pendingOperations: [],
+      },
     });
 
     const justBashReadyMs = Date.now() - startTime;
@@ -137,13 +131,10 @@ export async function POST(req: Request) {
 
     // 5. Return immediately - user can start chatting with JustBash
     return Response.json({
-      sandboxId: `justbash-${taskId}`, // Placeholder ID indicating JustBash mode
       createdAt: Date.now(),
       timeout: DEFAULT_TIMEOUT,
       currentBranch: branch,
       mode: "hybrid",
-      justBashReady: true,
-      vercelStatus: "starting",
       timing: {
         justBashReadyMs,
       },
@@ -193,14 +184,13 @@ export async function POST(req: Request) {
     vercelSandbox = await connectVercelSandbox(sandboxOptions);
   }
 
-  // Update task with sandbox metadata
-  const sandboxCreatedAt = new Date();
+  // Update task with sandbox state
   if (taskId) {
     await updateTask(taskId, {
-      sandboxId: vercelSandbox.id,
-      sandboxCreatedAt,
-      sandboxTimeout: DEFAULT_TIMEOUT,
-      sandboxMode: "vercel",
+      sandboxState: {
+        type: "vercel",
+        sandboxId: vercelSandbox.id,
+      },
     });
   }
 
@@ -249,27 +239,28 @@ async function startVercelInBackground(options: {
       },
     });
 
-    // Update task with Vercel sandbox info
-    await updateTask(taskId, {
-      vercelStatus: "ready",
-      sandboxId: sandbox.id,
-      sandboxCreatedAt: new Date(),
-      sandboxTimeout: DEFAULT_TIMEOUT,
-    });
+    // Update sandboxState with sandboxId - this signals handoff should happen
+    const task = await getTaskById(taskId);
+    if (task?.sandboxState?.type === "hybrid") {
+      await updateTask(taskId, {
+        sandboxState: {
+          ...task.sandboxState,
+          sandboxId: sandbox.id,
+        },
+      });
+    }
 
     console.log(
       `[Sandbox] Vercel ready in background for task ${taskId}: ${sandbox.id}`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await updateTask(taskId, {
-      vercelStatus: "failed",
-      vercelError: message,
-    });
     console.error(
       `[Sandbox] Vercel background startup failed for task ${taskId}:`,
       message,
     );
+    // Note: We don't update sandboxState on failure - the hybrid sandbox
+    // will continue working with JustBash
   }
 }
 
@@ -290,18 +281,13 @@ export async function DELETE(req: Request) {
   if (
     !body ||
     typeof body !== "object" ||
-    !("sandboxId" in body) ||
-    typeof (body as Record<string, unknown>).sandboxId !== "string" ||
     !("taskId" in body) ||
     typeof (body as Record<string, unknown>).taskId !== "string"
   ) {
-    return Response.json(
-      { error: "Missing sandboxId or taskId" },
-      { status: 400 },
-    );
+    return Response.json({ error: "Missing taskId" }, { status: 400 });
   }
 
-  const { sandboxId, taskId } = body as { sandboxId: string; taskId: string };
+  const { taskId } = body as { taskId: string };
 
   const task = await getTaskById(taskId);
   if (!task) {
@@ -310,21 +296,18 @@ export async function DELETE(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "No sandbox to stop" }, { status: 400 });
   }
 
-  const sandbox = await connectVercelSandbox({ sandboxId });
+  // Connect to sandbox and stop it
+  const sandbox = await connectSandbox(task.sandboxState);
   await sandbox.stop();
 
-  // Clear sandbox metadata from task so future sandbox creation doesn't fail validation
+  // Clear sandbox state
+  // TODO: Consider snapshotting before clearing (behavior differs by sandbox type)
   await updateTask(taskId, {
-    sandboxId: null,
-    sandboxCreatedAt: null,
-    sandboxTimeout: null,
+    sandboxState: null,
   });
 
   return Response.json({ success: true });

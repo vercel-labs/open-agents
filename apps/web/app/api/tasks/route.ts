@@ -9,7 +9,6 @@ interface CreateTaskRequest {
   repoName?: string;
   branch?: string;
   cloneUrl?: string;
-  sandboxId?: string;
   isNewBranch?: boolean;
   modelId?: string;
 }
@@ -55,16 +54,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const {
-    title,
-    repoOwner,
-    repoName,
-    branch,
-    cloneUrl,
-    sandboxId,
-    isNewBranch,
-    modelId,
-  } = body;
+  const { title, repoOwner, repoName, branch, cloneUrl, isNewBranch, modelId } =
+    body;
 
   if (!title) {
     return Response.json({ error: "title is required" }, { status: 400 });
@@ -86,7 +77,6 @@ export async function POST(req: Request) {
       repoName,
       branch: finalBranch,
       cloneUrl,
-      sandboxId,
       isNewBranch: isNewBranch ?? false,
       modelId: modelId ?? DEFAULT_MODEL_ID,
     });

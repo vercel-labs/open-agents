@@ -8,7 +8,6 @@ import type { DiffFile } from "@/app/api/tasks/[id]/diff/route";
 import { useTaskChatContext } from "./task-context";
 
 type DiffViewerProps = {
-  sandboxId?: string;
   refreshKey: number;
   onClose: () => void;
 };
@@ -224,24 +223,21 @@ function FileEntry({
   );
 }
 
-export function DiffViewer({
-  sandboxId,
-  refreshKey,
-  onClose,
-}: DiffViewerProps) {
-  const { diffCache, fetchDiff, diffRefreshKey } = useTaskChatContext();
+export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
+  const { diffCache, fetchDiff, diffRefreshKey, sandboxInfo } =
+    useTaskChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   const { data, error, isLoading, cachedAt } = diffCache;
 
   // Show stale indicator if sandbox is offline (even if data came from a live fetch earlier)
-  const showStaleIndicator = !sandboxId && data !== null;
+  const showStaleIndicator = !sandboxInfo && data !== null;
 
   // Fetch diff on mount and when refreshKey changes
   // The fetchDiff function will skip if cache is still valid
   useEffect(() => {
-    fetchDiff(sandboxId);
-  }, [fetchDiff, sandboxId, refreshKey, diffRefreshKey]);
+    fetchDiff();
+  }, [fetchDiff, refreshKey, diffRefreshKey]);
 
   const toggleFile = (path: string) => {
     setExpandedFiles((prev) => {

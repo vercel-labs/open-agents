@@ -73,7 +73,6 @@ async function createSandbox(
   branch: string | undefined,
   isNewBranch: boolean,
   taskId: string,
-  existingSandboxId: string | undefined,
 ): Promise<SandboxInfo> {
   const response = await fetch("/api/sandbox", {
     method: "POST",
@@ -83,7 +82,6 @@ async function createSandbox(
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       taskId,
-      sandboxId: existingSandboxId,
     }),
   });
   if (!response.ok) {
@@ -152,7 +150,7 @@ function SandboxHeaderBadge({
   // Reset auto-save flag when sandbox changes
   useEffect(() => {
     hasAutoSavedRef.current = false;
-  }, [sandboxInfo?.sandboxId]);
+  }, [sandboxInfo]);
 
   // Reset stopping state when sandbox becomes inactive
   useEffect(() => {
@@ -504,61 +502,54 @@ export function TaskDetailContent() {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sandboxId: sandboxInfo.sandboxId,
           taskId: task.id,
         }),
       });
     } finally {
       clearSandboxInfo();
     }
-  }, [sandboxInfo, task.id, clearSandboxInfo]);
+  }, [task.id, clearSandboxInfo]);
 
-  const saveSnapshot = useCallback(
-    async (
-      sandboxId: string,
-    ): Promise<{
-      success: boolean;
-      downloadUrl?: string;
-      createdAt?: number;
-    }> => {
-      try {
-        const response = await fetch("/api/sandbox/snapshot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sandboxId,
-            taskId: task.id,
-          }),
-        });
+  const saveSnapshot = useCallback(async (): Promise<{
+    success: boolean;
+    downloadUrl?: string;
+    createdAt?: number;
+  }> => {
+    try {
+      const response = await fetch("/api/sandbox/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: task.id,
+        }),
+      });
 
-        if (!response.ok) {
-          const error = (await response.json()) as { error?: string };
-          console.error("Failed to save snapshot:", error.error);
-          return { success: false };
-        }
-        const data = (await response.json()) as {
-          downloadUrl: string;
-          createdAt: number;
-        };
-        return {
-          success: true,
-          downloadUrl: data.downloadUrl,
-          createdAt: data.createdAt,
-        };
-      } catch (err) {
-        console.error("Failed to save snapshot:", err);
+      if (!response.ok) {
+        const error = (await response.json()) as { error?: string };
+        console.error("Failed to save snapshot:", error.error);
         return { success: false };
       }
-    },
-    [task.id],
-  );
+      const data = (await response.json()) as {
+        downloadUrl: string;
+        createdAt: number;
+      };
+      return {
+        success: true,
+        downloadUrl: data.downloadUrl,
+        createdAt: data.createdAt,
+      };
+    } catch (err) {
+      console.error("Failed to save snapshot:", err);
+      return { success: false };
+    }
+  }, [task.id]);
 
   const handleSaveAndKill = useCallback(async () => {
     if (!sandboxInfo || isSavingSnapshotRef.current) return;
     isSavingSnapshotRef.current = true;
     setIsSavingSnapshot(true);
     try {
-      const result = await saveSnapshot(sandboxInfo.sandboxId);
+      const result = await saveSnapshot();
       if (result.success && result.downloadUrl && result.createdAt) {
         updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
       }
@@ -578,7 +569,6 @@ export function TaskDetailContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sandboxId: sandboxInfo.sandboxId,
           taskId: task.id,
         }),
       });
@@ -635,7 +625,6 @@ export function TaskDetailContent() {
         task.branch ?? undefined,
         useNewBranch,
         task.id,
-        undefined,
       );
       setSandboxInfo(newSandbox);
 
@@ -644,7 +633,6 @@ export function TaskDetailContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sandboxId: newSandbox.sandboxId,
           taskId: task.id,
         }),
       });
@@ -683,7 +671,6 @@ export function TaskDetailContent() {
         task.branch ?? undefined,
         shouldCreateNewBranch,
         task.id,
-        task.sandboxId ?? undefined,
       );
       setSandboxInfo(newSandbox);
     } catch (err) {
@@ -697,7 +684,6 @@ export function TaskDetailContent() {
     task.cloneUrl,
     task.branch,
     task.id,
-    task.sandboxId,
     setSandboxInfo,
   ]);
 
@@ -717,13 +703,13 @@ export function TaskDetailContent() {
   useEffect(() => {
     // Only attempt reconnection if:
     // 1. We have initial messages (returning to an existing conversation)
-    // 2. Task has a sandboxId (sandbox was created before)
+    // 2. Task has sandboxState (sandbox was created before)
     // 3. No current sandboxInfo (haven't reconnected yet)
     // 4. Not already creating a sandbox
     // 5. Reconnection status is idle (haven't tried yet)
     if (
       hadInitialMessages &&
-      task.sandboxId &&
+      task.sandboxState &&
       !sandboxInfo &&
       !isCreatingSandbox &&
       reconnectionStatus === "idle"
@@ -732,7 +718,7 @@ export function TaskDetailContent() {
     }
   }, [
     hadInitialMessages,
-    task.sandboxId,
+    task.sandboxState,
     sandboxInfo,
     isCreatingSandbox,
     reconnectionStatus,
@@ -761,7 +747,6 @@ export function TaskDetailContent() {
             task.branch ?? undefined,
             shouldCreateNewBranch,
             task.id,
-            task.sandboxId ?? undefined,
           );
           setSandboxInfo(newSandbox);
         } catch (err) {
@@ -786,7 +771,6 @@ export function TaskDetailContent() {
     task.branch,
     task.isNewBranch,
     task.prNumber,
-    task.sandboxId,
     task.title,
   ]);
 
@@ -856,7 +840,7 @@ export function TaskDetailContent() {
   // Fetch files when sandbox becomes available
   useEffect(() => {
     if (sandboxInfo && !fileCache.data && !fileCache.isLoading) {
-      fetchFiles(sandboxInfo.sandboxId);
+      fetchFiles();
     }
   }, [sandboxInfo, fileCache.data, fileCache.isLoading, fetchFiles]);
 
@@ -864,10 +848,10 @@ export function TaskDetailContent() {
   useEffect(() => {
     // Fetch on mount (for cached data) or when sandbox/diffRefreshKey changes
     if (!diffCache.isLoading && diffCache.lastFetchedKey !== diffRefreshKey) {
-      fetchDiff(sandboxInfo?.sandboxId);
+      fetchDiff();
     }
   }, [
-    sandboxInfo?.sandboxId,
+    sandboxInfo,
     diffRefreshKey,
     diffCache.isLoading,
     diffCache.lastFetchedKey,
@@ -1408,7 +1392,7 @@ export function TaskDetailContent() {
           open={prDialogOpen}
           onOpenChange={setPrDialogOpen}
           task={task}
-          sandboxId={sandboxInfo?.sandboxId ?? null}
+          hasSandbox={sandboxInfo !== null}
         />
       )}
 
@@ -1418,14 +1402,13 @@ export function TaskDetailContent() {
           open={repoDialogOpen}
           onOpenChange={setRepoDialogOpen}
           task={task}
-          sandboxId={sandboxInfo?.sandboxId ?? null}
+          hasSandbox={sandboxInfo !== null}
         />
       )}
 
       {/* Diff Viewer Panel */}
       {showDiffPanel && (sandboxInfo || Boolean(task.cachedDiff)) && (
         <DiffViewer
-          sandboxId={sandboxInfo?.sandboxId}
           refreshKey={diffRefreshKey}
           onClose={() => setShowDiffPanel(false)}
         />

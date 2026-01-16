@@ -1,15 +1,13 @@
-import { connectVercelSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 
 interface CreateSnapshotRequest {
-  sandboxId: string;
   taskId: string;
 }
 
 interface RestoreSnapshotRequest {
-  sandboxId: string;
   taskId: string;
 }
 
@@ -37,13 +35,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { sandboxId, taskId } = body;
+  const { taskId } = body;
 
-  if (!sandboxId || !taskId) {
-    return Response.json(
-      { error: "Missing sandboxId or taskId" },
-      { status: 400 },
-    );
+  if (!taskId) {
+    return Response.json({ error: "Missing taskId" }, { status: 400 });
   }
 
   // Verify task ownership
@@ -54,15 +49,12 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectVercelSandbox({ sandboxId });
+    const sandbox = await connectSandbox(task.sandboxState);
 
     if (!sandbox.snapshot) {
       return Response.json(
@@ -123,13 +115,10 @@ export async function PUT(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { sandboxId, taskId } = body;
+  const { taskId } = body;
 
-  if (!sandboxId || !taskId) {
-    return Response.json(
-      { error: "Missing sandboxId or taskId" },
-      { status: 400 },
-    );
+  if (!taskId) {
+    return Response.json({ error: "Missing taskId" }, { status: 400 });
   }
 
   // Verify task ownership and get snapshot URL
@@ -140,11 +129,8 @@ export async function PUT(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
   if (!task.snapshotUrl) {
     return Response.json(
@@ -154,7 +140,7 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const sandbox = await connectVercelSandbox({ sandboxId });
+    const sandbox = await connectSandbox(task.sandboxState);
 
     if (!sandbox.restoreSnapshot) {
       return Response.json(

@@ -1,7 +1,6 @@
-import { connectVercelSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 import { getTaskById } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
-import type { NextRequest } from "next/server";
 
 export type FileSuggestion = {
   value: string;
@@ -62,21 +61,13 @@ function parseGitFiles(output: string): FileSuggestion[] {
   return results;
 }
 
-export async function GET(req: NextRequest, context: RouteContext) {
+export async function GET(_req: Request, context: RouteContext) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { id: taskId } = await context.params;
-  const sandboxId = req.nextUrl.searchParams.get("sandboxId");
-
-  if (!sandboxId) {
-    return Response.json(
-      { error: "sandboxId query parameter is required" },
-      { status: 400 },
-    );
-  }
 
   // Verify task ownership
   const task = await getTaskById(taskId);
@@ -86,15 +77,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectVercelSandbox({ sandboxId });
+    const sandbox = await connectSandbox(task.sandboxState);
     const cwd = sandbox.workingDirectory;
 
     // Run git commands in parallel to get both tracked and untracked files

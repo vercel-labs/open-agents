@@ -34,7 +34,7 @@ interface CreatePRDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: Task;
-  sandboxId: string | null;
+  hasSandbox: boolean;
 }
 
 interface GitActions {
@@ -49,7 +49,7 @@ export function CreatePRDialog({
   open,
   onOpenChange,
   task,
-  sandboxId,
+  hasSandbox,
 }: CreatePRDialogProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -91,13 +91,13 @@ export function CreatePRDialog({
 
   // Check git status when dialog opens
   const checkGitStatus = useCallback(async () => {
-    if (!sandboxId) return;
+    if (!hasSandbox) return;
     setIsCheckingStatus(true);
     try {
       const res = await fetch("/api/git-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sandboxId, taskId: task.id }),
+        body: JSON.stringify({ taskId: task.id }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -113,13 +113,13 @@ export function CreatePRDialog({
     } finally {
       setIsCheckingStatus(false);
     }
-  }, [sandboxId, task.id]);
+  }, [hasSandbox, task.id]);
 
   useEffect(() => {
-    if (open && sandboxId) {
+    if (open && hasSandbox) {
       checkGitStatus();
     }
-  }, [open, sandboxId, checkGitStatus]);
+  }, [open, hasSandbox, checkGitStatus]);
 
   // Determine which step to show after git status check completes
   const currentBranch = resolvedBranch ?? task.branch ?? baseBranch;
@@ -171,7 +171,7 @@ export function CreatePRDialog({
   }, [open, task.repoOwner, task.repoName, fetchBranches]);
 
   const handleCreateBranch = async () => {
-    if (!sandboxId) {
+    if (!hasSandbox) {
       setError("Sandbox not active. Please wait for sandbox to start.");
       return;
     }
@@ -183,7 +183,6 @@ export function CreatePRDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: task.id,
-          sandboxId,
           taskTitle: task.title,
           baseBranch,
           branchName: displayBranch,
@@ -216,7 +215,7 @@ export function CreatePRDialog({
   };
 
   const handleCommit = async () => {
-    if (!sandboxId) {
+    if (!hasSandbox) {
       setError("Sandbox not active. Please wait for sandbox to start.");
       return;
     }
@@ -228,7 +227,6 @@ export function CreatePRDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: task.id,
-          sandboxId,
           taskTitle: task.title,
           baseBranch,
           branchName: displayBranch,
@@ -267,7 +265,6 @@ export function CreatePRDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId: task.id,
-          sandboxId,
           taskTitle: task.title,
           baseBranch,
           branchName: displayBranch,
@@ -495,7 +492,7 @@ export function CreatePRDialog({
               {step === "create-branch" && (
                 <Button
                   onClick={handleCreateBranch}
-                  disabled={isDisabled || !sandboxId}
+                  disabled={isDisabled || !hasSandbox}
                 >
                   {isCreatingBranch ? (
                     <>
@@ -517,7 +514,7 @@ export function CreatePRDialog({
               {step === "commit" && (
                 <Button
                   onClick={handleCommit}
-                  disabled={isDisabled || !sandboxId}
+                  disabled={isDisabled || !hasSandbox}
                 >
                   {isCommitting ? (
                     <>
@@ -536,7 +533,7 @@ export function CreatePRDialog({
                   <Button
                     variant="outline"
                     onClick={handleGenerate}
-                    disabled={isDisabled || !sandboxId || hasGenerated}
+                    disabled={isDisabled || !hasSandbox || hasGenerated}
                   >
                     {isGenerating ? (
                       <>

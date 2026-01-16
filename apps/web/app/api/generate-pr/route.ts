@@ -1,4 +1,4 @@
-import { connectVercelSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -42,7 +42,6 @@ export const maxDuration = 120;
 
 interface GeneratePRRequest {
   taskId: string;
-  sandboxId: string;
   taskTitle: string;
   baseBranch: string;
   branchName: string;
@@ -67,7 +66,6 @@ export async function POST(req: Request) {
 
   const {
     taskId,
-    sandboxId,
     taskTitle,
     baseBranch,
     branchName,
@@ -87,23 +85,8 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!sandboxId) {
-    return Response.json(
-      { error: "Sandbox not active. Please wait for sandbox to start." },
-      { status: 400 },
-    );
-  }
-  if (!task.sandboxId) {
-    return Response.json(
-      { error: "Sandbox not linked to task" },
-      { status: 400 },
-    );
-  }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   if (!branchName) {
@@ -124,7 +107,7 @@ export async function POST(req: Request) {
   }
 
   // 3. Connect to sandbox
-  const sandbox = await connectVercelSandbox({ sandboxId });
+  const sandbox = await connectSandbox(task.sandboxState);
   const cwd = sandbox.workingDirectory;
 
   // 3a. Resolve live branch from sandbox

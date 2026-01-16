@@ -1,4 +1,4 @@
-import { connectVercelSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway } from "ai";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -13,7 +13,6 @@ const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
 
 interface CreateRepoRequest {
   taskId: string;
-  sandboxId: string;
   repoName: string;
   description?: string;
   isPrivate?: boolean;
@@ -35,8 +34,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId, sandboxId, repoName, description, isPrivate, taskTitle } =
-    body;
+  const { taskId, repoName, description, isPrivate, taskTitle } = body;
 
   if (!taskId) {
     return Response.json({ error: "Task ID is required" }, { status: 400 });
@@ -65,23 +63,8 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!sandboxId) {
-    return Response.json(
-      { error: "Sandbox not active. Please wait for sandbox to start." },
-      { status: 400 },
-    );
-  }
-  if (!task.sandboxId) {
-    return Response.json(
-      { error: "Sandbox not linked to task" },
-      { status: 400 },
-    );
-  }
-  if (task.sandboxId !== sandboxId) {
-    return Response.json(
-      { error: "Sandbox does not belong to this task" },
-      { status: 403 },
-    );
+  if (!task.sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   // 4. Get GitHub token for git operations
@@ -91,7 +74,7 @@ export async function POST(req: Request) {
   }
 
   // 5. Connect to sandbox
-  const sandbox = await connectVercelSandbox({ sandboxId });
+  const sandbox = await connectSandbox(task.sandboxState);
   const cwd = sandbox.workingDirectory;
 
   // 6. Check if there are any files to push

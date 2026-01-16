@@ -18,7 +18,8 @@ interface ConnectOptions {
  *
  * - Post-handoff (sandboxId present, no files): Reconnect directly to Vercel
  * - Post-handoff recovery (snapshotId present, no sandboxId, no files): Restore from snapshot
- * - Pre-handoff (files present): Restore JustBash state with pending operations
+ * - Inline handoff (sandboxId + files): Vercel ready, perform handoff now
+ * - Pre-handoff (files present, no sandboxId): Restore JustBash state with pending operations
  * - Fresh start (source present or empty): Create new JustBash sandbox
  */
 export async function connectHybrid(
@@ -47,6 +48,28 @@ export async function connectHybrid(
       { snapshotId: state.snapshotId },
       options,
     );
+    const hybrid = new HybridSandbox({
+      justBash: await connectJustBash({
+        workingDirectory: vercel.workingDirectory,
+      }),
+    });
+    await hybrid.performHandoff(vercel);
+    return hybrid;
+  }
+
+  // Pre-handoff but Vercel ready: Perform inline handoff
+  // (sandboxId + files means Vercel is ready but we haven't switched yet)
+  if (state.sandboxId && state.files) {
+    const vercel = await connectVercel({ sandboxId: state.sandboxId }, options);
+    // Replay pending operations
+    for (const op of state.pendingOperations ?? []) {
+      if (op.type === "mkdir") {
+        await vercel.mkdir(op.path, { recursive: op.recursive });
+      } else if (op.type === "writeFile") {
+        await vercel.writeFile(op.path, op.content, "utf-8");
+      }
+    }
+    // Create hybrid in post-handoff state
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({
         workingDirectory: vercel.workingDirectory,

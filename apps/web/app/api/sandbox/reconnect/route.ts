@@ -1,4 +1,4 @@
-import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
+import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 
@@ -11,10 +11,7 @@ export type ReconnectStatus =
 export type ReconnectResponse =
   | {
       status: "connected";
-      sandboxId: string;
-      createdAt: number;
-      timeout: number;
-      remainingTimeout: number;
+      hasSnapshot: boolean;
     }
   | {
       status: "expired" | "not_found" | "no_sandbox";
@@ -43,51 +40,26 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   // No sandbox to reconnect to
-  if (!task.sandboxId || !task.sandboxCreatedAt || !task.sandboxTimeout) {
+  if (!task.sandboxState) {
     return Response.json({
       status: "no_sandbox",
       hasSnapshot: !!task.snapshotUrl,
     } satisfies ReconnectResponse);
   }
 
-  // Check if sandbox might still be valid (with 10s buffer)
-  const expiresAt = task.sandboxCreatedAt.getTime() + task.sandboxTimeout;
-  const now = Date.now();
-  const remainingTimeout = expiresAt - now;
-
-  if (remainingTimeout < 10_000) {
-    // Clear stale sandbox metadata
-    await updateTask(taskId, {
-      sandboxId: null,
-      sandboxCreatedAt: null,
-      sandboxTimeout: null,
-    });
-
-    return Response.json({
-      status: "expired",
-      hasSnapshot: !!task.snapshotUrl,
-    } satisfies ReconnectResponse);
-  }
-
-  // Attempt to reconnect
+  // Attempt to connect using the unified API
   try {
-    await VercelSandboxSDK.get({ sandboxId: task.sandboxId });
+    await connectSandbox(task.sandboxState);
 
-    // Success - sandbox exists and is accessible
     return Response.json({
       status: "connected",
-      sandboxId: task.sandboxId,
-      createdAt: task.sandboxCreatedAt.getTime(),
-      timeout: task.sandboxTimeout,
-      remainingTimeout,
+      hasSnapshot: !!task.snapshotUrl,
     } satisfies ReconnectResponse);
   } catch {
-    // Sandbox no longer exists (was stopped or timed out on Vercel side)
-    // Clear sandbox info from task
+    // Sandbox no longer exists (was stopped or timed out)
+    // Clear sandbox state from task
     await updateTask(taskId, {
-      sandboxId: null,
-      sandboxCreatedAt: null,
-      sandboxTimeout: null,
+      sandboxState: null,
     });
 
     return Response.json({
