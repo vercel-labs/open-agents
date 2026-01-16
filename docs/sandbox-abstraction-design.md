@@ -808,8 +808,8 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 4. ~~**Move HybridSandbox** from `apps/web` to `packages/sandbox/hybrid/`~~ - **Done**
 5. ~~**Add connect functions** to each implementation folder~~ - **Done**
 6. ~~**Add `getState()` and `status`** to all sandbox implementations~~ - **Done**
-7. **Update web app** to use new API with single `sandboxState` column
-8. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)
+7. ~~**Update web app** to use new API with single `sandboxState` column~~ - **Done**
+8. ~~**Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)~~ - **Done**
 
 ---
 
