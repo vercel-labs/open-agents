@@ -59,6 +59,8 @@ sandbox related:
 - have concept of workspaces which are sandboxes that start (and tabs in the sidebar) - e.g. the equivalent of chats
 - like conductor, each workspace could have multiple chats? so we could referense one, that would be cool
 
+- what if for just-bash you had the code execution tool to send off things to run? 
+
 ---
 Web
 
