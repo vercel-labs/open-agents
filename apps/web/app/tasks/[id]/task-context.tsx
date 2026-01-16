@@ -16,6 +16,7 @@ import {
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { Task } from "@/lib/db/schema";
+import type { SandboxState } from "@open-harness/sandbox";
 import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
 import type { CachedDiffResponse } from "@/app/api/tasks/[id]/diff/cached/route";
 import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
@@ -81,6 +82,8 @@ type TaskChatContextValue = {
   fetchFiles: () => Promise<void>;
   /** Update task snapshot info after saving */
   updateTaskSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
+  /** Update sandbox type in task state */
+  setSandboxType: (type: "just-bash" | "vercel" | "hybrid") => void;
   /** Current status of sandbox reconnection attempt */
   reconnectionStatus: ReconnectionStatus;
   /** Attempt to reconnect to an existing sandbox */
@@ -176,6 +179,28 @@ export function TaskChatProvider({
   const updateTaskSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
       setTask((prev) => ({ ...prev, snapshotUrl, snapshotCreatedAt }));
+    },
+    [],
+  );
+
+  const setSandboxType = useCallback(
+    (type: "just-bash" | "vercel" | "hybrid") => {
+      setTask((prev) => {
+        if (!prev.sandboxState) {
+          // Create minimal sandboxState with just the type
+          return {
+            ...prev,
+            sandboxState: { type } as SandboxState,
+          };
+        }
+        return {
+          ...prev,
+          sandboxState: {
+            ...prev.sandboxState,
+            type,
+          } as SandboxState,
+        };
+      });
     },
     [],
   );
@@ -460,6 +485,7 @@ export function TaskChatProvider({
         fileCache,
         fetchFiles,
         updateTaskSnapshot,
+        setSandboxType,
         reconnectionStatus,
         attemptReconnection,
       }}

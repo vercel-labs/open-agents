@@ -68,13 +68,17 @@ const shikiThemes = ["github-dark", "github-dark"] as [
   BundledTheme,
 ];
 
+type CreateSandboxResponse = SandboxInfo & {
+  type: "just-bash" | "vercel" | "hybrid";
+};
+
 async function createSandbox(
   cloneUrl: string | undefined,
   branch: string | undefined,
   isNewBranch: boolean,
   taskId: string,
   sandboxType?: string,
-): Promise<SandboxInfo> {
+): Promise<CreateSandboxResponse> {
   const response = await fetch("/api/sandbox", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -92,7 +96,10 @@ async function createSandbox(
       `Failed to create sandbox: ${response.status}${text ? ` - ${text}` : ""}`,
     );
   }
-  return (await response.json()) as SandboxInfo;
+  const data = (await response.json()) as {
+    mode: "just-bash" | "vercel" | "hybrid";
+  } & SandboxInfo;
+  return { ...data, type: data.mode };
 }
 
 function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
@@ -234,7 +241,8 @@ function SandboxHeaderBadge({
   const secondsRemaining = Math.ceil(timeRemaining / 1000);
 
   // Warning state - show message with extend and close buttons
-  if (isWarning) {
+  // (not applicable to just-bash sandboxes since they're in-memory)
+  if (isWarning && sandboxType !== "just-bash") {
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs text-orange-500">
@@ -286,8 +294,8 @@ function SandboxHeaderBadge({
         </TooltipContent>
       </Tooltip>
 
-      {/* X button on hover */}
-      {isHovered && (
+      {/* X button on hover (not shown for in-memory sandboxes) */}
+      {isHovered && sandboxType !== "just-bash" && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -457,6 +465,7 @@ export function TaskDetailContent() {
     fetchFiles,
     triggerFileRefresh,
     updateTaskSnapshot,
+    setSandboxType,
     reconnectionStatus,
     attemptReconnection,
   } = useTaskChatContext();
@@ -618,7 +627,7 @@ export function TaskDetailContent() {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
 
-    let newSandbox: SandboxInfo | null = null;
+    let newSandbox: CreateSandboxResponse | null = null;
     try {
       // First create a new sandbox
       // Don't pass task.sandboxId - we're creating a fresh sandbox for restore,
@@ -638,6 +647,7 @@ export function TaskDetailContent() {
         task.sandboxState?.type ?? "hybrid",
       );
       setSandboxInfo(newSandbox);
+      setSandboxType(newSandbox.type);
 
       // Then restore the snapshot
       const response = await fetch("/api/sandbox/snapshot", {
@@ -685,6 +695,7 @@ export function TaskDetailContent() {
         task.sandboxState?.type ?? sandboxTypeParam ?? "hybrid",
       );
       setSandboxInfo(newSandbox);
+      setSandboxType(newSandbox.type);
     } catch (err) {
       console.error("Failed to create sandbox:", err);
     } finally {
@@ -699,6 +710,7 @@ export function TaskDetailContent() {
     task.sandboxState?.type,
     sandboxTypeParam,
     setSandboxInfo,
+    setSandboxType,
   ]);
 
   useEffect(() => {
@@ -764,6 +776,7 @@ export function TaskDetailContent() {
             sandboxTypeParam ?? "hybrid",
           );
           setSandboxInfo(newSandbox);
+          setSandboxType(newSandbox.type);
         } catch (err) {
           console.error("Failed to create sandbox:", err);
           return;
@@ -781,6 +794,7 @@ export function TaskDetailContent() {
     messages.length,
     sendMessage,
     setSandboxInfo,
+    setSandboxType,
     task.id,
     task.cloneUrl,
     task.branch,
