@@ -24,7 +24,7 @@ import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
 
 export type SandboxInfo = {
   createdAt: number;
-  timeout: number;
+  timeout: number | null;
   currentBranch?: string;
 };
 

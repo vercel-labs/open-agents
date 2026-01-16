@@ -210,7 +210,7 @@ export async function POST(req: Request) {
 
   return Response.json({
     createdAt: Date.now(),
-    timeout: DEFAULT_TIMEOUT,
+    timeout: sandboxType === "just-bash" ? null : DEFAULT_TIMEOUT,
     currentBranch: repoUrl ? branch : undefined,
     mode: sandboxType,
     timing: { readyMs },

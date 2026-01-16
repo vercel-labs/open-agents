@@ -104,6 +104,7 @@ async function createSandbox(
 
 function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
   if (!sandboxInfo) return false;
+  if (sandboxInfo.timeout === null) return true; // No timeout = always valid
   const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
   return Date.now() < expiresAt - 10_000;
 }
@@ -112,13 +113,15 @@ function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!sandboxInfo) {
+    if (!sandboxInfo || sandboxInfo.timeout === null) {
       setTimeRemaining(null);
       return;
     }
 
+    const { createdAt, timeout } = sandboxInfo;
+
     const updateTime = () => {
-      const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
+      const expiresAt = createdAt + timeout;
       const remaining = expiresAt - Date.now();
       setTimeRemaining(remaining > 0 ? remaining : 0);
     };
@@ -222,7 +225,12 @@ function SandboxHeaderBadge({
   }
 
   // Inactive - show gray dot
-  if (!sandboxInfo || timeRemaining === null || timeRemaining <= 0) {
+  // Note: timeRemaining is null for just-bash (no timeout), so check timeout !== null
+  if (
+    !sandboxInfo ||
+    (sandboxInfo.timeout !== null &&
+      (timeRemaining === null || timeRemaining <= 0))
+  ) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -237,12 +245,37 @@ function SandboxHeaderBadge({
     );
   }
 
+  // For just-bash (no timeout), skip countdown logic and show active state
+  if (sandboxInfo.timeout === null) {
+    return (
+      <div
+        className="flex items-center gap-1"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center p-1">
+              <span className="size-2.5 rounded-full bg-green-500" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8}>
+            Sandbox active (in-memory)
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  // At this point timeout is not null, so timeRemaining must be a number
+  // (we returned early for null timeout above, and the inactive check handles null/0 timeRemaining)
+  if (timeRemaining === null) return null;
+
   const isWarning = timeRemaining < WARNING_THRESHOLD_MS;
   const secondsRemaining = Math.ceil(timeRemaining / 1000);
 
   // Warning state - show message with extend and close buttons
-  // (not applicable to just-bash sandboxes since they're in-memory)
-  if (isWarning && sandboxType !== "just-bash") {
+  if (isWarning) {
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs text-orange-500">
