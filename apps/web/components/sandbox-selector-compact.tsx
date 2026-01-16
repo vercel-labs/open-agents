@@ -28,7 +28,7 @@ const SANDBOX_OPTIONS: SandboxOption[] = [
   {
     id: "hybrid",
     name: "Hybrid",
-    description: "Starts local, hands off to cloud",
+    description: "Starts in-memory, hands off to cloud",
   },
   {
     id: "vercel",
@@ -38,7 +38,7 @@ const SANDBOX_OPTIONS: SandboxOption[] = [
   {
     id: "just-bash",
     name: "Just Bash",
-    description: "Local bash-only sandbox",
+    description: "In-memory bash-only sandbox",
   },
 ];
 
