@@ -707,20 +707,34 @@ export function TaskDetailContent() {
 
   const handleSaveAndKill = useCallback(async () => {
     if (!sandboxInfo || isSavingSnapshotRef.current) return;
-    isSavingSnapshotRef.current = true;
-    setIsSavingSnapshot(true);
-    try {
-      const result = await saveSnapshot();
-      if (result.success && result.downloadUrl && result.createdAt) {
-        updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
+
+    // Only save snapshot for sandbox types that support it
+    // just-bash state is already persisted after each message via getState()
+    const supportsSnapshot = task.sandboxState?.type !== "just-bash";
+
+    if (supportsSnapshot) {
+      isSavingSnapshotRef.current = true;
+      setIsSavingSnapshot(true);
+      try {
+        const result = await saveSnapshot();
+        if (result.success && result.downloadUrl && result.createdAt) {
+          updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
+        }
+      } finally {
+        setIsSavingSnapshot(false);
+        isSavingSnapshotRef.current = false;
       }
-    } finally {
-      setIsSavingSnapshot(false);
-      isSavingSnapshotRef.current = false;
     }
-    // Kill sandbox after saving (regardless of save success)
+
+    // Kill sandbox (regardless of save result or type)
     await handleKillSandbox();
-  }, [sandboxInfo, updateTaskSnapshot, handleKillSandbox, saveSnapshot]);
+  }, [
+    sandboxInfo,
+    task.sandboxState?.type,
+    updateTaskSnapshot,
+    handleKillSandbox,
+    saveSnapshot,
+  ]);
 
   const handleExtendSandbox = async () => {
     if (!sandboxInfo) return;
