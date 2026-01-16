@@ -23,6 +23,7 @@ function HomePage() {
     cloneUrl?: string;
     isNewBranch: boolean;
     modelId: string;
+    sandboxType: string;
   }) => {
     setIsCreating(true);
     try {
@@ -35,8 +36,10 @@ function HomePage() {
         isNewBranch: input.isNewBranch,
         modelId: input.modelId,
       });
-      // Navigate to the task detail page
-      router.push(`/tasks/${task.id}`);
+      // Navigate to the task detail page with sandbox type
+      const sandboxParam =
+        input.sandboxType !== "hybrid" ? `?sandbox=${input.sandboxType}` : "";
+      router.push(`/tasks/${task.id}${sandboxParam}`);
     } catch (error) {
       console.error("Failed to create task:", error);
     } finally {

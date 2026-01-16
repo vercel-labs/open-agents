@@ -10,6 +10,11 @@ import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { RepoSelectorCompact } from "./repo-selector-compact";
 import { BranchSelectorCompact } from "./branch-selector-compact";
 import { ModelSelectorCompact } from "./model-selector-compact";
+import {
+  SandboxSelectorCompact,
+  DEFAULT_SANDBOX_TYPE,
+  type SandboxType,
+} from "./sandbox-selector-compact";
 import { ImageAttachmentsPreview } from "./image-attachments-preview";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 
@@ -23,6 +28,7 @@ interface TaskInputProps {
     isNewBranch: boolean;
     files?: FileUIPart[];
     modelId: string;
+    sandboxType: SandboxType;
   }) => void;
   isLoading?: boolean;
 }
@@ -35,6 +41,8 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
+  const [selectedSandbox, setSelectedSandbox] =
+    useState<SandboxType>(DEFAULT_SANDBOX_TYPE);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,6 +139,7 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
       isNewBranch,
       files: getFileParts(),
       modelId: selectedModel,
+      sandboxType: selectedSandbox,
     });
     setPrompt("");
     clearImages();
@@ -266,6 +275,11 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
           <ModelSelectorCompact
             value={selectedModel}
             onChange={setSelectedModel}
+          />
+
+          <SandboxSelectorCompact
+            value={selectedSandbox}
+            onChange={setSelectedSandbox}
           />
 
           <RepoSelectorCompact

@@ -31,6 +31,7 @@ interface CreateSandboxRequest {
   isNewBranch?: boolean;
   taskId?: string;
   sandboxId?: string;
+  sandboxType?: "hybrid" | "vercel" | "just-bash";
 }
 
 export async function POST(req: Request) {
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     isNewBranch = false,
     taskId,
     sandboxId: providedSandboxId,
+    sandboxType = "hybrid",
   } = body;
 
   // Get user's GitHub token
@@ -98,13 +100,13 @@ export async function POST(req: Request) {
   }
 
   // ============================================
-  // NEW SANDBOX: Hybrid approach
+  // NEW SANDBOX: Create based on sandboxType
   // ============================================
   const startTime = Date.now();
 
-  // Download and extract tarball if repo provided
+  // Download and extract tarball if repo provided (needed for hybrid and just-bash)
   let files: Record<string, FileEntry> = {};
-  if (repoUrl) {
+  if (repoUrl && (sandboxType === "hybrid" || sandboxType === "just-bash")) {
     let tarballResult;
     try {
       tarballResult = await downloadAndExtractTarball(
@@ -125,46 +127,78 @@ export async function POST(req: Request) {
     files = toFileEntries(tarballResult.files);
   }
 
-  const sandbox = await connectSandbox({
-    state: {
-      type: "hybrid",
-      files,
-      workingDirectory: WORKING_DIR,
-      source: repoUrl
-        ? {
-            repo: repoUrl,
-            branch: isNewBranch ? undefined : branch,
-            token: githubToken,
-          }
-        : undefined,
-    },
-    options: {
-      env: { GITHUB_TOKEN: githubToken },
-      gitUser,
-      scheduleBackgroundWork: (cb) => after(cb),
-      hooks: taskId
-        ? {
-            onCloudSandboxReady: async (sandboxId) => {
-              const currentTask = await getTaskById(taskId);
-              if (currentTask?.sandboxState?.type === "hybrid") {
-                await updateTask(taskId, {
-                  sandboxState: { type: "hybrid", sandboxId },
-                });
-                console.log(
-                  `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
+  const source = repoUrl
+    ? {
+        repo: repoUrl,
+        branch: isNewBranch ? undefined : branch,
+        token: githubToken,
+      }
+    : undefined;
+
+  let sandbox;
+
+  if (sandboxType === "just-bash") {
+    // Local-only sandbox
+    sandbox = await connectSandbox({
+      state: {
+        type: "just-bash",
+        files,
+        workingDirectory: WORKING_DIR,
+        source,
+      },
+      options: {
+        env: { GITHUB_TOKEN: githubToken },
+      },
+    });
+  } else if (sandboxType === "vercel") {
+    // Cloud-first sandbox
+    sandbox = await connectSandbox({
+      state: {
+        type: "vercel",
+        source,
+      },
+      options: {
+        env: { GITHUB_TOKEN: githubToken },
+        gitUser,
+      },
+    });
+  } else {
+    // Default: hybrid sandbox (local first, then cloud)
+    sandbox = await connectSandbox({
+      state: {
+        type: "hybrid",
+        files,
+        workingDirectory: WORKING_DIR,
+        source,
+      },
+      options: {
+        env: { GITHUB_TOKEN: githubToken },
+        gitUser,
+        scheduleBackgroundWork: (cb) => after(cb),
+        hooks: taskId
+          ? {
+              onCloudSandboxReady: async (sandboxId) => {
+                const currentTask = await getTaskById(taskId);
+                if (currentTask?.sandboxState?.type === "hybrid") {
+                  await updateTask(taskId, {
+                    sandboxState: { type: "hybrid", sandboxId },
+                  });
+                  console.log(
+                    `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
+                  );
+                }
+              },
+              onCloudSandboxFailed: async (error) => {
+                console.error(
+                  `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
+                  error.message,
                 );
-              }
-            },
-            onCloudSandboxFailed: async (error) => {
-              console.error(
-                `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
-                error.message,
-              );
-            },
-          }
-        : undefined,
-    },
-  });
+              },
+            }
+          : undefined,
+      },
+    });
+  }
 
   if (taskId && sandbox.getState) {
     await updateTask(taskId, {
@@ -178,7 +212,7 @@ export async function POST(req: Request) {
     createdAt: Date.now(),
     timeout: DEFAULT_TIMEOUT,
     currentBranch: repoUrl ? branch : undefined,
-    mode: "hybrid",
+    mode: sandboxType,
     timing: { readyMs },
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { isToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
 import { Children, cloneElement, isValidElement } from "react";
@@ -73,6 +73,7 @@ async function createSandbox(
   branch: string | undefined,
   isNewBranch: boolean,
   taskId: string,
+  sandboxType?: string,
 ): Promise<SandboxInfo> {
   const response = await fetch("/api/sandbox", {
     method: "POST",
@@ -82,6 +83,7 @@ async function createSandbox(
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       taskId,
+      sandboxType: sandboxType ?? "hybrid",
     }),
   });
   if (!response.ok) {
@@ -126,6 +128,7 @@ const WARNING_THRESHOLD_MS = 60_000; // Show warning when < 1 minute remaining
 
 function SandboxHeaderBadge({
   sandboxInfo,
+  sandboxType,
   isCreating,
   isSavingSnapshot,
   isRestoring,
@@ -135,6 +138,7 @@ function SandboxHeaderBadge({
   onSaveAndKill,
 }: {
   sandboxInfo: SandboxInfo | null;
+  sandboxType?: string;
   isCreating: boolean;
   isSavingSnapshot: boolean;
   isRestoring: boolean;
@@ -278,7 +282,7 @@ function SandboxHeaderBadge({
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
-          Sandbox active
+          {sandboxType ? `Sandbox active (${sandboxType})` : "Sandbox active"}
         </TooltipContent>
       </Tooltip>
 
@@ -362,6 +366,12 @@ function formatDate(date: Date): string {
 
 export function TaskDetailContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sandboxTypeParam = searchParams.get("sandbox") as
+    | "hybrid"
+    | "vercel"
+    | "just-bash"
+    | null;
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
@@ -625,6 +635,7 @@ export function TaskDetailContent() {
         task.branch ?? undefined,
         useNewBranch,
         task.id,
+        task.sandboxState?.type ?? "hybrid",
       );
       setSandboxInfo(newSandbox);
 
@@ -671,6 +682,7 @@ export function TaskDetailContent() {
         task.branch ?? undefined,
         shouldCreateNewBranch,
         task.id,
+        task.sandboxState?.type ?? sandboxTypeParam ?? "hybrid",
       );
       setSandboxInfo(newSandbox);
     } catch (err) {
@@ -684,6 +696,8 @@ export function TaskDetailContent() {
     task.cloneUrl,
     task.branch,
     task.id,
+    task.sandboxState?.type,
+    sandboxTypeParam,
     setSandboxInfo,
   ]);
 
@@ -747,6 +761,7 @@ export function TaskDetailContent() {
             task.branch ?? undefined,
             shouldCreateNewBranch,
             task.id,
+            sandboxTypeParam ?? "hybrid",
           );
           setSandboxInfo(newSandbox);
         } catch (err) {
@@ -771,6 +786,7 @@ export function TaskDetailContent() {
     task.branch,
     task.isNewBranch,
     task.prNumber,
+    sandboxTypeParam,
     task.title,
   ]);
 
@@ -903,6 +919,7 @@ export function TaskDetailContent() {
             </div>
             <SandboxHeaderBadge
               sandboxInfo={sandboxInfo}
+              sandboxType={task.sandboxState?.type}
               isCreating={isCreatingSandbox}
               isSavingSnapshot={isSavingSnapshot}
               isRestoring={isRestoringSnapshot}
