@@ -5,36 +5,10 @@ import type {
   SandboxStats,
   ExecResult,
   SandboxHooks,
-} from "./interface";
+} from "../interface";
+import type { JustBashSnapshot } from "./snapshot";
 
 const MAX_OUTPUT_LENGTH = 50_000;
-
-/**
- * File entry in a JustBash snapshot.
- */
-interface SnapshotFileEntry {
-  type: "file" | "directory" | "symlink";
-  /** File content (UTF-8 text or base64 for binary) */
-  content?: string;
-  /** Set to "base64" for binary files */
-  encoding?: "base64";
-  /** File permissions */
-  mode?: number;
-  /** Symlink target path */
-  target?: string;
-}
-
-/**
- * Snapshot format for persisting JustBash state across serverless invocations.
- *
- * Only files under the working directory are included - system files
- * (`/bin`, `/proc`, `/dev`, `/usr`) are recreated automatically by JustBash.
- */
-export interface JustBashSnapshot {
-  workingDirectory: string;
-  env: Record<string, string>;
-  files: Record<string, SnapshotFileEntry>;
-}
 
 export interface JustBashSandboxConfig {
   /**

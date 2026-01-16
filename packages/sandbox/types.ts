@@ -1,0 +1,34 @@
+/**
+ * Source configuration for cloning a git repository into a sandbox.
+ */
+export interface Source {
+  /** GitHub repository URL (e.g., "https://github.com/owner/repo") */
+  repo: string;
+  /** Branch to clone (defaults to "main") */
+  branch?: string;
+  /** Token for authenticated git access (e.g., GitHub PAT). Enables push operations. */
+  token?: string;
+}
+
+/**
+ * File entry representing a file, directory, or symlink in the sandbox filesystem.
+ * Used for serialization/deserialization of sandbox state.
+ */
+export interface FileEntry {
+  type: "file" | "directory" | "symlink";
+  /** File content (UTF-8 text or base64 for binary) */
+  content?: string;
+  /** Set to "base64" for binary files */
+  encoding?: "base64";
+  /** File permissions */
+  mode?: number;
+  /** Symlink target path */
+  target?: string;
+}
+
+/**
+ * Operation pending replay during hybrid sandbox handoff.
+ */
+export type PendingOperation =
+  | { type: "writeFile"; path: string; content: string }
+  | { type: "mkdir"; path: string; recursive: boolean };

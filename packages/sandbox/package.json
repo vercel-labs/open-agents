@@ -5,7 +5,17 @@
   "type": "module",
   "main": "./index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./interface.js": "./interface.ts",
+    "./types.js": "./types.ts",
+    "./local/index.js": "./local/index.ts",
+    "./local/sandbox.js": "./local/sandbox.ts",
+    "./vercel/index.js": "./vercel/index.ts",
+    "./vercel/sandbox.js": "./vercel/sandbox.ts",
+    "./vercel/config.js": "./vercel/config.ts",
+    "./just-bash/index.js": "./just-bash/index.ts",
+    "./just-bash/sandbox.js": "./just-bash/sandbox.ts",
+    "./just-bash/snapshot.js": "./just-bash/snapshot.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

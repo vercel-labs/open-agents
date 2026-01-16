@@ -1,3 +1,4 @@
+// interface
 export type {
   Sandbox,
   SandboxStats,
@@ -8,13 +9,22 @@ export type {
   SnapshotResult,
   RestoreOptions,
 } from "./interface";
+
+// shared types
+export type { Source, FileEntry, PendingOperation } from "./types";
+
+// local
 export { LocalSandbox, createLocalSandbox } from "./local";
+
+// vercel
 export {
   VercelSandbox,
   connectVercelSandbox,
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,
 } from "./vercel";
+
+// just-bash
 export {
   JustBashSandbox,
   createJustBashSandbox,
