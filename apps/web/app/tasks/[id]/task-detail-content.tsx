@@ -945,27 +945,43 @@ export function TaskDetailContent() {
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDiffPanel(!showDiffPanel)}
-              disabled={!sandboxInfo && !task.cachedDiff}
-            >
-              <GitCompare className="mr-2 h-4 w-4" />
-              Diff
-              {diffCache.data &&
-                (diffCache.data.summary.totalAdditions > 0 ||
-                  diffCache.data.summary.totalDeletions > 0) && (
-                  <span className="ml-2 text-xs">
-                    <span className="text-green-500">
-                      +{diffCache.data.summary.totalAdditions}
-                    </span>{" "}
-                    <span className="text-red-400">
-                      -{diffCache.data.summary.totalDeletions}
-                    </span>
+            {task.sandboxState?.type === "just-bash" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button variant="ghost" size="sm" disabled>
+                      <GitCompare className="mr-2 h-4 w-4" />
+                      Diff
+                    </Button>
                   </span>
-                )}
-            </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8}>
+                  Not available for in-memory sandboxes
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDiffPanel(!showDiffPanel)}
+                disabled={!diffCache.data && !task.cachedDiff}
+              >
+                <GitCompare className="mr-2 h-4 w-4" />
+                Diff
+                {diffCache.data &&
+                  (diffCache.data.summary.totalAdditions > 0 ||
+                    diffCache.data.summary.totalDeletions > 0) && (
+                    <span className="ml-2 text-xs">
+                      <span className="text-green-500">
+                        +{diffCache.data.summary.totalAdditions}
+                      </span>{" "}
+                      <span className="text-red-400">
+                        -{diffCache.data.summary.totalDeletions}
+                      </span>
+                    </span>
+                  )}
+              </Button>
+            )}
             {task?.cloneUrl ? (
               // Task has a repo - show PR buttons
               task?.prNumber ? (
