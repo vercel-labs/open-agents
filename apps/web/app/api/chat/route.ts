@@ -148,10 +148,42 @@ export async function POST(req: Request) {
         }
 
         // Persist sandbox state
+        // For hybrid sandboxes, we need to be careful not to overwrite the sandboxId
+        // that may have been set by background work (the onCloudSandboxReady hook)
         if (sandbox.getState) {
           try {
+            const currentState = sandbox.getState() as SandboxState;
+
+            // For hybrid sandboxes in pre-handoff state (has files, no sandboxId),
+            // check if background work has already set a sandboxId we should preserve
+            if (
+              currentState.type === "hybrid" &&
+              "files" in currentState &&
+              !currentState.sandboxId
+            ) {
+              const currentTask = await getTaskById(taskId);
+              if (
+                currentTask?.sandboxState?.type === "hybrid" &&
+                currentTask.sandboxState.sandboxId
+              ) {
+                // Background work has completed - use the sandboxId from DB
+                // but also include pending operations from this session
+                await updateTask(taskId, {
+                  sandboxState: {
+                    type: "hybrid",
+                    sandboxId: currentTask.sandboxState.sandboxId,
+                    pendingOperations:
+                      "pendingOperations" in currentState
+                        ? currentState.pendingOperations
+                        : undefined,
+                  },
+                });
+                return;
+              }
+            }
+
             await updateTask(taskId, {
-              sandboxState: sandbox.getState() as SandboxState,
+              sandboxState: currentState,
             });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);
