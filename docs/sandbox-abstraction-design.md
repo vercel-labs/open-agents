@@ -417,7 +417,9 @@ interface Sandbox {
 
 ## Prerequisite: Folder Restructure
 
-Before implementing this abstraction, complete the [Sandbox Folder Restructure](./sandbox-folder-restructure.md) task.
+~~Before implementing this abstraction, complete the [Sandbox Folder Restructure](./sandbox-folder-restructure.md) task.~~
+
+**Done** - see [Sandbox Folder Restructure](./sandbox-folder-restructure.md).
 
 This reorganizes sandbox implementations from single files into self-contained folders:
 

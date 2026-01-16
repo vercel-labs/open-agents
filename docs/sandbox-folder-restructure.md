@@ -1,5 +1,7 @@
 # Sandbox Folder Restructure
 
+**Status: Complete** (commit `b6af16f`)
+
 Prerequisite task for the [Sandbox Abstraction Design](./sandbox-abstraction-design.md).
 
 ## Goal
