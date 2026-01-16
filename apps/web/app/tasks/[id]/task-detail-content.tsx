@@ -508,7 +508,7 @@ export function TaskDetailContent() {
     } finally {
       clearSandboxInfo();
     }
-  }, [task.id, clearSandboxInfo]);
+  }, [sandboxInfo, task.id, clearSandboxInfo]);
 
   const saveSnapshot = useCallback(async (): Promise<{
     success: boolean;

@@ -61,14 +61,30 @@ export async function connectHybrid(
   // (sandboxId + files means Vercel is ready but we haven't switched yet)
   if (state.sandboxId && state.files) {
     const vercel = await connectVercel({ sandboxId: state.sandboxId }, options);
-    // Replay pending operations
-    for (const op of state.pendingOperations ?? []) {
-      if (op.type === "mkdir") {
-        await vercel.mkdir(op.path, { recursive: op.recursive });
-      } else if (op.type === "writeFile") {
-        await vercel.writeFile(op.path, op.content, "utf-8");
+
+    // Replay pending operations with error tracking
+    const pendingOps = state.pendingOperations ?? [];
+    const errors: string[] = [];
+    for (const op of pendingOps) {
+      try {
+        if (op.type === "mkdir") {
+          await vercel.mkdir(op.path, { recursive: op.recursive });
+        } else if (op.type === "writeFile") {
+          await vercel.writeFile(op.path, op.content, "utf-8");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Failed to replay ${op.type} for ${op.path}: ${message}`);
       }
     }
+
+    if (errors.length > 0) {
+      console.warn(
+        `[HybridSandbox] Inline handoff replay errors (${errors.length}/${pendingOps.length}):`,
+        errors,
+      );
+    }
+
     // Create hybrid in post-handoff state
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({

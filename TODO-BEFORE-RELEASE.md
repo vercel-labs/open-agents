@@ -20,6 +20,7 @@
 
 ### Sandbox Setup
 - [ ] Ensure pnpm install runs during sandbox setup
+- [ ] interesting idea with just-bash that we allow the user to start in read-only mode and then offer to switch to full sandbox if needed (e.g. if the agent wants to write files or run files)
 
 ### Nice to Have
 - [ ] Add terminal view in tasks (terminal implementation exists elsewhere)

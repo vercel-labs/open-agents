@@ -8,15 +8,10 @@ export type ReconnectStatus =
   | "not_found"
   | "no_sandbox";
 
-export type ReconnectResponse =
-  | {
-      status: "connected";
-      hasSnapshot: boolean;
-    }
-  | {
-      status: "expired" | "not_found" | "no_sandbox";
-      hasSnapshot: boolean;
-    };
+export type ReconnectResponse = {
+  status: ReconnectStatus;
+  hasSnapshot: boolean;
+};
 
 export async function GET(req: Request): Promise<Response> {
   const session = await getServerSession();
@@ -39,7 +34,7 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // No sandbox to reconnect to
+  // No sandbox state at all
   if (!task.sandboxState) {
     return Response.json({
       status: "no_sandbox",
@@ -47,23 +42,28 @@ export async function GET(req: Request): Promise<Response> {
     } satisfies ReconnectResponse);
   }
 
-  // Attempt to connect using the unified API
-  try {
-    await connectSandbox(task.sandboxState);
+  const state = task.sandboxState;
 
+  // Pre-handoff hybrid (has files) - always available since JustBash is in-memory
+  if (state.type === "hybrid" && state.files) {
+    return Response.json({
+      status: "connected",
+      hasSnapshot: !!task.snapshotUrl,
+    } satisfies ReconnectResponse);
+  }
+
+  // Post-handoff hybrid or Vercel - has sandboxId, try to connect
+  try {
+    await connectSandbox(state);
     return Response.json({
       status: "connected",
       hasSnapshot: !!task.snapshotUrl,
     } satisfies ReconnectResponse);
   } catch {
-    // Sandbox no longer exists (was stopped or timed out)
-    // Clear sandbox state from task
-    await updateTask(taskId, {
-      sandboxState: null,
-    });
-
+    // Sandbox no longer exists (expired or stopped)
+    await updateTask(taskId, { sandboxState: null });
     return Response.json({
-      status: "not_found",
+      status: "expired",
       hasSnapshot: !!task.snapshotUrl,
     } satisfies ReconnectResponse);
   }

@@ -151,11 +151,11 @@ export function TaskChatProvider({
       const data = (await response.json()) as ReconnectResponse;
 
       if (data.status === "connected") {
-        // Sandbox is still alive - set minimal info for UI
+        // Sandbox is still alive - set info for UI
         // (actual sandbox connection happens server-side via task.sandboxState)
         setSandboxInfoState({
           createdAt: Date.now(),
-          timeout: 300_000, // 5 minutes default
+          timeout: 300_000, // 5 minutes default for UI display
         });
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {

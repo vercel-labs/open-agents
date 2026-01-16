@@ -206,6 +206,12 @@ export async function POST(req: Request) {
 /**
  * Start Vercel sandbox in background.
  * This function is fire-and-forget - errors are logged but not thrown.
+ *
+ * Note: There's a small race window when updating sandboxState. If a chat
+ * request updates pendingOperations concurrently, those changes could be
+ * overwritten. However, the window is very small (single DB read-write cycle)
+ * and the impact is limited (pending ops would be replayed again on next
+ * handoff attempt). Proper fix would require atomic JSON field updates.
  */
 async function startVercelInBackground(options: {
   taskId: string;
@@ -240,19 +246,28 @@ async function startVercelInBackground(options: {
     });
 
     // Update sandboxState with sandboxId - this signals handoff should happen
+    // Re-read task immediately before update to minimize race window
     const task = await getTaskById(taskId);
-    if (task?.sandboxState?.type === "hybrid") {
+    if (task?.sandboxState?.type === "hybrid" && task.sandboxState.files) {
+      // Only update if still in pre-handoff state (files present)
+      // This prevents updating if handoff already occurred
       await updateTask(taskId, {
         sandboxState: {
           ...task.sandboxState,
           sandboxId: sandbox.id,
         },
       });
+      console.log(
+        `[Sandbox] Vercel ready in background for task ${taskId}: ${sandbox.id}`,
+      );
+    } else {
+      // State changed - sandbox may have already been handed off or cleared
+      console.log(
+        `[Sandbox] Vercel ready but state changed for task ${taskId}, skipping update`,
+      );
+      // Stop the unused sandbox to free resources
+      await sandbox.stop();
     }
-
-    console.log(
-      `[Sandbox] Vercel ready in background for task ${taskId}: ${sandbox.id}`,
-    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(
