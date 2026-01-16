@@ -1,4 +1,4 @@
-import { connectSandbox, HybridSandbox } from "@open-harness/sandbox";
+import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import { convertToModelMessages, gateway } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
@@ -148,9 +148,11 @@ export async function POST(req: Request) {
         }
 
         // Persist sandbox state
-        if (sandbox instanceof HybridSandbox) {
+        if (sandbox.getState) {
           try {
-            await updateTask(taskId, { sandboxState: sandbox.getState() });
+            await updateTask(taskId, {
+              sandboxState: sandbox.getState() as SandboxState,
+            });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);
           }

@@ -280,6 +280,10 @@ export interface Sandbox {
    * Get the current state of the sandbox for persistence/restoration.
    * Returns state that can be passed to `connectSandbox()` to restore.
    * Not all sandbox implementations support state persistence.
+   *
+   * TODO: Return `SandboxState` instead of `unknown`. Currently returns `unknown`
+   * due to circular dependency (factory.ts imports from interface.ts). Fix by
+   * moving `SandboxState` to a shared types file.
    */
   getState?(): unknown;
 }
