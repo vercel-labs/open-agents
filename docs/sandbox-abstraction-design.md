@@ -801,12 +801,12 @@ Currently source is only included when needed (e.g., hybrid pre-handoff where Ve
 
 ## Migration Path
 
-0. **Complete folder restructure** (see [sandbox-folder-restructure.md](./sandbox-folder-restructure.md))
-1. **Define shared types** in `packages/sandbox/types.ts`
-2. **Add state types** to each implementation folder (`*/connect.ts`)
-3. **Create factory** in `packages/sandbox/factory.ts`
-4. **Move HybridSandbox** from `apps/web` to `packages/sandbox/hybrid/`
-5. **Add connect functions** to each implementation folder
-6. **Add `getState()` and `status`** to all sandbox implementations
+0. ~~**Complete folder restructure**~~ (see [sandbox-folder-restructure.md](./sandbox-folder-restructure.md)) - **Done**
+1. ~~**Define shared types** in `packages/sandbox/types.ts`~~ - **Done**
+2. ~~**Add state types** to each implementation folder (`*/state.ts`)~~ - **Done**
+3. ~~**Create factory** in `packages/sandbox/factory.ts`~~ - **Done**
+4. ~~**Move HybridSandbox** from `apps/web` to `packages/sandbox/hybrid/`~~ - **Done**
+5. ~~**Add connect functions** to each implementation folder~~ - **Done**
+6. ~~**Add `getState()` and `status`** to all sandbox implementations~~ - **Done**
 7. **Update web app** to use new API with single `sandboxState` column
 8. **Remove old schema fields** (`sandboxMode`, `vercelStatus`, `justBashSnapshot`, `pendingOperations`)

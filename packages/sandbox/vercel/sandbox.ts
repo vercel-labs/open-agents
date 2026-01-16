@@ -10,6 +10,8 @@ import type {
   RestoreOptions,
 } from "../interface";
 import type { VercelSandboxConfig, VercelSandboxConnectConfig } from "./config";
+import type { VercelState } from "./state";
+import type { SandboxStatus } from "../types";
 
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
@@ -711,6 +713,25 @@ export class VercelSandbox implements Sandbox {
     }
 
     await this.sdk.stop();
+  }
+
+  /**
+   * Get the current status of the sandbox.
+   */
+  get status(): SandboxStatus {
+    if (this.isStopped) return "stopped";
+    return "ready";
+  }
+
+  /**
+   * Get the current state for persistence.
+   * Returns state that can be passed to `connectSandbox()` to restore this sandbox.
+   */
+  getState(): { type: "vercel" } & VercelState {
+    return {
+      type: "vercel",
+      sandboxId: this.id,
+    };
   }
 }
 

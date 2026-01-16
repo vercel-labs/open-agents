@@ -7,6 +7,8 @@ import type {
   SandboxHooks,
 } from "../interface";
 import type { JustBashSnapshot } from "./snapshot";
+import type { JustBashState } from "./state";
+import type { SandboxStatus } from "../types";
 
 const MAX_OUTPUT_LENGTH = 50_000;
 
@@ -315,6 +317,28 @@ export class JustBashSandbox implements Sandbox {
       await this.hooks.beforeStop(this);
     }
     // No resources to clean up for just-bash
+  }
+
+  /**
+   * Get the current status of the sandbox.
+   * JustBash is always ready since it's in-memory.
+   */
+  get status(): SandboxStatus {
+    return "ready";
+  }
+
+  /**
+   * Get the current state for persistence.
+   * Returns state that can be passed to `connectSandbox()` to restore this sandbox.
+   */
+  getState(): { type: "just-bash" } & JustBashState {
+    const snapshot = this.serialize();
+    return {
+      type: "just-bash",
+      files: snapshot.files,
+      workingDirectory: snapshot.workingDirectory,
+      env: snapshot.env,
+    };
   }
 
   /**
