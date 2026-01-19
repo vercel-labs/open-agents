@@ -6,6 +6,7 @@ import type {
   ApprovalRule,
 } from "../types";
 import type { Sandbox } from "@open-harness/sandbox";
+import type { ModelMessage } from "ai";
 
 /**
  * Check if a file path is within a given directory.
@@ -167,3 +168,28 @@ export function pathMatchesGlob(
     return false;
   }
 }
+
+
+export type ToolNeedsApprovalFunction<INPUT> = (
+  input: INPUT,
+  options: {
+    /**
+     * The ID of the tool call. You can use it e.g. when sending tool-call related information with stream data.
+     */
+    toolCallId: string;
+
+    /**
+     * Messages that were sent to the language model to initiate the response that contained the tool call.
+     * The messages **do not** include the system prompt nor the assistant response that contained the tool call.
+     */
+    messages: ModelMessage[];
+
+    /**
+     * Additional context.
+     *
+     * Experimental (can break in patch releases).
+     */
+    experimental_context?: unknown;
+  },
+) => boolean | PromiseLike<boolean>;
+
