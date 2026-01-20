@@ -17,7 +17,7 @@ import { StatusBar, StandaloneTodoList } from "./components/status-bar";
 import { InputBox } from "./components/input-box";
 import { Header } from "./components/header";
 import { defaultModelLabel } from "@open-harness/agent";
-import { AVAILABLE_MODELS, getModelDisplayName } from "./lib/models";
+import { getModelDisplayName } from "./lib/models";
 import type { SlashCommandAction } from "./lib/slash-commands";
 import { pasteCollapseLineThreshold } from "./config";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
@@ -646,10 +646,9 @@ function AppContent({ options }: AppProps) {
         <SettingsPanel
           title="Select model"
           description="Choose the AI model for this session"
-          options={AVAILABLE_MODELS.map((m) => ({
+          options={state.availableModels.map((m) => ({
             id: m.id,
             name: m.name,
-            description: m.description,
             meta: m.pricing
               ? `${m.pricing.input} in · ${m.pricing.output} out`
               : undefined,

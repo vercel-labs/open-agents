@@ -15,6 +15,7 @@ type SettingsPanelProps = {
   currentId: string;
   onSelect: (id: string) => void;
   onCancel: () => void;
+  maxVisible?: number;
 };
 
 export function SettingsPanel({
@@ -24,6 +25,7 @@ export function SettingsPanel({
   currentId,
   onSelect,
   onCancel,
+  maxVisible = 10,
 }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -39,20 +41,37 @@ export function SettingsPanel({
     );
   }, [options, searchQuery]);
 
-  // Reset selection when filtered options change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [filteredOptions.length]);
-
-  // Set initial selection to current value
+  // Update selection when filtered options change - prefer current value, fallback to 0
   useEffect(() => {
     const currentIndex = filteredOptions.findIndex(
       (opt) => opt.id === currentId,
     );
-    if (currentIndex !== -1) {
-      setSelectedIndex(currentIndex);
-    }
+    setSelectedIndex(currentIndex !== -1 ? currentIndex : 0);
   }, [currentId, filteredOptions]);
+
+  // Calculate visible window of options
+  const { visibleOptions, startIndex } = useMemo(() => {
+    const total = filteredOptions.length;
+    if (total <= maxVisible) {
+      return { visibleOptions: filteredOptions, startIndex: 0 };
+    }
+
+    // Calculate window to keep selected item visible with context
+    const halfWindow = Math.floor(maxVisible / 2);
+    let start = selectedIndex - halfWindow;
+
+    // Clamp to valid range
+    if (start < 0) {
+      start = 0;
+    } else if (start + maxVisible > total) {
+      start = total - maxVisible;
+    }
+
+    return {
+      visibleOptions: filteredOptions.slice(start, start + maxVisible),
+      startIndex: start,
+    };
+  }, [filteredOptions, selectedIndex, maxVisible]);
 
   useInput((input, key) => {
     // Escape to cancel
@@ -70,15 +89,15 @@ export function SettingsPanel({
       return;
     }
 
-    // Navigation
+    // Navigation (vim keys only work when not searching)
     const goUp =
       key.upArrow ||
-      input === "k" ||
+      (!searchQuery && input === "k") ||
       (key.ctrl && input === "p") ||
       (key.shift && key.tab);
     const goDown =
       key.downArrow ||
-      input === "j" ||
+      (!searchQuery && input === "j") ||
       (key.ctrl && input === "n") ||
       (!key.shift && key.tab);
 
@@ -146,40 +165,60 @@ export function SettingsPanel({
         {filteredOptions.length === 0 ? (
           <Text color="gray">No matching options</Text>
         ) : (
-          filteredOptions.map((option, index) => {
-            const isSelected = index === selectedIndex;
-            const isCurrent = option.id === currentId;
-
-            return (
-              <Box key={option.id} flexDirection="column">
-                <Box>
-                  {/* Selection indicator */}
-                  <Text color="yellow">{isSelected ? "› " : "  "}</Text>
-
-                  {/* Current indicator (checkmark) */}
-                  <Text color="green">{isCurrent ? "✓ " : "  "}</Text>
-
-                  {/* Option number and name */}
-                  <Text
-                    color={isSelected ? "yellow" : undefined}
-                    bold={isSelected}
-                  >
-                    {index + 1}. {option.name}
-                  </Text>
-
-                  {/* Meta info (e.g., pricing) */}
-                  {option.meta && <Text color="gray"> · {option.meta}</Text>}
-                </Box>
-
-                {/* Description on separate line */}
-                {option.description && (
-                  <Box marginLeft={6}>
-                    <Text color="gray">{option.description}</Text>
-                  </Box>
-                )}
+          <>
+            {/* Scroll up indicator */}
+            {startIndex > 0 && (
+              <Box marginBottom={0}>
+                <Text color="gray"> ↑ {startIndex} more above</Text>
               </Box>
-            );
-          })
+            )}
+
+            {visibleOptions.map((option, visibleIndex) => {
+              const actualIndex = startIndex + visibleIndex;
+              const isSelected = actualIndex === selectedIndex;
+              const isCurrent = option.id === currentId;
+
+              return (
+                <Box key={option.id} flexDirection="column">
+                  <Box>
+                    {/* Selection indicator */}
+                    <Text color="yellow">{isSelected ? "› " : "  "}</Text>
+
+                    {/* Current indicator (checkmark) */}
+                    <Text color="green">{isCurrent ? "✓ " : "  "}</Text>
+
+                    {/* Option number and name */}
+                    <Text
+                      color={isSelected ? "yellow" : undefined}
+                      bold={isSelected}
+                    >
+                      {actualIndex + 1}. {option.name}
+                    </Text>
+
+                    {/* Meta info (e.g., pricing) */}
+                    {option.meta && <Text color="gray"> · {option.meta}</Text>}
+                  </Box>
+
+                  {/* Description on separate line */}
+                  {option.description && (
+                    <Box marginLeft={6}>
+                      <Text color="gray">{option.description}</Text>
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+
+            {/* Scroll down indicator */}
+            {startIndex + maxVisible < filteredOptions.length && (
+              <Box marginTop={0}>
+                <Text color="gray">
+                  {"    "}↓ {filteredOptions.length - startIndex - maxVisible}{" "}
+                  more below
+                </Text>
+              </Box>
+            )}
+          </>
         )}
       </Box>
 
