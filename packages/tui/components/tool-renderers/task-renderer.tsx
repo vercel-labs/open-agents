@@ -1,8 +1,8 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { ToolSpinner } from "./shared.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { ToolSpinner } from "./shared";
 
 /**
  * Simplified tool call renderer for subagent tool parts.

@@ -169,7 +169,6 @@ export function pathMatchesGlob(
   }
 }
 
-
 export type ToolNeedsApprovalFunction<INPUT> = (
   input: INPUT,
   options: {
@@ -192,4 +191,3 @@ export type ToolNeedsApprovalFunction<INPUT> = (
     experimental_context?: unknown;
   },
 ) => boolean | PromiseLike<boolean>;
-

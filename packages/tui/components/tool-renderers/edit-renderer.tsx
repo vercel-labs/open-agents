@@ -1,8 +1,8 @@
 import React from "react";
 import { createEditDiffLines } from "@open-harness/shared";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { FileChangeLayout, toRelativePath } from "./shared.js";
-import { useChatContext } from "../../chat-context.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { FileChangeLayout, toRelativePath } from "./shared";
+import { useChatContext } from "../../chat-context";
 
 export function EditRenderer({ part, state }: ToolRendererProps<"tool-edit">) {
   const { state: chatState } = useChatContext();

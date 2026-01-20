@@ -6,22 +6,22 @@
  * tool types are handled.
  */
 import React from "react";
-import type { TUIAgentUIToolPart } from "../types.js";
+import type { TUIAgentUIToolPart } from "../types";
 import {
   extractRenderState,
   type ToolRenderState,
 } from "@open-harness/shared/lib/tool-state";
 
 // Import all renderers
-import { ReadRenderer } from "../components/tool-renderers/read-renderer.js";
-import { WriteRenderer } from "../components/tool-renderers/write-renderer.js";
-import { EditRenderer } from "../components/tool-renderers/edit-renderer.js";
-import { GlobRenderer } from "../components/tool-renderers/glob-renderer.js";
-import { GrepRenderer } from "../components/tool-renderers/grep-renderer.js";
-import { BashRenderer } from "../components/tool-renderers/bash-renderer.js";
-import { TodoRenderer } from "../components/tool-renderers/todo-renderer.js";
-import { TaskRenderer } from "../components/tool-renderers/task-renderer.js";
-import { DefaultRenderer } from "../components/tool-renderers/default-renderer.js";
+import { ReadRenderer } from "../components/tool-renderers/read-renderer";
+import { WriteRenderer } from "../components/tool-renderers/write-renderer";
+import { EditRenderer } from "../components/tool-renderers/edit-renderer";
+import { GlobRenderer } from "../components/tool-renderers/glob-renderer";
+import { GrepRenderer } from "../components/tool-renderers/grep-renderer";
+import { BashRenderer } from "../components/tool-renderers/bash-renderer";
+import { TodoRenderer } from "../components/tool-renderers/todo-renderer";
+import { TaskRenderer } from "../components/tool-renderers/task-renderer";
+import { DefaultRenderer } from "../components/tool-renderers/default-renderer";
 
 /**
  * All possible tool part types derived from the agent.

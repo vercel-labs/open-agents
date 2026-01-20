@@ -1,7 +1,7 @@
 import { deepAgent } from "@open-harness/agent";
 import type { AgentMode } from "@open-harness/agent";
 import type { Sandbox } from "@open-harness/sandbox";
-import type { TUIAgentCallOptions } from "./types.js";
+import type { TUIAgentCallOptions } from "./types";
 
 // Configure your agent here - this is the single source of truth for the TUI
 export const tuiAgent = deepAgent;

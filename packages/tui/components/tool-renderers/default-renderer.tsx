@@ -1,9 +1,9 @@
 import React from "react";
 import { Text } from "ink";
 import { getToolName } from "ai";
-import type { TUIAgentUIToolPart } from "../../types.js";
-import type { ToolRenderState } from "../../lib/render-tool.js";
-import { ToolLayout } from "./shared.js";
+import type { TUIAgentUIToolPart } from "../../types";
+import type { ToolRenderState } from "../../lib/render-tool";
+import { ToolLayout } from "./shared";
 
 /**
  * Default renderer for unknown tool types.

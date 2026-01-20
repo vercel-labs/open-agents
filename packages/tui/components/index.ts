@@ -1,21 +1,21 @@
 // Main tool call component
-export { ToolCall } from "./tool-call.js";
+export { ToolCall } from "./tool-call";
 
 // Individual tool renderers (for custom overrides)
-export * from "./tool-renderers/index.js";
+export * from "./tool-renderers/index";
 
 // Other components
-export { TextOutput } from "./text-output.js";
-export { StatusBar, StandaloneTodoList } from "./status-bar.js";
-export { InputBox } from "./input-box.js";
-export { DiffView, parseEditOutput } from "./diff-view.js";
-export { Header } from "./header.js";
-export { ApprovalPanel } from "./approval-panel.js";
-export { ApprovalButtons } from "./approval-buttons.js";
+export { TextOutput } from "./text-output";
+export { StatusBar, StandaloneTodoList } from "./status-bar";
+export { InputBox } from "./input-box";
+export { DiffView, parseEditOutput } from "./diff-view";
+export { Header } from "./header";
+export { ApprovalPanel } from "./approval-panel";
+export { ApprovalButtons } from "./approval-buttons";
 
 // Re-exports from tool-call for backwards compatibility
 export {
   getToolApprovalInfo,
   inferApprovalRule,
   type ToolApprovalInfo,
-} from "./tool-call.js";
+} from "./tool-call";

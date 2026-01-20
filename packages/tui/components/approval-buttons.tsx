@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
-import { useChatContext } from "../chat-context.js";
+import { useChatContext } from "../chat-context";
 
 export function ApprovalButtons({ approvalId }: { approvalId: string }) {
   const { chat } = useChatContext();

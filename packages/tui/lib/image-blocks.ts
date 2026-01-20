@@ -1,5 +1,5 @@
 import type { FileUIPart } from "ai";
-import type { ImageMediaType } from "./image-clipboard.js";
+import type { ImageMediaType } from "./image-clipboard";
 
 export type ImageBlock = {
   id: number;

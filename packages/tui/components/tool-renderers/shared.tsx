@@ -4,7 +4,7 @@
 import React, { useState, useEffect, type ReactNode } from "react";
 import { Box, Text } from "ink";
 import type { DiffLine, CodeLine } from "@open-harness/shared";
-import type { ToolRenderState } from "../../lib/render-tool.js";
+import type { ToolRenderState } from "../../lib/render-tool";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 

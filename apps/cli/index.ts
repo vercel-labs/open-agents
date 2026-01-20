@@ -2,14 +2,14 @@
 
 import { defaultModelLabel } from "@open-harness/agent";
 import { createTUI } from "@open-harness/tui";
-import { loadAgentsMd } from "./agents-md.js";
-import { onCleanup, cleanup } from "./cleanup-handler.js";
+import { loadAgentsMd } from "./agents-md";
+import { onCleanup, cleanup } from "./cleanup-handler";
 import {
   createSandbox,
   parseSandboxType,
   type SandboxType,
-} from "./sandbox-factory.js";
-import { showSpinner } from "./spinner.js";
+} from "./sandbox-factory";
+import { showSpinner } from "./spinner";
 
 function printHelp() {
   console.log("Deep Agent CLI");

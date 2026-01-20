@@ -4,7 +4,7 @@
  */
 import * as path from "path";
 import { getToolName } from "ai";
-import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
+import type { TUIAgentUIToolPart, ApprovalRule } from "../types";
 
 export type ToolApprovalInfo = {
   toolType: string;

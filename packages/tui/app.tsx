@@ -7,23 +7,23 @@ import {
   useExpandedView,
   useTodoView,
 } from "@open-harness/shared";
-import { renderMarkdown } from "./lib/markdown.js";
-import { useChatContext } from "./chat-context.js";
-import { ToolCall, getToolApprovalInfo } from "./components/tool-call.js";
-import { ApprovalPanel } from "./components/approval-panel.js";
-import { TaskGroupView } from "./components/task-group-view.js";
-import { StatusBar, StandaloneTodoList } from "./components/status-bar.js";
-import { InputBox } from "./components/input-box.js";
-import { Header } from "./components/header.js";
+import { renderMarkdown } from "./lib/markdown";
+import { useChatContext } from "./chat-context";
+import { ToolCall, getToolApprovalInfo } from "./components/tool-call";
+import { ApprovalPanel } from "./components/approval-panel";
+import { TaskGroupView } from "./components/task-group-view";
+import { StatusBar, StandaloneTodoList } from "./components/status-bar";
+import { InputBox } from "./components/input-box";
+import { Header } from "./components/header";
 import { defaultModelLabel } from "@open-harness/agent";
-import { pasteCollapseLineThreshold } from "./config.js";
-import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos.js";
+import { pasteCollapseLineThreshold } from "./config";
+import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
 import type {
   TUIOptions,
   TUIAgentUIMessagePart,
   TUIAgentUIMessage,
   TUIAgentUIToolPart,
-} from "./types.js";
+} from "./types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
 type AppProps = {
