@@ -37,11 +37,8 @@ export type AutoAcceptMode = "off" | "edits" | "all";
 // Re-export ApprovalRule for client-side use
 export type { ApprovalRule } from "@open-harness/agent";
 
-// Re-export Settings for CLI use
-export type { Settings } from "./lib/settings";
-
-// Re-export ModelInfo for CLI use
-export type { ModelInfo } from "./lib/models";
+// Re-export for external use (already imported above for TUIOptions)
+export type { Settings, ModelInfo };
 
 export type TUIOptions = {
   /** Initial prompt to run (for one-shot mode) */
