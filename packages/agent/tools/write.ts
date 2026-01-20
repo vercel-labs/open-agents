@@ -2,11 +2,10 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import {
-  isPathWithinDirectory,
   getSandbox,
   getApprovalContext,
   shouldAutoApprove,
-  pathMatchesApprovalRule,
+  pathNeedsApproval,
 } from "./utils";
 
 const writeInputSchema = z.object({
@@ -30,34 +29,7 @@ const editInputSchema = z.object({
     .describe("Line number where oldString starts (for diff display)"),
 });
 
-type WriteInput = z.infer<typeof writeInputSchema>;
-type EditInput = z.infer<typeof editInputSchema>;
-
-type WriteApprovalFn = (args: WriteInput) => boolean | Promise<boolean>;
-type EditApprovalFn = (args: EditInput) => boolean | Promise<boolean>;
-
-interface WriteToolOptions {
-  needsApproval?: boolean | WriteApprovalFn;
-}
-
-interface EditToolOptions {
-  needsApproval?: boolean | EditApprovalFn;
-}
-
-/**
- * Check if a path is outside the working directory.
- */
-function isOutsideWorkingDirectory(
-  filePath: string,
-  workingDirectory: string,
-): boolean {
-  const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workingDirectory, filePath);
-  return !isPathWithinDirectory(absolutePath, workingDirectory);
-}
-
-export const writeFileTool = (options?: WriteToolOptions) =>
+export const writeFileTool = () =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "write");
@@ -68,38 +40,12 @@ export const writeFileTool = (options?: WriteToolOptions) =>
         return false;
       }
 
-      const isOutside = isOutsideWorkingDirectory(
-        args.filePath,
-        ctx.workingDirectory,
-      );
-
-      // Check if path matches any saved session rules (works for both inside and outside paths)
-      if (
-        pathMatchesApprovalRule(
-          args.filePath,
-          "write",
-          ctx.workingDirectory,
-          approval.sessionRules,
-        )
-      ) {
-        return false;
-      }
-
-      // If outside working directory and no approval rule matched, require approval
-      if (isOutside) {
-        return true;
-      }
-
-      // Inside working directory: check autoApprove setting
-      if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
-        return false;
-      }
-
-      // Otherwise use the configured approval setting
-      if (typeof options?.needsApproval === "function") {
-        return options.needsApproval(args);
-      }
-      return options?.needsApproval ?? true;
+      return pathNeedsApproval({
+        path: args.filePath,
+        tool: "write",
+        approval,
+        workingDirectory: ctx.workingDirectory,
+      });
     },
     description: `Write content to a file on the filesystem.
 
@@ -159,7 +105,7 @@ EXAMPLES:
     },
   });
 
-export const editFileTool = (options?: EditToolOptions) =>
+export const editFileTool = () =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "edit");
@@ -170,38 +116,12 @@ export const editFileTool = (options?: EditToolOptions) =>
         return false;
       }
 
-      const isOutside = isOutsideWorkingDirectory(
-        args.filePath,
-        ctx.workingDirectory,
-      );
-
-      // Check if path matches any saved session rules (works for both inside and outside paths)
-      if (
-        pathMatchesApprovalRule(
-          args.filePath,
-          "edit",
-          ctx.workingDirectory,
-          approval.sessionRules,
-        )
-      ) {
-        return false;
-      }
-
-      // If outside working directory and no approval rule matched, require approval
-      if (isOutside) {
-        return true;
-      }
-
-      // Inside working directory: check autoApprove setting
-      if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
-        return false;
-      }
-
-      // Otherwise use the configured approval setting
-      if (typeof options?.needsApproval === "function") {
-        return options.needsApproval(args);
-      }
-      return options?.needsApproval ?? true;
+      return pathNeedsApproval({
+        path: args.filePath,
+        tool: "edit",
+        approval,
+        workingDirectory: ctx.workingDirectory,
+      });
     },
     description: `Perform exact string replacement in a file.
 

@@ -48,11 +48,11 @@ export const defaultModelLabel = defaultModel.modelId;
 const tools = {
   todo_write: todoWriteTool,
   read: readFileTool(),
-  write: writeFileTool({ needsApproval: true }),
-  edit: editFileTool({ needsApproval: true }),
+  write: writeFileTool(),
+  edit: editFileTool(),
   grep: grepTool(),
   glob: globTool(),
-  bash: bashTool({ needsApproval: true }),
+  bash: bashTool(),
   task: taskTool,
 } satisfies ToolSet;
 

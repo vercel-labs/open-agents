@@ -66,17 +66,6 @@ export function shouldAutoApprove(
 }
 
 /**
- * Get session rules from an approval config.
- * Returns empty array for background and delegated modes.
- *
- * @param approval - The approval configuration
- * @returns Array of approval rules, or empty array if not in interactive mode
- */
-export function getSessionRules(approval: ApprovalConfig): ApprovalRule[] {
-  return approval.type === "interactive" ? approval.sessionRules : [];
-}
-
-/**
  * Get the full approval context from experimental_context.
  * Used by needsApproval functions to access approval configuration.
  *
