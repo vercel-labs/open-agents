@@ -1,6 +1,6 @@
 import type { Suggestion } from "../components/suggestions";
 
-export type SlashCommandAction = "open-model-select";
+export type SlashCommandAction = "open-model-select" | "open-resume";
 
 export type SlashCommand = {
   name: string;
@@ -13,6 +13,11 @@ export const slashCommands: SlashCommand[] = [
     name: "model",
     description: "Select the AI model",
     action: "open-model-select",
+  },
+  {
+    name: "resume",
+    description: "Resume a previous session",
+    action: "open-resume",
   },
 ];
 

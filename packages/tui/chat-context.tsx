@@ -24,7 +24,10 @@ import type { Settings } from "./lib/settings";
 import { AVAILABLE_MODELS, type ModelInfo } from "./lib/models";
 import { getContextLimit } from "@open-harness/agent";
 
-export type PanelState = { type: "none" } | { type: "model-select" };
+export type PanelState =
+  | { type: "none" }
+  | { type: "model-select" }
+  | { type: "resume" };
 
 type ChatState = {
   model?: string;
@@ -37,6 +40,9 @@ type ChatState = {
   settings: Settings;
   activePanel: PanelState;
   availableModels: ModelInfo[];
+  sessionId: string | null;
+  projectPath: string | null;
+  currentBranch: string;
 };
 
 type ChatContextValue = {
@@ -49,6 +55,7 @@ type ChatContextValue = {
   updateSettings: (updates: Partial<Settings>) => void;
   openPanel: (panel: PanelState) => void;
   closePanel: () => void;
+  setSessionId: (sessionId: string | null) => void;
 };
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -64,6 +71,10 @@ type ChatProviderProps = {
   initialSettings?: Settings;
   onSettingsChange?: (settings: Settings) => void;
   availableModels?: ModelInfo[];
+  projectPath?: string;
+  currentBranch?: string;
+  initialSessionId?: string;
+  initialMessages?: TUIAgentUIMessage[];
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -129,6 +140,10 @@ export function ChatProvider({
   initialSettings = {},
   onSettingsChange,
   availableModels = AVAILABLE_MODELS,
+  projectPath,
+  currentBranch = "",
+  initialSessionId,
+  initialMessages,
 }: ChatProviderProps) {
   const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
     initialAutoAcceptMode,
@@ -139,6 +154,9 @@ export function ChatProvider({
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [activePanel, setActivePanel] = useState<PanelState>({ type: "none" });
+  const [sessionId, setSessionId] = useState<string | null>(
+    initialSessionId ?? null,
+  );
 
   // Use refs to pass current values to transport without recreating it
   const autoAcceptModeRef = useRef(autoAcceptMode);
@@ -193,8 +211,9 @@ export function ChatProvider({
         transport,
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,
+        messages: initialMessages,
       }),
-    [transport],
+    [transport, initialMessages],
   );
 
   const state: ChatState = useMemo(
@@ -209,6 +228,9 @@ export function ChatProvider({
       settings,
       activePanel,
       availableModels,
+      sessionId,
+      projectPath: projectPath ?? null,
+      currentBranch,
     }),
     [
       effectiveModel,
@@ -221,6 +243,9 @@ export function ChatProvider({
       settings,
       activePanel,
       availableModels,
+      sessionId,
+      projectPath,
+      currentBranch,
     ],
   );
 
@@ -263,6 +288,7 @@ export function ChatProvider({
         updateSettings,
         openPanel,
         closePanel,
+        setSessionId,
       }}
     >
       {children}

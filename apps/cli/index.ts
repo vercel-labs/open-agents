@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execSync } from "node:child_process";
 import { defaultModelLabel } from "@open-harness/agent";
 import {
   createTUI,
@@ -16,6 +17,23 @@ import {
   type SandboxType,
 } from "./sandbox-factory";
 import { showSpinner } from "./spinner";
+
+/**
+ * Get the current git branch for a directory.
+ * Returns empty string if not a git repo or git is not available.
+ */
+function getCurrentGitBranch(workingDirectory: string): string {
+  try {
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: workingDirectory,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    return branch;
+  } catch {
+    return "";
+  }
+}
 
 function printHelp() {
   console.log("Deep Agent CLI");
@@ -148,9 +166,15 @@ async function main() {
       });
     };
 
+    // Get the current git branch - prefer sandbox's branch, fallback to local git
+    const currentBranch =
+      sandbox.currentBranch ?? getCurrentGitBranch(workingDirectory);
+
     await createTUI({
       initialPrompt: parsed.initialPrompt,
       workingDirectory: sandbox.workingDirectory,
+      projectPath: workingDirectory,
+      currentBranch,
       header: {
         name: "Open Harness",
         version: "0.1.0",

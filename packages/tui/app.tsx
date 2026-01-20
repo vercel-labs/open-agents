@@ -12,6 +12,7 @@ import { useChatContext } from "./chat-context";
 import { ToolCall, getToolApprovalInfo } from "./components/tool-call";
 import { ApprovalPanel } from "./components/approval-panel";
 import { SettingsPanel } from "./components/settings-panel";
+import { ResumePanel } from "./components/resume-panel";
 import { TaskGroupView } from "./components/task-group-view";
 import { StatusBar, StandaloneTodoList } from "./components/status-bar";
 import { InputBox } from "./components/input-box";
@@ -20,6 +21,10 @@ import { defaultModelLabel } from "@open-harness/agent";
 import type { SlashCommandAction } from "./lib/slash-commands";
 import { pasteCollapseLineThreshold } from "./config";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
+import { useSessionPersistence } from "./hooks/use-session-persistence";
+import { listSessions, loadSession } from "./lib/session-storage";
+import { convertToUIMessages } from "./lib/session-types";
+import type { SessionListItem } from "./lib/session-types";
 import type {
   TUIOptions,
   TUIAgentUIMessagePart,
@@ -520,14 +525,26 @@ function AppContent({ options }: AppProps) {
     openPanel,
     closePanel,
     updateSettings,
+    setSessionId,
   } = useChatContext();
   const { isExpanded, toggleExpanded } = useExpandedView();
   const { isTodoVisible, toggleTodoView } = useTodoView();
   const [wasInterrupted, setWasInterrupted] = useState(false);
+  const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const { messages, sendMessage, status, stop, error } = useChat({
     chat,
   });
+
+  // Session persistence - auto-save messages
+  useSessionPersistence(
+    messages,
+    state.sessionId,
+    state.projectPath,
+    state.currentBranch,
+    setSessionId,
+  );
 
   const isStreaming = status === "streaming" || status === "submitted";
 
@@ -604,15 +621,83 @@ function AppContent({ options }: AppProps) {
     [isStreaming, sendMessage],
   );
 
+  // Load sessions when resume panel opens
+  const loadSessions = useCallback(async () => {
+    if (!state.projectPath) {
+      setSessions([]);
+      return;
+    }
+    try {
+      const sessionList = await listSessions(state.projectPath);
+      setSessions(sessionList);
+      setResumeError(null);
+    } catch {
+      setResumeError("Failed to load sessions");
+      setSessions([]);
+    }
+  }, [state.projectPath]);
+
+  // Handle session selection from resume panel
+  const handleSessionSelect = useCallback(
+    async (selectedSessionId: string) => {
+      if (!state.projectPath) {
+        closePanel();
+        return;
+      }
+
+      try {
+        const sessionData = await loadSession(
+          state.projectPath,
+          selectedSessionId,
+        );
+        if (!sessionData) {
+          setResumeError("Session not found");
+          return;
+        }
+
+        // Convert stored messages to UI messages
+        const uiMessages = convertToUIMessages(sessionData.messages);
+
+        // Set the messages on the chat instance
+        // Note: This uses the setMessages method from the Chat class
+        if (
+          chat &&
+          typeof (
+            chat as unknown as {
+              setMessages?: (msgs: TUIAgentUIMessage[]) => void;
+            }
+          ).setMessages === "function"
+        ) {
+          (
+            chat as unknown as {
+              setMessages: (msgs: TUIAgentUIMessage[]) => void;
+            }
+          ).setMessages(uiMessages);
+        }
+
+        // Update the session ID
+        setSessionId(selectedSessionId);
+        closePanel();
+      } catch {
+        setResumeError("Failed to load session");
+      }
+    },
+    [state.projectPath, chat, setSessionId, closePanel],
+  );
+
   const handleCommandSelect = useCallback(
     (action: SlashCommandAction) => {
       switch (action) {
         case "open-model-select":
           openPanel({ type: "model-select" });
           break;
+        case "open-resume":
+          loadSessions();
+          openPanel({ type: "resume" });
+          break;
       }
     },
-    [openPanel],
+    [openPanel, loadSessions],
   );
 
   // Memoize model options to prevent re-renders in SettingsPanel
@@ -670,6 +755,23 @@ function AppContent({ options }: AppProps) {
           onSelect={handleModelSelect}
           onCancel={closePanel}
         />
+      )}
+
+      {/* Show resume panel when active (replaces input) */}
+      {state.activePanel.type === "resume" && (
+        <>
+          {resumeError && (
+            <Box marginBottom={1}>
+              <Text color="red">{resumeError}</Text>
+            </Box>
+          )}
+          <ResumePanel
+            sessions={sessions}
+            currentBranch={state.currentBranch}
+            onSelect={handleSessionSelect}
+            onCancel={closePanel}
+          />
+        </>
       )}
 
       {/* Show approval panel when there's a pending approval (replaces status bar and input) */}

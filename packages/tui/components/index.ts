@@ -12,6 +12,8 @@ export { DiffView, parseEditOutput } from "./diff-view";
 export { Header } from "./header";
 export { ApprovalPanel } from "./approval-panel";
 export { ApprovalButtons } from "./approval-buttons";
+export { ResumePanel } from "./resume-panel";
+export { SettingsPanel } from "./settings-panel";
 
 // Re-exports from tool-call for backwards compatibility
 export {

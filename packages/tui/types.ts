@@ -63,4 +63,8 @@ export type TUIOptions = {
   onSettingsChange?: (settings: Settings) => void;
   /** Available models for model selection (fetched from gateway) */
   availableModels?: ModelInfo[];
+  /** Project path for session persistence (defaults to workingDirectory) */
+  projectPath?: string;
+  /** Current git branch for session filtering */
+  currentBranch?: string;
 };
