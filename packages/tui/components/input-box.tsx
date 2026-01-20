@@ -556,10 +556,12 @@ export const InputBox = memo(function InputBox({
       {/* Bottom row: auto-accept (left) and context usage (right) */}
       <Box justifyContent="space-between">
         <AutoAcceptIndicator mode={autoAcceptMode} />
-        <ContextUsageIndicator
-          inputTokens={inputTokens}
-          contextLimit={contextLimit}
-        />
+        {!disabled && (
+          <ContextUsageIndicator
+            inputTokens={inputTokens}
+            contextLimit={contextLimit}
+          />
+        )}
       </Box>
     </Box>
   );
