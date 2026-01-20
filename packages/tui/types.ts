@@ -6,7 +6,7 @@ import type {
   ToolUIPart,
 } from "ai";
 import type { Sandbox } from "@open-harness/sandbox";
-import type { tuiAgent } from "./config.js";
+import type { tuiAgent } from "./config";
 
 export type TUIAgent = typeof tuiAgent;
 export type TUIAgentCallOptions = Parameters<

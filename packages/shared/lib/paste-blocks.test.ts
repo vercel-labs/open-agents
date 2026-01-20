@@ -6,7 +6,7 @@ import {
   extractPasteTokens,
   formatPastePlaceholder,
   type PasteBlock,
-} from "./paste-blocks.js";
+} from "./paste-blocks";
 
 test("countLines handles newline variants", () => {
   expect(countLines("a\nb\nc")).toBe(3);

@@ -29,7 +29,7 @@ type TextInputProps = {
 };
 
 /**
- * Find the position of the previous word boundary (for Option+Delete)
+ * Find the position of the previous word boundary (for Option+Left, Option+Delete)
  */
 function findPrevWordBoundary(value: string, cursorOffset: number): number {
   if (cursorOffset <= 0) return 0;
@@ -47,6 +47,104 @@ function findPrevWordBoundary(value: string, cursorOffset: number): number {
   }
 
   return pos;
+}
+
+/**
+ * Find the position of the next word boundary (for Option+Right)
+ */
+function findNextWordBoundary(value: string, cursorOffset: number): number {
+  if (cursorOffset >= value.length) return value.length;
+
+  let pos = cursorOffset;
+
+  // Skip current word characters
+  while (pos < value.length && !/\s/.test(value[pos]!)) {
+    pos++;
+  }
+
+  // Skip whitespace
+  while (pos < value.length && /\s/.test(value[pos]!)) {
+    pos++;
+  }
+
+  return pos;
+}
+
+/**
+ * Find the position of the beginning of the current line (for Ctrl+A / Command+Left)
+ */
+function findLineStart(value: string, cursorOffset: number): number {
+  if (cursorOffset <= 0) return 0;
+
+  // Search backwards for a newline
+  for (let i = cursorOffset - 1; i >= 0; i--) {
+    if (value[i] === "\n") {
+      return i + 1; // Position after the newline
+    }
+  }
+  return 0; // No newline found, go to start
+}
+
+/**
+ * Find the position of the end of the current line (for Ctrl+E / Command+Right)
+ */
+function findLineEnd(value: string, cursorOffset: number): number {
+  // Search forwards for a newline
+  for (let i = cursorOffset; i < value.length; i++) {
+    if (value[i] === "\n") {
+      return i; // Position before the newline
+    }
+  }
+  return value.length; // No newline found, go to end
+}
+
+/**
+ * Calculate the cursor position when moving up one line.
+ * Returns -1 if already on the first line.
+ */
+function findPositionAbove(value: string, cursorOffset: number): number {
+  const lineStart = findLineStart(value, cursorOffset);
+
+  // If we're on the first line, return -1 to signal parent should handle
+  if (lineStart === 0) {
+    return -1;
+  }
+
+  // Column position within current line
+  const column = cursorOffset - lineStart;
+
+  // Find the start of the previous line (lineStart - 1 is the newline, go before it)
+  const prevLineEnd = lineStart - 1;
+  const prevLineStart = findLineStart(value, prevLineEnd);
+  const prevLineLength = prevLineEnd - prevLineStart;
+
+  // Move to same column on previous line, clamped to line length
+  return prevLineStart + Math.min(column, prevLineLength);
+}
+
+/**
+ * Calculate the cursor position when moving down one line.
+ * Returns -1 if already on the last line.
+ */
+function findPositionBelow(value: string, cursorOffset: number): number {
+  const lineEnd = findLineEnd(value, cursorOffset);
+
+  // If we're on the last line, return -1 to signal parent should handle
+  if (lineEnd === value.length) {
+    return -1;
+  }
+
+  // Column position within current line
+  const lineStart = findLineStart(value, cursorOffset);
+  const column = cursorOffset - lineStart;
+
+  // Next line starts after the newline
+  const nextLineStart = lineEnd + 1;
+  const nextLineEnd = findLineEnd(value, nextLineStart);
+  const nextLineLength = nextLineEnd - nextLineStart;
+
+  // Move to same column on next line, clamped to line length
+  return nextLineStart + Math.min(column, nextLineLength);
 }
 
 export function TextInput({
@@ -226,6 +324,12 @@ export function TextInput({
         } else {
           result += tokenText;
         }
+      } else if (char === "\n") {
+        // For newlines, show cursor as inverse space at end of line
+        if (isCursor) {
+          result += chalk.inverse(" ");
+        }
+        result += "\n";
       } else {
         result += isCursor ? chalk.inverse(char) : char;
       }
@@ -289,14 +393,30 @@ export function TextInput({
         flushPasteBuffer();
       }
 
-      // Handle up arrow - let parent intercept if needed
+      // Handle up arrow - navigate within multiline text, or let parent handle
       if (key.upArrow) {
+        if (showCursor) {
+          const newPos = findPositionAbove(currentValue, currentCursor);
+          if (newPos !== -1) {
+            updateCursor(newPos);
+            return;
+          }
+        }
+        // On first line or cursor hidden - let parent intercept
         if (onUpArrow?.()) return;
         return; // Still block if no handler
       }
 
-      // Handle down arrow - let parent intercept if needed
+      // Handle down arrow - navigate within multiline text, or let parent handle
       if (key.downArrow) {
+        if (showCursor) {
+          const newPos = findPositionBelow(currentValue, currentCursor);
+          if (newPos !== -1) {
+            updateCursor(newPos);
+            return;
+          }
+        }
+        // On last line or cursor hidden - let parent intercept
         if (onDownArrow?.()) return;
         return; // Still block if no handler
       }
@@ -354,28 +474,42 @@ export function TextInput({
         if (showCursor) {
           // Option+Right: Move to next word boundary
           if (key.meta) {
-            let pos = currentCursor;
-            // Skip current word
-            while (
-              pos < currentValue.length &&
-              !/\s/.test(currentValue[pos]!)
-            ) {
-              pos++;
-            }
-            // Skip whitespace
-            while (pos < currentValue.length && /\s/.test(currentValue[pos]!)) {
-              pos++;
-            }
-            nextCursorOffset = pos;
+            nextCursorOffset = findNextWordBoundary(
+              currentValue,
+              currentCursor,
+            );
           } else {
             nextCursorOffset++;
           }
         }
+      } else if (key.meta && input === "b") {
+        // Option+Left (emacs-style): Move to previous word boundary
+        if (showCursor) {
+          nextCursorOffset = findPrevWordBoundary(currentValue, currentCursor);
+        }
+      } else if (key.meta && input === "f") {
+        // Option+Right (emacs-style): Move to next word boundary
+        if (showCursor) {
+          nextCursorOffset = findNextWordBoundary(currentValue, currentCursor);
+        }
+      } else if (key.ctrl && input === "a") {
+        // Ctrl+A (Command+Left): Move to beginning of current line
+        if (showCursor) {
+          nextCursorOffset = findLineStart(currentValue, currentCursor);
+        }
+      } else if (key.ctrl && input === "e") {
+        // Ctrl+E (Command+Right): Move to end of current line
+        if (showCursor) {
+          nextCursorOffset = findLineEnd(currentValue, currentCursor);
+        }
       } else if (key.ctrl && input === "u") {
-        // Ctrl+U: Delete entire line to the left (Cmd+Delete equivalent)
-        if (currentCursor > 0) {
-          nextValue = currentValue.slice(currentCursor);
-          nextCursorOffset = 0;
+        // Ctrl+U: Delete to beginning of current line (Cmd+Delete equivalent)
+        const lineStart = findLineStart(currentValue, currentCursor);
+        if (currentCursor > lineStart) {
+          nextValue =
+            currentValue.slice(0, lineStart) +
+            currentValue.slice(currentCursor);
+          nextCursorOffset = lineStart;
         }
       } else if (key.ctrl && input === "w") {
         // Ctrl+W: Delete previous word (unix-style, Option+Delete equivalent)

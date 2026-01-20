@@ -6,15 +6,15 @@
  */
 
 // Individual renderers
-export { ReadRenderer } from "./read-renderer.js";
-export { WriteRenderer } from "./write-renderer.js";
-export { EditRenderer } from "./edit-renderer.js";
-export { GlobRenderer } from "./glob-renderer.js";
-export { GrepRenderer } from "./grep-renderer.js";
-export { BashRenderer } from "./bash-renderer.js";
-export { TodoRenderer } from "./todo-renderer.js";
-export { TaskRenderer, SubagentToolCall } from "./task-renderer.js";
-export { DefaultRenderer } from "./default-renderer.js";
+export { ReadRenderer } from "./read-renderer";
+export { WriteRenderer } from "./write-renderer";
+export { EditRenderer } from "./edit-renderer";
+export { GlobRenderer } from "./glob-renderer";
+export { GrepRenderer } from "./grep-renderer";
+export { BashRenderer } from "./bash-renderer";
+export { TodoRenderer } from "./todo-renderer";
+export { TaskRenderer, SubagentToolCall } from "./task-renderer";
+export { DefaultRenderer } from "./default-renderer";
 
 // Shared components
 export {
@@ -23,4 +23,4 @@ export {
   FileChangeLayout,
   getDotColor,
   toRelativePath,
-} from "./shared.js";
+} from "./shared";

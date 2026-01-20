@@ -18,6 +18,7 @@ To work through these todos, follow this pattern:
 ## Web App
 
 ### Critical
+
 - [x] Model selector (in flight)
 - [x] Add loading state in repository selection dropdown
 - [x] Three dots menu is non-functional - remove or implement
@@ -26,56 +27,67 @@ To work through these todos, follow this pattern:
 - [x] Add context window usage / token usage display in task page
 - [x] Show todo list inline in chat
 
-### Performance
-- [ ] Sandbox startup time is too slow - add warming (start sandbox when user starts typing)
-- [ ] Explore Modal as alternative sandbox provider (reportedly faster)
-
 ### Cost Optimization
+
 - [ ] Remove Vercel Blob for saving sandbox (ingress/egress too expensive) - switch to native snapshotting
 
 ### Sandbox Setup
+
 - [ ] Ensure pnpm install runs during sandbox setup
-- [ ] interesting idea with just-bash that we allow the user to start in read-only mode and then offer to switch to full sandbox if needed (e.g. if the agent wants to write files or run files)
+- [ ] Explore read-only mode that switches to full sandbox when agent needs write/execute access
 
 ### Nice to Have
+
 - [ ] Add terminal view in tasks (terminal implementation exists elsewhere)
 - [ ] Move to workspace approach (multiple chats per workspace)
 - [ ] Migrate from raw fetching to SWR
 
+### Cancelled
+
+- [c] Sandbox startup time - using in-memory solution instead
+- [c] Explore Modal as alternative sandbox provider
+
+---
+
 ## CLI
 
 ### Critical
-- [ ] Add slash commands for:
-  - Changing model
-  - Changing context compaction approach (auto compaction vs open code approach)
-- [ ] Stop execution when user leaves no reason in tool execution approval (instead of continuing)
+
+- [ ] Add slash commands for changing model and context compaction approach
+- [ ] Stop execution when user leaves no reason in tool execution approval
 - [ ] Persist chats for resume capability
-- [ ] Client-side pending approval rule propagation: When the model generates multiple approval requests in the same batch (e.g., two file edits in the same directory), approving the first one with a rule should apply to remaining pending approvals in that batch, not just follow-up requests
+- [ ] Client-side pending approval rule propagation for batch requests
+- [ ] Auth with web app
 
 ### Architecture
-- [ ] Evaluate whether TUI package should remain separate or be merged into CLI app
-- [ ] Explore workflows for being able to spin up and leave things running in the background
-- [ ] Explore sandboxes having maximum timeout and then proactively shutting down after inactivity 
 
-### Nice to Have
-- [ ] Add auth flow to authenticate with web app
+- [ ] Evaluate whether TUI package should remain separate or be merged into CLI app
+- [ ] Explore workflows for background execution
+- [ ] Explore sandbox maximum timeout with proactive shutdown after inactivity
+
+---
 
 ## Agent
 
 ### Features
+
 - [ ] Add plan mode
-- [ ] Add automatic compaction approach as a tool
-- [ ] provider defined tools dynamic switch per request
-- [ ] cc ido approach to context management (context offloading outside of current message)
+
+### Explored/Blocked
+
+- [ ] Context offloading outside of current message (cc ido approach) [blocked]
+- [ ] Add automatic compaction approach as a tool [explored]
+- [ ] Provider defined tools dynamic switch per request [explored]
+
+---
 
 ## Technical Debt
 
-- [ ] Align import extensions across packages - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack. Requires updating tsconfig settings for web-consumed packages. CLI-only packages can keep `.js` extensions.
+- [x] Align import extensions across packages - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack
 
-## Slack App (New)
+---
 
-- [ ] Explore using Malte's chat SDK (vercel-labs/chat) for Slack interface
+## Future Ideas
 
-### Misc
-
-- [ ] auth with web app
+- [ ] Slack App - explore using Malte's chat SDK (vercel-labs/chat)
+- [ ] Documentation

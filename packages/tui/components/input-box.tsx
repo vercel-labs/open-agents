@@ -8,9 +8,9 @@ import React, {
 } from "react";
 import { Box, Text, useInput } from "ink";
 import type { FileUIPart } from "ai";
-import { TextInput } from "./text-input.js";
-import { Suggestions, type Suggestion } from "./suggestions.js";
-import { getFileSuggestions, extractMention } from "../lib/file-suggestions.js";
+import { TextInput } from "./text-input";
+import { Suggestions, type Suggestion } from "./suggestions";
+import { getFileSuggestions, extractMention } from "../lib/file-suggestions";
 import {
   countLines,
   createPasteToken,
@@ -25,13 +25,13 @@ import {
   imageToDataUrl,
   isImagePath,
   loadImageFromPath,
-} from "../lib/image-clipboard.js";
+} from "../lib/image-clipboard";
 import {
   formatImagePlaceholder,
   imageBlockToFilePart,
   type ImageBlock,
-} from "../lib/image-blocks.js";
-import type { AutoAcceptMode } from "../types.js";
+} from "../lib/image-blocks";
+import type { AutoAcceptMode } from "../types";
 
 type InputBoxProps = {
   onSubmit: (value: string, files?: FileUIPart[]) => void;

@@ -3,14 +3,14 @@ export {
   ReasoningProvider,
   useReasoningContext,
   type ThinkingState,
-} from "./hooks/reasoning-context.js";
+} from "./hooks/reasoning-context";
 
 export {
   ExpandedViewProvider,
   useExpandedView,
-} from "./hooks/expanded-view-context.js";
+} from "./hooks/expanded-view-context";
 
-export { TodoViewProvider, useTodoView } from "./hooks/todo-view-context.js";
+export { TodoViewProvider, useTodoView } from "./hooks/todo-view-context";
 
 // Lib - Paste blocks
 export {
@@ -23,7 +23,7 @@ export {
   expandPasteTokens,
   countLines,
   formatPastePlaceholder,
-} from "./lib/paste-blocks.js";
+} from "./lib/paste-blocks";
 
 // Lib - Diff utilities
 export {
@@ -37,7 +37,7 @@ export {
   createEditDiffLines,
   getLanguageFromPath,
   createNewFileCodeLines,
-} from "./lib/diff.js";
+} from "./lib/diff";
 
 // Lib - Tool state utilities
 export {
@@ -47,4 +47,4 @@ export {
   getStatusColor,
   getStatusLabel,
   toRelativePath,
-} from "./lib/tool-state.js";
+} from "./lib/tool-state";

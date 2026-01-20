@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { Suggestion } from "../components/suggestions.js";
+import type { Suggestion } from "../components/suggestions";
 
 // Cache for all files to avoid repeated filesystem scans
 let cachedFiles: Suggestion[] | null = null;

@@ -1,19 +1,19 @@
 import React from "react";
 import { render } from "ink";
-import { App } from "./app.js";
-import { ChatProvider } from "./chat-context.js";
+import { App } from "./app";
+import { ChatProvider } from "./chat-context";
 import {
   ReasoningProvider,
   ExpandedViewProvider,
   TodoViewProvider,
 } from "@open-harness/shared";
 import { defaultModelLabel } from "@open-harness/agent";
-import { createDefaultAgentOptions } from "./config.js";
-import type { TUIOptions } from "./types.js";
+import { createDefaultAgentOptions } from "./config";
+import type { TUIOptions } from "./types";
 
-export type { TUIOptions, AutoAcceptMode } from "./types.js";
-export { useChatContext, ChatProvider } from "./chat-context.js";
-export { tuiAgent, createDefaultAgentOptions } from "./config.js";
+export type { TUIOptions, AutoAcceptMode } from "./types";
+export { useChatContext, ChatProvider } from "./chat-context";
+export { tuiAgent, createDefaultAgentOptions } from "./config";
 
 /**
  * Create a Claude Code-style TUI.
@@ -103,10 +103,10 @@ export function renderTUI(options: TUIOptions) {
 }
 
 // Re-export components for custom TUI composition
-export * from "./components/index.js";
+export * from "./components/index";
 
 // Re-export render-tool types and utilities
-export * from "./lib/render-tool.js";
+export * from "./lib/render-tool";
 
 // Re-export transport for custom usage
-export { createAgentTransport } from "./transport.js";
+export { createAgentTransport } from "./transport";

@@ -5,18 +5,18 @@
  * It extracts the render state and delegates to the appropriate renderer.
  */
 import React from "react";
-import type { TUIAgentUIToolPart } from "../types.js";
-import { renderToolPart, extractRenderState } from "../lib/render-tool.js";
+import type { TUIAgentUIToolPart } from "../types";
+import { renderToolPart, extractRenderState } from "../lib/render-tool";
 
 // Re-export approval utilities for backwards compatibility
-export { getToolApprovalInfo, inferApprovalRule } from "../lib/approval.js";
-export type { ToolApprovalInfo } from "../lib/approval.js";
+export { getToolApprovalInfo, inferApprovalRule } from "../lib/approval";
+export type { ToolApprovalInfo } from "../lib/approval";
 
 // Re-export shared components for backwards compatibility
-export { ToolSpinner, SubagentToolCall } from "./tool-renderers/index.js";
+export { ToolSpinner, SubagentToolCall } from "./tool-renderers/index";
 
 // Re-export ApprovalButtons (keeping it here for now as it's tightly coupled to chat context)
-export { ApprovalButtons } from "./approval-buttons.js";
+export { ApprovalButtons } from "./approval-buttons";
 
 export type ToolCallProps = {
   part: TUIAgentUIToolPart;

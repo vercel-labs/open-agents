@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { ToolLayout } from "./shared.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { ToolLayout } from "./shared";
 
 function getTodoIcon(status: string) {
   switch (status) {
