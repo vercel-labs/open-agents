@@ -1,6 +1,6 @@
 import { isToolUIPart } from "ai";
-import type { TodoItem } from "../../agent/types.js";
-import type { TUIAgentUIMessage, TUIAgentUIToolPart } from "../types.js";
+import type { TodoItem } from "../../agent/types";
+import type { TUIAgentUIMessage, TUIAgentUIToolPart } from "../types";
 
 function isTodoWritePart(
   part: TUIAgentUIToolPart,

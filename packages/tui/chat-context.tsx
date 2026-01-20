@@ -12,14 +12,14 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
 } from "ai";
 import { Chat } from "@ai-sdk/react";
-import { createAgentTransport } from "./transport.js";
-import { tuiAgent } from "./config.js";
+import { createAgentTransport } from "./transport";
+import { tuiAgent } from "./config";
 import type {
   TUIAgentCallOptions,
   TUIAgentUIMessage,
   AutoAcceptMode,
   ApprovalRule,
-} from "./types.js";
+} from "./types";
 import { getContextLimit } from "@open-harness/agent";
 
 type ChatState = {

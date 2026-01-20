@@ -1,7 +1,7 @@
 import React from "react";
 import { Text } from "ink";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { ToolLayout } from "./shared.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { ToolLayout } from "./shared";
 
 export function GrepRenderer({ part, state }: ToolRendererProps<"tool-grep">) {
   const pattern = part.input?.pattern ?? "...";
