@@ -503,10 +503,13 @@ export function TextInput({
           nextCursorOffset = findLineEnd(currentValue, currentCursor);
         }
       } else if (key.ctrl && input === "u") {
-        // Ctrl+U: Delete entire line to the left (Cmd+Delete equivalent)
-        if (currentCursor > 0) {
-          nextValue = currentValue.slice(currentCursor);
-          nextCursorOffset = 0;
+        // Ctrl+U: Delete to beginning of current line (Cmd+Delete equivalent)
+        const lineStart = findLineStart(currentValue, currentCursor);
+        if (currentCursor > lineStart) {
+          nextValue =
+            currentValue.slice(0, lineStart) +
+            currentValue.slice(currentCursor);
+          nextCursorOffset = lineStart;
         }
       } else if (key.ctrl && input === "w") {
         // Ctrl+W: Delete previous word (unix-style, Option+Delete equivalent)
