@@ -29,7 +29,7 @@ type TextInputProps = {
 };
 
 /**
- * Find the position of the previous word boundary (for Option+Delete)
+ * Find the position of the previous word boundary (for Option+Left, Option+Delete)
  */
 function findPrevWordBoundary(value: string, cursorOffset: number): number {
   if (cursorOffset <= 0) return 0;
@@ -44,6 +44,27 @@ function findPrevWordBoundary(value: string, cursorOffset: number): number {
   // Skip the word characters
   while (pos > 0 && !/\s/.test(value[pos - 1]!)) {
     pos--;
+  }
+
+  return pos;
+}
+
+/**
+ * Find the position of the next word boundary (for Option+Right)
+ */
+function findNextWordBoundary(value: string, cursorOffset: number): number {
+  if (cursorOffset >= value.length) return value.length;
+
+  let pos = cursorOffset;
+
+  // Skip current word characters
+  while (pos < value.length && !/\s/.test(value[pos]!)) {
+    pos++;
+  }
+
+  // Skip whitespace
+  while (pos < value.length && /\s/.test(value[pos]!)) {
+    pos++;
   }
 
   return pos;
@@ -354,22 +375,23 @@ export function TextInput({
         if (showCursor) {
           // Option+Right: Move to next word boundary
           if (key.meta) {
-            let pos = currentCursor;
-            // Skip current word
-            while (
-              pos < currentValue.length &&
-              !/\s/.test(currentValue[pos]!)
-            ) {
-              pos++;
-            }
-            // Skip whitespace
-            while (pos < currentValue.length && /\s/.test(currentValue[pos]!)) {
-              pos++;
-            }
-            nextCursorOffset = pos;
+            nextCursorOffset = findNextWordBoundary(
+              currentValue,
+              currentCursor,
+            );
           } else {
             nextCursorOffset++;
           }
+        }
+      } else if (key.meta && input === "b") {
+        // Option+Left (emacs-style): Move to previous word boundary
+        if (showCursor) {
+          nextCursorOffset = findPrevWordBoundary(currentValue, currentCursor);
+        }
+      } else if (key.meta && input === "f") {
+        // Option+Right (emacs-style): Move to next word boundary
+        if (showCursor) {
+          nextCursorOffset = findNextWordBoundary(currentValue, currentCursor);
         }
       } else if (key.ctrl && input === "u") {
         // Ctrl+U: Delete entire line to the left (Cmd+Delete equivalent)
