@@ -98,6 +98,55 @@ function findLineEnd(value: string, cursorOffset: number): number {
   return value.length; // No newline found, go to end
 }
 
+/**
+ * Calculate the cursor position when moving up one line.
+ * Returns -1 if already on the first line.
+ */
+function findPositionAbove(value: string, cursorOffset: number): number {
+  const lineStart = findLineStart(value, cursorOffset);
+
+  // If we're on the first line, return -1 to signal parent should handle
+  if (lineStart === 0) {
+    return -1;
+  }
+
+  // Column position within current line
+  const column = cursorOffset - lineStart;
+
+  // Find the start of the previous line (lineStart - 1 is the newline, go before it)
+  const prevLineEnd = lineStart - 1;
+  const prevLineStart = findLineStart(value, prevLineEnd);
+  const prevLineLength = prevLineEnd - prevLineStart;
+
+  // Move to same column on previous line, clamped to line length
+  return prevLineStart + Math.min(column, prevLineLength);
+}
+
+/**
+ * Calculate the cursor position when moving down one line.
+ * Returns -1 if already on the last line.
+ */
+function findPositionBelow(value: string, cursorOffset: number): number {
+  const lineEnd = findLineEnd(value, cursorOffset);
+
+  // If we're on the last line, return -1 to signal parent should handle
+  if (lineEnd === value.length) {
+    return -1;
+  }
+
+  // Column position within current line
+  const lineStart = findLineStart(value, cursorOffset);
+  const column = cursorOffset - lineStart;
+
+  // Next line starts after the newline
+  const nextLineStart = lineEnd + 1;
+  const nextLineEnd = findLineEnd(value, nextLineStart);
+  const nextLineLength = nextLineEnd - nextLineStart;
+
+  // Move to same column on next line, clamped to line length
+  return nextLineStart + Math.min(column, nextLineLength);
+}
+
 export function TextInput({
   value: externalValue,
   onChange,
@@ -275,6 +324,12 @@ export function TextInput({
         } else {
           result += tokenText;
         }
+      } else if (char === "\n") {
+        // For newlines, show cursor as inverse space at end of line
+        if (isCursor) {
+          result += chalk.inverse(" ");
+        }
+        result += "\n";
       } else {
         result += isCursor ? chalk.inverse(char) : char;
       }
@@ -338,14 +393,30 @@ export function TextInput({
         flushPasteBuffer();
       }
 
-      // Handle up arrow - let parent intercept if needed
+      // Handle up arrow - navigate within multiline text, or let parent handle
       if (key.upArrow) {
+        if (showCursor) {
+          const newPos = findPositionAbove(currentValue, currentCursor);
+          if (newPos !== -1) {
+            updateCursor(newPos);
+            return;
+          }
+        }
+        // On first line or cursor hidden - let parent intercept
         if (onUpArrow?.()) return;
         return; // Still block if no handler
       }
 
-      // Handle down arrow - let parent intercept if needed
+      // Handle down arrow - navigate within multiline text, or let parent handle
       if (key.downArrow) {
+        if (showCursor) {
+          const newPos = findPositionBelow(currentValue, currentCursor);
+          if (newPos !== -1) {
+            updateCursor(newPos);
+            return;
+          }
+        }
+        // On last line or cursor hidden - let parent intercept
         if (onDownArrow?.()) return;
         return; // Still block if no handler
       }
