@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 
 export type SettingsOption = {
@@ -28,7 +28,15 @@ export function SettingsPanel({
   maxVisible = 10,
 }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // Initialize selectedIndex based on currentId - only computed once on mount
+  const [selectedIndex, setSelectedIndex] = useState(() => {
+    const index = options.findIndex((opt) => opt.id === currentId);
+    return index !== -1 ? index : 0;
+  });
+
+  // Track previous search query to reset selection when search changes
+  const prevSearchQueryRef = useRef(searchQuery);
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -42,13 +50,18 @@ export function SettingsPanel({
     );
   }, [options, searchQuery]);
 
-  // Update selection when filtered options change - prefer current value, fallback to 0
-  useEffect(() => {
+  // Reset selection when search query changes (synchronously in render)
+  if (searchQuery !== prevSearchQueryRef.current) {
+    prevSearchQueryRef.current = searchQuery;
+    // Find currentId in new filtered results, or default to 0
     const currentIndex = filteredOptions.findIndex(
       (opt) => opt.id === currentId,
     );
-    setSelectedIndex(currentIndex !== -1 ? currentIndex : 0);
-  }, [currentId, filteredOptions]);
+    const newIndex = currentIndex !== -1 ? currentIndex : 0;
+    if (newIndex !== selectedIndex) {
+      setSelectedIndex(newIndex);
+    }
+  }
 
   // Calculate visible window of options
   const { visibleOptions, startIndex } = useMemo(() => {
@@ -74,57 +87,84 @@ export function SettingsPanel({
     };
   }, [filteredOptions, selectedIndex, maxVisible]);
 
-  useInput((input, key) => {
-    // Escape to cancel
-    if (key.escape) {
-      onCancel();
-      return;
-    }
+  // Use refs to access current values in the input handler without causing re-subscriptions
+  const filteredOptionsRef = useRef(filteredOptions);
+  filteredOptionsRef.current = filteredOptions;
 
-    // Enter to confirm selection
-    if (key.return) {
-      const selected = filteredOptions[selectedIndex];
-      if (selected) {
-        onSelect(selected.id);
+  const searchQueryRef = useRef(searchQuery);
+  searchQueryRef.current = searchQuery;
+
+  // Memoize input handler to prevent useInput from re-subscribing on every render
+  const handleInput = useCallback(
+    (
+      input: string,
+      key: {
+        escape?: boolean;
+        return?: boolean;
+        upArrow?: boolean;
+        downArrow?: boolean;
+        ctrl?: boolean;
+        backspace?: boolean;
+        delete?: boolean;
+        meta?: boolean;
+      },
+    ) => {
+      // Escape to cancel
+      if (key.escape) {
+        onCancel();
+        return;
       }
-      return;
-    }
 
-    // Navigation (vim keys only work when not searching)
-    const goUp =
-      key.upArrow ||
-      (!searchQuery && input === "k") ||
-      (key.ctrl && input === "p");
-    const goDown =
-      key.downArrow ||
-      (!searchQuery && input === "j") ||
-      (key.ctrl && input === "n");
+      // Enter to confirm selection
+      if (key.return) {
+        setSelectedIndex((currentIndex) => {
+          const selected = filteredOptionsRef.current[currentIndex];
+          if (selected) {
+            onSelect(selected.id);
+          }
+          return currentIndex;
+        });
+        return;
+      }
 
-    if (goUp && filteredOptions.length > 0) {
-      setSelectedIndex((prev) =>
-        prev === 0 ? filteredOptions.length - 1 : prev - 1,
-      );
-      return;
-    }
+      // Navigation (vim keys only work when not searching)
+      const currentSearchQuery = searchQueryRef.current;
+      const goUp =
+        key.upArrow ||
+        (!currentSearchQuery && input === "k") ||
+        (key.ctrl && input === "p");
+      const goDown =
+        key.downArrow ||
+        (!currentSearchQuery && input === "j") ||
+        (key.ctrl && input === "n");
 
-    if (goDown && filteredOptions.length > 0) {
-      setSelectedIndex((prev) =>
-        prev === filteredOptions.length - 1 ? 0 : prev + 1,
-      );
-      return;
-    }
+      const optionsLength = filteredOptionsRef.current.length;
 
-    // Backspace to delete search character
-    if (key.backspace || key.delete) {
-      setSearchQuery((prev) => prev.slice(0, -1));
-      return;
-    }
+      if (goUp && optionsLength > 0) {
+        setSelectedIndex((prev) => (prev === 0 ? optionsLength - 1 : prev - 1));
+        return;
+      }
 
-    // Type to search (printable characters)
-    if (input && !key.ctrl && !key.meta) {
-      setSearchQuery((prev) => prev + input);
-    }
-  });
+      if (goDown && optionsLength > 0) {
+        setSelectedIndex((prev) => (prev === optionsLength - 1 ? 0 : prev + 1));
+        return;
+      }
+
+      // Backspace to delete search character
+      if (key.backspace || key.delete) {
+        setSearchQuery((prev) => prev.slice(0, -1));
+        return;
+      }
+
+      // Type to search (printable characters)
+      if (input && !key.ctrl && !key.meta) {
+        setSearchQuery((prev) => prev + input);
+      }
+    },
+    [onCancel, onSelect],
+  );
+
+  useInput(handleInput);
 
   return (
     <Box

@@ -615,6 +615,28 @@ function AppContent({ options }: AppProps) {
     [openPanel],
   );
 
+  // Memoize model options to prevent re-renders in SettingsPanel
+  const modelOptions = useMemo(
+    () =>
+      state.availableModels.map((m) => ({
+        id: m.id,
+        name: m.name,
+        meta: m.pricing
+          ? `${m.pricing.input} in · ${m.pricing.output} out`
+          : undefined,
+      })),
+    [state.availableModels],
+  );
+
+  // Memoize model selection handler to prevent re-renders
+  const handleModelSelect = useCallback(
+    (id: string) => {
+      updateSettings({ modelId: id });
+      closePanel();
+    },
+    [updateSettings, closePanel],
+  );
+
   // Show message list with either approval panel or input box at bottom
   return (
     <Box flexDirection="column" paddingLeft={1} paddingRight={1}>
@@ -643,18 +665,9 @@ function AppContent({ options }: AppProps) {
         <SettingsPanel
           title="Select model"
           description="Choose the AI model for this session"
-          options={state.availableModels.map((m) => ({
-            id: m.id,
-            name: m.name,
-            meta: m.pricing
-              ? `${m.pricing.input} in · ${m.pricing.output} out`
-              : undefined,
-          }))}
+          options={modelOptions}
           currentId={state.settings.modelId ?? ""}
-          onSelect={(id) => {
-            updateSettings({ modelId: id });
-            closePanel();
-          }}
+          onSelect={handleModelSelect}
           onCancel={closePanel}
         />
       )}
