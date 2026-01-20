@@ -21,20 +21,13 @@ export type { ModelInfo } from "./lib/models";
 // Session persistence exports
 export {
   createSession,
-  appendMessage,
+  saveSession,
   listSessions,
   loadSession,
   formatTimeAgo,
   encodeProjectPath,
-  decodeProjectPath,
 } from "./lib/session-storage";
-export type {
-  SessionListItem,
-  SessionData,
-  SessionMetadata,
-  SessionMessage,
-} from "./lib/session-types";
-export { convertToUIMessages } from "./lib/session-types";
+export type { SessionListItem, SessionData } from "./lib/session-types";
 
 /**
  * Create a Claude Code-style TUI.

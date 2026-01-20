@@ -1,6 +1,8 @@
 import {
+  generateId,
   type ChatTransport,
   type LanguageModelUsage,
+  type UIMessage,
   convertToModelMessages,
   smoothStream,
   pruneMessages,
@@ -14,6 +16,14 @@ import type {
 } from "./types";
 import type { Settings } from "./lib/settings";
 import { getModelById } from "./lib/models";
+import { createSession, saveSession } from "./lib/session-storage";
+
+export type PersistenceConfig = {
+  getSessionId: () => string | null;
+  projectPath: string;
+  branch: string;
+  onSessionCreated: (id: string) => void;
+};
 
 export type AgentTransportOptions = {
   agent: TUIAgent;
@@ -22,6 +32,7 @@ export type AgentTransportOptions = {
   getApprovalRules?: () => ApprovalRule[];
   getSettings?: () => Settings;
   onUsageUpdate?: (usage: LanguageModelUsage) => void;
+  persistence?: PersistenceConfig;
 };
 
 export function createAgentTransport({
@@ -31,6 +42,7 @@ export function createAgentTransport({
   getApprovalRules,
   getSettings,
   onUsageUpdate,
+  persistence,
 }: AgentTransportOptions): ChatTransport<TUIAgentUIMessage> {
   return {
     sendMessages: async ({ messages, abortSignal }) => {
@@ -91,13 +103,42 @@ export function createAgentTransport({
           // Ignore errors from aborted requests
         });
 
+      // Track session ID locally so we can update it after creation
+      let currentSessionId = persistence?.getSessionId() ?? null;
+
       return result.toUIMessageStream<TUIAgentUIMessage>({
+        originalMessages: messages,
+        generateMessageId: generateId,
         messageMetadata: ({ part }) => {
           if (part.type === "finish") {
             return { usage: part.totalUsage };
           }
           if (part.type === "finish-step") {
             return { usage: part.usage };
+          }
+        },
+        onFinish: async ({ messages: allMessages }) => {
+          if (!persistence) return;
+
+          try {
+            // Create session if needed
+            if (!currentSessionId) {
+              currentSessionId = await createSession(
+                persistence.projectPath,
+                persistence.branch,
+              );
+              persistence.onSessionCreated(currentSessionId);
+            }
+
+            // Save all messages (overwrites file)
+            await saveSession(
+              persistence.projectPath,
+              currentSessionId,
+              persistence.branch,
+              allMessages as UIMessage[],
+            );
+          } catch {
+            // Ignore persistence errors
           }
         },
       });

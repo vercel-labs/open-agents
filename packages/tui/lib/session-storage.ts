@@ -1,34 +1,19 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import {
-  sessionMetadataSchema,
-  sessionMessageSchema,
-  type SessionMetadata,
-  type SessionMessage,
-  type SessionListItem,
-  type SessionData,
-} from "./session-types";
-import type { TUIAgentUIMessage } from "../types";
+import type { UIMessage } from "ai";
+import type { SessionData, SessionListItem } from "./session-types";
 
 const CONFIG_DIR = join(homedir(), ".config", "open-harness");
 const SESSIONS_DIR = join(CONFIG_DIR, "sessions");
 
 /**
  * Encode a project path for use as a filesystem-safe directory name.
- * Example: /Users/nico/code/project → -Users-nico-code-project
+ * Example: /Users/nico/code/project → Users-nico-code-project
  */
 export function encodeProjectPath(path: string): string {
   return path.replace(/\//g, "-").replace(/^-/, "");
-}
-
-/**
- * Decode an encoded project path back to the original path.
- * Example: -Users-nico-code-project → /Users/nico/code/project
- */
-export function decodeProjectPath(encoded: string): string {
-  return "/" + encoded.replace(/-/g, "/");
 }
 
 /**
@@ -43,70 +28,90 @@ function getProjectSessionsDir(projectPath: string): string {
  * Get the full path to a session file.
  */
 function getSessionFilePath(projectPath: string, sessionId: string): string {
-  return join(getProjectSessionsDir(projectPath), `${sessionId}.jsonl`);
+  return join(getProjectSessionsDir(projectPath), `${sessionId}.json`);
 }
 
 /**
- * Create a new session and write its metadata.
- * Returns the new session ID.
+ * Create a new session and return the session ID.
  */
 export async function createSession(
   projectPath: string,
-  gitBranch: string,
+  branch: string,
 ): Promise<string> {
   const sessionId = randomUUID();
   const sessionsDir = getProjectSessionsDir(projectPath);
 
   await mkdir(sessionsDir, { recursive: true });
 
-  const metadata: SessionMetadata = {
-    type: "metadata",
-    sessionId,
+  const sessionData: SessionData = {
+    id: sessionId,
     projectPath,
-    gitBranch,
+    branch,
     createdAt: new Date().toISOString(),
+    messages: [],
   };
 
   const filePath = getSessionFilePath(projectPath, sessionId);
-  await writeFile(filePath, JSON.stringify(metadata) + "\n");
+  await writeFile(filePath, JSON.stringify(sessionData, null, 2));
 
   return sessionId;
 }
 
 /**
- * Append a message entry to a session's JSONL file.
- * Only user and assistant messages are persisted (system messages are skipped).
+ * Save all messages to a session (overwrites file).
  */
-export async function appendMessage(
+export async function saveSession(
   projectPath: string,
   sessionId: string,
-  message: TUIAgentUIMessage,
-  gitBranch: string,
+  branch: string,
+  messages: UIMessage[],
 ): Promise<void> {
-  // Only persist user and assistant messages
-  if (message.role !== "user" && message.role !== "assistant") {
-    return;
+  const sessionsDir = getProjectSessionsDir(projectPath);
+  await mkdir(sessionsDir, { recursive: true });
+
+  // Load existing session to preserve createdAt, or create new metadata
+  const filePath = getSessionFilePath(projectPath, sessionId);
+  let createdAt: string;
+
+  try {
+    const existing = await readFile(filePath, "utf-8");
+    const parsed = JSON.parse(existing) as SessionData;
+    createdAt = parsed.createdAt;
+  } catch {
+    createdAt = new Date().toISOString();
   }
 
-  const entry: SessionMessage = {
-    type: message.role,
-    timestamp: new Date().toISOString(),
-    gitBranch,
-    message: {
-      role: message.role,
-      parts: message.parts,
-      id: message.id,
-      metadata: message.metadata,
-    },
+  const sessionData: SessionData = {
+    id: sessionId,
+    projectPath,
+    branch,
+    createdAt,
+    messages,
   };
 
-  const filePath = getSessionFilePath(projectPath, sessionId);
-  await writeFile(filePath, JSON.stringify(entry) + "\n", { flag: "a" });
+  await writeFile(filePath, JSON.stringify(sessionData, null, 2));
 }
 
 /**
- * List all sessions for a project with summary metadata.
- * Returns sessions sorted by last activity (most recent first).
+ * Load a session for resume.
+ */
+export async function loadSession(
+  projectPath: string,
+  sessionId: string,
+): Promise<SessionData | null> {
+  const filePath = getSessionFilePath(projectPath, sessionId);
+
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const data = JSON.parse(content) as SessionData;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * List sessions for a project, sorted by last activity (most recent first).
  */
 export async function listSessions(
   projectPath: string,
@@ -117,82 +122,53 @@ export async function listSessions(
   try {
     files = await readdir(sessionsDir);
   } catch {
-    // Directory doesn't exist - no sessions
     return [];
   }
 
   const sessions: SessionListItem[] = [];
 
   for (const file of files) {
-    if (!file.endsWith(".jsonl")) continue;
+    if (!file.endsWith(".json")) continue;
 
     const filePath = join(sessionsDir, file);
     try {
       const content = await readFile(filePath, "utf-8");
-      const lines = content.trim().split("\n");
+      const data = JSON.parse(content) as SessionData;
 
-      if (lines.length === 0 || !lines[0]) continue;
+      // Skip sessions with no messages
+      if (!data.messages || data.messages.length === 0) continue;
 
-      // Parse metadata from first line
-      const metadataResult = sessionMetadataSchema.safeParse(
-        JSON.parse(lines[0]),
-      );
-      if (!metadataResult.success) continue;
-      const metadata = metadataResult.data;
+      // Get file modification time for lastActivity
+      const fileStat = await stat(filePath);
+      const lastActivity = fileStat.mtime;
 
-      // Parse messages to extract preview and count
-      let messageCount = 0;
-      let firstUserMessage = "";
-      let lastTimestamp = metadata.createdAt;
-      let lastBranch = metadata.gitBranch;
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
-
-        try {
-          const msgResult = sessionMessageSchema.safeParse(JSON.parse(line));
-          if (!msgResult.success) continue;
-          const msg = msgResult.data;
-
-          messageCount++;
-          lastTimestamp = msg.timestamp;
-          lastBranch = msg.gitBranch;
-
-          // Get first user message for preview
-          if (!firstUserMessage && msg.type === "user") {
-            const textPart = (
-              msg.message.parts as Array<{ type: string; text?: string }>
-            ).find((p) => p.type === "text" && p.text);
-            if (textPart?.text) {
-              firstUserMessage = textPart.text;
-            }
+      // Extract preview from first user message
+      let preview = "(no preview)";
+      for (const msg of data.messages) {
+        if (msg.role === "user") {
+          const textPart = (
+            msg.parts as Array<{ type: string; text?: string }>
+          ).find((p) => p.type === "text" && p.text);
+          if (textPart?.text) {
+            preview =
+              textPart.text.length > 60
+                ? textPart.text.slice(0, 57) + "..."
+                : textPart.text;
+            break;
           }
-        } catch {
-          // Skip invalid message lines
         }
       }
 
-      // Skip sessions with no messages (only metadata)
-      if (messageCount === 0) continue;
-
-      // Truncate preview to 60 characters
-      const preview =
-        firstUserMessage.length > 60
-          ? firstUserMessage.slice(0, 57) + "..."
-          : firstUserMessage || "(no preview)";
-
       sessions.push({
-        sessionId: metadata.sessionId,
-        projectPath: metadata.projectPath,
-        gitBranch: lastBranch,
-        createdAt: new Date(metadata.createdAt),
-        lastActivity: new Date(lastTimestamp),
-        messageCount,
-        firstMessagePreview: preview,
+        id: data.id,
+        branch: data.branch,
+        createdAt: new Date(data.createdAt),
+        lastActivity,
+        messageCount: data.messages.length,
+        preview,
       });
     } catch {
-      // Skip files that can't be read or parsed
+      // Skip invalid files
     }
   }
 
@@ -203,52 +179,7 @@ export async function listSessions(
 }
 
 /**
- * Load a complete session for restoration.
- */
-export async function loadSession(
-  projectPath: string,
-  sessionId: string,
-): Promise<SessionData | null> {
-  const filePath = getSessionFilePath(projectPath, sessionId);
-
-  try {
-    const content = await readFile(filePath, "utf-8");
-    const lines = content.trim().split("\n");
-
-    if (lines.length === 0 || !lines[0]) return null;
-
-    // Parse metadata
-    const metadataResult = sessionMetadataSchema.safeParse(
-      JSON.parse(lines[0]),
-    );
-    if (!metadataResult.success) return null;
-    const metadata = metadataResult.data;
-
-    // Parse messages
-    const messages: SessionMessage[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue;
-
-      try {
-        const msgResult = sessionMessageSchema.safeParse(JSON.parse(line));
-        if (msgResult.success) {
-          messages.push(msgResult.data);
-        }
-      } catch {
-        // Skip invalid lines
-      }
-    }
-
-    return { metadata, messages };
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Format a date as a relative time string.
- * Example: "2h ago", "3d ago", "just now"
  */
 export function formatTimeAgo(date: Date): string {
   const now = new Date();

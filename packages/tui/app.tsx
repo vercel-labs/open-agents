@@ -21,9 +21,7 @@ import { defaultModelLabel } from "@open-harness/agent";
 import type { SlashCommandAction } from "./lib/slash-commands";
 import { pasteCollapseLineThreshold } from "./config";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
-import { useSessionPersistence } from "./hooks/use-session-persistence";
 import { listSessions, loadSession } from "./lib/session-storage";
-import { convertToUIMessages } from "./lib/session-types";
 import type { SessionListItem } from "./lib/session-types";
 import type {
   TUIOptions,
@@ -400,7 +398,7 @@ const MessagesList = memo(function MessagesList({
     <Box flexDirection="column">
       {messages.map((message, index) => (
         <Message
-          key={message.id}
+          key={message.id || `msg-${index}`}
           message={message}
           activeApprovalId={activeApprovalId}
           isStreaming={isStreaming && index === messages.length - 1}
@@ -533,18 +531,9 @@ function AppContent({ options }: AppProps) {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [resumeError, setResumeError] = useState<string | null>(null);
 
-  const { messages, sendMessage, status, stop, error } = useChat({
+  const { messages, sendMessage, status, stop, error, setMessages } = useChat({
     chat,
   });
-
-  // Session persistence - auto-save messages
-  useSessionPersistence(
-    messages,
-    state.sessionId,
-    state.projectPath,
-    state.currentBranch,
-    setSessionId,
-  );
 
   const isStreaming = status === "streaming" || status === "submitted";
 
@@ -655,34 +644,14 @@ function AppContent({ options }: AppProps) {
           return;
         }
 
-        // Convert stored messages to UI messages
-        const uiMessages = convertToUIMessages(sessionData.messages);
-
-        // Set the messages on the chat instance
-        // Note: This uses the setMessages method from the Chat class
-        if (
-          chat &&
-          typeof (
-            chat as unknown as {
-              setMessages?: (msgs: TUIAgentUIMessage[]) => void;
-            }
-          ).setMessages === "function"
-        ) {
-          (
-            chat as unknown as {
-              setMessages: (msgs: TUIAgentUIMessage[]) => void;
-            }
-          ).setMessages(uiMessages);
-        }
-
-        // Update the session ID
+        setMessages(sessionData.messages as TUIAgentUIMessage[]);
         setSessionId(selectedSessionId);
         closePanel();
       } catch {
         setResumeError("Failed to load session");
       }
     },
-    [state.projectPath, chat, setSessionId, closePanel],
+    [state.projectPath, setMessages, setSessionId, closePanel],
   );
 
   const handleCommandSelect = useCallback(

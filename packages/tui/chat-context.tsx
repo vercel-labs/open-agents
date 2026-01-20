@@ -165,6 +165,8 @@ export function ChatProvider({
   approvalRulesRef.current = approvalRules;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
 
   const effectiveModel = settings.modelId ?? model ?? "";
   const contextLimit = useMemo(
@@ -201,8 +203,16 @@ export function ChatProvider({
         getApprovalRules: () => approvalRulesRef.current,
         getSettings: () => settingsRef.current,
         onUsageUpdate: handleUsageUpdate,
+        persistence: projectPath
+          ? {
+              getSessionId: () => sessionIdRef.current,
+              projectPath,
+              branch: currentBranch,
+              onSessionCreated: setSessionId,
+            }
+          : undefined,
       }),
-    [agentOptions, handleUsageUpdate],
+    [agentOptions, handleUsageUpdate, projectPath, currentBranch],
   );
 
   const chat = useMemo(

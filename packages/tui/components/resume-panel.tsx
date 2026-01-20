@@ -40,14 +40,14 @@ export function ResumePanel({
 
     // Apply branch filter
     if (filterByBranch && currentBranch) {
-      filtered = filtered.filter((s) => s.gitBranch === currentBranch);
+      filtered = filtered.filter((s) => s.branch === currentBranch);
     }
 
     // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((s) =>
-        s.firstMessagePreview.toLowerCase().includes(query),
+        s.preview.toLowerCase().includes(query),
       );
     }
 
@@ -121,7 +121,7 @@ export function ResumePanel({
       if (key.return) {
         const selected = filteredSessionsRef.current[selectedIndexRef.current];
         if (selected) {
-          onSelect(selected.sessionId);
+          onSelect(selected.id);
         }
         return;
       }
@@ -238,10 +238,10 @@ export function ResumePanel({
             {visibleSessions.map((session, visibleIndex) => {
               const actualIndex = startIndex + visibleIndex;
               const isSelected = actualIndex === selectedIndex;
-              const isSameBranch = session.gitBranch === currentBranch;
+              const isSameBranch = session.branch === currentBranch;
 
               return (
-                <Box key={session.sessionId} flexDirection="column">
+                <Box key={session.id} flexDirection="column">
                   <Box>
                     {/* Selection indicator */}
                     <Text color="yellow">{isSelected ? "> " : "  "}</Text>
@@ -253,7 +253,7 @@ export function ResumePanel({
                         bold={isSelected}
                         wrap="truncate"
                       >
-                        {session.firstMessagePreview}
+                        {session.preview}
                       </Text>
                     </Box>
 
@@ -268,7 +268,7 @@ export function ResumePanel({
 
                     {/* Branch indicator */}
                     {!isSameBranch && (
-                      <Text color="magenta"> [{session.gitBranch}]</Text>
+                      <Text color="magenta"> [{session.branch}]</Text>
                     )}
                   </Box>
                 </Box>
