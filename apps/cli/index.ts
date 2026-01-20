@@ -139,7 +139,11 @@ async function main() {
       },
       agentOptions: {
         sandbox,
-        mode: "interactive",
+        approval: {
+          type: "interactive",
+          autoApprove: "off",
+          sessionRules: [],
+        },
         ...(agentsMd?.content && {
           customInstructions: agentsMd.content,
         }),

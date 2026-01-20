@@ -7,6 +7,7 @@ import {
   getSandbox,
   pathMatchesGlob,
   getApprovalContext,
+  getSessionRules,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -147,27 +148,33 @@ export const globTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "glob");
+      const { approval } = ctx;
+
       // If no path is provided, it defaults to working directory (no approval needed)
       if (!args.path) {
         return false;
       }
+
       const absolutePath = path.isAbsolute(args.path)
         ? args.path
         : path.resolve(ctx.workingDirectory, args.path);
+
       // Check if within working directory - no approval needed
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
         return false;
       }
-      // Outside working directory - check if a rule matches
+
+      // Outside working directory - check if a session rule matches
       if (
         pathMatchesApprovalRule(
           args.path,
           ctx.workingDirectory,
-          ctx.approvalRules,
+          getSessionRules(approval),
         )
       ) {
         return false;
       }
+
       return true;
     },
     description: `Find files matching a glob pattern.

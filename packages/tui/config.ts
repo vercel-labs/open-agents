@@ -1,5 +1,5 @@
 import { deepAgent } from "@open-harness/agent";
-import type { AgentMode } from "@open-harness/agent";
+import type { ApprovalConfig } from "@open-harness/agent";
 import type { Sandbox } from "@open-harness/sandbox";
 import type { TUIAgentCallOptions } from "./types.js";
 
@@ -7,13 +7,20 @@ import type { TUIAgentCallOptions } from "./types.js";
 export const tuiAgent = deepAgent;
 export const pasteCollapseLineThreshold = 5;
 
+// Default approval config for interactive mode
+const defaultApprovalConfig: ApprovalConfig = {
+  type: "interactive",
+  autoApprove: "off",
+  sessionRules: [],
+};
+
 // Default agent options factory
 export function createDefaultAgentOptions(
   sandbox: Sandbox,
-  mode: AgentMode = "interactive",
+  approval: ApprovalConfig = defaultApprovalConfig,
 ): TUIAgentCallOptions {
   return {
     sandbox,
-    mode,
+    approval,
   };
 }

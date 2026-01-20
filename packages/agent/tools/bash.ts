@@ -1,7 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import { isPathWithinDirectory, getSandbox, getApprovalContext } from "./utils";
+import {
+  isPathWithinDirectory,
+  getSandbox,
+  getApprovalContext,
+  shouldAutoApprove,
+  getSessionRules,
+} from "./utils";
 import type { ApprovalRule } from "../types";
 
 const TIMEOUT_MS = 120_000;
@@ -131,30 +137,40 @@ export const bashTool = (options?: ToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "bash");
-      // Check if command matches any saved approval rules
-      if (commandMatchesApprovalRule(args.command, ctx.approvalRules)) {
+      const { approval } = ctx;
+
+      // Check if command matches any saved session rules
+      if (commandMatchesApprovalRule(args.command, getSessionRules(approval))) {
         return false;
       }
-      // Need approval if cwd is outside working directory (even in background mode)
+
+      // Need approval if cwd is outside working directory (even in background/delegated mode)
       if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
         return true;
       }
-      // In background mode, auto-approve all operations within working directory
-      if (ctx.mode === "background") {
+
+      // Background and delegated modes auto-approve all operations within working directory
+      if (shouldAutoApprove(approval)) {
         return false;
       }
-      // Auto-approve bash commands within working directory in interactive mode
-      if (ctx.mode === "interactive" && ctx.autoApprove === "all") {
-        return false;
-      }
-      // Check command safety
-      if (commandNeedsApproval(args.command)) {
-        // If command is dangerous, check user's approval setting
-        if (typeof options?.needsApproval === "function") {
-          return options.needsApproval(args);
+
+      // Interactive mode: check autoApprove setting and command safety
+      if (approval.type === "interactive") {
+        // Auto-approve all bash commands when autoApprove is "all"
+        if (approval.autoApprove === "all") {
+          return false;
         }
-        return options?.needsApproval ?? true;
+
+        // Check command safety
+        if (commandNeedsApproval(args.command)) {
+          // If command is dangerous, check user's approval setting
+          if (typeof options?.needsApproval === "function") {
+            return options.needsApproval(args);
+          }
+          return options?.needsApproval ?? true;
+        }
       }
+
       // Command is safe - no approval needed
       return false;
     },

@@ -6,6 +6,8 @@ import {
   getSandbox,
   pathMatchesGlob,
   getApprovalContext,
+  shouldAutoApprove,
+  getSessionRules,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -92,33 +94,45 @@ export const writeFileTool = (options?: WriteToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "write");
+      const { approval } = ctx;
       const isOutside = isOutsideWorkingDirectory(
         args.filePath,
         ctx.workingDirectory,
       );
-      // Check if path matches any saved approval rules (works for both inside and outside paths)
+
+      // Check if path matches any saved session rules (works for both inside and outside paths)
       if (
         pathMatchesApprovalRule(
           args.filePath,
           "write",
           ctx.workingDirectory,
-          ctx.approvalRules,
+          getSessionRules(approval),
         )
       ) {
         return false;
       }
+
       // If outside working directory and no approval rule matched, require approval
       if (isOutside) {
         return true;
       }
-      // In background mode, auto-approve all operations within working directory
-      if (ctx.mode === "background") {
+
+      // Background and delegated modes auto-approve all operations within working directory
+      if (shouldAutoApprove(approval)) {
         return false;
       }
-      // Auto-approve edits when autoApprove is "edits" or "all"
-      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-        return false;
+
+      // Interactive mode: check autoApprove setting
+      if (approval.type === "interactive") {
+        // Auto-approve edits when autoApprove is "edits" or "all"
+        if (
+          approval.autoApprove === "edits" ||
+          approval.autoApprove === "all"
+        ) {
+          return false;
+        }
       }
+
       // Otherwise use the configured approval setting
       if (typeof options?.needsApproval === "function") {
         return options.needsApproval(args);
@@ -187,33 +201,45 @@ export const editFileTool = (options?: EditToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "edit");
+      const { approval } = ctx;
       const isOutside = isOutsideWorkingDirectory(
         args.filePath,
         ctx.workingDirectory,
       );
-      // Check if path matches any saved approval rules (works for both inside and outside paths)
+
+      // Check if path matches any saved session rules (works for both inside and outside paths)
       if (
         pathMatchesApprovalRule(
           args.filePath,
           "edit",
           ctx.workingDirectory,
-          ctx.approvalRules,
+          getSessionRules(approval),
         )
       ) {
         return false;
       }
+
       // If outside working directory and no approval rule matched, require approval
       if (isOutside) {
         return true;
       }
-      // In background mode, auto-approve all operations within working directory
-      if (ctx.mode === "background") {
+
+      // Background and delegated modes auto-approve all operations within working directory
+      if (shouldAutoApprove(approval)) {
         return false;
       }
-      // Auto-approve edits when autoApprove is "edits" or "all"
-      if (ctx.autoApprove === "edits" || ctx.autoApprove === "all") {
-        return false;
+
+      // Interactive mode: check autoApprove setting
+      if (approval.type === "interactive") {
+        // Auto-approve edits when autoApprove is "edits" or "all"
+        if (
+          approval.autoApprove === "edits" ||
+          approval.autoApprove === "all"
+        ) {
+          return false;
+        }
       }
+
       // Otherwise use the configured approval setting
       if (typeof options?.needsApproval === "function") {
         return options.needsApproval(args);

@@ -7,6 +7,7 @@ import {
   getSandbox,
   getApprovalContext,
   pathMatchesGlob,
+  getSessionRules,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -92,21 +93,25 @@ export const readFileTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "read");
+      const { approval } = ctx;
       const absolutePath = resolveFilePath(args.filePath, ctx.workingDirectory);
+
       // Check if within working directory - no approval needed
       if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
         return false;
       }
-      // Check if path matches any saved approval rules
+
+      // Check if path matches any saved session rules
       if (
         pathMatchesApprovalRule(
           args.filePath,
           ctx.workingDirectory,
-          ctx.approvalRules,
+          getSessionRules(approval),
         )
       ) {
         return false;
       }
+
       // Outside working directory - requires approval
       return true;
     },

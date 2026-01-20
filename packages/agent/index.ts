@@ -8,7 +8,7 @@ export type { DeepAgentCallOptions } from "./deep-agent";
 export type {
   TodoItem,
   TodoStatus,
-  AgentMode,
+  ApprovalConfig,
   ApprovalRule,
 } from "./types";
 export { DEEP_AGENT_SYSTEM_PROMPT, buildSystemPrompt } from "./system-prompt";

@@ -14,27 +14,24 @@ export const todoItemSchema = z.object({
 export type TodoItem = z.infer<typeof todoItemSchema>;
 
 /**
- * Agent execution modes that control behavior based on execution context.
+ * Approval configuration using a discriminated union that makes the trust model explicit.
  *
- * - 'interactive': Human in the loop, local development. Tool approval required for writes/bash.
+ * - 'interactive': Human in the loop, local development. Uses autoApprove and sessionRules.
  * - 'background': Async execution, cloud sandbox. Auto-approve all tools, checkpoint via git.
+ * - 'delegated': Subagent inherits trust from parent agent. Auto-approve all tools.
  */
-export type AgentMode = "interactive" | "background";
-
-/**
- * Auto-approve settings for tool operations in interactive mode.
- *
- * - 'off': All destructive operations require manual approval (default)
- * - 'edits': Auto-approve file edits and writes within working directory
- * - 'all': Auto-approve all operations within working directory (edits + bash)
- */
-export type AutoApprove = "off" | "edits" | "all";
+export type ApprovalConfig =
+  | {
+      type: "interactive";
+      autoApprove: "off" | "edits" | "all";
+      sessionRules: ApprovalRule[];
+    }
+  | { type: "background" }
+  | { type: "delegated" };
 
 export interface AgentContext {
   sandbox: Sandbox;
-  mode: AgentMode;
-  autoApprove: AutoApprove;
-  approvalRules: ApprovalRule[];
+  approval: ApprovalConfig;
 }
 
 /**
