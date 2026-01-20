@@ -8,6 +8,7 @@ import {
   pathMatchesGlob,
   getApprovalContext,
   getSessionRules,
+  shouldAutoApprove,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -149,6 +150,11 @@ export const globTool = () =>
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "glob");
       const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
 
       // If no path is provided, it defaults to working directory (no approval needed)
       if (!args.path) {

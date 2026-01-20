@@ -139,19 +139,19 @@ export const bashTool = (options?: ToolOptions) =>
       const ctx = getApprovalContext(experimental_context, "bash");
       const { approval } = ctx;
 
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       // Check if command matches any saved session rules
       if (commandMatchesApprovalRule(args.command, getSessionRules(approval))) {
         return false;
       }
 
-      // Need approval if cwd is outside working directory (even in background/delegated mode)
+      // Need approval if cwd is outside working directory
       if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
         return true;
-      }
-
-      // Background and delegated modes auto-approve all operations within working directory
-      if (shouldAutoApprove(approval)) {
-        return false;
       }
 
       // Interactive mode: check autoApprove setting and command safety

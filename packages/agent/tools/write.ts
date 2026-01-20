@@ -95,6 +95,12 @@ export const writeFileTool = (options?: WriteToolOptions) =>
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "write");
       const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       const isOutside = isOutsideWorkingDirectory(
         args.filePath,
         ctx.workingDirectory,
@@ -115,11 +121,6 @@ export const writeFileTool = (options?: WriteToolOptions) =>
       // If outside working directory and no approval rule matched, require approval
       if (isOutside) {
         return true;
-      }
-
-      // Background and delegated modes auto-approve all operations within working directory
-      if (shouldAutoApprove(approval)) {
-        return false;
       }
 
       // Interactive mode: check autoApprove setting
@@ -202,6 +203,12 @@ export const editFileTool = (options?: EditToolOptions) =>
     needsApproval: async (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "edit");
       const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       const isOutside = isOutsideWorkingDirectory(
         args.filePath,
         ctx.workingDirectory,
@@ -222,11 +229,6 @@ export const editFileTool = (options?: EditToolOptions) =>
       // If outside working directory and no approval rule matched, require approval
       if (isOutside) {
         return true;
-      }
-
-      // Background and delegated modes auto-approve all operations within working directory
-      if (shouldAutoApprove(approval)) {
-        return false;
       }
 
       // Interactive mode: check autoApprove setting

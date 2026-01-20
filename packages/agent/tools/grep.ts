@@ -8,6 +8,7 @@ import {
   pathMatchesGlob,
   getApprovalContext,
   getSessionRules,
+  shouldAutoApprove,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -140,6 +141,12 @@ export const grepTool = () =>
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "grep");
       const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       const absolutePath = path.isAbsolute(args.path)
         ? args.path
         : path.resolve(ctx.workingDirectory, args.path);

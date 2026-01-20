@@ -8,6 +8,7 @@ import {
   getApprovalContext,
   pathMatchesGlob,
   getSessionRules,
+  shouldAutoApprove,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -94,6 +95,12 @@ export const readFileTool = () =>
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "read");
       const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       const absolutePath = resolveFilePath(args.filePath, ctx.workingDirectory);
 
       // Check if within working directory - no approval needed
