@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
 import { Box, Text, useInput } from "ink";
 
 export type SettingsOption = {
@@ -35,8 +41,11 @@ export function SettingsPanel({
     return index !== -1 ? index : 0;
   });
 
-  // Track previous search query to reset selection when search changes
-  const prevSearchQueryRef = useRef(searchQuery);
+  // Guard to prevent callbacks from firing during initial render
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+  }, []);
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -50,18 +59,15 @@ export function SettingsPanel({
     );
   }, [options, searchQuery]);
 
-  // Reset selection when search query changes (synchronously in render)
-  if (searchQuery !== prevSearchQueryRef.current) {
-    prevSearchQueryRef.current = searchQuery;
+  // Reset selection when search query changes
+  useEffect(() => {
     // Find currentId in new filtered results, or default to 0
     const currentIndex = filteredOptions.findIndex(
       (opt) => opt.id === currentId,
     );
     const newIndex = currentIndex !== -1 ? currentIndex : 0;
-    if (newIndex !== selectedIndex) {
-      setSelectedIndex(newIndex);
-    }
-  }
+    setSelectedIndex(newIndex);
+  }, [searchQuery, filteredOptions, currentId]);
 
   // Calculate visible window of options
   const { visibleOptions, startIndex } = useMemo(() => {
@@ -91,6 +97,9 @@ export function SettingsPanel({
   const filteredOptionsRef = useRef(filteredOptions);
   filteredOptionsRef.current = filteredOptions;
 
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
+
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
 
@@ -109,6 +118,9 @@ export function SettingsPanel({
         meta?: boolean;
       },
     ) => {
+      // Guard against callbacks firing during initial render
+      if (!isMountedRef.current) return;
+
       // Escape to cancel
       if (key.escape) {
         onCancel();
@@ -117,13 +129,10 @@ export function SettingsPanel({
 
       // Enter to confirm selection
       if (key.return) {
-        setSelectedIndex((currentIndex) => {
-          const selected = filteredOptionsRef.current[currentIndex];
-          if (selected) {
-            onSelect(selected.id);
-          }
-          return currentIndex;
-        });
+        const selected = filteredOptionsRef.current[selectedIndexRef.current];
+        if (selected) {
+          onSelect(selected.id);
+        }
         return;
       }
 

@@ -17,7 +17,7 @@
     "zod": "^4.3.5"
   },
   "scripts": {
-    "cli": "bun run --cwd apps/cli dev",
+    "cli": "AI_SDK_LOG_WARNINGS=false bun run --cwd apps/cli dev",
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
     "build": "turbo build",
