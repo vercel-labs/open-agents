@@ -40,8 +40,13 @@ export function useTasks() {
     }
 
     const responseData = (await res.json()) as { task: Task };
-    // Optimistically update the cache
-    mutate({ tasks: [responseData.task, ...tasks] }, false);
+    // Optimistically update the cache using functional form to avoid stale closure
+    mutate(
+      (current) => ({
+        tasks: [responseData.task, ...(current?.tasks ?? [])],
+      }),
+      { revalidate: false },
+    );
     return responseData.task;
   };
 
@@ -58,10 +63,14 @@ export function useTasks() {
     }
 
     const responseData = (await res.json()) as { task: Task };
-    // Optimistically update the cache
+    // Optimistically update the cache using functional form to avoid stale closure
     mutate(
-      { tasks: tasks.map((t) => (t.id === taskId ? responseData.task : t)) },
-      false,
+      (current) => ({
+        tasks: (current?.tasks ?? []).map((t) =>
+          t.id === taskId ? responseData.task : t,
+        ),
+      }),
+      { revalidate: false },
     );
     return responseData.task;
   };

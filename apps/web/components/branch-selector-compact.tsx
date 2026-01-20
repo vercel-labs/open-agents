@@ -58,6 +58,9 @@ export function BranchSelectorCompact({
 
   // Auto-select default branch when data loads (only once per owner/repo combo)
   useEffect(() => {
+    // Guard against undefined owner/repo to prevent matching "undefined/undefined"
+    if (!owner || !repo) return;
+
     const key = `${owner}/${repo}`;
     if (
       data?.defaultBranch &&

@@ -1,5 +1,7 @@
-import type { SWRConfiguration } from "swr";
-
+/**
+ * Default fetcher for SWR hooks.
+ * Parses JSON responses and extracts error messages from failed requests.
+ */
 export const fetcher = async <T>(url: string): Promise<T> => {
   const res = await fetch(url);
   if (!res.ok) {
@@ -15,9 +17,10 @@ export const fetcher = async <T>(url: string): Promise<T> => {
   return res.json() as Promise<T>;
 };
 
-export const swrConfig: SWRConfiguration = {
-  fetcher,
-  revalidateOnFocus: true,
-  dedupingInterval: 2000,
-  errorRetryCount: 3,
-};
+/**
+ * SWR revalidateOnFocus guidelines:
+ *
+ * - Session/auth data: revalidateOnFocus: true (detect login state changes)
+ * - GitHub data (branches, repos, models): default (true) - relatively static, cheap to refetch
+ * - Task diff/files: revalidateOnFocus: false - requires sandbox connection, avoid unnecessary errors
+ */

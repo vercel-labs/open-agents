@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import {
   Folder,
@@ -74,18 +74,13 @@ export function RepoSelectorCompact({
   const [open, setOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
 
+  // Track whether we've auto-selected an owner
+  const hasAutoSelectedRef = useRef(false);
+
   // Fetch owners (user + orgs)
   const { data: owners = [], isLoading: ownersLoading } = useSWR<Owner[]>(
     "github-owners",
     fetchOwners,
-    {
-      onSuccess: (data) => {
-        // Auto-select first owner if none selected
-        if (!currentOwner && data[0]) {
-          setCurrentOwner(data[0].login);
-        }
-      },
-    },
   );
 
   // Fetch repos for current owner (conditional fetch)
@@ -93,6 +88,14 @@ export function RepoSelectorCompact({
     currentOwner ? `/api/github/repos?owner=${currentOwner}` : null,
     fetcher,
   );
+
+  // Auto-select first owner when data loads (only once)
+  useEffect(() => {
+    if (owners[0] && !currentOwner && !hasAutoSelectedRef.current) {
+      hasAutoSelectedRef.current = true;
+      setCurrentOwner(owners[0].login);
+    }
+  }, [owners, currentOwner]);
 
   // Sync currentOwner with selectedOwner prop
   useEffect(() => {

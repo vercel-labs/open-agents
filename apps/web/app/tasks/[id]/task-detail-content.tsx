@@ -1013,7 +1013,9 @@ export function TaskDetailContent() {
         hasAutoOpenedDiffRef.current = true;
         setShowDiffPanel(true);
       }
-      // Refresh diff and files when files change
+      // Refresh diff and files when files change.
+      // These are fire-and-forget calls - SWR handles request deduplication
+      // and cleanup internally, so no await needed.
       refreshDiff();
       refreshFiles();
     }
