@@ -28,7 +28,7 @@ function getCommandPrefix(command: string): string {
 
 /**
  * Get glob pattern for a file path's directory.
- * Used for path-glob approval rules.
+ * Used for path-glob approval rules when the input is a file path.
  */
 function getDirectoryGlob(filePath: string, cwd: string): string {
   const absolutePath = path.isAbsolute(filePath)
@@ -37,6 +37,20 @@ function getDirectoryGlob(filePath: string, cwd: string): string {
   const relativePath = path.relative(cwd, absolutePath);
   const dirPath = path.dirname(relativePath);
   return dirPath === "." ? "**" : `${dirPath}/**`;
+}
+
+/**
+ * Get glob pattern for a directory path.
+ * Used for path-glob approval rules when the input is already a directory (e.g., glob/grep search paths).
+ */
+function getPathGlob(dirPath: string, cwd: string): string {
+  const absolutePath = path.isAbsolute(dirPath)
+    ? dirPath
+    : path.resolve(cwd, dirPath);
+  const relativePath = path.relative(cwd, absolutePath);
+  return relativePath === "" || relativePath === "."
+    ? "**"
+    : `${relativePath}/**`;
 }
 
 /**
@@ -113,7 +127,7 @@ export function getToolApprovalInfo(
     case "tool-glob": {
       const pattern = String(part.input?.pattern ?? "");
       const searchPath = String(part.input?.path ?? cwd);
-      const glob = getDirectoryGlob(searchPath, cwd);
+      const glob = getPathGlob(searchPath, cwd);
       return {
         toolType: "Glob",
         toolCommand: `"${pattern}" in ${searchPath}`,
@@ -125,7 +139,7 @@ export function getToolApprovalInfo(
     case "tool-grep": {
       const pattern = String(part.input?.pattern ?? "");
       const searchPath = String(part.input?.path ?? cwd);
-      const glob = getDirectoryGlob(searchPath, cwd);
+      const glob = getPathGlob(searchPath, cwd);
       return {
         toolType: "Grep",
         toolCommand: `"${pattern}" in ${searchPath}`,
@@ -220,7 +234,7 @@ export function inferApprovalRule(
       return {
         type: "path-glob",
         tool: "glob",
-        glob: getDirectoryGlob(searchPath, cwd),
+        glob: getPathGlob(searchPath, cwd),
       };
     }
 
@@ -231,7 +245,7 @@ export function inferApprovalRule(
       return {
         type: "path-glob",
         tool: "grep",
-        glob: getDirectoryGlob(searchPath, cwd),
+        glob: getPathGlob(searchPath, cwd),
       };
     }
 
