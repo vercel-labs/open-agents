@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import {
@@ -207,6 +208,18 @@ export function TaskChatProvider({
     error: filesError,
     refresh: refreshFilesSWR,
   } = useTaskFiles(task.id, sandboxConnected);
+
+  // Update local task state when fresh diff data is received from the live sandbox.
+  // This ensures cachedDiff is available when the sandbox disconnects.
+  useEffect(() => {
+    if (diff && !diffIsStale) {
+      setTask((prev) => ({
+        ...prev,
+        cachedDiff: diff,
+        cachedDiffUpdatedAt: new Date(),
+      }));
+    }
+  }, [diff, diffIsStale]);
 
   const refreshDiff = useCallback(async () => {
     await refreshDiffSWR();
