@@ -110,6 +110,30 @@ export function getToolApprovalInfo(
       };
     }
 
+    case "tool-glob": {
+      const pattern = String(part.input?.pattern ?? "");
+      const searchPath = String(part.input?.path ?? cwd);
+      const glob = getDirectoryGlob(searchPath, cwd);
+      return {
+        toolType: "Glob",
+        toolCommand: `"${pattern}" in ${searchPath}`,
+        toolDescription: "Search files outside working directory",
+        dontAskAgainPattern: `globs in ${glob}`,
+      };
+    }
+
+    case "tool-grep": {
+      const pattern = String(part.input?.pattern ?? "");
+      const searchPath = String(part.input?.path ?? cwd);
+      const glob = getDirectoryGlob(searchPath, cwd);
+      return {
+        toolType: "Grep",
+        toolCommand: `"${pattern}" in ${searchPath}`,
+        toolDescription: "Search content outside working directory",
+        dontAskAgainPattern: `greps in ${glob}`,
+      };
+    }
+
     default: {
       const toolName = getToolName(part);
       return {
@@ -186,6 +210,28 @@ export function inferApprovalRule(
         type: "subagent-type",
         tool: "task",
         subagentType,
+      };
+    }
+
+    case "tool-glob": {
+      const searchPath = String(part.input?.path ?? "");
+      if (!searchPath) return null;
+
+      return {
+        type: "path-glob",
+        tool: "glob",
+        glob: getDirectoryGlob(searchPath, cwd),
+      };
+    }
+
+    case "tool-grep": {
+      const searchPath = String(part.input?.path ?? "");
+      if (!searchPath) return null;
+
+      return {
+        type: "path-glob",
+        tool: "grep",
+        glob: getDirectoryGlob(searchPath, cwd),
       };
     }
 
