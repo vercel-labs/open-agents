@@ -1,7 +1,7 @@
 import React from "react";
 import { Text } from "ink";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { ToolLayout, toRelativePath } from "./shared.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { ToolLayout, toRelativePath } from "./shared";
 
 export function ReadRenderer({ part, state }: ToolRendererProps<"tool-read">) {
   const cwd = process.cwd();

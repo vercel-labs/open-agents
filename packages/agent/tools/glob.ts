@@ -3,12 +3,11 @@ import { z } from "zod";
 import * as path from "path";
 import type { Sandbox } from "@open-harness/sandbox";
 import {
-  isPathWithinDirectory,
   getSandbox,
-  pathMatchesGlob,
   getApprovalContext,
+  shouldAutoApprove,
+  pathNeedsApproval,
 } from "./utils";
-import type { ApprovalRule } from "../types";
 
 interface FileInfo {
   path: string;
@@ -113,62 +112,28 @@ const globInputSchema = z.object({
     .describe("Maximum number of results. Default: 100"),
 });
 
-/**
- * Check if a path matches any path-glob approval rules for glob operations.
- * Glob approval rules apply to paths OUTSIDE the working directory, so we need
- * to allow matching outside the base directory.
- */
-function pathMatchesApprovalRule(
-  searchPath: string,
-  workingDirectory: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  const absolutePath = path.isAbsolute(searchPath)
-    ? searchPath
-    : path.resolve(workingDirectory, searchPath);
-
-  for (const rule of approvalRules) {
-    if (rule.type === "path-glob" && rule.tool === "glob") {
-      // Glob rules apply to paths outside the working directory,
-      // so we must allow matching outside the base
-      if (
-        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
-          allowOutsideBase: true,
-        })
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 export const globTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "glob");
+      const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
+        return false;
+      }
+
       // If no path is provided, it defaults to working directory (no approval needed)
       if (!args.path) {
         return false;
       }
-      const absolutePath = path.isAbsolute(args.path)
-        ? args.path
-        : path.resolve(ctx.workingDirectory, args.path);
-      // Check if within working directory - no approval needed
-      if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
-        return false;
-      }
-      // Outside working directory - check if a rule matches
-      if (
-        pathMatchesApprovalRule(
-          args.path,
-          ctx.workingDirectory,
-          ctx.approvalRules,
-        )
-      ) {
-        return false;
-      }
-      return true;
+
+      return pathNeedsApproval({
+        path: args.path,
+        tool: "glob",
+        approval,
+        workingDirectory: ctx.workingDirectory,
+      });
     },
     description: `Find files matching a glob pattern.
 

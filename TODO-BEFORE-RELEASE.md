@@ -83,7 +83,7 @@ To work through these todos, follow this pattern:
 
 ## Technical Debt
 
-- [ ] Align import extensions across packages - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack
+- [x] Align import extensions across packages - `packages/shared` uses `.js` extensions which cause issues with Next.js/Turbopack
 
 ---
 

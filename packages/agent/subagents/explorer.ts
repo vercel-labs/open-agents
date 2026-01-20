@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readFileTool } from "../tools/read";
 import { grepTool } from "../tools/grep";
 import { globTool } from "../tools/glob";
-import { bashTool, commandNeedsApproval } from "../tools/bash";
+import { bashTool } from "../tools/bash";
 import type { Sandbox } from "@open-harness/sandbox";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
@@ -70,14 +70,11 @@ export const explorerSubagent = new ToolLoopAgent({
   model: "anthropic/claude-haiku-4.5",
   instructions: EXPLORER_SYSTEM_PROMPT,
   tools: {
+    // All tools auto-approve in delegated mode (set via prepareCall)
     read: readFileTool(),
     grep: grepTool(),
     glob: globTool(),
-    // Use smart approval: safe read-only commands run without approval,
-    // dangerous commands are blocked (explorer is read-only anyway)
-    bash: bashTool({
-      needsApproval: ({ command }) => commandNeedsApproval(command),
-    }),
+    bash: bashTool(),
   },
   stopWhen: stepCountIs(30),
   callOptionsSchema,
@@ -101,8 +98,7 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
       experimental_context: {
         sandbox,
-        workingDirectory: sandbox.workingDirectory,
-        autoApprove: "all",
+        approval: { type: "delegated" },
       },
     };
   },

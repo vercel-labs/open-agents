@@ -43,22 +43,32 @@ export function createAgentTransport({
         emptyMessages: "remove",
       });
 
-      // Get current settings at request time
-      const autoApprove = getAutoApprove
-        ? getAutoApprove()
-        : (agentOptions.approvals?.autoApprove ?? "off");
-      const approvalRules = getApprovalRules
-        ? getApprovalRules()
-        : (agentOptions.approvals?.rules ?? []);
-      const approvals = {
-        ...agentOptions.approvals,
-        autoApprove,
-        rules: approvalRules,
-      };
+      // Get current settings at request time and build approval config
+      const autoApprove = getAutoApprove ? getAutoApprove() : "off";
+      const sessionRules = getApprovalRules ? getApprovalRules() : [];
+
+      // Build the approval config based on the current base config type
+      const baseApproval = agentOptions.approval;
+      let approval: typeof baseApproval;
+      switch (baseApproval.type) {
+        case "interactive":
+          // Interactive mode: inject current UI settings
+          approval = {
+            type: "interactive",
+            autoApprove,
+            sessionRules,
+          };
+          break;
+        case "background":
+        case "delegated":
+          // These modes are fully trusted - pass through unchanged
+          approval = baseApproval;
+          break;
+      }
 
       const result = await agent.stream({
         messages: prunedMessages,
-        options: { ...agentOptions, approvals },
+        options: { ...agentOptions, approval },
         abortSignal: abortSignal ?? undefined,
         experimental_transform: smoothStream(),
       });

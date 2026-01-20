@@ -4,7 +4,7 @@ import { readFileTool } from "../tools/read";
 import { writeFileTool, editFileTool } from "../tools/write";
 import { grepTool } from "../tools/grep";
 import { globTool } from "../tools/glob";
-import { bashTool, commandNeedsApproval } from "../tools/bash";
+import { bashTool } from "../tools/bash";
 import type { Sandbox } from "@open-harness/sandbox";
 
 const EXECUTOR_SYSTEM_PROMPT = `You are an executor agent - a fire-and-forget subagent that completes specific, well-defined implementation tasks autonomously.
@@ -57,16 +57,13 @@ export const executorSubagent = new ToolLoopAgent({
   model: "anthropic/claude-haiku-4.5",
   instructions: EXECUTOR_SYSTEM_PROMPT,
   tools: {
+    // All tools auto-approve in delegated mode (set via prepareCall)
     read: readFileTool(),
-    write: writeFileTool({ needsApproval: false }),
-    edit: editFileTool({ needsApproval: false }),
+    write: writeFileTool(),
+    edit: editFileTool(),
     grep: grepTool(),
     glob: globTool(),
-    // Use smart approval: safe read-only commands run without approval,
-    // dangerous commands (rm, git push, etc.) still require approval
-    bash: bashTool({
-      needsApproval: ({ command }) => commandNeedsApproval(command),
-    }),
+    bash: bashTool(),
   },
   stopWhen: stepCountIs(30),
   callOptionsSchema,
@@ -90,8 +87,7 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
       experimental_context: {
         sandbox,
-        workingDirectory: sandbox.workingDirectory,
-        autoApprove: "all",
+        approval: { type: "delegated" },
       },
     };
   },

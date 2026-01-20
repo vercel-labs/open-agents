@@ -8,10 +8,10 @@ import {
   type CodeLine,
   type DiffLine,
 } from "@open-harness/shared";
-import { useChatContext } from "../chat-context.js";
-import type { TUIAgentUIToolPart, ApprovalRule } from "../types.js";
-import { inferApprovalRule } from "../lib/approval.js";
-import { cliHighlighter } from "../lib/highlighter.js";
+import { useChatContext } from "../chat-context";
+import type { TUIAgentUIToolPart, ApprovalRule } from "../types";
+import { inferApprovalRule } from "../lib/approval";
+import { cliHighlighter } from "../lib/highlighter";
 
 export type ApprovalPanelProps = {
   approvalId: string;

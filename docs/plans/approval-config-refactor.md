@@ -1,6 +1,6 @@
 # Plan: Refactor Approval Config to Discriminated Union
 
-**Status:** Incomplete / Not Implemented
+**Status:** Implemented
 
 ## Problem
 

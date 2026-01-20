@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { ToolSpinner, getDotColor } from "./shared.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { ToolSpinner, getDotColor } from "./shared";
 
 export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
   const command = String(part.input?.command ?? "");

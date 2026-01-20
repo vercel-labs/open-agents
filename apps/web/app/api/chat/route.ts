@@ -110,10 +110,13 @@ export async function POST(req: Request) {
     messages: modelMessages,
     options: {
       sandbox,
-      mode: "interactive",
       model,
       // TODO: consider enabling approvals for non-cloud-sandbox environments
-      approvals: { autoApprove: "all" },
+      approval: {
+        type: "interactive",
+        autoApprove: "all",
+        sessionRules: [],
+      },
     },
     abortSignal: req.signal,
   });

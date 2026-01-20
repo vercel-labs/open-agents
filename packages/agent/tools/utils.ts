@@ -1,10 +1,5 @@
 import * as path from "path";
-import type {
-  AgentContext,
-  AgentMode,
-  AutoApprove,
-  ApprovalRule,
-} from "../types";
+import type { AgentContext, ApprovalConfig, ApprovalRule } from "../types";
 import type { Sandbox } from "@open-harness/sandbox";
 import type { ModelMessage } from "ai";
 
@@ -56,35 +51,27 @@ export function getSandbox(
 }
 
 /**
- * Get agent mode from experimental context.
- * Defaults to 'interactive' if not set (backward compatibility).
+ * Check if the approval config implies full trust (auto-approve everything within sandbox).
+ * Returns true for background and delegated modes.
  *
- * @param experimental_context - The context passed to tool execute functions
- * @returns The agent mode ('interactive' or 'background')
- */
-export function getMode(experimental_context: unknown): AgentMode {
-  const context = experimental_context as AgentContext | undefined;
-  return context?.mode ?? "interactive";
-}
-
-/**
- * Check if the agent is running in background mode.
- * Useful for conditional logic in tools.
+ * This is a type guard - after checking, TypeScript narrows the type.
  *
- * @param experimental_context - The context passed to tool execute functions
- * @returns true if running in background mode
+ * @param approval - The approval configuration
+ * @returns true if the context implies full trust
  */
-export function isBackgroundMode(experimental_context: unknown): boolean {
-  return getMode(experimental_context) === "background";
+export function shouldAutoApprove(
+  approval: ApprovalConfig,
+): approval is { type: "background" } | { type: "delegated" } {
+  return approval.type === "background" || approval.type === "delegated";
 }
 
 /**
  * Get the full approval context from experimental_context.
- * Used by needsApproval functions to access mode, autoApprove, and approvalRules.
+ * Used by needsApproval functions to access approval configuration.
  *
  * @param experimental_context - The context passed to needsApproval functions
  * @param toolName - Optional tool name for better error messages
- * @returns Object with sandbox, mode, autoApprove, and approvalRules
+ * @returns Object with sandbox, workingDirectory, and approval config
  */
 export function getApprovalContext(
   experimental_context: unknown,
@@ -92,9 +79,7 @@ export function getApprovalContext(
 ): {
   sandbox: Sandbox;
   workingDirectory: string;
-  mode: AgentMode;
-  autoApprove: AutoApprove;
-  approvalRules: ApprovalRule[];
+  approval: ApprovalConfig;
 } {
   const context = experimental_context as AgentContext | undefined;
   if (!context?.sandbox) {
@@ -107,12 +92,18 @@ export function getApprovalContext(
         "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
   }
+
+  // Default to interactive mode with no auto-approve if approval config is missing
+  const defaultApproval: ApprovalConfig = {
+    type: "interactive",
+    autoApprove: "off",
+    sessionRules: [],
+  };
+
   return {
     sandbox: context.sandbox,
     workingDirectory: context.sandbox.workingDirectory,
-    mode: context.mode ?? "interactive",
-    autoApprove: context.autoApprove ?? "off",
-    approvalRules: context.approvalRules ?? [],
+    approval: context.approval ?? defaultApproval,
   };
 }
 
@@ -174,6 +165,129 @@ export function pathMatchesGlob(
   } catch {
     // If regex construction fails (malformed pattern), treat as no match
     return false;
+  }
+}
+
+/**
+ * Tools that can have path-glob approval rules.
+ */
+export type PathToolName = "read" | "write" | "edit" | "grep" | "glob";
+
+/**
+ * Check if a file path matches any path-glob approval rules for a specific tool.
+ * Rules can apply to paths outside the working directory, so we allow matching outside the base.
+ */
+export function pathMatchesApprovalRule(
+  filePath: string,
+  tool: PathToolName,
+  workingDirectory: string,
+  approvalRules: ApprovalRule[],
+): boolean {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(workingDirectory, filePath);
+
+  for (const rule of approvalRules) {
+    if (rule.type === "path-glob" && rule.tool === tool) {
+      if (
+        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
+          allowOutsideBase: true,
+        })
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Options for checking if a path-based operation needs approval.
+ */
+type PathApprovalOptions = {
+  /** The file path to check */
+  path: string;
+  /** The tool making the request */
+  tool: PathToolName;
+  /** The approval config (must be interactive - use shouldAutoApprove first) */
+  approval: {
+    type: "interactive";
+    autoApprove: "off" | "edits" | "all";
+    sessionRules: ApprovalRule[];
+  };
+  /** The working directory for path resolution */
+  workingDirectory: string;
+};
+
+/**
+ * Determines if a path-based operation needs approval.
+ *
+ * Call shouldAutoApprove() first - this function assumes interactive mode.
+ *
+ * Logic:
+ * - Read-only tools (read, grep, glob): auto-approve inside working dir, check session rules outside
+ * - Write tools (write, edit): check session rules first, then working dir + autoApprove setting
+ *
+ * @returns true if approval is needed, false if auto-approved
+ */
+export function pathNeedsApproval(options: PathApprovalOptions): boolean {
+  const { path: filePath, tool, approval, workingDirectory } = options;
+
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(workingDirectory, filePath);
+
+  const isInsideWorkingDir = isPathWithinDirectory(
+    absolutePath,
+    workingDirectory,
+  );
+  const isWriteTool = tool === "write" || tool === "edit";
+
+  if (isWriteTool) {
+    // Write tools: session rules can auto-approve any path (inside or outside)
+    if (
+      pathMatchesApprovalRule(
+        filePath,
+        tool,
+        workingDirectory,
+        approval.sessionRules,
+      )
+    ) {
+      return false;
+    }
+
+    // Outside working directory without matching rule = needs approval
+    if (!isInsideWorkingDir) {
+      return true;
+    }
+
+    // Inside working directory: check autoApprove setting
+    if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
+      return false;
+    }
+
+    // Inside working directory but autoApprove doesn't cover edits
+    return true;
+  } else {
+    // Read-only tools: inside working directory = auto-approve
+    if (isInsideWorkingDir) {
+      return false;
+    }
+
+    // Outside working directory: check session rules
+    if (
+      pathMatchesApprovalRule(
+        filePath,
+        tool,
+        workingDirectory,
+        approval.sessionRules,
+      )
+    ) {
+      return false;
+    }
+
+    // Outside working directory without matching rule = needs approval
+    return true;
   }
 }
 

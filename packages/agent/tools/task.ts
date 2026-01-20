@@ -2,7 +2,7 @@ import { tool, readUIMessageStream, type UIToolInvocation } from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "../subagents/explorer";
 import { executorSubagent } from "../subagents/executor";
-import { getSandbox, getApprovalContext } from "./utils";
+import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
 import type { ApprovalRule } from "../types";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
@@ -45,18 +45,24 @@ export const taskTool = tool({
   // Explorer is read-only, so no approval needed
   needsApproval: ({ subagentType }, { experimental_context }) => {
     const ctx = getApprovalContext(experimental_context, "task");
+    const { approval } = ctx;
+
     // Explorer never needs approval
     if (subagentType !== "executor") {
       return false;
     }
-    // In background mode, auto-approve
-    if (ctx.mode === "background") {
+
+    // Background and delegated modes auto-approve
+    if (shouldAutoApprove(approval)) {
       return false;
     }
-    // Check if a rule matches this subagent type
-    if (subagentMatchesApprovalRule(subagentType, ctx.approvalRules)) {
+
+    // Type guard narrowed approval to interactive mode
+    // Check if a session rule matches this subagent type
+    if (subagentMatchesApprovalRule(subagentType, approval.sessionRules)) {
       return false;
     }
+
     // Default: executor needs approval
     return true;
   },

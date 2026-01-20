@@ -3,12 +3,11 @@ import { z } from "zod";
 import * as path from "path";
 import type { Sandbox } from "@open-harness/sandbox";
 import {
-  isPathWithinDirectory,
   getSandbox,
-  pathMatchesGlob,
   getApprovalContext,
+  shouldAutoApprove,
+  pathNeedsApproval,
 } from "./utils";
-import type { ApprovalRule } from "../types";
 
 interface GrepMatch {
   file: string;
@@ -104,58 +103,23 @@ const grepInputSchema = z.object({
     .describe("Case-sensitive search. Default: true"),
 });
 
-/**
- * Check if a path matches any path-glob approval rules for grep operations.
- * Grep approval rules apply to paths OUTSIDE the working directory, so we need
- * to allow matching outside the base directory.
- */
-function pathMatchesApprovalRule(
-  searchPath: string,
-  workingDirectory: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  const absolutePath = path.isAbsolute(searchPath)
-    ? searchPath
-    : path.resolve(workingDirectory, searchPath);
-
-  for (const rule of approvalRules) {
-    if (rule.type === "path-glob" && rule.tool === "grep") {
-      // Grep rules apply to paths outside the working directory,
-      // so we must allow matching outside the base
-      if (
-        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
-          allowOutsideBase: true,
-        })
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 export const grepTool = () =>
   tool({
     needsApproval: (args, { experimental_context }) => {
       const ctx = getApprovalContext(experimental_context, "grep");
-      const absolutePath = path.isAbsolute(args.path)
-        ? args.path
-        : path.resolve(ctx.workingDirectory, args.path);
-      // Check if within working directory - no approval needed
-      if (isPathWithinDirectory(absolutePath, ctx.workingDirectory)) {
+      const { approval } = ctx;
+
+      // Background and delegated modes auto-approve all operations
+      if (shouldAutoApprove(approval)) {
         return false;
       }
-      // Outside working directory - check if a rule matches
-      if (
-        pathMatchesApprovalRule(
-          args.path,
-          ctx.workingDirectory,
-          ctx.approvalRules,
-        )
-      ) {
-        return false;
-      }
-      return true;
+
+      return pathNeedsApproval({
+        path: args.path,
+        tool: "grep",
+        approval,
+        workingDirectory: ctx.workingDirectory,
+      });
     },
     description: `Search for patterns in files using JavaScript regular expressions.
 

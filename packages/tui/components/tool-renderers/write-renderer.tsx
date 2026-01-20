@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
 import { createNewFileCodeLines } from "@open-harness/shared";
-import type { ToolRendererProps } from "../../lib/render-tool.js";
-import { NewFileLayout, toRelativePath } from "./shared.js";
-import { useChatContext } from "../../chat-context.js";
-import { cliHighlighter } from "../../lib/highlighter.js";
+import type { ToolRendererProps } from "../../lib/render-tool";
+import { NewFileLayout, toRelativePath } from "./shared";
+import { useChatContext } from "../../chat-context";
+import { cliHighlighter } from "../../lib/highlighter";
 
 export function WriteRenderer({
   part,
