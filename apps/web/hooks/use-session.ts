@@ -1,32 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { SessionUserInfo } from "@/lib/session/types";
 
 export function useSession() {
-  const [session, setSession] = useState<SessionUserInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useSWR<SessionUserInfo>(
+    "/api/auth/info",
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      fallbackData: { user: undefined },
+    },
+  );
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const res = await fetch("/api/auth/info");
-        const data = (await res.json()) as SessionUserInfo;
-        setSession(data);
-      } catch (error) {
-        console.error("Failed to fetch session:", error);
-        setSession({ user: undefined });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSession();
-
-    const handleFocus = () => fetchSession();
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, []);
-
-  return { session, loading, isAuthenticated: !!session?.user };
+  return {
+    session: data ?? null,
+    loading: isLoading,
+    isAuthenticated: !!data?.user,
+  };
 }

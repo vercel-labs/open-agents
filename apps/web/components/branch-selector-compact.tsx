@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { GitBranch, ChevronDown, CheckIcon, PlusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetcher } from "@/lib/swr";
 import {
   Popover,
   PopoverContent,
@@ -39,50 +41,34 @@ export function BranchSelectorCompact({
   onChange,
 }: BranchSelectorCompactProps) {
   const [open, setOpen] = useState(false);
-  const [branches, setBranches] = useState<string[]>([]);
-  const [defaultBranch, setDefaultBranch] = useState("main");
-  const [loading, setLoading] = useState(false);
 
-  // Use refs to avoid dependency issues in useEffect
-  const valueRef = useRef(value);
-  const isNewBranchRef = useRef(isNewBranch);
-  const onChangeRef = useRef(onChange);
-  valueRef.current = value;
-  isNewBranchRef.current = isNewBranch;
-  onChangeRef.current = onChange;
+  // Track whether we've auto-selected for this owner/repo combo
+  const autoSelectedKeyRef = useRef<string | null>(null);
 
+  // Conditional fetch based on owner and repo
+  const { data, isLoading } = useSWR<BranchesResponse>(
+    owner && repo
+      ? `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`
+      : null,
+    fetcher,
+  );
+
+  const branches = data?.branches ?? [];
+  const defaultBranch = data?.defaultBranch ?? "main";
+
+  // Auto-select default branch when data loads (only once per owner/repo combo)
   useEffect(() => {
-    if (!owner || !repo) {
-      setBranches([]);
-      return;
+    const key = `${owner}/${repo}`;
+    if (
+      data?.defaultBranch &&
+      !value &&
+      !isNewBranch &&
+      autoSelectedKeyRef.current !== key
+    ) {
+      autoSelectedKeyRef.current = key;
+      onChange(data.defaultBranch, false);
     }
-
-    const fetchBranches = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch branches");
-        }
-        const data = (await response.json()) as BranchesResponse;
-        setBranches(data.branches);
-        setDefaultBranch(data.defaultBranch);
-        // Auto-select default branch if no value is set and not creating new branch
-        if (!valueRef.current && !isNewBranchRef.current) {
-          onChangeRef.current(data.defaultBranch, false);
-        }
-      } catch (err) {
-        console.error("Failed to fetch branches:", err);
-        setBranches([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBranches();
-  }, [owner, repo]);
+  }, [data, value, isNewBranch, onChange, owner, repo]);
 
   const handleSelectBranch = (branch: string) => {
     onChange(branch, false);
@@ -94,9 +80,8 @@ export function BranchSelectorCompact({
     setOpen(false);
   };
 
-  // Determine display text
   const getDisplayText = () => {
-    if (loading) return "Loading...";
+    if (isLoading) return "Loading...";
     if (isNewBranch) return "New branch (auto)";
     return value || defaultBranch || "main";
   };
@@ -118,7 +103,7 @@ export function BranchSelectorCompact({
           <CommandInput placeholder="Search branches..." />
           <CommandList>
             <CommandEmpty>
-              {loading ? "Loading..." : "No branches found."}
+              {isLoading ? "Loading..." : "No branches found."}
             </CommandEmpty>
             <CommandGroup>
               {branches.map((branch) => (

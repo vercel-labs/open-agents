@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { ChevronDown, CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetcher } from "@/lib/swr";
 import {
   Popover,
   PopoverContent,
@@ -27,34 +29,18 @@ interface ModelSelectorCompactProps {
   onChange: (modelId: string) => void;
 }
 
+interface ModelsResponse {
+  models: AvailableModel[];
+}
+
 export function ModelSelectorCompact({
   value,
   onChange,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
-  const [models, setModels] = useState<AvailableModel[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useSWR<ModelsResponse>("/api/models", fetcher);
 
-  useEffect(() => {
-    const fetchModels = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("/api/models");
-        if (!response.ok) {
-          throw new Error("Failed to fetch models");
-        }
-        const data = (await response.json()) as { models: AvailableModel[] };
-        setModels(data.models);
-      } catch (err) {
-        console.error("Failed to fetch models:", err);
-        setModels([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchModels();
-  }, []);
+  const models = data?.models ?? [];
 
   const handleSelect = (modelId: string) => {
     onChange(modelId);
@@ -62,7 +48,7 @@ export function ModelSelectorCompact({
   };
 
   const selectedModel = models.find((m) => m.id === value);
-  const displayText = loading
+  const displayText = isLoading
     ? "Loading..."
     : selectedModel
       ? getModelDisplayName(selectedModel)
@@ -84,7 +70,7 @@ export function ModelSelectorCompact({
           <CommandInput placeholder="Search models..." />
           <CommandList>
             <CommandEmpty>
-              {loading ? "Loading..." : "No models found."}
+              {isLoading ? "Loading..." : "No models found."}
             </CommandEmpty>
             <CommandGroup>
               {models.map((model) => (

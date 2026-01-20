@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronRight, X, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import type { DiffFile } from "@/app/api/tasks/[id]/diff/route";
 import { useTaskChatContext } from "./task-context";
 
 type DiffViewerProps = {
-  refreshKey: number;
   onClose: () => void;
 };
 
@@ -223,21 +222,13 @@ function FileEntry({
   );
 }
 
-export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
-  const { diffCache, fetchDiff, diffRefreshKey, sandboxInfo } =
+export function DiffViewer({ onClose }: DiffViewerProps) {
+  const { diff, diffLoading, diffError, diffCachedAt, sandboxInfo } =
     useTaskChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  const { data, error, isLoading, cachedAt } = diffCache;
-
   // Show stale indicator if sandbox is offline (even if data came from a live fetch earlier)
-  const showStaleIndicator = !sandboxInfo && data !== null;
-
-  // Fetch diff on mount and when refreshKey changes
-  // The fetchDiff function will skip if cache is still valid
-  useEffect(() => {
-    fetchDiff();
-  }, [fetchDiff, refreshKey, diffRefreshKey]);
+  const showStaleIndicator = !sandboxInfo && diff !== null;
 
   const toggleFile = (path: string) => {
     setExpandedFiles((prev) => {
@@ -252,8 +243,8 @@ export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
   };
 
   const expandAll = () => {
-    if (data) {
-      setExpandedFiles(new Set(data.files.map((f) => f.path)));
+    if (diff) {
+      setExpandedFiles(new Set(diff.files.map((f) => f.path)));
     }
   };
 
@@ -267,19 +258,19 @@ export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
           <h2 className="font-medium text-foreground">Changes</h2>
-          {data && data.summary.totalFiles > 0 && (
+          {diff && diff.summary.totalFiles > 0 && (
             <div className="flex items-center gap-2 text-xs">
               <span className="text-green-500">
-                +{data.summary.totalAdditions}
+                +{diff.summary.totalAdditions}
               </span>
               <span className="text-red-400">
-                -{data.summary.totalDeletions}
+                -{diff.summary.totalDeletions}
               </span>
             </div>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {data && data.files.length > 0 && (
+          {diff && diff.files.length > 0 && (
             <>
               <Button
                 variant="ghost"
@@ -311,7 +302,7 @@ export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
       </div>
 
       {/* Staleness indicator */}
-      {showStaleIndicator && <StaleBanner cachedAt={cachedAt} />}
+      {showStaleIndicator && <StaleBanner cachedAt={diffCachedAt} />}
 
       {/* Content */}
       <div
@@ -320,27 +311,27 @@ export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
           showStaleIndicator && "opacity-90",
         )}
       >
-        {isLoading && (
+        {diffLoading && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {error && (
+        {diffError && (
           <div className="px-4 py-8 text-center">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-400">{diffError}</p>
           </div>
         )}
 
-        {!isLoading && !error && data && data.files.length === 0 && (
+        {!diffLoading && !diffError && diff && diff.files.length === 0 && (
           <div className="px-4 py-8 text-center">
             <p className="text-sm text-muted-foreground">No changes detected</p>
           </div>
         )}
 
-        {!isLoading && !error && data && data.files.length > 0 && (
+        {!diffLoading && !diffError && diff && diff.files.length > 0 && (
           <div>
-            {data.files.map((file) => (
+            {diff.files.map((file) => (
               <FileEntry
                 key={file.path}
                 file={file}
@@ -353,9 +344,9 @@ export function DiffViewer({ refreshKey, onClose }: DiffViewerProps) {
       </div>
 
       {/* Footer with file count */}
-      {data && data.files.length > 0 && (
+      {diff && diff.files.length > 0 && (
         <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-          {data.summary.totalFiles} file{data.summary.totalFiles !== 1 && "s"}{" "}
+          {diff.summary.totalFiles} file{diff.summary.totalFiles !== 1 && "s"}{" "}
           changed
         </div>
       )}

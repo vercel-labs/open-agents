@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import useSWR from "swr";
 import {
   Folder,
   ChevronDown,
@@ -9,6 +10,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetcher } from "@/lib/swr";
 import {
   Popover,
   PopoverContent,
@@ -43,77 +45,61 @@ interface RepoSelectorCompactProps {
   onSelect: (owner: string, repo: string) => void;
 }
 
+async function fetchOwners(): Promise<Owner[]> {
+  const [userRes, orgsRes] = await Promise.all([
+    fetch("/api/github/user"),
+    fetch("/api/github/orgs"),
+  ]);
+
+  if (!userRes.ok) return [];
+
+  const user = (await userRes.json()) as Owner;
+  const orgs = orgsRes.ok ? ((await orgsRes.json()) as Owner[]) : [];
+
+  return [
+    {
+      login: user.login,
+      name: user.name || user.login,
+      avatar_url: user.avatar_url,
+    },
+    ...orgs,
+  ];
+}
+
 export function RepoSelectorCompact({
   selectedOwner,
   selectedRepo,
   onSelect,
 }: RepoSelectorCompactProps) {
   const [open, setOpen] = useState(false);
-  const [owners, setOwners] = useState<Owner[]>([]);
-  const [repos, setRepos] = useState<Repo[]>([]);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
-  const [ownersLoading, setOwnersLoading] = useState(true);
-  const [reposLoading, setReposLoading] = useState(false);
 
-  // Use ref to track if we've already set a default owner
-  const hasSetDefaultOwner = useRef(false);
-
-  useEffect(() => {
-    const loadOwners = async () => {
-      setOwnersLoading(true);
-      try {
-        const [userRes, orgsRes] = await Promise.all([
-          fetch("/api/github/user"),
-          fetch("/api/github/orgs"),
-        ]);
-
-        if (!userRes.ok) return;
-
-        const user = (await userRes.json()) as Owner;
-        const orgs = orgsRes.ok ? ((await orgsRes.json()) as Owner[]) : [];
-
-        const allOwners = [
-          {
-            login: user.login,
-            name: user.name || user.login,
-            avatar_url: user.avatar_url,
-          },
-          ...orgs,
-        ];
-        setOwners(allOwners);
-        if (!hasSetDefaultOwner.current && allOwners[0]) {
-          hasSetDefaultOwner.current = true;
-          setCurrentOwner(allOwners[0].login);
+  // Fetch owners (user + orgs)
+  const { data: owners = [], isLoading: ownersLoading } = useSWR<Owner[]>(
+    "github-owners",
+    fetchOwners,
+    {
+      onSuccess: (data) => {
+        // Auto-select first owner if none selected
+        if (!currentOwner && data[0]) {
+          setCurrentOwner(data[0].login);
         }
-      } catch (err) {
-        console.error("Failed to load owners:", err);
-      } finally {
-        setOwnersLoading(false);
-      }
-    };
+      },
+    },
+  );
 
-    loadOwners();
-  }, []);
+  // Fetch repos for current owner (conditional fetch)
+  const { data: repos = [], isLoading: reposLoading } = useSWR<Repo[]>(
+    currentOwner ? `/api/github/repos?owner=${currentOwner}` : null,
+    fetcher,
+  );
 
+  // Sync currentOwner with selectedOwner prop
   useEffect(() => {
-    if (!currentOwner) return;
-
-    const loadRepos = async () => {
-      setReposLoading(true);
-      setRepos([]);
-      try {
-        const res = await fetch(`/api/github/repos?owner=${currentOwner}`);
-        const data = (await res.json()) as Repo[];
-        setRepos(data);
-      } catch (error) {
-        console.error("Failed to load repos:", error);
-      } finally {
-        setReposLoading(false);
-      }
-    };
-
-    loadRepos();
-  }, [currentOwner]);
+    if (selectedOwner && selectedOwner !== currentOwner) {
+      setCurrentOwner(selectedOwner);
+    }
+  }, [selectedOwner, currentOwner]);
 
   const handleRepoSelect = (repo: Repo) => {
     onSelect(currentOwner, repo.name);

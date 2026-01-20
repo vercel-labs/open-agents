@@ -599,13 +599,11 @@ export function TaskDetailContent() {
     archiveTask,
     updateTaskTitle,
     hadInitialMessages,
-    diffRefreshKey,
-    triggerDiffRefresh,
-    diffCache,
-    fetchDiff,
-    fileCache,
-    fetchFiles,
-    triggerFileRefresh,
+    diff,
+    refreshDiff,
+    files,
+    filesLoading,
+    refreshFiles,
     updateTaskSnapshot,
     setSandboxType,
     reconnectionStatus,
@@ -652,7 +650,7 @@ export function TaskDetailContent() {
   } = useFileSuggestions({
     inputValue: input,
     cursorPosition,
-    files: fileCache.data,
+    files,
     onSelect: handleFileSelect,
   });
 
@@ -1015,9 +1013,9 @@ export function TaskDetailContent() {
         hasAutoOpenedDiffRef.current = true;
         setShowDiffPanel(true);
       }
-      // Always invalidate cache when files change
-      triggerDiffRefresh();
-      triggerFileRefresh();
+      // Refresh diff and files when files change
+      refreshDiff();
+      refreshFiles();
     }
   }, [
     currentToolStates,
@@ -1025,30 +1023,12 @@ export function TaskDetailContent() {
     showDiffPanel,
     sandboxInfo,
     task.sandboxState?.type,
-    triggerDiffRefresh,
-    triggerFileRefresh,
+    refreshDiff,
+    refreshFiles,
   ]);
 
-  // Fetch files when sandbox becomes available
-  useEffect(() => {
-    if (sandboxInfo && !fileCache.data && !fileCache.isLoading) {
-      fetchFiles();
-    }
-  }, [sandboxInfo, fileCache.data, fileCache.isLoading, fetchFiles]);
-
-  // Fetch diff proactively (from sandbox or cached) to show stats in header
-  useEffect(() => {
-    // Fetch on mount (for cached data) or when sandbox/diffRefreshKey changes
-    if (!diffCache.isLoading && diffCache.lastFetchedKey !== diffRefreshKey) {
-      fetchDiff();
-    }
-  }, [
-    sandboxInfo,
-    diffRefreshKey,
-    diffCache.isLoading,
-    diffCache.lastFetchedKey,
-    fetchDiff,
-  ]);
+  // Note: SWR handles automatic fetching when sandbox becomes available
+  // and caching/deduplication of requests
 
   // Get token usage from the most recent assistant message (current context usage)
   const tokenUsage = useMemo(() => {
@@ -1221,19 +1201,19 @@ export function TaskDetailContent() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDiffPanel(!showDiffPanel)}
-                disabled={!diffCache.data && !task.cachedDiff}
+                disabled={!diff && !task.cachedDiff}
               >
                 <GitCompare className="mr-2 h-4 w-4" />
                 Diff
-                {diffCache.data &&
-                  (diffCache.data.summary.totalAdditions > 0 ||
-                    diffCache.data.summary.totalDeletions > 0) && (
+                {diff &&
+                  (diff.summary.totalAdditions > 0 ||
+                    diff.summary.totalDeletions > 0) && (
                     <span className="ml-2 text-xs">
                       <span className="text-green-500">
-                        +{diffCache.data.summary.totalAdditions}
+                        +{diff.summary.totalAdditions}
                       </span>{" "}
                       <span className="text-red-400">
-                        -{diffCache.data.summary.totalDeletions}
+                        -{diff.summary.totalDeletions}
                       </span>
                     </span>
                   )}
@@ -1494,7 +1474,7 @@ export function TaskDetailContent() {
                       );
                     }
                   }}
-                  isLoading={fileCache.isLoading}
+                  isLoading={filesLoading}
                 />
               )}
               <form
@@ -1701,10 +1681,7 @@ export function TaskDetailContent() {
 
       {/* Diff Viewer Panel */}
       {showDiffPanel && (sandboxInfo || Boolean(task.cachedDiff)) && (
-        <DiffViewer
-          refreshKey={diffRefreshKey}
-          onClose={() => setShowDiffPanel(false)}
-        />
+        <DiffViewer onClose={() => setShowDiffPanel(false)} />
       )}
     </div>
   );
