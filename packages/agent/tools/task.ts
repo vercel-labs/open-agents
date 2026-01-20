@@ -2,12 +2,7 @@ import { tool, readUIMessageStream, type UIToolInvocation } from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "../subagents/explorer";
 import { executorSubagent } from "../subagents/executor";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  getSessionRules,
-} from "./utils";
+import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
 import type { ApprovalRule } from "../types";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
@@ -62,8 +57,9 @@ export const taskTool = tool({
       return false;
     }
 
+    // Type guard narrowed approval to interactive mode
     // Check if a session rule matches this subagent type
-    if (subagentMatchesApprovalRule(subagentType, getSessionRules(approval))) {
+    if (subagentMatchesApprovalRule(subagentType, approval.sessionRules)) {
       return false;
     }
 

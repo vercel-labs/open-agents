@@ -6,7 +6,6 @@ import {
   getSandbox,
   getApprovalContext,
   shouldAutoApprove,
-  getSessionRules,
 } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -144,8 +143,9 @@ export const bashTool = (options?: ToolOptions) =>
         return false;
       }
 
+      // Type guard narrowed approval to interactive mode
       // Check if command matches any saved session rules
-      if (commandMatchesApprovalRule(args.command, getSessionRules(approval))) {
+      if (commandMatchesApprovalRule(args.command, approval.sessionRules)) {
         return false;
       }
 
@@ -154,21 +154,18 @@ export const bashTool = (options?: ToolOptions) =>
         return true;
       }
 
-      // Interactive mode: check autoApprove setting and command safety
-      if (approval.type === "interactive") {
-        // Auto-approve all bash commands when autoApprove is "all"
-        if (approval.autoApprove === "all") {
-          return false;
-        }
+      // Auto-approve all bash commands when autoApprove is "all"
+      if (approval.autoApprove === "all") {
+        return false;
+      }
 
-        // Check command safety
-        if (commandNeedsApproval(args.command)) {
-          // If command is dangerous, check user's approval setting
-          if (typeof options?.needsApproval === "function") {
-            return options.needsApproval(args);
-          }
-          return options?.needsApproval ?? true;
+      // Check command safety
+      if (commandNeedsApproval(args.command)) {
+        // If command is dangerous, check user's approval setting
+        if (typeof options?.needsApproval === "function") {
+          return options.needsApproval(args);
         }
+        return options?.needsApproval ?? true;
       }
 
       // Command is safe - no approval needed

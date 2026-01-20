@@ -49,14 +49,22 @@ export function createAgentTransport({
 
       // Build the approval config based on the current base config type
       const baseApproval = agentOptions.approval;
-      const approval =
-        baseApproval.type === "interactive"
-          ? {
-              type: "interactive" as const,
-              autoApprove,
-              sessionRules,
-            }
-          : baseApproval;
+      let approval: typeof baseApproval;
+      switch (baseApproval.type) {
+        case "interactive":
+          // Interactive mode: inject current UI settings
+          approval = {
+            type: "interactive",
+            autoApprove,
+            sessionRules,
+          };
+          break;
+        case "background":
+        case "delegated":
+          // These modes are fully trusted - pass through unchanged
+          approval = baseApproval;
+          break;
+      }
 
       const result = await agent.stream({
         messages: prunedMessages,

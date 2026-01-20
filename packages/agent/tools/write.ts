@@ -4,12 +4,10 @@ import * as path from "path";
 import {
   isPathWithinDirectory,
   getSandbox,
-  pathMatchesGlob,
   getApprovalContext,
   shouldAutoApprove,
-  getSessionRules,
+  pathMatchesApprovalRule,
 } from "./utils";
-import type { ApprovalRule } from "../types";
 
 const writeInputSchema = z.object({
   filePath: z.string().describe("Absolute path to the file to write"),
@@ -59,37 +57,6 @@ function isOutsideWorkingDirectory(
   return !isPathWithinDirectory(absolutePath, workingDirectory);
 }
 
-/**
- * Check if a file path matches any path-glob approval rules for a specific tool.
- * Write/edit approval rules can apply to paths outside the working directory,
- * so we allow matching outside the base directory.
- */
-function pathMatchesApprovalRule(
-  filePath: string,
-  toolName: "write" | "edit",
-  workingDirectory: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workingDirectory, filePath);
-
-  for (const rule of approvalRules) {
-    if (rule.type === "path-glob" && rule.tool === toolName) {
-      // Rules can apply to paths outside the working directory,
-      // so we must allow matching outside the base
-      if (
-        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
-          allowOutsideBase: true,
-        })
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 export const writeFileTool = (options?: WriteToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
@@ -112,7 +79,7 @@ export const writeFileTool = (options?: WriteToolOptions) =>
           args.filePath,
           "write",
           ctx.workingDirectory,
-          getSessionRules(approval),
+          approval.sessionRules,
         )
       ) {
         return false;
@@ -123,15 +90,9 @@ export const writeFileTool = (options?: WriteToolOptions) =>
         return true;
       }
 
-      // Interactive mode: check autoApprove setting
-      if (approval.type === "interactive") {
-        // Auto-approve edits when autoApprove is "edits" or "all"
-        if (
-          approval.autoApprove === "edits" ||
-          approval.autoApprove === "all"
-        ) {
-          return false;
-        }
+      // Inside working directory: check autoApprove setting
+      if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
+        return false;
       }
 
       // Otherwise use the configured approval setting
@@ -220,7 +181,7 @@ export const editFileTool = (options?: EditToolOptions) =>
           args.filePath,
           "edit",
           ctx.workingDirectory,
-          getSessionRules(approval),
+          approval.sessionRules,
         )
       ) {
         return false;
@@ -231,15 +192,9 @@ export const editFileTool = (options?: EditToolOptions) =>
         return true;
       }
 
-      // Interactive mode: check autoApprove setting
-      if (approval.type === "interactive") {
-        // Auto-approve edits when autoApprove is "edits" or "all"
-        if (
-          approval.autoApprove === "edits" ||
-          approval.autoApprove === "all"
-        ) {
-          return false;
-        }
+      // Inside working directory: check autoApprove setting
+      if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
+        return false;
       }
 
       // Otherwise use the configured approval setting
