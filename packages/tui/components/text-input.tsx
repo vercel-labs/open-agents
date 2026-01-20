@@ -70,6 +70,34 @@ function findNextWordBoundary(value: string, cursorOffset: number): number {
   return pos;
 }
 
+/**
+ * Find the position of the beginning of the current line (for Ctrl+A / Command+Left)
+ */
+function findLineStart(value: string, cursorOffset: number): number {
+  if (cursorOffset <= 0) return 0;
+
+  // Search backwards for a newline
+  for (let i = cursorOffset - 1; i >= 0; i--) {
+    if (value[i] === "\n") {
+      return i + 1; // Position after the newline
+    }
+  }
+  return 0; // No newline found, go to start
+}
+
+/**
+ * Find the position of the end of the current line (for Ctrl+E / Command+Right)
+ */
+function findLineEnd(value: string, cursorOffset: number): number {
+  // Search forwards for a newline
+  for (let i = cursorOffset; i < value.length; i++) {
+    if (value[i] === "\n") {
+      return i; // Position before the newline
+    }
+  }
+  return value.length; // No newline found, go to end
+}
+
 export function TextInput({
   value: externalValue,
   onChange,
@@ -392,6 +420,16 @@ export function TextInput({
         // Option+Right (emacs-style): Move to next word boundary
         if (showCursor) {
           nextCursorOffset = findNextWordBoundary(currentValue, currentCursor);
+        }
+      } else if (key.ctrl && input === "a") {
+        // Ctrl+A (Command+Left): Move to beginning of current line
+        if (showCursor) {
+          nextCursorOffset = findLineStart(currentValue, currentCursor);
+        }
+      } else if (key.ctrl && input === "e") {
+        // Ctrl+E (Command+Right): Move to end of current line
+        if (showCursor) {
+          nextCursorOffset = findLineEnd(currentValue, currentCursor);
         }
       } else if (key.ctrl && input === "u") {
         // Ctrl+U: Delete entire line to the left (Cmd+Delete equivalent)
