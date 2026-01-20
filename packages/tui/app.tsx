@@ -17,7 +17,6 @@ import { StatusBar, StandaloneTodoList } from "./components/status-bar";
 import { InputBox } from "./components/input-box";
 import { Header } from "./components/header";
 import { defaultModelLabel } from "@open-harness/agent";
-import { getModelDisplayName } from "./lib/models";
 import type { SlashCommandAction } from "./lib/slash-commands";
 import { pasteCollapseLineThreshold } from "./config";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
@@ -623,9 +622,7 @@ function AppContent({ options }: AppProps) {
         name={options?.header?.name}
         version={options?.header?.version}
         model={
-          state.settings.modelId
-            ? getModelDisplayName(state.settings.modelId)
-            : (options?.header?.model ?? defaultModelLabel)
+          state.settings.modelId ?? options?.header?.model ?? defaultModelLabel
         }
         cwd={state.workingDirectory}
       />

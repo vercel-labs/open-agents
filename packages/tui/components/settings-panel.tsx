@@ -36,6 +36,7 @@ export function SettingsPanel({
     const query = searchQuery.toLowerCase();
     return options.filter(
       (opt) =>
+        opt.id.toLowerCase().includes(query) ||
         opt.name.toLowerCase().includes(query) ||
         opt.description?.toLowerCase().includes(query),
     );
@@ -93,13 +94,11 @@ export function SettingsPanel({
     const goUp =
       key.upArrow ||
       (!searchQuery && input === "k") ||
-      (key.ctrl && input === "p") ||
-      (key.shift && key.tab);
+      (key.ctrl && input === "p");
     const goDown =
       key.downArrow ||
       (!searchQuery && input === "j") ||
-      (key.ctrl && input === "n") ||
-      (!key.shift && key.tab);
+      (key.ctrl && input === "n");
 
     if (goUp && filteredOptions.length > 0) {
       setSelectedIndex((prev) =>

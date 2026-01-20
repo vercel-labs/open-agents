@@ -38,11 +38,3 @@ export function getModelById(
 ): LanguageModel {
   return gateway(id as GatewayModelId, options);
 }
-
-/**
- * Get display name for a model ID
- */
-export function getModelDisplayName(modelId: string): string {
-  const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
-  return model?.name ?? modelId;
-}
