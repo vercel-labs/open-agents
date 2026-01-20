@@ -228,9 +228,7 @@ export function inferApprovalRule(
     }
 
     case "tool-glob": {
-      const searchPath = String(part.input?.path ?? "");
-      if (!searchPath) return null;
-
+      const searchPath = String(part.input?.path ?? cwd);
       return {
         type: "path-glob",
         tool: "glob",
@@ -239,9 +237,7 @@ export function inferApprovalRule(
     }
 
     case "tool-grep": {
-      const searchPath = String(part.input?.path ?? "");
-      if (!searchPath) return null;
-
+      const searchPath = String(part.input?.path ?? cwd);
       return {
         type: "path-glob",
         tool: "grep",
