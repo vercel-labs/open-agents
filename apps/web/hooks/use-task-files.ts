@@ -27,11 +27,13 @@ export function useTaskFiles(
     },
   );
 
+  // When sandbox is disconnected, return null state without an error.
+  // This distinguishes "no sandbox to fetch from" from "fetch failed".
   if (!sandboxConnected) {
     return {
       files: null,
       isLoading: false,
-      error: "No sandbox available",
+      error: null,
       refresh: async () => undefined,
     };
   }

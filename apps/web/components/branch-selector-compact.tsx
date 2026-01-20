@@ -42,7 +42,11 @@ export function BranchSelectorCompact({
 }: BranchSelectorCompactProps) {
   const [open, setOpen] = useState(false);
 
-  // Track whether we've auto-selected for this owner/repo combo
+  // Track which owner/repo combo we've auto-selected for.
+  // This prevents re-triggering auto-selection when switching between repos,
+  // but intentionally does NOT reset when returning to a previously visited repo.
+  // This means if a user manually clears their selection and switches back,
+  // auto-selection won't re-trigger - treating it as an intentional user action.
   const autoSelectedKeyRef = useRef<string | null>(null);
 
   // Conditional fetch based on owner and repo

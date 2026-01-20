@@ -1014,10 +1014,10 @@ export function TaskDetailContent() {
         setShowDiffPanel(true);
       }
       // Refresh diff and files when files change.
-      // These are fire-and-forget calls - SWR handles request deduplication
-      // and cleanup internally, so no await needed.
-      refreshDiff();
-      refreshFiles();
+      // Fire-and-forget with error handling - SWR updates error state internally,
+      // but we catch here to prevent unhandled rejection warnings.
+      refreshDiff().catch(() => {});
+      refreshFiles().catch(() => {});
     }
   }, [
     currentToolStates,

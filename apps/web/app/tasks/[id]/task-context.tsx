@@ -187,6 +187,8 @@ export function TaskChatProvider({
   // Use SWR hooks for diff and files
   const sandboxConnected = sandboxInfo !== null;
 
+  // Note: cachedDiff is stored as jsonb and cast to DiffResponse without runtime validation.
+  // This is safe as long as the schema is only written by our own diff route.
   const {
     diff,
     isLoading: diffLoading,
