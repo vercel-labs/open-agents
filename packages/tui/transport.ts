@@ -12,12 +12,15 @@ import type {
   AutoAcceptMode,
   ApprovalRule,
 } from "./types";
+import type { Settings } from "./lib/settings";
+import { getModelById } from "./lib/models";
 
 export type AgentTransportOptions = {
   agent: TUIAgent;
   agentOptions: TUIAgentCallOptions;
   getAutoApprove?: () => AutoAcceptMode;
   getApprovalRules?: () => ApprovalRule[];
+  getSettings?: () => Settings;
   onUsageUpdate?: (usage: LanguageModelUsage) => void;
 };
 
@@ -26,6 +29,7 @@ export function createAgentTransport({
   agentOptions,
   getAutoApprove,
   getApprovalRules,
+  getSettings,
   onUsageUpdate,
 }: AgentTransportOptions): ChatTransport<TUIAgentUIMessage> {
   return {
@@ -46,6 +50,10 @@ export function createAgentTransport({
       // Get current settings at request time and build approval config
       const autoApprove = getAutoApprove ? getAutoApprove() : "off";
       const sessionRules = getApprovalRules ? getApprovalRules() : [];
+      const settings = getSettings?.() ?? {};
+      const model = settings.modelId
+        ? getModelById(settings.modelId, { devtools: false })
+        : undefined;
 
       // Build the approval config based on the current base config type
       const baseApproval = agentOptions.approval;
@@ -68,7 +76,7 @@ export function createAgentTransport({
 
       const result = await agent.stream({
         messages: prunedMessages,
-        options: { ...agentOptions, approval },
+        options: { ...agentOptions, model, approval },
         abortSignal: abortSignal ?? undefined,
         experimental_transform: smoothStream(),
       });

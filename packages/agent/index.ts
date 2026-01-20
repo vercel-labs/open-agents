@@ -5,6 +5,7 @@ export {
   extractTodosFromStep,
 } from "./deep-agent";
 export type { DeepAgentCallOptions } from "./deep-agent";
+export { gateway } from "./models";
 export type {
   TodoItem,
   TodoStatus,

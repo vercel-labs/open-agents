@@ -5,6 +5,7 @@ export type Suggestion = {
   value: string;
   display: string;
   isDirectory?: boolean;
+  description?: string;
 };
 
 type SuggestionsProps = {
@@ -94,6 +95,10 @@ export const Suggestions = memo(function Suggestions({
             >
               {suggestion.display}
             </Text>
+            {/* Description (for commands) */}
+            {suggestion.description && (
+              <Text color="gray"> - {suggestion.description}</Text>
+            )}
           </Box>
         );
       })}

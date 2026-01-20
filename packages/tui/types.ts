@@ -35,6 +35,9 @@ export type AutoAcceptMode = "off" | "edits" | "all";
 // Re-export ApprovalRule for client-side use
 export type { ApprovalRule } from "@open-harness/agent";
 
+// Re-export Settings for CLI use
+export type { Settings } from "./lib/settings";
+
 export type TUIOptions = {
   /** Initial prompt to run (for one-shot mode) */
   initialPrompt?: string;
@@ -52,4 +55,8 @@ export type TUIOptions = {
   };
   /** Initial auto-accept mode (defaults to "off") */
   initialAutoAcceptMode?: AutoAcceptMode;
+  /** Initial settings (loaded from config file) */
+  initialSettings?: import("./lib/settings").Settings;
+  /** Callback when settings change (for persistence) */
+  onSettingsChange?: (settings: import("./lib/settings").Settings) => void;
 };

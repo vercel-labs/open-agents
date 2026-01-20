@@ -11,11 +11,14 @@ import { renderMarkdown } from "./lib/markdown";
 import { useChatContext } from "./chat-context";
 import { ToolCall, getToolApprovalInfo } from "./components/tool-call";
 import { ApprovalPanel } from "./components/approval-panel";
+import { SettingsPanel } from "./components/settings-panel";
 import { TaskGroupView } from "./components/task-group-view";
 import { StatusBar, StandaloneTodoList } from "./components/status-bar";
 import { InputBox } from "./components/input-box";
 import { Header } from "./components/header";
 import { defaultModelLabel } from "@open-harness/agent";
+import { AVAILABLE_MODELS, getModelDisplayName } from "./lib/models";
+import type { SlashCommandAction } from "./lib/slash-commands";
 import { pasteCollapseLineThreshold } from "./config";
 import { extractTodosFromLastAssistantMessage } from "./utils/extract-todos";
 import type {
@@ -511,7 +514,14 @@ const ExpandedViewIndicator = memo(function ExpandedViewIndicator() {
 
 function AppContent({ options }: AppProps) {
   const { exit } = useApp();
-  const { chat, state, cycleAutoAcceptMode } = useChatContext();
+  const {
+    chat,
+    state,
+    cycleAutoAcceptMode,
+    openPanel,
+    closePanel,
+    updateSettings,
+  } = useChatContext();
   const { isExpanded, toggleExpanded } = useExpandedView();
   const { isTodoVisible, toggleTodoView } = useTodoView();
   const [wasInterrupted, setWasInterrupted] = useState(false);
@@ -595,13 +605,28 @@ function AppContent({ options }: AppProps) {
     [isStreaming, sendMessage],
   );
 
+  const handleCommandSelect = useCallback(
+    (action: SlashCommandAction) => {
+      switch (action) {
+        case "open-model-select":
+          openPanel({ type: "model-select" });
+          break;
+      }
+    },
+    [openPanel],
+  );
+
   // Show message list with either approval panel or input box at bottom
   return (
     <Box flexDirection="column" paddingLeft={1} paddingRight={1}>
       <Header
         name={options?.header?.name}
         version={options?.header?.version}
-        model={options?.header?.model ?? defaultModelLabel}
+        model={
+          state.settings.modelId
+            ? getModelDisplayName(state.settings.modelId)
+            : (options?.header?.model ?? defaultModelLabel)
+        }
         cwd={state.workingDirectory}
       />
 
@@ -616,8 +641,31 @@ function AppContent({ options }: AppProps) {
 
       <ErrorDisplay error={error} />
 
+      {/* Show settings panel when active (replaces input) */}
+      {state.activePanel.type === "model-select" && (
+        <SettingsPanel
+          title="Select model"
+          description="Choose the AI model for this session"
+          options={AVAILABLE_MODELS.map((m) => ({
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            meta: m.pricing
+              ? `${m.pricing.input} in · ${m.pricing.output} out`
+              : undefined,
+          }))}
+          currentId={state.settings.modelId ?? ""}
+          onSelect={(id) => {
+            updateSettings({ modelId: id });
+            closePanel();
+          }}
+          onCancel={closePanel}
+        />
+      )}
+
       {/* Show approval panel when there's a pending approval (replaces status bar and input) */}
-      {hasPendingApproval &&
+      {state.activePanel.type === "none" &&
+      hasPendingApproval &&
       activeApprovalId &&
       approvalInfo &&
       pendingToolPart ? (
@@ -629,7 +677,7 @@ function AppContent({ options }: AppProps) {
           dontAskAgainPattern={approvalInfo.dontAskAgainPattern}
           toolPart={pendingToolPart}
         />
-      ) : (
+      ) : state.activePanel.type === "none" ? (
         <>
           {/* Show streaming status bar when streaming */}
           {isStreaming && <StreamingStatusBar messages={messages} />}
@@ -645,6 +693,7 @@ function AppContent({ options }: AppProps) {
               onSubmit={handleSubmit}
               autoAcceptMode={state.autoAcceptMode}
               onToggleAutoAccept={cycleAutoAcceptMode}
+              onCommandSelect={handleCommandSelect}
               disabled={isStreaming}
               inputTokens={state.usage.inputTokens ?? 0}
               contextLimit={state.contextLimit}
@@ -652,7 +701,7 @@ function AppContent({ options }: AppProps) {
             />
           )}
         </>
-      )}
+      ) : null}
 
       {isExpanded && <ExpandedViewIndicator />}
     </Box>

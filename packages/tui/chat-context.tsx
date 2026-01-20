@@ -20,7 +20,10 @@ import type {
   AutoAcceptMode,
   ApprovalRule,
 } from "./types";
+import type { Settings } from "./lib/settings";
 import { getContextLimit } from "@open-harness/agent";
+
+export type PanelState = { type: "none" } | { type: "model-select" };
 
 type ChatState = {
   model?: string;
@@ -30,6 +33,8 @@ type ChatState = {
   sessionUsage: LanguageModelUsage;
   contextLimit: number;
   approvalRules: ApprovalRule[];
+  settings: Settings;
+  activePanel: PanelState;
 };
 
 type ChatContextValue = {
@@ -39,6 +44,9 @@ type ChatContextValue = {
   cycleAutoAcceptMode: () => void;
   addApprovalRule: (rule: ApprovalRule) => void;
   clearApprovalRules: () => void;
+  updateSettings: (updates: Partial<Settings>) => void;
+  openPanel: (panel: PanelState) => void;
+  closePanel: () => void;
 };
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -51,6 +59,8 @@ type ChatProviderProps = {
   model?: string;
   workingDirectory?: string;
   initialAutoAcceptMode?: AutoAcceptMode;
+  initialSettings?: Settings;
+  onSettingsChange?: (settings: Settings) => void;
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -113,6 +123,8 @@ export function ChatProvider({
   model,
   workingDirectory,
   initialAutoAcceptMode = "off",
+  initialSettings = {},
+  onSettingsChange,
 }: ChatProviderProps) {
   const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
     initialAutoAcceptMode,
@@ -121,12 +133,16 @@ export function ChatProvider({
   const [sessionUsage, setSessionUsage] =
     useState<LanguageModelUsage>(DEFAULT_USAGE);
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
+  const [settings, setSettings] = useState<Settings>(initialSettings);
+  const [activePanel, setActivePanel] = useState<PanelState>({ type: "none" });
 
   // Use refs to pass current values to transport without recreating it
   const autoAcceptModeRef = useRef(autoAcceptMode);
   autoAcceptModeRef.current = autoAcceptMode;
   const approvalRulesRef = useRef(approvalRules);
   approvalRulesRef.current = approvalRules;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   const contextLimit = useMemo(() => getContextLimit(model ?? ""), [model]);
 
@@ -157,6 +173,7 @@ export function ChatProvider({
         agentOptions,
         getAutoApprove: () => autoAcceptModeRef.current,
         getApprovalRules: () => approvalRulesRef.current,
+        getSettings: () => settingsRef.current,
         onUsageUpdate: handleUsageUpdate,
       }),
     [agentOptions, handleUsageUpdate],
@@ -174,13 +191,15 @@ export function ChatProvider({
 
   const state: ChatState = useMemo(
     () => ({
-      model,
+      model: settings.modelId ?? model,
       autoAcceptMode,
       workingDirectory,
       usage,
       sessionUsage,
       contextLimit,
       approvalRules,
+      settings,
+      activePanel,
     }),
     [
       model,
@@ -190,6 +209,8 @@ export function ChatProvider({
       sessionUsage,
       contextLimit,
       approvalRules,
+      settings,
+      activePanel,
     ],
   );
 
@@ -201,6 +222,25 @@ export function ChatProvider({
     });
   };
 
+  const updateSettings = useCallback(
+    (updates: Partial<Settings>) => {
+      setSettings((prev) => {
+        const newSettings = { ...prev, ...updates };
+        onSettingsChange?.(newSettings);
+        return newSettings;
+      });
+    },
+    [onSettingsChange],
+  );
+
+  const openPanel = useCallback((panel: PanelState) => {
+    setActivePanel(panel);
+  }, []);
+
+  const closePanel = useCallback(() => {
+    setActivePanel({ type: "none" });
+  }, []);
+
   return (
     <ChatContext.Provider
       value={{
@@ -210,6 +250,9 @@ export function ChatProvider({
         cycleAutoAcceptMode,
         addApprovalRule,
         clearApprovalRules,
+        updateSettings,
+        openPanel,
+        closePanel,
       }}
     >
       {children}

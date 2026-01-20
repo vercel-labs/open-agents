@@ -12,6 +12,12 @@ import { TextInput } from "./text-input";
 import { Suggestions, type Suggestion } from "./suggestions";
 import { getFileSuggestions, extractMention } from "../lib/file-suggestions";
 import {
+  extractSlashCommand,
+  getCommandSuggestions,
+  getCommandAction,
+  type SlashCommandAction,
+} from "../lib/slash-commands";
+import {
   countLines,
   createPasteToken,
   expandPasteTokens,
@@ -37,6 +43,7 @@ type InputBoxProps = {
   onSubmit: (value: string, files?: FileUIPart[]) => void;
   autoAcceptMode: AutoAcceptMode;
   onToggleAutoAccept: () => void;
+  onCommandSelect?: (action: SlashCommandAction) => void;
   disabled?: boolean;
   inputTokens?: number;
   contextLimit?: number;
@@ -112,6 +119,7 @@ export const InputBox = memo(function InputBox({
   onSubmit,
   autoAcceptMode,
   onToggleAutoAccept,
+  onCommandSelect,
   disabled = false,
   inputTokens = 0,
   contextLimit = 0,
@@ -124,6 +132,10 @@ export const InputBox = memo(function InputBox({
   const [mentionInfo, setMentionInfo] = useState<{
     mentionStart: number;
     partialPath: string;
+  } | null>(null);
+  const [commandInfo, setCommandInfo] = useState<{
+    commandStart: number;
+    partialCommand: string;
   } | null>(null);
   const [pasteBlocks, setPasteBlocks] = useState<PasteBlock[]>([]);
   const [imageBlocks, setImageBlocks] = useState<ImageBlock[]>([]);
@@ -166,6 +178,7 @@ export const InputBox = memo(function InputBox({
       } else if (suggestions.length > 0) {
         setSuggestions([]);
         setMentionInfo(null);
+        setCommandInfo(null);
       }
     }
     // Ctrl+V to paste image
@@ -201,6 +214,20 @@ export const InputBox = memo(function InputBox({
 
   // Update suggestions when cursor position or value changes (debounced)
   useEffect(() => {
+    // Check for slash commands first (priority over @ mentions)
+    const command = extractSlashCommand(value, cursorPosition);
+    if (command) {
+      setCommandInfo(command);
+      setMentionInfo(null);
+      setSuggestions(getCommandSuggestions(command.partialCommand));
+      setSelectedIndex(0);
+      return;
+    }
+
+    // Clear command info if not in a command
+    setCommandInfo(null);
+
+    // Check for @ mentions
     const mention = extractMention(value, cursorPosition);
     setMentionInfo(mention);
 
@@ -348,35 +375,62 @@ export const InputBox = memo(function InputBox({
   }, [suggestions.length]);
 
   const selectSuggestion = useCallback(() => {
-    if (suggestions.length > 0 && mentionInfo) {
-      const selected = suggestions[selectedIndex];
-      if (selected) {
-        // Replace the partial path with the selected suggestion + space
-        const before = value.slice(0, mentionInfo.mentionStart + 1); // Include @
-        const after = value.slice(cursorPosition);
-        const newValue = before + selected.value + " " + after;
-        updateValue(newValue);
-        // Update cursor position to after the space
-        const newCursorPos =
-          mentionInfo.mentionStart + 1 + selected.value.length + 1;
-        setCursorPosition(newCursorPos);
-        // Close suggestions after selection
+    if (suggestions.length === 0) return false;
+
+    const selected = suggestions[selectedIndex];
+    if (!selected) return false;
+
+    // Handle slash command selection
+    if (commandInfo) {
+      const action = getCommandAction(selected.value);
+      if (action && onCommandSelect) {
+        // Clear input and close suggestions
+        updateValue("");
+        setCursorPosition(0);
         setSuggestions([]);
-        setMentionInfo(null);
-        return true; // Consumed the event
+        setCommandInfo(null);
+        // Execute the command action
+        onCommandSelect(action);
+        return true;
       }
+      return false;
     }
+
+    // Handle @ mention selection
+    if (mentionInfo) {
+      // Replace the partial path with the selected suggestion + space
+      const before = value.slice(0, mentionInfo.mentionStart + 1); // Include @
+      const after = value.slice(cursorPosition);
+      const newValue = before + selected.value + " " + after;
+      updateValue(newValue);
+      // Update cursor position to after the space
+      const newCursorPos =
+        mentionInfo.mentionStart + 1 + selected.value.length + 1;
+      setCursorPosition(newCursorPos);
+      // Close suggestions after selection
+      setSuggestions([]);
+      setMentionInfo(null);
+      return true; // Consumed the event
+    }
+
     return false;
   }, [
     suggestions,
     selectedIndex,
+    commandInfo,
     mentionInfo,
     value,
     cursorPosition,
     updateValue,
+    onCommandSelect,
   ]);
 
   const handleTab = useCallback(() => {
+    // For slash commands, tab selects like enter
+    if (commandInfo) {
+      return selectSuggestion();
+    }
+
     // If a directory is selected, "enter" it instead of selecting
     if (suggestions.length > 0 && mentionInfo) {
       const selected = suggestions[selectedIndex];
@@ -399,6 +453,7 @@ export const InputBox = memo(function InputBox({
   }, [
     suggestions,
     selectedIndex,
+    commandInfo,
     mentionInfo,
     value,
     cursorPosition,
@@ -425,6 +480,7 @@ export const InputBox = memo(function InputBox({
         setCursorPosition(0);
         setSuggestions([]);
         setMentionInfo(null);
+        setCommandInfo(null);
         setImageBlocks([]);
         setSelectedImageIndex(null);
         nextImageIdRef.current = 1;

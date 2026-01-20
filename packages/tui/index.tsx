@@ -11,9 +11,10 @@ import { defaultModelLabel } from "@open-harness/agent";
 import { createDefaultAgentOptions } from "./config";
 import type { TUIOptions } from "./types";
 
-export type { TUIOptions, AutoAcceptMode } from "./types";
+export type { TUIOptions, AutoAcceptMode, Settings } from "./types";
 export { useChatContext, ChatProvider } from "./chat-context";
 export { tuiAgent, createDefaultAgentOptions } from "./config";
+export { loadSettings, saveSettings } from "./lib/settings";
 
 /**
  * Create a Claude Code-style TUI.
@@ -55,6 +56,8 @@ export async function createTUI(options: TUIOptions): Promise<void> {
       model={options.header?.model ?? defaultModelLabel}
       workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
+      initialSettings={options.initialSettings}
+      onSettingsChange={options.onSettingsChange}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
@@ -90,6 +93,8 @@ export function renderTUI(options: TUIOptions) {
       model={options.header?.model ?? defaultModelLabel}
       workingDirectory={workingDirectory}
       initialAutoAcceptMode={options.initialAutoAcceptMode}
+      initialSettings={options.initialSettings}
+      onSettingsChange={options.onSettingsChange}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
