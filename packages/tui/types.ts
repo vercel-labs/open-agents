@@ -59,4 +59,6 @@ export type TUIOptions = {
   initialSettings?: import("./lib/settings").Settings;
   /** Callback when settings change (for persistence) */
   onSettingsChange?: (settings: import("./lib/settings").Settings) => void;
+  /** Available models for model selection (fetched from gateway) */
+  availableModels?: import("./lib/models").ModelInfo[];
 };

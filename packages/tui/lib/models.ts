@@ -29,17 +29,13 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   },
 ];
 
-export const DEFAULT_MODEL_ID = "anthropic/claude-haiku-4.5";
-
 /**
  * Get a LanguageModel instance by ID
  */
 export function getModelById(
   id: string,
   options: { devtools: boolean } = { devtools: false },
-): LanguageModel | undefined {
-  const model = AVAILABLE_MODELS.find((m) => m.id === id);
-  if (!model) return undefined;
+): LanguageModel {
   return gateway(id as GatewayModelId, options);
 }
 

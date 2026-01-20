@@ -52,7 +52,7 @@ export function createAgentTransport({
       const sessionRules = getApprovalRules ? getApprovalRules() : [];
       const settings = getSettings?.() ?? {};
       const model = settings.modelId
-        ? getModelById(settings.modelId, { devtools: false })
+        ? getModelById(settings.modelId, { devtools: true })
         : undefined;
 
       // Build the approval config based on the current base config type
@@ -76,7 +76,7 @@ export function createAgentTransport({
 
       const result = await agent.stream({
         messages: prunedMessages,
-        options: { ...agentOptions, model, approval },
+        options: { ...agentOptions, ...(model && { model }), approval },
         abortSignal: abortSignal ?? undefined,
         experimental_transform: smoothStream(),
       });

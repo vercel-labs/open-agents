@@ -21,6 +21,7 @@ import type {
   ApprovalRule,
 } from "./types";
 import type { Settings } from "./lib/settings";
+import { AVAILABLE_MODELS, type ModelInfo } from "./lib/models";
 import { getContextLimit } from "@open-harness/agent";
 
 export type PanelState = { type: "none" } | { type: "model-select" };
@@ -35,6 +36,7 @@ type ChatState = {
   approvalRules: ApprovalRule[];
   settings: Settings;
   activePanel: PanelState;
+  availableModels: ModelInfo[];
 };
 
 type ChatContextValue = {
@@ -61,6 +63,7 @@ type ChatProviderProps = {
   initialAutoAcceptMode?: AutoAcceptMode;
   initialSettings?: Settings;
   onSettingsChange?: (settings: Settings) => void;
+  availableModels?: ModelInfo[];
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -125,6 +128,7 @@ export function ChatProvider({
   initialAutoAcceptMode = "off",
   initialSettings = {},
   onSettingsChange,
+  availableModels = AVAILABLE_MODELS,
 }: ChatProviderProps) {
   const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
     initialAutoAcceptMode,
@@ -144,7 +148,11 @@ export function ChatProvider({
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  const contextLimit = useMemo(() => getContextLimit(model ?? ""), [model]);
+  const effectiveModel = settings.modelId ?? model ?? "";
+  const contextLimit = useMemo(
+    () => getContextLimit(effectiveModel),
+    [effectiveModel],
+  );
 
   const handleUsageUpdate = useCallback((newUsage: LanguageModelUsage) => {
     setUsage(newUsage);
@@ -191,7 +199,7 @@ export function ChatProvider({
 
   const state: ChatState = useMemo(
     () => ({
-      model: settings.modelId ?? model,
+      model: effectiveModel,
       autoAcceptMode,
       workingDirectory,
       usage,
@@ -200,9 +208,10 @@ export function ChatProvider({
       approvalRules,
       settings,
       activePanel,
+      availableModels,
     }),
     [
-      model,
+      effectiveModel,
       autoAcceptMode,
       workingDirectory,
       usage,
@@ -211,6 +220,7 @@ export function ChatProvider({
       approvalRules,
       settings,
       activePanel,
+      availableModels,
     ],
   );
 

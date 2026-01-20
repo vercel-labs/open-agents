@@ -5,6 +5,7 @@ import {
   createTUI,
   loadSettings,
   saveSettings,
+  fetchAvailableModels,
   type Settings,
 } from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md";
@@ -134,8 +135,11 @@ async function main() {
     // Load agents.md files from the working directory hierarchy
     const agentsMd = await loadAgentsMd(workingDirectory);
 
-    // Load user settings from config file
-    const settings = await loadSettings();
+    // Load user settings and available models in parallel
+    const [settings, availableModels] = await Promise.all([
+      loadSettings(),
+      fetchAvailableModels(),
+    ]);
 
     // Callback to save settings when they change
     const handleSettingsChange = (newSettings: Settings) => {
@@ -165,6 +169,7 @@ async function main() {
       },
       initialSettings: settings,
       onSettingsChange: handleSettingsChange,
+      availableModels,
       // Auto-accept all tools in sandbox mode since it's an isolated environment
       ...(isRemoteSandbox && { initialAutoAcceptMode: "all" }),
     });

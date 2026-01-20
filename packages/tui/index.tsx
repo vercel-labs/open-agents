@@ -15,6 +15,8 @@ export type { TUIOptions, AutoAcceptMode, Settings } from "./types";
 export { useChatContext, ChatProvider } from "./chat-context";
 export { tuiAgent, createDefaultAgentOptions } from "./config";
 export { loadSettings, saveSettings } from "./lib/settings";
+export { fetchAvailableModels } from "./lib/fetch-models";
+export type { ModelInfo } from "./lib/models";
 
 /**
  * Create a Claude Code-style TUI.
@@ -58,6 +60,7 @@ export async function createTUI(options: TUIOptions): Promise<void> {
       initialAutoAcceptMode={options.initialAutoAcceptMode}
       initialSettings={options.initialSettings}
       onSettingsChange={options.onSettingsChange}
+      availableModels={options.availableModels}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
@@ -95,6 +98,7 @@ export function renderTUI(options: TUIOptions) {
       initialAutoAcceptMode={options.initialAutoAcceptMode}
       initialSettings={options.initialSettings}
       onSettingsChange={options.onSettingsChange}
+      availableModels={options.availableModels}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
