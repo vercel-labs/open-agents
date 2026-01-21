@@ -43,7 +43,12 @@ function countTaskTools(part: TaskToolUIPart): number {
 function getTaskTokens(part: TaskToolUIPart): number | null {
   if (part.state !== "output-available") return null;
   const message = part.output;
-  return message?.metadata?.inputTokens ?? null;
+  // Use totalMessageUsage when complete, lastStepUsage when still running
+  const isComplete = !part.preliminary;
+  if (isComplete) {
+    return message?.metadata?.totalMessageUsage?.inputTokens ?? null;
+  }
+  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
 }
 
 function getLastToolInfo(
@@ -57,7 +62,8 @@ function getLastToolInfo(
   if (toolParts.length === 0) return null;
 
   const lastTool = toolParts[toolParts.length - 1];
-  if (!lastTool) return null;
+  // Double-check needed for TypeScript narrowing with union types
+  if (!lastTool || !isToolUIPart(lastTool)) return null;
 
   const toolName = getToolName(lastTool);
   const input = lastTool.input as Record<string, unknown> | undefined;

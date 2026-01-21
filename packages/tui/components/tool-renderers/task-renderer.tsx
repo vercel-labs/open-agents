@@ -2,35 +2,35 @@ import React from "react";
 import { Box, Text } from "ink";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import { formatTokens } from "@open-harness/shared";
+import type { SubagentUIMessage } from "@open-harness/agent";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolSpinner } from "./shared";
 
-/**
- * Simplified tool call renderer for subagent tool parts.
- * Uses a looser type since these come from a different agent's tool set.
- */
-function SubagentToolCall({
-  part,
-}: {
-  part: Parameters<typeof getToolName>[0];
-}) {
+type SubagentMessagePart = SubagentUIMessage["parts"][number];
+
+function getToolSummary(part: SubagentMessagePart): string {
+  switch (part.type) {
+    case "tool-read":
+    case "tool-write":
+    case "tool-edit":
+      return part.input?.filePath ?? "";
+    case "tool-grep":
+    case "tool-glob":
+      return part.input?.pattern ? `"${part.input.pattern}"` : "";
+    case "tool-bash":
+      return part.input?.command ?? "";
+    default:
+      return "";
+  }
+}
+
+function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
+  if (!isToolUIPart(part)) return null;
   const toolName = getToolName(part);
   const isRunning =
     part.state === "input-streaming" || part.state === "input-available";
   const hasError = part.state === "output-error";
-
-  // Extract a summary based on common tool input patterns
-  const input = part.input as Record<string, unknown> | undefined;
-  let summary = "";
-  if (input?.filePath) {
-    summary = String(input.filePath);
-  } else if (input?.pattern) {
-    summary = `"${input.pattern}"`;
-  } else if (input?.command) {
-    summary = String(input.command);
-  } else if (input) {
-    summary = JSON.stringify(input).slice(0, 40);
-  }
+  const summary = getToolSummary(part);
 
   const dotColor = isRunning ? "yellow" : hasError ? "red" : "green";
   const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
@@ -177,8 +177,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
           <Text color="gray">└ </Text>
           <Text color="white">
             Complete ({toolParts.length} tool calls
-            {message?.metadata?.inputTokens
-              ? `, ${formatTokens(message.metadata.inputTokens)} tokens`
+            {message?.metadata?.totalMessageUsage?.inputTokens
+              ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
               : ""}
             )
           </Text>

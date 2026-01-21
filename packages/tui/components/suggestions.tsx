@@ -62,8 +62,14 @@ export const Suggestions = memo(function Suggestions({
   const itemsAbove = windowStart;
   const itemsBelow = suggestions.length - windowEnd;
 
+  // Calculate max width for column alignment
+  const maxDisplayWidth = Math.max(
+    ...displayedSuggestions.map((s) => s.display.length),
+  );
+  const columnWidth = maxDisplayWidth + 4; // Add padding between columns
+
   return (
-    <Box flexDirection="column" paddingLeft={1} paddingRight={1} marginTop={0}>
+    <Box flexDirection="column" paddingLeft={1} marginTop={1} marginBottom={1}>
       {/* Scroll indicator: items above */}
       {hasItemsAbove && (
         <Text color="gray" dimColor>
@@ -78,26 +84,18 @@ export const Suggestions = memo(function Suggestions({
 
         return (
           <Box key={suggestion.value}>
-            {/* Selection indicator */}
-            <Text color={isSelected ? "yellow" : "gray"}>
-              {isSelected ? "> " : "  "}
-            </Text>
-            {/* Suggestion text */}
             <Text
               color={
-                isSelected
-                  ? "yellow"
-                  : suggestion.isDirectory
-                    ? "cyan"
-                    : "white"
+                isSelected ? "yellow" : suggestion.isDirectory ? "cyan" : "gray"
               }
               bold={isSelected}
             >
-              {suggestion.display}
+              {suggestion.display.padEnd(columnWidth)}
             </Text>
-            {/* Description (for commands) */}
             {suggestion.description && (
-              <Text color="gray"> - {suggestion.description}</Text>
+              <Text color={isSelected ? "yellow" : "gray"}>
+                {suggestion.description}
+              </Text>
             )}
           </Box>
         );

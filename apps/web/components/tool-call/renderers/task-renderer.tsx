@@ -15,6 +15,8 @@ type SubagentMessagePart = SubagentUIMessage["parts"][number];
 function getToolSummary(part: SubagentMessagePart): string {
   switch (part.type) {
     case "tool-read":
+    case "tool-write":
+    case "tool-edit":
       return part.input?.filePath ?? "";
     case "tool-grep":
     case "tool-glob":
@@ -22,10 +24,6 @@ function getToolSummary(part: SubagentMessagePart): string {
     case "tool-bash":
       return part.input?.command ?? "";
     default:
-      // Fallback: show truncated JSON for unknown tools
-      if (isToolUIPart(part) && part.input) {
-        return JSON.stringify(part.input).slice(0, 40);
-      }
       return "";
   }
 }
@@ -88,14 +86,11 @@ function SubagentToolCall({
         {hasError && <span className="text-sm text-red-500"> - error</span>}
       </div>
       {/* Show full input in expanded mode */}
-      {expanded &&
-        part.input != null &&
-        typeof part.input === "object" &&
-        Object.keys(part.input as object).length > 0 && (
-          <pre className="ml-4 mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
-            {JSON.stringify(part.input, null, 2)}
-          </pre>
-        )}
+      {expanded && (
+        <pre className="ml-4 mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
+          {JSON.stringify(part.input, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }
@@ -347,8 +342,8 @@ export function TaskRenderer({
       {!isExpanded && isComplete && (
         <div className="mt-2 pl-5 text-sm text-muted-foreground">
           Complete ({toolParts.length} tool calls
-          {message?.metadata?.inputTokens
-            ? `, ${formatTokens(message.metadata.inputTokens)} tokens`
+          {message?.metadata?.totalMessageUsage?.inputTokens
+            ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
             : ""}
           )
         </div>
