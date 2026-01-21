@@ -781,29 +781,10 @@ export function TaskDetailContent() {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
 
-    let newSandbox: CreateSandboxResponse | null = null;
     try {
-      // First create a new sandbox
-      // Don't pass task.sandboxId - we're creating a fresh sandbox for restore,
-      // and the React state may be stale (not synced with DB after discard)
-      //
-      // For isNewBranch tasks: if no PR exists, the branch was never pushed to origin.
-      // We need to use the newBranch pattern (clone default, create branch locally).
-      // If a PR exists, the branch was pushed and we can clone it directly.
-      const branchExistsOnOrigin = task.prNumber != null;
-      const useNewBranch = task.isNewBranch && !branchExistsOnOrigin;
-
-      newSandbox = await createSandbox(
-        task.cloneUrl ?? undefined,
-        task.branch ?? undefined,
-        useNewBranch,
-        task.id,
-        task.sandboxState?.type ?? "hybrid",
-      );
-      setSandboxInfo(newSandbox);
-      setSandboxType(newSandbox.type);
-
-      // Then restore the snapshot
+      // Restore from snapshot directly - this creates a new sandbox from the snapshot
+      // Do NOT create a sandbox first, as that would set sandboxId which prevents
+      // the snapshot restoration from working correctly
       const response = await fetch("/api/sandbox/snapshot", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -815,22 +796,23 @@ export function TaskDetailContent() {
       if (!response.ok) {
         const error = (await response.json()) as { error?: string };
         const errorMsg = error.error ?? "Unknown error";
-        console.error("Failed to restore snapshot:", errorMsg);
-        setRestoreError(
-          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
-        );
+        setRestoreError(`Snapshot restore failed: ${errorMsg}`);
+        return;
+      }
+
+      // Set sandbox info for the restored sandbox
+      setSandboxInfo({
+        createdAt: Date.now(),
+        timeout: 300_000, // 5 minutes
+      });
+
+      // Update sandbox type from the preserved state
+      if (task.sandboxState?.type) {
+        setSandboxType(task.sandboxState.type);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("Failed to restore snapshot:", err);
-      // If sandbox was created but restore failed, show warning
-      if (newSandbox) {
-        setRestoreError(
-          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
-        );
-      } else {
-        setRestoreError(`Failed to create sandbox: ${errorMsg}`);
-      }
+      setRestoreError(`Failed to restore snapshot: ${errorMsg}`);
     } finally {
       setIsRestoringSnapshot(false);
     }

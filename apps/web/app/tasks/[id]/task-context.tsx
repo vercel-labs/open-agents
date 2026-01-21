@@ -118,7 +118,13 @@ export function TaskChatProvider({
 
   const clearSandboxInfo = useCallback(() => {
     setSandboxInfoState(null);
-    setTask((prev) => ({ ...prev, sandboxState: null }));
+    // Preserve the sandbox type for restoration, but clear other state
+    setTask((prev) => ({
+      ...prev,
+      sandboxState: prev.sandboxState
+        ? ({ type: prev.sandboxState.type } as SandboxState)
+        : null,
+    }));
   }, []);
 
   const [reconnectionStatus, setReconnectionStatus] =
@@ -145,10 +151,22 @@ export function TaskChatProvider({
         });
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {
-        setTask((prev) => ({ ...prev, sandboxState: null }));
+        // Preserve the sandbox type for restoration, but clear other state
+        setTask((prev) => ({
+          ...prev,
+          sandboxState: prev.sandboxState
+            ? ({ type: prev.sandboxState.type } as SandboxState)
+            : null,
+        }));
         setReconnectionStatus("no_sandbox");
       } else {
-        setTask((prev) => ({ ...prev, sandboxState: null }));
+        // Preserve the sandbox type for restoration, but clear other state
+        setTask((prev) => ({
+          ...prev,
+          sandboxState: prev.sandboxState
+            ? ({ type: prev.sandboxState.type } as SandboxState)
+            : null,
+        }));
         setReconnectionStatus("failed");
       }
     } catch (error) {

@@ -1,6 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { clearSandboxState, isSandboxActive } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
   taskId: string;
@@ -11,7 +12,7 @@ interface RestoreSnapshotRequest {
 }
 
 /**
- * POST - Create a native Vercel snapshot of the sandbox filesystem.
+ * POST - Create a snapshot of the sandbox filesystem.
  * IMPORTANT: This automatically stops the sandbox after snapshot creation.
  */
 export async function POST(req: Request) {
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.sandboxState) {
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -55,13 +56,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create native Vercel snapshot (automatically stops the sandbox)
+    // Create snapshot (automatically stops the sandbox)
     const result = await sandbox.snapshot();
 
     // Update task with snapshot info (now stores snapshotId instead of downloadUrl)
+    // Also clear sandbox state but preserve the type for future restoration
+    const clearedState = clearSandboxState(task.sandboxState);
+
     await updateTask(taskId, {
       snapshotUrl: result.snapshotId,
       snapshotCreatedAt: new Date(),
+      sandboxState: clearedState,
     });
 
     return Response.json({
@@ -113,11 +118,23 @@ export async function PUT(req: Request) {
       { status: 404 },
     );
   }
+  if (!task.sandboxState) {
+    return Response.json(
+      { error: "No sandbox state available for restoration" },
+      { status: 400 },
+    );
+  }
+  if (task.sandboxState.type === "just-bash") {
+    return Response.json(
+      { error: "Snapshot restoration not supported for just-bash sandboxes" },
+      { status: 400 },
+    );
+  }
 
   try {
-    // Create a new sandbox from the snapshot
+    // Restore sandbox from snapshot by adding snapshotId to existing state
     const sandbox = await connectSandbox({
-      type: "vercel",
+      ...task.sandboxState,
       snapshotId: task.snapshotUrl,
     });
 

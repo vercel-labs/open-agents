@@ -23,7 +23,7 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@vercel/sandbox": "^1.1.2",
+    "@vercel/sandbox": "^1.2.0",
     "just-bash": "^2.1.0"
   },
   "devDependencies": {

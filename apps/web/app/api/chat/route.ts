@@ -11,6 +11,7 @@ import {
   updateTask,
 } from "@/lib/db/tasks";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 // Allow streaming responses up to 5 minutes (matching sandbox timeout)
@@ -51,8 +52,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // 4. Require sandboxState
-  if (!task.sandboxState) {
+  // 4. Require active sandbox
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 

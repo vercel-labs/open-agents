@@ -1,6 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { clearSandboxState, isSandboxActive } from "@/lib/sandbox/utils";
 
 export type ReconnectStatus =
   | "connected"
@@ -34,8 +35,8 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // No sandbox state at all
-  if (!task.sandboxState) {
+  // No active sandbox
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({
       status: "no_sandbox",
       hasSnapshot: !!task.snapshotUrl,
@@ -61,7 +62,9 @@ export async function GET(req: Request): Promise<Response> {
     } satisfies ReconnectResponse);
   } catch {
     // Sandbox no longer exists (expired or stopped)
-    await updateTask(taskId, { sandboxState: null });
+    await updateTask(taskId, {
+      sandboxState: clearSandboxState(task.sandboxState),
+    });
     return Response.json({
       status: "expired",
       hasSnapshot: !!task.snapshotUrl,
