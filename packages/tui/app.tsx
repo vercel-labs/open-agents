@@ -454,7 +454,7 @@ const StreamingStatusBar = memo(function StreamingStatusBar({
   const thinkingState = getThinkingState(messageId);
 
   // Extract input tokens from the last message's metadata
-  const inputTokens = lastMessage?.metadata?.usage?.inputTokens ?? null;
+  const inputTokens = lastMessage?.metadata?.lastStepUsage?.inputTokens ?? null;
 
   // Extract todos from the most recent assistant message in the current exchange
   const todos = useMemo(

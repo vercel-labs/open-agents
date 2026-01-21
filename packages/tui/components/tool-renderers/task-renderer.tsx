@@ -177,8 +177,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
           <Text color="gray">└ </Text>
           <Text color="white">
             Complete ({toolParts.length} tool calls
-            {message?.metadata?.inputTokens
-              ? `, ${formatTokens(message.metadata.inputTokens)} tokens`
+            {message?.metadata?.lastStepUsage?.inputTokens
+              ? `, ${formatTokens(message.metadata.lastStepUsage.inputTokens)} tokens`
               : ""}
             )
           </Text>

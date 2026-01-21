@@ -1,9 +1,10 @@
-import type { InferAgentUIMessage } from "ai";
+import type { InferAgentUIMessage, LanguageModelUsage } from "ai";
 import type { explorerSubagent } from "./explorer";
 import type { executorSubagent } from "./executor";
 
 export type SubagentMessageMetadata = {
-  inputTokens?: number;
+  lastStepUsage?: LanguageModelUsage;
+  totalMessageUsage?: LanguageModelUsage;
 };
 
 // Union of both subagent types to support all tool types at runtime

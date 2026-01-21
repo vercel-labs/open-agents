@@ -105,7 +105,7 @@ function countTaskTools(part: TaskToolUIPart): number {
 function getTaskTokens(part: TaskToolUIPart): number | null {
   if (part.state !== "output-available") return null;
   const message = part.output;
-  return message?.metadata?.inputTokens ?? null;
+  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
 }
 
 function getToolSummary(part: SubagentMessagePart): string {

@@ -1037,10 +1037,10 @@ export function TaskDetailContent() {
     // Find the last assistant message with usage metadata
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i];
-      if (message?.role === "assistant" && message.metadata?.usage) {
+      if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
         return {
-          inputTokens: message.metadata.usage.inputTokens ?? 0,
-          outputTokens: message.metadata.usage.outputTokens ?? 0,
+          inputTokens: message.metadata.lastStepUsage.inputTokens ?? 0,
+          outputTokens: message.metadata.lastStepUsage.outputTokens ?? 0,
         };
       }
     }
