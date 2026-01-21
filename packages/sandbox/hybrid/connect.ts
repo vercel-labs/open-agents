@@ -5,6 +5,7 @@ import { HybridSandbox } from "./sandbox";
 import { connectJustBash } from "../just-bash/connect";
 import { connectVercel } from "../vercel/connect";
 import { VercelSandbox } from "../vercel/sandbox";
+import { configureGitUser } from "../vercel/utils";
 
 /**
  * Connect options for hybrid sandbox.
@@ -138,16 +139,7 @@ export async function connectHybrid(
 
     // Configure git user if provided (not done automatically when restoring from snapshot)
     if (options?.gitUser) {
-      await cloudSandbox.exec(
-        `git config user.name "${options.gitUser.name}"`,
-        cloudSandbox.workingDirectory,
-        10_000,
-      );
-      await cloudSandbox.exec(
-        `git config user.email "${options.gitUser.email}"`,
-        cloudSandbox.workingDirectory,
-        10_000,
-      );
+      await configureGitUser(cloudSandbox, options.gitUser);
     }
 
     const hybrid = new HybridSandbox({

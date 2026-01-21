@@ -79,8 +79,6 @@ export async function POST(req: Request) {
 
 /**
  * PUT - Restore a snapshot by creating a new sandbox from it.
- * For native Vercel snapshots, this creates a new sandbox from the snapshot.
- * For legacy blob snapshots, this creates a sandbox and restores the blob.
  */
 export async function PUT(req: Request) {
   const session = await getServerSession();
@@ -118,9 +116,6 @@ export async function PUT(req: Request) {
 
   try {
     // Create a new sandbox from the snapshot
-    // The snapshotUrl field now stores either:
-    // - Native Vercel snapshot ID (new format)
-    // - Legacy blob download URL (starts with https://)
     const sandbox = await connectSandbox({
       type: "vercel",
       snapshotId: task.snapshotUrl,

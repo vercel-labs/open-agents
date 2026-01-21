@@ -2,6 +2,7 @@ import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { SandboxHooks } from "../interface";
 import type { VercelState } from "./state";
 import { VercelSandbox } from "./sandbox";
+import { configureGitUser } from "./utils";
 
 interface ConnectOptions {
   env?: Record<string, string>;
@@ -43,16 +44,7 @@ export async function connectVercel(
 
     // Configure git user if provided (not done automatically when restoring from snapshot)
     if (options?.gitUser) {
-      await sandbox.exec(
-        `git config user.name "${options.gitUser.name}"`,
-        sandbox.workingDirectory,
-        10_000,
-      );
-      await sandbox.exec(
-        `git config user.email "${options.gitUser.email}"`,
-        sandbox.workingDirectory,
-        10_000,
-      );
+      await configureGitUser(sandbox, options.gitUser);
     }
 
     return sandbox;
