@@ -10,6 +10,7 @@ import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
+// TODO: INCREASE LIMITS BEFORE RELEASE
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const WORKING_DIR = "/vercel/sandbox";
 
