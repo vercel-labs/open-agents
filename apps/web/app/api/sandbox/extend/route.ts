@@ -52,8 +52,10 @@ export async function POST(req: Request) {
 
     // Persist updated expiresAt to database
     if (typeof sandbox.getState === "function") {
-      const newState = sandbox.getState() as SandboxState;
-      await updateTask(taskId, { sandboxState: newState });
+      const newState = sandbox.getState();
+      if (newState) {
+        await updateTask(taskId, { sandboxState: newState as SandboxState });
+      }
     }
 
     return Response.json({

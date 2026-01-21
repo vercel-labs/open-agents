@@ -124,19 +124,31 @@ export async function PUT(req: Request) {
       { status: 400 },
     );
   }
-  if (task.sandboxState.type === "just-bash") {
+  // Save the type before narrowing checks (TypeScript loses track after multiple guards)
+  const sandboxType = task.sandboxState.type;
+  if (sandboxType === "just-bash") {
     return Response.json(
       { error: "Snapshot restoration not supported for just-bash sandboxes" },
       { status: 400 },
     );
   }
+  // Warn if sandbox appears to still be running (has sandboxId)
+  // This shouldn't happen in normal flow since snapshot stops the sandbox
+  if (canOperateOnSandbox(task.sandboxState)) {
+    return Response.json(
+      { error: "Cannot restore: a sandbox is still running. Stop it first." },
+      { status: 400 },
+    );
+  }
 
   try {
-    // Restore sandbox from snapshot by adding snapshotId to existing state
+    // Restore sandbox from snapshot - only pass type and snapshotId
+    // Do NOT spread full sandboxState as it may contain a stale sandboxId
+    // which would cause connectSandbox to reconnect instead of restore
     const sandbox = await connectSandbox({
-      ...task.sandboxState,
+      type: sandboxType,
       snapshotId: task.snapshotUrl,
-    });
+    } as Parameters<typeof connectSandbox>[0]);
 
     // Update task with new sandbox state
     const newState = sandbox.getState?.();
