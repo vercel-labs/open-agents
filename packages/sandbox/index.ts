@@ -1,7 +1,6 @@
 // interface
 export type {
   ExecResult,
-  LegacyRestoreOptions,
   Sandbox,
   SandboxHook,
   SandboxHooks,

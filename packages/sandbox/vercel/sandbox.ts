@@ -2,7 +2,6 @@ import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Dirent } from "fs";
 import type {
   ExecResult,
-  LegacyRestoreOptions,
   Sandbox,
   SandboxHooks,
   SandboxStats,
@@ -610,29 +609,6 @@ export class VercelSandbox implements Sandbox {
     return {
       snapshotId: snapshot.snapshotId,
     };
-  }
-
-  /**
-   * Restore a legacy blob-based snapshot into the sandbox filesystem.
-   * @deprecated Use native Vercel snapshots via Sandbox.create({ source: { type: 'snapshot', snapshotId } })
-   */
-  async restoreLegacySnapshot(options: LegacyRestoreOptions): Promise<void> {
-    const cwd = options.workingDirectory ?? this.workingDirectory;
-    const timeoutMs = options.timeoutMs ?? 120_000;
-
-    // Optionally clean directory first
-    if (options.clean) {
-      await this.exec(`rm -rf "${cwd}"/*`, cwd, 30_000);
-    }
-
-    // Download and extract
-    const restoreCommand = `curl -fsSL "${options.downloadUrl}" | tar -xzf - -C "${cwd}"`;
-    const result = await this.exec(restoreCommand, cwd, timeoutMs);
-    if (!result.success) {
-      throw new Error(
-        `Failed to restore legacy snapshot: ${result.stderr || result.stdout}`,
-      );
-    }
   }
 
   /**

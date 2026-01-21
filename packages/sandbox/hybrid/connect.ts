@@ -7,14 +7,6 @@ import { connectVercel } from "../vercel/connect";
 import { VercelSandbox } from "../vercel/sandbox";
 
 /**
- * Check if a snapshot ID is a legacy blob URL (vs native snapshot ID).
- * Legacy snapshots are download URLs starting with https://
- */
-function isLegacySnapshot(snapshotId: string): boolean {
-  return snapshotId.startsWith("https://");
-}
-
-/**
  * Connect options for hybrid sandbox.
  * Includes hybrid-specific hooks and background task support.
  */
@@ -135,28 +127,27 @@ export async function connectHybrid(
 
   // Post-handoff recovery: Cloud sandbox timed out, restore from snapshot
   if (state.snapshotId && !state.sandboxId && !state.files) {
-    let cloudSandbox: VercelSandbox;
+    const sdk = await VercelSandboxSDK.create({
+      source: { type: "snapshot", snapshotId: state.snapshotId },
+    });
 
-    if (isLegacySnapshot(state.snapshotId)) {
-      // Legacy blob restoration: use connectVercel which handles legacy snapshots
-      cloudSandbox = await connectVercel(
-        { snapshotId: state.snapshotId },
-        {
-          env: options?.env,
-          gitUser: options?.gitUser,
-          hooks: options?.hooks,
-        },
+    const cloudSandbox = await VercelSandbox.connect(sdk.sandboxId, {
+      env: options?.env,
+      hooks: options?.hooks,
+    });
+
+    // Configure git user if provided (not done automatically when restoring from snapshot)
+    if (options?.gitUser) {
+      await cloudSandbox.exec(
+        `git config user.name "${options.gitUser.name}"`,
+        cloudSandbox.workingDirectory,
+        10_000,
       );
-    } else {
-      // Native snapshot restoration: create sandbox from snapshot directly
-      const sdk = await VercelSandboxSDK.create({
-        source: { type: "snapshot", snapshotId: state.snapshotId },
-      });
-
-      cloudSandbox = await VercelSandbox.connect(sdk.sandboxId, {
-        env: options?.env,
-        hooks: options?.hooks,
-      });
+      await cloudSandbox.exec(
+        `git config user.email "${options.gitUser.email}"`,
+        cloudSandbox.workingDirectory,
+        10_000,
+      );
     }
 
     const hybrid = new HybridSandbox({

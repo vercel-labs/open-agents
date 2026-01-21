@@ -120,6 +120,10 @@ function getToolSummary(part: SubagentMessagePart): string {
       return cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
     }
     default:
+      // Fallback: show truncated JSON for unknown tools
+      if (isToolUIPart(part) && part.input) {
+        return JSON.stringify(part.input).slice(0, 40);
+      }
       return "";
   }
 }
