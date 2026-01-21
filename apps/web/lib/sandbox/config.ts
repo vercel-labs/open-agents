@@ -4,7 +4,7 @@
  */
 
 /** Default timeout for new sandboxes (5 minutes) */
-export const DEFAULT_SANDBOX_TIMEOUT_MS = 60_000;
+export const DEFAULT_SANDBOX_TIMEOUT_MS = 300_000;
 
 /** Duration to extend timeout by when user requests more time (5 minutes) */
 export const EXTEND_TIMEOUT_DURATION_MS = 300_000;
