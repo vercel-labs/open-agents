@@ -1,5 +1,5 @@
-import { connectSandbox } from "@open-harness/sandbox";
-import { getTaskById } from "@/lib/db/tasks";
+import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
+import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -49,6 +49,12 @@ export async function POST(req: Request) {
       );
     }
     const result = await sandbox.extendTimeout(EXTEND_DURATION);
+
+    // Persist updated expiresAt to database
+    if (typeof sandbox.getState === "function") {
+      const newState = sandbox.getState() as SandboxState;
+      await updateTask(taskId, { sandboxState: newState });
+    }
 
     return Response.json({
       success: true,

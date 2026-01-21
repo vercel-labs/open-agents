@@ -24,9 +24,16 @@ export async function connectVercel(
 ): Promise<VercelSandbox> {
   // Reconnect to existing VM
   if (state.sandboxId) {
+    // Calculate remaining timeout from persisted expiresAt
+    let remainingTimeout: number | undefined;
+    if (state.expiresAt) {
+      remainingTimeout = Math.max(0, state.expiresAt - Date.now());
+    }
+
     return VercelSandbox.connect(state.sandboxId, {
       env: options?.env,
       hooks: options?.hooks,
+      remainingTimeout,
     });
   }
 

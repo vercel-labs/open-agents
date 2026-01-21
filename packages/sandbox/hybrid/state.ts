@@ -50,4 +50,9 @@ export interface HybridState {
    * These are tracked during ephemeral phase and replayed to cloud on handoff.
    */
   pendingOperations?: PendingOperation[];
+
+  // === Timeout tracking ===
+
+  /** Timestamp (ms) when the cloud sandbox expires */
+  expiresAt?: number;
 }

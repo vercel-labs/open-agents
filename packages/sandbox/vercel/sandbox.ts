@@ -658,6 +658,7 @@ export class VercelSandbox implements Sandbox {
     return {
       type: "vercel",
       sandboxId: this.id,
+      expiresAt: this.expiresAt,
     };
   }
 }

@@ -11,4 +11,6 @@ export interface VercelState {
   sandboxId?: string;
   /** Snapshot ID for restoring when VM timed out (sandboxId will be undefined) */
   snapshotId?: string;
+  /** Timestamp (ms) when the sandbox expires */
+  expiresAt?: number;
 }

@@ -4,6 +4,14 @@ export function isSandboxActive(
   state: SandboxState | null | undefined,
 ): state is SandboxState {
   if (!state) return false;
+
+  // Check expiration first (with 10s buffer for clock skew)
+  if ("expiresAt" in state && state.expiresAt !== undefined) {
+    if (Date.now() >= state.expiresAt - 10_000) {
+      return false;
+    }
+  }
+
   switch (state.type) {
     case "vercel":
       return !!state.sandboxId;
