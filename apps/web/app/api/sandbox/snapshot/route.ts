@@ -1,6 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
@@ -145,10 +146,10 @@ export async function PUT(req: Request) {
     // Restore sandbox from snapshot - only pass type and snapshotId
     // Do NOT spread full sandboxState as it may contain a stale sandboxId
     // which would cause connectSandbox to reconnect instead of restore
-    const sandbox = await connectSandbox({
-      type: sandboxType,
-      snapshotId: task.snapshotUrl,
-    } as Parameters<typeof connectSandbox>[0]);
+    const sandbox = await connectSandbox(
+      { type: sandboxType, snapshotId: task.snapshotUrl },
+      { timeout: DEFAULT_SANDBOX_TIMEOUT_MS },
+    );
 
     // Update task with new sandbox state
     const newState = sandbox.getState?.();

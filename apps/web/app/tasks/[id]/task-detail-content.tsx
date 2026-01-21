@@ -423,8 +423,11 @@ function SandboxHeaderBadge({
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center p-1">
+          <div className="flex items-center gap-1 p-1">
             <span className="size-2.5 rounded-full bg-green-500" />
+            <span className="text-xs text-muted-foreground">
+              {secondsRemaining}s
+            </span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>

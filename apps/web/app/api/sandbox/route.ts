@@ -160,6 +160,7 @@ export async function POST(req: Request) {
       options: {
         env: { GITHUB_TOKEN: githubToken },
         gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       },
     });
   } else {
@@ -174,6 +175,7 @@ export async function POST(req: Request) {
       options: {
         env: { GITHUB_TOKEN: githubToken },
         gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         scheduleBackgroundWork: (cb) => after(cb),
         hooks: taskId
           ? {

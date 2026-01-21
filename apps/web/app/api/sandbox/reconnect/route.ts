@@ -12,6 +12,8 @@ export type ReconnectStatus =
 export type ReconnectResponse = {
   status: ReconnectStatus;
   hasSnapshot: boolean;
+  /** Timestamp (ms) when sandbox expires. Only present when status is "connected". */
+  expiresAt?: number;
 };
 
 export async function GET(req: Request): Promise<Response> {
@@ -46,7 +48,8 @@ export async function GET(req: Request): Promise<Response> {
   const state = task.sandboxState;
 
   // Pre-handoff hybrid (has files) - always available since JustBash is in-memory
-  if (state.type === "hybrid" && state.files) {
+  // No expiresAt for pre-handoff since JustBash doesn't timeout
+  if (state.type === "hybrid" && state.files && !state.sandboxId) {
     return Response.json({
       status: "connected",
       hasSnapshot: !!task.snapshotUrl,
@@ -55,10 +58,11 @@ export async function GET(req: Request): Promise<Response> {
 
   // Post-handoff hybrid or Vercel - has sandboxId, try to connect
   try {
-    await connectSandbox(state);
+    const sandbox = await connectSandbox(state);
     return Response.json({
       status: "connected",
       hasSnapshot: !!task.snapshotUrl,
+      expiresAt: sandbox.expiresAt,
     } satisfies ReconnectResponse);
   } catch {
     // Sandbox no longer exists (expired or stopped)
