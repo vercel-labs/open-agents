@@ -1,9 +1,8 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { EXTEND_TIMEOUT_DURATION_MS } from "@/lib/sandbox/config";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-const EXTEND_DURATION = 300_000; // 5 minutes
 
 interface ExtendRequest {
   taskId: string;
@@ -48,7 +47,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const result = await sandbox.extendTimeout(EXTEND_DURATION);
+    const result = await sandbox.extendTimeout(EXTEND_TIMEOUT_DURATION_MS);
 
     // Persist updated expiresAt to database
     if (typeof sandbox.getState === "function") {
@@ -61,7 +60,7 @@ export async function POST(req: Request) {
     return Response.json({
       success: true,
       expiresAt: result.expiresAt,
-      extendedBy: EXTEND_DURATION,
+      extendedBy: EXTEND_TIMEOUT_DURATION_MS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

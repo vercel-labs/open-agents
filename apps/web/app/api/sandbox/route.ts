@@ -8,10 +8,8 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
-
-// TODO: INCREASE LIMITS BEFORE RELEASE
-const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const WORKING_DIR = "/vercel/sandbox";
 
 /**
@@ -95,7 +93,7 @@ export async function POST(req: Request) {
     return Response.json({
       sandboxId: providedSandboxId,
       createdAt: Date.now(),
-      timeout: DEFAULT_TIMEOUT,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       currentBranch: sandbox.currentBranch,
       mode: "hybrid",
     });
@@ -212,7 +210,7 @@ export async function POST(req: Request) {
 
   return Response.json({
     createdAt: Date.now(),
-    timeout: sandboxType === "just-bash" ? null : DEFAULT_TIMEOUT,
+    timeout: sandboxType === "just-bash" ? null : DEFAULT_SANDBOX_TIMEOUT_MS,
     currentBranch: repoUrl ? branch : undefined,
     mode: sandboxType,
     timing: { readyMs },

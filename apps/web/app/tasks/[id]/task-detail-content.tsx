@@ -39,6 +39,7 @@ import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
@@ -803,7 +804,7 @@ export function TaskDetailContent() {
       // Set sandbox info for the restored sandbox
       setSandboxInfo({
         createdAt: Date.now(),
-        timeout: 300_000, // 5 minutes
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       });
 
       // Update sandbox type from the preserved state

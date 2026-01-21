@@ -20,6 +20,7 @@ import type { SandboxState } from "@open-harness/sandbox";
 import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
 import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
 import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { useTaskDiff } from "@/hooks/use-task-diff";
 import { useTaskFiles } from "@/hooks/use-task-files";
 
@@ -147,7 +148,7 @@ export function TaskChatProvider({
       if (data.status === "connected") {
         setSandboxInfoState({
           createdAt: Date.now(),
-          timeout: 300_000,
+          timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         });
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {
