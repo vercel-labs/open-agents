@@ -139,6 +139,7 @@ export async function connectHybrid(
     const cloudSandbox = await VercelSandbox.connect(sdk.sandboxId, {
       env: options?.env,
       hooks: options?.hooks,
+      remainingTimeout: options?.timeout,
     });
 
     // Configure git user if provided (not done automatically when restoring from snapshot)
