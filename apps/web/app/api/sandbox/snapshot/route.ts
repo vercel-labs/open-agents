@@ -1,7 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
-import { clearSandboxState, isSandboxActive } from "@/lib/sandbox/utils";
+import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
   taskId: string;
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!canOperateOnSandbox(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 

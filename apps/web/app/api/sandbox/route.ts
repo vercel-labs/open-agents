@@ -8,7 +8,7 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
-import { clearSandboxState, isSandboxActive } from "@/lib/sandbox/utils";
+import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 const DEFAULT_TIMEOUT = 300_000; // 5 minutes
 const WORKING_DIR = "/vercel/sandbox";
@@ -249,8 +249,9 @@ export async function DELETE(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
-    return Response.json({ error: "No sandbox to stop" }, { status: 400 });
+  // If there's no sandbox to stop, return success (idempotent)
+  if (!canOperateOnSandbox(task.sandboxState)) {
+    return Response.json({ success: true, alreadyStopped: true });
   }
 
   // Connect and stop using unified API

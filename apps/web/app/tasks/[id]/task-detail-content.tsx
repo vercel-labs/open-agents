@@ -689,12 +689,12 @@ export function TaskDetailContent() {
         return { success: false };
       }
       const data = (await response.json()) as {
-        downloadUrl: string;
+        snapshotId: string;
         createdAt: number;
       };
       return {
         success: true,
-        downloadUrl: data.downloadUrl,
+        downloadUrl: data.snapshotId,
         createdAt: data.createdAt,
       };
     } catch (err) {
