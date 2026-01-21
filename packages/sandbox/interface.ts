@@ -10,38 +10,21 @@ import type { Dirent } from "fs";
 export type SandboxType = "local" | "in-memory" | "cloud" | "hybrid";
 
 /**
- * Options for creating a snapshot of the sandbox filesystem.
- */
-export interface SnapshotOptions {
-  /** Vercel Blob read-write token for upload */
-  blobToken: string;
-  /** Blob pathname for the snapshot (e.g., "snapshots/task-123/snapshot.tgz") */
-  pathname: string;
-  /** Working directory to snapshot (defaults to sandbox.workingDirectory) */
-  workingDirectory?: string;
-  /** Local path for temporary archive (defaults to /tmp/sandbox-snapshot.tgz) */
-  archivePath?: string;
-  /** Glob patterns to exclude from snapshot */
-  exclude?: string[];
-  /** Timeout in milliseconds */
-  timeoutMs?: number;
-}
-
-/**
  * Result of a successful snapshot operation.
+ * Uses native Vercel snapshot IDs instead of blob URLs.
  */
 export interface SnapshotResult {
-  /** Public URL of the uploaded snapshot */
-  url: string;
-  /** Download URL with Content-Disposition: attachment */
-  downloadUrl: string;
+  /** Native Vercel snapshot ID */
+  snapshotId: string;
 }
 
 /**
- * Options for restoring a snapshot to the sandbox filesystem.
+ * Options for restoring a legacy blob-based snapshot.
+ * Used during migration period for backwards compatibility.
+ * @deprecated Use native Vercel snapshots via Sandbox.create({ source: { type: 'snapshot', snapshotId } })
  */
-export interface RestoreOptions {
-  /** Download URL of the snapshot to restore */
+export interface LegacyRestoreOptions {
+  /** Download URL of the legacy blob snapshot to restore */
   downloadUrl: string;
   /** Working directory to restore into (defaults to sandbox.workingDirectory) */
   workingDirectory?: string;
@@ -260,21 +243,20 @@ export interface Sandbox {
   extendTimeout?(additionalMs: number): Promise<{ expiresAt: number }>;
 
   /**
-   * Create a snapshot of the sandbox filesystem and upload to Vercel Blob.
-   * The snapshot is a tarball of the working directory.
-   * Only supported by sandboxes with shell access (Vercel, Local).
-   * @param options - Snapshot configuration including blob token and pathname
-   * @returns URLs for accessing the uploaded snapshot
+   * Create a native Vercel snapshot of the sandbox filesystem.
+   * IMPORTANT: This automatically stops the sandbox after snapshot creation.
+   * Only supported by cloud sandboxes (Vercel).
+   * @returns The native snapshot ID for later restoration
    */
-  snapshot?(options: SnapshotOptions): Promise<SnapshotResult>;
+  snapshot?(): Promise<SnapshotResult>;
 
   /**
-   * Restore a snapshot from Vercel Blob into the sandbox filesystem.
+   * Restore a legacy blob-based snapshot into the sandbox filesystem.
    * Downloads and extracts the tarball into the working directory.
-   * Only supported by sandboxes with shell access (Vercel, Local).
+   * @deprecated Use native Vercel snapshots via Sandbox.create({ source: { type: 'snapshot', snapshotId } })
    * @param options - Restore configuration including download URL
    */
-  restoreSnapshot?(options: RestoreOptions): Promise<void>;
+  restoreLegacySnapshot?(options: LegacyRestoreOptions): Promise<void>;
 
   /**
    * Get the current state of the sandbox for persistence/restoration.

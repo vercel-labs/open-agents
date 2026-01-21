@@ -1,8 +1,18 @@
+import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { HybridState } from "./state";
 import type { HybridHooks } from "./hooks";
 import { HybridSandbox } from "./sandbox";
 import { connectJustBash } from "../just-bash/connect";
 import { connectVercel } from "../vercel/connect";
+import { VercelSandbox } from "../vercel/sandbox";
+
+/**
+ * Check if a snapshot ID is a legacy blob URL (vs native snapshot ID).
+ * Legacy snapshots are download URLs starting with https://
+ */
+function isLegacySnapshot(snapshotId: string): boolean {
+  return snapshotId.startsWith("https://");
+}
 
 /**
  * Connect options for hybrid sandbox.
@@ -125,14 +135,29 @@ export async function connectHybrid(
 
   // Post-handoff recovery: Cloud sandbox timed out, restore from snapshot
   if (state.snapshotId && !state.sandboxId && !state.files) {
-    const cloudSandbox = await connectVercel(
-      { snapshotId: state.snapshotId },
-      {
+    let cloudSandbox: VercelSandbox;
+
+    if (isLegacySnapshot(state.snapshotId)) {
+      // Legacy blob restoration: use connectVercel which handles legacy snapshots
+      cloudSandbox = await connectVercel(
+        { snapshotId: state.snapshotId },
+        {
+          env: options?.env,
+          gitUser: options?.gitUser,
+          hooks: options?.hooks,
+        },
+      );
+    } else {
+      // Native snapshot restoration: create sandbox from snapshot directly
+      const sdk = await VercelSandboxSDK.create({
+        source: { type: "snapshot", snapshotId: state.snapshotId },
+      });
+
+      cloudSandbox = await VercelSandbox.connect(sdk.sandboxId, {
         env: options?.env,
-        gitUser: options?.gitUser,
         hooks: options?.hooks,
-      },
-    );
+      });
+    }
 
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({
