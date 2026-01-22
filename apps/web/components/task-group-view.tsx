@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { isToolUIPart, getToolName } from "ai";
 import type { TaskToolUIPart } from "@open-harness/agent";
+import { formatTokens } from "@open-harness/shared";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "./tool-call/approval-buttons";
 
@@ -39,6 +40,17 @@ function countTaskTools(part: TaskToolUIPart): number {
   return message.parts.filter(isToolUIPart).length;
 }
 
+function getTaskTokens(part: TaskToolUIPart): number | null {
+  if (part.state !== "output-available") return null;
+  const message = part.output;
+  // Use totalMessageUsage when complete, lastStepUsage when still running
+  const isComplete = !part.preliminary;
+  if (isComplete) {
+    return message?.metadata?.totalMessageUsage?.inputTokens ?? null;
+  }
+  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
+}
+
 function getLastToolInfo(
   part: TaskToolUIPart,
 ): { name: string; summary: string } | null {
@@ -50,7 +62,8 @@ function getLastToolInfo(
   if (toolParts.length === 0) return null;
 
   const lastTool = toolParts[toolParts.length - 1];
-  if (!lastTool) return null;
+  // Double-check needed for TypeScript narrowing with union types
+  if (!lastTool || !isToolUIPart(lastTool)) return null;
 
   const toolName = getToolName(lastTool);
   const input = lastTool.input as Record<string, unknown> | undefined;
@@ -149,6 +162,7 @@ function TaskItem({
   const isRunning = status === "running" || status === "pending";
   const elapsedSeconds = useTaskTiming(isRunning);
   const toolCount = countTaskTools(part);
+  const tokenCount = getTaskTokens(part);
   const lastTool = getLastToolInfo(part);
 
   const desc = part.input?.task ?? "Task";
@@ -208,6 +222,7 @@ function TaskItem({
           </span>
           <span className="text-xs text-muted-foreground">
             - {toolCount} tool{toolCount !== 1 ? "s" : ""}
+            {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
           </span>
           {approvalRequested && (
             <span className="text-xs text-yellow-500">[NEEDS APPROVAL]</span>

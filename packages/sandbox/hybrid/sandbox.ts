@@ -356,6 +356,7 @@ export class HybridSandbox implements Sandbox {
       return {
         type: "hybrid",
         sandboxId: vercelId,
+        expiresAt: this.vercel.expiresAt,
       };
     }
 
@@ -382,6 +383,7 @@ export class HybridSandbox implements Sandbox {
         this._pendingOperations.length > 0
           ? this._pendingOperations
           : undefined,
+      expiresAt: this.vercel?.expiresAt,
     };
   }
 }

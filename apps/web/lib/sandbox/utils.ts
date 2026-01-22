@@ -1,0 +1,96 @@
+import type { SandboxState } from "@open-harness/sandbox";
+
+/**
+ * Type guard to check if a sandbox is active and ready to accept operations.
+ *
+ * "Active" means ALL of:
+ * - state is a valid SandboxState (not null/undefined)
+ * - sandbox has not expired (with 10s buffer for clock skew)
+ * - sandbox has runtime state (sandboxId for cloud, files for local)
+ *
+ * Use this for operations that require an active sandbox (chat, file ops, etc.)
+ * For operations on potentially expired sandboxes (snapshot, stop), use canOperateOnSandbox.
+ */
+export function isSandboxActive(
+  state: SandboxState | null | undefined,
+): state is SandboxState {
+  if (!state) return false;
+
+  // Check expiration first (with 10s buffer for clock skew)
+  if ("expiresAt" in state && state.expiresAt !== undefined) {
+    if (Date.now() >= state.expiresAt - 10_000) {
+      return false;
+    }
+  }
+
+  return hasRuntimeState(state);
+}
+
+/**
+ * Check if we can perform operations on a sandbox (snapshot, stop, etc.).
+ * Unlike isSandboxActive, this does NOT check expiration - we should still
+ * be able to snapshot/stop an expired sandbox.
+ *
+ * For hybrid sandboxes, this only returns true if there's a cloud sandbox
+ * (sandboxId present). Pre-handoff hybrid sandboxes (files only) cannot be
+ * snapshotted since they're not cloud-based.
+ */
+export function canOperateOnSandbox(
+  state: SandboxState | null | undefined,
+): state is SandboxState {
+  if (!state) return false;
+
+  switch (state.type) {
+    case "vercel":
+      return !!state.sandboxId;
+    case "hybrid":
+      // Only cloud-based hybrid sandboxes can be operated on (snapshot/stop)
+      // Pre-handoff hybrid (files only) has no cloud VM to snapshot
+      return !!state.sandboxId;
+    case "just-bash":
+      return !!state.files;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Check if the sandbox state has runtime state (active sandbox).
+ * Used internally to determine if sandbox is currently running.
+ */
+function hasRuntimeState(state: SandboxState): boolean {
+  switch (state.type) {
+    case "vercel":
+      return !!state.sandboxId;
+    case "hybrid":
+      // Hybrid is active if it has cloud sandbox OR local files (pre-handoff)
+      return !!state.sandboxId || !!state.files;
+    case "just-bash":
+      return !!state.files;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Clear sandbox runtime state while preserving the type for future restoration.
+ * Returns a minimal SandboxState with only the type field.
+ */
+export function clearSandboxState(
+  state: SandboxState | null | undefined,
+): SandboxState | null {
+  if (!state) return null;
+
+  // Create minimal state preserving only the type
+  // All SandboxState variants have optional fields, so { type } is valid
+  switch (state.type) {
+    case "vercel":
+      return { type: "vercel" };
+    case "hybrid":
+      return { type: "hybrid" };
+    case "just-bash":
+      return { type: "just-bash" };
+    default:
+      return null;
+  }
+}

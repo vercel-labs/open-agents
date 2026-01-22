@@ -40,31 +40,30 @@ export function ToolCall({
   onDeny,
 }: ToolCallProps) {
   const state = extractRenderState(part, activeApprovalId, isStreaming);
-  const toolName = getToolName(part);
   const approvalProps = { onApprove, onDeny };
 
-  switch (toolName) {
-    case "bash":
+  switch (part.type) {
+    case "tool-bash":
       return <BashRenderer part={part} state={state} {...approvalProps} />;
-    case "read":
+    case "tool-read":
       return (
         <ReadRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
       );
-    case "write":
+    case "tool-write":
       return (
         <WriteRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
       );
-    case "edit":
+    case "tool-edit":
       return (
         <EditRenderer part={part} state={state} cwd={cwd} {...approvalProps} />
       );
-    case "glob":
+    case "tool-glob":
       return <GlobRenderer part={part} state={state} {...approvalProps} />;
-    case "grep":
+    case "tool-grep":
       return <GrepRenderer part={part} state={state} {...approvalProps} />;
-    case "task":
+    case "tool-task":
       return <TaskRenderer part={part} state={state} {...approvalProps} />;
-    case "todo_write":
+    case "tool-todo_write":
       // Todo tool doesn't require approval, so approvalProps are intentionally omitted
       return <TodoRenderer part={part} state={state} />;
     default:
@@ -72,7 +71,7 @@ export function ToolCall({
         <DefaultRenderer
           part={part}
           state={state}
-          toolName={toolName}
+          toolName={getToolName(part)}
           {...approvalProps}
         />
       );

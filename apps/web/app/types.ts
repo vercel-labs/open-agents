@@ -13,7 +13,8 @@ export type WebAgentCallOptions = Parameters<
 >["0"]["options"];
 
 export type WebAgentMessageMetadata = {
-  usage: LanguageModelUsage;
+  lastStepUsage?: LanguageModelUsage;
+  totalMessageUsage?: LanguageModelUsage;
 };
 
 // All types derived from the agent

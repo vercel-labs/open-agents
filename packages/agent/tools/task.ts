@@ -1,7 +1,13 @@
-import { tool, readUIMessageStream, type UIToolInvocation } from "ai";
+import {
+  tool,
+  readUIMessageStream,
+  type UIToolInvocation,
+  type LanguageModelUsage,
+} from "ai";
 import { z } from "zod";
 import { explorerSubagent } from "../subagents/explorer";
 import { executorSubagent } from "../subagents/executor";
+import type { SubagentUIMessage } from "../subagents/types";
 import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
 import type { ApprovalRule } from "../types";
 
@@ -131,8 +137,23 @@ NOTE: The executor subagent requires user approval before running because it has
       abortSignal,
     });
 
-    for await (const message of readUIMessageStream({
-      stream: result.toUIMessageStream(),
+    // Track last step usage for message metadata
+    let lastStepUsage: LanguageModelUsage | undefined;
+
+    for await (const message of readUIMessageStream<SubagentUIMessage>({
+      stream: result.toUIMessageStream<SubagentUIMessage>({
+        messageMetadata: ({ part }) => {
+          // Track per-step usage from finish-step events
+          if (part.type === "finish-step") {
+            lastStepUsage = part.usage;
+            return { lastStepUsage, totalMessageUsage: undefined };
+          }
+          // On finish, include both the last step usage and total message usage
+          if (part.type === "finish") {
+            return { lastStepUsage, totalMessageUsage: part.totalUsage };
+          }
+        },
+      }),
     })) {
       yield message;
     }

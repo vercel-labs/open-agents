@@ -118,7 +118,13 @@ export function TaskChatProvider({
 
   const clearSandboxInfo = useCallback(() => {
     setSandboxInfoState(null);
-    setTask((prev) => ({ ...prev, sandboxState: null }));
+    // Preserve the sandbox type for restoration, but clear other state
+    setTask((prev) => ({
+      ...prev,
+      sandboxState: prev.sandboxState
+        ? ({ type: prev.sandboxState.type } as SandboxState)
+        : null,
+    }));
   }, []);
 
   const [reconnectionStatus, setReconnectionStatus] =
@@ -139,16 +145,31 @@ export function TaskChatProvider({
       const data = (await response.json()) as ReconnectResponse;
 
       if (data.status === "connected") {
+        // Calculate timeout from expiresAt if available, otherwise sandbox has no timeout
+        const now = Date.now();
+        const timeout = data.expiresAt ? data.expiresAt - now : null;
         setSandboxInfoState({
-          createdAt: Date.now(),
-          timeout: 300_000,
+          createdAt: now,
+          timeout,
         });
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {
-        setTask((prev) => ({ ...prev, sandboxState: null }));
+        // Preserve the sandbox type for restoration, but clear other state
+        setTask((prev) => ({
+          ...prev,
+          sandboxState: prev.sandboxState
+            ? ({ type: prev.sandboxState.type } as SandboxState)
+            : null,
+        }));
         setReconnectionStatus("no_sandbox");
       } else {
-        setTask((prev) => ({ ...prev, sandboxState: null }));
+        // Preserve the sandbox type for restoration, but clear other state
+        setTask((prev) => ({
+          ...prev,
+          sandboxState: prev.sandboxState
+            ? ({ type: prev.sandboxState.type } as SandboxState)
+            : null,
+        }));
         setReconnectionStatus("failed");
       }
     } catch (error) {

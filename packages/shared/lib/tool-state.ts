@@ -127,3 +127,14 @@ export function toRelativePath(filePath: string, cwd: string): string {
   }
   return filePath;
 }
+
+/**
+ * Format token count for display.
+ * Shows "1.2k" for numbers >= 1000, otherwise raw number.
+ */
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}

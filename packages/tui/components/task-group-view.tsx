@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text } from "ink";
 import { getToolName, isToolUIPart } from "ai";
-import type { TaskToolUIPart } from "../../agent/tools/task";
+import type { TaskToolUIPart, SubagentUIMessage } from "@open-harness/agent";
+import { formatTokens } from "@open-harness/shared";
+
+type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -99,6 +102,35 @@ function countTaskTools(part: TaskToolUIPart): number {
   return message.parts.filter(isToolUIPart).length;
 }
 
+function getTaskTokens(part: TaskToolUIPart): number | null {
+  if (part.state !== "output-available") return null;
+  const message = part.output;
+  // Use totalMessageUsage when complete, lastStepUsage when still running
+  const isComplete = !part.preliminary;
+  if (isComplete) {
+    return message?.metadata?.totalMessageUsage?.inputTokens ?? null;
+  }
+  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
+}
+
+function getToolSummary(part: SubagentMessagePart): string {
+  switch (part.type) {
+    case "tool-read":
+    case "tool-write":
+    case "tool-edit":
+      return part.input?.filePath ?? "";
+    case "tool-grep":
+    case "tool-glob":
+      return part.input?.pattern ? `"${part.input.pattern}"` : "";
+    case "tool-bash": {
+      const cmd = part.input?.command ?? "";
+      return cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
+    }
+    default:
+      return "";
+  }
+}
+
 function getLastToolInfo(
   part: TaskToolUIPart,
 ): { name: string; summary: string } | null {
@@ -110,20 +142,11 @@ function getLastToolInfo(
   if (toolParts.length === 0) return null;
 
   const lastTool = toolParts[toolParts.length - 1];
-  if (!lastTool) return null;
+  // Double-check needed for TypeScript narrowing with union types
+  if (!lastTool || !isToolUIPart(lastTool)) return null;
 
   const toolName = getToolName(lastTool);
-  const input = lastTool.input as Record<string, unknown> | undefined;
-
-  let summary = "";
-  if (input?.filePath) {
-    summary = String(input.filePath);
-  } else if (input?.pattern) {
-    summary = `"${input.pattern}"`;
-  } else if (input?.command) {
-    const cmd = String(input.command);
-    summary = cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
-  }
+  const summary = getToolSummary(lastTool);
 
   const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
   return { name: displayName, summary };
@@ -163,6 +186,7 @@ function TaskItem({
   const isRunning = status === "running" || status === "pending";
   const elapsedSeconds = useTaskTiming(isRunning);
   const toolCount = countTaskTools(part);
+  const tokenCount = getTaskTokens(part);
   const lastTool = getLastToolInfo(part);
 
   const desc = part.input?.task ?? "Task";
@@ -213,6 +237,7 @@ function TaskItem({
         <Text color="gray">
           {" "}
           - {toolCount} tool{toolCount !== 1 ? "s" : ""}
+          {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
         </Text>
         {approvalRequested && <Text color="yellow"> [NEEDS APPROVAL]</Text>}
         {isRunning && elapsedSeconds > 0 && (

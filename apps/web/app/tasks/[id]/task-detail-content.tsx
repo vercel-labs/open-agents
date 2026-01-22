@@ -39,6 +39,7 @@ import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
 import type { TaskToolUIPart } from "@open-harness/agent";
 
@@ -422,8 +423,11 @@ function SandboxHeaderBadge({
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center p-1">
+          <div className="flex items-center gap-1 p-1">
             <span className="size-2.5 rounded-full bg-green-500" />
+            <span className="text-xs text-muted-foreground">
+              {secondsRemaining}s
+            </span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
@@ -689,12 +693,12 @@ export function TaskDetailContent() {
         return { success: false };
       }
       const data = (await response.json()) as {
-        downloadUrl: string;
+        snapshotId: string;
         createdAt: number;
       };
       return {
         success: true,
-        downloadUrl: data.downloadUrl,
+        downloadUrl: data.snapshotId,
         createdAt: data.createdAt,
       };
     } catch (err) {
@@ -781,29 +785,10 @@ export function TaskDetailContent() {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
 
-    let newSandbox: CreateSandboxResponse | null = null;
     try {
-      // First create a new sandbox
-      // Don't pass task.sandboxId - we're creating a fresh sandbox for restore,
-      // and the React state may be stale (not synced with DB after discard)
-      //
-      // For isNewBranch tasks: if no PR exists, the branch was never pushed to origin.
-      // We need to use the newBranch pattern (clone default, create branch locally).
-      // If a PR exists, the branch was pushed and we can clone it directly.
-      const branchExistsOnOrigin = task.prNumber != null;
-      const useNewBranch = task.isNewBranch && !branchExistsOnOrigin;
-
-      newSandbox = await createSandbox(
-        task.cloneUrl ?? undefined,
-        task.branch ?? undefined,
-        useNewBranch,
-        task.id,
-        task.sandboxState?.type ?? "hybrid",
-      );
-      setSandboxInfo(newSandbox);
-      setSandboxType(newSandbox.type);
-
-      // Then restore the snapshot
+      // Restore from snapshot directly - this creates a new sandbox from the snapshot
+      // Do NOT create a sandbox first, as that would set sandboxId which prevents
+      // the snapshot restoration from working correctly
       const response = await fetch("/api/sandbox/snapshot", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -815,22 +800,23 @@ export function TaskDetailContent() {
       if (!response.ok) {
         const error = (await response.json()) as { error?: string };
         const errorMsg = error.error ?? "Unknown error";
-        console.error("Failed to restore snapshot:", errorMsg);
-        setRestoreError(
-          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
-        );
+        setRestoreError(`Snapshot restore failed: ${errorMsg}`);
+        return;
+      }
+
+      // Set sandbox info for the restored sandbox
+      setSandboxInfo({
+        createdAt: Date.now(),
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      });
+
+      // Update sandbox type from the preserved state
+      if (task.sandboxState?.type) {
+        setSandboxType(task.sandboxState.type);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("Failed to restore snapshot:", err);
-      // If sandbox was created but restore failed, show warning
-      if (newSandbox) {
-        setRestoreError(
-          `Snapshot restore failed: ${errorMsg}. Sandbox is running but may be empty.`,
-        );
-      } else {
-        setRestoreError(`Failed to create sandbox: ${errorMsg}`);
-      }
+      setRestoreError(`Failed to restore snapshot: ${errorMsg}`);
     } finally {
       setIsRestoringSnapshot(false);
     }
@@ -1037,10 +1023,10 @@ export function TaskDetailContent() {
     // Find the last assistant message with usage metadata
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i];
-      if (message?.role === "assistant" && message.metadata?.usage) {
+      if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
         return {
-          inputTokens: message.metadata.usage.inputTokens ?? 0,
-          outputTokens: message.metadata.usage.outputTokens ?? 0,
+          inputTokens: message.metadata.lastStepUsage.inputTokens ?? 0,
+          outputTokens: message.metadata.lastStepUsage.outputTokens ?? 0,
         };
       }
     }

@@ -3,81 +3,46 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { isToolUIPart, isTextUIPart, getToolName } from "ai";
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import { formatTokens } from "@open-harness/shared";
+import type { TaskToolUIPart, SubagentUIMessage } from "@open-harness/agent";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
-type TaskInput = {
-  prompt?: string;
-  description?: string;
-  subagent_type?: string;
-};
+type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
-type MessagePart = {
-  type: string;
-  text?: string;
-  toolName?: string;
-  toolCallId?: string;
-  state?: string;
-  input?: Record<string, unknown>;
-  output?: unknown;
-  [key: string]: unknown;
-};
-
-type UIMessage = {
-  parts?: MessagePart[];
-};
-
-/**
- * Check if a part is a tool UI part.
- */
-function isToolPart(part: MessagePart): boolean {
-  return part.type.startsWith("tool-") || part.type === "dynamic-tool";
-}
-
-/**
- * Check if a part is a text UI part.
- */
-function isTextPart(part: MessagePart): boolean {
-  return part.type === "text";
-}
-
-/**
- * Get tool name from a message part.
- */
-function getToolName(part: MessagePart): string {
-  if (part.toolName) {
-    return part.toolName;
+function getToolSummary(part: SubagentMessagePart): string {
+  switch (part.type) {
+    case "tool-read":
+    case "tool-write":
+    case "tool-edit":
+      return part.input?.filePath ?? "";
+    case "tool-grep":
+    case "tool-glob":
+      return part.input?.pattern ? `"${part.input.pattern}"` : "";
+    case "tool-bash":
+      return part.input?.command ?? "";
+    default:
+      return "";
   }
-  if (part.type.startsWith("tool-")) {
-    return part.type.slice(5);
-  }
-  return "unknown";
 }
 
 function SubagentToolCall({
   part,
   expanded = false,
 }: {
-  part: MessagePart;
+  part: SubagentMessagePart;
   expanded?: boolean;
 }) {
+  if (!isToolUIPart(part)) return null;
+
   const toolName = getToolName(part);
   const isRunning =
     part.state === "input-streaming" || part.state === "input-available";
   const hasError = part.state === "output-error";
 
-  const input = part.input;
-  let summary = "";
-  if (input?.filePath) {
-    summary = String(input.filePath);
-  } else if (input?.pattern) {
-    summary = `"${input.pattern}"`;
-  } else if (input?.command) {
-    summary = String(input.command);
-  } else if (input) {
-    summary = JSON.stringify(input).slice(0, 40);
-  }
+  const summary = getToolSummary(part);
 
   const dotColor = isRunning
     ? "bg-yellow-500"
@@ -121,9 +86,9 @@ function SubagentToolCall({
         {hasError && <span className="text-sm text-red-500"> - error</span>}
       </div>
       {/* Show full input in expanded mode */}
-      {expanded && input && Object.keys(input).length > 0 && (
+      {expanded && (
         <pre className="ml-4 mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
-          {JSON.stringify(input, null, 2)}
+          {JSON.stringify(part.input, null, 2)}
         </pre>
       )}
     </div>
@@ -136,36 +101,30 @@ export function TaskRenderer({
   onApprove,
   onDeny,
 }: {
-  part: {
-    input?: unknown;
-    state: string;
-    output?: unknown;
-    approval?: { reason?: string; id?: string };
-    preliminary?: boolean;
-  };
+  part: TaskToolUIPart;
   state: ToolRenderState;
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const input = part.input as TaskInput | undefined;
-  const desc = input?.description ?? input?.prompt ?? "Spawning subagent";
-  const fullPrompt = input?.prompt;
-  const subagentType = input?.subagent_type;
+  const input = part.input;
+  const desc = input?.task ?? "Spawning subagent";
+  const fullPrompt = input?.instructions;
+  const subagentType = input?.subagentType;
   const taskApprovalRequested = part.state === "approval-requested";
   const taskDenied = part.state === "output-denied";
   const taskDenialReason = taskDenied ? part.approval?.reason : undefined;
 
   const hasOutput = part.state === "output-available";
   const isPreliminary = hasOutput && part.preliminary === true;
-  const message = hasOutput ? (part.output as UIMessage) : undefined;
+  const message = hasOutput ? part.output : undefined;
 
   const messageParts = message?.parts ?? [];
   const relevantParts = messageParts.filter(
-    (p) => isToolPart(p) || isTextPart(p),
+    (p) => isToolUIPart(p) || isTextUIPart(p),
   );
-  const toolParts = messageParts.filter(isToolPart);
-  const textParts = messageParts.filter(isTextPart);
+  const toolParts = messageParts.filter(isToolUIPart);
+  const textParts = messageParts.filter(isTextUIPart);
 
   const maxVisible = 4;
   const hiddenCount = Math.max(0, relevantParts.length - maxVisible);
@@ -296,10 +255,10 @@ export function TaskRenderer({
             </div>
           )}
           {visibleParts.map((p, i) => {
-            if (isToolPart(p)) {
+            if (isToolUIPart(p)) {
               return <SubagentToolCall key={p.toolCallId ?? i} part={p} />;
             }
-            if (isTextPart(p)) {
+            if (isTextUIPart(p)) {
               const text = p.text?.trim() ?? "";
               if (!text) return null;
               const truncated =
@@ -351,7 +310,7 @@ export function TaskRenderer({
               </div>
               <div className="max-h-96 space-y-1 overflow-auto">
                 {relevantParts.map((p, i) => {
-                  if (isToolPart(p)) {
+                  if (isToolUIPart(p)) {
                     return (
                       <SubagentToolCall
                         key={p.toolCallId ?? i}
@@ -360,7 +319,7 @@ export function TaskRenderer({
                       />
                     );
                   }
-                  if (isTextPart(p)) {
+                  if (isTextUIPart(p)) {
                     const text = p.text?.trim() ?? "";
                     if (!text) return null;
                     return (
@@ -382,7 +341,11 @@ export function TaskRenderer({
 
       {!isExpanded && isComplete && (
         <div className="mt-2 pl-5 text-sm text-muted-foreground">
-          Complete ({toolParts.length} tool calls)
+          Complete ({toolParts.length} tool calls
+          {message?.metadata?.totalMessageUsage?.inputTokens
+            ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
+            : ""}
+          )
         </div>
       )}
 

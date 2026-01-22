@@ -1,13 +1,11 @@
 // interface
 export type {
   ExecResult,
-  RestoreOptions,
   Sandbox,
   SandboxHook,
   SandboxHooks,
   SandboxStats,
   SandboxType,
-  SnapshotOptions,
   SnapshotResult,
 } from "./interface";
 

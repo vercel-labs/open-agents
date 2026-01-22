@@ -1,8 +1,11 @@
+import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { HybridState } from "./state";
 import type { HybridHooks } from "./hooks";
 import { HybridSandbox } from "./sandbox";
 import { connectJustBash } from "../just-bash/connect";
 import { connectVercel } from "../vercel/connect";
+import { VercelSandbox } from "../vercel/sandbox";
+import { configureGitUser } from "../vercel/utils";
 
 /**
  * Connect options for hybrid sandbox.
@@ -15,6 +18,8 @@ export interface HybridConnectOptions {
   gitUser?: { name: string; email: string };
   /** Lifecycle hooks including hybrid-specific hooks */
   hooks?: HybridHooks;
+  /** Timeout in milliseconds for cloud sandboxes (default: 300,000 = 5 minutes) */
+  timeout?: number;
   /**
    * Schedule background work for cloud sandbox startup.
    * The callback returns a promise that completes when cloud sandbox is ready.
@@ -62,6 +67,7 @@ function startCloudSandboxInBackground(
         env: options?.env,
         gitUser: options?.gitUser,
         hooks: options?.hooks,
+        timeout: options?.timeout,
       });
 
       // Perform handoff
@@ -125,14 +131,21 @@ export async function connectHybrid(
 
   // Post-handoff recovery: Cloud sandbox timed out, restore from snapshot
   if (state.snapshotId && !state.sandboxId && !state.files) {
-    const cloudSandbox = await connectVercel(
-      { snapshotId: state.snapshotId },
-      {
-        env: options?.env,
-        gitUser: options?.gitUser,
-        hooks: options?.hooks,
-      },
-    );
+    const sdk = await VercelSandboxSDK.create({
+      source: { type: "snapshot", snapshotId: state.snapshotId },
+      ...(options?.timeout !== undefined && { timeout: options.timeout }),
+    });
+
+    const cloudSandbox = await VercelSandbox.connect(sdk.sandboxId, {
+      env: options?.env,
+      hooks: options?.hooks,
+      remainingTimeout: options?.timeout,
+    });
+
+    // Configure git user if provided (not done automatically when restoring from snapshot)
+    if (options?.gitUser) {
+      await configureGitUser(cloudSandbox, options.gitUser);
+    }
 
     const hybrid = new HybridSandbox({
       justBash: await connectJustBash({

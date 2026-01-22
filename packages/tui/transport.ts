@@ -104,16 +104,22 @@ export function createAgentTransport({
 
       // Track session ID locally so we can update it after creation
       let currentSessionId = persistence?.getSessionId() ?? null;
+      // Track last step usage for message metadata
+      let lastStepUsage: LanguageModelUsage | undefined;
 
       return result.toUIMessageStream<TUIAgentUIMessage>({
         originalMessages: messages,
         generateMessageId: generateId,
         messageMetadata: ({ part }) => {
-          if (part.type === "finish") {
-            return { usage: part.totalUsage };
-          }
+          // Track per-step usage from finish-step events. The last step's input
+          // tokens represents actual context window utilization.
           if (part.type === "finish-step") {
-            return { usage: part.usage };
+            lastStepUsage = part.usage;
+            return { lastStepUsage, totalMessageUsage: undefined };
+          }
+          // On finish, include both the last step usage and total message usage
+          if (part.type === "finish") {
+            return { lastStepUsage, totalMessageUsage: part.totalUsage };
           }
         },
         onFinish: async ({ messages: allMessages }) => {

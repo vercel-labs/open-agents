@@ -1,6 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { z } from "zod";
 
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.sandboxState) {
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 

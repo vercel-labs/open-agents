@@ -29,6 +29,8 @@ export interface ConnectOptions {
   gitUser?: { name: string; email: string };
   /** Lifecycle hooks */
   hooks?: SandboxHooks;
+  /** Timeout in milliseconds for cloud sandboxes (default: 300,000 = 5 minutes) */
+  timeout?: number;
 }
 
 /**

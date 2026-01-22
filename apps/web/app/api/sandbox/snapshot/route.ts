@@ -1,7 +1,8 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
   taskId: string;
@@ -12,20 +13,13 @@ interface RestoreSnapshotRequest {
 }
 
 /**
- * POST - Create a snapshot of the sandbox filesystem
+ * POST - Create a snapshot of the sandbox filesystem.
+ * IMPORTANT: This automatically stops the sandbox after snapshot creation.
  */
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!blobToken) {
-    return Response.json(
-      { error: "BLOB_READ_WRITE_TOKEN not configured" },
-      { status: 500 },
-    );
   }
 
   let body: CreateSnapshotRequest;
@@ -49,7 +43,7 @@ export async function POST(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.sandboxState) {
+  if (!canOperateOnSandbox(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -63,31 +57,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // Generate a scoped, short-lived client token for the upload
-    // This is safer than passing the full BLOB_READ_WRITE_TOKEN to the sandbox
-    const pathname = `snapshots/${taskId}/${Date.now()}.tgz`;
-    const clientToken = await generateClientTokenFromReadWriteToken({
-      token: blobToken,
-      pathname,
-      allowedContentTypes: ["application/gzip", "application/x-gzip"],
-      maximumSizeInBytes: 500 * 1024 * 1024, // 500MB max
-      validUntil: Date.now() + 5 * 60 * 1000, // 5 minutes
-    });
+    // Create snapshot (automatically stops the sandbox)
+    const result = await sandbox.snapshot();
 
-    const result = await sandbox.snapshot({
-      blobToken: clientToken,
-      pathname,
-    });
+    // Update task with snapshot info (now stores snapshotId instead of downloadUrl)
+    // Also clear sandbox state but preserve the type for future restoration
+    const clearedState = clearSandboxState(task.sandboxState);
 
-    // Update task with snapshot info
     await updateTask(taskId, {
-      snapshotUrl: result.downloadUrl,
+      snapshotUrl: result.snapshotId,
       snapshotCreatedAt: new Date(),
+      sandboxState: clearedState,
     });
 
     return Response.json({
-      url: result.url,
-      downloadUrl: result.downloadUrl,
+      snapshotId: result.snapshotId,
       createdAt: Date.now(),
     });
   } catch (error) {
@@ -100,7 +84,7 @@ export async function POST(req: Request) {
 }
 
 /**
- * PUT - Restore a snapshot to the sandbox filesystem
+ * PUT - Restore a snapshot by creating a new sandbox from it.
  */
 export async function PUT(req: Request) {
   const session = await getServerSession();
@@ -129,34 +113,58 @@ export async function PUT(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.sandboxState) {
-    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
-  }
   if (!task.snapshotUrl) {
     return Response.json(
       { error: "No snapshot available for this task" },
       { status: 404 },
     );
   }
+  if (!task.sandboxState) {
+    return Response.json(
+      { error: "No sandbox state available for restoration" },
+      { status: 400 },
+    );
+  }
+  // Save the type before narrowing checks (TypeScript loses track after multiple guards)
+  const sandboxType = task.sandboxState.type;
+  if (sandboxType === "just-bash") {
+    return Response.json(
+      { error: "Snapshot restoration not supported for just-bash sandboxes" },
+      { status: 400 },
+    );
+  }
+  // Warn if sandbox appears to still be running (has sandboxId)
+  // This shouldn't happen in normal flow since snapshot stops the sandbox
+  if (canOperateOnSandbox(task.sandboxState)) {
+    return Response.json(
+      { error: "Cannot restore: a sandbox is still running. Stop it first." },
+      { status: 400 },
+    );
+  }
 
   try {
-    const sandbox = await connectSandbox(task.sandboxState);
+    // Restore sandbox from snapshot - only pass type and snapshotId
+    // Do NOT spread full sandboxState as it may contain a stale sandboxId
+    // which would cause connectSandbox to reconnect instead of restore
+    const sandbox = await connectSandbox(
+      { type: sandboxType, snapshotId: task.snapshotUrl },
+      { timeout: DEFAULT_SANDBOX_TIMEOUT_MS },
+    );
 
-    if (!sandbox.restoreSnapshot) {
-      return Response.json(
-        { error: "Restore not supported by this sandbox type" },
-        { status: 400 },
-      );
+    // Update task with new sandbox state
+    const newState = sandbox.getState?.();
+    if (newState) {
+      await updateTask(taskId, {
+        sandboxState: newState as Parameters<
+          typeof updateTask
+        >[1]["sandboxState"],
+      });
     }
-
-    await sandbox.restoreSnapshot({
-      downloadUrl: task.snapshotUrl,
-      clean: true,
-    });
 
     return Response.json({
       success: true,
       restoredFrom: task.snapshotUrl,
+      sandboxId: "id" in sandbox ? sandbox.id : undefined,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

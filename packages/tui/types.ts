@@ -16,7 +16,8 @@ export type TUIAgentCallOptions = Parameters<
 >["0"]["options"];
 
 export type TUIAgentMessageMetadata = {
-  usage: LanguageModelUsage;
+  lastStepUsage?: LanguageModelUsage;
+  totalMessageUsage?: LanguageModelUsage;
 };
 
 // all derived

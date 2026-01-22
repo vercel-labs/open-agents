@@ -23,3 +23,9 @@ export {
 
 // Tool exports
 export { type TaskToolUIPart } from "./tools/task";
+
+// Subagent type exports
+export type {
+  SubagentMessageMetadata,
+  SubagentUIMessage,
+} from "./subagents/types";

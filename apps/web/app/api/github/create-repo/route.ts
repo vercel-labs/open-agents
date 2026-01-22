@@ -1,9 +1,10 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway } from "ai";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
-import { getServerSession } from "@/lib/session/get-server-session";
 import { createRepository } from "@/lib/github/client";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { isSandboxActive } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 // Allow up to 2 minutes for git operations
 export const maxDuration = 120;
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!task.sandboxState) {
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 

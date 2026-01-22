@@ -1,5 +1,5 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { convertToModelMessages, gateway } from "ai";
+import { convertToModelMessages, gateway, type LanguageModelUsage } from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { webAgent } from "@/app/config";
@@ -11,6 +11,7 @@ import {
   updateTask,
 } from "@/lib/db/tasks";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 // Allow streaming responses up to 5 minutes (matching sandbox timeout)
@@ -51,8 +52,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // 4. Require sandboxState
-  if (!task.sandboxState) {
+  // 4. Require active sandbox
+  if (!isSandboxActive(task.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -123,16 +124,23 @@ export async function POST(req: Request) {
 
   result.consumeStream();
 
+  // Track last step usage for message metadata
+  let lastStepUsage: LanguageModelUsage | undefined;
+
   // Save assistant message on finish, and persist sandbox state if applicable
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
     generateMessageId: nanoid,
     messageMetadata: ({ part }) => {
-      if (part.type === "finish") {
-        return { usage: part.totalUsage };
-      }
+      // Track per-step usage from finish-step events. The last step's input
+      // tokens represents actual context window utilization.
       if (part.type === "finish-step") {
-        return { usage: part.usage };
+        lastStepUsage = part.usage;
+        return { lastStepUsage, totalMessageUsage: undefined };
+      }
+      // On finish, include both the last step usage and total message usage
+      if (part.type === "finish") {
+        return { lastStepUsage, totalMessageUsage: part.totalUsage };
       }
       return undefined;
     },

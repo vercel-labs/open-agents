@@ -8,8 +8,8 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getTaskById, updateTask } from "@/lib/db/tasks";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
-
-const DEFAULT_TIMEOUT = 300_000; // 5 minutes
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 const WORKING_DIR = "/vercel/sandbox";
 
 /**
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     return Response.json({
       sandboxId: providedSandboxId,
       createdAt: Date.now(),
-      timeout: DEFAULT_TIMEOUT,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       currentBranch: sandbox.currentBranch,
       mode: "hybrid",
     });
@@ -160,6 +160,7 @@ export async function POST(req: Request) {
       options: {
         env: { GITHUB_TOKEN: githubToken },
         gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       },
     });
   } else {
@@ -174,6 +175,7 @@ export async function POST(req: Request) {
       options: {
         env: { GITHUB_TOKEN: githubToken },
         gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         scheduleBackgroundWork: (cb) => after(cb),
         hooks: taskId
           ? {
@@ -210,7 +212,7 @@ export async function POST(req: Request) {
 
   return Response.json({
     createdAt: Date.now(),
-    timeout: sandboxType === "just-bash" ? null : DEFAULT_TIMEOUT,
+    timeout: sandboxType === "just-bash" ? null : DEFAULT_SANDBOX_TIMEOUT_MS,
     currentBranch: repoUrl ? branch : undefined,
     mode: sandboxType,
     timing: { readyMs },
@@ -248,15 +250,18 @@ export async function DELETE(req: Request) {
   if (task.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.sandboxState) {
-    return Response.json({ error: "No sandbox to stop" }, { status: 400 });
+  // If there's no sandbox to stop, return success (idempotent)
+  if (!canOperateOnSandbox(task.sandboxState)) {
+    return Response.json({ success: true, alreadyStopped: true });
   }
 
   // Connect and stop using unified API
   const sandbox = await connectSandbox(task.sandboxState);
   await sandbox.stop();
 
-  await updateTask(taskId, { sandboxState: null });
+  await updateTask(taskId, {
+    sandboxState: clearSandboxState(task.sandboxState),
+  });
 
   return Response.json({ success: true });
 }
