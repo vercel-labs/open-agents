@@ -58,12 +58,30 @@ export function AskUserQuestionRenderer({
       )}
 
       {/* Show summary when output available and user answered */}
-      {part.state === "output-available" && hasAnswers && !state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="green">User answered questions</Text>
-        </Box>
-      )}
+      {part.state === "output-available" &&
+        hasAnswers &&
+        !state.denied &&
+        "answers" in output && (
+          <Box flexDirection="column" paddingLeft={2}>
+            {questions.map((q, idx) => {
+              if (!q || !q.question) return null;
+              const answer = output.answers[q.question];
+              const answerText = Array.isArray(answer)
+                ? answer.join(", ")
+                : answer;
+              const isFirst = idx === 0;
+              return (
+                <Box key={q.question}>
+                  <Text color="gray">{isFirst ? "└ " : "  "}</Text>
+                  <Text color="gray">· </Text>
+                  <Text color="white">{q.question}</Text>
+                  <Text color="gray"> → </Text>
+                  <Text color="green">{answerText ?? "No answer"}</Text>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
 
       {/* Show declined message */}
       {part.state === "output-available" && isDeclined && (
