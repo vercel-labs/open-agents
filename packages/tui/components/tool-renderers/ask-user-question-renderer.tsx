@@ -7,6 +7,15 @@ type AskUserQuestionOutput =
   | { answers: Record<string, string | string[]> }
   | { declined: true };
 
+function isAskUserQuestionOutput(
+  value: unknown,
+): value is AskUserQuestionOutput {
+  if (typeof value !== "object" || value === null) return false;
+  if ("declined" in value && value.declined === true) return true;
+  if ("answers" in value && typeof value.answers === "object") return true;
+  return false;
+}
+
 export function AskUserQuestionRenderer({
   part,
   state,
@@ -14,10 +23,10 @@ export function AskUserQuestionRenderer({
   const questions = part.input?.questions ?? [];
   const questionCount = questions.length;
 
-  // Extract output when available
+  // Extract output when available with proper runtime validation
   const output =
-    part.state === "output-available"
-      ? (part.output as AskUserQuestionOutput | undefined)
+    part.state === "output-available" && isAskUserQuestionOutput(part.output)
+      ? part.output
       : undefined;
 
   const isDeclined = output && "declined" in output && output.declined;

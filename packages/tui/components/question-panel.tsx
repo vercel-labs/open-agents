@@ -6,7 +6,6 @@ type Question = AskUserQuestionInput["questions"][number];
 
 type QuestionPanelProps = {
   questions: Question[];
-  toolCallId: string;
   onSubmit: (answers: Record<string, string | string[]>) => void;
   onCancel: () => void;
 };
@@ -41,6 +40,25 @@ export function QuestionPanel({
 
   const currentQuestion = questions[state.currentTab] as Question | undefined;
   const isSubmitTab = state.currentTab === questions.length;
+
+  // Computed values for "Other" option in current question
+  const otherText = currentQuestion
+    ? state.otherText[currentQuestion.question] || ""
+    : "";
+  const currentAnswer = currentQuestion
+    ? state.answers[currentQuestion.question]
+    : undefined;
+  const isOtherSelected = currentQuestion
+    ? currentQuestion.multiSelect
+      ? Array.isArray(currentAnswer) &&
+        otherText !== "" &&
+        currentAnswer.includes(otherText)
+      : currentAnswer === otherText && otherText !== ""
+    : false;
+  const isOtherHighlighted = currentQuestion
+    ? (state.optionIndex[currentQuestion.question] ?? 0) ===
+      currentQuestion.options.length
+    : false;
 
   // Get current answer for a question
   const getAnswer = useCallback(
@@ -107,46 +125,88 @@ export function QuestionPanel({
     [],
   );
 
-  // Handle "Other" text selection
+  // Handle "Other" text selection - only enter typing mode, don't save empty values
   const selectOther = useCallback((question: Question) => {
     setState((prev) => {
       const otherValue = prev.otherText[question.question] || "";
       if (question.multiSelect) {
-        // For multi-select, add "Other" as an option if not already selected
+        // For multi-select, only add to answers if there's actual text
         const currentArray = Array.isArray(prev.answers[question.question])
           ? (prev.answers[question.question] as string[])
           : prev.answers[question.question]
             ? [prev.answers[question.question] as string]
             : [];
-        // If other text exists and not already in array, we'll add it
         return {
           ...prev,
           typingOther: { ...prev.typingOther, [question.question]: true },
-          answers: {
-            ...prev.answers,
-            [question.question]: otherValue
-              ? [...currentArray.filter((a) => a !== otherValue), otherValue]
-              : currentArray,
-          },
+          // Only include otherValue in answers if it's non-empty
+          answers: otherValue
+            ? {
+                ...prev.answers,
+                [question.question]: [
+                  ...currentArray.filter((a) => a !== otherValue),
+                  otherValue,
+                ],
+              }
+            : prev.answers,
         };
       } else {
+        // For single-select, only enter typing mode without setting empty answer
         return {
           ...prev,
           typingOther: { ...prev.typingOther, [question.question]: true },
-          answers: { ...prev.answers, [question.question]: otherValue },
+          // Only set answer if there's actual text
+          answers: otherValue
+            ? { ...prev.answers, [question.question]: otherValue }
+            : prev.answers,
         };
       }
     });
   }, []);
 
-  // Handle typing in "Other" field
-  const handleOtherInput = useCallback((question: string, input: string) => {
-    setState((prev) => ({
-      ...prev,
-      otherText: { ...prev.otherText, [question]: input },
-      answers: { ...prev.answers, [question]: input },
-    }));
-  }, []);
+  // Handle typing in "Other" field - only save non-empty values as answers
+  const handleOtherInput = useCallback(
+    (question: string, input: string) => {
+      setState((prev) => {
+        // Always update otherText to track what user typed
+        const newOtherText = { ...prev.otherText, [question]: input };
+        const newAnswers = { ...prev.answers };
+        const currentAnswer = prev.answers[question];
+        const previousOther = prev.otherText[question] || "";
+
+        // Check if this question is multi-select
+        const questionObj = questions.find((q) => q.question === question);
+
+        if (questionObj?.multiSelect && Array.isArray(currentAnswer)) {
+          // Multi-select: only remove/update the "Other" value, preserve other selections
+          let updatedArray = currentAnswer.filter((a) => a !== previousOther);
+          if (input) {
+            updatedArray = [...updatedArray, input];
+          }
+          // Only keep answer if array has items
+          if (updatedArray.length > 0) {
+            newAnswers[question] = updatedArray;
+          } else {
+            delete newAnswers[question];
+          }
+        } else {
+          // Single-select: replace or remove the answer
+          if (input) {
+            newAnswers[question] = input;
+          } else {
+            delete newAnswers[question];
+          }
+        }
+
+        return {
+          ...prev,
+          otherText: newOtherText,
+          answers: newAnswers,
+        };
+      });
+    },
+    [questions],
+  );
 
   useInput((input, key) => {
     // Escape to cancel
@@ -154,10 +214,6 @@ export function QuestionPanel({
       onCancel();
       return;
     }
-
-    // Tab navigation with left/right arrows or Tab key
-    const goLeft = key.leftArrow || (key.shift && key.tab);
-    const goRight = key.rightArrow || key.tab;
 
     // If currently typing in "Other" field
     if (currentQuestion && state.typingOther[currentQuestion.question]) {
@@ -199,15 +255,17 @@ export function QuestionPanel({
       return;
     }
 
-    // Tab navigation
-    if (goLeft && !key.shift) {
+    // Arrow key navigation between tabs
+    if (key.leftArrow) {
       goToTab(state.currentTab - 1);
       return;
     }
-    if (goRight && !key.shift && !key.tab) {
+    if (key.rightArrow) {
       goToTab(state.currentTab + 1);
       return;
     }
+
+    // Tab key navigation
     if (key.tab) {
       if (key.shift) {
         goToTab(state.currentTab - 1);
@@ -412,26 +470,25 @@ export function QuestionPanel({
               {/* "Other" option */}
               <Box flexDirection="column">
                 <Box>
-                  <Text color="yellow">
-                    {(state.optionIndex[currentQuestion.question] ?? 0) ===
-                    currentQuestion.options.length
-                      ? "› "
-                      : "  "}
-                  </Text>
-                  <Text color="gray">
-                    {currentQuestion.multiSelect ? "[ ]" : "( )"}
+                  <Text color="yellow">{isOtherHighlighted ? "› " : "  "}</Text>
+                  <Text color={isOtherSelected ? "green" : "gray"}>
+                    {currentQuestion.multiSelect
+                      ? isOtherSelected
+                        ? "[✓]"
+                        : "[ ]"
+                      : isOtherSelected
+                        ? "(●)"
+                        : "( )"}
                   </Text>
                   <Text> </Text>
                   {state.typingOther[currentQuestion.question] ? (
                     <>
-                      <Text color="yellow">
-                        {state.otherText[currentQuestion.question] || ""}
-                      </Text>
+                      <Text color="yellow">{otherText}</Text>
                       <Text color="gray">█</Text>
                     </>
-                  ) : state.otherText[currentQuestion.question] ? (
-                    <Text color="gray">
-                      {state.otherText[currentQuestion.question]}
+                  ) : otherText ? (
+                    <Text color={isOtherSelected ? "green" : "gray"}>
+                      {otherText}
                     </Text>
                   ) : (
                     <Text color="gray">Type something else...</Text>

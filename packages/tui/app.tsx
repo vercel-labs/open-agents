@@ -814,7 +814,6 @@ function AppContent({ options }: AppProps) {
       questionToolCallId ? (
         <QuestionPanel
           questions={pendingQuestionPart.input.questions}
-          toolCallId={questionToolCallId}
           onSubmit={handleQuestionSubmit}
           onCancel={handleQuestionCancel}
         />
