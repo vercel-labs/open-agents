@@ -7,10 +7,7 @@ import React, {
   useRef,
   type ReactNode,
 } from "react";
-import {
-  type LanguageModelUsage,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-} from "ai";
+import { type LanguageModelUsage, type UIMessage, isToolUIPart } from "ai";
 import { Chat } from "@ai-sdk/react";
 import { createAgentTransport } from "./transport";
 import { tuiAgent } from "./config";
@@ -61,6 +58,47 @@ type ChatContextValue = {
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
 
 const AUTO_ACCEPT_MODES: AutoAcceptMode[] = ["off", "edits", "all"];
+
+/**
+ * Custom predicate that handles both approval-based tools and client-side tools.
+ *
+ * This is a combination of the library's two predicates:
+ * - lastAssistantMessageIsCompleteWithToolCalls (requires output-available/output-error)
+ * - lastAssistantMessageIsCompleteWithApprovalResponses (also allows approval-responded)
+ *
+ * Returns true when all tools in the last step are in a terminal state:
+ * - output-available: execution complete
+ * - output-error: execution failed
+ * - approval-responded: approval given/denied (server will execute next)
+ */
+function shouldAutoSubmit({ messages }: { messages: UIMessage[] }): boolean {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || lastMessage.role !== "assistant") return false;
+
+  // Find the last step boundary (for multi-step agents)
+  const lastStepStartIndex = lastMessage.parts.reduce(
+    (lastIndex, part, index) =>
+      part.type === "step-start" ? index : lastIndex,
+    -1,
+  );
+
+  // Get tool invocations from the last step, excluding provider-executed tools
+  const lastStepToolInvocations = lastMessage.parts
+    .slice(lastStepStartIndex + 1)
+    .filter(isToolUIPart)
+    .filter((part) => !part.providerExecuted);
+
+  // Need at least one tool call
+  if (lastStepToolInvocations.length === 0) return false;
+
+  // All tools must be in a terminal state
+  return lastStepToolInvocations.every(
+    (part) =>
+      part.state === "output-available" ||
+      part.state === "output-error" ||
+      part.state === "approval-responded",
+  );
+}
 
 type ChatProviderProps = {
   children: ReactNode;
@@ -231,8 +269,7 @@ export function ChatProvider({
     () =>
       new Chat<TUIAgentUIMessage>({
         transport,
-        sendAutomaticallyWhen:
-          lastAssistantMessageIsCompleteWithApprovalResponses,
+        sendAutomaticallyWhen: shouldAutoSubmit,
         messages: initialMessagesRef.current,
       }),
     [transport],

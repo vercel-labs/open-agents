@@ -16,6 +16,7 @@ import {
   globTool,
   bashTool,
   taskTool,
+  askUserQuestionTool,
 } from "./tools";
 import { buildSystemPrompt } from "./system-prompt";
 import type { TodoItem, ApprovalConfig } from "./types";
@@ -54,6 +55,7 @@ const tools = {
   glob: globTool(),
   bash: bashTool(),
   task: taskTool,
+  ask_user_question: askUserQuestionTool,
 } satisfies ToolSet;
 
 export const deepAgent = new ToolLoopAgent({

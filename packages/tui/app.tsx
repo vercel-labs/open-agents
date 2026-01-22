@@ -11,6 +11,7 @@ import { renderMarkdown } from "./lib/markdown";
 import { useChatContext } from "./chat-context";
 import { ToolCall, getToolApprovalInfo } from "./components/tool-call";
 import { ApprovalPanel } from "./components/approval-panel";
+import { QuestionPanel } from "./components/question-panel";
 import { SettingsPanel } from "./components/settings-panel";
 import { ResumePanel } from "./components/resume-panel";
 import { TaskGroupView } from "./components/task-group-view";
@@ -29,7 +30,7 @@ import type {
   TUIAgentUIMessage,
   TUIAgentUIToolPart,
 } from "./types";
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskToolUIPart, AskUserQuestionInput } from "@open-harness/agent";
 
 type AppProps = {
   options: TUIOptions;
@@ -531,7 +532,15 @@ function AppContent({ options }: AppProps) {
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [resumeError, setResumeError] = useState<string | null>(null);
 
-  const { messages, sendMessage, status, stop, error, setMessages } = useChat({
+  const {
+    messages,
+    sendMessage,
+    status,
+    stop,
+    error,
+    setMessages,
+    addToolOutput,
+  } = useChat({
     chat,
   });
 
@@ -566,6 +575,36 @@ function AppContent({ options }: AppProps) {
       };
     }, [messages]);
 
+  // Detect pending askUserQuestion tool calls
+  const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
+    useMemo(() => {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        for (const p of lastMessage.parts) {
+          if (
+            isToolUIPart(p) &&
+            p.type === "tool-ask_user_question" &&
+            p.state === "input-available"
+          ) {
+            return {
+              hasPendingQuestion: true,
+              pendingQuestionPart: p as {
+                type: "tool-ask_user_question";
+                toolCallId: string;
+                input: AskUserQuestionInput;
+              },
+              questionToolCallId: p.toolCallId,
+            };
+          }
+        }
+      }
+      return {
+        hasPendingQuestion: false,
+        pendingQuestionPart: null,
+        questionToolCallId: null,
+      };
+    }, [messages]);
+
   // Extract todos for standalone display when not streaming
   const todos = useMemo(
     () => extractTodosFromLastAssistantMessage(messages),
@@ -577,6 +616,31 @@ function AppContent({ options }: AppProps) {
     if (!pendingToolPart) return null;
     return getToolApprovalInfo(pendingToolPart, state.workingDirectory);
   }, [pendingToolPart, state.workingDirectory]);
+
+  // Handle question submission
+  const handleQuestionSubmit = useCallback(
+    (answers: Record<string, string | string[]>) => {
+      if (questionToolCallId) {
+        addToolOutput({
+          tool: "ask_user_question",
+          toolCallId: questionToolCallId,
+          output: { answers },
+        });
+      }
+    },
+    [questionToolCallId, addToolOutput],
+  );
+
+  // Handle question cancellation
+  const handleQuestionCancel = useCallback(() => {
+    if (questionToolCallId) {
+      addToolOutput({
+        tool: "ask_user_question",
+        toolCallId: questionToolCallId,
+        output: { declined: true },
+      });
+    }
+  }, [questionToolCallId, addToolOutput]);
 
   useInput((input, key) => {
     if (key.escape && isStreaming) {
@@ -743,12 +807,23 @@ function AppContent({ options }: AppProps) {
         </>
       )}
 
-      {/* Show approval panel when there's a pending approval (replaces status bar and input) */}
+      {/* Show question panel when there's a pending question (replaces input) */}
       {state.activePanel.type === "none" &&
-      hasPendingApproval &&
-      activeApprovalId &&
-      approvalInfo &&
-      pendingToolPart ? (
+      hasPendingQuestion &&
+      pendingQuestionPart &&
+      questionToolCallId ? (
+        <QuestionPanel
+          questions={pendingQuestionPart.input.questions}
+          toolCallId={questionToolCallId}
+          onSubmit={handleQuestionSubmit}
+          onCancel={handleQuestionCancel}
+        />
+      ) : /* Show approval panel when there's a pending approval (replaces status bar and input) */
+      state.activePanel.type === "none" &&
+        hasPendingApproval &&
+        activeApprovalId &&
+        approvalInfo &&
+        pendingToolPart ? (
         <ApprovalPanel
           approvalId={activeApprovalId}
           toolType={approvalInfo.toolType}

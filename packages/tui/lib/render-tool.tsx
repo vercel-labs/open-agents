@@ -21,6 +21,7 @@ import { GrepRenderer } from "../components/tool-renderers/grep-renderer";
 import { BashRenderer } from "../components/tool-renderers/bash-renderer";
 import { TodoRenderer } from "../components/tool-renderers/todo-renderer";
 import { TaskRenderer } from "../components/tool-renderers/task-renderer";
+import { AskUserQuestionRenderer } from "../components/tool-renderers/ask-user-question-renderer";
 import { DefaultRenderer } from "../components/tool-renderers/default-renderer";
 
 /**
@@ -82,6 +83,14 @@ export function renderToolPart(
       return <TodoRenderer part={part} state={state} isExpanded={isExpanded} />;
     case "tool-task":
       return <TaskRenderer part={part} state={state} isExpanded={isExpanded} />;
+    case "tool-ask_user_question":
+      return (
+        <AskUserQuestionRenderer
+          part={part}
+          state={state}
+          isExpanded={isExpanded}
+        />
+      );
     case "dynamic-tool":
       return <DefaultRenderer part={part} state={state} />;
   }

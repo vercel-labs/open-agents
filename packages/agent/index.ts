@@ -23,6 +23,10 @@ export {
 
 // Tool exports
 export { type TaskToolUIPart } from "./tools/task";
+export {
+  type AskUserQuestionToolUIPart,
+  type AskUserQuestionInput,
+} from "./tools/ask-user-question";
 
 // Subagent type exports
 export type {
