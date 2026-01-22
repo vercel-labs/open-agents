@@ -295,7 +295,7 @@ export function ResumePanel({
         <Text color="gray">
           {searchQuery
             ? "Type to search "
-            : `Type to search ${currentBranch ? ` B to ${filterByBranch ? "show all" : "filter branch"}` : ""} `}
+            : `Type to search${currentBranch ? ` B to ${filterByBranch ? "show all" : "filter branch"} ` : " "}`}
           Enter to select Esc to cancel
         </Text>
       </Box>
