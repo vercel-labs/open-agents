@@ -167,6 +167,18 @@ export function ChatProvider({
   settingsRef.current = settings;
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
+  const currentBranchRef = useRef(currentBranch);
+  currentBranchRef.current = currentBranch;
+
+  // Use ref for initialMessages to avoid recreating chat when it changes
+  const initialMessagesRef = useRef(initialMessages);
+  // Only set on first render - don't update on subsequent renders
+  if (
+    initialMessagesRef.current === undefined &&
+    initialMessages !== undefined
+  ) {
+    initialMessagesRef.current = initialMessages;
+  }
 
   const effectiveModel = settings.modelId ?? model ?? "";
   const contextLimit = useMemo(
@@ -207,12 +219,12 @@ export function ChatProvider({
           ? {
               getSessionId: () => sessionIdRef.current,
               projectPath,
-              branch: currentBranch,
+              getBranch: () => currentBranchRef.current,
               onSessionCreated: setSessionId,
             }
           : undefined,
       }),
-    [agentOptions, handleUsageUpdate, projectPath, currentBranch],
+    [agentOptions, handleUsageUpdate, projectPath],
   );
 
   const chat = useMemo(
@@ -221,9 +233,9 @@ export function ChatProvider({
         transport,
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,
-        messages: initialMessages,
+        messages: initialMessagesRef.current,
       }),
-    [transport, initialMessages],
+    [transport],
   );
 
   const state: ChatState = useMemo(

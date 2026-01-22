@@ -21,7 +21,7 @@ import { createSession, saveSession } from "./lib/session-storage";
 export type PersistenceConfig = {
   getSessionId: () => string | null;
   projectPath: string;
-  branch: string;
+  getBranch: () => string;
   onSessionCreated: (id: string) => void;
 };
 
@@ -121,11 +121,14 @@ export function createAgentTransport({
           if (!persistence) return;
 
           try {
+            // Get current branch at save time
+            const branch = persistence.getBranch();
+
             // Create session if needed
             if (!currentSessionId) {
               currentSessionId = await createSession(
                 persistence.projectPath,
-                persistence.branch,
+                branch,
               );
               persistence.onSessionCreated(currentSessionId);
             }
@@ -134,7 +137,7 @@ export function createAgentTransport({
             await saveSession(
               persistence.projectPath,
               currentSessionId,
-              persistence.branch,
+              branch,
               allMessages as UIMessage[],
             );
           } catch {

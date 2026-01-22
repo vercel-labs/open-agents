@@ -1,6 +1,13 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  readdir,
+  stat,
+  rename,
+} from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { UIMessage } from "ai";
 import type { SessionData, SessionListItem } from "./session-types";
@@ -13,7 +20,7 @@ const SESSIONS_DIR = join(CONFIG_DIR, "sessions");
  * Example: /Users/nico/code/project → Users-nico-code-project
  */
 export function encodeProjectPath(path: string): string {
-  return path.replace(/\//g, "-").replace(/^-/, "");
+  return path.replace(/[\\/]/g, "-").replace(/^-/, "");
 }
 
 /**
@@ -89,7 +96,10 @@ export async function saveSession(
     messages,
   };
 
-  await writeFile(filePath, JSON.stringify(sessionData, null, 2));
+  // Write to temp file, then atomic rename to prevent corruption from partial writes
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+  await writeFile(tempPath, JSON.stringify(sessionData, null, 2));
+  await rename(tempPath, filePath);
 }
 
 /**

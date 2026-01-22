@@ -165,8 +165,10 @@ export function ResumePanel({
         return;
       }
 
-      // Type to search (printable characters, except B for branch filter)
-      if (input && !key.ctrl && !key.meta && input.toLowerCase() !== "b") {
+      // Type to search (all printable characters)
+      // Note: "b" for branch toggle returns early above when search is empty,
+      // so it will reach here and be added to search when search has content
+      if (input && !key.ctrl && !key.meta) {
         setSearchQuery((prev) => prev + input);
       }
     },
@@ -267,7 +269,7 @@ export function ResumePanel({
                     <Text color="gray"> ({session.messageCount})</Text>
 
                     {/* Branch indicator */}
-                    {!isSameBranch && (
+                    {!isSameBranch && session.branch && (
                       <Text color="magenta"> [{session.branch}]</Text>
                     )}
                   </Box>
