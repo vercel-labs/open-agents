@@ -32,12 +32,20 @@ export function AskUserQuestionRenderer({
   const isDeclined = output && "declined" in output && output.declined;
   const hasAnswers = output && "answers" in output;
 
-  const dotColor = state.denied || isDeclined ? "red" : getDotColor(state);
+  // Use yellow dot when waiting for user input (like approval-requested tools)
+  const isWaitingForInput = part.state === "input-available";
+  const isGenerating = part.state === "input-streaming";
+  const dotColor =
+    state.denied || isDeclined
+      ? "red"
+      : isWaitingForInput
+        ? "yellow"
+        : getDotColor(state);
 
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
       <Box>
-        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
+        {isGenerating ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
         <Text bold color={state.denied || isDeclined ? "red" : "white"}>
           Ask User Question
         </Text>
@@ -48,9 +56,16 @@ export function AskUserQuestionRenderer({
         <Text color="gray">)</Text>
       </Box>
 
-      {/* Show waiting status when input available but not yet answered */}
-      {(part.state === "input-available" ||
-        part.state === "input-streaming") && (
+      {/* Show generating status while streaming input */}
+      {isGenerating && (
+        <Box paddingLeft={2}>
+          <Text color="gray">└ </Text>
+          <Text color="gray">Generating questions...</Text>
+        </Box>
+      )}
+
+      {/* Show waiting status when input is ready and awaiting user response */}
+      {isWaitingForInput && (
         <Box paddingLeft={2}>
           <Text color="gray">└ </Text>
           <Text color="gray">Waiting for user input...</Text>
