@@ -1,4 +1,4 @@
-import type { UIMessage } from "ai";
+import type { TUIAgentUIMessage } from "../types";
 
 /**
  * Full session data stored as a single JSON file
@@ -8,7 +8,7 @@ export interface SessionData {
   projectPath: string;
   branch: string;
   createdAt: string;
-  messages: UIMessage[];
+  messages: TUIAgentUIMessage[];
 }
 
 /**

@@ -9,7 +9,7 @@ import {
   rename,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import type { UIMessage } from "ai";
+import type { TUIAgentUIMessage } from "../types";
 import type { SessionData, SessionListItem } from "./session-types";
 
 const CONFIG_DIR = join(homedir(), ".config", "open-harness");
@@ -71,7 +71,7 @@ export async function saveSession(
   projectPath: string,
   sessionId: string,
   branch: string,
-  messages: UIMessage[],
+  messages: TUIAgentUIMessage[],
 ): Promise<void> {
   const sessionsDir = getProjectSessionsDir(projectPath);
   await mkdir(sessionsDir, { recursive: true });

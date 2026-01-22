@@ -644,7 +644,7 @@ function AppContent({ options }: AppProps) {
           return;
         }
 
-        setMessages(sessionData.messages as TUIAgentUIMessage[]);
+        setMessages(sessionData.messages);
         setSessionId(selectedSessionId);
         closePanel();
       } catch {

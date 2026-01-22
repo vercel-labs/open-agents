@@ -2,7 +2,6 @@ import {
   generateId,
   type ChatTransport,
   type LanguageModelUsage,
-  type UIMessage,
   convertToModelMessages,
   smoothStream,
   pruneMessages,
@@ -138,7 +137,7 @@ export function createAgentTransport({
               persistence.projectPath,
               currentSessionId,
               branch,
-              allMessages as UIMessage[],
+              allMessages,
             );
           } catch {
             // Ignore persistence errors
