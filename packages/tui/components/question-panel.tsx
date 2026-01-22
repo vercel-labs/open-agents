@@ -228,6 +228,10 @@ export function QuestionPanel({
               [currentQuestion.question]: false,
             },
           }));
+          // Auto-advance to next tab after confirming "Other" text (single-select only)
+          if (!currentQuestion.multiSelect) {
+            goToTab(state.currentTab + 1);
+          }
         }
         return;
       }
@@ -324,9 +328,14 @@ export function QuestionPanel({
         const option = currentQuestion.options[currentIndex];
         if (option) {
           selectOption(currentQuestion, option.label);
+          // For single-select, auto-advance to next tab on selection
+          // For multi-select, only advance on Enter (not Space which toggles)
+          if (!currentQuestion.multiSelect || key.return) {
+            goToTab(state.currentTab + 1);
+          }
         }
       } else {
-        // Select "Other"
+        // Select "Other" - enter typing mode, don't advance yet
         selectOther(currentQuestion);
       }
       return;
@@ -338,6 +347,10 @@ export function QuestionPanel({
       const option = currentQuestion.options[num - 1];
       if (option) {
         selectOption(currentQuestion, option.label);
+        // Auto-advance for single-select only (number keys act like quick toggle for multi-select)
+        if (!currentQuestion.multiSelect) {
+          goToTab(state.currentTab + 1);
+        }
       }
     }
   });
