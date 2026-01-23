@@ -27,7 +27,7 @@ export function AskUserQuestionRenderer({
   const questions = input?.questions ?? [];
 
   const isWaitingForInput = part.state === "input-available";
-  const isStreaming = part.state === "streaming-input";
+  const isStreaming = part.state === "input-streaming";
   const hasOutput = part.state === "output-available";
   const isDeclined =
     hasOutput && output && "declined" in output && output.declined;
