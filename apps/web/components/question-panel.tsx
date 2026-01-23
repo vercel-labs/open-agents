@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,12 @@ export function QuestionPanel({
     otherText: {},
     typingOther: {},
   }));
+
+  // Ref to track current tab for setTimeout callbacks (avoids stale closure)
+  const currentTabRef = useRef(state.currentTab);
+  useEffect(() => {
+    currentTabRef.current = state.currentTab;
+  }, [state.currentTab]);
 
   const currentQuestion = questions[state.currentTab] as Question | undefined;
   const isSubmitTab = state.currentTab === questions.length;
@@ -116,12 +122,12 @@ export function QuestionPanel({
         }
       });
 
-      // Auto-advance for single-select only
+      // Auto-advance for single-select only (use ref to avoid stale closure)
       if (autoAdvance && !question.multiSelect) {
-        setTimeout(() => goToTab(state.currentTab + 1), 150);
+        setTimeout(() => goToTab(currentTabRef.current + 1), 150);
       }
     },
-    [goToTab, state.currentTab],
+    [goToTab],
   );
 
   // Handle "Other" text change

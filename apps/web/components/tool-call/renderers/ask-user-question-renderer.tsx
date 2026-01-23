@@ -31,7 +31,8 @@ export function AskUserQuestionRenderer({
   const hasOutput = part.state === "output-available";
   const isDeclined =
     hasOutput && output && "declined" in output && output.declined;
-  const hasAnswers = hasOutput && output && "answers" in output;
+  const hasAnswers =
+    hasOutput && output && "answers" in output && output.answers !== null;
 
   const hasExpandableContent = questions.length > 0 && hasAnswers;
 
