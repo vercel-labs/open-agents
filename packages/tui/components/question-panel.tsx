@@ -177,9 +177,14 @@ export function QuestionPanel({
         // Check if this question is multi-select
         const questionObj = questions.find((q) => q.question === question);
 
-        if (questionObj?.multiSelect && Array.isArray(currentAnswer)) {
+        if (questionObj?.multiSelect) {
           // Multi-select: only remove/update the "Other" value, preserve other selections
-          let updatedArray = currentAnswer.filter((a) => a !== previousOther);
+          const currentArray = Array.isArray(currentAnswer)
+            ? currentAnswer
+            : currentAnswer
+              ? [currentAnswer]
+              : [];
+          let updatedArray = currentArray.filter((a) => a !== previousOther);
           if (input) {
             updatedArray = [...updatedArray, input];
           }

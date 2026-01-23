@@ -141,8 +141,13 @@ export function QuestionPanel({
 
         const questionObj = questions.find((q) => q.question === question);
 
-        if (questionObj?.multiSelect && Array.isArray(currentAnswer)) {
-          let updatedArray = currentAnswer.filter((a) => a !== previousOther);
+        if (questionObj?.multiSelect) {
+          const currentArray = Array.isArray(currentAnswer)
+            ? currentAnswer
+            : currentAnswer
+              ? [currentAnswer]
+              : [];
+          let updatedArray = currentArray.filter((a) => a !== previousOther);
           if (input) {
             updatedArray = [...updatedArray, input];
           }
