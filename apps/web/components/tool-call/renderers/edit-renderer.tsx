@@ -3,40 +3,21 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import {
-  type ToolRenderState,
-  toRelativePath,
-} from "@open-harness/shared/lib/tool-state";
+import { toRelativePath } from "@open-harness/shared/lib/tool-state";
 import { createEditDiffLines } from "@open-harness/shared/lib/diff";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
-
-type EditInput = {
-  filePath?: string;
-  oldString?: string;
-  newString?: string;
-};
-
-type EditOutput = {
-  success?: boolean;
-  error?: string;
-};
 
 export function EditRenderer({
   part,
   state,
-  cwd,
+  cwd = "",
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  cwd: string;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
+}: ToolRendererProps<"tool-edit">) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const input = part.input as EditInput | undefined;
+  const input = part.input;
   const rawFilePath = input?.filePath ?? "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
@@ -54,8 +35,7 @@ export function EditRenderer({
   // Expanded view: show all lines (up to 500)
   const fullDiff = createEditDiffLines(oldString, newString, 3, 500);
 
-  const output =
-    part.state === "output-available" ? (part.output as EditOutput) : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
     output?.success === false ? (output?.error ?? "Edit failed") : undefined;
 

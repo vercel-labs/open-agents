@@ -1,42 +1,20 @@
 "use client";
 
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
-
-type GrepInput = {
-  pattern?: string;
-  path?: string;
-  include?: string;
-};
-
-type GrepMatch = {
-  file: string;
-  line: number;
-  content?: string;
-};
-
-type GrepOutput = {
-  matches?: GrepMatch[];
-};
 
 export function GrepRenderer({
   part,
   state,
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
-  const input = part.input as GrepInput | undefined;
+}: ToolRendererProps<"tool-grep">) {
+  const input = part.input;
   const pattern = input?.pattern ?? "...";
   const path = input?.path;
-  const include = input?.include;
+  const include = input?.glob;
 
-  const output =
-    part.state === "output-available" ? (part.output as GrepOutput) : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const matches = output?.matches ?? [];
 
   // Show expanded content if there are matches

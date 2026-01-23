@@ -3,39 +3,21 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import {
-  type ToolRenderState,
-  toRelativePath,
-} from "@open-harness/shared/lib/tool-state";
+import { toRelativePath } from "@open-harness/shared/lib/tool-state";
 import { createNewFileCodeLines } from "@open-harness/shared/lib/diff";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
-
-type WriteInput = {
-  filePath?: string;
-  content?: string;
-};
-
-type WriteOutput = {
-  success?: boolean;
-  error?: string;
-};
 
 export function WriteRenderer({
   part,
   state,
-  cwd,
+  cwd = "",
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  cwd: string;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
+}: ToolRendererProps<"tool-write">) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const input = part.input as WriteInput | undefined;
+  const input = part.input;
   const rawFilePath = input?.filePath ?? "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
@@ -48,10 +30,7 @@ export function WriteRenderer({
     10,
   );
 
-  const output =
-    part.state === "output-available"
-      ? (part.output as WriteOutput)
-      : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
     output?.success === false ? (output?.error ?? "Write failed") : undefined;
 

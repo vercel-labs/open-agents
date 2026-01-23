@@ -1,34 +1,19 @@
 "use client";
 
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
-
-type GlobInput = {
-  pattern?: string;
-  path?: string;
-};
-
-type GlobOutput = {
-  files?: string[];
-};
 
 export function GlobRenderer({
   part,
   state,
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
-  const input = part.input as GlobInput | undefined;
+}: ToolRendererProps<"tool-glob">) {
+  const input = part.input;
   const pattern = input?.pattern ?? "...";
   const path = input?.path;
 
-  const output =
-    part.state === "output-available" ? (part.output as GlobOutput) : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const files = output?.files ?? [];
 
   // Show expanded content if there are files to show
@@ -56,7 +41,7 @@ export function GlobRenderer({
         <div className="max-h-64 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
           {files.map((file, i) => (
             <div key={i} className="text-foreground">
-              {file}
+              {file?.path}
             </div>
           ))}
         </div>

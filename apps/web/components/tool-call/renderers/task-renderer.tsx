@@ -4,9 +4,9 @@ import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { isToolUIPart, isTextUIPart, getToolName } from "ai";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import { formatTokens } from "@open-harness/shared";
-import type { TaskToolUIPart, SubagentUIMessage } from "@open-harness/agent";
+import type { SubagentUIMessage } from "@open-harness/agent";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
@@ -100,12 +100,7 @@ export function TaskRenderer({
   state,
   onApprove,
   onDeny,
-}: {
-  part: TaskToolUIPart;
-  state: ToolRenderState;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
+}: ToolRendererProps<"tool-task">) {
   const [isExpanded, setIsExpanded] = useState(false);
   const input = part.input;
   const desc = input?.task ?? "Spawning subagent";

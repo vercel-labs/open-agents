@@ -1,45 +1,24 @@
 "use client";
 
-import {
-  type ToolRenderState,
-  toRelativePath,
-} from "@open-harness/shared/lib/tool-state";
+import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
-
-type ReadInput = {
-  filePath?: string;
-  offset?: number;
-  limit?: number;
-};
-
-type ReadOutput = {
-  success?: boolean;
-  error?: string;
-  totalLines?: number;
-};
 
 export function ReadRenderer({
   part,
   state,
-  cwd,
+  cwd = "",
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  cwd: string;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
-  const input = part.input as ReadInput | undefined;
+}: ToolRendererProps<"tool-read">) {
+  const input = part.input;
   const rawFilePath = input?.filePath ?? "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
   const offset = input?.offset;
   const limit = input?.limit;
 
-  const output =
-    part.state === "output-available" ? (part.output as ReadOutput) : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const lines = output?.totalLines;
   const outputError =
     output?.success === false ? (output?.error ?? "Read failed") : undefined;

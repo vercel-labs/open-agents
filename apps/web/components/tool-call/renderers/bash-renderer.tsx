@@ -3,42 +3,22 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
-
-type BashInput = {
-  command?: string;
-  description?: string;
-  workdir?: string;
-  timeout?: number;
-};
-
-type BashOutput = {
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-};
 
 export function BashRenderer({
   part,
   state,
   onApprove,
   onDeny,
-}: {
-  part: { input?: unknown; state: string; output?: unknown };
-  state: ToolRenderState;
-  onApprove?: (id: string) => void;
-  onDeny?: (id: string, reason?: string) => void;
-}) {
+}: ToolRendererProps<"tool-bash">) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const input = part.input as BashInput | undefined;
+  const input = part.input;
   const command = String(input?.command ?? "");
-  const description = input?.description;
-  const workdir = input?.workdir;
+  const cwd = input?.cwd;
 
-  const output =
-    part.state === "output-available" ? (part.output as BashOutput) : undefined;
+  const output = part.state === "output-available" ? part.output : undefined;
   const exitCode = output?.exitCode;
   const stdout = output?.stdout;
   const stderr = output?.stderr;
@@ -51,8 +31,7 @@ export function BashRenderer({
   const hasMoreLines = allLines.length > 3;
 
   // Determine if we have content worth expanding
-  const hasExpandableContent =
-    command.length > 60 || hasMoreLines || description || workdir;
+  const hasExpandableContent = command.length > 60 || hasMoreLines || cwd;
 
   const dotColor = state.denied
     ? "bg-red-500"
@@ -189,23 +168,13 @@ export function BashRenderer({
             </pre>
           </div>
 
-          {/* Description if present */}
-          {description && (
-            <div>
-              <div className="mb-1 text-xs font-medium text-muted-foreground">
-                Description
-              </div>
-              <div className="text-sm text-foreground">{description}</div>
-            </div>
-          )}
-
           {/* Working directory if present */}
-          {workdir && (
+          {cwd && (
             <div>
               <div className="mb-1 text-xs font-medium text-muted-foreground">
                 Working Directory
               </div>
-              <code className="text-sm text-foreground">{workdir}</code>
+              <code className="text-sm text-foreground">{cwd}</code>
             </div>
           )}
 

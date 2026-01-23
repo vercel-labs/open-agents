@@ -2,28 +2,16 @@
 
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
-import type {
-  AskUserQuestionInput,
-  AskUserQuestionOutput,
-} from "@open-harness/agent";
 
 export function AskUserQuestionRenderer({
   part,
   state,
-}: {
-  part: {
-    input?: unknown;
-    state: string;
-    output?: unknown;
-    toolCallId?: string;
-  };
-  state: ToolRenderState;
-}) {
+}: ToolRendererProps<"tool-ask_user_question">) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const input = part.input as AskUserQuestionInput | undefined;
-  const output = part.output as AskUserQuestionOutput | undefined;
+  const input = part.input;
+  const output = part.state === "output-available" ? part.output : undefined;
   const questions = input?.questions ?? [];
 
   const isWaitingForInput = part.state === "input-available";
@@ -109,13 +97,15 @@ export function AskUserQuestionRenderer({
       {isExpanded && hasAnswers && output && "answers" in output && (
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           {questions.map((q) => {
-            const answer = output.answers[q.question];
+            if (!q?.question) return null;
+            const questionKey = q.question;
+            const answer = output.answers[questionKey];
             const answerStr = Array.isArray(answer)
               ? answer.join(", ")
               : (answer ?? "(not answered)");
             return (
-              <div key={q.question} className="space-y-0.5">
-                <p className="text-sm text-foreground">{q.question}</p>
+              <div key={questionKey} className="space-y-0.5">
+                <p className="text-sm text-foreground">{questionKey}</p>
                 <p className="text-sm text-muted-foreground">
                   <span className="text-green-500">&rarr;</span> {answerStr}
                 </p>
