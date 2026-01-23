@@ -40,7 +40,8 @@ To work through these todos, follow this pattern:
 
 - [ ] Add terminal view in tasks (terminal implementation exists elsewhere)
 - [ ] Move to workspace approach (multiple chats per workspace)
-- [ ] Migrate from raw fetching to SWR
+- [x] Migrate from raw fetching to SWR
+- [ ] explore a new package with ai related utils (e.g. predicate for sendAutomaticallyWhen etc.)
 
 ### Cancelled
 
