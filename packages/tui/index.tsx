@@ -2,11 +2,9 @@ import React from "react";
 import { render } from "ink";
 import { App } from "./app";
 import { ChatProvider } from "./chat-context";
-import {
-  ReasoningProvider,
-  ExpandedViewProvider,
-  TodoViewProvider,
-} from "@open-harness/shared";
+import { ReasoningProvider } from "@open-harness/shared/hooks/reasoning-context";
+import { ExpandedViewProvider } from "@open-harness/shared/hooks/expanded-view-context";
+import { TodoViewProvider } from "@open-harness/shared/hooks/todo-view-context";
 import { defaultModelLabel } from "@open-harness/agent";
 import { createDefaultAgentOptions } from "./config";
 import type { TUIOptions } from "./types";
@@ -76,6 +74,7 @@ export async function createTUI(options: TUIOptions): Promise<void> {
       availableModels={options.availableModels}
       projectPath={projectPath}
       currentBranch={options.currentBranch}
+      sandbox={options.sandbox}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
@@ -118,6 +117,7 @@ export function renderTUI(options: TUIOptions) {
       availableModels={options.availableModels}
       projectPath={projectPath}
       currentBranch={options.currentBranch}
+      sandbox={options.sandbox}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
