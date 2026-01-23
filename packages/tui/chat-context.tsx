@@ -57,6 +57,7 @@ type ChatContextValue = {
   openPanel: (panel: PanelState) => void;
   closePanel: () => void;
   setSessionId: (sessionId: string | null) => void;
+  resetUsage: () => void;
 };
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -383,6 +384,11 @@ export function ChatProvider({
     setActivePanel({ type: "none" });
   }, []);
 
+  const resetUsage = useCallback(() => {
+    setUsage(DEFAULT_USAGE);
+    setSessionUsage(DEFAULT_USAGE);
+  }, []);
+
   return (
     <ChatContext.Provider
       value={{
@@ -396,6 +402,7 @@ export function ChatProvider({
         openPanel,
         closePanel,
         setSessionId,
+        resetUsage,
       }}
     >
       {children}

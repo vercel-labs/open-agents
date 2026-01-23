@@ -530,6 +530,7 @@ function AppContent({ options }: AppProps) {
     closePanel,
     updateSettings,
     setSessionId,
+    resetUsage,
   } = useChatContext();
   const { isExpanded, toggleExpanded } = useExpandedView();
   const { isTodoVisible, toggleTodoView } = useTodoView();
@@ -795,9 +796,14 @@ function AppContent({ options }: AppProps) {
           loadSessions();
           openPanel({ type: "resume" });
           break;
+        case "new-chat":
+          setMessages([]);
+          setSessionId(null);
+          resetUsage();
+          break;
       }
     },
-    [openPanel, loadSessions],
+    [openPanel, loadSessions, setMessages, setSessionId, resetUsage],
   );
 
   // Memoize model options to prevent re-renders in SettingsPanel
