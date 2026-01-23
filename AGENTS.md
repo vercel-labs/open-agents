@@ -33,6 +33,19 @@ bun test path/to/file.test.ts   # Run single test file
 bun test --watch                # Watch mode
 ```
 
+## Git Commands
+
+**Quote paths with special characters**: File paths containing brackets (like Next.js dynamic routes `[id]`, `[slug]`) are interpreted as glob patterns by zsh. Always quote these paths in git commands:
+
+```bash
+# Wrong - zsh interprets [id] as a glob pattern
+git add apps/web/app/tasks/[id]/page.tsx
+# Error: no matches found: apps/web/app/tasks/[id]/page.tsx
+
+# Correct - quote the path
+git add "apps/web/app/tasks/[id]/page.tsx"
+```
+
 ## Architecture
 
 This is a Turborepo monorepo for "Open Harness" - an AI coding agent built with AI SDK.
