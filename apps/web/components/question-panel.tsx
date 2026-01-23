@@ -424,7 +424,7 @@ export function QuestionPanel({
                           confirmOther(currentQuestion);
                         }
                       }}
-                      className="flex-1 border-0 bg-transparent p-0 focus-visible:ring-0"
+                      className="flex-1 border-0 bg-transparent px-2 py-0 focus-visible:ring-0"
                     />
                   </div>
                 </div>
@@ -436,8 +436,7 @@ export function QuestionPanel({
         {/* Footer */}
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-xs text-muted-foreground">
-            &larr;/&rarr; navigate tabs &middot; 1-4 select option &middot; Esc
-            cancel
+            1-4 select option &middot; Esc cancel
           </p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel}>
