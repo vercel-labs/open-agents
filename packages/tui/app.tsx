@@ -806,6 +806,24 @@ function AppContent({ options }: AppProps) {
     [openPanel, loadSessions, setMessages, setSessionId, resetUsage],
   );
 
+  const handleClearAndImplementPlan = useCallback(
+    (planPath: string) => {
+      // 1. Clear the chat (like /new)
+      setMessages([]);
+      setSessionId(null);
+      resetUsage();
+
+      // 2. Set permission mode to "edits" (auto-accept edits)
+      setPermissionMode("edits");
+
+      // 3. Send a new message to implement the plan
+      setTimeout(() => {
+        sendMessage({ text: `implement the plan at ${planPath}` });
+      }, 0);
+    },
+    [setMessages, setSessionId, resetUsage, setPermissionMode, sendMessage],
+  );
+
   // Memoize model options to prevent re-renders in SettingsPanel
   const modelOptions = useMemo(
     () =>
@@ -898,6 +916,7 @@ function AppContent({ options }: AppProps) {
         <PlanApprovalPanel
           approvalId={planApprovalId}
           planFilePath={state.planFilePath}
+          onClearAndImplement={handleClearAndImplementPlan}
         />
       ) : /* Show approval panel when there's a pending approval (replaces status bar and input) */
       state.activePanel.type === "none" &&

@@ -8,13 +8,15 @@ import { renderMarkdown } from "../lib/markdown";
 export type PlanApprovalPanelProps = {
   approvalId: string;
   planFilePath: string;
+  onClearAndImplement?: (planFilePath: string) => void;
 };
 
 export function PlanApprovalPanel({
   approvalId,
   planFilePath,
+  onClearAndImplement,
 }: PlanApprovalPanelProps) {
-  const { chat } = useChatContext();
+  const { chat, setPermissionMode } = useChatContext();
   const { addToolApprovalResponse } = useChat({ chat });
 
   const [selected, setSelected] = useState(0);
@@ -53,10 +55,11 @@ export function PlanApprovalPanel({
       return;
     }
 
-    // Shift+Tab shortcut for option 0
+    // Shift+Tab shortcut for option 0 (clear context and implement)
     if (key.shift && key.tab) {
-      // TODO: Implement clear context + auto-accept logic
-      addToolApprovalResponse({ id: approvalId, approved: true });
+      if (onClearAndImplement) {
+        onClearAndImplement(planFilePath);
+      }
       return;
     }
 
@@ -92,13 +95,16 @@ export function PlanApprovalPanel({
     if (key.return) {
       if (selected === 0) {
         // Yes, clear context and auto-accept edits
-        // TODO: Implement clear context logic
-        addToolApprovalResponse({ id: approvalId, approved: true });
+        if (onClearAndImplement) {
+          onClearAndImplement(planFilePath);
+        }
       } else if (selected === 1) {
         // Yes, auto-accept edits
+        setPermissionMode("edits");
         addToolApprovalResponse({ id: approvalId, approved: true });
       } else if (selected === 2) {
         // Yes, manually approve edits
+        setPermissionMode("default");
         addToolApprovalResponse({ id: approvalId, approved: true });
       }
     }
