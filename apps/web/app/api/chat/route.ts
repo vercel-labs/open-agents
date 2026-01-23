@@ -5,10 +5,10 @@ import { WebAgentUIMessage } from "@/app/types";
 import { webAgent } from "@/app/config";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
-  createTaskMessage,
   createTaskMessageIfNotExists,
   getTaskById,
   updateTask,
+  upsertTaskMessage,
 } from "@/lib/db/tasks";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -146,9 +146,9 @@ export async function POST(req: Request) {
     },
     onFinish: async ({ responseMessage }) => {
       if (taskId) {
-        // Save assistant message
+        // Save assistant message (upsert to handle tool results added client-side)
         try {
-          await createTaskMessage({
+          await upsertTaskMessage({
             id: responseMessage.id,
             taskId,
             role: "assistant",

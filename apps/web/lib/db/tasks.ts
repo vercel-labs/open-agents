@@ -67,6 +67,22 @@ export async function createTaskMessageIfNotExists(data: NewTaskMessage) {
   return message;
 }
 
+/**
+ * Upserts a task message - inserts if new, updates parts if already exists.
+ * Use this for assistant messages that may have tool results added client-side.
+ */
+export async function upsertTaskMessage(data: NewTaskMessage) {
+  const [message] = await db
+    .insert(taskMessages)
+    .values(data)
+    .onConflictDoUpdate({
+      target: taskMessages.id,
+      set: { parts: data.parts },
+    })
+    .returning();
+  return message;
+}
+
 export async function getTaskMessageById(messageId: string) {
   return db.query.taskMessages.findFirst({
     where: eq(taskMessages.id, messageId),

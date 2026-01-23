@@ -18,6 +18,7 @@ import { GlobRenderer } from "./renderers/glob-renderer";
 import { GrepRenderer } from "./renderers/grep-renderer";
 import { TaskRenderer } from "./renderers/task-renderer";
 import { TodoRenderer } from "./renderers/todo-renderer";
+import { AskUserQuestionRenderer } from "./renderers/ask-user-question-renderer";
 
 export type ToolCallProps = {
   part: WebAgentUIToolPart;
@@ -66,6 +67,9 @@ export function ToolCall({
     case "tool-todo_write":
       // Todo tool doesn't require approval, so approvalProps are intentionally omitted
       return <TodoRenderer part={part} state={state} />;
+    case "tool-ask_user_question":
+      // AskUserQuestion tool doesn't require approval, handled separately
+      return <AskUserQuestionRenderer part={part} state={state} />;
     default:
       return (
         <DefaultRenderer

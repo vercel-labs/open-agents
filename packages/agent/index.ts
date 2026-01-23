@@ -26,6 +26,7 @@ export { type TaskToolUIPart } from "./tools/task";
 export {
   type AskUserQuestionToolUIPart,
   type AskUserQuestionInput,
+  type AskUserQuestionOutput,
 } from "./tools/ask-user-question";
 
 // Subagent type exports

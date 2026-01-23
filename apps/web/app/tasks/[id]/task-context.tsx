@@ -9,10 +9,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import {
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-  DefaultChatTransport,
-} from "ai";
+import { DefaultChatTransport, isToolUIPart } from "ai";
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { Task } from "@/lib/db/schema";
@@ -80,6 +77,46 @@ const TaskChatContext = createContext<TaskChatContextValue | undefined>(
   undefined,
 );
 
+/**
+ * Custom predicate for auto-submitting messages.
+ * Unlike the default `lastAssistantMessageIsCompleteWithApprovalResponses`,
+ * this also checks for tools waiting in `input-available` state (e.g., AskUserQuestion).
+ */
+function shouldAutoSubmit({
+  messages,
+}: {
+  messages: WebAgentUIMessage[];
+}): boolean {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || lastMessage.role !== "assistant") return false;
+
+  // Find the last step-start to get tools from the current step only
+  const lastStepStartIndex = lastMessage.parts.reduce(
+    (lastIndex, part, index) =>
+      part.type === "step-start" ? index : lastIndex,
+    -1,
+  );
+
+  // Get tool invocations from the last step (non-provider-executed)
+  const lastStepToolInvocations = lastMessage.parts
+    .slice(lastStepStartIndex + 1)
+    .filter(isToolUIPart)
+    .filter((part) => !part.providerExecuted);
+
+  // If no tool invocations, don't auto-submit
+  if (lastStepToolInvocations.length === 0) return false;
+
+  // Auto-submit only if ALL tools are in terminal state
+  // Terminal states: output-available, output-error, approval-responded
+  // NOT terminal: input-available (waiting for user input, e.g., AskUserQuestion)
+  return lastStepToolInvocations.every(
+    (part) =>
+      part.state === "output-available" ||
+      part.state === "output-error" ||
+      part.state === "approval-responded",
+  );
+}
+
 type TaskChatProviderProps = {
   task: Task;
   initialMessages: WebAgentUIMessage[];
@@ -107,7 +144,7 @@ export function TaskChatProvider({
   const chat = useChat<WebAgentUIMessage>({
     transport,
     messages: initialMessages,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    sendAutomaticallyWhen: shouldAutoSubmit,
   });
 
   const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(null);

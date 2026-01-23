@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ToolCall } from "@/components/tool-call";
 import { TaskGroupView } from "@/components/task-group-view";
+import { QuestionPanel } from "@/components/question-panel";
 import { CreatePRDialog } from "@/components/create-pr-dialog";
 import { CreateRepoDialog } from "@/components/create-repo-dialog";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
@@ -41,7 +42,7 @@ import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskToolUIPart, AskUserQuestionInput } from "@open-harness/agent";
 
 import { useTaskChatContext, type SandboxInfo } from "./task-context";
 import { DiffViewer } from "./diff-viewer";
@@ -620,6 +621,7 @@ export function TaskDetailContent() {
     sendMessage,
     status,
     addToolApprovalResponse,
+    addToolOutput,
     stop,
   } = chat;
 
@@ -1033,6 +1035,61 @@ export function TaskDetailContent() {
     return { inputTokens: 0, outputTokens: 0 };
   }, [messages]);
 
+  // Detect pending AskUserQuestion tool calls
+  const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
+    useMemo(() => {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        for (const p of lastMessage.parts) {
+          if (
+            isToolUIPart(p) &&
+            p.type === "tool-ask_user_question" &&
+            p.state === "input-available"
+          ) {
+            return {
+              hasPendingQuestion: true,
+              pendingQuestionPart: p as {
+                type: "tool-ask_user_question";
+                toolCallId: string;
+                input: AskUserQuestionInput;
+              },
+              questionToolCallId: p.toolCallId,
+            };
+          }
+        }
+      }
+      return {
+        hasPendingQuestion: false,
+        pendingQuestionPart: null,
+        questionToolCallId: null,
+      };
+    }, [messages]);
+
+  // Handle question submission
+  const handleQuestionSubmit = useCallback(
+    (answers: Record<string, string | string[]>) => {
+      if (questionToolCallId) {
+        addToolOutput({
+          tool: "ask_user_question",
+          toolCallId: questionToolCallId,
+          output: { answers },
+        });
+      }
+    },
+    [questionToolCallId, addToolOutput],
+  );
+
+  // Handle question cancellation
+  const handleQuestionCancel = useCallback(() => {
+    if (questionToolCallId) {
+      addToolOutput({
+        tool: "ask_user_question",
+        toolCallId: questionToolCallId,
+        output: { declined: true },
+      });
+    }
+  }, [questionToolCallId, addToolOutput]);
+
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -1417,6 +1474,15 @@ export function TaskDetailContent() {
             </Button>
           )}
         </div>
+
+        {/* Question Panel */}
+        {hasPendingQuestion && pendingQuestionPart && (
+          <QuestionPanel
+            questions={pendingQuestionPart.input.questions}
+            onSubmit={handleQuestionSubmit}
+            onCancel={handleQuestionCancel}
+          />
+        )}
 
         {/* Input */}
         <div className="p-4 pb-8">

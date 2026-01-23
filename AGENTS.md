@@ -2,6 +2,8 @@
 
 This file provides guidance for AI coding agents working in this repository.
 
+**This is a living document.** When you make a mistake or learn something new about this codebase, update this file to prevent the same mistake from happening again. Add lessons learned to the relevant section, or create a new "Lessons Learned" section at the bottom if needed.
+
 ## Commands
 
 ```bash
