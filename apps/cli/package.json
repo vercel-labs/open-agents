@@ -7,8 +7,8 @@
     "deep-agent": "./index.ts"
   },
   "scripts": {
-    "dev": "bun run index.ts",
-    "dev:vercel": "bun run index.ts --sandbox=vercel",
+    "dev": "NODE_ENV=development bun run index.ts",
+    "dev:vercel": "NODE_ENV=development bun run index.ts --sandbox=vercel",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"

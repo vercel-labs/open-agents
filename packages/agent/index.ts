@@ -45,3 +45,7 @@ export type {
 } from "./skills/types";
 export { skillFrontmatterSchema, frontmatterToOptions } from "./skills/types";
 export type { SkillToolInput } from "./tools/skill";
+
+// Proxy gateway exports
+export { createProxyGateway } from "./proxy-gateway";
+export type { ProxyConfig } from "./proxy-gateway";

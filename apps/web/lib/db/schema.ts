@@ -124,3 +124,65 @@ export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type TaskMessage = typeof taskMessages.$inferSelect;
 export type NewTaskMessage = typeof taskMessages.$inferInsert;
+
+// Linked accounts for external platforms (Slack, Discord, etc.)
+export const linkedAccounts = pgTable(
+  "linked_accounts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", {
+      enum: ["slack", "discord", "whatsapp", "telegram"],
+    }).notNull(),
+    externalId: text("external_id").notNull(),
+    workspaceId: text("workspace_id"), // For Slack workspaces, Discord servers
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("linked_accounts_provider_external_workspace_idx").on(
+      table.provider,
+      table.externalId,
+      table.workspaceId,
+    ),
+  ],
+);
+
+export type LinkedAccount = typeof linkedAccounts.$inferSelect;
+export type NewLinkedAccount = typeof linkedAccounts.$inferInsert;
+
+// CLI tokens for device flow authentication
+export const cliTokens = pgTable(
+  "cli_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    // Encrypted access token - only populated during device flow, cleared after first retrieval
+    encryptedAccessToken: text("encrypted_access_token"),
+    deviceName: text("device_name"),
+    lastUsedAt: timestamp("last_used_at"),
+    expiresAt: timestamp("expires_at"),
+    // Device flow fields
+    deviceCode: text("device_code"),
+    userCode: text("user_code"),
+    deviceCodeExpiresAt: timestamp("device_code_expires_at"),
+    status: text("status", {
+      enum: ["pending", "active", "revoked"],
+    })
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("cli_tokens_token_hash_idx").on(table.tokenHash),
+    uniqueIndex("cli_tokens_device_code_idx").on(table.deviceCode),
+    uniqueIndex("cli_tokens_user_code_idx").on(table.userCode),
+  ],
+);
+
+export type CliToken = typeof cliTokens.$inferSelect;
+export type NewCliToken = typeof cliTokens.$inferInsert;

@@ -18,7 +18,7 @@ import type {
   ApprovalRule,
 } from "./types";
 import type { Settings } from "./lib/settings";
-import { AVAILABLE_MODELS, type ModelInfo } from "./lib/models";
+import { AVAILABLE_MODELS, type ModelInfo, type GatewayFn } from "./lib/models";
 import { getContextLimit, type SkillMetadata } from "@open-harness/agent";
 
 export type PanelState =
@@ -115,6 +115,7 @@ type ChatProviderProps = {
   currentBranch?: string;
   initialSessionId?: string;
   initialMessages?: TUIAgentUIMessage[];
+  gateway?: GatewayFn;
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -184,6 +185,7 @@ export function ChatProvider({
   currentBranch = "",
   initialSessionId,
   initialMessages,
+  gateway,
 }: ChatProviderProps) {
   const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
     initialAutoAcceptMode,
@@ -263,8 +265,9 @@ export function ChatProvider({
               onSessionCreated: setSessionId,
             }
           : undefined,
+        gateway,
       }),
-    [agentOptions, handleUsageUpdate, projectPath],
+    [agentOptions, handleUsageUpdate, projectPath, gateway],
   );
 
   const chat = useMemo(

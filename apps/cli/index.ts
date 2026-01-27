@@ -3,7 +3,11 @@
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { defaultModelLabel, discoverSkills } from "@open-harness/agent";
+import {
+  defaultModelLabel,
+  discoverSkills,
+  createProxyGateway,
+} from "@open-harness/agent";
 import {
   createTUI,
   loadSettings,
@@ -12,6 +16,9 @@ import {
   type Settings,
 } from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md";
+import { handleAuthCommand } from "./auth/commands";
+import { getWebAppUrl } from "./auth/config";
+import { loadCredentials, validateCredentials } from "./auth/credentials";
 import { onCleanup, cleanup } from "./cleanup-handler";
 import {
   createSandbox,
@@ -43,11 +50,18 @@ function printHelp() {
   console.log("Usage:");
   console.log("  deep-agent [options]              Start interactive REPL");
   console.log("  deep-agent [options] <prompt>     Run a one-shot prompt");
+  console.log("  deep-agent auth <command>         Authentication commands");
   console.log("");
   console.log("Options:");
   console.log("  --sandbox=<type>  Sandbox to use: local (default), vercel");
   console.log("  --repo=<repo>     GitHub repo to clone (e.g., vercel/ai)");
   console.log("  --help, -h        Show this help message");
+  console.log("");
+  console.log("Auth commands:");
+  console.log("  auth login    Authenticate with the Open Harness web app");
+  console.log("  auth logout   Clear stored credentials");
+  console.log("  auth status   Show current authentication status");
+  console.log("  auth whoami   Print the current user's username");
   console.log("");
   console.log("Environment variables (for --sandbox=vercel):");
   console.log("  GITHUB_TOKEN        GitHub PAT for private repos (optional)");
@@ -59,6 +73,7 @@ function printHelp() {
   console.log("  deep-agent --sandbox=vercel");
   console.log("  deep-agent --sandbox=vercel --repo=vercel/ai");
   console.log('  deep-agent --sandbox=vercel --repo=vercel/ai "Fix the bug"');
+  console.log("  deep-agent auth login");
   console.log("");
   console.log("Keyboard shortcuts:");
   console.log("  esc           Abort current operation / exit");
@@ -108,12 +123,51 @@ async function main() {
   const args = process.argv.slice(2);
   const workingDirectory = process.cwd();
 
+  // Handle auth subcommand
+  if (args[0] === "auth") {
+    const result = await handleAuthCommand(args.slice(1));
+    if (result.handled) {
+      process.exit(result.exitCode);
+    }
+  }
+
   const parsed = parseArgs(args);
 
   if (parsed.showHelp) {
     printHelp();
     process.exit(0);
   }
+
+  // Load credentials and create proxy gateway if authenticated
+  const credentials = await loadCredentials();
+
+  if (!credentials) {
+    console.log("You must be logged in to use Open Harness.\n");
+    console.log("Run `deep-agent auth login` to authenticate.\n");
+    process.exit(1);
+  }
+
+  const webAppUrl = getWebAppUrl();
+
+  // Validate token against server to catch revoked tokens early
+  const validation = await validateCredentials(credentials, webAppUrl);
+  if (!validation.valid) {
+    if (validation.isNetworkError) {
+      console.log(`Warning: Could not validate token: ${validation.error}\n`);
+      console.log("Continuing with cached credentials...\n");
+    } else {
+      console.log(`Authentication failed: ${validation.error}\n`);
+      console.log("Run `deep-agent auth login` to re-authenticate.\n");
+      process.exit(1);
+    }
+  }
+
+  const gateway = createProxyGateway({
+    baseUrl: webAppUrl,
+    token: credentials.token,
+  });
+
+  console.log(`Authenticated as ${credentials.username}\n`);
 
   let sandbox: Awaited<ReturnType<typeof createSandbox>> | undefined;
   const isRemoteSandbox = parsed.sandboxType !== "local";
@@ -213,6 +267,8 @@ async function main() {
       availableModels,
       // Auto-accept all tools in sandbox mode since it's an isolated environment
       ...(isRemoteSandbox && { initialAutoAcceptMode: "all" }),
+      // Use proxy gateway when authenticated
+      gateway,
     });
   } catch (error) {
     // Ignore abort errors from ESC key interrupts

@@ -8,7 +8,7 @@ import type {
 import type { Sandbox } from "@open-harness/sandbox";
 import type { tuiAgent } from "./config";
 import type { Settings } from "./lib/settings";
-import type { ModelInfo } from "./lib/models";
+import type { ModelInfo, GatewayFn } from "./lib/models";
 
 export type TUIAgent = typeof tuiAgent;
 export type TUIAgentCallOptions = Parameters<
@@ -68,4 +68,6 @@ export type TUIOptions = {
   projectPath?: string;
   /** Current git branch for session filtering */
   currentBranch?: string;
+  /** Custom gateway function for model resolution (e.g., proxy gateway) */
+  gateway?: GatewayFn;
 };
