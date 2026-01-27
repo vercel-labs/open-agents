@@ -29,12 +29,12 @@ The tasks table requires a valid user, but Slack messages don't have an associat
 
 We have multiple clients that need to interact with the agent:
 
-| Client                               | Current State        | Auth Needs                    |
-| ------------------------------------ | -------------------- | ----------------------------- |
-| **Web App**                          | Works                | GitHub OAuth, session-based   |
-| **CLI**                              | Direct gateway calls | Needs user auth, GitHub token |
-| **Slack**                            | Separate Hono server | Needs to link to web user     |
-| **Future** (WhatsApp, Discord, etc.) | Not built            | Same linking pattern as Slack |
+| Client                               | Current State              | Auth Needs                    |
+| ------------------------------------ | -------------------------- | ----------------------------- |
+| **Web App**                          | Works                      | GitHub OAuth, session-based   |
+| **CLI**                              | Works (device flow)        | Proxies through web app       |
+| **Slack**                            | Not built                  | Needs to link to web user     |
+| **Future** (WhatsApp, Discord, etc.) | Not built                  | Same linking pattern as Slack |
 
 Each client needs:
 
@@ -149,15 +149,57 @@ app/api/
 
 ## Migration Steps
 
-1. [ ] Create `linked_accounts` table
+1. [x] Create `linked_accounts` and `cli_tokens` tables
 2. [ ] Add Slack OAuth flow for account linking
-3. [ ] Move Slack webhook handler to Next.js (`/api/webhooks/slack`)
-4. [ ] Implement AI proxy route for CLI (`/api/ai-proxy`)
-5. [ ] Implement CLI auth flow
-6. [ ] Remove standalone Hono server
+3. [ ] Implement Slack webhook handler (`/api/webhooks/slack`)
+4. [x] Implement AI proxy route for CLI (`/api/ai-proxy`)
+5. [x] Implement CLI auth flow
+
+## Implementation Status
+
+### Completed
+
+#### Database Layer
+- **Schema**: `linked_accounts` and `cli_tokens` tables in `apps/web/lib/db/schema.ts`
+- **Migration**: `0010_far_shiva.sql` adds both tables
+- **CLI Tokens Module** (`apps/web/lib/db/cli-tokens.ts`):
+  - Device flow management (start, poll, verify)
+  - Token verification and user lookup
+  - Token revocation and cleanup
+- **Linked Accounts Module** (`apps/web/lib/db/linked-accounts.ts`):
+  - CRUD operations for linked accounts
+
+#### CLI Authentication (`apps/cli/auth/`)
+- **Commands** (`commands.ts`): `login`, `logout`, `status`, `whoami`
+- **Credentials** (`credentials.ts`): Local storage at `~/.config/open-harness/credentials.json`
+- **Device Flow** (`device-flow.ts`): OAuth 2.0 device authorization grant
+- **Config** (`config.ts`): Dev/prod URL switching via `NODE_ENV` or `OPEN_HARNESS_URL`
+
+#### Web App API Routes
+- `POST /api/cli/auth/device` - Start device flow, returns device code + user code
+- `POST /api/cli/auth/token` - Poll for token (authorization_pending → access_token)
+- `POST /api/cli/auth/verify` - Web UI calls this to authorize a device code
+- `GET /api/cli/auth/me` - Get user info from access token
+- `POST /api/ai-proxy/[...path]` - Proxies AI requests to Vercel AI Gateway
+
+#### Web App UI
+- `/cli/auth` page - User enters device code to authorize CLI
+
+#### Agent & TUI Integration
+- `createProxyGateway()` in `packages/agent/proxy-gateway.ts`
+- Gateway function passed through TUI → Transport → Model selection
+- CLI requires auth; creates proxy gateway when authenticated
+
+### Remaining Work
+
+#### Slack Integration (not started)
+- Slack OAuth flow for account linking (Settings → Connect Slack)
+- Webhook handler at `/api/webhooks/slack`
+- Lookup linked user when bot receives message
 
 ## Open Questions
 
-- **Function timeouts**: Long-running agent tasks may hit Vercel's limits. Mitigation: streaming, `maxDuration` config, or background jobs.
-- **CLI offline mode**: Should CLI work without auth for local-only use cases?
+- **Function timeouts**: Currently using `maxDuration: 300` (5 min) for the AI proxy. May need background jobs for very long tasks.
+- **CLI offline mode**: Should CLI work without auth for local-only use cases? Currently requires auth.
 - **Rate limiting**: How to handle usage limits per user?
+- **Token refresh**: CLI tokens expire after 90 days. Consider auto-refresh or better UX for re-auth.
