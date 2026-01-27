@@ -744,7 +744,7 @@ export function TaskDetailContent() {
     saveSnapshot,
   ]);
 
-  const handleExtendSandbox = async () => {
+  const handleExtendSandbox = useCallback(async () => {
     if (!sandboxInfo) return;
     setIsExtendingSandbox(true);
     try {
@@ -780,7 +780,7 @@ export function TaskDetailContent() {
     } finally {
       setIsExtendingSandbox(false);
     }
-  };
+  }, [sandboxInfo, task.id, setSandboxInfo, setIsExtendingSandbox]);
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const isSavingSnapshotRef = useRef(false);
