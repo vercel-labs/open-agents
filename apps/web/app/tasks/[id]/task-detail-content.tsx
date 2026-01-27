@@ -261,13 +261,15 @@ function SandboxHeaderBadge({
   isRestoring: boolean;
   isExtending: boolean;
   timeRemaining: number | null;
-  onExtend: () => void;
+  onExtend: () => Promise<boolean>;
   onSaveAndKill: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const hasAutoSavedRef = useRef(false);
   const hasAutoExtendedRef = useRef(false);
+  const autoExtendRetryCountRef = useRef(0);
+  const MAX_AUTO_EXTEND_RETRIES = 3;
 
   // Reset auto-save flag when sandbox changes
   useEffect(() => {
@@ -282,6 +284,7 @@ function SandboxHeaderBadge({
       timeRemaining > AUTO_EXTEND_THRESHOLD_MS
     ) {
       hasAutoExtendedRef.current = false;
+      autoExtendRetryCountRef.current = 0;
     }
   }, [sandboxInfo, timeRemaining]);
 
@@ -308,7 +311,7 @@ function SandboxHeaderBadge({
 
   // Auto-extend when window is visible and time is low
   useEffect(() => {
-    const tryAutoExtend = () => {
+    const tryAutoExtend = async () => {
       if (
         timeRemaining !== null &&
         timeRemaining > 0 &&
@@ -318,7 +321,14 @@ function SandboxHeaderBadge({
         document.visibilityState === "visible"
       ) {
         hasAutoExtendedRef.current = true;
-        onExtend();
+        const success = await onExtend();
+        // Allow retry on failure, up to max retries
+        if (!success) {
+          autoExtendRetryCountRef.current += 1;
+          if (autoExtendRetryCountRef.current < MAX_AUTO_EXTEND_RETRIES) {
+            hasAutoExtendedRef.current = false;
+          }
+        }
       }
     };
 
@@ -744,8 +754,8 @@ export function TaskDetailContent() {
     saveSnapshot,
   ]);
 
-  const handleExtendSandbox = useCallback(async () => {
-    if (!sandboxInfo) return;
+  const handleExtendSandbox = useCallback(async (): Promise<boolean> => {
+    if (!sandboxInfo) return false;
     setIsExtendingSandbox(true);
     try {
       const response = await fetch("/api/sandbox/extend", {
@@ -759,7 +769,7 @@ export function TaskDetailContent() {
       if (!response.ok) {
         const error = (await response.json()) as { error?: string };
         console.error("Failed to extend sandbox:", error.error);
-        return;
+        return false;
       }
 
       const data = (await response.json()) as {
@@ -775,12 +785,14 @@ export function TaskDetailContent() {
         createdAt: now,
         timeout: data.expiresAt - now,
       });
+      return true;
     } catch (err) {
       console.error("Failed to extend sandbox:", err);
+      return false;
     } finally {
       setIsExtendingSandbox(false);
     }
-  }, [sandboxInfo, task.id, setSandboxInfo, setIsExtendingSandbox]);
+  }, [sandboxInfo, task.id, setSandboxInfo]);
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const isSavingSnapshotRef = useRef(false);
