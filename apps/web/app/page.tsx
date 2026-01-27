@@ -7,12 +7,11 @@ import { TaskInput } from "@/components/task-input";
 import { TaskList } from "@/components/task-list";
 import { useTasks } from "@/hooks/use-tasks";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useSession } from "@/hooks/use-session";
+import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 
 function HomePage() {
   const router = useRouter();
   const { tasks, loading, createTask } = useTasks();
-  const { session } = useSession();
   const [isCreating, setIsCreating] = useState(false);
 
   const handleCreateTask = async (input: {
@@ -70,25 +69,7 @@ function HomePage() {
           </div>
           <span className="text-lg font-semibold">Open Harness</span>
         </div>
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Settings
-          </button>
-          <button
-            type="button"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Docs
-          </button>
-          {session?.user && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-xs font-medium text-white">
-              {session.user.username.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-        </div>
+        <UserAvatarDropdown />
       </header>
 
       {/* Main Content */}
