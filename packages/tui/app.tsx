@@ -215,10 +215,13 @@ const UserMessage = memo(function UserMessage({
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
       {imageCount > 0 && (
-        <Box>
-          <Text color="magenta" bold>
-            &gt;{" "}
-          </Text>
+        <Box
+          backgroundColor="#333333"
+          paddingLeft={1}
+          paddingRight={1}
+          alignSelf="flex-start"
+        >
+          <Text color="#666666">❯ </Text>
           <Text color="blue">
             {imageCount === 1
               ? "[1 image attached]"
@@ -227,10 +230,13 @@ const UserMessage = memo(function UserMessage({
         </Box>
       )}
       {text && (
-        <Box>
-          <Text color="magenta" bold>
-            &gt;{" "}
-          </Text>
+        <Box
+          backgroundColor="#333333"
+          paddingLeft={1}
+          paddingRight={1}
+          alignSelf="flex-start"
+        >
+          <Text color="#666666">❯ </Text>
           <Text color="white" bold>
             {text}
           </Text>
