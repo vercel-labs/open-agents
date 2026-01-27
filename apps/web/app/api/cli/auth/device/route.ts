@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       device_code: result.deviceCode,
       user_code: result.userCode,
       verification_uri: result.verificationUri,
-      verification_uri_complete: result.verificationUri,
+      verification_uri_complete: result.verificationUriComplete,
       expires_in: result.expiresIn,
       interval: result.interval,
     });

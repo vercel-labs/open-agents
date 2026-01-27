@@ -54,11 +54,16 @@ export async function POST(
     forwardHeaders.set(key, value);
   }
 
+  const gatewayToken = process.env.VERCEL_OIDC_TOKEN;
+  if (!gatewayToken) {
+    return Response.json(
+      { error: "Missing VERCEL_OIDC_TOKEN configuration" },
+      { status: 500 },
+    );
+  }
+
   // Add the real gateway auth (OIDC token for Vercel AI Gateway)
-  forwardHeaders.set(
-    "Authorization",
-    `Bearer ${process.env.VERCEL_OIDC_TOKEN}`,
-  );
+  forwardHeaders.set("Authorization", `Bearer ${gatewayToken}`);
 
   try {
     // Proxy the request to the real AI Gateway

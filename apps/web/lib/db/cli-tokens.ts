@@ -38,8 +38,18 @@ function generateToken(length = 64): string {
 function getEncryptionKey(): Buffer {
   const envKey = process.env.CLI_TOKEN_ENCRYPTION_KEY;
   if (envKey) {
+    if (!/^[0-9a-fA-F]{64}$/.test(envKey)) {
+      throw new Error(
+        "CLI_TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)",
+      );
+    }
     return Buffer.from(envKey, "hex");
   }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("CLI_TOKEN_ENCRYPTION_KEY must be set in production");
+  }
+
   // Fallback for development - derive from a constant (not secure for production)
   return createHash("sha256").update("dev-encryption-key").digest();
 }
@@ -109,6 +119,7 @@ export interface DeviceFlowResult {
   deviceCode: string;
   userCode: string;
   verificationUri: string;
+  verificationUriComplete: string;
   expiresIn: number;
   interval: number;
 }
@@ -146,7 +157,8 @@ export async function startDeviceFlow(
   return {
     deviceCode,
     userCode,
-    verificationUri: `${verificationUriBase}/cli/auth?code=${userCode}`,
+    verificationUri: `${verificationUriBase}/cli/auth`,
+    verificationUriComplete: `${verificationUriBase}/cli/auth?code=${userCode}`,
     expiresIn: DEVICE_CODE_EXPIRY_MINUTES * 60,
     interval: 5, // Poll every 5 seconds
   };
