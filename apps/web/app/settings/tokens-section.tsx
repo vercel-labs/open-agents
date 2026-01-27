@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import {
   Card,
@@ -39,6 +39,8 @@ function formatRelativeTime(date: Date | string | null): string {
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
+  // Handle future dates (clock skew, etc.)
+  if (diffDays < 0) return formatDate(d);
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
@@ -62,6 +64,13 @@ function RenameDialog({
   const [newName, setNewName] = useState(token?.deviceName ?? "");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Reset newName when dialog opens or token changes
+  useEffect(() => {
+    if (open) {
+      setNewName(token?.deviceName ?? "");
+    }
+  }, [open, token]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token || !newName.trim()) return;
@@ -76,11 +85,6 @@ function RenameDialog({
       setIsLoading(false);
     }
   };
-
-  // Update newName when token changes
-  if (token && newName !== (token.deviceName ?? "") && !open) {
-    setNewName(token.deviceName ?? "");
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
