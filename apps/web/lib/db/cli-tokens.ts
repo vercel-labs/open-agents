@@ -404,6 +404,22 @@ export async function revokeToken(tokenId: string): Promise<boolean> {
 }
 
 /**
+ * Rename a CLI token's device name
+ */
+export async function renameToken(
+  tokenId: string,
+  deviceName: string,
+): Promise<boolean> {
+  const result = await db
+    .update(cliTokens)
+    .set({ deviceName })
+    .where(eq(cliTokens.id, tokenId))
+    .returning({ id: cliTokens.id });
+
+  return result.length > 0;
+}
+
+/**
  * Revoke all CLI tokens for a user
  */
 export async function revokeAllUserTokens(userId: string): Promise<number> {

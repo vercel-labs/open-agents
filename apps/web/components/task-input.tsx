@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { RepoSelectorCompact } from "./repo-selector-compact";
 import { BranchSelectorCompact } from "./branch-selector-compact";
 import { ModelSelectorCompact } from "./model-selector-compact";
@@ -46,6 +47,18 @@ export function TaskInput({ onSubmit, isLoading }: TaskInputProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const { preferences } = useUserPreferences();
+
+  // Update model and sandbox when preferences load
+  useEffect(() => {
+    if (preferences?.defaultModelId) {
+      setSelectedModel(preferences.defaultModelId);
+    }
+    if (preferences?.defaultSandboxType) {
+      setSelectedSandbox(preferences.defaultSandboxType);
+    }
+  }, [preferences]);
 
   const {
     images,

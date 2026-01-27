@@ -186,3 +186,23 @@ export const cliTokens = pgTable(
 
 export type CliToken = typeof cliTokens.$inferSelect;
 export type NewCliToken = typeof cliTokens.$inferInsert;
+
+// User preferences for settings
+export const userPreferences = pgTable("user_preferences", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  defaultModelId: text("default_model_id").default(
+    "anthropic/claude-haiku-4.5",
+  ),
+  defaultSandboxType: text("default_sandbox_type", {
+    enum: ["hybrid", "vercel", "just-bash"],
+  }).default("hybrid"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type UserPreferences = typeof userPreferences.$inferSelect;
+export type NewUserPreferences = typeof userPreferences.$inferInsert;
