@@ -26,3 +26,15 @@ export function extractSkillBody(fileContent: string): string {
 export function substituteArguments(body: string, args?: string): string {
   return body.replace(/\$ARGUMENTS/g, args ?? "");
 }
+
+/**
+ * Inject skill directory path into the body content.
+ * This allows Claude to construct full paths to scripts and resources.
+ *
+ * @param body - Skill body content
+ * @param skillDir - Absolute path to the skill directory
+ * @returns Body with skill directory info prepended
+ */
+export function injectSkillDirectory(body: string, skillDir: string): string {
+  return `Skill directory: ${skillDir}\n\n${body}`;
+}

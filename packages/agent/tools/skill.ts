@@ -2,7 +2,11 @@ import * as path from "path";
 import { tool } from "ai";
 import { z } from "zod";
 import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
-import { extractSkillBody, substituteArguments } from "../skills/loader";
+import {
+  extractSkillBody,
+  substituteArguments,
+  injectSkillDirectory,
+} from "../skills/loader";
 import type { SkillMetadata } from "../skills/types";
 import type { ApprovalRule } from "../types";
 
@@ -126,8 +130,11 @@ Important:
     // Parse and extract body (skip frontmatter)
     const body = extractSkillBody(fileContent);
 
+    // Inject skill directory for script access
+    const bodyWithDir = injectSkillDirectory(body, foundSkill.path);
+
     // Substitute arguments
-    const content = substituteArguments(body, args);
+    const content = substituteArguments(bodyWithDir, args);
 
     return {
       success: true,
