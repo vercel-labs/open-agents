@@ -53,9 +53,16 @@ function printHelp() {
   console.log("  deep-agent auth <command>         Authentication commands");
   console.log("");
   console.log("Options:");
-  console.log("  --sandbox=<type>  Sandbox to use: local (default), vercel");
-  console.log("  --repo=<repo>     GitHub repo to clone (e.g., vercel/ai)");
-  console.log("  --help, -h        Show this help message");
+  console.log(
+    "  --sandbox=<type>        Sandbox to use: local (default), vercel",
+  );
+  console.log(
+    "  --repo=<repo>           GitHub repo to clone (e.g., vercel/ai)",
+  );
+  console.log(
+    "  --dangerously-skip-all  Auto-accept all tool calls (YOLO mode)",
+  );
+  console.log("  --help, -h              Show this help message");
   console.log("");
   console.log("Auth commands:");
   console.log("  auth login    Authenticate with the Open Harness web app");
@@ -87,17 +94,21 @@ interface ParsedArgs {
   repo?: string;
   initialPrompt?: string;
   showHelp: boolean;
+  dangerouslySkipAll: boolean;
 }
 
 function parseArgs(args: string[]): ParsedArgs {
   let sandboxType: SandboxType = "local";
   let repo: string | undefined;
   let showHelp = false;
+  let dangerouslySkipAll = false;
   const promptParts: string[] = [];
 
   for (const arg of args) {
     if (arg === "--help" || arg === "-h") {
       showHelp = true;
+    } else if (arg === "--dangerously-skip-all") {
+      dangerouslySkipAll = true;
     } else if (arg.startsWith("--sandbox=")) {
       const value = arg.slice("--sandbox=".length);
       sandboxType = parseSandboxType(value);
@@ -116,6 +127,7 @@ function parseArgs(args: string[]): ParsedArgs {
     repo,
     initialPrompt: promptParts.length > 0 ? promptParts.join(" ") : undefined,
     showHelp,
+    dangerouslySkipAll,
   };
 }
 
@@ -265,8 +277,10 @@ async function main() {
       initialSettings: settings,
       onSettingsChange: handleSettingsChange,
       availableModels,
-      // Auto-accept all tools in sandbox mode since it's an isolated environment
-      ...(isRemoteSandbox && { initialAutoAcceptMode: "all" }),
+      // Auto-accept all tools in sandbox mode or when --dangerously-skip-all is set
+      ...((isRemoteSandbox || parsed.dangerouslySkipAll) && {
+        initialAutoAcceptMode: "all" as const,
+      }),
       // Use proxy gateway when authenticated
       gateway,
     });
