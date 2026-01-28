@@ -30,7 +30,7 @@ export function ApprovalPanel({
   dontAskAgainPattern,
   toolPart,
 }: ApprovalPanelProps) {
-  const { chat, state, addApprovalRule } = useChatContext();
+  const { chat, state, addPendingApprovalRule } = useChatContext();
   const { addToolApprovalResponse } = useChat({ chat });
 
   // Infer the approval rule from the tool part
@@ -144,8 +144,8 @@ export function ApprovalPanel({
         // Yes
         addToolApprovalResponse({ id: approvalId, approved: true });
       } else if (canSaveRule && selected === 1) {
-        // Yes, and don't ask again - add the rule then approve
-        addApprovalRule(inferredRule!);
+        // Yes, and don't ask again - add the rule as pending (will auto-approve parallel tools)
+        addPendingApprovalRule(inferredRule!);
         addToolApprovalResponse({ id: approvalId, approved: true });
       }
     }

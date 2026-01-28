@@ -32,6 +32,7 @@ export type AgentTransportOptions = {
   getApprovalRules?: () => ApprovalRule[];
   getSettings?: () => Settings;
   onUsageUpdate?: (usage: LanguageModelUsage) => void;
+  onBeforeRequest?: () => void;
   persistence?: PersistenceConfig;
   gateway?: GatewayFn;
 };
@@ -43,11 +44,14 @@ export function createAgentTransport({
   getApprovalRules,
   getSettings,
   onUsageUpdate,
+  onBeforeRequest,
   persistence,
   gateway,
 }: AgentTransportOptions): ChatTransport<TUIAgentUIMessage> {
   return {
     sendMessages: async ({ messages, abortSignal }) => {
+      // Promote pending approval rules before building request
+      onBeforeRequest?.();
       // Pass the agent's tools so convertToModelMessages can properly handle
       // tool approval responses for locally-executed tools
       const modelMessages = await convertToModelMessages(messages, {

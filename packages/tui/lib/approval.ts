@@ -271,3 +271,111 @@ export function inferApprovalRule(
       return null;
   }
 }
+
+/**
+ * Simple glob pattern matching for approval rules.
+ * Matches the behavior of pathMatchesGlob in packages/agent/tools/utils.ts.
+ */
+function simpleGlobMatch(relativePath: string, glob: string): boolean {
+  // Normalize to POSIX separators for consistent matching
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+
+  // Convert glob pattern to regex
+  try {
+    const globRegex = glob
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // Escape regex metacharacters
+      .replace(/\*\*/g, "<<<GLOBSTAR>>>") // Temporary placeholder
+      .replace(/\*/g, "[^/]*") // * matches anything except /
+      .replace(/<<<GLOBSTAR>>>/g, ".*") // ** matches anything including /
+      .replace(/\//g, "\\/"); // Escape path separators
+
+    const regex = new RegExp(`^${globRegex}`);
+    if (regex.test(normalizedPath)) {
+      return true;
+    }
+    // If glob ends with /** and path doesn't end with /, try adding trailing /
+    // This allows directory paths to match their own glob (e.g., "apps" matches "apps/**")
+    if (glob.endsWith("/**") && !normalizedPath.endsWith("/")) {
+      return regex.test(normalizedPath + "/");
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a tool part matches a specific approval rule.
+ * Used for client-side auto-approval of parallel tool calls.
+ */
+export function toolMatchesApprovalRule(
+  part: TUIAgentUIToolPart,
+  rule: ApprovalRule,
+  workingDirectory?: string,
+): boolean {
+  const cwd = workingDirectory ?? process.cwd();
+
+  switch (rule.type) {
+    case "command-prefix": {
+      if (part.type !== "tool-bash") return false;
+      const command = String(part.input?.command ?? "").trim();
+      return command.startsWith(rule.prefix);
+    }
+
+    case "path-glob": {
+      // Match path-glob rules against read, write, edit, glob, grep tools
+      let filePath: string | undefined;
+      let toolMatch = false;
+
+      switch (part.type) {
+        case "tool-read":
+          toolMatch = rule.tool === "read";
+          filePath = String(part.input?.filePath ?? "");
+          break;
+        case "tool-write":
+          toolMatch = rule.tool === "write";
+          filePath = String(part.input?.filePath ?? "");
+          break;
+        case "tool-edit":
+          toolMatch = rule.tool === "edit";
+          filePath = String(part.input?.filePath ?? "");
+          break;
+        case "tool-glob":
+          toolMatch = rule.tool === "glob";
+          filePath = String(part.input?.path ?? cwd);
+          break;
+        case "tool-grep":
+          toolMatch = rule.tool === "grep";
+          filePath = String(part.input?.path ?? cwd);
+          break;
+        default:
+          return false;
+      }
+
+      if (!toolMatch || !filePath) return false;
+
+      // Convert path to relative for matching
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(cwd, filePath);
+      const relativePath = path.relative(cwd, absolutePath);
+
+      return simpleGlobMatch(relativePath, rule.glob);
+    }
+
+    case "subagent-type": {
+      if (part.type !== "tool-task") return false;
+      const subagentType = part.input?.subagentType;
+      return subagentType === rule.subagentType;
+    }
+
+    case "skill": {
+      if (part.type !== "tool-skill") return false;
+      const skillName = String(part.input?.skill ?? "");
+      return skillName.toLowerCase() === rule.skillName.toLowerCase();
+    }
+
+    default:
+      return false;
+  }
+}

@@ -34,6 +34,7 @@ type ChatState = {
   sessionUsage: LanguageModelUsage;
   contextLimit: number;
   approvalRules: ApprovalRule[];
+  pendingApprovalRules: ApprovalRule[];
   settings: Settings;
   activePanel: PanelState;
   availableModels: ModelInfo[];
@@ -49,6 +50,8 @@ type ChatContextValue = {
   setAutoAcceptMode: (mode: AutoAcceptMode) => void;
   cycleAutoAcceptMode: () => void;
   addApprovalRule: (rule: ApprovalRule) => void;
+  addPendingApprovalRule: (rule: ApprovalRule) => void;
+  promotePendingApprovalRules: () => void;
   clearApprovalRules: () => void;
   updateSettings: (updates: Partial<Settings>) => void;
   openPanel: (panel: PanelState) => void;
@@ -194,6 +197,9 @@ export function ChatProvider({
   const [sessionUsage, setSessionUsage] =
     useState<LanguageModelUsage>(DEFAULT_USAGE);
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
+  const [pendingApprovalRules, setPendingApprovalRules] = useState<
+    ApprovalRule[]
+  >([]);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [activePanel, setActivePanel] = useState<PanelState>({ type: "none" });
   const [sessionId, setSessionId] = useState<string | null>(
@@ -205,6 +211,8 @@ export function ChatProvider({
   autoAcceptModeRef.current = autoAcceptMode;
   const approvalRulesRef = useRef(approvalRules);
   approvalRulesRef.current = approvalRules;
+  const pendingApprovalRulesRef = useRef(pendingApprovalRules);
+  pendingApprovalRulesRef.current = pendingApprovalRules;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const sessionIdRef = useRef(sessionId);
@@ -246,6 +254,30 @@ export function ChatProvider({
 
   const clearApprovalRules = useCallback(() => {
     setApprovalRules([]);
+    setPendingApprovalRules([]);
+  }, []);
+
+  const addPendingApprovalRule = useCallback((rule: ApprovalRule) => {
+    setPendingApprovalRules((prev) => {
+      const exists = prev.some(
+        (r) => JSON.stringify(r) === JSON.stringify(rule),
+      );
+      if (exists) return prev;
+      return [...prev, rule];
+    });
+  }, []);
+
+  const promotePendingApprovalRules = useCallback(() => {
+    const pending = pendingApprovalRulesRef.current;
+    if (pending.length === 0) return;
+
+    setApprovalRules((prev) => {
+      const newRules = pending.filter(
+        (rule) => !prev.some((r) => JSON.stringify(r) === JSON.stringify(rule)),
+      );
+      return [...prev, ...newRules];
+    });
+    setPendingApprovalRules([]);
   }, []);
 
   const transport = useMemo(
@@ -257,6 +289,7 @@ export function ChatProvider({
         getApprovalRules: () => approvalRulesRef.current,
         getSettings: () => settingsRef.current,
         onUsageUpdate: handleUsageUpdate,
+        onBeforeRequest: promotePendingApprovalRules,
         persistence: projectPath
           ? {
               getSessionId: () => sessionIdRef.current,
@@ -267,7 +300,13 @@ export function ChatProvider({
           : undefined,
         gateway,
       }),
-    [agentOptions, handleUsageUpdate, projectPath, gateway],
+    [
+      agentOptions,
+      handleUsageUpdate,
+      promotePendingApprovalRules,
+      projectPath,
+      gateway,
+    ],
   );
 
   const chat = useMemo(
@@ -294,6 +333,7 @@ export function ChatProvider({
       sessionUsage,
       contextLimit,
       approvalRules,
+      pendingApprovalRules,
       settings,
       activePanel,
       availableModels,
@@ -310,6 +350,7 @@ export function ChatProvider({
       sessionUsage,
       contextLimit,
       approvalRules,
+      pendingApprovalRules,
       settings,
       activePanel,
       availableModels,
@@ -360,6 +401,8 @@ export function ChatProvider({
         setAutoAcceptMode,
         cycleAutoAcceptMode,
         addApprovalRule,
+        addPendingApprovalRule,
+        promotePendingApprovalRules,
         clearApprovalRules,
         updateSettings,
         openPanel,
