@@ -1,9 +1,10 @@
 /**
  * Shared components and utilities for tool renderers.
  */
-import React, { useState, useEffect, type ReactNode } from "react";
-import { Box, Text } from "ink";
-import type { DiffLine, CodeLine } from "@open-harness/shared";
+
+import type { CodeLine, DiffLine } from "@open-harness/shared";
+import React, { type ReactNode, useEffect, useState } from "react";
+import { Box, Text } from "../../ink-shim";
 import type { ToolRenderState } from "../../lib/render-tool";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

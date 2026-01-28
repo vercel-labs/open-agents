@@ -1,13 +1,9 @@
 /**
- * CLI syntax highlighter using cli-highlight.
- * This is TUI-specific and wraps the shared diff utilities.
+ * TUI syntax highlighter placeholder.
+ * OpenTUI renders plain text for now.
  */
-import { highlight } from "cli-highlight";
 import type { Highlighter } from "@open-harness/shared";
 
-export const cliHighlighter: Highlighter = (code, language) => {
-  return highlight(code, {
-    language: language || undefined,
-    ignoreIllegals: true,
-  });
+export const cliHighlighter: Highlighter = (code) => {
+  return code;
 };

@@ -1,8 +1,8 @@
-import React from "react";
-import { Text } from "ink";
 import { getToolName } from "ai";
-import type { TUIAgentUIToolPart } from "../../types";
+import React from "react";
+import { Text } from "../../ink-shim";
 import type { ToolRenderState } from "../../lib/render-tool";
+import type { TUIAgentUIToolPart } from "../../types";
 import { ToolLayout } from "./shared";
 
 /**

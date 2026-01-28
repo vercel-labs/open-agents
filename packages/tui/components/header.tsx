@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "../ink-shim";
 
 type HeaderProps = {
   name?: string;
@@ -8,16 +8,17 @@ type HeaderProps = {
   cwd?: string;
 };
 
-export function Header({ name = "AI SDK", version, model, cwd }: HeaderProps) {
+export function Header({ name, version, model, cwd }: HeaderProps) {
+  const displayName = name?.trim() ? name : "AI SDK";
   const homedir = process.env.HOME || process.env.USERPROFILE || "";
   const displayCwd =
     cwd?.replace(homedir, "~") || process.cwd().replace(homedir, "~");
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginBottom={1} flexShrink={0}>
       {/* Info line */}
       <Box gap={1}>
-        <Text bold>{name}</Text>
+        <Text bold>{displayName}</Text>
         {version && <Text dimColor>v{version}</Text>}
         {model && (
           <>

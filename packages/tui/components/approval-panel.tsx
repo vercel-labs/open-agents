@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Box, Text, useInput } from "ink";
 import { useChat } from "@ai-sdk/react";
 import {
-  createNewFileCodeLines,
-  createEditDiffLines,
-  DIFF_LINE_MAX_WIDTH,
   type CodeLine,
+  createEditDiffLines,
+  createNewFileCodeLines,
+  DIFF_LINE_MAX_WIDTH,
   type DiffLine,
 } from "@open-harness/shared";
+import React, { useEffect, useMemo, useState } from "react";
 import { useChatContext } from "../chat-context";
-import type { TUIAgentUIToolPart, ApprovalRule } from "../types";
+import { Box, Text, useInput } from "../ink-shim";
 import { inferApprovalRule } from "../lib/approval";
 import { cliHighlighter } from "../lib/highlighter";
+import type { ApprovalRule, TUIAgentUIToolPart } from "../types";
 
 export type ApprovalPanelProps = {
   approvalId: string;
@@ -164,7 +164,7 @@ export function ApprovalPanel({
       paddingTop={1}
     >
       {/* Tool type header */}
-      <Text color="blueBright" bold>
+      <Text color="brightBlue" bold>
         {toolType}
       </Text>
 
@@ -259,10 +259,11 @@ export function ApprovalPanel({
               {selected === reasonOptionIndex ? "› " : "  "}
             </Text>
             <Text color={selected === reasonOptionIndex ? "yellow" : undefined}>
-              {canSaveRule ? "3" : "2"}.{" "}
+              {canSaveRule ? "3" : "2"}.
             </Text>
             {reason || selected === reasonOptionIndex ? (
               <>
+                {reason && <Text> </Text>}
                 <Text
                   color={selected === reasonOptionIndex ? "yellow" : undefined}
                 >
@@ -272,6 +273,7 @@ export function ApprovalPanel({
               </>
             ) : (
               <Text color="gray">
+                {" "}
                 Type here to tell Claude what to do differently
               </Text>
             )}

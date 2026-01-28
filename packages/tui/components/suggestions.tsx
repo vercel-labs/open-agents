@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from "react";
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useStdout } from "../ink-shim";
 
 export type Suggestion = {
   value: string;

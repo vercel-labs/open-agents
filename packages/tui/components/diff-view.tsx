@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "../ink-shim";
 
 type DiffLine = {
   type: "context" | "addition" | "removal";
@@ -52,7 +52,7 @@ export function DiffView({
             {/* +/- indicator and content */}
             {line.type === "addition" ? (
               <>
-                <Text color="green" backgroundColor="greenBright">
+                <Text color="green" backgroundColor="brightGreen">
                   +{" "}
                 </Text>
                 <Text color="white" backgroundColor="green">
@@ -61,7 +61,7 @@ export function DiffView({
               </>
             ) : line.type === "removal" ? (
               <>
-                <Text color="red" backgroundColor="redBright">
+                <Text color="red" backgroundColor="brightRed">
                   -{" "}
                 </Text>
                 <Text color="white" backgroundColor="red">

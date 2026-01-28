@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { Box, Text, useInput } from "ink";
 import type { AskUserQuestionInput } from "@open-harness/agent";
+import React, { useCallback, useMemo, useState } from "react";
+import { Box, Text, useInput } from "../ink-shim";
 
 type Question = AskUserQuestionInput["questions"][number];
 
@@ -405,7 +405,7 @@ export function QuestionPanel({
         {isSubmitTab ? (
           // Submit tab: show review
           <Box flexDirection="column">
-            <Text color="blueBright" bold>
+            <Text color="brightBlue" bold>
               Review your answers
             </Text>
             <Box flexDirection="column" marginTop={1} marginLeft={2}>
@@ -437,7 +437,7 @@ export function QuestionPanel({
         ) : currentQuestion ? (
           // Question tab
           <Box flexDirection="column">
-            <Text color="blueBright" bold>
+            <Text color="brightBlue" bold>
               {currentQuestion.question}
             </Text>
             <Box flexDirection="column" marginTop={1}>

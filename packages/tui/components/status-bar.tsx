@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Box, Text } from "ink";
-import type { ThinkingState } from "@open-harness/shared";
 import type { TodoItem } from "@open-harness/agent";
+import type { ThinkingState } from "@open-harness/shared";
+import React, { useEffect, useState } from "react";
+import { Box, Text } from "../ink-shim";
 
 const SILLY_WORDS = [
   "Thinking",
@@ -68,7 +68,7 @@ function PulsedWord({
         return (
           <Text
             key={i}
-            color={isBright ? "yellowBright" : "yellow"}
+            color={isBright ? "brightYellow" : "yellow"}
             bold={isBright}
             dimColor={!isBright && !isMedium}
           >

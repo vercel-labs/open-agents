@@ -1,8 +1,8 @@
-import React from "react";
-import { Box, Text } from "ink";
-import { getToolName, isTextUIPart, isToolUIPart } from "ai";
-import { formatTokens } from "@open-harness/shared";
 import type { SubagentUIMessage } from "@open-harness/agent";
+import { formatTokens } from "@open-harness/shared";
+import { getToolName, isTextUIPart, isToolUIPart } from "ai";
+import React from "react";
+import { Box, Text } from "../../ink-shim";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolSpinner } from "./shared";
 

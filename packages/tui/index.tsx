@@ -1,33 +1,33 @@
-import React from "react";
-import { render } from "ink";
-import { App } from "./app";
-import { ChatProvider } from "./chat-context";
+import { defaultModelLabel } from "@open-harness/agent";
 import {
-  ReasoningProvider,
   ExpandedViewProvider,
+  ReasoningProvider,
   TodoViewProvider,
 } from "@open-harness/shared";
-import { defaultModelLabel } from "@open-harness/agent";
+import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+import React from "react";
+import { App } from "./app";
+import { ChatProvider } from "./chat-context";
 import { createDefaultAgentOptions } from "./config";
 import type { TUIOptions } from "./types";
 
-export type { TUIOptions, AutoAcceptMode, Settings } from "./types";
-export { useChatContext, ChatProvider } from "./chat-context";
-export { tuiAgent, createDefaultAgentOptions } from "./config";
-export { loadSettings, saveSettings } from "./lib/settings";
+export { ChatProvider, useChatContext } from "./chat-context";
+export { createDefaultAgentOptions, tuiAgent } from "./config";
 export { fetchAvailableModels } from "./lib/fetch-models";
 export type { ModelInfo } from "./lib/models";
-
 // Session persistence exports
 export {
   createSession,
-  saveSession,
+  encodeProjectPath,
+  formatTimeAgo,
   listSessions,
   loadSession,
-  formatTimeAgo,
-  encodeProjectPath,
+  saveSession,
 } from "./lib/session-storage";
-export type { SessionListItem, SessionData } from "./lib/session-types";
+export type { SessionData, SessionListItem } from "./lib/session-types";
+export { loadSettings, saveSettings } from "./lib/settings";
+export type { AutoAcceptMode, Settings, TUIOptions } from "./types";
 
 /**
  * Create a Claude Code-style TUI.
@@ -65,7 +65,12 @@ export async function createTUI(options: TUIOptions): Promise<void> {
 
   const projectPath = options.projectPath ?? workingDirectory;
 
-  const { waitUntilExit } = render(
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: false,
+  });
+  const root = createRoot(renderer);
+
+  root.render(
     <ChatProvider
       agentOptions={agentOptions}
       model={options.header?.model ?? defaultModelLabel}
@@ -88,14 +93,16 @@ export async function createTUI(options: TUIOptions): Promise<void> {
     </ChatProvider>,
   );
 
-  await waitUntilExit();
+  await new Promise<void>((resolve) => {
+    renderer.once("destroy", () => resolve());
+  });
 }
 
 /**
  * Render the TUI without waiting for exit.
  * Useful for programmatic control.
  */
-export function renderTUI(options: TUIOptions) {
+export async function renderTUI(options: TUIOptions) {
   if (!options.agentOptions && !options.sandbox) {
     throw new Error("renderTUI requires agentOptions or a sandbox.");
   }
@@ -108,7 +115,12 @@ export function renderTUI(options: TUIOptions) {
 
   const projectPath = options.projectPath ?? workingDirectory;
 
-  return render(
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: false,
+  });
+  const root = createRoot(renderer);
+
+  root.render(
     <ChatProvider
       agentOptions={agentOptions}
       model={options.header?.model ?? defaultModelLabel}
@@ -130,6 +142,15 @@ export function renderTUI(options: TUIOptions) {
       </ReasoningProvider>
     </ChatProvider>,
   );
+
+  return {
+    renderer,
+    unmount: () => renderer.destroy(),
+    waitUntilExit: () =>
+      new Promise<void>((resolve) => {
+        renderer.once("destroy", () => resolve());
+      }),
+  };
 }
 
 // Re-export components for custom TUI composition

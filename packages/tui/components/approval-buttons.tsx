@@ -2,10 +2,11 @@
  * Approval buttons component for tool approval UI.
  * This is kept separate from tool-call.tsx as it's tightly coupled to chat context.
  */
-import React, { useState } from "react";
-import { Box, Text, useInput } from "ink";
+
 import { useChat } from "@ai-sdk/react";
+import React, { useState } from "react";
 import { useChatContext } from "../chat-context";
+import { Box, Text, useInput } from "../ink-shim";
 
 export function ApprovalButtons({ approvalId }: { approvalId: string }) {
   const { chat } = useChatContext();

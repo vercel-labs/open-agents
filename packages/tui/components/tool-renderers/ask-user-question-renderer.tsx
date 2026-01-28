@@ -1,7 +1,7 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "../../ink-shim";
 import type { ToolRendererProps } from "../../lib/render-tool";
-import { ToolSpinner, getDotColor } from "./shared";
+import { getDotColor, ToolSpinner } from "./shared";
 
 type AskUserQuestionOutput =
   | { answers: Record<string, string | string[]> }

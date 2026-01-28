@@ -1,13 +1,13 @@
 import React, {
-  useState,
-  useMemo,
   useCallback,
-  useRef,
   useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
-import { Box, Text, useInput } from "ink";
-import type { SessionListItem } from "../lib/session-types";
+import { Box, Text, useInput } from "../ink-shim";
 import { formatTimeAgo } from "../lib/session-storage";
+import type { SessionListItem } from "../lib/session-types";
 
 type ResumePanelProps = {
   sessions: SessionListItem[];
@@ -190,7 +190,7 @@ export function ResumePanel({
       paddingTop={1}
     >
       {/* Title */}
-      <Text color="blueBright" bold>
+      <Text color="brightBlue" bold>
         Resume session
       </Text>
 

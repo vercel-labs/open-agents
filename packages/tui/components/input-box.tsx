@@ -1,23 +1,3 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  memo,
-  useMemo,
-} from "react";
-import { Box, Text, useInput } from "ink";
-import type { FileUIPart } from "ai";
-import { TextInput } from "./text-input";
-import { Suggestions, type Suggestion } from "./suggestions";
-import { getFileSuggestions, extractMention } from "../lib/file-suggestions";
-import {
-  extractSlashCommand,
-  getCommandSuggestions,
-  getCommandAction,
-  type SlashCommandAction,
-} from "../lib/slash-commands";
-import { useChatContext } from "../chat-context";
 import {
   countLines,
   createPasteToken,
@@ -27,6 +7,23 @@ import {
   isPasteTokenChar,
   type PasteBlock,
 } from "@open-harness/shared";
+import type { FileUIPart } from "ai";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useChatContext } from "../chat-context";
+import { Box, Text, useInput } from "../ink-shim";
+import { extractMention, getFileSuggestions } from "../lib/file-suggestions";
+import {
+  formatImagePlaceholder,
+  type ImageBlock,
+  imageBlockToFilePart,
+} from "../lib/image-blocks";
 import {
   getClipboardImage,
   imageToDataUrl,
@@ -34,11 +31,14 @@ import {
   loadImageFromPath,
 } from "../lib/image-clipboard";
 import {
-  formatImagePlaceholder,
-  imageBlockToFilePart,
-  type ImageBlock,
-} from "../lib/image-blocks";
+  extractSlashCommand,
+  getCommandAction,
+  getCommandSuggestions,
+  type SlashCommandAction,
+} from "../lib/slash-commands";
 import type { AutoAcceptMode } from "../types";
+import { type Suggestion, Suggestions } from "./suggestions";
+import { TextInput } from "./text-input";
 
 type InputBoxProps = {
   onSubmit: (value: string, files?: FileUIPart[]) => void;

@@ -1,11 +1,11 @@
 import React, {
-  useState,
-  useMemo,
   useCallback,
-  useRef,
   useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput } from "../ink-shim";
 
 export type SettingsOption = {
   id: string;
@@ -188,7 +188,7 @@ export function SettingsPanel({
       paddingTop={1}
     >
       {/* Title */}
-      <Text color="blueBright" bold>
+      <Text color="brightBlue" bold>
         {title}
       </Text>
 

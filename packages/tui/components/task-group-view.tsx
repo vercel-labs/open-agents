@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Box, Text } from "ink";
-import { getToolName, isToolUIPart } from "ai";
-import type { TaskToolUIPart, SubagentUIMessage } from "@open-harness/agent";
+import type { SubagentUIMessage, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
+import { getToolName, isToolUIPart } from "ai";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, Text } from "../ink-shim";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 

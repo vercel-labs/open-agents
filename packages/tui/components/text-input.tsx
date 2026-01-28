@@ -1,12 +1,13 @@
+import { TextAttributes } from "@opentui/core";
 import React, {
-  useState,
-  useRef,
   useCallback,
-  useLayoutEffect,
   useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
-import { Text, useInput } from "ink";
-import chalk from "chalk";
+import { Text, useInput } from "../ink-shim";
 
 type TextInputProps = {
   value: string;
@@ -26,6 +27,13 @@ type TextInputProps = {
   placeholder?: string;
   focus?: boolean;
   showCursor?: boolean;
+};
+
+type TextSegment = {
+  text: string;
+  attributes?: number;
+  fg?: string;
+  bg?: string;
 };
 
 /**
@@ -292,66 +300,99 @@ export function TextInput({
   }, []);
 
   const value = internalValue;
-  let renderedValue = value;
-  let renderedPlaceholder = placeholder ? chalk.grey(placeholder) : undefined;
   const tokenMatcher = isTokenChar ?? (() => false);
   const tokenRenderer = renderToken ?? ((token: string) => token);
 
-  const buildRenderedValue = (withCursor: boolean): string => {
-    if (!withCursor) {
-      let result = "";
-      for (const char of value) {
-        result += tokenMatcher(char) ? tokenRenderer(char) : char;
+  const segments = useMemo((): TextSegment[] => {
+    const result: TextSegment[] = [];
+    const placeholderText = placeholder ?? "";
+    const cursorActive = Boolean(showCursor && focus);
+    const cursorAttributes = TextAttributes.INVERSE;
+    const cursorFg = "black";
+    const cursorBg = "white";
+
+    const pushSegment = (
+      text: string,
+      attributes?: number,
+      fg?: string,
+      bg?: string,
+    ) => {
+      if (!text) return;
+      const last = result[result.length - 1];
+      if (
+        last &&
+        last.attributes === attributes &&
+        last.fg === fg &&
+        last.bg === bg
+      ) {
+        last.text += text;
+      } else {
+        result.push({ text, attributes, fg, bg });
+      }
+    };
+
+    if (value.length === 0) {
+      if (placeholderText.length > 0) {
+        if (cursorActive) {
+          pushSegment(
+            placeholderText[0] ?? " ",
+            cursorAttributes,
+            cursorFg,
+            cursorBg,
+          );
+          pushSegment(placeholderText.slice(1), undefined, "gray");
+        } else {
+          pushSegment(placeholderText, undefined, "gray");
+        }
+      } else if (cursorActive) {
+        pushSegment(" ", cursorAttributes, cursorFg, cursorBg);
       }
       return result;
     }
 
-    if (value.length === 0) {
-      return chalk.inverse(" ");
-    }
+    for (let i = 0; i < value.length; i += 1) {
+      const char = value[i];
+      if (char === undefined) continue;
 
-    let result = "";
-    let i = 0;
-    for (const char of value) {
-      const isCursor = i === cursorOffset;
-      if (tokenMatcher(char)) {
-        const tokenText = tokenRenderer(char);
+      const isCursor = cursorActive && i === cursorOffset;
+      const display = tokenMatcher(char) ? tokenRenderer(char) : char;
+
+      if (char === "\n") {
         if (isCursor) {
-          result +=
-            tokenText.length > 0
-              ? chalk.inverse(tokenText[0]) + tokenText.slice(1)
-              : chalk.inverse(" ");
-        } else {
-          result += tokenText;
+          pushSegment(" ", cursorAttributes, cursorFg, cursorBg);
         }
-      } else if (char === "\n") {
-        // For newlines, show cursor as inverse space at end of line
-        if (isCursor) {
-          result += chalk.inverse(" ");
-        }
-        result += "\n";
-      } else {
-        result += isCursor ? chalk.inverse(char) : char;
+        pushSegment("\n");
+        continue;
       }
-      i++;
+
+      if (display.length === 0) {
+        if (isCursor) {
+          pushSegment(" ", cursorAttributes, cursorFg, cursorBg);
+        }
+        continue;
+      }
+
+      if (isCursor) {
+        pushSegment(display, cursorAttributes, cursorFg, cursorBg);
+      } else {
+        pushSegment(display);
+      }
     }
 
-    if (cursorOffset === value.length) {
-      result += chalk.inverse(" ");
+    if (cursorActive && cursorOffset === value.length) {
+      pushSegment(" ", cursorAttributes, cursorFg, cursorBg);
     }
+
     return result;
-  };
-
-  // Fake mouse cursor
-  if (showCursor && focus) {
-    renderedPlaceholder =
-      placeholder.length > 0
-        ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
-        : chalk.inverse(" ");
-    renderedValue = buildRenderedValue(true);
-  } else {
-    renderedValue = buildRenderedValue(false);
-  }
+  }, [
+    value,
+    cursorOffset,
+    focus,
+    showCursor,
+    placeholder,
+    tokenMatcher,
+    tokenRenderer,
+  ]);
 
   useInput(
     (input, key) => {
@@ -571,11 +612,16 @@ export function TextInput({
 
   return (
     <Text>
-      {placeholder
-        ? value.length > 0
-          ? renderedValue
-          : renderedPlaceholder
-        : renderedValue}
+      {segments.map((segment, index) => (
+        <span
+          key={`text-input-segment-${index}`}
+          fg={segment.fg}
+          bg={segment.bg}
+          attributes={segment.attributes}
+        >
+          {segment.text}
+        </span>
+      ))}
     </Text>
   );
 }

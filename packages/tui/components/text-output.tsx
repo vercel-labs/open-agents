@@ -1,6 +1,6 @@
 import React from "react";
-import { Box, Text } from "ink";
-import { renderMarkdown } from "../lib/markdown";
+import { Box, Text } from "../ink-shim";
+import { MarkdownContent } from "../lib/markdown";
 
 type TextOutputProps = {
   text: string;
@@ -25,9 +25,10 @@ export function TextOutput({
       )}
       {text && (
         <Box>
-          <Text>
-            <Text color="white">●</Text> {renderMarkdown(text)}
-          </Text>
+          <Text color="white">● </Text>
+          <Box flexShrink={1} flexGrow={1}>
+            <MarkdownContent content={text} />
+          </Box>
         </Box>
       )}
     </Box>
