@@ -28,13 +28,13 @@ function getToolSummary(part: SubagentMessagePart): string {
 }
 
 function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
+  const { width } = useTerminalDimensions();
   if (!isToolUIPart(part)) return null;
   const toolName = getToolName(part);
   const isRunning =
     part.state === "input-streaming" || part.state === "input-available";
   const hasError = part.state === "output-error";
   const summary = getToolSummary(part);
-  const { width } = useTerminalDimensions();
   const terminalWidth = width ?? 80;
 
   const dotColor = isRunning ? PRIMARY_COLOR : hasError ? "red" : "green";

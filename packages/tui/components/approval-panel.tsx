@@ -1,15 +1,15 @@
 import { useChat } from "@ai-sdk/react";
 import {
-  type CodeLine,
-  createEditDiffLines,
   createNewFileCodeLines,
-  type DiffLine,
+  createUnifiedDiff,
+  getLanguageFromPath,
 } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useChatContext } from "../chat-context";
 import { inferApprovalRule } from "../lib/approval";
+import { cliSyntaxStyle, cliTreeSitterClient } from "../lib/code-theme";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { cliHighlighter } from "../lib/highlighter";
 import { inputFromKey, isReturnKey } from "../lib/keyboard";
@@ -39,7 +39,6 @@ export function ApprovalPanel({
   const terminalWidth = width ?? 80;
   const contentIndent = 2;
   const maxContentWidth = Math.max(10, terminalWidth - contentIndent);
-  const diffContentWidth = Math.max(10, terminalWidth - 6);
 
   // Infer the approval rule from the tool part
   const inferredRule = useMemo((): ApprovalRule | null => {
@@ -82,11 +81,18 @@ export function ApprovalPanel({
   const previewInfo = useMemo(():
     | {
         type: "newFile";
-        lines: CodeLine[];
+        content: string;
+        filetype?: string;
         totalLines: number;
         hiddenLines: number;
       }
-    | { type: "edit"; lines: DiffLine[]; additions: number; removals: number }
+    | {
+        type: "edit";
+        diff: string;
+        additions: number;
+        removals: number;
+        filetype?: string;
+      }
     | null => {
     if (!toolPart) return null;
 
@@ -98,15 +104,34 @@ export function ApprovalPanel({
         filePath,
         cliHighlighter,
       );
-      return { type: "newFile", lines, totalLines, hiddenLines };
+      const previewContent = lines.map((line) => line.content).join("\n");
+      return {
+        type: "newFile",
+        content: previewContent,
+        filetype: getLanguageFromPath(filePath),
+        totalLines,
+        hiddenLines,
+      };
     }
 
     if (toolPart.type === "tool-edit") {
       const oldString = String(toolPart.input?.oldString ?? "");
       const newString = String(toolPart.input?.newString ?? "");
       const startLine = Number(toolPart.input?.startLine) || 1;
-      const result = createEditDiffLines(oldString, newString, startLine);
-      return { type: "edit", ...result };
+      const filePath = String(toolPart.input?.filePath ?? "file");
+      const result = createUnifiedDiff(
+        oldString,
+        newString,
+        filePath,
+        startLine,
+      );
+      return {
+        type: "edit",
+        diff: result.diff,
+        additions: result.additions,
+        removals: result.removals,
+        filetype: getLanguageFromPath(filePath),
+      };
     }
 
     return null;
@@ -186,7 +211,7 @@ export function ApprovalPanel({
       </box>
 
       {/* Code preview for new files */}
-      {previewInfo?.type === "newFile" && previewInfo.lines.length > 0 && (
+      {previewInfo?.type === "newFile" && previewInfo.content.length > 0 && (
         <box
           flexDirection="column"
           marginTop={1}
@@ -195,9 +220,13 @@ export function ApprovalPanel({
           paddingLeft={1}
           paddingRight={1}
         >
-          {previewInfo.lines.map((line, i) => (
-            <text key={i}>{line.highlighted}</text>
-          ))}
+          <code
+            content={previewInfo.content}
+            filetype={previewInfo.filetype}
+            syntaxStyle={cliSyntaxStyle}
+            treeSitterClient={cliTreeSitterClient}
+            width="100%"
+          />
           {previewInfo.hiddenLines > 0 && (
             <text fg="gray">
               ... {previewInfo.hiddenLines} more line
@@ -208,37 +237,28 @@ export function ApprovalPanel({
       )}
 
       {/* Diff preview for edits */}
-      {previewInfo?.type === "edit" && previewInfo.lines.length > 0 && (
-        <box flexDirection="column" marginTop={1}>
-          {previewInfo.lines.map((line, i) => (
-            <box key={i}>
-              {line.type === "separator" ? (
-                <text fg="gray"> {line.content}</text>
-              ) : line.type === "addition" ? (
-                <text bg="#234823">
-                  {line.lineNumber !== undefined
-                    ? String(line.lineNumber).padStart(3, " ")
-                    : "   "}{" "}
-                  +
-                  {line.content
-                    .slice(0, diffContentWidth)
-                    .padEnd(diffContentWidth, " ")}
-                </text>
-              ) : (
-                <text bg="#5c2626">
-                  {line.lineNumber !== undefined
-                    ? String(line.lineNumber).padStart(3, " ")
-                    : "   "}{" "}
-                  -
-                  {line.content
-                    .slice(0, diffContentWidth)
-                    .padEnd(diffContentWidth, " ")}
-                </text>
-              )}
-            </box>
-          ))}
-        </box>
-      )}
+      {previewInfo?.type === "edit" &&
+        previewInfo.additions + previewInfo.removals > 0 && (
+          <box flexDirection="column" marginTop={1}>
+            <diff
+              diff={previewInfo.diff}
+              filetype={previewInfo.filetype}
+              syntaxStyle={cliSyntaxStyle}
+              treeSitterClient={cliTreeSitterClient}
+              view="unified"
+              wrapMode="char"
+              showLineNumbers={true}
+              lineNumberFg="#6b7280"
+              addedBg="#244d32"
+              removedBg="#4f2626"
+              addedLineNumberBg="#244d32"
+              removedLineNumberBg="#4f2626"
+              addedSignColor="#7ee787"
+              removedSignColor="#ff7b72"
+              width="100%"
+            />
+          </box>
+        )}
 
       {/* Question and options */}
       <box flexDirection="column" marginTop={1}>

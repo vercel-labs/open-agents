@@ -1,4 +1,4 @@
-import { createEditDiffLines } from "@open-harness/shared";
+import { createUnifiedDiff, getLanguageFromPath } from "@open-harness/shared";
 import React from "react";
 import { useChatContext } from "../../chat-context";
 import type { ToolRendererProps } from "../../lib/render-tool";
@@ -13,10 +13,16 @@ export function EditRenderer({ part, state }: ToolRendererProps<"tool-edit">) {
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
   const oldString = isInputReady ? (part.input?.oldString ?? "") : "";
   const newString = isInputReady ? (part.input?.newString ?? "") : "";
-  const { lines, additions, removals } = createEditDiffLines(
+  const startLine = Number(part.input?.startLine) || 1;
+  const { diff, additions, removals } = createUnifiedDiff(
     oldString,
     newString,
+    rawFilePath === "..." ? "file" : rawFilePath,
+    startLine,
   );
+  const hasChanges = additions + removals > 0;
+  const filetype =
+    rawFilePath === "..." ? undefined : getLanguageFromPath(rawFilePath);
 
   // Check for tool execution failure (success: false in output)
   const outputError =
@@ -35,7 +41,10 @@ export function EditRenderer({ part, state }: ToolRendererProps<"tool-edit">) {
       filePath={filePath}
       additions={additions}
       removals={removals}
-      lines={state.running || state.denied || outputError ? [] : lines}
+      diff={
+        state.running || state.denied || outputError || !hasChanges ? "" : diff
+      }
+      filetype={filetype}
       state={mergedState}
     />
   );

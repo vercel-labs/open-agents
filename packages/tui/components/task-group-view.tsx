@@ -280,8 +280,8 @@ type TaskGroupViewProps = {
 };
 
 export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
-  if (taskParts.length === 0) return null;
   const { width } = useTerminalDimensions();
+  if (taskParts.length === 0) return null;
   const terminalWidth = width ?? 80;
 
   // Count different states

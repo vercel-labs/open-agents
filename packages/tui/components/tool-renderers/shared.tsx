@@ -2,10 +2,10 @@
  * Shared components and utilities for tool renderers.
  */
 
-import type { CodeLine, DiffLine } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import React, { type ReactNode, useEffect, useState } from "react";
+import { cliSyntaxStyle, cliTreeSitterClient } from "../../lib/code-theme";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRenderState } from "../../lib/render-tool";
 import { truncateText } from "../../lib/truncate";
@@ -140,27 +140,21 @@ export function FileChangeLayout({
   filePath,
   additions,
   removals,
-  lines,
+  diff,
+  filetype,
   state,
 }: {
   action: "Create" | "Update";
   filePath: string;
   additions: number;
   removals: number;
-  lines: DiffLine[];
+  diff: string;
+  filetype?: string;
   state: ToolRenderState;
 }) {
   const dotColor = getDotColor(state);
   const { width } = useTerminalDimensions();
   const terminalWidth = width ?? 80;
-  const paddingLeft = 4;
-  const lineNumberWidth = 5;
-  const indicatorWidth = 2;
-  const maxLineWidth = Math.max(
-    10,
-    terminalWidth - paddingLeft - lineNumberWidth - indicatorWidth,
-  );
-  const maxSeparatorWidth = Math.max(10, terminalWidth - paddingLeft);
   const headerPrefixLength = 2 + action.length + 1;
   const headerSuffixLength = 1;
   const maxHeaderPathWidth = Math.max(
@@ -168,16 +162,6 @@ export function FileChangeLayout({
     terminalWidth - headerPrefixLength - headerSuffixLength,
   );
   const displayHeaderPath = truncateText(filePath, maxHeaderPathWidth);
-  const actionLabel = action === "Create" ? "Created" : "Updated";
-  const additionsLabel = `${additions} addition${additions !== 1 ? "s" : ""}`;
-  const removalsLabel = `${removals} removal${removals !== 1 ? "s" : ""}`;
-  const subPrefixLength = "└ ".length + actionLabel.length + 1;
-  const subSuffixLength = ` with ${additionsLabel} and ${removalsLabel}`.length;
-  const maxSubPathWidth = Math.max(
-    10,
-    terminalWidth - subPrefixLength - subSuffixLength,
-  );
-  const displaySubPath = truncateText(filePath, maxSubPathWidth);
   const errorPrefix = "Error: ";
   const maxErrorWidth = Math.max(10, terminalWidth - 2 - errorPrefix.length);
   const showDiff =
@@ -202,6 +186,8 @@ export function FileChangeLayout({
         <text fg="gray">(</text>
         <text fg="white">{displayHeaderPath}</text>
         <text fg="gray">)</text>
+        <text fg="#7ee787"> +{additions}</text>
+        <text fg="#ff7b72"> -{removals}</text>
       </box>
 
       {/* Show Running/Waiting status for approval-requested tools */}
@@ -214,67 +200,28 @@ export function FileChangeLayout({
         </box>
       )}
 
-      {/* Subheader: └ Updated src/file.ts with X additions and Y removals */}
-      {showDiff && !state.approvalRequested && !state.denied && (
-        <box paddingLeft={2} flexDirection="row">
-          <text fg="gray">└ </text>
-          <text>{actionLabel} </text>
-          <text attributes={TextAttributes.BOLD}>{displaySubPath}</text>
-          <text> with </text>
-          <text fg="green">{additionsLabel}</text>
-          <text> and </text>
-          <text fg="red">{removalsLabel}</text>
+      {/* Diff lines */}
+      {showDiff && !state.approvalRequested && !state.denied && diff && (
+        <box flexDirection="column" paddingLeft={4}>
+          <diff
+            diff={diff}
+            filetype={filetype}
+            syntaxStyle={cliSyntaxStyle}
+            treeSitterClient={cliTreeSitterClient}
+            view="unified"
+            wrapMode="char"
+            showLineNumbers={true}
+            lineNumberFg="#6b7280"
+            addedBg="#244d32"
+            removedBg="#4f2626"
+            addedLineNumberBg="#244d32"
+            removedLineNumberBg="#4f2626"
+            addedSignColor="#7ee787"
+            removedSignColor="#ff7b72"
+            width="100%"
+          />
         </box>
       )}
-
-      {/* Diff lines */}
-      {showDiff &&
-        !state.approvalRequested &&
-        !state.denied &&
-        lines.length > 0 && (
-          <box flexDirection="column" paddingLeft={4}>
-            {lines.map((line, i) => (
-              <box key={i} flexDirection="row">
-                {line.type === "separator" ? (
-                  <text fg="gray">
-                    {line.content.slice(0, maxSeparatorWidth)}
-                  </text>
-                ) : (
-                  <>
-                    {/* Line number */}
-                    <text fg="gray">
-                      {line.lineNumber !== undefined
-                        ? String(line.lineNumber).padStart(4, " ")
-                        : "    "}{" "}
-                    </text>
-
-                    {/* +/- indicator and content */}
-                    {line.type === "addition" ? (
-                      <>
-                        <text bg="#234823">+ </text>
-                        <text bg="#234823">
-                          {line.content.slice(0, maxLineWidth)}
-                        </text>
-                      </>
-                    ) : line.type === "removal" ? (
-                      <>
-                        <text bg="#5c2626">- </text>
-                        <text bg="#5c2626">
-                          {line.content.slice(0, maxLineWidth)}
-                        </text>
-                      </>
-                    ) : (
-                      <>
-                        <text fg="gray"> </text>
-                        <text>{line.content.slice(0, maxLineWidth)}</text>
-                      </>
-                    )}
-                  </>
-                )}
-              </box>
-            ))}
-          </box>
-        )}
 
       {state.denied && (
         <box paddingLeft={2} flexDirection="row">
@@ -310,13 +257,15 @@ export function FileChangeLayout({
  */
 export function NewFileLayout({
   filePath,
-  lines,
+  content,
+  filetype,
   totalLines,
   hiddenLines,
   state,
 }: {
   filePath: string;
-  lines: CodeLine[];
+  content: string;
+  filetype?: string;
   totalLines: number;
   hiddenLines: number;
   state: ToolRenderState;
@@ -388,7 +337,7 @@ export function NewFileLayout({
       {showCode &&
         !state.approvalRequested &&
         !state.denied &&
-        lines.length > 0 && (
+        content.length > 0 && (
           <box
             flexDirection="column"
             marginLeft={2}
@@ -397,9 +346,13 @@ export function NewFileLayout({
             paddingLeft={1}
             paddingRight={1}
           >
-            {lines.map((line, i) => (
-              <text key={i}>{line.highlighted}</text>
-            ))}
+            <code
+              content={content}
+              filetype={filetype}
+              syntaxStyle={cliSyntaxStyle}
+              treeSitterClient={cliTreeSitterClient}
+              width="100%"
+            />
             {hiddenLines > 0 && (
               <text fg="gray">
                 ... {hiddenLines} more line{hiddenLines !== 1 ? "s" : ""}

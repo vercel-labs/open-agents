@@ -13,6 +13,12 @@ export type DiffLine = {
   content: string;
 };
 
+export type UnifiedDiffResult = {
+  diff: string;
+  additions: number;
+  removals: number;
+};
+
 /**
  * Split content into lines, removing trailing empty line from files ending with newline.
  * "hello\n".split("\n") -> ["hello", ""], but we want ["hello"].
@@ -81,6 +87,39 @@ export function createEditDiffLines(
   }
 
   return { lines: result, additions, removals };
+}
+
+/**
+ * Create a unified diff string for an edit operation.
+ */
+export function createUnifiedDiff(
+  oldString: string,
+  newString: string,
+  filePath: string,
+  startLine: number = 1,
+): UnifiedDiffResult {
+  const oldLines = splitLines(oldString);
+  const newLines = splitLines(newString);
+  const removals = oldLines.length;
+  const additions = newLines.length;
+  const safeStartLine =
+    Number.isFinite(startLine) && startLine > 0 ? Math.floor(startLine) : 1;
+  const safeFilePath = filePath || "file";
+  const diffLines: string[] = [
+    `--- a/${safeFilePath}`,
+    `+++ b/${safeFilePath}`,
+    `@@ -${safeStartLine},${removals} +${safeStartLine},${additions} @@`,
+  ];
+
+  for (const line of oldLines) {
+    diffLines.push(`-${line}`);
+  }
+
+  for (const line of newLines) {
+    diffLines.push(`+${line}`);
+  }
+
+  return { diff: diffLines.join("\n"), additions, removals };
 }
 
 /**

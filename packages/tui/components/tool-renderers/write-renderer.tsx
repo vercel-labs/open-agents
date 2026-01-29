@@ -1,4 +1,7 @@
-import { createNewFileCodeLines } from "@open-harness/shared";
+import {
+  createNewFileCodeLines,
+  getLanguageFromPath,
+} from "@open-harness/shared";
 import React, { useMemo } from "react";
 import { useChatContext } from "../../chat-context";
 import { cliHighlighter } from "../../lib/highlighter";
@@ -22,6 +25,15 @@ export function WriteRenderer({
     () => createNewFileCodeLines(content, rawFilePath, cliHighlighter),
     [content, rawFilePath],
   );
+  const previewContent = useMemo(
+    () => lines.map((line) => line.content).join("\n"),
+    [lines],
+  );
+  const filetype = useMemo(
+    () =>
+      rawFilePath === "..." ? undefined : getLanguageFromPath(rawFilePath),
+    [rawFilePath],
+  );
 
   // Check for tool execution failure (success: false in output)
   const outputError =
@@ -37,11 +49,12 @@ export function WriteRenderer({
   return (
     <NewFileLayout
       filePath={filePath}
-      lines={
+      content={
         state.running || state.denied || state.interrupted || outputError
-          ? []
-          : lines
+          ? ""
+          : previewContent
       }
+      filetype={filetype}
       totalLines={totalLines}
       hiddenLines={hiddenLines}
       state={mergedState}
