@@ -1,10 +1,41 @@
-import { gateway } from "ai";
 import type { ModelInfo } from "./models";
 import { AVAILABLE_MODELS } from "./models";
 
-export type GatewayModel = Awaited<
-  ReturnType<typeof gateway.getAvailableModels>
->["models"][number];
+export type GatewayModel = {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  pricing?: {
+    input: string;
+    output: string;
+  } | null;
+  modelType?: "language" | "embedding" | "image" | null;
+};
+
+type GatewayModelsResponse = {
+  models: GatewayModel[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isGatewayModel(value: unknown): value is GatewayModel {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return typeof value.id === "string";
+}
+
+function isGatewayModelsResponse(
+  value: unknown,
+): value is GatewayModelsResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { models } = value;
+  return Array.isArray(models) && models.every(isGatewayModel);
+}
 
 /**
  * Format price per token to price per million tokens
@@ -43,12 +74,27 @@ export function transformToModelInfo(model: GatewayModel): ModelInfo {
  * Fetch available models from the gateway provider.
  * Falls back to hardcoded models on failure.
  */
-export async function fetchAvailableModels(): Promise<ModelInfo[]> {
+export async function fetchAvailableModels(options?: {
+  baseUrl?: string;
+}): Promise<ModelInfo[]> {
   try {
-    const response = await gateway.getAvailableModels();
+    const baseUrl = options?.baseUrl ?? "";
+    const url = `${baseUrl}/api/models`;
+    const response = await fetch(url, {
+      headers: {
+        "Accept-Encoding": "identity",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models (${response.status})`);
+    }
+    const data = (await response.json()) as unknown;
+    if (!isGatewayModelsResponse(data)) {
+      throw new Error("Invalid models response");
+    }
 
     // Filter to only language models (not embeddings/image models)
-    const languageModels = response.models.filter(
+    const languageModels = data.models.filter(
       (m) => !m.modelType || m.modelType === "language",
     );
 

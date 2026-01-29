@@ -9,8 +9,25 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  return handleProxyRequest(req, params, "POST");
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return handleProxyRequest(req, params, "GET");
+}
+
+async function handleProxyRequest(
+  req: Request,
+  params: Promise<{ path: string[] }>,
+  method: "GET" | "POST",
+) {
   const { path } = await params;
   const endpoint = path.join("/");
+  const requestUrl = new URL(req.url);
+  const gatewayUrl = `${AI_GATEWAY_URL}/${endpoint}${requestUrl.search}`;
 
   // Extract and validate Bearer token
   const authHeader = req.headers.get("Authorization");
@@ -41,6 +58,7 @@ export async function POST(
         "host",
         "connection",
         "authorization",
+        "accept-encoding",
         "content-length",
         "transfer-encoding",
         "x-forwarded-for",
@@ -64,10 +82,25 @@ export async function POST(
 
   // Add the real gateway auth (OIDC token for Vercel AI Gateway)
   forwardHeaders.set("Authorization", `Bearer ${gatewayToken}`);
+  forwardHeaders.set("Accept-Encoding", "identity");
 
   try {
     // Proxy the request to the real AI Gateway
-    const response = await fetch(`${AI_GATEWAY_URL}/${endpoint}`, {
+    if (method === "GET") {
+      const response = await fetch(gatewayUrl, {
+        method,
+        headers: forwardHeaders,
+        signal: req.signal,
+      });
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    }
+
+    const response = await fetch(gatewayUrl, {
       method: "POST",
       headers: forwardHeaders,
       body: req.body,

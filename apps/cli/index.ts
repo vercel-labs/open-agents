@@ -240,7 +240,7 @@ async function main() {
     // Load user settings and available models in parallel
     const [settings, availableModels] = await Promise.all([
       loadSettings(),
-      fetchAvailableModels(),
+      fetchAvailableModels({ baseUrl: webAppUrl }),
     ]);
 
     // Callback to save settings when they change
