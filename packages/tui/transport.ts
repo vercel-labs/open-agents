@@ -95,7 +95,7 @@ export function createAgentTransport({
         messages: prunedMessages,
         options: { ...agentOptions, ...(model && { model }), approval },
         abortSignal: abortSignal ?? undefined,
-        experimental_transform: smoothStream(),
+        experimental_transform: smoothStream({ chunking: "line" }),
       });
 
       // Capture usage after stream completes (non-blocking)
