@@ -561,7 +561,7 @@ const ClipboardToast = memo(function ClipboardToast({
 
 const InterruptedIndicator = memo(function InterruptedIndicator() {
   return (
-    <box marginLeft={2}>
+    <box marginLeft={2} flexDirection="row" flexWrap="no-wrap">
       <text fg="gray">└ </text>
       <text fg={PRIMARY_COLOR}>Interrupted</text>
       <text fg="gray"> · What should the agent do instead?</text>

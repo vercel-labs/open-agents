@@ -69,16 +69,14 @@ export function AskUserQuestionRenderer({
         >
           Ask User Question
         </text>
-        <text fg="gray">(</text>
-        <text fg="white">{questionCountLabel}</text>
-        <text fg="gray">)</text>
+        <text fg="gray"> · </text>
+        <text fg="gray">{questionCountLabel}</text>
       </box>
 
       {/* Show waiting status when input is ready and awaiting user response */}
       {isWaitingForInput && (
         <box paddingLeft={2} flexDirection="row">
-          <text fg="gray">└ </text>
-          <text fg="gray">Waiting for user input...</text>
+          <text fg="gray">Waiting for input</text>
         </box>
       )}
 
@@ -88,7 +86,7 @@ export function AskUserQuestionRenderer({
         !state.denied &&
         "answers" in output && (
           <box flexDirection="column" paddingLeft={2}>
-            {questions.map((q, idx) => {
+            {questions.map((q) => {
               if (!q || !q.question) return null;
               const answer = output.answers[q.question];
               const answerText = Array.isArray(answer)
@@ -99,13 +97,11 @@ export function AskUserQuestionRenderer({
                 answerText ?? "No answer",
                 answerWidth,
               );
-              const isFirst = idx === 0;
               return (
                 <box key={q.question} flexDirection="row">
-                  <text fg="gray">{isFirst ? "└ " : "  "}</text>
                   <text fg="gray">· </text>
                   <text fg="white">{displayQuestion}</text>
-                  <text fg="gray"> → </text>
+                  <text fg="gray">: </text>
                   <text fg="green">{displayAnswer}</text>
                 </box>
               );
@@ -116,14 +112,12 @@ export function AskUserQuestionRenderer({
       {/* Show declined message */}
       {part.state === "output-available" && isDeclined && (
         <box paddingLeft={2} flexDirection="row">
-          <text fg="gray">└ </text>
           <text fg="red">User declined to answer</text>
         </box>
       )}
 
       {state.denied && (
         <box paddingLeft={2} flexDirection="row">
-          <text fg="gray">└ </text>
           <text fg="red">Cancelled</text>
         </box>
       )}
