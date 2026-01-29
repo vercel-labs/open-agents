@@ -4,22 +4,22 @@ import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  createProxyGateway,
   defaultModelLabel,
   discoverSkills,
-  createProxyGateway,
 } from "@open-harness/agent";
 import {
   createTUI,
-  loadSettings,
-  saveSettings,
   fetchAvailableModels,
+  loadSettings,
   type Settings,
+  saveSettings,
 } from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md";
 import { handleAuthCommand } from "./auth/commands";
 import { getWebAppUrl } from "./auth/config";
 import { loadCredentials, validateCredentials } from "./auth/credentials";
-import { onCleanup, cleanup } from "./cleanup-handler";
+import { cleanup, onCleanup } from "./cleanup-handler";
 import {
   createSandbox,
   parseSandboxType,
@@ -85,6 +85,8 @@ function printHelp() {
   console.log("Keyboard shortcuts:");
   console.log("  esc           Abort current operation / exit");
   console.log("  ctrl+c        Force exit");
+  console.log("  shift+enter   Insert newline in input");
+  console.log("  alt+delete    Delete previous word in input");
   console.log("  shift+tab     Cycle auto-accept mode");
   console.log("  ctrl+r        Expand tool output (when available)");
 }

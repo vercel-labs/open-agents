@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { inputFromKey } from "../lib/keyboard";
+import { inputFromKey, isMouseSequence } from "../lib/keyboard";
 
 type TextInputProps = {
   value: string;
@@ -421,7 +421,7 @@ export function TextInput({
       const meta = event?.meta ?? false;
       const shift = event?.shift ?? false;
       const sequence = event?.sequence;
-      if (sequence && sequence.startsWith("\x1b[<")) {
+      if (sequence && isMouseSequence(sequence)) {
         return;
       }
       const isReturn = name === "return" || name === "linefeed";
@@ -520,6 +520,20 @@ export function TextInput({
       }
 
       if (isReturn) {
+        const isShiftReturnSequence =
+          sequence === "\n" ||
+          sequence === "\x1b[13;2u" ||
+          sequence === "\x1b[10;2u" ||
+          sequence === "\x1b[27;2;13~" ||
+          sequence === "\x1b[27;2;10~";
+        if (shift || name === "linefeed" || isShiftReturnSequence) {
+          const nextValue =
+            currentValue.slice(0, currentCursor) +
+            "\n" +
+            currentValue.slice(currentCursor);
+          updateValue(nextValue, currentCursor + 1);
+          return;
+        }
         // Let parent intercept return (e.g., for autocomplete)
         if (onReturn?.()) return;
         if (onSubmit) {
@@ -597,8 +611,8 @@ export function TextInput({
         }
       } else if (isBackspace || isDelete) {
         if (currentCursor > 0) {
-          // Option+Delete (meta + delete): Delete previous word
-          if (isDelete && meta) {
+          // Option+Delete (meta + delete/backspace): Delete previous word
+          if (meta) {
             const wordBoundary = findPrevWordBoundary(
               currentValue,
               currentCursor,
