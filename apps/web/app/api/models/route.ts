@@ -1,34 +1,25 @@
-const AI_GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/v1/models";
+import { gateway } from "ai";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+const CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=86400";
+
+type GatewayModel = Awaited<
+  ReturnType<typeof gateway.getAvailableModels>
+>["models"][number];
+
+function isLanguageModel(model: GatewayModel): boolean {
+  return model.modelType === "language" || model.modelType == null;
 }
 
 export async function GET() {
   try {
-    const response = await fetch(AI_GATEWAY_MODELS_URL);
-    if (!response.ok) {
-      return Response.json(
-        { error: `Failed to fetch available models (${response.status})` },
-        { status: 500 },
-      );
-    }
-
-    const payload: unknown = await response.json();
-    const data = isRecord(payload) ? payload.data : undefined;
-    if (!Array.isArray(data)) {
-      return Response.json(
-        { error: "Invalid models response" },
-        { status: 500 },
-      );
-    }
+    const { models } = await gateway.getAvailableModels();
+    const languageModels = models.filter(isLanguageModel);
 
     return Response.json(
-      { models: data },
+      { models: languageModels },
       {
         headers: {
-          "Cache-Control":
-            "public, s-maxage=3600, stale-while-revalidate=86400",
+          "Cache-Control": CACHE_CONTROL,
         },
       },
     );
