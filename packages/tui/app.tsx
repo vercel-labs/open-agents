@@ -530,20 +530,31 @@ const ClipboardToast = memo(function ClipboardToast({
 }: {
   notice: string;
 }) {
+  const words = notice.split(" ");
+  const primary = words[0] ?? notice;
+  const secondary = words.slice(1).join(" ");
+
   return (
     <box
       position="absolute"
-      top={0}
-      right={0}
+      top={1}
+      right={2}
       zIndex={1000}
-      paddingLeft={1}
-      paddingRight={1}
+      flexDirection="row"
+      flexWrap="no-wrap"
+      paddingLeft={2}
+      paddingRight={2}
+      paddingTop={0}
+      paddingBottom={0}
       border
-      borderStyle="single"
-      borderColor="green"
-      backgroundColor="#1e1e1e"
+      borderStyle="rounded"
+      borderColor="#2f7a3d"
+      backgroundColor="#0f1411"
     >
-      <text fg="green">✓ {notice}</text>
+      <text fg="#8fd694">✓</text>
+      <text> </text>
+      <text fg="#d9dedc">{primary}</text>
+      {secondary.length > 0 ? <text fg="#7f8a85"> {secondary}</text> : null}
     </box>
   );
 });
