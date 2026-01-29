@@ -6,10 +6,22 @@ import {
   useReasoningContext,
   useTodoView,
 } from "@open-harness/shared";
+import type { Selection } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
-import { useKeyboard, useRenderer } from "@opentui/react";
+import {
+  useKeyboard,
+  useRenderer,
+  useTerminalDimensions,
+} from "@opentui/react";
 import { type FileUIPart, getToolName, isToolUIPart } from "ai";
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useChatContext } from "./chat-context";
 import { ApprovalPanel } from "./components/approval-panel";
 import { Header } from "./components/header";
@@ -28,6 +40,8 @@ import { MarkdownContent } from "./lib/markdown";
 import { listSessions, loadSession } from "./lib/session-storage";
 import type { SessionListItem } from "./lib/session-types";
 import type { SlashCommandAction } from "./lib/slash-commands";
+import { copyTextToClipboard } from "./lib/text-clipboard";
+import { wrapMarkdown } from "./lib/wrap-markdown";
 import type {
   TUIAgentUIMessage,
   TUIAgentUIMessagePart,
@@ -61,11 +75,16 @@ const TextPart = memo(function TextPart({
   timestamp?: Date;
   model?: string;
 }) {
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
+  const bulletWidth = 2;
+  const maxContentWidth = Math.max(10, terminalWidth - bulletWidth);
+  const displayText = wrapMarkdown(text, maxContentWidth);
   return (
     <box flexDirection="row">
-      <text>● </text>
-      <box flexShrink={1} flexGrow={1}>
-        <MarkdownContent content={text} streaming={isStreaming} />
+      <text>●</text>
+      <box marginLeft={1} flexShrink={1} flexGrow={1}>
+        <MarkdownContent content={displayText} streaming={isStreaming} />
       </box>
       {isExpanded && timestamp && model && (
         <box marginLeft={2} flexShrink={0} flexDirection="row">
@@ -165,6 +184,7 @@ function renderPart(
     options;
 
   if (isToolUIPart(part)) {
+    if (part.state === "input-streaming") return null;
     return (
       <ToolPartWrapper
         key={key}
@@ -309,6 +329,9 @@ const AssistantMessage = memo(function AssistantMessage({
     let taskGroupStartIndex = 0;
 
     message.parts.forEach((part, index) => {
+      if (isToolUIPart(part) && part.state === "input-streaming") {
+        return;
+      }
       if (isToolUIPart(part) && part.type === "tool-task") {
         if (currentTaskGroup.length === 0) {
           taskGroupStartIndex = index;
@@ -349,10 +372,14 @@ const AssistantMessage = memo(function AssistantMessage({
       />
       {renderGroups.map((group) => {
         if (group.type === "task-group") {
+          const visibleTasks = group.tasks.filter(
+            (task) => task.state !== "input-streaming",
+          );
+          if (visibleTasks.length === 0) return null;
           return (
             <TaskGroupView
               key={`task-group-${group.startIndex}`}
-              taskParts={group.tasks}
+              taskParts={visibleTasks}
               isStreaming={isStreaming}
             />
           );
@@ -442,11 +469,7 @@ function useStatusText(messages: TUIAgentUIMessage[]): string {
     if (lastMessage?.role === "assistant") {
       for (let i = lastMessage.parts.length - 1; i >= 0; i--) {
         const p = lastMessage.parts[i];
-        if (
-          p &&
-          isToolUIPart(p) &&
-          (p.state === "input-available" || p.state === "input-streaming")
-        ) {
+        if (p && isToolUIPart(p) && p.state === "input-available") {
           return `${getToolName(p)}...`;
         }
       }
@@ -502,6 +525,29 @@ const StreamingStatusBar = memo(function StreamingStatusBar({
   );
 });
 
+const ClipboardToast = memo(function ClipboardToast({
+  notice,
+}: {
+  notice: string;
+}) {
+  return (
+    <box
+      position="absolute"
+      top={0}
+      right={0}
+      zIndex={1000}
+      paddingLeft={1}
+      paddingRight={1}
+      border
+      borderStyle="single"
+      borderColor="green"
+      backgroundColor="#1e1e1e"
+    >
+      <text fg="green">✓ {notice}</text>
+    </box>
+  );
+});
+
 const InterruptedIndicator = memo(function InterruptedIndicator() {
   return (
     <box marginLeft={2}>
@@ -522,6 +568,11 @@ const ExpandedViewIndicator = memo(function ExpandedViewIndicator() {
 
 function AppContent({ options }: AppProps) {
   const renderer = useRenderer();
+  const lastCopiedSelectionRef = useRef<string | null>(null);
+  const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectionClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const exit = useCallback(() => {
     renderer.destroy();
   }, [renderer]);
@@ -540,6 +591,7 @@ function AppContent({ options }: AppProps) {
   const [wasInterrupted, setWasInterrupted] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [clipboardNotice, setClipboardNotice] = useState<string | null>(null);
 
   const {
     messages,
@@ -555,6 +607,50 @@ function AppContent({ options }: AppProps) {
   });
 
   const isStreaming = status === "streaming" || status === "submitted";
+
+  useEffect(() => {
+    const handleSelection = (selection: Selection) => {
+      if (selection.isSelecting) return;
+      const selectedText = selection.getSelectedText();
+      if (selectedText.length === 0) {
+        lastCopiedSelectionRef.current = null;
+        return;
+      }
+      if (selectedText === lastCopiedSelectionRef.current) return;
+      lastCopiedSelectionRef.current = selectedText;
+
+      void (async () => {
+        const copied = await copyTextToClipboard(selectedText);
+        if (!copied) return;
+
+        if (noticeTimeoutRef.current) {
+          clearTimeout(noticeTimeoutRef.current);
+        }
+        setClipboardNotice("Copied to clipboard");
+        noticeTimeoutRef.current = setTimeout(() => {
+          setClipboardNotice(null);
+        }, 1500);
+
+        if (selectionClearTimeoutRef.current) {
+          clearTimeout(selectionClearTimeoutRef.current);
+        }
+        selectionClearTimeoutRef.current = setTimeout(() => {
+          renderer.clearSelection();
+        }, 120);
+      })();
+    };
+
+    renderer.on("selection", handleSelection);
+    return () => {
+      if (noticeTimeoutRef.current) {
+        clearTimeout(noticeTimeoutRef.current);
+      }
+      if (selectionClearTimeoutRef.current) {
+        clearTimeout(selectionClearTimeoutRef.current);
+      }
+      renderer.off("selection", handleSelection);
+    };
+  }, [renderer]);
 
   // Clear interrupted state when streaming starts
   useEffect(() => {
@@ -814,16 +910,9 @@ function AppContent({ options }: AppProps) {
       paddingBottom={0.5}
       paddingLeft={1}
       paddingRight={1}
+      position="relative"
     >
-      <Header
-        name={options?.header?.name}
-        version={options?.header?.version}
-        model={
-          state.settings.modelId ?? options?.header?.model ?? defaultModelLabel
-        }
-        cwd={state.workingDirectory}
-      />
-
+      {clipboardNotice && <ClipboardToast notice={clipboardNotice} />}
       <scrollbox
         scrollY
         stickyScroll
@@ -833,6 +922,16 @@ function AppContent({ options }: AppProps) {
         horizontalScrollbarOptions={{ visible: false }}
       >
         <box flexDirection="column">
+          <Header
+            name={options?.header?.name}
+            version={options?.header?.version}
+            model={
+              state.settings.modelId ??
+              options?.header?.model ??
+              defaultModelLabel
+            }
+            cwd={state.workingDirectory}
+          />
           <MessagesList
             messages={messages}
             activeApprovalId={activeApprovalId}
