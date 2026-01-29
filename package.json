@@ -25,7 +25,8 @@
     "lint": "turbo lint",
     "lint:fix": "turbo lint:fix",
     "format": "biome format --write .",
-    "format:check": "biome format ."
+    "format:check": "biome format .",
+    "ci": "bun run format:check && bun run lint && bun run typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
