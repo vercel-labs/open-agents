@@ -3,8 +3,9 @@
  */
 
 import type { CodeLine, DiffLine } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
 import React, { type ReactNode, useEffect, useState } from "react";
-import { Box, Text } from "../../ink-shim";
+import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRenderState } from "../../lib/render-tool";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -19,7 +20,7 @@ export function ToolSpinner() {
     return () => clearInterval(timer);
   }, []);
 
-  return <Text color="yellow">{SPINNER_FRAMES[frame]} </Text>;
+  return <text fg={PRIMARY_COLOR}>{SPINNER_FRAMES[frame]} </text>;
 }
 
 /**
@@ -27,8 +28,8 @@ export function ToolSpinner() {
  */
 export function getDotColor(state: ToolRenderState): string {
   if (state.denied) return "red";
-  if (state.approvalRequested) return "yellow";
-  if (state.running) return "yellow";
+  if (state.approvalRequested) return PRIMARY_COLOR;
+  if (state.running) return PRIMARY_COLOR;
   if (state.error) return "red";
   return "green";
 }
@@ -50,50 +51,53 @@ export function ToolLayout({
   const dotColor = getDotColor(state);
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      <Box>
-        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text bold color={state.denied ? "red" : "white"}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
+      <box flexDirection="row">
+        {state.running ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        <text
+          fg={state.denied ? "red" : "white"}
+          attributes={TextAttributes.BOLD}
+        >
           {name}
-        </Text>
-        <Text color="gray">(</Text>
-        <Text color="white">{summary}</Text>
-        <Text color="gray">)</Text>
-      </Box>
+        </text>
+        <text fg="gray">(</text>
+        <text fg="white">{summary}</text>
+        <text fg="gray">)</text>
+      </box>
 
       {/* Show Running/Waiting status for approval-requested tools */}
       {state.approvalRequested && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="gray">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="gray">
             {state.isActiveApproval ? "Running…" : "Waiting…"}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {output && !state.approvalRequested && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
           {output}
-        </Box>
+        </box>
       )}
 
       {state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">
             Denied{state.denialReason ? `: ${state.denialReason}` : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {state.error && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
-        </Box>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 
@@ -122,43 +126,43 @@ export function FileChangeLayout({
     (!state.running && !state.error && !state.denied);
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
       {/* Header: ● Update(src/tui/lib/markdown.ts) */}
-      <Box>
-        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text bold color="white">
+      <box flexDirection="row">
+        {state.running ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        <text fg="white" attributes={TextAttributes.BOLD}>
           {action}
-        </Text>
-        <Text color="gray">(</Text>
-        <Text color="white">{filePath}</Text>
-        <Text color="gray">)</Text>
-      </Box>
+        </text>
+        <text fg="gray">(</text>
+        <text fg="white">{filePath}</text>
+        <text fg="gray">)</text>
+      </box>
 
       {/* Show Running/Waiting status for approval-requested tools */}
       {state.approvalRequested && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="gray">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="gray">
             {state.isActiveApproval ? "Running…" : "Waiting…"}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Subheader: └ Updated src/file.ts with X additions and Y removals */}
       {showDiff && !state.approvalRequested && !state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text>{action === "Create" ? "Created" : "Updated"} </Text>
-          <Text bold>{filePath}</Text>
-          <Text> with </Text>
-          <Text color="green">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text>{action === "Create" ? "Created" : "Updated"} </text>
+          <text attributes={TextAttributes.BOLD}>{filePath}</text>
+          <text> with </text>
+          <text fg="green">
             {additions} addition{additions !== 1 ? "s" : ""}
-          </Text>
-          <Text> and </Text>
-          <Text color="red">
+          </text>
+          <text> and </text>
+          <text fg="red">
             {removals} removal{removals !== 1 ? "s" : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Diff lines */}
@@ -166,64 +170,64 @@ export function FileChangeLayout({
         !state.approvalRequested &&
         !state.denied &&
         lines.length > 0 && (
-          <Box flexDirection="column" paddingLeft={4}>
+          <box flexDirection="column" paddingLeft={4}>
             {lines.map((line, i) => (
-              <Box key={i}>
+              <box key={i} flexDirection="row">
                 {line.type === "separator" ? (
-                  <Text color="gray">{line.content}</Text>
+                  <text fg="gray">{line.content}</text>
                 ) : (
                   <>
                     {/* Line number */}
-                    <Text color="gray">
+                    <text fg="gray">
                       {line.lineNumber !== undefined
                         ? String(line.lineNumber).padStart(4, " ")
                         : "    "}{" "}
-                    </Text>
+                    </text>
 
                     {/* +/- indicator and content */}
                     {line.type === "addition" ? (
                       <>
-                        <Text backgroundColor="#234823">+ </Text>
-                        <Text backgroundColor="#234823">
+                        <text bg="#234823">+ </text>
+                        <text bg="#234823">
                           {line.content.slice(0, maxWidth)}
-                        </Text>
+                        </text>
                       </>
                     ) : line.type === "removal" ? (
                       <>
-                        <Text backgroundColor="#5c2626">- </Text>
-                        <Text backgroundColor="#5c2626">
+                        <text bg="#5c2626">- </text>
+                        <text bg="#5c2626">
                           {line.content.slice(0, maxWidth)}
-                        </Text>
+                        </text>
                       </>
                     ) : (
                       <>
-                        <Text color="gray"> </Text>
-                        <Text>{line.content.slice(0, maxWidth)}</Text>
+                        <text fg="gray"> </text>
+                        <text>{line.content.slice(0, maxWidth)}</text>
                       </>
                     )}
                   </>
                 )}
-              </Box>
+              </box>
             ))}
-          </Box>
+          </box>
         )}
 
       {state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">
             Denied{state.denialReason ? `: ${state.denialReason}` : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {state.error && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
-        </Box>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 
@@ -249,39 +253,39 @@ export function NewFileLayout({
     (!state.running && !state.error && !state.denied);
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
       {/* Header: ● Create(src/file.ts) */}
-      <Box>
-        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text bold color="white">
+      <box flexDirection="row">
+        {state.running ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        <text fg="white" attributes={TextAttributes.BOLD}>
           Create
-        </Text>
-        <Text color="gray">(</Text>
-        <Text color="white">{filePath}</Text>
-        <Text color="gray">)</Text>
-      </Box>
+        </text>
+        <text fg="gray">(</text>
+        <text fg="white">{filePath}</text>
+        <text fg="gray">)</text>
+      </box>
 
       {/* Show Running/Waiting status for approval-requested tools */}
       {state.approvalRequested && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="gray">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="gray">
             {state.isActiveApproval ? "Running…" : "Waiting…"}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Subheader: └ Created src/file.ts (N lines) */}
       {showCode && !state.approvalRequested && !state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text>Created </Text>
-          <Text bold>{filePath}</Text>
-          <Text color="gray">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text>Created </text>
+          <text attributes={TextAttributes.BOLD}>{filePath}</text>
+          <text fg="gray">
             {" "}
             ({totalLines} line{totalLines !== 1 ? "s" : ""})
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Code preview with syntax highlighting */}
@@ -289,40 +293,41 @@ export function NewFileLayout({
         !state.approvalRequested &&
         !state.denied &&
         lines.length > 0 && (
-          <Box
+          <box
             flexDirection="column"
             marginLeft={2}
-            borderStyle="round"
+            borderStyle="rounded"
             borderColor="gray"
-            paddingX={1}
+            paddingLeft={1}
+            paddingRight={1}
           >
             {lines.map((line, i) => (
-              <Text key={i}>{line.highlighted}</Text>
+              <text key={i}>{line.highlighted}</text>
             ))}
             {hiddenLines > 0 && (
-              <Text color="gray">
+              <text fg="gray">
                 ... {hiddenLines} more line{hiddenLines !== 1 ? "s" : ""}
-              </Text>
+              </text>
             )}
-          </Box>
+          </box>
         )}
 
       {state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">
             Denied{state.denialReason ? `: ${state.denialReason}` : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {state.error && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
-        </Box>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 

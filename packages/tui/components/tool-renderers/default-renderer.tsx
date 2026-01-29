@@ -1,6 +1,5 @@
 import { getToolName } from "ai";
 import React from "react";
-import { Text } from "../../ink-shim";
 import type { ToolRenderState } from "../../lib/render-tool";
 import type { TUIAgentUIToolPart } from "../../types";
 import { ToolLayout } from "./shared";
@@ -23,9 +22,7 @@ export function DefaultRenderer({
     <ToolLayout
       name={name}
       summary={part.input ? JSON.stringify(part.input).slice(0, 40) : "..."}
-      output={
-        part.state === "output-available" && <Text color="white">Done</Text>
-      }
+      output={part.state === "output-available" && <text fg="white">Done</text>}
       state={state}
     />
   );

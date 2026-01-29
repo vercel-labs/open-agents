@@ -1,5 +1,4 @@
 import React from "react";
-import { Text } from "../../ink-shim";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolLayout } from "./shared";
 
@@ -12,9 +11,7 @@ export function GrepRenderer({ part, state }: ToolRendererProps<"tool-grep">) {
     <ToolLayout
       name="Grep"
       summary={`"${pattern}"`}
-      output={
-        matches && <Text color="white">Found {matches.length} matches</Text>
-      }
+      output={matches && <text fg="white">Found {matches.length} matches</text>}
       state={state}
     />
   );

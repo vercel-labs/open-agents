@@ -1,5 +1,7 @@
+import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 import React, { memo, useMemo } from "react";
-import { Box, Text, useStdout } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
 
 export type Suggestion = {
   value: string;
@@ -55,8 +57,8 @@ export const Suggestions = memo(function Suggestions({
   visible,
 }: SuggestionsProps) {
   const maxDisplay = 10;
-  const { stdout } = useStdout();
-  const terminalWidth = stdout?.columns ?? 80;
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width || 80;
 
   // Calculate window based on selected index (must be called before early return)
   const { windowStart, windowEnd } = useMemo(
@@ -85,12 +87,12 @@ export const Suggestions = memo(function Suggestions({
   const descriptionMaxWidth = terminalWidth - columnWidth - 4;
 
   return (
-    <Box flexDirection="column" paddingLeft={1} marginTop={1} marginBottom={1}>
+    <box flexDirection="column" paddingLeft={1} marginTop={1} marginBottom={1}>
       {/* Scroll indicator: items above */}
       {hasItemsAbove && (
-        <Text color="gray" dimColor>
+        <text fg="gray" attributes={TextAttributes.DIM}>
           ... {itemsAbove} above
-        </Text>
+        </text>
       )}
 
       {displayedSuggestions.map((suggestion, displayIndex) => {
@@ -102,30 +104,34 @@ export const Suggestions = memo(function Suggestions({
           : undefined;
 
         return (
-          <Box key={suggestion.value}>
-            <Text
-              color={
-                isSelected ? "yellow" : suggestion.isDirectory ? "cyan" : "gray"
+          <box key={suggestion.value} flexDirection="row">
+            <text
+              fg={
+                isSelected
+                  ? PRIMARY_COLOR
+                  : suggestion.isDirectory
+                    ? "white"
+                    : "gray"
               }
-              bold={isSelected}
+              attributes={isSelected ? TextAttributes.BOLD : undefined}
             >
               {suggestion.display.padEnd(columnWidth)}
-            </Text>
+            </text>
             {truncatedDescription && (
-              <Text color={isSelected ? "yellow" : "gray"}>
+              <text fg={isSelected ? PRIMARY_COLOR : "gray"}>
                 {truncatedDescription}
-              </Text>
+              </text>
             )}
-          </Box>
+          </box>
         );
       })}
 
       {/* Scroll indicator: items below */}
       {hasItemsBelow && (
-        <Text color="gray" dimColor>
+        <text fg="gray" attributes={TextAttributes.DIM}>
           ... {itemsBelow} below
-        </Text>
+        </text>
       )}
-    </Box>
+    </box>
   );
 });

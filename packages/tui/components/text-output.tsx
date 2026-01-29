@@ -1,5 +1,5 @@
+import { TextAttributes } from "@opentui/core";
 import React from "react";
-import { Box, Text } from "../ink-shim";
 import { MarkdownContent } from "../lib/markdown";
 
 type TextOutputProps = {
@@ -14,23 +14,23 @@ export function TextOutput({
   showReasoning = false,
 }: TextOutputProps) {
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column">
       {showReasoning && reasoning && (
-        <Box marginBottom={1}>
-          <Text color="blue" dimColor>
+        <box marginBottom={1} flexDirection="row">
+          <text fg="blue" attributes={TextAttributes.DIM}>
             {" "}
             {reasoning}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
       {text && (
-        <Box>
-          <Text color="white">● </Text>
-          <Box flexShrink={1} flexGrow={1}>
+        <box flexDirection="row">
+          <text fg="white">● </text>
+          <box flexShrink={1} flexGrow={1}>
             <MarkdownContent content={text} />
-          </Box>
-        </Box>
+          </box>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }

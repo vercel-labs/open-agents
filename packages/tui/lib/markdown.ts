@@ -4,7 +4,6 @@ import {
   type ThemeTokenStyle,
 } from "@opentui/core";
 import React from "react";
-import { Markdown } from "../ink-shim";
 
 const MARKDOWN_THEME: ThemeTokenStyle[] = [
   { scope: ["default"], style: { foreground: "#d7d7d7" } },
@@ -54,7 +53,7 @@ export function MarkdownContent({
   content,
   streaming = false,
 }: MarkdownContentProps) {
-  return React.createElement(Markdown, {
+  return React.createElement("markdown", {
     content: content.trimEnd(),
     syntaxStyle: markdownSyntaxStyle,
     treeSitterClient: markdownTreeSitterClient,

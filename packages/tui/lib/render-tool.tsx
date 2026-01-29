@@ -5,24 +5,24 @@
  * of a registry pattern. TypeScript's exhaustive checking ensures all
  * tool types are handled.
  */
-import React from "react";
-import type { TUIAgentUIToolPart } from "../types";
+
 import {
   extractRenderState,
   type ToolRenderState,
 } from "@open-harness/shared/lib/tool-state";
-
-// Import all renderers
-import { ReadRenderer } from "../components/tool-renderers/read-renderer";
-import { WriteRenderer } from "../components/tool-renderers/write-renderer";
+import React from "react";
+import { AskUserQuestionRenderer } from "../components/tool-renderers/ask-user-question-renderer";
+import { BashRenderer } from "../components/tool-renderers/bash-renderer";
+import { DefaultRenderer } from "../components/tool-renderers/default-renderer";
 import { EditRenderer } from "../components/tool-renderers/edit-renderer";
 import { GlobRenderer } from "../components/tool-renderers/glob-renderer";
 import { GrepRenderer } from "../components/tool-renderers/grep-renderer";
-import { BashRenderer } from "../components/tool-renderers/bash-renderer";
-import { TodoRenderer } from "../components/tool-renderers/todo-renderer";
+// Import all renderers
+import { ReadRenderer } from "../components/tool-renderers/read-renderer";
 import { TaskRenderer } from "../components/tool-renderers/task-renderer";
-import { AskUserQuestionRenderer } from "../components/tool-renderers/ask-user-question-renderer";
-import { DefaultRenderer } from "../components/tool-renderers/default-renderer";
+import { TodoRenderer } from "../components/tool-renderers/todo-renderer";
+import { WriteRenderer } from "../components/tool-renderers/write-renderer";
+import type { TUIAgentUIToolPart } from "../types";
 
 /**
  * All possible tool part types derived from the agent.
@@ -63,7 +63,7 @@ export function renderToolPart(
   part: TUIAgentUIToolPart,
   state: ToolRenderState,
   isExpanded?: boolean,
-): React.ReactElement {
+): React.ReactNode {
   switch (part.type) {
     case "tool-read":
       return <ReadRenderer part={part} state={state} isExpanded={isExpanded} />;

@@ -7,6 +7,8 @@ import {
   isPasteTokenChar,
   type PasteBlock,
 } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 import type { FileUIPart } from "ai";
 import React, {
   memo,
@@ -17,7 +19,7 @@ import React, {
   useState,
 } from "react";
 import { useChatContext } from "../chat-context";
-import { Box, Text, useInput } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
 import { extractMention, getFileSuggestions } from "../lib/file-suggestions";
 import {
   formatImagePlaceholder,
@@ -30,6 +32,7 @@ import {
   isImagePath,
   loadImageFromPath,
 } from "../lib/image-clipboard";
+import { inputFromKey } from "../lib/keyboard";
 import {
   extractSlashCommand,
   getCommandAction,
@@ -69,7 +72,7 @@ function getAutoAcceptColor(mode: AutoAcceptMode): string {
     case "edits":
       return "green";
     case "all":
-      return "yellow";
+      return PRIMARY_COLOR;
   }
 }
 
@@ -94,9 +97,9 @@ const ContextUsageIndicator = memo(function ContextUsageIndicator({
     contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
 
   return (
-    <Text color="gray">
+    <text fg="gray">
       {formatTokens(inputTokens)}/{formatTokens(contextLimit)} ({percentage}%)
-    </Text>
+    </text>
   );
 });
 
@@ -107,12 +110,10 @@ const AutoAcceptIndicator = memo(function AutoAcceptIndicator({
   mode: AutoAcceptMode;
 }) {
   return (
-    <Box marginTop={0}>
-      <Text color={getAutoAcceptColor(mode)}>
-        ▸▸ {getAutoAcceptLabel(mode)}
-      </Text>
-      <Text color="gray"> (shift+tab to cycle)</Text>
-    </Box>
+    <box marginTop={0} flexDirection="row">
+      <text fg={getAutoAcceptColor(mode)}>▸▸ {getAutoAcceptLabel(mode)}</text>
+      <text fg="gray"> (shift+tab to cycle)</text>
+    </box>
   );
 });
 
@@ -169,13 +170,14 @@ export const InputBox = memo(function InputBox({
     setSelectedImageIndex(null);
   }, []);
 
-  useInput((input, key) => {
+  useKeyboard((event) => {
+    const input = inputFromKey(event);
     // Shift+Tab to cycle auto-accept modes
-    if (key.shift && key.tab) {
+    if (event.shift && event.name === "tab") {
       onToggleAutoAccept();
     }
     // Escape to close suggestions or deselect image
-    if (key.escape) {
+    if (event.name === "escape") {
       if (selectedImageIndex !== null) {
         setSelectedImageIndex(null);
       } else if (suggestions.length > 0) {
@@ -185,12 +187,12 @@ export const InputBox = memo(function InputBox({
       }
     }
     // Ctrl+V to paste image
-    if (key.ctrl && input === "v" && !disabled) {
+    if (event.ctrl && input === "v" && !disabled) {
       handleImagePaste();
     }
     // Up arrow to select image when at start of input
     if (
-      key.upArrow &&
+      event.name === "up" &&
       imageBlocks.length > 0 &&
       cursorPosition === 0 &&
       suggestions.length === 0
@@ -202,7 +204,7 @@ export const InputBox = memo(function InputBox({
       }
     }
     // Down arrow to deselect image
-    if (key.downArrow && selectedImageIndex !== null) {
+    if (event.name === "down" && selectedImageIndex !== null) {
       if (selectedImageIndex < imageBlocks.length - 1) {
         setSelectedImageIndex(selectedImageIndex + 1);
       } else {
@@ -210,7 +212,10 @@ export const InputBox = memo(function InputBox({
       }
     }
     // Backspace to remove selected image
-    if ((key.backspace || key.delete) && selectedImageIndex !== null) {
+    if (
+      (event.name === "backspace" || event.name === "delete") &&
+      selectedImageIndex !== null
+    ) {
       handleRemoveImage(selectedImageIndex);
     }
   });
@@ -505,41 +510,41 @@ export const InputBox = memo(function InputBox({
   );
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <box flexDirection="column" marginTop={1}>
       {/* Image attachments */}
       {imageBlocks.length > 0 && (
-        <Box marginBottom={0} gap={1}>
+        <box marginBottom={0} gap={1} flexDirection="row">
           {imageBlocks.map((block, index) => (
-            <Box key={block.id}>
-              <Text
-                color={selectedImageIndex === index ? "cyan" : "blue"}
-                inverse={selectedImageIndex === index}
+            <box key={block.id} flexDirection="row">
+              <text
+                fg={selectedImageIndex === index ? "cyan" : "blue"}
+                attributes={
+                  selectedImageIndex === index
+                    ? TextAttributes.INVERSE
+                    : undefined
+                }
               >
                 {formatImagePlaceholder(block.id)}
-              </Text>
+              </text>
               {selectedImageIndex === index && (
-                <Text color="gray"> (backspace remove · ↓ cancel)</Text>
+                <text fg="gray"> (backspace remove · ↓ cancel)</text>
               )}
-            </Box>
+            </box>
           ))}
-          {selectedImageIndex === null && (
-            <Text color="gray">(↑ to select)</Text>
-          )}
-        </Box>
+          {selectedImageIndex === null && <text fg="gray">(↑ to select)</text>}
+        </box>
       )}
 
       {/* Input line */}
-      <Box
+      <box
         borderStyle="single"
-        borderTop
-        borderBottom
-        borderLeft={false}
-        borderRight={false}
+        border={["top", "bottom"]}
         borderColor="#555"
+        flexDirection="row"
       >
-        <Text color={disabled ? "gray" : "white"}>&gt; </Text>
+        <text fg={disabled ? "gray" : "white"}>&gt; </text>
         {disabled ? (
-          <Text color="gray">Waiting...</Text>
+          <text fg="gray">Waiting...</text>
         ) : (
           <TextInput
             value={value}
@@ -559,7 +564,7 @@ export const InputBox = memo(function InputBox({
             placeholder='Try "write a test for <filepath>"'
           />
         )}
-      </Box>
+      </box>
 
       {/* Suggestions dropdown (below input) */}
       <Suggestions
@@ -569,7 +574,7 @@ export const InputBox = memo(function InputBox({
       />
 
       {/* Bottom row: auto-accept (left) and context usage (right) */}
-      <Box justifyContent="space-between">
+      <box justifyContent="space-between" flexDirection="row">
         <AutoAcceptIndicator mode={autoAcceptMode} />
         {!disabled && (
           <ContextUsageIndicator
@@ -577,7 +582,7 @@ export const InputBox = memo(function InputBox({
             contextLimit={contextLimit}
           />
         )}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 });

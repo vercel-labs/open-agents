@@ -1,8 +1,9 @@
 import type { SubagentUIMessage } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import React from "react";
-import { Box, Text } from "../../ink-shim";
+import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolSpinner } from "./shared";
 
@@ -32,27 +33,30 @@ function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
   const hasError = part.state === "output-error";
   const summary = getToolSummary(part);
 
-  const dotColor = isRunning ? "yellow" : hasError ? "red" : "green";
+  const dotColor = isRunning ? PRIMARY_COLOR : hasError ? "red" : "green";
   const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
 
   return (
-    <Box paddingLeft={1}>
-      <Text color="gray">│ </Text>
-      <Box>
-        {isRunning ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text bold color={isRunning ? "yellow" : "white"}>
+    <box paddingLeft={1} flexDirection="row">
+      <text fg="gray">│ </text>
+      <box flexDirection="row">
+        {isRunning ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        <text
+          fg={isRunning ? PRIMARY_COLOR : "white"}
+          attributes={TextAttributes.BOLD}
+        >
           {displayName}
-        </Text>
+        </text>
         {summary && (
           <>
-            <Text color="gray">(</Text>
-            <Text color="white">{summary}</Text>
-            <Text color="gray">)</Text>
+            <text fg="gray">(</text>
+            <text fg="white">{summary}</text>
+            <text fg="gray">)</text>
           </>
         )}
-        {hasError && <Text color="red"> - error</Text>}
-      </Box>
-    </Box>
+        {hasError && <text fg="red"> - error</text>}
+      </box>
+    </box>
   );
 }
 
@@ -87,12 +91,12 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
   const dotColor = taskDenied
     ? "red"
     : taskApprovalRequested
-      ? "yellow"
+      ? PRIMARY_COLOR
       : isStreaming
-        ? "yellow"
+        ? PRIMARY_COLOR
         : isComplete
           ? "green"
-          : "yellow";
+          : PRIMARY_COLOR;
 
   // Format subagent type for display
   const subagentLabel =
@@ -103,49 +107,52 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
         : "Task";
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
       {/* Header */}
-      <Box>
+      <box flexDirection="row">
         {state.running || isStreaming ? (
           <ToolSpinner />
         ) : (
-          <Text color={dotColor}>● </Text>
+          <text fg={dotColor}>● </text>
         )}
-        <Text bold color={taskDenied ? "red" : "white"}>
+        <text
+          fg={taskDenied ? "red" : "white"}
+          attributes={TextAttributes.BOLD}
+        >
           {subagentLabel}
-        </Text>
-        <Text color="gray">(</Text>
-        <Text color="white">{desc}</Text>
-        <Text color="gray">)</Text>
-      </Box>
+        </text>
+        <text fg="gray">(</text>
+        <text fg="white">{desc}</text>
+        <text fg="gray">)</text>
+      </box>
 
       {/* Executor approval warning */}
       {taskApprovalRequested && subagentType === "executor" && (
-        <Box paddingLeft={2} marginTop={1}>
-          <Text color="yellow">
+        <box paddingLeft={2} marginTop={1} flexDirection="row">
+          <text fg={PRIMARY_COLOR}>
             This executor has full write access and can create, modify, and
             delete files.
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Denied message */}
       {taskDenied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">
             Denied{taskDenialReason ? `: ${taskDenialReason}` : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Nested parts from subagent (text and tools in order) */}
       {hasOutput && visibleParts.length > 0 && (
-        <Box flexDirection="column" paddingLeft={2} marginTop={1}>
+        <box flexDirection="column" paddingLeft={2} marginTop={1}>
           {hiddenCount > 0 && (
-            <Box marginBottom={1}>
-              <Text color="gray">... {hiddenCount} more above</Text>
-            </Box>
+            <box marginBottom={1} flexDirection="row">
+              <text fg="gray">... {hiddenCount} more above</text>
+            </box>
           )}
           {visibleParts.map((p, i) => {
             if (isToolUIPart(p)) {
@@ -158,40 +165,40 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
               const truncated =
                 text.length > 80 ? text.slice(0, 80) + "..." : text;
               return (
-                <Box key={`text-${i}`} paddingLeft={1}>
-                  <Text color="gray">│ </Text>
-                  <Text color="gray" dimColor>
+                <box key={`text-${i}`} paddingLeft={1} flexDirection="row">
+                  <text fg="gray">│ </text>
+                  <text fg="gray" attributes={TextAttributes.DIM}>
                     {truncated}
-                  </Text>
-                </Box>
+                  </text>
+                </box>
               );
             }
             return null;
           })}
-        </Box>
+        </box>
       )}
 
       {/* Completion status */}
       {isComplete && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="white">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="white">
             Complete ({toolParts.length} tool calls
             {message?.metadata?.totalMessageUsage?.inputTokens
               ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
               : ""}
             )
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {state.error && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
-        </Box>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 

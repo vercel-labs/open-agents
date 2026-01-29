@@ -1,5 +1,6 @@
+import { TextAttributes } from "@opentui/core";
 import React from "react";
-import { Box, Text } from "../../ink-shim";
+import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolLayout } from "./shared";
 
@@ -19,7 +20,7 @@ function getTodoColor(status: string) {
     case "completed":
       return "gray";
     case "in_progress":
-      return "yellow";
+      return PRIMARY_COLOR;
     default:
       return "white";
   }
@@ -40,33 +41,35 @@ export function TodoRenderer({
     todos?.filter((t) => t.status === "in_progress").length ?? 0;
 
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column">
       <ToolLayout
         name="TodoWrite"
         summary={`${todoCount} tasks (${completedCount} done, ${inProgressCount} in progress)`}
         output={
           part.state === "output-available" && (
-            <Text color="white">Tasks updated</Text>
+            <text fg="white">Tasks updated</text>
           )
         }
         state={state}
       />
       {isExpanded && todos && todos.length > 0 && (
-        <Box flexDirection="column" paddingLeft={3}>
+        <box flexDirection="column" paddingLeft={3}>
           {todos.map((todo) => (
-            <Box key={todo.id}>
-              <Text color={getTodoColor(todo.status)}>
+            <box key={todo.id}>
+              <text fg={getTodoColor(todo.status)}>
                 {getTodoIcon(todo.status)}{" "}
                 {todo.status === "completed" ? (
-                  <Text strikethrough>{todo.content}</Text>
+                  <span attributes={TextAttributes.STRIKETHROUGH}>
+                    {todo.content}
+                  </span>
                 ) : (
                   todo.content
                 )}
-              </Text>
-            </Box>
+              </text>
+            </box>
           ))}
-        </Box>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }

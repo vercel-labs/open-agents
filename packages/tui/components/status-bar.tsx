@@ -1,7 +1,8 @@
 import type { TodoItem } from "@open-harness/agent";
 import type { ThinkingState } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
 import React, { useEffect, useState } from "react";
-import { Box, Text } from "../ink-shim";
+import { PRIMARY_COLOR, PRIMARY_COLOR_BRIGHT } from "../lib/colors";
 
 const SILLY_WORDS = [
   "Thinking",
@@ -64,16 +65,19 @@ function PulsedWord({
         const distance = Math.abs(i - pulsePosition);
         const isBright = distance === 0;
         const isMedium = distance === 1;
+        let attributes = 0;
+        if (isBright) attributes |= TextAttributes.BOLD;
+        if (!isBright && !isMedium) attributes |= TextAttributes.DIM;
+        const resolvedAttributes = attributes === 0 ? undefined : attributes;
 
         return (
-          <Text
+          <text
             key={i}
-            color={isBright ? "brightYellow" : "yellow"}
-            bold={isBright}
-            dimColor={!isBright && !isMedium}
+            fg={isBright ? PRIMARY_COLOR_BRIGHT : PRIMARY_COLOR}
+            attributes={resolvedAttributes}
           >
             {char}
-          </Text>
+          </text>
         );
       })}
     </>
@@ -133,14 +137,14 @@ function StatusIndicator({
   if (isStreaming) {
     return (
       <>
-        <Text color="yellow">{prefix} </Text>
+        <text fg={PRIMARY_COLOR}>{prefix} </text>
         <PulsedWord word={word} pulsePosition={pulsePosition} />
-        <Text color="gray">...</Text>
-        <Text color="gray"> {metaText}</Text>
+        <text fg="gray">...</text>
+        <text fg="gray"> {metaText}</text>
       </>
     );
   }
-  return <Text color="green">✓ Done</Text>;
+  return <text fg="green">✓ Done</text>;
 }
 
 function getTodoIcon(status: TodoItem["status"]): string {
@@ -160,7 +164,7 @@ function getTodoColor(status: TodoItem["status"]): string {
     case "completed":
       return "gray";
     case "in_progress":
-      return "yellow";
+      return PRIMARY_COLOR;
     case "pending":
     default:
       return "white";
@@ -169,20 +173,22 @@ function getTodoColor(status: TodoItem["status"]): string {
 
 function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
-    <Box flexDirection="column" marginLeft={2}>
+    <box flexDirection="column" marginLeft={2}>
       {todos.map((todo) => (
-        <Box key={todo.id}>
-          <Text color={getTodoColor(todo.status)}>
+        <box key={todo.id} flexDirection="row">
+          <text fg={getTodoColor(todo.status)}>
             {getTodoIcon(todo.status)}{" "}
             {todo.status === "completed" ? (
-              <Text strikethrough>{todo.content}</Text>
+              <span attributes={TextAttributes.STRIKETHROUGH}>
+                {todo.content}
+              </span>
             ) : (
               todo.content
             )}
-          </Text>
-        </Box>
+          </text>
+        </box>
       ))}
-    </Box>
+    </box>
   );
 }
 
@@ -201,13 +207,13 @@ export function StandaloneTodoList({
   }
 
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Box>
-        <Text color="gray">Todo List</Text>
-        <Text color="gray"> · ctrl+t to hide</Text>
-      </Box>
+    <box flexDirection="column" marginTop={1}>
+      <box flexDirection="row">
+        <text fg="gray">Todo List</text>
+        <text fg="gray"> · ctrl+t to hide</text>
+      </box>
       <TodoList todos={todos} />
-    </Box>
+    </box>
   );
 }
 
@@ -235,16 +241,16 @@ export function StatusBar({
       : "";
 
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Box>
+    <box flexDirection="column" marginTop={1}>
+      <box flexDirection="row">
         <StatusIndicator
           isStreaming={isStreaming}
           thinkingState={thinkingState}
           inputTokens={inputTokens}
         />
-        {hasTodos && <Text color="gray">{todoHint}</Text>}
-      </Box>
+        {hasTodos && <text fg="gray">{todoHint}</text>}
+      </box>
       {showTodos && <TodoList todos={todos} />}
-    </Box>
+    </box>
   );
 }

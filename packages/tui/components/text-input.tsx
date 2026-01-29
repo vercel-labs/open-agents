@@ -1,4 +1,5 @@
-import { TextAttributes } from "@opentui/core";
+import { type PasteEvent, TextAttributes } from "@opentui/core";
+import { useKeyboard, useRenderer } from "@opentui/react";
 import React, {
   useCallback,
   useEffect,
@@ -7,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Text, useInput } from "../ink-shim";
+import { inputFromKey } from "../lib/keyboard";
 
 type TextInputProps = {
   value: string;
@@ -180,7 +181,7 @@ export function TextInput({
     (externalValue || "").length,
   );
 
-  // Refs to always have access to latest values in useInput callback
+  // Refs to always have access to latest values in useKeyboard callback
   const valueRef = useRef(internalValue);
   const cursorRef = useRef(cursorOffset);
   const pasteBufferRef = useRef("");
@@ -300,8 +301,14 @@ export function TextInput({
   }, []);
 
   const value = internalValue;
-  const tokenMatcher = isTokenChar ?? (() => false);
-  const tokenRenderer = renderToken ?? ((token: string) => token);
+  const tokenMatcher = useCallback(
+    (char: string) => (isTokenChar ? isTokenChar(char) : false),
+    [isTokenChar],
+  );
+  const tokenRenderer = useCallback(
+    (token: string) => (renderToken ? renderToken(token) : token),
+    [renderToken],
+  );
 
   const segments = useMemo((): TextSegment[] => {
     const result: TextSegment[] = [];
@@ -394,11 +401,38 @@ export function TextInput({
     tokenRenderer,
   ]);
 
-  useInput(
-    (input, key) => {
+  const handleInput = useCallback(
+    (
+      input: string,
+      event: {
+        name: string;
+        ctrl: boolean;
+        meta: boolean;
+        shift: boolean;
+        sequence?: string;
+      } | null,
+    ) => {
       // Always read from refs to get latest values
       const currentValue = valueRef.current;
       const currentCursor = cursorRef.current;
+
+      const name = event?.name ?? "";
+      const ctrl = event?.ctrl ?? false;
+      const meta = event?.meta ?? false;
+      const shift = event?.shift ?? false;
+      const sequence = event?.sequence;
+      if (sequence && sequence.startsWith("\x1b[<")) {
+        return;
+      }
+      const isReturn = name === "return" || name === "linefeed";
+      const isBackspace = name === "backspace";
+      const isDelete = name === "delete";
+      const isUpArrow = name === "up";
+      const isDownArrow = name === "down";
+      const isLeftArrow = name === "left";
+      const isRightArrow = name === "right";
+      const isEscape = name === "escape";
+      const isTab = name === "tab";
 
       // Handle paste buffering
       if (onPaste && input.length > 1) {
@@ -418,11 +452,11 @@ export function TextInput({
       if (
         pasteBufferRef.current &&
         input.length === 1 &&
-        !key.backspace &&
-        !key.delete &&
-        !key.return &&
-        !key.escape &&
-        !key.tab
+        !isBackspace &&
+        !isDelete &&
+        !isReturn &&
+        !isEscape &&
+        !isTab
       ) {
         pasteBufferRef.current += input;
         flushPasteBuffer();
@@ -435,7 +469,7 @@ export function TextInput({
       }
 
       // Handle up arrow - navigate within multiline text, or let parent handle
-      if (key.upArrow) {
+      if (isUpArrow) {
         if (showCursor) {
           const newPos = findPositionAbove(currentValue, currentCursor);
           if (newPos !== -1) {
@@ -449,7 +483,7 @@ export function TextInput({
       }
 
       // Handle down arrow - navigate within multiline text, or let parent handle
-      if (key.downArrow) {
+      if (isDownArrow) {
         if (showCursor) {
           const newPos = findPositionBelow(currentValue, currentCursor);
           if (newPos !== -1) {
@@ -463,32 +497,29 @@ export function TextInput({
       }
 
       // Handle tab - let parent intercept if needed
-      if (key.tab && !key.shift) {
+      if (isTab && !shift) {
         if (onTab?.()) return;
         return; // Still block if no handler
       }
 
       // Handle Ctrl+N - let parent intercept if needed
-      if (key.ctrl && input === "n") {
+      if (ctrl && input === "n") {
         if (onCtrlN?.()) return;
       }
 
       // Handle Ctrl+P - let parent intercept if needed
-      if (key.ctrl && input === "p") {
+      if (ctrl && input === "p") {
         onCtrlP?.();
         return; // Always consume ctrl+p to prevent inserting 'p'
       }
 
       // Ignore certain key combinations
       const ignoredCtrlKeys = ["c", "o", "t"];
-      if (
-        (key.ctrl && ignoredCtrlKeys.includes(input)) ||
-        (key.shift && key.tab)
-      ) {
+      if ((ctrl && ignoredCtrlKeys.includes(input)) || (shift && isTab)) {
         return;
       }
 
-      if (key.return) {
+      if (isReturn) {
         // Let parent intercept return (e.g., for autocomplete)
         if (onReturn?.()) return;
         if (onSubmit) {
@@ -499,10 +530,10 @@ export function TextInput({
 
       let nextCursorOffset = currentCursor;
       let nextValue = currentValue;
-      if (key.leftArrow) {
+      if (isLeftArrow) {
         if (showCursor) {
           // Option+Left: Move to previous word boundary
-          if (key.meta) {
+          if (meta) {
             nextCursorOffset = findPrevWordBoundary(
               currentValue,
               currentCursor,
@@ -511,10 +542,10 @@ export function TextInput({
             nextCursorOffset--;
           }
         }
-      } else if (key.rightArrow) {
+      } else if (isRightArrow) {
         if (showCursor) {
           // Option+Right: Move to next word boundary
-          if (key.meta) {
+          if (meta) {
             nextCursorOffset = findNextWordBoundary(
               currentValue,
               currentCursor,
@@ -523,27 +554,27 @@ export function TextInput({
             nextCursorOffset++;
           }
         }
-      } else if (key.meta && input === "b") {
+      } else if (meta && input === "b") {
         // Option+Left (emacs-style): Move to previous word boundary
         if (showCursor) {
           nextCursorOffset = findPrevWordBoundary(currentValue, currentCursor);
         }
-      } else if (key.meta && input === "f") {
+      } else if (meta && input === "f") {
         // Option+Right (emacs-style): Move to next word boundary
         if (showCursor) {
           nextCursorOffset = findNextWordBoundary(currentValue, currentCursor);
         }
-      } else if (key.ctrl && input === "a") {
+      } else if (ctrl && input === "a") {
         // Ctrl+A (Command+Left): Move to beginning of current line
         if (showCursor) {
           nextCursorOffset = findLineStart(currentValue, currentCursor);
         }
-      } else if (key.ctrl && input === "e") {
+      } else if (ctrl && input === "e") {
         // Ctrl+E (Command+Right): Move to end of current line
         if (showCursor) {
           nextCursorOffset = findLineEnd(currentValue, currentCursor);
         }
-      } else if (key.ctrl && input === "u") {
+      } else if (ctrl && input === "u") {
         // Ctrl+U: Delete to beginning of current line (Cmd+Delete equivalent)
         const lineStart = findLineStart(currentValue, currentCursor);
         if (currentCursor > lineStart) {
@@ -552,7 +583,7 @@ export function TextInput({
             currentValue.slice(currentCursor);
           nextCursorOffset = lineStart;
         }
-      } else if (key.ctrl && input === "w") {
+      } else if (ctrl && input === "w") {
         // Ctrl+W: Delete previous word (unix-style, Option+Delete equivalent)
         if (currentCursor > 0) {
           const wordBoundary = findPrevWordBoundary(
@@ -564,10 +595,10 @@ export function TextInput({
             currentValue.slice(currentCursor);
           nextCursorOffset = wordBoundary;
         }
-      } else if (key.backspace || key.delete) {
+      } else if (isBackspace || isDelete) {
         if (currentCursor > 0) {
           // Option+Delete (meta + delete): Delete previous word
-          if (key.delete && key.meta) {
+          if (isDelete && meta) {
             const wordBoundary = findPrevWordBoundary(
               currentValue,
               currentCursor,
@@ -607,11 +638,44 @@ export function TextInput({
         updateCursor(nextCursorOffset);
       }
     },
-    { isActive: focus },
+    [
+      flushPasteBuffer,
+      onCtrlN,
+      onCtrlP,
+      onDownArrow,
+      onPaste,
+      onReturn,
+      onSubmit,
+      onTab,
+      onUpArrow,
+      showCursor,
+      updateCursor,
+      updateValue,
+    ],
   );
 
+  const renderer = useRenderer();
+
+  useKeyboard((event) => {
+    if (!focus) return;
+    const input = inputFromKey(event);
+    handleInput(input, event);
+  });
+
+  useEffect(() => {
+    const onPaste = (event: PasteEvent) => {
+      if (!focus) return;
+      handleInput(event.text, null);
+    };
+
+    renderer.keyInput.on("paste", onPaste);
+    return () => {
+      renderer.keyInput.off("paste", onPaste);
+    };
+  }, [focus, handleInput, renderer]);
+
   return (
-    <Text>
+    <text>
       {segments.map((segment, index) => (
         <span
           key={`text-input-segment-${index}`}
@@ -622,6 +686,6 @@ export function TextInput({
           {segment.text}
         </span>
       ))}
-    </Text>
+    </text>
   );
 }

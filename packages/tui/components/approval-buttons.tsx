@@ -4,9 +4,10 @@
  */
 
 import { useChat } from "@ai-sdk/react";
+import { useKeyboard } from "@opentui/react";
 import React, { useState } from "react";
 import { useChatContext } from "../chat-context";
-import { Box, Text, useInput } from "../ink-shim";
+import { inputFromKey, isReturnKey } from "../lib/keyboard";
 
 export function ApprovalButtons({ approvalId }: { approvalId: string }) {
   const { chat } = useChatContext();
@@ -17,35 +18,37 @@ export function ApprovalButtons({ approvalId }: { approvalId: string }) {
   const [isTypingReason, setIsTypingReason] = useState(false);
   const [reason, setReason] = useState("");
 
-  useInput((input, key) => {
+  useKeyboard((event) => {
+    const input = inputFromKey(event);
     if (isTypingReason) {
-      if (key.escape) {
+      if (event.name === "escape") {
         setIsTypingReason(false);
         setReason("");
-      } else if (key.return && reason.trim()) {
+      } else if (isReturnKey(event) && reason.trim()) {
         addToolApprovalResponse({
           id: approvalId,
           approved: false,
           reason: reason.trim(),
         });
-      } else if (key.backspace || key.delete) {
+      } else if (event.name === "backspace" || event.name === "delete") {
         setReason((prev) => prev.slice(0, -1));
-      } else if (input && !key.ctrl && !key.meta) {
+      } else if (input && !event.ctrl && !event.meta) {
         setReason((prev) => prev + input);
       }
       return;
     }
 
-    const goUp = key.upArrow || input === "k" || (key.ctrl && input === "p");
+    const goUp =
+      event.name === "up" || input === "k" || (event.ctrl && input === "p");
     const goDown =
-      key.downArrow || input === "j" || (key.ctrl && input === "n");
+      event.name === "down" || input === "j" || (event.ctrl && input === "n");
     if (goUp) {
       setSelected((prev) => (prev === 0 ? 2 : prev - 1));
     }
     if (goDown) {
       setSelected((prev) => (prev === 2 ? 0 : prev + 1));
     }
-    if (key.return) {
+    if (isReturnKey(event)) {
       if (selected === 0) {
         addToolApprovalResponse({ id: approvalId, approved: true });
       } else if (selected === 1) {
@@ -57,36 +60,36 @@ export function ApprovalButtons({ approvalId }: { approvalId: string }) {
   });
 
   return (
-    <Box flexDirection="column" marginTop={1} marginLeft={2}>
-      <Text>Do you want to proceed?</Text>
-      <Box flexDirection="column" marginTop={1}>
-        <Text>
+    <box flexDirection="column" marginTop={1} marginLeft={2}>
+      <text>Do you want to proceed?</text>
+      <box flexDirection="column" marginTop={1}>
+        <text>
           {selected === 0 ? "> " : "  "}
-          <Text color={selected === 0 ? "green" : undefined}>1. Yes</Text>
-        </Text>
-        <Text>
+          <span fg={selected === 0 ? "green" : undefined}>1. Yes</span>
+        </text>
+        <text>
           {selected === 1 ? "> " : "  "}
-          <Text color={selected === 1 ? "red" : undefined}>2. No</Text>
-        </Text>
-        <Text>
+          <span fg={selected === 1 ? "red" : undefined}>2. No</span>
+        </text>
+        <text>
           {selected === 2 ? "> " : "  "}
-          <Text color={selected === 2 ? "cyan" : undefined}>
+          <span fg={selected === 2 ? "cyan" : undefined}>
             3. Type here to tell the agent what to do differently
-          </Text>
-        </Text>
-      </Box>
+          </span>
+        </text>
+      </box>
       {isTypingReason && (
-        <Box marginTop={1} marginLeft={2}>
-          <Text color="cyan">Reason: </Text>
-          <Text>{reason}</Text>
-          <Text color="gray">█</Text>
-        </Box>
+        <box marginTop={1} marginLeft={2}>
+          <text fg="cyan">Reason: </text>
+          <text>{reason}</text>
+          <text fg="gray">█</text>
+        </box>
       )}
-      <Box marginTop={1}>
-        <Text color="gray">
+      <box marginTop={1}>
+        <text fg="gray">
           {isTypingReason ? "Enter to submit, Esc to cancel" : "Esc to cancel"}
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 }

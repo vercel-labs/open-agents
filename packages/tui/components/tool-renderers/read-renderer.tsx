@@ -1,5 +1,4 @@
 import React from "react";
-import { Text } from "../../ink-shim";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolLayout, toRelativePath } from "./shared";
 
@@ -15,7 +14,7 @@ export function ReadRenderer({ part, state }: ToolRendererProps<"tool-read">) {
     <ToolLayout
       name="Read"
       summary={lines ? `${filePath} (${lines} lines)` : filePath}
-      output={lines && <Text color="white">Read {lines} lines</Text>}
+      output={lines && <text fg="white">Read {lines} lines</text>}
       state={state}
     />
   );

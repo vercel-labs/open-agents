@@ -1,5 +1,4 @@
 import React from "react";
-import { Text } from "../../ink-shim";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { ToolLayout } from "./shared";
 
@@ -12,7 +11,7 @@ export function GlobRenderer({ part, state }: ToolRendererProps<"tool-glob">) {
     <ToolLayout
       name="Glob"
       summary={`"${pattern}"`}
-      output={files && <Text color="white">Found {files.length} files</Text>}
+      output={files && <text fg="white">Found {files.length} files</text>}
       state={state}
     />
   );

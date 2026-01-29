@@ -1,6 +1,9 @@
 import type { AskUserQuestionInput } from "@open-harness/agent";
+import { TextAttributes } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 import React, { useCallback, useMemo, useState } from "react";
-import { Box, Text, useInput } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
+import { inputFromKey, isReturnKey } from "../lib/keyboard";
 
 type Question = AskUserQuestionInput["questions"][number];
 
@@ -213,16 +216,17 @@ export function QuestionPanel({
     [questions],
   );
 
-  useInput((input, key) => {
+  useKeyboard((event) => {
+    const input = inputFromKey(event);
     // Escape to cancel
-    if (key.escape) {
+    if (event.name === "escape") {
       onCancel();
       return;
     }
 
     // If currently typing in "Other" field
     if (currentQuestion && state.typingOther[currentQuestion.question]) {
-      if (key.return) {
+      if (isReturnKey(event)) {
         // Exit typing mode and confirm the other text
         const otherValue = state.otherText[currentQuestion.question] || "";
         if (otherValue) {
@@ -240,12 +244,12 @@ export function QuestionPanel({
         }
         return;
       }
-      if (key.backspace || key.delete) {
+      if (event.name === "backspace" || event.name === "delete") {
         const current = state.otherText[currentQuestion.question] || "";
         handleOtherInput(currentQuestion.question, current.slice(0, -1));
         return;
       }
-      if (key.upArrow) {
+      if (event.name === "up") {
         // Exit typing mode and go back to options
         setState((prev) => ({
           ...prev,
@@ -256,7 +260,7 @@ export function QuestionPanel({
         }));
         return;
       }
-      if (input && !key.ctrl && !key.meta) {
+      if (input && !event.ctrl && !event.meta) {
         const current = state.otherText[currentQuestion.question] || "";
         handleOtherInput(currentQuestion.question, current + input);
         return;
@@ -265,18 +269,18 @@ export function QuestionPanel({
     }
 
     // Arrow key navigation between tabs
-    if (key.leftArrow) {
+    if (event.name === "left") {
       goToTab(state.currentTab - 1);
       return;
     }
-    if (key.rightArrow) {
+    if (event.name === "right") {
       goToTab(state.currentTab + 1);
       return;
     }
 
     // Tab key navigation
-    if (key.tab) {
-      if (key.shift) {
+    if (event.name === "tab") {
+      if (event.shift) {
         goToTab(state.currentTab - 1);
       } else {
         goToTab(state.currentTab + 1);
@@ -286,7 +290,7 @@ export function QuestionPanel({
 
     // On Submit tab
     if (isSubmitTab) {
-      if (key.return && allAnswered) {
+      if (isReturnKey(event) && allAnswered) {
         onSubmit(state.answers);
       }
       return;
@@ -298,9 +302,10 @@ export function QuestionPanel({
     const optionsCount = currentQuestion.options.length + 1; // +1 for "Other"
     const currentIndex = state.optionIndex[currentQuestion.question] ?? 0;
 
-    const goUp = key.upArrow || input === "k" || (key.ctrl && input === "p");
+    const goUp =
+      event.name === "up" || input === "k" || (event.ctrl && input === "p");
     const goDown =
-      key.downArrow || input === "j" || (key.ctrl && input === "n");
+      event.name === "down" || input === "j" || (event.ctrl && input === "n");
 
     if (goUp) {
       const newIndex = currentIndex === 0 ? optionsCount - 1 : currentIndex - 1;
@@ -327,7 +332,7 @@ export function QuestionPanel({
     }
 
     // Enter or Space to select
-    if (key.return || input === " ") {
+    if (isReturnKey(event) || input === " ") {
       if (currentIndex < currentQuestion.options.length) {
         // Select a regular option
         const option = currentQuestion.options[currentIndex];
@@ -335,7 +340,7 @@ export function QuestionPanel({
           selectOption(currentQuestion, option.label);
           // For single-select, auto-advance to next tab on selection
           // For multi-select, only advance on Enter (not Space which toggles)
-          if (!currentQuestion.multiSelect || key.return) {
+          if (!currentQuestion.multiSelect || isReturnKey(event)) {
             goToTab(state.currentTab + 1);
           }
         }
@@ -361,86 +366,83 @@ export function QuestionPanel({
   });
 
   return (
-    <Box
+    <box
       flexDirection="column"
       marginTop={1}
       borderStyle="single"
-      borderTop
-      borderBottom={false}
-      borderLeft={false}
-      borderRight={false}
+      border={["top"]}
       borderColor="gray"
       paddingTop={1}
     >
       {/* Tab bar */}
-      <Box>
-        <Text color="gray">{"← "}</Text>
+      <box flexDirection="row">
+        <text fg="gray">{"← "}</text>
         {questions.map((q, idx) => {
           const isActive = idx === state.currentTab;
           const hasAnswer = getAnswer(q.question) !== undefined;
           return (
-            <Box key={q.question}>
-              <Text
-                color={isActive ? "yellow" : hasAnswer ? "green" : "gray"}
-                bold={isActive}
+            <box key={q.question}>
+              <text
+                fg={isActive ? PRIMARY_COLOR : hasAnswer ? "green" : "gray"}
+                attributes={isActive ? TextAttributes.BOLD : undefined}
               >
                 {isActive ? "●" : hasAnswer ? "✓" : "○"} {q.header}
-              </Text>
-              {idx < questions.length - 1 && <Text color="gray"> │ </Text>}
-            </Box>
+              </text>
+              {idx < questions.length - 1 && <text fg="gray"> │ </text>}
+            </box>
           );
         })}
-        <Text color="gray"> │ </Text>
-        <Text
-          color={isSubmitTab ? "yellow" : allAnswered ? "green" : "gray"}
-          bold={isSubmitTab}
+        <text fg="gray"> │ </text>
+        <text
+          fg={isSubmitTab ? PRIMARY_COLOR : allAnswered ? "green" : "gray"}
+          attributes={isSubmitTab ? TextAttributes.BOLD : undefined}
         >
           {isSubmitTab ? "●" : allAnswered ? "✓" : "○"} Submit
-        </Text>
-        <Text color="gray">{" →"}</Text>
-      </Box>
+        </text>
+        <text fg="gray">{" →"}</text>
+      </box>
 
       {/* Content area */}
-      <Box flexDirection="column" marginTop={1}>
+      <box flexDirection="column" marginTop={1}>
         {isSubmitTab ? (
           // Submit tab: show review
-          <Box flexDirection="column">
-            <Text color="brightBlue" bold>
+          <box flexDirection="column">
+            <text fg="brightBlue" attributes={TextAttributes.BOLD}>
               Review your answers
-            </Text>
-            <Box flexDirection="column" marginTop={1} marginLeft={2}>
+            </text>
+            <box flexDirection="column" marginTop={1} marginLeft={2}>
               {questions.map((q) => {
                 const answer = getAnswer(q.question);
                 const answerStr = Array.isArray(answer)
                   ? answer.join(", ")
                   : answer || "(not answered)";
                 return (
-                  <Box key={q.question} flexDirection="column" marginBottom={1}>
-                    <Text color="white">{q.question}</Text>
-                    <Text color="gray"> → {answerStr}</Text>
-                  </Box>
+                  <box key={q.question} flexDirection="column" marginBottom={1}>
+                    <text fg="white">{q.question}</text>
+                    <text fg="gray"> → {answerStr}</text>
+                  </box>
                 );
               })}
-            </Box>
+            </box>
             {allAnswered ? (
-              <Box marginTop={1}>
-                <Text color="green">Press Enter to submit</Text>
-              </Box>
+              <box marginTop={1}>
+                <text fg="green">Press Enter to submit</text>
+              </box>
             ) : (
-              <Box marginTop={1}>
-                <Text color="yellow">
+              <box marginTop={1}>
+                <text fg={PRIMARY_COLOR}>
                   Please answer all questions before submitting
-                </Text>
-              </Box>
+                </text>
+              </box>
             )}
-          </Box>
+          </box>
         ) : currentQuestion ? (
           // Question tab
-          <Box flexDirection="column">
-            <Text color="brightBlue" bold>
+          <box flexDirection="column">
+            <text fg="brightBlue" attributes={TextAttributes.BOLD}>
               {currentQuestion.question}
-            </Text>
-            <Box flexDirection="column" marginTop={1}>
+            </text>
+            <box flexDirection="column" marginTop={1}>
               {currentQuestion.options.map((option, idx) => {
                 const currentIndex =
                   state.optionIndex[currentQuestion.question] ?? 0;
@@ -451,10 +453,12 @@ export function QuestionPanel({
                   : answer === option.label;
 
                 return (
-                  <Box key={option.label} flexDirection="column">
-                    <Box>
-                      <Text color="yellow">{isHighlighted ? "› " : "  "}</Text>
-                      <Text color={isSelected ? "green" : "gray"}>
+                  <box key={option.label} flexDirection="column">
+                    <box flexDirection="row">
+                      <text fg={PRIMARY_COLOR}>
+                        {isHighlighted ? "› " : "  "}
+                      </text>
+                      <text fg={isSelected ? "green" : "gray"}>
                         {currentQuestion.multiSelect
                           ? isSelected
                             ? "[✓]"
@@ -462,34 +466,38 @@ export function QuestionPanel({
                           : isSelected
                             ? "(●)"
                             : "( )"}
-                      </Text>
-                      <Text> </Text>
-                      <Text
-                        color={
+                      </text>
+                      <text> </text>
+                      <text
+                        fg={
                           isHighlighted
-                            ? "yellow"
+                            ? PRIMARY_COLOR
                             : isSelected
                               ? "green"
                               : undefined
                         }
-                        bold={isHighlighted}
+                        attributes={
+                          isHighlighted ? TextAttributes.BOLD : undefined
+                        }
                       >
                         {idx + 1}. {option.label}
-                      </Text>
-                    </Box>
+                      </text>
+                    </box>
                     {option.description && (
-                      <Box marginLeft={6}>
-                        <Text color="gray">{option.description}</Text>
-                      </Box>
+                      <box marginLeft={6}>
+                        <text fg="gray">{option.description}</text>
+                      </box>
                     )}
-                  </Box>
+                  </box>
                 );
               })}
               {/* "Other" option */}
-              <Box flexDirection="column">
-                <Box>
-                  <Text color="yellow">{isOtherHighlighted ? "› " : "  "}</Text>
-                  <Text color={isOtherSelected ? "green" : "gray"}>
+              <box flexDirection="column">
+                <box flexDirection="row">
+                  <text fg={PRIMARY_COLOR}>
+                    {isOtherHighlighted ? "› " : "  "}
+                  </text>
+                  <text fg={isOtherSelected ? "green" : "gray"}>
                     {currentQuestion.multiSelect
                       ? isOtherSelected
                         ? "[✓]"
@@ -497,35 +505,35 @@ export function QuestionPanel({
                       : isOtherSelected
                         ? "(●)"
                         : "( )"}
-                  </Text>
-                  <Text> </Text>
+                  </text>
+                  <text> </text>
                   {state.typingOther[currentQuestion.question] ? (
                     <>
-                      <Text color="yellow">{otherText}</Text>
-                      <Text color="gray">█</Text>
+                      <text fg={PRIMARY_COLOR}>{otherText}</text>
+                      <text fg="gray">█</text>
                     </>
                   ) : otherText ? (
-                    <Text color={isOtherSelected ? "green" : "gray"}>
+                    <text fg={isOtherSelected ? "green" : "gray"}>
                       {otherText}
-                    </Text>
+                    </text>
                   ) : (
-                    <Text color="gray">Type something else...</Text>
+                    <text fg="gray">Type something else...</text>
                   )}
-                </Box>
-              </Box>
-            </Box>
-          </Box>
+                </box>
+              </box>
+            </box>
+          </box>
         ) : null}
-      </Box>
+      </box>
 
       {/* Footer hint */}
-      <Box marginTop={1}>
-        <Text color="gray">
+      <box marginTop={1}>
+        <text fg="gray">
           {state.typingOther[currentQuestion?.question ?? ""]
             ? "Type your answer · Enter to confirm · ↑ to go back"
             : "Tab/←→ navigate tabs · ↑↓ navigate options · Enter/Space select · Esc cancel"}
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 }

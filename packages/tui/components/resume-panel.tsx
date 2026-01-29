@@ -1,3 +1,5 @@
+import { type KeyEvent, TextAttributes } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 import React, {
   useCallback,
   useEffect,
@@ -5,7 +7,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Box, Text, useInput } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
+import { inputFromKey, isReturnKey } from "../lib/keyboard";
 import { formatTimeAgo } from "../lib/session-storage";
 import type { SessionListItem } from "../lib/session-types";
 
@@ -95,30 +98,19 @@ export function ResumePanel({
 
   // Memoize input handler
   const handleInput = useCallback(
-    (
-      input: string,
-      key: {
-        escape?: boolean;
-        return?: boolean;
-        upArrow?: boolean;
-        downArrow?: boolean;
-        ctrl?: boolean;
-        backspace?: boolean;
-        delete?: boolean;
-        meta?: boolean;
-      },
-    ) => {
+    (event: KeyEvent) => {
+      const input = inputFromKey(event);
       // Guard against callbacks firing during initial render
       if (!isMountedRef.current) return;
 
       // Escape to cancel
-      if (key.escape) {
+      if (event.name === "escape") {
         onCancel();
         return;
       }
 
       // Enter to confirm selection
-      if (key.return) {
+      if (isReturnKey(event)) {
         const selected = filteredSessionsRef.current[selectedIndexRef.current];
         if (selected) {
           onSelect(selected.id);
@@ -135,13 +127,13 @@ export function ResumePanel({
       // Navigation (vim keys only work when not searching)
       const currentSearchQuery = searchQueryRef.current;
       const goUp =
-        key.upArrow ||
+        event.name === "up" ||
         (!currentSearchQuery && input === "k") ||
-        (key.ctrl && input === "p");
+        (event.ctrl && input === "p");
       const goDown =
-        key.downArrow ||
+        event.name === "down" ||
         (!currentSearchQuery && input === "j") ||
-        (key.ctrl && input === "n");
+        (event.ctrl && input === "n");
 
       const sessionsLength = filteredSessionsRef.current.length;
 
@@ -160,7 +152,7 @@ export function ResumePanel({
       }
 
       // Backspace to delete search character
-      if (key.backspace || key.delete) {
+      if (event.name === "backspace" || event.name === "delete") {
         setSearchQuery((prev) => prev.slice(0, -1));
         return;
       }
@@ -168,73 +160,70 @@ export function ResumePanel({
       // Type to search (all printable characters)
       // Note: "b" for branch toggle returns early above when search is empty,
       // so it will reach here and be added to search when search has content
-      if (input && !key.ctrl && !key.meta) {
+      if (input && !event.ctrl && !event.meta) {
         setSearchQuery((prev) => prev + input);
       }
     },
     [onCancel, onSelect],
   );
 
-  useInput(handleInput);
+  useKeyboard(handleInput);
 
   return (
-    <Box
+    <box
       flexDirection="column"
       marginTop={1}
       borderStyle="single"
-      borderTop
-      borderBottom={false}
-      borderLeft={false}
-      borderRight={false}
+      border={["top"]}
       borderColor="gray"
       paddingTop={1}
     >
       {/* Title */}
-      <Text color="brightBlue" bold>
+      <text fg="brightBlue" attributes={TextAttributes.BOLD}>
         Resume session
-      </Text>
+      </text>
 
       {/* Description */}
-      <Box marginTop={0}>
-        <Text color="gray">
+      <box marginTop={0}>
+        <text fg="gray">
           Select a previous session to continue
           {currentBranch && (
             <>
               {" "}
               (branch:{" "}
-              <Text color={filterByBranch ? "yellow" : "gray"}>
+              <span fg={filterByBranch ? PRIMARY_COLOR : "gray"}>
                 {currentBranch}
-              </Text>
+              </span>
               )
             </>
           )}
-        </Text>
-      </Box>
+        </text>
+      </box>
 
       {/* Search indicator */}
       {searchQuery && (
-        <Box marginTop={1}>
-          <Text color="gray">Search: </Text>
-          <Text color="yellow">{searchQuery}</Text>
-          <Text color="gray">|</Text>
-        </Box>
+        <box marginTop={1} flexDirection="row">
+          <text fg="gray">Search: </text>
+          <text fg={PRIMARY_COLOR}>{searchQuery}</text>
+          <text fg="gray">|</text>
+        </box>
       )}
 
       {/* Sessions list */}
-      <Box flexDirection="column" marginTop={1}>
+      <box flexDirection="column" marginTop={1}>
         {filteredSessions.length === 0 ? (
-          <Text color="gray">
+          <text fg="gray">
             {sessions.length === 0
               ? "No previous sessions found"
               : "No matching sessions"}
-          </Text>
+          </text>
         ) : (
           <>
             {/* Scroll up indicator */}
             {startIndex > 0 && (
-              <Box marginBottom={0}>
-                <Text color="gray"> {startIndex} more above</Text>
-              </Box>
+              <box marginBottom={0} flexDirection="row">
+                <text fg="gray"> {startIndex} more above</text>
+              </box>
             )}
 
             {visibleSessions.map((session, visibleIndex) => {
@@ -243,62 +232,65 @@ export function ResumePanel({
               const isSameBranch = session.branch === currentBranch;
 
               return (
-                <Box key={session.id} flexDirection="column">
-                  <Box>
+                <box key={session.id} flexDirection="column">
+                  <box flexDirection="row">
                     {/* Selection indicator */}
-                    <Text color="yellow">{isSelected ? "> " : "  "}</Text>
+                    <text fg={PRIMARY_COLOR}>{isSelected ? "> " : "  "}</text>
 
                     {/* Preview text */}
-                    <Box flexGrow={1} flexShrink={1}>
-                      <Text
-                        color={isSelected ? "yellow" : undefined}
-                        bold={isSelected}
-                        wrap="truncate"
+                    <box flexGrow={1} flexShrink={1}>
+                      <text
+                        fg={isSelected ? PRIMARY_COLOR : undefined}
+                        attributes={
+                          isSelected ? TextAttributes.BOLD : undefined
+                        }
+                        wrapMode="none"
+                        truncate
                       >
                         {session.preview}
-                      </Text>
-                    </Box>
+                      </text>
+                    </box>
 
                     {/* Time ago */}
-                    <Text color="gray">
+                    <text fg="gray">
                       {" "}
                       {formatTimeAgo(session.lastActivity)}
-                    </Text>
+                    </text>
 
                     {/* Message count */}
-                    <Text color="gray"> ({session.messageCount})</Text>
+                    <text fg="gray"> ({session.messageCount})</text>
 
                     {/* Branch indicator */}
                     {!isSameBranch && session.branch && (
-                      <Text color="magenta"> [{session.branch}]</Text>
+                      <text fg="magenta"> [{session.branch}]</text>
                     )}
-                  </Box>
-                </Box>
+                  </box>
+                </box>
               );
             })}
 
             {/* Scroll down indicator */}
             {startIndex + maxVisible < filteredSessions.length && (
-              <Box marginTop={0}>
-                <Text color="gray">
+              <box marginTop={0} flexDirection="row">
+                <text fg="gray">
                   {"  "}
                   {filteredSessions.length - startIndex - maxVisible} more below
-                </Text>
-              </Box>
+                </text>
+              </box>
             )}
           </>
         )}
-      </Box>
+      </box>
 
       {/* Footer hint */}
-      <Box marginTop={1}>
-        <Text color="gray">
+      <box marginTop={1}>
+        <text fg="gray">
           {searchQuery
             ? "Type to search "
             : `Type to search${currentBranch ? ` B to ${filterByBranch ? "show all" : "filter branch"} ` : " "}`}
           Enter to select Esc to cancel
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 }

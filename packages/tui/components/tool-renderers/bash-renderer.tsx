@@ -1,5 +1,6 @@
+import { TextAttributes } from "@opentui/core";
 import React from "react";
-import { Box, Text } from "../../ink-shim";
+import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { getDotColor, ToolSpinner } from "./shared";
 
@@ -23,92 +24,99 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
   const dotColor = state.denied
     ? "red"
     : state.approvalRequested
-      ? "yellow"
+      ? PRIMARY_COLOR
       : isError
         ? "red"
         : getDotColor(state);
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      <Box>
-        {state.running ? <ToolSpinner /> : <Text color={dotColor}>● </Text>}
-        <Text bold color={state.denied ? "red" : "white"}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
+      <box flexDirection="row">
+        {state.running ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        <text
+          fg={state.denied ? "red" : "white"}
+          attributes={TextAttributes.BOLD}
+        >
           Bash
-        </Text>
-        <Text color="gray">(</Text>
-        <Text color="white">
+        </text>
+        <text fg="gray">(</text>
+        <text fg="white">
           {command.length > 60 ? command.slice(0, 60) + "…" : command || "..."}
-        </Text>
-        <Text color="gray">)</Text>
-      </Box>
+        </text>
+        <text fg="gray">)</text>
+      </box>
 
       {/* Show Running/Waiting status for approval-requested tools */}
       {state.approvalRequested && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="gray">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="gray">
             {state.isActiveApproval ? "Running…" : "Waiting…"}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {/* Show output when completed */}
       {part.state === "output-available" &&
         !state.approvalRequested &&
         !state.denied && (
-          <Box flexDirection="column" paddingLeft={2}>
+          <box flexDirection="column" paddingLeft={2}>
             {isError && (
-              <Box>
-                <Text color="gray">└ </Text>
-                <Text color="red">Error: Exit code {exitCode}</Text>
-              </Box>
+              <box flexDirection="row">
+                <text fg="gray">└ </text>
+                <text fg="red">Error: Exit code {exitCode}</text>
+              </box>
             )}
             {hasOutput ? (
-              <Box flexDirection="column">
+              <box flexDirection="column">
                 {hasMoreLines && (
-                  <Box paddingLeft={isError ? 2 : 0}>
-                    <Text color="gray">└ </Text>
-                    <Text color="gray">...</Text>
-                  </Box>
+                  <box paddingLeft={isError ? 2 : 0} flexDirection="row">
+                    <text fg="gray">└ </text>
+                    <text fg="gray">...</text>
+                  </box>
                 )}
                 {outputLines.map((line, i) => (
-                  <Box key={i} paddingLeft={isError ? 2 : 0}>
+                  <box
+                    key={i}
+                    paddingLeft={isError ? 2 : 0}
+                    flexDirection="row"
+                  >
                     {!hasMoreLines && !isError && i === 0 && (
-                      <Text color="gray">└ </Text>
+                      <text fg="gray">└ </text>
                     )}
-                    {(hasMoreLines || isError || i > 0) && <Text> </Text>}
-                    <Text color={isError ? "red" : "white"}>
+                    {(hasMoreLines || isError || i > 0) && <text> </text>}
+                    <text fg={isError ? "red" : "white"}>
                       {line.slice(0, 100)}
-                    </Text>
-                  </Box>
+                    </text>
+                  </box>
                 ))}
-              </Box>
+              </box>
             ) : (
               !isError && (
-                <Box>
-                  <Text color="gray">└ </Text>
-                  <Text color="gray">(No content)</Text>
-                </Box>
+                <box flexDirection="row">
+                  <text fg="gray">└ </text>
+                  <text fg="gray">(No content)</text>
+                </box>
               )
             )}
-          </Box>
+          </box>
         )}
 
       {state.denied && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">
             Denied{state.denialReason ? `: ${state.denialReason}` : ""}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
 
       {state.error && (
-        <Box paddingLeft={2}>
-          <Text color="gray">└ </Text>
-          <Text color="red">Error: {state.error.slice(0, 80)}</Text>
-        </Box>
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }

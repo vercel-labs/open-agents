@@ -1,3 +1,5 @@
+import { type KeyEvent, TextAttributes } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 import React, {
   useCallback,
   useEffect,
@@ -5,7 +7,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Box, Text, useInput } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
+import { inputFromKey, isReturnKey } from "../lib/keyboard";
 
 export type SettingsOption = {
   id: string;
@@ -103,32 +106,21 @@ export function SettingsPanel({
   const searchQueryRef = useRef(searchQuery);
   searchQueryRef.current = searchQuery;
 
-  // Memoize input handler to prevent useInput from re-subscribing on every render
+  // Memoize input handler to prevent useKeyboard from re-subscribing on every render
   const handleInput = useCallback(
-    (
-      input: string,
-      key: {
-        escape?: boolean;
-        return?: boolean;
-        upArrow?: boolean;
-        downArrow?: boolean;
-        ctrl?: boolean;
-        backspace?: boolean;
-        delete?: boolean;
-        meta?: boolean;
-      },
-    ) => {
+    (event: KeyEvent) => {
+      const input = inputFromKey(event);
       // Guard against callbacks firing during initial render
       if (!isMountedRef.current) return;
 
       // Escape to cancel
-      if (key.escape) {
+      if (event.name === "escape") {
         onCancel();
         return;
       }
 
       // Enter to confirm selection
-      if (key.return) {
+      if (isReturnKey(event)) {
         const selected = filteredOptionsRef.current[selectedIndexRef.current];
         if (selected) {
           onSelect(selected.id);
@@ -139,13 +131,13 @@ export function SettingsPanel({
       // Navigation (vim keys only work when not searching)
       const currentSearchQuery = searchQueryRef.current;
       const goUp =
-        key.upArrow ||
+        event.name === "up" ||
         (!currentSearchQuery && input === "k") ||
-        (key.ctrl && input === "p");
+        (event.ctrl && input === "p");
       const goDown =
-        key.downArrow ||
+        event.name === "down" ||
         (!currentSearchQuery && input === "j") ||
-        (key.ctrl && input === "n");
+        (event.ctrl && input === "n");
 
       const optionsLength = filteredOptionsRef.current.length;
 
@@ -160,65 +152,62 @@ export function SettingsPanel({
       }
 
       // Backspace to delete search character
-      if (key.backspace || key.delete) {
+      if (event.name === "backspace" || event.name === "delete") {
         setSearchQuery((prev) => prev.slice(0, -1));
         return;
       }
 
       // Type to search (printable characters)
-      if (input && !key.ctrl && !key.meta) {
+      if (input && !event.ctrl && !event.meta) {
         setSearchQuery((prev) => prev + input);
       }
     },
     [onCancel, onSelect],
   );
 
-  useInput(handleInput);
+  useKeyboard(handleInput);
 
   return (
-    <Box
+    <box
       flexDirection="column"
       marginTop={1}
       borderStyle="single"
-      borderTop
-      borderBottom={false}
-      borderLeft={false}
-      borderRight={false}
+      border={["top"]}
       borderColor="gray"
       paddingTop={1}
     >
       {/* Title */}
-      <Text color="brightBlue" bold>
+      <text fg="brightBlue" attributes={TextAttributes.BOLD}>
         {title}
-      </Text>
+      </text>
 
       {/* Description */}
       {description && (
-        <Box marginTop={0}>
-          <Text color="gray">{description}</Text>
-        </Box>
+        <box marginTop={0}>
+          <text fg="gray">{description}</text>
+        </box>
       )}
 
       {/* Search indicator */}
       {searchQuery && (
-        <Box marginTop={1}>
-          <Text color="gray">Search: </Text>
-          <Text color="yellow">{searchQuery}</Text>
-          <Text color="gray">█</Text>
-        </Box>
+        <box marginTop={1} flexDirection="row">
+          <text fg="gray">Search: </text>
+          <text fg={PRIMARY_COLOR}>{searchQuery}</text>
+          <text fg="gray">█</text>
+        </box>
       )}
 
       {/* Options list */}
-      <Box flexDirection="column" marginTop={1}>
+      <box flexDirection="column" marginTop={1}>
         {filteredOptions.length === 0 ? (
-          <Text color="gray">No matching options</Text>
+          <text fg="gray">No matching options</text>
         ) : (
           <>
             {/* Scroll up indicator */}
             {startIndex > 0 && (
-              <Box marginBottom={0}>
-                <Text color="gray"> ↑ {startIndex} more above</Text>
-              </Box>
+              <box marginBottom={0} flexDirection="row">
+                <text fg="gray"> ↑ {startIndex} more above</text>
+              </box>
             )}
 
             {visibleOptions.map((option, visibleIndex) => {
@@ -227,57 +216,57 @@ export function SettingsPanel({
               const isCurrent = option.id === currentId;
 
               return (
-                <Box key={option.id} flexDirection="column">
-                  <Box>
+                <box key={option.id} flexDirection="column">
+                  <box flexDirection="row">
                     {/* Selection indicator */}
-                    <Text color="yellow">{isSelected ? "› " : "  "}</Text>
+                    <text fg={PRIMARY_COLOR}>{isSelected ? "› " : "  "}</text>
 
                     {/* Current indicator (checkmark) */}
-                    <Text color="green">{isCurrent ? "✓ " : "  "}</Text>
+                    <text fg="green">{isCurrent ? "✓ " : "  "}</text>
 
                     {/* Option number and name */}
-                    <Text
-                      color={isSelected ? "yellow" : undefined}
-                      bold={isSelected}
+                    <text
+                      fg={isSelected ? PRIMARY_COLOR : undefined}
+                      attributes={isSelected ? TextAttributes.BOLD : undefined}
                     >
                       {actualIndex + 1}. {option.name}
-                    </Text>
+                    </text>
 
                     {/* Meta info (e.g., pricing) */}
-                    {option.meta && <Text color="gray"> · {option.meta}</Text>}
-                  </Box>
+                    {option.meta && <text fg="gray"> · {option.meta}</text>}
+                  </box>
 
                   {/* Description on separate line */}
                   {option.description && (
-                    <Box marginLeft={6}>
-                      <Text color="gray">{option.description}</Text>
-                    </Box>
+                    <box marginLeft={6}>
+                      <text fg="gray">{option.description}</text>
+                    </box>
                   )}
-                </Box>
+                </box>
               );
             })}
 
             {/* Scroll down indicator */}
             {startIndex + maxVisible < filteredOptions.length && (
-              <Box marginTop={0}>
-                <Text color="gray">
+              <box marginTop={0} flexDirection="row">
+                <text fg="gray">
                   {"    "}↓ {filteredOptions.length - startIndex - maxVisible}{" "}
                   more below
-                </Text>
-              </Box>
+                </text>
+              </box>
             )}
           </>
         )}
-      </Box>
+      </box>
 
       {/* Footer hint */}
-      <Box marginTop={1}>
-        <Text color="gray">
+      <box marginTop={1}>
+        <text fg="gray">
           {searchQuery
             ? "Type to search · Enter to confirm · Esc to cancel"
             : "Type to search · ↑↓ to navigate · Enter to confirm · Esc to cancel"}
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 }

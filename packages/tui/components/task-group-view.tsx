@@ -1,8 +1,9 @@
 import type { SubagentUIMessage, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
 import { getToolName, isToolUIPart } from "ai";
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Text } from "../ink-shim";
+import { PRIMARY_COLOR } from "../lib/colors";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
@@ -18,7 +19,7 @@ function TaskSpinner() {
     return () => clearInterval(timer);
   }, []);
 
-  return <Text color="gray">{SPINNER_FRAMES[frame]}</Text>;
+  return <text fg="gray">{SPINNER_FRAMES[frame]}</text>;
 }
 
 function FlashingDot() {
@@ -31,7 +32,7 @@ function FlashingDot() {
     return () => clearInterval(timer);
   }, []);
 
-  return <Text color="gray">{visible ? "●" : " "}</Text>;
+  return <text fg="gray">{visible ? "●" : " "}</text>;
 }
 
 function formatTime(seconds: number): string {
@@ -160,16 +161,16 @@ function TaskStatusIndicator({ status }: { status: TaskStatus }) {
       return <FlashingDot />;
     case "approval-requested":
       // Static white circle for approval needed
-      return <Text color="white">●</Text>;
+      return <text fg="white">●</text>;
     case "complete":
-      return <Text color="green">✓</Text>;
+      return <text fg="green">✓</text>;
     case "interrupted":
-      return <Text color="yellow">○</Text>;
+      return <text fg={PRIMARY_COLOR}>○</text>;
     case "error":
     case "denied":
-      return <Text color="red">✗</Text>;
+      return <text fg="red">✗</text>;
     default:
-      return <Text color="gray">●</Text>;
+      return <text fg="gray">●</text>;
   }
 }
 
@@ -223,42 +224,40 @@ function TaskItem({
   }
 
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column">
       {/* Task row */}
-      <Box>
-        <Text color="gray">{treeChar} </Text>
+      <box flexDirection="row">
+        <text fg="gray">{treeChar} </text>
         <TaskStatusIndicator status={status} />
-        <Text> </Text>
-        <Text
-          color={status === "error" || status === "denied" ? "red" : "white"}
-        >
+        <text> </text>
+        <text fg={status === "error" || status === "denied" ? "red" : "white"}>
           {desc}
-        </Text>
-        <Text color="gray">
+        </text>
+        <text fg="gray">
           {" "}
           - {toolCount} tool{toolCount !== 1 ? "s" : ""}
           {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
-        </Text>
-        {approvalRequested && <Text color="yellow"> [NEEDS APPROVAL]</Text>}
+        </text>
+        {approvalRequested && <text fg={PRIMARY_COLOR}> [NEEDS APPROVAL]</text>}
         {isRunning && elapsedSeconds > 0 && (
-          <Text color="gray"> - {formatTime(elapsedSeconds)}</Text>
+          <text fg="gray"> - {formatTime(elapsedSeconds)}</text>
         )}
-      </Box>
+      </box>
 
       {/* Nested status line */}
       {nestedStatus && (
-        <Box>
-          <Text color="gray">{continueChar}└ </Text>
-          <Text
-            color={
-              denied ? "red" : status === "interrupted" ? "yellow" : "gray"
+        <box flexDirection="row">
+          <text fg="gray">{continueChar}└ </text>
+          <text
+            fg={
+              denied ? "red" : status === "interrupted" ? PRIMARY_COLOR : "gray"
             }
           >
             {nestedStatus}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 
@@ -298,28 +297,28 @@ export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
   }
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
       {/* Header */}
-      <Box>
+      <box flexDirection="row">
         {allComplete ? (
-          <Text color="green">● </Text>
+          <text fg="green">● </text>
         ) : hasInterrupted && runningCount === 0 ? (
-          <Text color="yellow">○ </Text>
+          <text fg={PRIMARY_COLOR}>○ </text>
         ) : hasApprovalPending && runningCount === 0 ? (
-          <Text color="white">● </Text>
+          <text fg="white">● </text>
         ) : (
           <>
             <TaskSpinner />
-            <Text> </Text>
+            <text> </text>
           </>
         )}
-        <Text bold color="white">
+        <text fg="white" attributes={TextAttributes.BOLD}>
           {headerText}
-        </Text>
-      </Box>
+        </text>
+      </box>
 
       {/* Task list */}
-      <Box flexDirection="column">
+      <box flexDirection="column">
         {taskParts.map((part, index) => (
           <TaskItem
             key={part.toolCallId}
@@ -328,7 +327,7 @@ export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
             isStreaming={isStreaming}
           />
         ))}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 }

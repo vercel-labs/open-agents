@@ -6,6 +6,8 @@ import {
   useReasoningContext,
   useTodoView,
 } from "@open-harness/shared";
+import { TextAttributes } from "@opentui/core";
+import { useKeyboard, useRenderer } from "@opentui/react";
 import { type FileUIPart, getToolName, isToolUIPart } from "ai";
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useChatContext } from "./chat-context";
@@ -19,8 +21,9 @@ import { StandaloneTodoList, StatusBar } from "./components/status-bar";
 import { TaskGroupView } from "./components/task-group-view";
 import { getToolApprovalInfo, ToolCall } from "./components/tool-call";
 import { pasteCollapseLineThreshold } from "./config";
-import { Box, ScrollBox, Text, useApp, useInput } from "./ink-shim";
 import { toolMatchesApprovalRule } from "./lib/approval";
+import { PRIMARY_COLOR } from "./lib/colors";
+import { inputFromKey } from "./lib/keyboard";
 import { MarkdownContent } from "./lib/markdown";
 import { listSessions, loadSession } from "./lib/session-storage";
 import type { SessionListItem } from "./lib/session-types";
@@ -59,19 +62,19 @@ const TextPart = memo(function TextPart({
   model?: string;
 }) {
   return (
-    <Box>
-      <Text>● </Text>
-      <Box flexShrink={1} flexGrow={1}>
+    <box flexDirection="row">
+      <text>● </text>
+      <box flexShrink={1} flexGrow={1}>
         <MarkdownContent content={text} streaming={isStreaming} />
-      </Box>
+      </box>
       {isExpanded && timestamp && model && (
-        <Box marginLeft={2} flexShrink={0}>
-          <Text color="gray">
+        <box marginLeft={2} flexShrink={0} flexDirection="row">
+          <text fg="gray">
             {formatTime(timestamp)} {model}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 });
 
@@ -140,16 +143,16 @@ const ThinkingPart = memo(function ThinkingPart({
   isComplete: boolean;
 }) {
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
-      <Text color="gray" italic>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
+      <text fg="gray" attributes={TextAttributes.ITALIC}>
         ∴ {isComplete ? "Thinking..." : "Thinking..."}
-      </Text>
-      <Box marginLeft={2} marginTop={1}>
-        <Text color="gray" italic>
+      </text>
+      <box marginLeft={2} marginTop={1}>
+        <text fg="gray" attributes={TextAttributes.ITALIC}>
           {text}
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 });
 
@@ -215,36 +218,38 @@ const UserMessage = memo(function UserMessage({
   ).length;
 
   return (
-    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <box flexDirection="column" marginTop={1} marginBottom={1}>
       {imageCount > 0 && (
-        <Box
+        <box
           backgroundColor="#333333"
           paddingLeft={1}
           paddingRight={1}
           alignSelf="flex-start"
+          flexDirection="row"
         >
-          <Text color="#666666">❯ </Text>
-          <Text color="blue">
+          <text fg="#666666">❯ </text>
+          <text fg="blue">
             {imageCount === 1
               ? "[1 image attached]"
               : `[${imageCount} images attached]`}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
       {text && (
-        <Box
+        <box
           backgroundColor="#333333"
           paddingLeft={1}
           paddingRight={1}
           alignSelf="flex-start"
+          flexDirection="row"
         >
-          <Text color="#666666">❯ </Text>
-          <Text color="white" bold>
+          <text fg="#666666">❯ </text>
+          <text fg="white" attributes={TextAttributes.BOLD}>
             {text}
-          </Text>
-        </Box>
+          </text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 });
 
@@ -336,7 +341,7 @@ const AssistantMessage = memo(function AssistantMessage({
   }, [message.parts]);
 
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column">
       <ReasoningTracker
         messageId={message.id}
         hasReasoning={hasReasoning}
@@ -361,7 +366,7 @@ const AssistantMessage = memo(function AssistantMessage({
           model,
         });
       })}
-    </Box>
+    </box>
   );
 });
 
@@ -404,7 +409,7 @@ const MessagesList = memo(function MessagesList({
   isExpanded: boolean;
 }) {
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column">
       {messages.map((message, index) => (
         <Message
           key={message.id || `msg-${index}`}
@@ -414,7 +419,7 @@ const MessagesList = memo(function MessagesList({
           isExpanded={isExpanded}
         />
       ))}
-    </Box>
+    </box>
   );
 });
 
@@ -425,9 +430,9 @@ const ErrorDisplay = memo(function ErrorDisplay({
 }) {
   if (!error) return null;
   return (
-    <Box marginTop={1}>
-      <Text color="red">Error: {error.message}</Text>
-    </Box>
+    <box marginTop={1}>
+      <text fg="red">Error: {error.message}</text>
+    </box>
   );
 });
 
@@ -499,32 +504,27 @@ const StreamingStatusBar = memo(function StreamingStatusBar({
 
 const InterruptedIndicator = memo(function InterruptedIndicator() {
   return (
-    <Box marginLeft={2}>
-      <Text color="gray">└ </Text>
-      <Text color="yellow">Interrupted</Text>
-      <Text color="gray"> · What should the agent do instead?</Text>
-    </Box>
+    <box marginLeft={2}>
+      <text fg="gray">└ </text>
+      <text fg={PRIMARY_COLOR}>Interrupted</text>
+      <text fg="gray"> · What should the agent do instead?</text>
+    </box>
   );
 });
 
 const ExpandedViewIndicator = memo(function ExpandedViewIndicator() {
   return (
-    <Box
-      marginTop={1}
-      borderStyle="single"
-      borderColor="gray"
-      borderTop
-      borderBottom={false}
-      borderLeft={false}
-      borderRight={false}
-    >
-      <Text color="gray">Showing detailed transcript · ctrl+o to toggle</Text>
-    </Box>
+    <box marginTop={1} borderStyle="single" borderColor="gray" border={["top"]}>
+      <text fg="gray">Showing detailed transcript · ctrl+o to toggle</text>
+    </box>
   );
 });
 
 function AppContent({ options }: AppProps) {
-  const { exit } = useApp();
+  const renderer = useRenderer();
+  const exit = useCallback(() => {
+    renderer.destroy();
+  }, [renderer]);
   const {
     chat,
     state,
@@ -684,19 +684,20 @@ function AppContent({ options }: AppProps) {
     }
   }, [questionToolCallId, addToolOutput]);
 
-  useInput((input, key) => {
-    if (key.escape && isStreaming) {
+  useKeyboard((event) => {
+    const input = inputFromKey(event);
+    if (event.name === "escape" && isStreaming) {
       stop();
       setWasInterrupted(true);
     }
-    if (input === "c" && key.ctrl) {
+    if (input === "c" && event.ctrl) {
       stop();
       exit();
     }
-    if (input === "o" && key.ctrl) {
+    if (input === "o" && event.ctrl) {
       toggleExpanded();
     }
-    if (input === "t" && key.ctrl) {
+    if (input === "t" && event.ctrl) {
       toggleTodoView();
     }
   });
@@ -807,10 +808,10 @@ function AppContent({ options }: AppProps) {
 
   // Show message list with either approval panel or input box at bottom
   return (
-    <Box
+    <box
       flexDirection="column"
-      paddingTop={1}
-      paddingBottom={2}
+      paddingTop={0.5}
+      paddingBottom={0.5}
       paddingLeft={1}
       paddingRight={1}
     >
@@ -823,7 +824,7 @@ function AppContent({ options }: AppProps) {
         cwd={state.workingDirectory}
       />
 
-      <ScrollBox
+      <scrollbox
         scrollY
         stickyScroll
         stickyStart="bottom"
@@ -831,7 +832,7 @@ function AppContent({ options }: AppProps) {
         verticalScrollbarOptions={{ visible: false }}
         horizontalScrollbarOptions={{ visible: false }}
       >
-        <Box flexDirection="column">
+        <box flexDirection="column">
           <MessagesList
             messages={messages}
             activeApprovalId={activeApprovalId}
@@ -857,9 +858,9 @@ function AppContent({ options }: AppProps) {
           {state.activePanel.type === "resume" && (
             <>
               {resumeError && (
-                <Box marginBottom={1}>
-                  <Text color="red">{resumeError}</Text>
-                </Box>
+                <box marginBottom={1}>
+                  <text fg="red">{resumeError}</text>
+                </box>
               )}
               <ResumePanel
                 sessions={sessions}
@@ -919,9 +920,9 @@ function AppContent({ options }: AppProps) {
           ) : null}
 
           {isExpanded && <ExpandedViewIndicator />}
-        </Box>
-      </ScrollBox>
-    </Box>
+        </box>
+      </scrollbox>
+    </box>
   );
 }
 

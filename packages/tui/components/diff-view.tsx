@@ -1,5 +1,5 @@
+import { TextAttributes } from "@opentui/core";
 import React from "react";
-import { Box, Text } from "../ink-shim";
 
 type DiffLine = {
   type: "context" | "addition" | "removal";
@@ -25,59 +25,57 @@ export function DiffView({
   const displayLines = lines.slice(0, maxLines);
 
   return (
-    <Box flexDirection="column" marginLeft={2}>
+    <box flexDirection="column" marginLeft={2}>
       {/* Header */}
-      <Box>
-        <Text color="gray">└ Updated </Text>
-        <Text bold>{filePath}</Text>
-        <Text color="gray"> with </Text>
-        <Text color="green">
+      <box>
+        <text fg="gray">└ Updated </text>
+        <text attributes={TextAttributes.BOLD}>{filePath}</text>
+        <text fg="gray"> with </text>
+        <text fg="green">
           {additions} addition{additions !== 1 ? "s" : ""}
-        </Text>
-        <Text color="gray"> and </Text>
-        <Text color="red">
+        </text>
+        <text fg="gray"> and </text>
+        <text fg="red">
           {removals} removal{removals !== 1 ? "s" : ""}
-        </Text>
-      </Box>
+        </text>
+      </box>
 
       {/* Diff lines */}
-      <Box flexDirection="column" marginLeft={2}>
+      <box flexDirection="column" marginLeft={2}>
         {displayLines.map((line, i) => (
-          <Box key={i}>
+          <box key={i}>
             {/* Line number */}
-            <Text color="gray">
-              {String(line.lineNumber).padStart(3, " ")}{" "}
-            </Text>
+            <text fg="gray">{String(line.lineNumber).padStart(3, " ")} </text>
 
             {/* +/- indicator and content */}
             {line.type === "addition" ? (
               <>
-                <Text color="green" backgroundColor="brightGreen">
+                <text fg="green" bg="brightGreen">
                   +{" "}
-                </Text>
-                <Text color="white" backgroundColor="green">
+                </text>
+                <text fg="white" bg="green">
                   {line.content}
-                </Text>
+                </text>
               </>
             ) : line.type === "removal" ? (
               <>
-                <Text color="red" backgroundColor="brightRed">
+                <text fg="red" bg="brightRed">
                   -{" "}
-                </Text>
-                <Text color="white" backgroundColor="red">
+                </text>
+                <text fg="white" bg="red">
                   {line.content}
-                </Text>
+                </text>
               </>
             ) : (
               <>
-                <Text color="gray"> </Text>
-                <Text>{line.content}</Text>
+                <text fg="gray"> </text>
+                <text>{line.content}</text>
               </>
             )}
-          </Box>
+          </box>
         ))}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 }
 
