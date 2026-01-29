@@ -314,14 +314,41 @@ export function ChatProvider({
     ],
   );
 
+  const abortedMessageIdRef = useRef<string | null>(null);
+  // Prevent auto-submit loops from immediately re-firing after ESC aborts.
+  const shouldAutoSubmitWithAbort = useCallback(
+    ({ messages }: { messages: UIMessage[] }) => {
+      const lastMessage = messages[messages.length - 1];
+      const abortedMessageId = abortedMessageIdRef.current;
+
+      if (abortedMessageId && lastMessage?.id !== abortedMessageId) {
+        abortedMessageIdRef.current = null;
+      }
+
+      if (abortedMessageId && lastMessage?.id === abortedMessageId) {
+        return false;
+      }
+
+      return shouldAutoSubmit({ messages });
+    },
+    [],
+  );
+
   const chat = useMemo(
     () =>
       new Chat<TUIAgentUIMessage>({
         transport,
-        sendAutomaticallyWhen: shouldAutoSubmit,
+        sendAutomaticallyWhen: shouldAutoSubmitWithAbort,
+        onFinish: ({ message, isAbort }) => {
+          if (isAbort) {
+            abortedMessageIdRef.current = message?.id ?? null;
+            return;
+          }
+          abortedMessageIdRef.current = null;
+        },
         messages: initialMessagesRef.current,
       }),
-    [transport],
+    [transport, shouldAutoSubmitWithAbort],
   );
 
   const skills = useMemo(
