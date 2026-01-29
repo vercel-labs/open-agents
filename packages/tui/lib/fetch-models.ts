@@ -10,6 +10,8 @@ export type GatewayModel = {
     output: string;
   } | null;
   modelType?: "language" | "embedding" | "image" | null;
+  type?: "language" | "embedding" | "image" | null;
+  context_window?: number | null;
 };
 
 type GatewayModelsResponse = {
@@ -62,11 +64,17 @@ export function transformToModelInfo(model: GatewayModel): ModelInfo {
     }
   }
 
+  const contextLimit =
+    typeof model.context_window === "number" && model.context_window > 0
+      ? model.context_window
+      : undefined;
+
   return {
     id: model.id,
     name: model.name ?? model.id,
     description: model.description ?? "",
     pricing,
+    contextLimit,
   };
 }
 
@@ -88,15 +96,16 @@ export async function fetchAvailableModels(options?: {
     if (!response.ok) {
       throw new Error(`Failed to fetch models (${response.status})`);
     }
-    const data = (await response.json()) as unknown;
+    const data: unknown = await response.json();
     if (!isGatewayModelsResponse(data)) {
       throw new Error("Invalid models response");
     }
 
     // Filter to only language models (not embeddings/image models)
-    const languageModels = data.models.filter(
-      (m) => !m.modelType || m.modelType === "language",
-    );
+    const languageModels = data.models.filter((model) => {
+      const modelType = model.modelType ?? model.type;
+      return !modelType || modelType === "language";
+    });
 
     if (languageModels.length === 0) {
       return AVAILABLE_MODELS;

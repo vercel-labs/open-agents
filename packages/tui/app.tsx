@@ -891,17 +891,36 @@ function AppContent({ options }: AppProps) {
     [openPanel, loadSessions, setMessages, setSessionId, resetUsage],
   );
 
+  const formatContextLimit = useCallback((tokens: number) => {
+    if (tokens >= 1_000_000) {
+      return `${Math.round(tokens / 1_000_000)}m`;
+    }
+    if (tokens >= 1000) {
+      return `${Math.round(tokens / 1000)}k`;
+    }
+    return String(tokens);
+  }, []);
+
   // Memoize model options to prevent re-renders in SettingsPanel
   const modelOptions = useMemo(
     () =>
-      state.availableModels.map((m) => ({
-        id: m.id,
-        name: m.name,
-        meta: m.pricing
-          ? `${m.pricing.input} in · ${m.pricing.output} out`
-          : undefined,
-      })),
-    [state.availableModels],
+      state.availableModels.map((model) => {
+        const metaParts: string[] = [];
+        if (model.pricing) {
+          metaParts.push(
+            `${model.pricing.input} in · ${model.pricing.output} out`,
+          );
+        }
+        if (typeof model.contextLimit === "number") {
+          metaParts.push(`${formatContextLimit(model.contextLimit)} ctx`);
+        }
+        return {
+          id: model.id,
+          name: model.name,
+          meta: metaParts.length > 0 ? metaParts.join(" · ") : undefined,
+        };
+      }),
+    [formatContextLimit, state.availableModels],
   );
 
   // Memoize model selection handler to prevent re-renders
