@@ -1,7 +1,9 @@
 import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 import React from "react";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
+import { truncateText } from "../../lib/truncate";
 import { ToolLayout } from "./shared";
 
 function getTodoIcon(status: string) {
@@ -31,6 +33,7 @@ export function TodoRenderer({
   state,
   isExpanded = false,
 }: ToolRendererProps<"tool-todo_write">) {
+  const isInputReady = part.state !== "input-streaming";
   const todos = part.input?.todos as
     | Array<{ id: string; content: string; status: string }>
     | undefined;
@@ -39,12 +42,20 @@ export function TodoRenderer({
     todos?.filter((t) => t.status === "completed").length ?? 0;
   const inProgressCount =
     todos?.filter((t) => t.status === "in_progress").length ?? 0;
+  const summary = isInputReady
+    ? `${todoCount} tasks (${completedCount} done, ${inProgressCount} in progress)`
+    : "...";
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
+  const indentWidth = 3;
+  const iconWidth = 2;
+  const maxTodoWidth = Math.max(10, terminalWidth - indentWidth - iconWidth);
 
   return (
     <box flexDirection="column">
       <ToolLayout
         name="TodoWrite"
-        summary={`${todoCount} tasks (${completedCount} done, ${inProgressCount} in progress)`}
+        summary={summary}
         output={
           part.state === "output-available" && (
             <text fg="white">Tasks updated</text>
@@ -52,7 +63,7 @@ export function TodoRenderer({
         }
         state={state}
       />
-      {isExpanded && todos && todos.length > 0 && (
+      {isExpanded && isInputReady && todos && todos.length > 0 && (
         <box flexDirection="column" paddingLeft={3}>
           {todos.map((todo) => (
             <box key={todo.id}>
@@ -60,10 +71,10 @@ export function TodoRenderer({
                 {getTodoIcon(todo.status)}{" "}
                 {todo.status === "completed" ? (
                   <span attributes={TextAttributes.STRIKETHROUGH}>
-                    {todo.content}
+                    {truncateText(todo.content, maxTodoWidth)}
                   </span>
                 ) : (
-                  todo.content
+                  truncateText(todo.content, maxTodoWidth)
                 )}
               </text>
             </box>

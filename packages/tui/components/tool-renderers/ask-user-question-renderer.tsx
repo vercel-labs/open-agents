@@ -1,7 +1,9 @@
 import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 import React from "react";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
+import { truncateText } from "../../lib/truncate";
 import { getDotColor, ToolSpinner } from "./shared";
 
 type AskUserQuestionOutput =
@@ -21,8 +23,22 @@ export function AskUserQuestionRenderer({
   part,
   state,
 }: ToolRendererProps<"tool-ask_user_question">) {
-  const questions = part.input?.questions ?? [];
+  const isInputReady = part.state !== "input-streaming";
+  const questions = isInputReady ? (part.input?.questions ?? []) : [];
   const questionCount = questions.length;
+  const questionCountLabel = isInputReady
+    ? `${questionCount} question${questionCount !== 1 ? "s" : ""}`
+    : "...";
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
+  const linePrefixLength = "└ ".length + "· ".length;
+  const separatorLength = " → ".length;
+  const availableWidth = Math.max(
+    10,
+    terminalWidth - linePrefixLength - separatorLength,
+  );
+  const questionWidth = Math.max(10, Math.floor(availableWidth * 0.6));
+  const answerWidth = Math.max(10, availableWidth - questionWidth);
 
   // Extract output when available with proper runtime validation
   const output =
@@ -54,19 +70,9 @@ export function AskUserQuestionRenderer({
           Ask User Question
         </text>
         <text fg="gray">(</text>
-        <text fg="white">
-          {questionCount} question{questionCount !== 1 ? "s" : ""}
-        </text>
+        <text fg="white">{questionCountLabel}</text>
         <text fg="gray">)</text>
       </box>
-
-      {/* Show generating status while streaming input */}
-      {isGenerating && (
-        <box paddingLeft={2} flexDirection="row">
-          <text fg="gray">└ </text>
-          <text fg="gray">Generating questions...</text>
-        </box>
-      )}
 
       {/* Show waiting status when input is ready and awaiting user response */}
       {isWaitingForInput && (
@@ -88,14 +94,19 @@ export function AskUserQuestionRenderer({
               const answerText = Array.isArray(answer)
                 ? answer.join(", ")
                 : answer;
+              const displayQuestion = truncateText(q.question, questionWidth);
+              const displayAnswer = truncateText(
+                answerText ?? "No answer",
+                answerWidth,
+              );
               const isFirst = idx === 0;
               return (
                 <box key={q.question} flexDirection="row">
                   <text fg="gray">{isFirst ? "└ " : "  "}</text>
                   <text fg="gray">· </text>
-                  <text fg="white">{q.question}</text>
+                  <text fg="white">{displayQuestion}</text>
                   <text fg="gray"> → </text>
-                  <text fg="green">{answerText ?? "No answer"}</text>
+                  <text fg="green">{displayAnswer}</text>
                 </box>
               );
             })}

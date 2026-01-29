@@ -1,17 +1,18 @@
-import React from "react";
 import { createEditDiffLines } from "@open-harness/shared";
+import React from "react";
+import { useChatContext } from "../../chat-context";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { FileChangeLayout, toRelativePath } from "./shared";
-import { useChatContext } from "../../chat-context";
 
 export function EditRenderer({ part, state }: ToolRendererProps<"tool-edit">) {
   const { state: chatState } = useChatContext();
   const cwd = chatState.workingDirectory ?? process.cwd();
-  const rawFilePath = part.input?.filePath ?? "...";
+  const isInputReady = part.state !== "input-streaming";
+  const rawFilePath = isInputReady ? (part.input?.filePath ?? "...") : "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
-  const oldString = part.input?.oldString ?? "";
-  const newString = part.input?.newString ?? "";
+  const oldString = isInputReady ? (part.input?.oldString ?? "") : "";
+  const newString = isInputReady ? (part.input?.newString ?? "") : "";
   const { lines, additions, removals } = createEditDiffLines(
     oldString,
     newString,

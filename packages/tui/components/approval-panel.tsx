@@ -3,17 +3,17 @@ import {
   type CodeLine,
   createEditDiffLines,
   createNewFileCodeLines,
-  DIFF_LINE_MAX_WIDTH,
   type DiffLine,
 } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useChatContext } from "../chat-context";
 import { inferApprovalRule } from "../lib/approval";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { cliHighlighter } from "../lib/highlighter";
 import { inputFromKey, isReturnKey } from "../lib/keyboard";
+import { truncateText } from "../lib/truncate";
 import type { ApprovalRule, TUIAgentUIToolPart } from "../types";
 
 export type ApprovalPanelProps = {
@@ -35,6 +35,11 @@ export function ApprovalPanel({
 }: ApprovalPanelProps) {
   const { chat, state, addPendingApprovalRule } = useChatContext();
   const { addToolApprovalResponse } = useChat({ chat });
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
+  const contentIndent = 2;
+  const maxContentWidth = Math.max(10, terminalWidth - contentIndent);
+  const diffContentWidth = Math.max(10, terminalWidth - 6);
 
   // Infer the approval rule from the tool part
   const inferredRule = useMemo((): ApprovalRule | null => {
@@ -172,8 +177,12 @@ export function ApprovalPanel({
 
       {/* Command and description */}
       <box flexDirection="column" marginTop={1} marginLeft={2}>
-        <text>{toolCommand}</text>
-        {effectiveDescription && <text fg="gray">{effectiveDescription}</text>}
+        <text>{truncateText(toolCommand, maxContentWidth)}</text>
+        {effectiveDescription && (
+          <text fg="gray">
+            {truncateText(effectiveDescription, maxContentWidth)}
+          </text>
+        )}
       </box>
 
       {/* Code preview for new files */}
@@ -212,8 +221,8 @@ export function ApprovalPanel({
                     : "   "}{" "}
                   +
                   {line.content
-                    .slice(0, DIFF_LINE_MAX_WIDTH)
-                    .padEnd(DIFF_LINE_MAX_WIDTH, " ")}
+                    .slice(0, diffContentWidth)
+                    .padEnd(diffContentWidth, " ")}
                 </text>
               ) : (
                 <text bg="#5c2626">
@@ -222,8 +231,8 @@ export function ApprovalPanel({
                     : "   "}{" "}
                   -
                   {line.content
-                    .slice(0, DIFF_LINE_MAX_WIDTH)
-                    .padEnd(DIFF_LINE_MAX_WIDTH, " ")}
+                    .slice(0, diffContentWidth)
+                    .padEnd(diffContentWidth, " ")}
                 </text>
               )}
             </box>

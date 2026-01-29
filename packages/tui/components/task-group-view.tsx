@@ -1,9 +1,11 @@
 import type { SubagentUIMessage, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 import { getToolName, isToolUIPart } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import { PRIMARY_COLOR } from "../lib/colors";
+import { truncateText } from "../lib/truncate";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
@@ -124,8 +126,7 @@ function getToolSummary(part: SubagentMessagePart): string {
     case "tool-glob":
       return part.input?.pattern ? `"${part.input.pattern}"` : "";
     case "tool-bash": {
-      const cmd = part.input?.command ?? "";
-      return cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
+      return part.input?.command ?? "";
     }
     default:
       return "";
@@ -189,6 +190,8 @@ function TaskItem({
   const toolCount = countTaskTools(part);
   const tokenCount = getTaskTokens(part);
   const lastTool = getLastToolInfo(part);
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
 
   const desc = part.input?.task ?? "Task";
 
@@ -222,6 +225,24 @@ function TaskItem({
       ? `${lastTool.name}(${lastTool.summary})`
       : lastTool.name;
   }
+  const toolCountText = ` - ${toolCount} tool${toolCount !== 1 ? "s" : ""}`;
+  const tokenText =
+    tokenCount !== null ? ` - ${formatTokens(tokenCount)} tokens` : "";
+  const approvalText = approvalRequested ? " [NEEDS APPROVAL]" : "";
+  const timeText =
+    isRunning && elapsedSeconds > 0 ? ` - ${formatTime(elapsedSeconds)}` : "";
+  const suffixText = `${toolCountText}${tokenText}${approvalText}${timeText}`;
+  const prefixLength = `${treeChar} `.length + 2;
+  const maxDescWidth = Math.max(
+    10,
+    terminalWidth - prefixLength - suffixText.length,
+  );
+  const displayDesc = truncateText(desc, maxDescWidth);
+  const nestedPrefixLength = `${continueChar}└ `.length;
+  const maxNestedWidth = Math.max(10, terminalWidth - nestedPrefixLength);
+  const displayNestedStatus = nestedStatus
+    ? truncateText(nestedStatus, maxNestedWidth)
+    : "";
 
   return (
     <box flexDirection="column">
@@ -231,17 +252,9 @@ function TaskItem({
         <TaskStatusIndicator status={status} />
         <text> </text>
         <text fg={status === "error" || status === "denied" ? "red" : "white"}>
-          {desc}
+          {displayDesc}
         </text>
-        <text fg="gray">
-          {" "}
-          - {toolCount} tool{toolCount !== 1 ? "s" : ""}
-          {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
-        </text>
-        {approvalRequested && <text fg={PRIMARY_COLOR}> [NEEDS APPROVAL]</text>}
-        {isRunning && elapsedSeconds > 0 && (
-          <text fg="gray"> - {formatTime(elapsedSeconds)}</text>
-        )}
+        <text fg="gray">{suffixText}</text>
       </box>
 
       {/* Nested status line */}
@@ -253,7 +266,7 @@ function TaskItem({
               denied ? "red" : status === "interrupted" ? PRIMARY_COLOR : "gray"
             }
           >
-            {nestedStatus}
+            {displayNestedStatus}
           </text>
         </box>
       )}
@@ -268,6 +281,8 @@ type TaskGroupViewProps = {
 
 export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
   if (taskParts.length === 0) return null;
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
 
   // Count different states
   const hasApprovalPending = taskParts.some(
@@ -295,6 +310,8 @@ export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
   } else {
     headerText = `Running ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}...`;
   }
+  const headerMaxWidth = Math.max(10, terminalWidth - 4);
+  const displayHeaderText = truncateText(headerText, headerMaxWidth);
 
   return (
     <box flexDirection="column" marginTop={1} marginBottom={1}>
@@ -313,7 +330,7 @@ export function TaskGroupView({ taskParts, isStreaming }: TaskGroupViewProps) {
           </>
         )}
         <text fg="white" attributes={TextAttributes.BOLD}>
-          {headerText}
+          {displayHeaderText}
         </text>
       </box>
 

@@ -1,11 +1,15 @@
 import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 import React from "react";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
+import { truncateText } from "../../lib/truncate";
+
 import { getDotColor, ToolSpinner } from "./shared";
 
 export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
-  const command = String(part.input?.command ?? "");
+  const isInputReady = part.state !== "input-streaming";
+  const command = isInputReady ? String(part.input?.command ?? "") : "";
   const exitCode =
     part.state === "output-available" ? part.output?.exitCode : undefined;
   const stdout =
@@ -20,6 +24,19 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
   const allLines = combinedOutput.split("\n");
   const outputLines = allLines.slice(-3); // Last 3 lines
   const hasMoreLines = allLines.length > 3;
+  const { width } = useTerminalDimensions();
+  const terminalWidth = width ?? 80;
+  const prefixLength = 2 + "Bash(".length;
+  const suffixLength = 1;
+  const safetyPadding = 2;
+  const maxCommandWidth = Math.max(
+    1,
+    terminalWidth - prefixLength - suffixLength - safetyPadding,
+  );
+  const displayCommand = truncateText(command || "...", maxCommandWidth);
+  const outputMaxWidth = Math.max(10, terminalWidth - 6);
+  const errorPrefix = "Error: ";
+  const maxErrorWidth = Math.max(10, terminalWidth - 2 - errorPrefix.length);
 
   const dotColor = state.denied
     ? "red"
@@ -29,10 +46,18 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
         ? "red"
         : getDotColor(state);
 
+  const indicator = state.running ? (
+    <ToolSpinner />
+  ) : state.interrupted ? (
+    <text fg={PRIMARY_COLOR}>○ </text>
+  ) : (
+    <text fg={dotColor}>● </text>
+  );
+
   return (
     <box flexDirection="column" marginTop={1} marginBottom={1}>
       <box flexDirection="row">
-        {state.running ? <ToolSpinner /> : <text fg={dotColor}>● </text>}
+        {indicator}
         <text
           fg={state.denied ? "red" : "white"}
           attributes={TextAttributes.BOLD}
@@ -40,9 +65,7 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
           Bash
         </text>
         <text fg="gray">(</text>
-        <text fg="white">
-          {command.length > 60 ? command.slice(0, 60) + "…" : command || "..."}
-        </text>
+        <text fg="white">{displayCommand}</text>
         <text fg="gray">)</text>
       </box>
 
@@ -59,7 +82,8 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
       {/* Show output when completed */}
       {part.state === "output-available" &&
         !state.approvalRequested &&
-        !state.denied && (
+        !state.denied &&
+        !state.interrupted && (
           <box flexDirection="column" paddingLeft={2}>
             {isError && (
               <box flexDirection="row">
@@ -86,7 +110,7 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
                     )}
                     {(hasMoreLines || isError || i > 0) && <text> </text>}
                     <text fg={isError ? "red" : "white"}>
-                      {line.slice(0, 100)}
+                      {truncateText(line, outputMaxWidth)}
                     </text>
                   </box>
                 ))}
@@ -114,7 +138,17 @@ export function BashRenderer({ part, state }: ToolRendererProps<"tool-bash">) {
       {state.error && (
         <box paddingLeft={2} flexDirection="row">
           <text fg="gray">└ </text>
-          <text fg="red">Error: {state.error.slice(0, 80)}</text>
+          <text fg="red">
+            {errorPrefix}
+            {truncateText(state.error, maxErrorWidth)}
+          </text>
+        </box>
+      )}
+
+      {state.interrupted && (
+        <box paddingLeft={2} flexDirection="row">
+          <text fg="gray">└ </text>
+          <text fg={PRIMARY_COLOR}>Interrupted</text>
         </box>
       )}
     </box>

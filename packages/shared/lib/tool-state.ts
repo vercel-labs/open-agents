@@ -49,7 +49,7 @@ export function extractRenderState(
   activeApprovalId: string | null,
   isStreaming: boolean,
 ): ToolRenderState {
-  const running =
+  const isRunningState =
     part.state === "input-streaming" || part.state === "input-available";
   const approval = part.approval;
   const denied = part.state === "output-denied" || approval?.approved === false;
@@ -61,7 +61,8 @@ export function extractRenderState(
     approvalId != null && approvalId === activeApprovalId;
 
   // Tool was running but stream stopped - it was interrupted
-  const interrupted = running && !isStreaming;
+  const interrupted = isRunningState && !isStreaming;
+  const running = isRunningState && isStreaming;
 
   return {
     running,
