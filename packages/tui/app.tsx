@@ -6,7 +6,7 @@ import {
   useReasoningContext,
   useTodoView,
 } from "@open-harness/shared";
-import type { Selection } from "@opentui/core";
+import type { ScrollBoxRenderable, Selection } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
 import {
   useKeyboard,
@@ -584,6 +584,7 @@ function AppContent({ options }: AppProps) {
   const selectionClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const scrollboxRef = useRef<ScrollBoxRenderable | null>(null);
   const exit = useCallback(() => {
     renderer.destroy();
   }, [renderer]);
@@ -754,6 +755,13 @@ function AppContent({ options }: AppProps) {
       };
     }, [messages]);
 
+  const inputVisible =
+    !isStreaming &&
+    !isExpanded &&
+    state.activePanel.type === "none" &&
+    !hasPendingQuestion &&
+    !hasPendingApproval;
+
   // Extract todos for standalone display when not streaming
   const todos = useMemo(
     () => extractTodosFromLastAssistantMessage(messages),
@@ -793,6 +801,31 @@ function AppContent({ options }: AppProps) {
 
   useKeyboard((event) => {
     const input = inputFromKey(event);
+    if (
+      inputVisible &&
+      !event.ctrl &&
+      !event.meta &&
+      (input.length > 0 ||
+        event.name === "backspace" ||
+        event.name === "delete" ||
+        event.name === "return" ||
+        event.name === "linefeed" ||
+        event.name === "tab")
+    ) {
+      const scrollbox = scrollboxRef.current;
+      if (scrollbox) {
+        const viewportHeight = scrollbox.viewport.height;
+        if (viewportHeight > 0) {
+          const maxScrollTop = Math.max(
+            0,
+            scrollbox.scrollHeight - viewportHeight,
+          );
+          if (scrollbox.scrollTop < maxScrollTop) {
+            scrollbox.scrollTo({ x: 0, y: scrollbox.scrollHeight });
+          }
+        }
+      }
+    }
     if (event.name === "escape" && isStreaming) {
       stop();
       setWasInterrupted(true);
@@ -950,6 +983,7 @@ function AppContent({ options }: AppProps) {
         flexGrow={1}
         verticalScrollbarOptions={{ visible: false }}
         horizontalScrollbarOptions={{ visible: false }}
+        ref={scrollboxRef}
       >
         <box flexDirection="column">
           <Header
