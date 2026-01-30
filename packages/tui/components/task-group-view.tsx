@@ -225,10 +225,9 @@ function TaskItem({
     nestedStatus = denialReason ? `Denied: ${denialReason}` : "Denied";
   } else if (approvalRequested) {
     nestedStatus = "Awaiting approval...";
-  } else if (
-    status === "pending" ||
-    (status === "running" && toolCount === 0)
-  ) {
+  } else if (status === "pending") {
+    nestedStatus = "Initializing...";
+  } else if (status === "running" && (!lastTool || toolCount === 0)) {
     nestedStatus = "Initializing...";
   } else if (lastTool) {
     nestedStatus = lastTool.summary
