@@ -221,8 +221,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
           <text fg="gray">└ </text>
           <text fg="white">
             Complete ({toolParts.length} tool calls
-            {message?.metadata?.totalMessageUsage?.inputTokens
-              ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
+            {message?.metadata?.lastStepUsage?.inputTokens
+              ? `, ${formatTokens(message.metadata.lastStepUsage.inputTokens)} tokens`
               : ""}
             )
           </text>

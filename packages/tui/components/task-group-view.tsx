@@ -110,11 +110,6 @@ function countTaskTools(part: TaskToolUIPart): number {
 function getTaskTokens(part: TaskToolUIPart): number | null {
   if (part.state !== "output-available") return null;
   const message = part.output;
-  // Use totalMessageUsage when complete, lastStepUsage when still running
-  const isComplete = !part.preliminary;
-  if (isComplete) {
-    return message?.metadata?.totalMessageUsage?.inputTokens ?? null;
-  }
   return message?.metadata?.lastStepUsage?.inputTokens ?? null;
 }
 
