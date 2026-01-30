@@ -3,6 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["POSTGRES_URL"],
       "outputs": ["dist/**"]
     },
     "dev": {
