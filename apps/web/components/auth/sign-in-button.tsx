@@ -15,13 +15,33 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-function handleSignIn() {
-  window.location.href = "/api/auth/signin/github";
+function resolveRedirectPath(value: string): string {
+  if (value.startsWith("/") && !value.startsWith("//")) {
+    return value;
+  }
+
+  try {
+    const parsed = new URL(value, window.location.origin);
+    if (parsed.origin === window.location.origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch {
+    return window.location.pathname + window.location.search;
+  }
+
+  return window.location.pathname + window.location.search;
 }
 
-export function SignInButton() {
+function handleSignIn(callbackUrl?: string) {
+  const fallback = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
+  const encodedRedirect = encodeURIComponent(redirectPath);
+  window.location.href = `/api/auth/signin/github?next=${encodedRedirect}`;
+}
+
+export function SignInButton({ callbackUrl }: { callbackUrl?: string }) {
   return (
-    <Button onClick={handleSignIn}>
+    <Button onClick={() => handleSignIn(callbackUrl)}>
       <GitHubIcon className="mr-2 h-4 w-4" />
       Sign in with GitHub
     </Button>
