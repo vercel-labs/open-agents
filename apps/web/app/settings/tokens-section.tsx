@@ -2,6 +2,7 @@
 
 import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { InstallCommandCard } from "@/components/install-command-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -276,9 +277,13 @@ export function TokensSection() {
         </CardHeader>
         <CardContent>
           {tokens.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No connected clients. Use the CLI to authenticate.
-            </p>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                No connected clients yet. Install the CLI and authenticate to
+                link this device.
+              </p>
+              <InstallCommandCard />
+            </div>
           ) : (
             <div className="space-y-4">
               {tokens.map((token) => (

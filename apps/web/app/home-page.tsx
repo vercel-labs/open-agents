@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SignedOutHero } from "@/components/auth/signed-out-hero";
@@ -8,6 +9,7 @@ import { TaskInput } from "@/components/task-input";
 import { TaskList } from "@/components/task-list";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
+import { useCliTokens } from "@/hooks/use-cli-tokens";
 import { useSession } from "@/hooks/use-session";
 import { useTasks } from "@/hooks/use-tasks";
 
@@ -69,8 +71,8 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
+      <header className="flex items-center justify-between px-6 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+        <div className="flex items-center gap-2 sm:justify-self-start">
           <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border">
             <svg
               viewBox="0 0 24 24"
@@ -85,7 +87,12 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
           </div>
           <span className="text-lg font-semibold">Open Harness</span>
         </div>
-        <UserAvatarDropdown />
+        <div className="hidden sm:flex sm:justify-self-center">
+          <CliConnectBanner />
+        </div>
+        <div className="flex sm:justify-self-end">
+          <UserAvatarDropdown />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col items-center px-6 pt-16">
@@ -135,6 +142,26 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
           </Tabs>
         </div>
       </main>
+    </div>
+  );
+}
+
+function CliConnectBanner() {
+  const { tokens, loading } = useCliTokens();
+
+  if (loading || tokens.length > 0) {
+    return null;
+  }
+
+  return (
+    <div className="inline-flex items-center gap-3 rounded-full border border-border/60 bg-muted/70 px-4 py-1.5 text-sm text-muted-foreground">
+      <span className="text-foreground">Run tasks locally with the CLI.</span>
+      <Link
+        href="/settings/tokens"
+        className="text-foreground underline decoration-foreground/40 underline-offset-4 transition hover:decoration-foreground"
+      >
+        Set up CLI
+      </Link>
     </div>
   );
 }
