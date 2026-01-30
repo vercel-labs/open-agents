@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "drizzle-kit push",
     "build": "next build",
     "start": "next start",
     "lint": "oxlint",
