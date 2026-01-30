@@ -1,0 +1,9 @@
+{
+  "appName": "Open Harness",
+  "binName": "open-harness",
+  "repoOwner": "vercel-labs",
+  "repoName": "open-harness",
+  "installDir": ".open-harness/bin",
+  "installDomain": "openharness.dev",
+  "installPath": "/install"
+}

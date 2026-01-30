@@ -45,12 +45,12 @@ function getCurrentGitBranch(workingDirectory: string): string {
 }
 
 function printHelp() {
-  console.log("Deep Agent CLI");
+  console.log("Open Harness CLI");
   console.log("");
   console.log("Usage:");
-  console.log("  deep-agent [options]              Start interactive REPL");
-  console.log("  deep-agent [options] <prompt>     Run a one-shot prompt");
-  console.log("  deep-agent auth <command>         Authentication commands");
+  console.log("  open-harness [options]              Start interactive REPL");
+  console.log("  open-harness [options] <prompt>     Run a one-shot prompt");
+  console.log("  open-harness auth <command>         Authentication commands");
   console.log("");
   console.log("Options:");
   console.log(
@@ -76,11 +76,11 @@ function printHelp() {
   console.log("  SANDBOX_NEW_BRANCH  New branch to create (optional)");
   console.log("");
   console.log("Examples:");
-  console.log('  deep-agent "Explain the structure of this codebase"');
-  console.log("  deep-agent --sandbox=vercel");
-  console.log("  deep-agent --sandbox=vercel --repo=vercel/ai");
-  console.log('  deep-agent --sandbox=vercel --repo=vercel/ai "Fix the bug"');
-  console.log("  deep-agent auth login");
+  console.log('  open-harness "Explain the structure of this codebase"');
+  console.log("  open-harness --sandbox=vercel");
+  console.log("  open-harness --sandbox=vercel --repo=vercel/ai");
+  console.log('  open-harness --sandbox=vercel --repo=vercel/ai "Fix the bug"');
+  console.log("  open-harness auth login");
   console.log("");
   console.log("Keyboard shortcuts:");
   console.log("  esc           Abort current operation / exit");
@@ -157,7 +157,7 @@ async function main() {
 
   if (!credentials) {
     console.log("You must be logged in to use Open Harness.\n");
-    console.log("Run `deep-agent auth login` to authenticate.\n");
+    console.log("Run `open-harness auth login` to authenticate.\n");
     process.exit(1);
   }
 
@@ -171,7 +171,7 @@ async function main() {
       console.log("Continuing with cached credentials...\n");
     } else {
       console.log(`Authentication failed: ${validation.error}\n`);
-      console.log("Run `deep-agent auth login` to re-authenticate.\n");
+      console.log("Run `open-harness auth login` to re-authenticate.\n");
       process.exit(1);
     }
   }

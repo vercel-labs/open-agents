@@ -1,13 +1,13 @@
 import {
-  loadCredentials,
   clearCredentials,
   getCredentialsPath,
+  loadCredentials,
 } from "./credentials";
 import {
+  getWebUrl,
+  openBrowser,
   startDeviceFlow,
   waitForAuthorization,
-  openBrowser,
-  getWebUrl,
 } from "./device-flow";
 
 /**
@@ -18,7 +18,7 @@ export async function handleLogin(): Promise<void> {
   const existing = await loadCredentials();
   if (existing) {
     console.log(`Already logged in as ${existing.username}`);
-    console.log('Run "deep-agent auth logout" to sign out first.');
+    console.log('Run "open-harness auth logout" to sign out first.');
     return;
   }
 
@@ -99,7 +99,7 @@ export async function handleStatus(): Promise<void> {
 
   if (!credentials) {
     console.log("Not logged in");
-    console.log('Run "deep-agent auth login" to authenticate.');
+    console.log('Run "open-harness auth login" to authenticate.');
     return;
   }
 
@@ -139,7 +139,7 @@ export async function handleWhoami(): Promise<void> {
  * Print auth help
  */
 export function printAuthHelp(): void {
-  console.log("Usage: deep-agent auth <command>");
+  console.log("Usage: open-harness auth <command>");
   console.log("");
   console.log("Commands:");
   console.log("  login   Authenticate with the Open Harness web app");
@@ -148,8 +148,8 @@ export function printAuthHelp(): void {
   console.log("  whoami  Print the current user's username");
   console.log("");
   console.log("Examples:");
-  console.log("  deep-agent auth login");
-  console.log("  deep-agent auth status");
+  console.log("  open-harness auth login");
+  console.log("  open-harness auth status");
 }
 
 /**

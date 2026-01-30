@@ -1,4 +1,5 @@
 import { SignInButton } from "@/components/auth/sign-in-button";
+import { InstallCommandCard } from "@/components/install-command-card";
 
 export function SignedOutHero() {
   return (
@@ -28,7 +29,8 @@ export function SignedOutHero() {
         <p className="mt-3 max-w-md text-sm text-muted-foreground">
           Sign in to kick off coding tasks and track progress in one place.
         </p>
-        <div className="mt-6">
+        <div className="mt-8 flex w-full flex-col items-center gap-6">
+          <InstallCommandCard />
           <SignInButton />
         </div>
       </main>
