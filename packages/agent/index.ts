@@ -4,14 +4,14 @@ export {
   getModelLabel,
   MODEL_CONTEXT_LIMITS,
 } from "./context-management/model-limits";
-export type { DeepAgentCallOptions } from "./deep-agent";
+export { gateway } from "./models";
+export type { OpenHarnessAgentCallOptions } from "./open-harness-agent";
 export {
-  deepAgent,
   defaultModel,
   defaultModelLabel,
   extractTodosFromStep,
-} from "./deep-agent";
-export { gateway } from "./models";
+  openHarnessAgent,
+} from "./open-harness-agent";
 export type { ProxyConfig } from "./proxy-gateway";
 // Proxy gateway exports
 export { createProxyGateway } from "./proxy-gateway";
@@ -30,7 +30,10 @@ export type {
   SubagentUIMessage,
 } from "./subagents/types";
 export type { BuildSystemPromptOptions } from "./system-prompt";
-export { buildSystemPrompt, DEEP_AGENT_SYSTEM_PROMPT } from "./system-prompt";
+export {
+  buildSystemPrompt,
+  OPEN_HARNESS_SYSTEM_PROMPT,
+} from "./system-prompt";
 export {
   type AskUserQuestionInput,
   type AskUserQuestionOutput,

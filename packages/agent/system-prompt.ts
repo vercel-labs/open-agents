@@ -1,6 +1,6 @@
 import type { SkillMetadata } from "./skills/types";
 
-export const DEEP_AGENT_SYSTEM_PROMPT = `You are a deep agent - an AI coding assistant capable of handling complex, multi-step tasks through planning, context management, and delegation.
+export const OPEN_HARNESS_SYSTEM_PROMPT = `You are an Open Harness agent - an AI coding assistant capable of handling complex, multi-step tasks through planning, context management, and delegation.
 
 # Role & Agency
 
@@ -234,7 +234,7 @@ If you see a <command-name> tag in the conversation, the skill is already loaded
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
-  const parts = [DEEP_AGENT_SYSTEM_PROMPT];
+  const parts = [OPEN_HARNESS_SYSTEM_PROMPT];
 
   if (options.cwd) {
     parts.push(`\n# Environment\n\nWorking directory: ${options.cwd}`);
