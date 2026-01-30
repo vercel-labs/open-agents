@@ -1,8 +1,12 @@
 "use client";
 
-import { Cloud, Monitor, Terminal } from "lucide-react";
+import { Check, Copy } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SignInButton } from "@/components/auth/sign-in-button";
-import { InstallCommandCard } from "@/components/install-command-card";
+import installerConfig from "../../../../installer.config.json";
+
+const installUrl = `https://${installerConfig.installDomain}${installerConfig.installPath}`;
+const installCommand = `curl -fsSL ${installUrl} | bash`;
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -17,30 +21,99 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      timeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 1800);
+    } catch (error) {
+      console.error(
+        "Failed to copy:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+      aria-label="Copy to clipboard"
+    >
+      {copied ? (
+        <Check className="h-4 w-4 text-emerald-400" />
+      ) : (
+        <Copy className="h-4 w-4" />
+      )}
+    </button>
+  );
+}
+
 export function SignedOutHero() {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Ambient gradient background */}
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0a0a0b]">
+      {/* Ambient glow effects */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-[20%] -top-[30%] h-[600px] w-[600px] rounded-full bg-gradient-to-br from-blue-500/[0.07] via-violet-500/[0.05] to-transparent blur-3xl" />
-        <div className="absolute -bottom-[20%] -right-[10%] h-[500px] w-[500px] rounded-full bg-gradient-to-tl from-emerald-500/[0.05] via-cyan-500/[0.03] to-transparent blur-3xl" />
-        {/* Subtle grid pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.015]"
-          style={{
-            backgroundImage: `linear-gradient(to right, currentColor 1px, transparent 1px),
-                            linear-gradient(to bottom, currentColor 1px, transparent 1px)`,
-            backgroundSize: "64px 64px",
-          }}
-        />
+        <div className="absolute left-1/2 top-0 h-[600px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.07] blur-[150px]" />
+        <div className="absolute bottom-0 right-0 h-[400px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-blue-500/[0.05] blur-[120px]" />
+        <div className="absolute bottom-1/3 left-0 h-[300px] w-[400px] -translate-x-1/2 rounded-full bg-violet-500/[0.04] blur-[100px]" />
       </div>
 
-      <header className="relative z-10 flex items-center justify-between px-8 py-6">
+      {/* Dot grid pattern */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.4]"
+        style={{
+          backgroundImage:
+            "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+
+      {/* Scanline effect */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)",
+        }}
+      />
+
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-gradient-to-b from-muted/50 to-muted/30">
-            <Terminal className="h-4 w-4 text-foreground/80" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="h-4 w-4 text-white/70"
+            >
+              <polyline points="4,17 10,11 4,5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
           </div>
-          <span className="text-lg font-medium tracking-tight">
+          <span className="text-lg font-medium tracking-tight text-white">
             Open Harness
           </span>
         </div>
@@ -48,30 +121,38 @@ export function SignedOutHero() {
           href="https://github.com/vercel-labs/open-harness"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/50 hover:text-foreground"
+          className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-sm text-white/50 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-white/70"
         >
           <GitHubIcon className="h-4 w-4" />
-          <span>Open Source</span>
+          <span className="hidden sm:inline">Open Source</span>
         </a>
       </header>
 
+      {/* Main content */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16">
         {/* Hero section */}
-        <div className="mb-14 max-w-2xl text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border/40 bg-muted/30 px-4 py-1.5 text-sm text-muted-foreground backdrop-blur-sm">
-            Powered by AI SDK 6, Vercel AI Gateway, Vercel Sandbox, Turborepo,
-            Next.js and more
+        <div className="mb-12 max-w-2xl text-center">
+          {/* Tech badge */}
+          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 backdrop-blur">
+            <div className="flex items-center gap-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/40" />
+            </div>
+            <span className="text-xs text-white/40">
+              Powered by AI SDK, Vercel AI Gateway, and Next.js
+            </span>
           </div>
 
-          <h1 className="text-balance bg-gradient-to-b from-foreground via-foreground to-foreground/70 bg-clip-text text-4xl font-semibold tracking-tight text-transparent sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
             Ship code faster with
             <br />
-            <span className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text">
+            <span className="bg-gradient-to-r from-white via-white/90 to-white/60 bg-clip-text text-transparent">
               AI that runs anywhere
             </span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-muted-foreground">
+          <p className="mx-auto mt-6 max-w-lg text-base leading-relaxed text-white/50">
             A cloud platform and CLI that share the same AI workflows. Start in
             the browser, continue locally, or work entirely from your terminal.
           </p>
@@ -79,48 +160,113 @@ export function SignedOutHero() {
 
         {/* Cards section */}
         <div className="w-full max-w-3xl">
-          <div className="grid gap-5 sm:grid-cols-2">
-            {/* Web card */}
-            <div className="group relative rounded-2xl border border-border/50 bg-gradient-to-b from-card to-card/80 p-6 transition-all duration-300 hover:border-border hover:shadow-lg hover:shadow-black/5">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-muted/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Web card - Terminal style */}
+            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#111113]/80 shadow-2xl shadow-black/20 backdrop-blur-xl">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
+                </div>
+                <div className="ml-3 flex-1">
+                  <span className="font-mono text-xs text-white/30">
+                    browser
+                  </span>
+                </div>
+              </div>
 
-              <div className="relative">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-gradient-to-b from-background to-muted/30">
-                  <Cloud className="h-5 w-5 text-muted-foreground" />
+              {/* Content */}
+              <div className="p-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    className="h-5 w-5 text-white/60"
+                  >
+                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                  </svg>
                 </div>
 
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-foreground">
+                <h2 className="mb-2 text-lg font-medium tracking-tight text-white">
                   Start on the web
                 </h2>
-                <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+                <p className="mb-5 text-sm leading-relaxed text-white/40">
                   Run the coding agent from anywhere - no local setup required.
                   Just sign in and start shipping.
                 </p>
 
-                <SignInButton />
+                <SignInButton className="h-10 w-full border-0 bg-white text-sm font-medium text-black transition-all hover:bg-white/90" />
               </div>
             </div>
 
-            {/* CLI card */}
-            <div className="group relative rounded-2xl border border-border/50 bg-gradient-to-b from-card to-card/80 p-6 transition-all duration-300 hover:border-border hover:shadow-lg hover:shadow-black/5">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-muted/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            {/* CLI card - Terminal style */}
+            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#111113]/80 shadow-2xl shadow-black/20 backdrop-blur-xl">
+              {/* Window chrome */}
+              <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
+                </div>
+                <div className="ml-3 flex-1">
+                  <span className="font-mono text-xs text-white/30">
+                    terminal
+                  </span>
+                </div>
+              </div>
 
-              <div className="relative">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-gradient-to-b from-background to-muted/30">
-                  <Monitor className="h-5 w-5 text-muted-foreground" />
+              {/* Content */}
+              <div className="p-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="h-5 w-5 text-white/60"
+                  >
+                    <polyline points="4,17 10,11 4,5" />
+                    <line x1="12" y1="19" x2="20" y2="19" />
+                  </svg>
                 </div>
 
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-foreground">
+                <h2 className="mb-2 text-lg font-medium tracking-tight text-white">
                   Run it locally
                 </h2>
-                <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+                <p className="mb-5 text-sm leading-relaxed text-white/40">
                   Install the CLI to run the same AI workflows directly on your
                   machine.
                 </p>
 
-                <InstallCommandCard variant="inline" />
+                {/* Install command */}
+                <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] py-1 pl-4 pr-1 font-mono text-sm">
+                  <code className="flex-1 truncate text-white/60">
+                    {installCommand}
+                  </code>
+                  <CopyButton text={installCommand} />
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Bottom decoration */}
+        <div className="mt-12 flex items-center gap-6 text-xs text-white/30">
+          <div className="flex items-center gap-2">
+            <div className="h-1 w-1 rounded-full bg-emerald-400/60" />
+            <span>AI SDK 6</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-1 w-1 rounded-full bg-blue-400/60" />
+            <span>Vercel Sandbox</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-1 w-1 rounded-full bg-violet-400/60" />
+            <span>Turborepo</span>
           </div>
         </div>
       </main>

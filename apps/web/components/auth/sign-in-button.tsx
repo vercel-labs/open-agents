@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -39,9 +40,13 @@ function handleSignIn(callbackUrl?: string) {
   window.location.href = `/api/auth/signin/github?next=${encodedRedirect}`;
 }
 
-export function SignInButton({ callbackUrl }: { callbackUrl?: string }) {
+type SignInButtonProps = {
+  callbackUrl?: string;
+} & Omit<ComponentProps<typeof Button>, "onClick">;
+
+export function SignInButton({ callbackUrl, ...props }: SignInButtonProps) {
   return (
-    <Button onClick={() => handleSignIn(callbackUrl)}>
+    <Button {...props} onClick={() => handleSignIn(callbackUrl)}>
       <GitHubIcon className="mr-2 h-4 w-4" />
       Sign in with GitHub
     </Button>
