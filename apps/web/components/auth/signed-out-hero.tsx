@@ -117,15 +117,18 @@ export function SignedOutHero() {
             Open Harness
           </span>
         </div>
-        <a
-          href="https://github.com/vercel-labs/open-harness"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-sm text-white/50 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-white/70"
-        >
-          <GitHubIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">Open Source</span>
-        </a>
+        <div className="flex items-center gap-3">
+          <a
+            href="https://github.com/vercel-labs/open-harness"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-sm text-white/50 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-white/70"
+          >
+            <GitHubIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Open Source</span>
+          </a>
+          <SignInButton className="h-9 border-0 bg-white px-4 text-sm font-medium text-black transition-colors hover:bg-white/90" />
+        </div>
       </header>
 
       {/* Main content */}
