@@ -1,3 +1,4 @@
+import { MODEL_CONTEXT_LIMITS } from "@open-harness/agent";
 import type { ModelInfo } from "./models";
 import { AVAILABLE_MODELS } from "./models";
 
@@ -51,6 +52,22 @@ function formatPricing(pricePerToken: string): string | undefined {
   return `$${pricePerMillion.toFixed(2)}/1M`;
 }
 
+function getKnownContextLimit(modelId: string): number | undefined {
+  const directMatch = MODEL_CONTEXT_LIMITS[modelId];
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const normalizedModelId = modelId.toLowerCase();
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
+    if (normalizedModelId.includes(key.toLowerCase())) {
+      return limit;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Transform gateway model entry to ModelInfo format
  */
@@ -67,7 +84,7 @@ export function transformToModelInfo(model: GatewayModel): ModelInfo {
   const contextLimit =
     typeof model.context_window === "number" && model.context_window > 0
       ? model.context_window
-      : undefined;
+      : getKnownContextLimit(model.id);
 
   return {
     id: model.id,
