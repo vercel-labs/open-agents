@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "bun run --cwd ../.. build:installer",
+    "prebuild": "drizzle-kit migrate && bun run --cwd ../.. build:installer",
     "build": "next build",
     "start": "next start",
     "lint": "oxlint",
