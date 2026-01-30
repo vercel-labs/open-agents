@@ -58,7 +58,7 @@ CLI (apps/cli) -> TUI (packages/tui) -> Agent (packages/agent) -> Sandbox (packa
 ```
 
 1. **CLI** parses args, creates sandbox, loads AGENTS.md files, and starts the TUI
-2. **TUI** renders the terminal UI with Ink/React, manages chat state via `ChatTransport`
+2. **TUI** renders the terminal UI with OpenTUI, manages chat state via `ChatTransport`
 3. **Agent** (`deepAgent`) is a `ToolLoopAgent` with tools for file ops, bash, and task delegation
 4. **Sandbox** abstracts file system and shell operations (local fs or remote like Vercel)
 
@@ -66,7 +66,7 @@ CLI (apps/cli) -> TUI (packages/tui) -> Agent (packages/agent) -> Sandbox (packa
 
 - **packages/agent/** - Core agent implementation with tools, subagents, and context management
 - **packages/sandbox/** - Execution environment abstraction (local/remote)
-- **packages/tui/** - Terminal UI with Ink/React components
+- **packages/tui/** - Terminal UI with OpenTUI components
 - **packages/shared/** - Shared utilities across packages
 
 ### Subagent Pattern
