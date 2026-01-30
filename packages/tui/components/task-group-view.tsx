@@ -4,8 +4,10 @@ import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { getToolName, isToolUIPart } from "ai";
 import React, { useEffect, useRef, useState } from "react";
+import { useChatContext } from "../chat-context";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { truncateText } from "../lib/truncate";
+import { toRelativePath } from "./tool-renderers/shared";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
@@ -116,12 +118,14 @@ function getTaskTokens(part: TaskToolUIPart): number | null {
   return message?.metadata?.lastStepUsage?.inputTokens ?? null;
 }
 
-function getToolSummary(part: SubagentMessagePart): string {
+function getToolSummary(part: SubagentMessagePart, cwd: string): string {
   switch (part.type) {
     case "tool-read":
     case "tool-write":
     case "tool-edit":
-      return part.input?.filePath ?? "";
+      return part.input?.filePath
+        ? toRelativePath(part.input.filePath, cwd)
+        : "";
     case "tool-grep":
     case "tool-glob":
       return part.input?.pattern ? `"${part.input.pattern}"` : "";
@@ -135,12 +139,16 @@ function getToolSummary(part: SubagentMessagePart): string {
 
 function getLastToolInfo(
   part: TaskToolUIPart,
+  cwd: string,
 ): { name: string; summary: string } | null {
   if (part.state !== "output-available") return null;
   const message = part.output;
   if (!message?.parts) return null;
 
-  const toolParts = message.parts.filter(isToolUIPart);
+  const toolParts = message.parts.filter(
+    (toolPart) =>
+      isToolUIPart(toolPart) && toolPart.state !== "input-streaming",
+  );
   if (toolParts.length === 0) return null;
 
   const lastTool = toolParts[toolParts.length - 1];
@@ -148,7 +156,7 @@ function getLastToolInfo(
   if (!lastTool || !isToolUIPart(lastTool)) return null;
 
   const toolName = getToolName(lastTool);
-  const summary = getToolSummary(lastTool);
+  const summary = getToolSummary(lastTool, cwd);
 
   const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
   return { name: displayName, summary };
@@ -189,7 +197,9 @@ function TaskItem({
   const elapsedSeconds = useTaskTiming(isRunning);
   const toolCount = countTaskTools(part);
   const tokenCount = getTaskTokens(part);
-  const lastTool = getLastToolInfo(part);
+  const { state: chatState } = useChatContext();
+  const cwd = chatState.workingDirectory ?? process.cwd();
+  const lastTool = getLastToolInfo(part, cwd);
   const { width } = useTerminalDimensions();
   const terminalWidth = width ?? 80;
 
