@@ -253,22 +253,6 @@ export function SignedOutHero() {
             </div>
           </div>
         </div>
-
-        {/* Bottom decoration */}
-        <div className="mt-12 flex items-center gap-6 text-xs text-white/30">
-          <div className="flex items-center gap-2">
-            <div className="h-1 w-1 rounded-full bg-emerald-400/60" />
-            <span>AI SDK 6</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-1 w-1 rounded-full bg-blue-400/60" />
-            <span>Vercel Sandbox</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-1 w-1 rounded-full bg-violet-400/60" />
-            <span>Turborepo</span>
-          </div>
-        </div>
       </main>
     </div>
   );
