@@ -1,30 +1,30 @@
+import type { Sandbox } from "@open-harness/sandbox";
 import {
-  ToolLoopAgent,
-  stepCountIs,
+  gateway,
   type LanguageModel,
+  stepCountIs,
+  ToolLoopAgent,
   type ToolSet,
   type TypedToolResult,
-  gateway,
 } from "ai";
 import { z } from "zod";
-import {
-  todoWriteTool,
-  readFileTool,
-  writeFileTool,
-  editFileTool,
-  grepTool,
-  globTool,
-  bashTool,
-  taskTool,
-  askUserQuestionTool,
-  skillTool,
-} from "./tools";
+import { addCacheControl, compactContext } from "./context-management";
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
-import type { TodoItem, ApprovalConfig } from "./types";
+import {
+  askUserQuestionTool,
+  bashTool,
+  editFileTool,
+  globTool,
+  grepTool,
+  readFileTool,
+  skillTool,
+  taskTool,
+  todoWriteTool,
+  writeFileTool,
+} from "./tools";
+import type { ApprovalConfig, TodoItem } from "./types";
 import { approvalRuleSchema } from "./types";
-import { addCacheControl, compactContext } from "./context-management";
-import type { Sandbox } from "@open-harness/sandbox";
 
 const approvalConfigSchema = z.discriminatedUnion("type", [
   z.object({
@@ -106,7 +106,7 @@ export const deepAgent = new ToolLoopAgent({
         model: callModel,
       }),
       instructions,
-      experimental_context: { sandbox, approval, skills },
+      experimental_context: { sandbox, approval, skills, model: callModel },
     };
   },
 });

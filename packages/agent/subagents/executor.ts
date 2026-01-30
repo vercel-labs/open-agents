@@ -1,11 +1,12 @@
-import { ToolLoopAgent, stepCountIs } from "ai";
-import { z } from "zod";
-import { readFileTool } from "../tools/read";
-import { writeFileTool, editFileTool } from "../tools/write";
-import { grepTool } from "../tools/grep";
-import { globTool } from "../tools/glob";
-import { bashTool } from "../tools/bash";
 import type { Sandbox } from "@open-harness/sandbox";
+import type { LanguageModel } from "ai";
+import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import { z } from "zod";
+import { bashTool } from "../tools/bash";
+import { globTool } from "../tools/glob";
+import { grepTool } from "../tools/grep";
+import { readFileTool } from "../tools/read";
+import { editFileTool, writeFileTool } from "../tools/write";
 
 const EXECUTOR_SYSTEM_PROMPT = `You are an executor agent - a fire-and-forget subagent that completes specific, well-defined implementation tasks autonomously.
 
@@ -49,12 +50,13 @@ const callOptionsSchema = z.object({
   sandbox: z
     .custom<Sandbox>()
     .describe("Sandbox for file system and shell operations"),
+  model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
 
 export type ExecutorCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const executorSubagent = new ToolLoopAgent({
-  model: "anthropic/claude-haiku-4.5",
+  model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXECUTOR_SYSTEM_PROMPT,
   tools: {
     // All tools auto-approve in delegated mode (set via prepareCall)
@@ -69,8 +71,10 @@ export const executorSubagent = new ToolLoopAgent({
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
+    const model = options.model ?? settings.model;
     return {
       ...settings,
+      model,
       instructions: `${EXECUTOR_SYSTEM_PROMPT}
 
 Working directory: ${sandbox.workingDirectory}
@@ -88,6 +92,7 @@ ${options.instructions}
       experimental_context: {
         sandbox,
         approval: { type: "delegated" },
+        model,
       },
     };
   },

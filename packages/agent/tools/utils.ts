@@ -1,7 +1,17 @@
+import type { Sandbox } from "@open-harness/sandbox";
+import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
 import type { AgentContext, ApprovalConfig, ApprovalRule } from "../types";
-import type { Sandbox } from "@open-harness/sandbox";
-import type { ModelMessage } from "ai";
+
+function isAgentContext(value: unknown): value is AgentContext {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "sandbox" in value &&
+    "approval" in value &&
+    "model" in value
+  );
+}
 
 /**
  * Check if a file path is within a given directory.
@@ -36,7 +46,9 @@ export function getSandbox(
   experimental_context: unknown,
   toolName?: string,
 ): Sandbox {
-  const context = experimental_context as AgentContext | undefined;
+  const context = isAgentContext(experimental_context)
+    ? experimental_context
+    : undefined;
   if (!context?.sandbox) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
     const contextInfo = context
@@ -81,7 +93,9 @@ export function getApprovalContext(
   workingDirectory: string;
   approval: ApprovalConfig;
 } {
-  const context = experimental_context as AgentContext | undefined;
+  const context = isAgentContext(experimental_context)
+    ? experimental_context
+    : undefined;
   if (!context?.sandbox) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
     const contextInfo = context
@@ -105,6 +119,30 @@ export function getApprovalContext(
     workingDirectory: context.sandbox.workingDirectory,
     approval: context.approval ?? defaultApproval,
   };
+}
+
+/**
+ * Get model from experimental context with null safety.
+ * Throws a descriptive error if model is not initialized.
+ */
+export function getModel(
+  experimental_context: unknown,
+  toolName?: string,
+): LanguageModel {
+  const context = isAgentContext(experimental_context)
+    ? experimental_context
+    : undefined;
+  if (!context?.model) {
+    const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+    const contextInfo = context
+      ? `Context exists but model is missing. Context keys: ${Object.keys(context).join(", ")}`
+      : "Context is undefined or null";
+    throw new Error(
+      `Model not initialized in context${toolInfo}. ${contextInfo}. ` +
+        "Ensure the agent's prepareCall sets experimental_context: { model, ... }",
+    );
+  }
+  return context.model;
 }
 
 /**

@@ -1,10 +1,11 @@
-import { ToolLoopAgent, stepCountIs } from "ai";
-import { z } from "zod";
-import { readFileTool } from "../tools/read";
-import { grepTool } from "../tools/grep";
-import { globTool } from "../tools/glob";
-import { bashTool } from "../tools/bash";
 import type { Sandbox } from "@open-harness/sandbox";
+import type { LanguageModel } from "ai";
+import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import { z } from "zod";
+import { bashTool } from "../tools/bash";
+import { globTool } from "../tools/glob";
+import { grepTool } from "../tools/grep";
+import { readFileTool } from "../tools/read";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 
@@ -62,12 +63,13 @@ const callOptionsSchema = z.object({
   sandbox: z
     .custom<Sandbox>()
     .describe("Sandbox for file system and shell operations"),
+  model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
 
 export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const explorerSubagent = new ToolLoopAgent({
-  model: "anthropic/claude-haiku-4.5",
+  model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXPLORER_SYSTEM_PROMPT,
   tools: {
     // All tools auto-approve in delegated mode (set via prepareCall)
@@ -80,8 +82,10 @@ export const explorerSubagent = new ToolLoopAgent({
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
+    const model = options.model ?? settings.model;
     return {
       ...settings,
+      model,
       instructions: `${EXPLORER_SYSTEM_PROMPT}
 
 Working directory: ${sandbox.workingDirectory}
@@ -99,6 +103,7 @@ ${options.instructions}
       experimental_context: {
         sandbox,
         approval: { type: "delegated" },
+        model,
       },
     };
   },
