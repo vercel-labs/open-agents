@@ -161,7 +161,7 @@ Prefer structured questions over open-ended chat when you need specific decision
 
 - Be concise and direct
 - No emojis, minimal exclamation points
-- Link to files when mentioning them using \`file://\` URLs
+- Link to files when mentioning them using repo-relative paths (no \`file://\` prefix)
 - After completing work, summarize: what changed, verification results, next action if any`;
 
 const BACKGROUND_MODE_INSTRUCTIONS = `# Background Mode - Ephemeral Sandbox

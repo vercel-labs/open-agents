@@ -106,7 +106,7 @@ export const openHarnessAgent = new ToolLoopAgent({
         model: callModel,
       }),
       instructions,
-      experimental_context: { sandbox, approval, skills },
+      experimental_context: { sandbox, approval, skills, model: callModel },
     };
   },
 });

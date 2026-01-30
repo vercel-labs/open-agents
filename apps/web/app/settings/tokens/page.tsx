@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { TokensSection } from "../tokens-section";
+
+export const metadata: Metadata = {
+  title: "Connected Clients",
+  description: "Manage CLI and device connections for Open Harness.",
+};
 
 export default function TokensPage() {
   return (

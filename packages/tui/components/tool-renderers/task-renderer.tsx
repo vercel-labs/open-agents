@@ -4,19 +4,22 @@ import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import React from "react";
+import { useChatContext } from "../../chat-context";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { truncateText } from "../../lib/truncate";
-import { ToolSpinner } from "./shared";
+import { ToolSpinner, toRelativePath } from "./shared";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
-function getToolSummary(part: SubagentMessagePart): string {
+function getToolSummary(part: SubagentMessagePart, cwd: string): string {
   switch (part.type) {
     case "tool-read":
     case "tool-write":
     case "tool-edit":
-      return part.input?.filePath ?? "";
+      return part.input?.filePath
+        ? toRelativePath(part.input.filePath, cwd)
+        : "";
     case "tool-grep":
     case "tool-glob":
       return part.input?.pattern ? `"${part.input.pattern}"` : "";
@@ -28,13 +31,15 @@ function getToolSummary(part: SubagentMessagePart): string {
 }
 
 function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
+  const { state: chatState } = useChatContext();
+  const cwd = chatState.workingDirectory ?? process.cwd();
   const { width } = useTerminalDimensions();
   if (!isToolUIPart(part)) return null;
+  if (part.state === "input-streaming") return null;
   const toolName = getToolName(part);
-  const isRunning =
-    part.state === "input-streaming" || part.state === "input-available";
+  const isRunning = part.state === "input-available";
   const hasError = part.state === "output-error";
-  const summary = getToolSummary(part);
+  const summary = getToolSummary(part, cwd);
   const terminalWidth = width ?? 80;
 
   const dotColor = isRunning ? PRIMARY_COLOR : hasError ? "red" : "green";
@@ -88,9 +93,11 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
 
   // Get all parts in order, filter to text and tool parts
   const messageParts = message?.parts ?? [];
-  const relevantParts = messageParts.filter(
-    (p) => isToolUIPart(p) || isTextUIPart(p),
-  );
+  const relevantParts = messageParts.filter((p) => {
+    if (isTextUIPart(p)) return true;
+    if (!isToolUIPart(p)) return false;
+    return p.state !== "input-streaming";
+  });
   const toolParts = messageParts.filter(isToolUIPart);
 
   // Show only the last few parts to avoid too much output
@@ -214,8 +221,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
           <text fg="gray">└ </text>
           <text fg="white">
             Complete ({toolParts.length} tool calls
-            {message?.metadata?.totalMessageUsage?.inputTokens
-              ? `, ${formatTokens(message.metadata.totalMessageUsage.inputTokens)} tokens`
+            {message?.metadata?.lastStepUsage?.inputTokens
+              ? `, ${formatTokens(message.metadata.lastStepUsage.inputTokens)} tokens`
               : ""}
             )
           </text>

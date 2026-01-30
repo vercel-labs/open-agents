@@ -1,12 +1,24 @@
-import { redirect, notFound } from "next/navigation";
-import { getServerSession } from "@/lib/session/get-server-session";
-import { getTaskById, getTaskMessages } from "@/lib/db/tasks";
+import type { Metadata } from "next";
+import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
+import { getTaskById, getTaskMessages } from "@/lib/db/tasks";
+import { getServerSession } from "@/lib/session/get-server-session";
 import { TaskChatProvider } from "./task-context";
 import { TaskDetailContent } from "./task-detail-content";
 
 interface TaskPageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: TaskPageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  return {
+    title: `Task ${id}`,
+    description: "Review task progress, messages, and outputs.",
+  };
 }
 
 export default async function TaskPage({ params }: TaskPageProps) {
