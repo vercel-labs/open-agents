@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { ProfileSection } from "../profile-section";
+
+export const metadata: Metadata = {
+  title: "Profile",
+  description: "Update your Open Harness profile details.",
+};
 
 export default function ProfilePage() {
   return (
