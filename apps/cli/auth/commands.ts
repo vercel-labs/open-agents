@@ -18,7 +18,7 @@ export async function handleLogin(): Promise<void> {
   const existing = await loadCredentials();
   if (existing) {
     console.log(`Already logged in as ${existing.username}`);
-    console.log('Run "open-harness auth logout" to sign out first.');
+    console.log('Run "openharness auth logout" to sign out first.');
     return;
   }
 
@@ -99,7 +99,7 @@ export async function handleStatus(): Promise<void> {
 
   if (!credentials) {
     console.log("Not logged in");
-    console.log('Run "open-harness auth login" to authenticate.');
+    console.log('Run "openharness auth login" to authenticate.');
     return;
   }
 
@@ -139,7 +139,7 @@ export async function handleWhoami(): Promise<void> {
  * Print auth help
  */
 export function printAuthHelp(): void {
-  console.log("Usage: open-harness auth <command>");
+  console.log("Usage: openharness auth <command>");
   console.log("");
   console.log("Commands:");
   console.log("  login   Authenticate with the Open Harness web app");
@@ -148,8 +148,8 @@ export function printAuthHelp(): void {
   console.log("  whoami  Print the current user's username");
   console.log("");
   console.log("Examples:");
-  console.log("  open-harness auth login");
-  console.log("  open-harness auth status");
+  console.log("  openharness auth login");
+  console.log("  openharness auth status");
 }
 
 /**

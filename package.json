@@ -27,10 +27,19 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "ci": "bun run format:check && bun run lint && bun run typecheck",
-    "build:installer": "bun run scripts/build-installer.ts"
+    "build:installer": "bun run scripts/build-installer.ts",
+    "build:release-artifacts": "bun run scripts/build-release-artifacts.ts",
+    "release:local": "bun run scripts/release-local.ts",
+    "upload:release": "bun run scripts/upload-release-to-blob.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
+    "@opentui/core-darwin-arm64": "^0.1.75",
+    "@opentui/core-darwin-x64": "^0.1.75",
+    "@opentui/core-linux-arm64": "^0.1.75",
+    "@opentui/core-linux-x64": "^0.1.75",
+    "@opentui/core-win32-x64": "^0.1.75",
+    "@vercel/blob": "^0.27.0",
     "turbo": "^2.5.4",
     "typescript": "^5"
   },

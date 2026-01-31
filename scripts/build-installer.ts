@@ -9,6 +9,7 @@ const configSchema = z.object({
   installDir: z.string().min(1),
   installDomain: z.string().min(1),
   installPath: z.string().min(1),
+  blobPublicBaseUrl: z.string().min(1),
 });
 
 const rootDir = process.cwd();
@@ -31,6 +32,7 @@ async function main() {
     __INSTALL_DIR__: config.installDir,
     __INSTALL_DOMAIN__: config.installDomain,
     __INSTALL_PATH__: config.installPath,
+    __BLOB_PUBLIC_BASE_URL__: config.blobPublicBaseUrl,
   };
 
   let output = template;

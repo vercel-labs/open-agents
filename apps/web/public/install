@@ -2,13 +2,15 @@
 set -euo pipefail
 
 APP_NAME="Open Harness"
-BIN_NAME="open-harness"
+BIN_NAME="openharness"
 REPO_OWNER="vercel-labs"
 REPO_NAME="open-harness"
-INSTALL_DIR="$HOME/.open-harness/bin"
+INSTALL_DIR="$HOME/.openharness/bin"
 INSTALL_DOMAIN="openharness.dev"
 INSTALL_PATH="/install"
 INSTALL_URL="https://${INSTALL_DOMAIN}${INSTALL_PATH}"
+BLOB_PUBLIC_BASE_URL="${OPEN_HARNESS_BLOB_BASE_URL:-https://jalsc4d6nyeispea.public.blob.vercel-storage.com/open-harness}"
+BLOB_PUBLIC_BASE_URL="${BLOB_PUBLIC_BASE_URL%/}"
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -141,22 +143,25 @@ else
   fi
 
   if [ -z "$requested_version" ]; then
-    url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/$filename"
-    specific_version=$(curl -fsSL "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest" | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p')
+    specific_version=$(curl -fsSL "${BLOB_PUBLIC_BASE_URL}/latest" | tr -d '[:space:]')
+    specific_version="${specific_version#v}"
 
     if [[ $? -ne 0 || -z "$specific_version" ]]; then
-      echo -e "${RED}Failed to fetch version information${NC}"
+      echo -e "${RED}Failed to fetch latest version${NC}"
       exit 1
     fi
   else
     requested_version="${requested_version#v}"
-    url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${requested_version}/$filename"
     specific_version=$requested_version
+  fi
 
-    http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/v${requested_version}")
+  url="${BLOB_PUBLIC_BASE_URL}/${specific_version}/${filename}"
+
+  if [ -n "$requested_version" ]; then
+    http_status=$(curl -sI -o /dev/null -w "%{http_code}" "$url")
     if [ "$http_status" = "404" ]; then
       echo -e "${RED}Error: Release v${requested_version} not found${NC}"
-      echo -e "${MUTED}Available releases: https://github.com/${REPO_OWNER}/${REPO_NAME}/releases${NC}"
+      echo -e "${MUTED}Available releases: ${BLOB_PUBLIC_BASE_URL}${NC}"
       exit 1
     fi
   fi
@@ -197,6 +202,14 @@ download_and_install() {
 
   mv "$tmp_dir/$binary_name" "$INSTALL_DIR/$binary_name"
   chmod 755 "${INSTALL_DIR}/$binary_name"
+  if [ -f "$tmp_dir/parser.worker.js" ]; then
+    mv "$tmp_dir/parser.worker.js" "$INSTALL_DIR/parser.worker.js"
+  fi
+  if [ -d "$tmp_dir/node_modules/web-tree-sitter" ]; then
+    mkdir -p "$INSTALL_DIR/node_modules"
+    rm -rf "$INSTALL_DIR/node_modules/web-tree-sitter"
+    mv "$tmp_dir/node_modules/web-tree-sitter" "$INSTALL_DIR/node_modules/"
+  fi
   rm -rf "$tmp_dir"
 }
 
@@ -204,6 +217,16 @@ install_from_binary() {
   print_message info "${MUTED}Installing ${NC}${BIN_NAME}${MUTED} from: ${NC}$binary_path"
   cp "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
   chmod 755 "${INSTALL_DIR}/${BIN_NAME}"
+  worker_source="$(dirname "$binary_path")/parser.worker.js"
+  if [ -f "$worker_source" ]; then
+    cp "$worker_source" "${INSTALL_DIR}/parser.worker.js"
+  fi
+  module_source="$(dirname "$binary_path")/node_modules/web-tree-sitter"
+  if [ -d "$module_source" ]; then
+    mkdir -p "$INSTALL_DIR/node_modules"
+    rm -rf "$INSTALL_DIR/node_modules/web-tree-sitter"
+    cp -R "$module_source" "$INSTALL_DIR/node_modules/"
+  fi
 }
 
 if [ -n "$binary_path" ]; then

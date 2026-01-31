@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "open-harness": "./index.ts"
+    "openharness": "./index.ts"
   },
   "scripts": {
     "dev": "NODE_ENV=development bun run index.ts",

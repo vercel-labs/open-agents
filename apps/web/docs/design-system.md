@@ -134,7 +134,7 @@ Animated terminal prompt with blinking cursor:
 <div className="font-mono text-sm">
   <div className="flex items-center gap-2 text-white/40">
     <span className="text-emerald-400">$</span>
-    <span>open-harness auth login</span>
+    <span>openharness auth login</span>
     <span className="inline-block h-4 w-2 animate-pulse bg-emerald-400/80" />
   </div>
   <div className="mt-2 text-white/30">

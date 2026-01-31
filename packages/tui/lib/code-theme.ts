@@ -1,8 +1,16 @@
-import {
-  getTreeSitterClient,
-  SyntaxStyle,
-  type ThemeTokenStyle,
-} from "@opentui/core";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { getTreeSitterClient, SyntaxStyle, type ThemeTokenStyle } from "@opentui/core";
+
+const workerEnvVar = "OTUI_TREE_SITTER_WORKER_PATH";
+
+if (!process.env[workerEnvVar]) {
+  const execDir = dirname(process.execPath);
+  const workerPath = join(execDir, "parser.worker.js");
+  if (existsSync(workerPath)) {
+    process.env[workerEnvVar] = workerPath;
+  }
+}
 
 const CODE_THEME: ThemeTokenStyle[] = [
   { scope: ["default"], style: { foreground: "#d7d7d7" } },

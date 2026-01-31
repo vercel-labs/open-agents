@@ -102,7 +102,7 @@ function CLIAuthSignedOut() {
             </div>
             <div className="ml-4 flex-1 text-center">
               <span className="font-mono text-xs text-white/30">
-                open-harness auth
+                openharness auth
               </span>
             </div>
             <div className="w-[52px]" />
@@ -114,7 +114,7 @@ function CLIAuthSignedOut() {
             <div className="mb-6 font-mono text-sm">
               <div className="flex items-center gap-2 text-white/40">
                 <span className="text-emerald-400">$</span>
-                <span>open-harness auth login</span>
+                <span>openharness auth login</span>
                 <span className="inline-block h-4 w-2 animate-pulse bg-emerald-400/80" />
               </div>
               <div className="mt-2 text-white/30">
