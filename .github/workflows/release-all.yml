@@ -1,4 +1,4 @@
-name: Release CLI (Apple Silicon)
+name: Release CLI (All Platforms)
 
 on:
   workflow_dispatch:
@@ -24,6 +24,18 @@ jobs:
           - os: macos-14
             target: darwin-arm64
             opentui: "@opentui/core-darwin-arm64"
+          - os: macos-15-intel
+            target: darwin-x64
+            opentui: "@opentui/core-darwin-x64"
+          - os: ubuntu-latest
+            target: linux-x64
+            opentui: "@opentui/core-linux-x64"
+          - os: ubuntu-22.04-arm64
+            target: linux-arm64
+            opentui: "@opentui/core-linux-arm64"
+          - os: windows-latest
+            target: windows-x64
+            opentui: "@opentui/core-win32-x64"
 
     steps:
       - name: Checkout
