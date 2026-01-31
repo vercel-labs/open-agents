@@ -2,8 +2,10 @@
  * Configuration for CLI authentication with the web app
  */
 
+import { DEFAULT_WEB_APP_URL } from "./config.generated";
+
 // Production URL for the web app
-const PRODUCTION_URL = "https://openharness.dev";
+const PRODUCTION_URL = DEFAULT_WEB_APP_URL;
 
 /**
  * Get the web app URL for authentication

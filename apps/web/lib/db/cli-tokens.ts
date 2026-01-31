@@ -1,13 +1,13 @@
-import { db } from "./client";
-import { cliTokens, users } from "./schema";
-import { eq, and, lt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import {
-  createHash,
-  randomBytes,
   createCipheriv,
   createDecipheriv,
+  createHash,
+  randomBytes,
 } from "node:crypto";
+import { and, eq, lt } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { db } from "./client";
+import { cliTokens, users } from "./schema";
 
 // Token configuration
 const DEVICE_CODE_EXPIRY_MINUTES = 10;
@@ -270,9 +270,18 @@ export async function verifyUserCode(
   }
 
   // Generate the access token now (at verification time, not at device flow start)
-  const accessToken = generateToken(64);
-  const tokenHash = hashToken(accessToken);
-  const encryptedAccessToken = encryptToken(accessToken);
+  let accessToken: string;
+  let tokenHash: string;
+  let encryptedAccessToken: string;
+
+  try {
+    accessToken = generateToken(64);
+    tokenHash = hashToken(accessToken);
+    encryptedAccessToken = encryptToken(accessToken);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Token encryption failed: ${message}` };
+  }
 
   // Calculate token expiry
   const expiresAt = new Date(

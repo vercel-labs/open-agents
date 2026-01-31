@@ -1,9 +1,10 @@
-import { mkdir, cp, rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 
 const configSchema = z.object({
   binName: z.string().min(1),
+  installDomain: z.string().min(1),
 });
 
 type TargetSpec = {
@@ -193,6 +194,10 @@ async function main() {
   const configText = await Bun.file("installer.config.json").text();
   const parsedConfig: unknown = JSON.parse(configText);
   const config = configSchema.parse(parsedConfig);
+
+  const cliConfigPath = join("apps", "cli", "auth", "config.generated.ts");
+  const cliConfigContents = `export const DEFAULT_WEB_APP_URL = "https://${config.installDomain}";\n`;
+  await Bun.write(cliConfigPath, cliConfigContents);
 
   const invalidTargets = options.targets.filter(
     (target) => !(target in TARGETS),
