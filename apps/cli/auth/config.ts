@@ -3,7 +3,7 @@
  */
 
 // Production URL for the web app
-const PRODUCTION_URL = "https://app.openharness.dev";
+const PRODUCTION_URL = "https://openharness.dev";
 
 // Development URL (local)
 const DEVELOPMENT_URL = "http://localhost:3000";

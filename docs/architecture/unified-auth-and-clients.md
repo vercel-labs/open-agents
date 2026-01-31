@@ -83,13 +83,13 @@ Consolidate everything into one Next.js application that serves all clients.
 #### CLI
 
 1. User runs `openharness auth login`
-2. Opens browser to `https://app.openharness.dev/auth/cli?code=XXXXX`
+2. Opens browser to `https://openharness.dev/auth/cli?code=XXXXX`
 3. User approves (already logged in with GitHub)
 4. CLI receives session token
 5. All AI SDK calls proxy through the web app:
    ```typescript
    const gateway = createGateway({
-     baseURL: "https://app.openharness.dev/api/ai-proxy",
+     baseURL: "https://openharness.dev/api/ai-proxy",
      apiKey: sessionToken,
    });
    ```
