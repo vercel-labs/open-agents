@@ -152,7 +152,9 @@ async function main() {
     "windows-x64": { os: "windows", arch: "x64", ext: ".zip" },
   };
 
-  const invalidTargets = options.targets.filter((target) => !(target in combos));
+  const invalidTargets = options.targets.filter(
+    (target) => !(target in combos),
+  );
   if (invalidTargets.length > 0) {
     throw new Error(`Unknown targets: ${invalidTargets.join(", ")}`);
   }

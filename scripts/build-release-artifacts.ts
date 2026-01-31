@@ -154,7 +154,12 @@ async function ensureOpentuiPackage(packageName: string) {
 }
 
 async function copyTreeSitterWorker(stageDir: string) {
-  const sourcePath = join("node_modules", "@opentui", "core", "parser.worker.js");
+  const sourcePath = join(
+    "node_modules",
+    "@opentui",
+    "core",
+    "parser.worker.js",
+  );
   const exists = await Bun.file(sourcePath).exists();
   if (!exists) {
     throw new Error(
@@ -189,12 +194,16 @@ async function main() {
   const parsedConfig: unknown = JSON.parse(configText);
   const config = configSchema.parse(parsedConfig);
 
-  const invalidTargets = options.targets.filter((target) => !(target in TARGETS));
+  const invalidTargets = options.targets.filter(
+    (target) => !(target in TARGETS),
+  );
   if (invalidTargets.length > 0) {
     throw new Error(`Unknown targets: ${invalidTargets.join(", ")}`);
   }
 
-  const needsZip = options.targets.some((target) => TARGETS[target]?.archiveExt === ".zip");
+  const needsZip = options.targets.some(
+    (target) => TARGETS[target]?.archiveExt === ".zip",
+  );
   const needsTar = options.targets.some(
     (target) => TARGETS[target]?.archiveExt === ".tar.gz",
   );

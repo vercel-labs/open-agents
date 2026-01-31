@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getTreeSitterClient, SyntaxStyle, type ThemeTokenStyle } from "@opentui/core";
+import {
+  getTreeSitterClient,
+  SyntaxStyle,
+  type ThemeTokenStyle,
+} from "@opentui/core";
 
 const workerEnvVar = "OTUI_TREE_SITTER_WORKER_PATH";
 
