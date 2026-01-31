@@ -34,14 +34,16 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
+    "@vercel/blob": "^0.27.0",
+    "turbo": "^2.5.4",
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
     "@opentui/core-darwin-arm64": "^0.1.75",
     "@opentui/core-darwin-x64": "^0.1.75",
     "@opentui/core-linux-arm64": "^0.1.75",
     "@opentui/core-linux-x64": "^0.1.75",
-    "@opentui/core-win32-x64": "^0.1.75",
-    "@vercel/blob": "^0.27.0",
-    "turbo": "^2.5.4",
-    "typescript": "^5"
+    "@opentui/core-win32-x64": "^0.1.75"
   },
   "packageManager": "bun@1.2.14",
   "dependencies": {
