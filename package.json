@@ -17,7 +17,7 @@
     "zod": "^4.3.5"
   },
   "scripts": {
-    "cli": "AI_SDK_LOG_WARNINGS=false NODE_ENV=development bun run apps/cli/index.ts",
+    "cli": "AI_SDK_LOG_WARNINGS=false NODE_ENV=development OPEN_HARNESS_URL=http://localhost:3000 bun run apps/cli/index.ts",
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
     "build": "turbo build",

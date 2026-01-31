@@ -93,6 +93,20 @@ async function handleProxyRequest(
         signal: req.signal,
       });
 
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.error("AI gateway GET failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: responseText,
+        });
+        return new Response(responseText, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      }
+
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -108,6 +122,20 @@ async function handleProxyRequest(
       duplex: "half",
       signal: req.signal,
     });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      console.error("AI gateway POST failed:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: responseText,
+      });
+      return new Response(responseText, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    }
 
     // Return the response as-is (streaming)
     return new Response(response.body, {
