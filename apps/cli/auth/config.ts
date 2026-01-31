@@ -5,14 +5,11 @@
 // Production URL for the web app
 const PRODUCTION_URL = "https://openharness.dev";
 
-// Development URL (local)
-const DEVELOPMENT_URL = "http://localhost:3000";
-
 /**
  * Get the web app URL for authentication
  * Priority:
  * 1. OPEN_HARNESS_URL environment variable
- * 2. Development URL if NODE_ENV is "development"
+ * 2. OPEN_HARNESS_DEV_URL if NODE_ENV is "development"
  * 3. Production URL otherwise
  */
 export function getWebAppUrl(): string {
@@ -21,7 +18,11 @@ export function getWebAppUrl(): string {
   }
 
   const isDev = process.env.NODE_ENV === "development";
-  return isDev ? DEVELOPMENT_URL : PRODUCTION_URL;
+  if (isDev && process.env.OPEN_HARNESS_DEV_URL) {
+    return process.env.OPEN_HARNESS_DEV_URL;
+  }
+
+  return PRODUCTION_URL;
 }
 
 /**

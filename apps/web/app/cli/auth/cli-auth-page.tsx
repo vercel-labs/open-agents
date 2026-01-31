@@ -62,7 +62,11 @@ function CLIAuthShell({ children }: { children: ReactNode }) {
   );
 }
 
-function CLIAuthSignedOut() {
+function CLIAuthSignedOut({ initialCode }: CLIAuthContentProps) {
+  const callbackUrl = initialCode
+    ? `/cli/auth?code=${encodeURIComponent(initialCode)}`
+    : "/cli/auth";
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0a0a0b] px-6 py-12">
       {/* Ambient glow effects */}
@@ -157,7 +161,7 @@ function CLIAuthSignedOut() {
               </p>
 
               <SignInButton
-                callbackUrl="/cli/auth"
+                callbackUrl={callbackUrl}
                 size="lg"
                 className="mt-2 h-11 w-full border-0 bg-white text-sm font-medium text-black transition-all hover:bg-white/90"
               />
@@ -410,11 +414,11 @@ export function CLIAuthPage({
   const { loading, isAuthenticated } = useSession();
 
   if (!hasSessionCookie) {
-    return <CLIAuthSignedOut />;
+    return <CLIAuthSignedOut initialCode={initialCode} />;
   }
 
   if (!isAuthenticated && !loading) {
-    return <CLIAuthSignedOut />;
+    return <CLIAuthSignedOut initialCode={initialCode} />;
   }
 
   return <CLIAuthContent initialCode={initialCode} />;
