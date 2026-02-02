@@ -23,8 +23,13 @@ fi
 if command -v vc >/dev/null 2>&1; then
   echo "Syncing Vercel env..."
   "$REPO_ROOT/scripts/refresh-vercel-token.sh"
+  if [[ -f "$REPO_ROOT/.env.local" ]]; then
+    cp "$REPO_ROOT/.env.local" "$REPO_ROOT/apps/web/.env"
+    echo "✓ Copied .env.local to apps/web/.env"
+  fi
 else
   echo "Vercel CLI (vc) not found. Install it and run scripts/refresh-vercel-token.sh after \"vc link\"."
 fi
 
 echo "Setup complete. Fill in any remaining env vars in apps/cli/.env (GitHub token) and apps/web/.env."
+echo "To run: first start the web app with 'bun run web', then start the CLI with 'bun run cli'."
