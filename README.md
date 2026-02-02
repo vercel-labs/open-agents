@@ -8,6 +8,8 @@ vc link
 ./scripts/setup.sh
 ```
 
+When `vc link` prompts you, use team `vercel-labs` and project `open-harness-web`.
+
 `scripts/setup.sh` will:
 - Copy `apps/cli/.env.example` and `apps/web/.env.example` to `.env` if missing
 - Pull Vercel env into `.env.local`, then copy the full `.env.local` into `apps/web/.env` and sync `VERCEL_OIDC_TOKEN` into app envs
@@ -29,6 +31,7 @@ Web (`apps/web/.env`):
 - `VERCEL_OIDC_TOKEN` + `BLOB_READ_WRITE_TOKEN` (auto-filled by setup after `vc link`)
 
 If you update Vercel env vars later, re-run `scripts/refresh-vercel-token.sh`.
+`scripts/refresh-vercel-token.sh` only refreshes `VERCEL_OIDC_TOKEN` in app envs.
 
 ## Run
 
@@ -42,6 +45,12 @@ CLI (start after web):
 
 ```bash
 bun run cli
+```
+
+CLI auth (web app must be running; CLI proxies traffic through it):
+
+```bash
+bun run cli auth login
 ```
 
 ## Release
