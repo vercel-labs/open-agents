@@ -10,7 +10,7 @@ vc link
 
 `scripts/setup.sh` will:
 - Copy `apps/cli/.env.example` and `apps/web/.env.example` to `.env` if missing
-- Pull Vercel env into `.env.local` and sync `VERCEL_OIDC_TOKEN` / `BLOB_READ_WRITE_TOKEN` into app envs
+- Pull Vercel env into `.env.local` and sync `VERCEL_OIDC_TOKEN` / `BLOB_READ_WRITE_TOKEN` / `POSTGRES_URL` into app envs
 
 ### Credentials
 
