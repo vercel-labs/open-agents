@@ -22,12 +22,10 @@ fi
 
 # Update Web .env
 if [[ -f "$REPO_ROOT/apps/web/.env" ]]; then
-  # Remove existing token/db lines and append fresh ones
-  grep -v "^VERCEL_OIDC_TOKEN=" "$REPO_ROOT/apps/web/.env" | grep -v "^BLOB_READ_WRITE_TOKEN=" | grep -v "^POSTGRES_URL=" > "$REPO_ROOT/apps/web/.env.tmp" || true
+  # Remove existing token line and append fresh one
+  grep -v "^VERCEL_OIDC_TOKEN=" "$REPO_ROOT/apps/web/.env" > "$REPO_ROOT/apps/web/.env.tmp" || true
   mv "$REPO_ROOT/apps/web/.env.tmp" "$REPO_ROOT/apps/web/.env"
   grep "^VERCEL_OIDC_TOKEN=" "$REPO_ROOT/.env.local" >> "$REPO_ROOT/apps/web/.env"
-  grep "^BLOB_READ_WRITE_TOKEN=" "$REPO_ROOT/.env.local" >> "$REPO_ROOT/apps/web/.env"
-  grep "^POSTGRES_URL=" "$REPO_ROOT/.env.local" >> "$REPO_ROOT/apps/web/.env"
   echo "✓ Updated apps/web/.env"
 fi
 
