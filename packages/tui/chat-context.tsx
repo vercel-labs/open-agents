@@ -1,5 +1,9 @@
 import { Chat } from "@ai-sdk/react";
-import { getContextLimit, type SkillMetadata } from "@open-harness/agent";
+import {
+  getContextLimit,
+  type GatewayConfig,
+  type SkillMetadata,
+} from "@open-harness/agent";
 import { isToolUIPart, type LanguageModelUsage, type UIMessage } from "ai";
 import React, {
   createContext,
@@ -11,7 +15,7 @@ import React, {
   useState,
 } from "react";
 import { tuiAgent } from "./config";
-import { AVAILABLE_MODELS, type GatewayFn, type ModelInfo } from "./lib/models";
+import { AVAILABLE_MODELS, type ModelInfo } from "./lib/models";
 import type { Settings } from "./lib/settings";
 import { createAgentTransport } from "./transport";
 import type {
@@ -118,7 +122,8 @@ type ChatProviderProps = {
   currentBranch?: string;
   initialSessionId?: string;
   initialMessages?: TUIAgentUIMessage[];
-  gateway?: GatewayFn;
+  gatewayConfig?: GatewayConfig;
+  devtools?: boolean;
 };
 
 const DEFAULT_USAGE: LanguageModelUsage = {
@@ -188,7 +193,8 @@ export function ChatProvider({
   currentBranch = "",
   initialSessionId,
   initialMessages,
-  gateway,
+  gatewayConfig,
+  devtools = false,
 }: ChatProviderProps) {
   const [autoAcceptMode, setAutoAcceptMode] = useState<AutoAcceptMode>(
     initialAutoAcceptMode,
@@ -303,14 +309,16 @@ export function ChatProvider({
               onSessionCreated: setSessionId,
             }
           : undefined,
-        gateway,
+        gatewayConfig,
+        devtools,
       }),
     [
       agentOptions,
       handleUsageUpdate,
       promotePendingApprovalRules,
       projectPath,
-      gateway,
+      gatewayConfig,
+      devtools,
     ],
   );
 

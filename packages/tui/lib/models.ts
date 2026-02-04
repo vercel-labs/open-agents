@@ -1,4 +1,4 @@
-import { gateway as defaultGateway } from "@open-harness/agent";
+import { gateway, type GatewayConfig } from "@open-harness/agent";
 import type { GatewayModelId, LanguageModel } from "ai";
 
 export type ModelInfo = {
@@ -8,8 +8,6 @@ export type ModelInfo = {
   pricing?: { input: string; output: string };
   contextLimit?: number;
 };
-
-export type GatewayFn = (modelId: string) => LanguageModel;
 
 export const AVAILABLE_MODELS: ModelInfo[] = [
   {
@@ -40,13 +38,10 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
  */
 export function getModelById(
   id: string,
-  options: { devtools: boolean; gateway?: GatewayFn } = { devtools: false },
+  options: { devtools?: boolean; gatewayConfig?: GatewayConfig } = {},
 ): LanguageModel {
-  const gatewayFn =
-    options.gateway ??
-    ((modelId: string) =>
-      defaultGateway(modelId as GatewayModelId, {
-        devtools: options.devtools,
-      }));
-  return gatewayFn(id);
+  return gateway(id as GatewayModelId, {
+    devtools: options.devtools,
+    config: options.gatewayConfig,
+  });
 }

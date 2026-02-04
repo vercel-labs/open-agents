@@ -6,7 +6,7 @@ import {
   smoothStream,
   pruneMessages,
 } from "ai";
-import { defaultModelLabel } from "@open-harness/agent";
+import { defaultModelLabel, type GatewayConfig } from "@open-harness/agent";
 import type {
   TUIAgent,
   TUIAgentCallOptions,
@@ -15,7 +15,7 @@ import type {
   ApprovalRule,
 } from "./types";
 import type { Settings } from "./lib/settings";
-import { getModelById, type GatewayFn } from "./lib/models";
+import { getModelById } from "./lib/models";
 import { createSession, saveSession } from "./lib/session-storage";
 
 export type PersistenceConfig = {
@@ -34,7 +34,8 @@ export type AgentTransportOptions = {
   onUsageUpdate?: (usage: LanguageModelUsage) => void;
   onBeforeRequest?: () => void;
   persistence?: PersistenceConfig;
-  gateway?: GatewayFn;
+  gatewayConfig?: GatewayConfig;
+  devtools?: boolean;
 };
 
 export function createAgentTransport({
@@ -46,7 +47,8 @@ export function createAgentTransport({
   onUsageUpdate,
   onBeforeRequest,
   persistence,
-  gateway,
+  gatewayConfig,
+  devtools = false,
 }: AgentTransportOptions): ChatTransport<TUIAgentUIMessage> {
   return {
     sendMessages: async ({ messages, abortSignal }) => {
@@ -70,7 +72,7 @@ export function createAgentTransport({
       const sessionRules = getApprovalRules ? getApprovalRules() : [];
       const settings = getSettings?.() ?? {};
       const modelId = settings.modelId ?? defaultModelLabel;
-      const model = getModelById(modelId, { devtools: true, gateway });
+      const model = getModelById(modelId, { devtools, gatewayConfig });
 
       // Build the approval config based on the current base config type
       const baseApproval = agentOptions.approval;

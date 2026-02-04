@@ -1,6 +1,10 @@
-import { discoverSkills } from "@open-harness/agent";
+import { discoverSkills, gateway } from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { convertToModelMessages, gateway, type LanguageModelUsage } from "ai";
+import {
+  convertToModelMessages,
+  type GatewayModelId,
+  type LanguageModelUsage,
+} from "ai";
 import { nanoid } from "nanoid";
 import { WebAgentUIMessage } from "@/app/types";
 import { webAgent } from "@/app/config";
@@ -108,13 +112,13 @@ export async function POST(req: Request) {
   const modelId = task.modelId ?? DEFAULT_MODEL_ID;
   let model;
   try {
-    model = gateway(modelId);
+    model = gateway(modelId as GatewayModelId);
   } catch (error) {
     console.error(
       `Invalid model ID "${modelId}", falling back to default:`,
       error,
     );
-    model = gateway(DEFAULT_MODEL_ID);
+    model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
   const result = await webAgent.stream({

@@ -1,4 +1,5 @@
 import {
+  createGateway,
   defaultSettingsMiddleware,
   gateway as aiGateway,
   wrapLanguageModel,
@@ -7,8 +8,6 @@ import {
 } from "ai";
 import type { AnthropicProviderOptions } from "@ai-sdk/anthropic";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
-
-type LanguageModelV3 = LanguageModel & { specificationVersion: "v3" };
 
 const anthropicMiddleware = defaultSettingsMiddleware({
   settings: {
@@ -20,37 +19,37 @@ const anthropicMiddleware = defaultSettingsMiddleware({
   },
 });
 
-const languageModels = {
-  "anthropic/claude-opus-4.5": wrapLanguageModel({
-    model: aiGateway("anthropic/claude-opus-4.5"),
-    middleware: anthropicMiddleware,
-  }),
-  "anthropic/claude-sonnet-4.5": wrapLanguageModel({
-    model: aiGateway("anthropic/claude-sonnet-4.5"),
-    middleware: anthropicMiddleware,
-  }),
-  "anthropic/claude-haiku-4.5": wrapLanguageModel({
-    model: aiGateway("anthropic/claude-haiku-4.5"),
-    middleware: anthropicMiddleware,
-  }),
-};
+export interface GatewayConfig {
+  baseURL: string;
+  apiKey: string;
+}
+
+export interface GatewayOptions {
+  devtools?: boolean;
+  config?: GatewayConfig;
+}
 
 export function gateway(
   modelId: GatewayModelId,
-  { devtools }: { devtools: boolean },
-) {
-  let model: LanguageModelV3;
-  if (modelId in languageModels) {
-    model = languageModels[modelId as keyof typeof languageModels];
-  } else {
-    model = aiGateway(modelId);
+  options: GatewayOptions = {},
+): LanguageModel {
+  const { devtools = false, config } = options;
+
+  // Use custom gateway config or default AI SDK gateway
+  const baseGateway = config
+    ? createGateway({ baseURL: config.baseURL, apiKey: config.apiKey })
+    : aiGateway;
+
+  let model: LanguageModel = baseGateway(modelId);
+
+  // Apply anthropic middleware for anthropic models
+  if (modelId.startsWith("anthropic/")) {
+    model = wrapLanguageModel({ model, middleware: anthropicMiddleware });
   }
 
+  // Apply devtools middleware if requested
   if (devtools) {
-    model = wrapLanguageModel({
-      model,
-      middleware: devToolsMiddleware(),
-    });
+    model = wrapLanguageModel({ model, middleware: devToolsMiddleware() });
   }
 
   return model;

@@ -81,7 +81,8 @@ export async function createTUI(options: TUIOptions): Promise<void> {
       availableModels={options.availableModels}
       projectPath={projectPath}
       currentBranch={options.currentBranch}
-      gateway={options.gateway}
+      gatewayConfig={options.gatewayConfig}
+      devtools={options.devtools}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>
@@ -131,7 +132,8 @@ export async function renderTUI(options: TUIOptions) {
       availableModels={options.availableModels}
       projectPath={projectPath}
       currentBranch={options.currentBranch}
-      gateway={options.gateway}
+      gatewayConfig={options.gatewayConfig}
+      devtools={options.devtools}
     >
       <ReasoningProvider>
         <ExpandedViewProvider>

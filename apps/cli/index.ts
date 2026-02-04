@@ -3,11 +3,7 @@
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-  createProxyGateway,
-  defaultModelLabel,
-  discoverSkills,
-} from "@open-harness/agent";
+import { defaultModelLabel, discoverSkills } from "@open-harness/agent";
 import {
   createTUI,
   fetchAvailableModels,
@@ -62,6 +58,7 @@ function printHelp() {
   console.log(
     "  --dangerously-skip-all  Auto-accept all tool calls (YOLO mode)",
   );
+  console.log("  --devtools              Enable AI SDK devtools");
   console.log("  --help, -h              Show this help message");
   console.log("");
   console.log("Auth commands:");
@@ -97,6 +94,7 @@ interface ParsedArgs {
   initialPrompt?: string;
   showHelp: boolean;
   dangerouslySkipAll: boolean;
+  devtools: boolean;
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -104,6 +102,7 @@ function parseArgs(args: string[]): ParsedArgs {
   let repo: string | undefined;
   let showHelp = false;
   let dangerouslySkipAll = false;
+  let devtools = false;
   const promptParts: string[] = [];
 
   for (const arg of args) {
@@ -111,6 +110,8 @@ function parseArgs(args: string[]): ParsedArgs {
       showHelp = true;
     } else if (arg === "--dangerously-skip-all") {
       dangerouslySkipAll = true;
+    } else if (arg === "--devtools") {
+      devtools = true;
     } else if (arg.startsWith("--sandbox=")) {
       const value = arg.slice("--sandbox=".length);
       sandboxType = parseSandboxType(value);
@@ -130,6 +131,7 @@ function parseArgs(args: string[]): ParsedArgs {
     initialPrompt: promptParts.length > 0 ? promptParts.join(" ") : undefined,
     showHelp,
     dangerouslySkipAll,
+    devtools,
   };
 }
 
@@ -163,10 +165,10 @@ async function main() {
 
   const webAppUrl = getWebAppUrl();
 
-  const gateway = createProxyGateway({
-    baseUrl: webAppUrl,
-    token: credentials.token,
-  });
+  const gatewayConfig = {
+    baseURL: `${webAppUrl}/api/ai-proxy`,
+    apiKey: credentials.token,
+  };
 
   console.log(`Authenticated as ${credentials.username}\n`);
 
@@ -270,8 +272,10 @@ async function main() {
       ...((isRemoteSandbox || parsed.dangerouslySkipAll) && {
         initialAutoAcceptMode: "all" as const,
       }),
-      // Use proxy gateway when authenticated
-      gateway,
+      // Use proxy gateway config when authenticated
+      gatewayConfig,
+      // Enable devtools when --devtools flag is passed
+      devtools: parsed.devtools,
     });
   } catch (error) {
     // Ignore abort errors from ESC key interrupts

@@ -4,7 +4,7 @@ export {
   getModelLabel,
   MODEL_CONTEXT_LIMITS,
 } from "./context-management/model-limits";
-export { gateway } from "./models";
+export { gateway, type GatewayConfig, type GatewayOptions } from "./models";
 export type { OpenHarnessAgentCallOptions } from "./open-harness-agent";
 export {
   defaultModel,
@@ -12,9 +12,6 @@ export {
   extractTodosFromStep,
   openHarnessAgent,
 } from "./open-harness-agent";
-export type { ProxyConfig } from "./proxy-gateway";
-// Proxy gateway exports
-export { createProxyGateway } from "./proxy-gateway";
 // Skills exports
 export { discoverSkills, parseSkillFrontmatter } from "./skills/discovery";
 export { extractSkillBody, substituteArguments } from "./skills/loader";
