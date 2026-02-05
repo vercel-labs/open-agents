@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
-import { getChatById, getChatMessages, getSessionById } from "@/lib/db/sessions";
+import {
+  getChatById,
+  getChatMessages,
+  getSessionById,
+} from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionChatProvider } from "./session-chat-context";
 import { SessionChatContent } from "./session-chat-content";

@@ -137,8 +137,7 @@ export function SessionChatProvider({
   children,
 }: SessionChatProviderProps) {
   const sessionId = initialSession.id;
-  const [sessionRecord, setSessionRecord] =
-    useState<Session>(initialSession);
+  const [sessionRecord, setSessionRecord] = useState<Session>(initialSession);
   const [chatInfo, setChatInfo] = useState<Chat>(initialChat);
 
   const transport = useMemo(
@@ -163,10 +162,13 @@ export function SessionChatProvider({
     () => sandboxInfoCache.get(sessionId) ?? null,
   );
 
-  const setSandboxInfo = useCallback((info: SandboxInfo) => {
-    setSandboxInfoState(info);
-    sandboxInfoCache.set(sessionId, info);
-  }, [sessionId]);
+  const setSandboxInfo = useCallback(
+    (info: SandboxInfo) => {
+      setSandboxInfoState(info);
+      sandboxInfoCache.set(sessionId, info);
+    },
+    [sessionId],
+  );
 
   const clearSandboxInfo = useCallback(() => {
     setSandboxInfoState(null);

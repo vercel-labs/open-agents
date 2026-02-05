@@ -53,7 +53,9 @@ export async function POST(req: Request) {
     if (typeof sandbox.getState === "function") {
       const newState = sandbox.getState();
       if (newState) {
-        await updateSession(sessionId, { sandboxState: newState as SandboxState });
+        await updateSession(sessionId, {
+          sandboxState: newState as SandboxState,
+        });
       }
     }
 

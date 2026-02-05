@@ -250,9 +250,11 @@ export async function POST(req: Request) {
   }
 
   if (resolvedBranch !== branchName) {
-    await updateSession(sessionId, { branch: resolvedBranch }).catch((error) => {
-      console.error("Failed to update session branch:", error);
-    });
+    await updateSession(sessionId, { branch: resolvedBranch }).catch(
+      (error) => {
+        console.error("Failed to update session branch:", error);
+      },
+    );
   }
 
   if (createBranchOnly) {

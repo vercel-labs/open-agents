@@ -1,5 +1,9 @@
 import { getServerSession } from "@/lib/session/get-server-session";
-import { deleteSession, getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  deleteSession,
+  getSessionById,
+  updateSession,
+} from "@/lib/db/sessions";
 
 interface UpdateSessionRequest {
   title?: string;

@@ -98,46 +98,48 @@ export function SessionList({
 
   return (
     <div className="space-y-6">
-      {Array.from(groupedSessions.entries()).map(([dateGroup, groupSessions]) => (
-        <div key={dateGroup}>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {dateGroup}
-          </h3>
-          <div className="space-y-1">
-            {groupSessions.map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                onClick={() => onSessionClick(session.id)}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">
-                    {session.title}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatTime(new Date(session.createdAt))}
-                    {session.repoName && (
-                      <>
-                        {" "}
-                        <span className="text-muted-foreground/50">-</span>{" "}
-                        {session.repoName}
-                      </>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <PrStatus status={session.prStatus} />
-                  <DiffStats
-                    added={session.linesAdded}
-                    removed={session.linesRemoved}
-                  />
-                </div>
-              </button>
-            ))}
+      {Array.from(groupedSessions.entries()).map(
+        ([dateGroup, groupSessions]) => (
+          <div key={dateGroup}>
+            <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {dateGroup}
+            </h3>
+            <div className="space-y-1">
+              {groupSessions.map((session) => (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => onSessionClick(session.id)}
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">
+                      {session.title}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatTime(new Date(session.createdAt))}
+                      {session.repoName && (
+                        <>
+                          {" "}
+                          <span className="text-muted-foreground/50">-</span>{" "}
+                          {session.repoName}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <PrStatus status={session.prStatus} />
+                    <DiffStats
+                      added={session.linesAdded}
+                      removed={session.linesRemoved}
+                    />
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ),
+      )}
     </div>
   );
 }
