@@ -75,6 +75,7 @@ To work through these todos, follow this pattern:
 ### Features
 
 - [ ] Add plan mode
+- [ ] Make exec timeout configurable via tool options for grep/glob (default 30s)
 
 ### Explored/Blocked
 

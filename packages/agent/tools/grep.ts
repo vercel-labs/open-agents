@@ -1,7 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import type { Sandbox } from "@open-harness/sandbox";
 import {
   getSandbox,
   getApprovalContext,
@@ -15,79 +14,8 @@ interface GrepMatch {
   content: string;
 }
 
-async function grepFile(
-  filePath: string,
-  pattern: RegExp,
-  maxMatchesPerFile: number,
-  sandbox: Sandbox,
-): Promise<GrepMatch[]> {
-  try {
-    const content = await sandbox.readFile(filePath, "utf-8");
-    const lines = content.split("\n");
-    const matches: GrepMatch[] = [];
-
-    for (
-      let i = 0;
-      i < lines.length && matches.length < maxMatchesPerFile;
-      i++
-    ) {
-      const line = lines[i];
-      if (line !== undefined && pattern.test(line)) {
-        matches.push({
-          file: filePath,
-          line: i + 1,
-          content: line.slice(0, 200),
-        });
-      }
-    }
-
-    return matches;
-  } catch {
-    return [];
-  }
-}
-
-async function walkDirectory(
-  dir: string,
-  glob: string | undefined,
-  sandbox: Sandbox,
-): Promise<string[]> {
-  const files: string[] = [];
-
-  async function walk(currentDir: string) {
-    try {
-      const entries = await sandbox.readdir(currentDir, {
-        withFileTypes: true,
-      });
-
-      for (const entry of entries) {
-        const fullPath = path.join(currentDir, entry.name);
-
-        if (entry.name.startsWith(".") || entry.name === "node_modules") {
-          continue;
-        }
-
-        if (entry.isDirectory()) {
-          await walk(fullPath);
-        } else if (entry.isFile()) {
-          if (glob) {
-            const ext = path.extname(entry.name);
-            const globExt = glob.startsWith("*") ? glob.slice(1) : glob;
-            if (ext === globExt || entry.name.endsWith(globExt)) {
-              files.push(fullPath);
-            }
-          } else {
-            files.push(fullPath);
-          }
-        }
-      }
-    } catch {
-      // Skip directories we can't read
-    }
-  }
-
-  await walk(dir);
-  return files;
+function shellEscape(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
 const grepInputSchema = z.object({
@@ -158,41 +86,89 @@ EXAMPLES:
       const workingDirectory = sandbox.workingDirectory;
 
       try {
-        const flags = caseSensitive ? "g" : "gi";
-        const regex = new RegExp(pattern, flags);
-
         const absolutePath = path.isAbsolute(searchPath)
           ? searchPath
           : path.resolve(workingDirectory, searchPath);
 
-        const stats = await sandbox.stat(absolutePath);
-        let files: string[];
-
-        if (stats.isDirectory()) {
-          files = await walkDirectory(absolutePath, glob, sandbox);
-        } else {
-          files = [absolutePath];
-        }
-
-        const allMatches: GrepMatch[] = [];
         const maxTotal = 100;
         const maxPerFile = 10;
 
-        for (const file of files) {
-          if (allMatches.length >= maxTotal) break;
+        const args: string[] = ["grep", "-rn"];
+        if (!caseSensitive) args.push("-i");
 
-          const remaining = maxTotal - allMatches.length;
-          const limit = Math.min(maxPerFile, remaining);
-          const matches = await grepFile(file, regex, limit, sandbox);
-          allMatches.push(...matches);
+        args.push("--exclude-dir=.*", "--exclude-dir=node_modules");
+        args.push("--null");
+
+        if (glob) {
+          args.push(`--include=${shellEscape(glob)}`);
+        }
+
+        args.push("-E", shellEscape(pattern), shellEscape(absolutePath));
+
+        const command = args.join(" ") + ` | head -n ${maxTotal}`;
+
+        const result = await sandbox.exec(
+          command,
+          sandbox.workingDirectory,
+          30_000,
+        );
+
+        // grep exits with 1 when no matches found - that's not an error
+        if (!result.success && result.exitCode !== 1) {
+          return {
+            success: false,
+            error: `Grep failed: ${result.stderr}`,
+          };
+        }
+
+        const matches: GrepMatch[] = [];
+        const filesSet = new Set<string>();
+        const fileMatchCounts = new Map<string, number>();
+
+        const lines = result.stdout.split("\n").filter(Boolean);
+        for (const line of lines) {
+          if (matches.length >= maxTotal) break;
+
+          // With --null, format is: file\0line:content
+          // Fall back to colon-based parsing if NUL not present
+          const nulIndex = line.indexOf("\0");
+          let file: string;
+          let rest: string;
+          if (nulIndex !== -1) {
+            file = line.slice(0, nulIndex);
+            rest = line.slice(nulIndex + 1);
+          } else {
+            const firstColon = line.indexOf(":");
+            if (firstColon === -1) continue;
+            file = line.slice(0, firstColon);
+            rest = line.slice(firstColon + 1);
+          }
+          const colonIndex = rest.indexOf(":");
+          if (colonIndex === -1) continue;
+
+          const lineNum = parseInt(rest.slice(0, colonIndex), 10);
+          const content = rest.slice(colonIndex + 1);
+
+          if (isNaN(lineNum)) continue;
+
+          filesSet.add(file);
+          const currentFileCount = fileMatchCounts.get(file) ?? 0;
+          if (currentFileCount >= maxPerFile) continue;
+
+          fileMatchCounts.set(file, currentFileCount + 1);
+          matches.push({
+            file,
+            line: lineNum,
+            content: content.slice(0, 200),
+          });
         }
 
         return {
           success: true,
           pattern,
-          matchCount: allMatches.length,
-          filesSearched: files.length,
-          matches: allMatches,
+          matchCount: matches.length,
+          filesWithMatches: filesSet.size,
+          matches,
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
