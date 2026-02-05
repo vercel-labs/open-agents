@@ -1474,12 +1474,10 @@ export function SessionChatContent() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={async () => {
-                // Stop sandbox if active (save snapshot first)
-                if (sandboxInfo) {
-                  await handleSaveAndKill();
-                }
-                await archiveSession();
+              onClick={() => {
+                void archiveSession().catch((error) => {
+                  console.error("Failed to archive session:", error);
+                });
                 router.push("/");
               }}
             >

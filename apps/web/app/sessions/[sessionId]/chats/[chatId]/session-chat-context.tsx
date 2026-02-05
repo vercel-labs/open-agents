@@ -11,6 +11,7 @@ import {
 } from "react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
+import { useSWRConfig } from "swr";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { Chat, Session } from "@/lib/db/schema";
 import type { SandboxState } from "@open-harness/sandbox";
@@ -130,12 +131,17 @@ type SessionChatProviderProps = {
   children: ReactNode;
 };
 
+interface SessionsResponse {
+  sessions: Session[];
+}
+
 export function SessionChatProvider({
   session: initialSession,
   chat: initialChat,
   initialMessages,
   children,
 }: SessionChatProviderProps) {
+  const { mutate } = useSWRConfig();
   const sessionId = initialSession.id;
   const [sessionRecord, setSessionRecord] = useState<Session>(initialSession);
   const [chatInfo, setChatInfo] = useState<Chat>(initialChat);
@@ -314,6 +320,26 @@ export function SessionChatProvider({
   }, [refreshFilesSWR]);
 
   const archiveSession = useCallback(async () => {
+    const previousSession = sessionRecord;
+    const optimisticSession: Session = {
+      ...sessionRecord,
+      status: "archived",
+    };
+
+    setSessionRecord(optimisticSession);
+    await mutate<SessionsResponse>(
+      "/api/sessions",
+      (current) =>
+        current
+          ? {
+              sessions: current.sessions.map((s) =>
+                s.id === sessionRecord.id ? optimisticSession : s,
+              ),
+            }
+          : current,
+      { revalidate: false },
+    );
+
     const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -323,13 +349,37 @@ export function SessionChatProvider({
     const data = (await res.json()) as { session?: Session; error?: string };
 
     if (!res.ok) {
+      setSessionRecord(previousSession);
+      await mutate<SessionsResponse>(
+        "/api/sessions",
+        (current) =>
+          current
+            ? {
+                sessions: current.sessions.map((s) =>
+                  s.id === sessionRecord.id ? previousSession : s,
+                ),
+              }
+            : current,
+        { revalidate: false },
+      );
       throw new Error(data.error ?? "Failed to archive session");
     }
 
-    if (data.session) {
-      setSessionRecord(data.session);
-    }
-  }, [sessionRecord.id]);
+    const nextSession = data.session ?? optimisticSession;
+    setSessionRecord(nextSession);
+    await mutate<SessionsResponse>(
+      "/api/sessions",
+      (current) =>
+        current
+          ? {
+              sessions: current.sessions.map((s) =>
+                s.id === sessionRecord.id ? nextSession : s,
+              ),
+            }
+          : current,
+      { revalidate: false },
+    );
+  }, [sessionRecord, mutate]);
 
   const updateSessionTitle = useCallback(
     async (title: string) => {

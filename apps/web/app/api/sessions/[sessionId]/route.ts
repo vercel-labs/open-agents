@@ -1,9 +1,12 @@
+import { connectSandbox } from "@open-harness/sandbox";
+import { after } from "next/server";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   deleteSession,
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
+import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 
 interface UpdateSessionRequest {
   title?: string;
@@ -64,10 +67,40 @@ export async function PATCH(
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const shouldStopSandboxAfterArchive =
+    body.status === "archived" && existingSession.status !== "archived";
+
   const updatedSession = await updateSession(sessionId, body);
   if (!updatedSession) {
     return Response.json({ error: "Session not found" }, { status: 404 });
   }
+
+  if (shouldStopSandboxAfterArchive) {
+    after(async () => {
+      try {
+        const archivedSession = await getSessionById(sessionId);
+        if (!archivedSession || archivedSession.status !== "archived") {
+          return;
+        }
+        if (!canOperateOnSandbox(archivedSession.sandboxState)) {
+          return;
+        }
+
+        const sandbox = await connectSandbox(archivedSession.sandboxState);
+        await sandbox.stop();
+
+        await updateSession(sessionId, {
+          sandboxState: clearSandboxState(archivedSession.sandboxState),
+        });
+      } catch (error) {
+        console.error(
+          `[Sessions] Failed to stop sandbox for archived session ${sessionId}:`,
+          error,
+        );
+      }
+    });
+  }
+
   return Response.json({ session: updatedSession });
 }
 
