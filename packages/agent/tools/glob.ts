@@ -123,9 +123,9 @@ EXAMPLES:
           literalPrefix.length,
           patternParts.length - 1,
         );
-        const hasRecursiveWildcard = remainingDirSegments.some(
-          (s) => s === "**",
-        );
+        // A trailing "**" segment (e.g. "**", "src/**") should also remain recursive.
+        const hasRecursiveWildcard =
+          remainingDirSegments.some((s) => s === "**") || namePattern === "**";
 
         let maxDepth: number | undefined;
         if (!hasRecursiveWildcard) {

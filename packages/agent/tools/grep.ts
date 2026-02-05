@@ -111,7 +111,7 @@ EXAMPLES:
           shellEscape(absolutePath),
         );
 
-        const command = args.join(" ") + ` | head -n ${maxTotal}`;
+        const command = args.join(" ");
 
         const result = await sandbox.exec(
           command,
@@ -121,9 +121,10 @@ EXAMPLES:
 
         // grep exits with 1 when no matches found - that's not an error
         if (!result.success && result.exitCode !== 1) {
+          const errorOutput = (result.stderr || result.stdout).slice(0, 500);
           return {
             success: false,
-            error: `Grep failed (exit ${result.exitCode}): ${result.stdout.slice(0, 500)}`,
+            error: `Grep failed (exit ${result.exitCode}): ${errorOutput}`,
           };
         }
 
