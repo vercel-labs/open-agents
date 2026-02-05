@@ -329,6 +329,14 @@ export function pathNeedsApproval(options: PathApprovalOptions): boolean {
   }
 }
 
+/**
+ * Escape a string for safe use in a single-quoted shell argument.
+ * Wraps the string in single quotes and escapes any embedded single quotes.
+ */
+export function shellEscape(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+
 export type ToolNeedsApprovalFunction<INPUT> = (
   input: INPUT,
   options: {

@@ -6,16 +6,13 @@ import {
   getApprovalContext,
   shouldAutoApprove,
   pathNeedsApproval,
+  shellEscape,
 } from "./utils";
 
 interface FileInfo {
   path: string;
   size: number;
   modifiedAt: number;
-}
-
-function shellEscape(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
 const globInputSchema = z.object({
@@ -154,12 +151,12 @@ EXAMPLES:
         );
 
         // Get file metadata (mtime, size) along with paths.
-        // GNU find -printf (Linux): outputs mtime/size/path directly, no -exec needed.
-        // Falls back to BSD stat (macOS) if -printf is unavailable.
+        // GNU find -printf (Linux): outputs mtime/size/path directly.
+        // BSD find (macOS): pipe to xargs stat to avoid running find twice.
         const findBase = findArgs.join(" ");
         const command = [
           `{ ${findBase} -printf '%T@\\t%s\\t%p\\n' 2>/dev/null`,
-          `|| ${findBase} -exec stat -f '%m%t%z%t%N' {} + ; }`,
+          `|| ${findBase} -print0 | xargs -0 stat -f '%m%t%z%t%N' ; }`,
           `| sort -t$'\\t' -k1 -rn | head -n ${limit}`,
         ].join(" ");
 

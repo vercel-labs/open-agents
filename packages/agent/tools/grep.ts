@@ -6,16 +6,13 @@ import {
   getApprovalContext,
   shouldAutoApprove,
   pathNeedsApproval,
+  shellEscape,
 } from "./utils";
 
 interface GrepMatch {
   file: string;
   line: number;
   content: string;
-}
-
-function shellEscape(s: string): string {
-  return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
 const grepInputSchema = z.object({
@@ -97,13 +94,22 @@ EXAMPLES:
         const args: string[] = ["grep", "-rn"];
         if (!caseSensitive) args.push("-i");
 
-        args.push("--exclude-dir='.*'", "--exclude-dir='node_modules'");
+        args.push(
+          `--exclude-dir=${shellEscape(".*")}`,
+          `--exclude-dir=${shellEscape("node_modules")}`,
+        );
 
         if (glob) {
           args.push(`--include=${shellEscape(glob)}`);
         }
 
-        args.push("-E", shellEscape(pattern), shellEscape(absolutePath));
+        args.push(
+          `-m`,
+          String(maxPerFile),
+          "-E",
+          shellEscape(pattern),
+          shellEscape(absolutePath),
+        );
 
         const command = args.join(" ") + ` | head -n ${maxTotal}`;
 
