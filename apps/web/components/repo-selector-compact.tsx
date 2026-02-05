@@ -1,21 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import useSWR from "swr";
 import {
-  Folder,
-  ChevronDown,
   CheckIcon,
-  LockIcon,
+  ChevronDown,
+  Folder,
   Loader2Icon,
+  LockIcon,
+  RefreshCw,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { fetcher } from "@/lib/swr";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import {
   Command,
   CommandEmpty,
@@ -25,6 +19,13 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { fetcher } from "@/lib/swr";
+import { cn } from "@/lib/utils";
 
 interface Owner {
   login: string;
@@ -73,6 +74,10 @@ export function RepoSelectorCompact({
 }: RepoSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
+  const [repoSearch, setRepoSearch] = useState("");
+  const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { mutate } = useSWRConfig();
 
   // Track whether we've auto-selected an owner
   const hasAutoSelectedRef = useRef(false);
@@ -83,11 +88,40 @@ export function RepoSelectorCompact({
     fetchOwners,
   );
 
+  // Build the repos URL for current owner
+  const reposUrl = currentOwner
+    ? `/api/github/repos?${new URLSearchParams({
+        owner: currentOwner,
+        limit: "50",
+        ...(debouncedRepoSearch ? { query: debouncedRepoSearch } : {}),
+      }).toString()}`
+    : null;
+
   // Fetch repos for current owner (conditional fetch)
   const { data: repos = [], isLoading: reposLoading } = useSWR<Repo[]>(
-    currentOwner ? `/api/github/repos?owner=${currentOwner}` : null,
+    reposUrl,
     fetcher,
   );
+
+  // Revalidate cache and refetch repos
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      // Revalidate the server cache
+      await fetch("/api/github/repos/revalidate", { method: "POST" });
+      // Then refetch the data - use regex to match all repo URLs for this owner
+      await mutate(
+        (key) =>
+          typeof key === "string" &&
+          key.startsWith("/api/github/repos?") &&
+          key.includes(`owner=${currentOwner}`),
+        undefined,
+        { revalidate: true },
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentOwner, mutate]);
 
   // Auto-select first owner when data loads (only once)
   useEffect(() => {
@@ -103,6 +137,18 @@ export function RepoSelectorCompact({
       setCurrentOwner(selectedOwner);
     }
   }, [selectedOwner, currentOwner]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedRepoSearch(repoSearch.trim());
+    }, 200);
+
+    return () => clearTimeout(timeoutId);
+  }, [repoSearch]);
+
+  useEffect(() => {
+    setRepoSearch("");
+  }, [currentOwner]);
 
   const handleRepoSelect = (repo: Repo) => {
     onSelect(currentOwner, repo.name);
@@ -137,7 +183,11 @@ export function RepoSelectorCompact({
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search repositories..." />
+          <CommandInput
+            placeholder="Search repositories..."
+            value={repoSearch}
+            onValueChange={setRepoSearch}
+          />
           <CommandList>
             <CommandEmpty>
               {ownersLoading || reposLoading
@@ -174,9 +224,26 @@ export function RepoSelectorCompact({
             </CommandGroup>
 
             <CommandSeparator />
+            <div className="flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground">
+              <span>
+                Showing repos for{" "}
+                <span className="text-foreground">{currentOwner}</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={cn("size-3", isRefreshing && "animate-spin")}
+                />
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
 
             {/* Repos for current owner */}
-            <CommandGroup heading="Repositories">
+            <CommandGroup>
               {reposLoading ? (
                 <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
                   <Loader2Icon className="size-4 animate-spin" />
@@ -187,7 +254,7 @@ export function RepoSelectorCompact({
                   No repositories found.
                 </div>
               ) : (
-                repos.map((repo) => (
+                repos.slice(0, 50).map((repo) => (
                   <CommandItem
                     key={repo.full_name}
                     value={repo.name}
@@ -208,6 +275,11 @@ export function RepoSelectorCompact({
                     )}
                   </CommandItem>
                 ))
+              )}
+              {repos.length === 50 && !debouncedRepoSearch && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                  Showing first 50 results. Use search to narrow.
+                </div>
               )}
             </CommandGroup>
           </CommandList>

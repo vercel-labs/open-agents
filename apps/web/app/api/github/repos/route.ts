@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/session/get-server-session";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getCachedGitHubRepos } from "@/lib/github/cached-api";
+import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const owner = searchParams.get("owner");
+  const limitParam = searchParams.get("limit");
+  const queryParam = searchParams.get("query");
 
   if (!owner) {
     return NextResponse.json(
@@ -32,8 +34,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
+  const limit =
+    typeof parsedLimit === "number" && Number.isFinite(parsedLimit)
+      ? parsedLimit
+      : undefined;
+  const query = queryParam?.trim() || undefined;
+
   try {
-    const repos = await getCachedGitHubRepos(session.user.id, token, owner);
+    const repos = await getCachedGitHubRepos(session.user.id, token, owner, {
+      limit,
+      query,
+    });
 
     if (!repos) {
       return NextResponse.json(

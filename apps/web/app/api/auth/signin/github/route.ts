@@ -1,6 +1,6 @@
-import { type NextRequest } from "next/server";
-import { cookies } from "next/headers";
 import { generateState } from "arctic";
+import { cookies } from "next/headers";
+import { type NextRequest } from "next/server";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "repo,read:user,user:email",
+    scope: "repo,read:org,read:user,user:email",
     state: state,
   });
 
