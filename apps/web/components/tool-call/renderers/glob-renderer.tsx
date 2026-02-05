@@ -3,6 +3,22 @@
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
+type GlobFile = {
+  path: string;
+};
+
+function getGlobFiles(output: unknown): GlobFile[] {
+  if (typeof output !== "object" || output === null) return [];
+  if (!("files" in output) || !Array.isArray(output.files)) return [];
+  return output.files.filter(
+    (file): file is GlobFile =>
+      typeof file === "object" &&
+      file !== null &&
+      "path" in file &&
+      typeof file.path === "string",
+  );
+}
+
 export function GlobRenderer({
   part,
   state,
@@ -14,7 +30,7 @@ export function GlobRenderer({
   const path = input?.path;
 
   const output = part.state === "output-available" ? part.output : undefined;
-  const files = output?.files ?? [];
+  const files = getGlobFiles(output);
 
   // Show expanded content if there are files to show
   const hasExpandedContent = files.length > 0;

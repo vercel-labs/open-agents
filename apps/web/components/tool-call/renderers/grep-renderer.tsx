@@ -3,6 +3,27 @@
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
+type GrepMatch = {
+  file: string;
+  line: number;
+  content?: string;
+};
+
+function getGrepMatches(output: unknown): GrepMatch[] {
+  if (typeof output !== "object" || output === null) return [];
+  if (!("matches" in output) || !Array.isArray(output.matches)) return [];
+  return output.matches.filter(
+    (match): match is GrepMatch =>
+      typeof match === "object" &&
+      match !== null &&
+      "file" in match &&
+      typeof match.file === "string" &&
+      "line" in match &&
+      typeof match.line === "number" &&
+      (!("content" in match) || typeof match.content === "string"),
+  );
+}
+
 export function GrepRenderer({
   part,
   state,
@@ -15,7 +36,7 @@ export function GrepRenderer({
   const include = input?.glob;
 
   const output = part.state === "output-available" ? part.output : undefined;
-  const matches = output?.matches ?? [];
+  const matches = getGrepMatches(output);
 
   // Show expanded content if there are matches
   const hasExpandedContent = matches.length > 0;

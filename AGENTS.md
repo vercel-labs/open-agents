@@ -215,3 +215,4 @@ Use `catalog:` for shared external versions:
 - In Next.js App Router, dynamic route param names must match the folder segment exactly (e.g. `[sessionId]` requires `params.sessionId`, not `params.id`), or DB queries can receive `undefined` and fail at runtime.
 - In shell tools, avoid piping primary command output directly to `head` when exit-code handling matters; pipeline semantics can mask real failures from the primary command.
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
+- Tool renderer `part.output` values may be `unknown`; when accessing fields like `files` or `matches`, add runtime narrowing/type guards first (in both TUI and web renderers) to satisfy strict typecheck.
