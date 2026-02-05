@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "Open Harness",
     template: "%s | Open Harness",
   },
-  description: "Open Harness web app for managing AI coding tasks.",
+  description: "Open Harness web app for managing AI coding sessions.",
 };
 
 export default function RootLayout({

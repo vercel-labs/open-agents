@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SignedOutHero } from "@/components/auth/signed-out-hero";
 import { HomeSkeleton, TaskListSkeleton } from "@/components/home-skeleton";
-import { TaskInput } from "@/components/task-input";
-import { TaskList } from "@/components/task-list";
+import type { SandboxType } from "@/components/sandbox-selector-compact";
+import { SessionList } from "@/components/session-list";
+import { SessionStarter } from "@/components/session-starter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 import { useCliTokens } from "@/hooks/use-cli-tokens";
 import { useSession } from "@/hooks/use-session";
-import { useTasks } from "@/hooks/use-tasks";
+import { useSessions } from "@/hooks/use-sessions";
 
 interface HomePageProps {
   hasSessionCookie: boolean;
@@ -20,45 +21,39 @@ interface HomePageProps {
 export function HomePage({ hasSessionCookie }: HomePageProps) {
   const router = useRouter();
   const { loading: sessionLoading, isAuthenticated } = useSession();
-  const { tasks, loading, createTask } = useTasks({
+  const { sessions, loading, createSession } = useSessions({
     enabled: isAuthenticated,
   });
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateTask = async (input: {
-    prompt: string;
+  const handleCreateSession = async (input: {
     repoOwner?: string;
     repoName?: string;
     branch?: string;
     cloneUrl?: string;
     isNewBranch: boolean;
-    modelId: string;
-    sandboxType: string;
+    sandboxType: SandboxType;
   }) => {
     setIsCreating(true);
     try {
-      const task = await createTask({
-        title: input.prompt,
+      const { session: createdSession, chat } = await createSession({
         repoOwner: input.repoOwner,
         repoName: input.repoName,
         branch: input.branch,
         cloneUrl: input.cloneUrl,
         isNewBranch: input.isNewBranch,
-        modelId: input.modelId,
+        sandboxType: input.sandboxType,
       });
-      // Navigate to the task detail page with sandbox type
-      const sandboxParam =
-        input.sandboxType !== "hybrid" ? `?sandbox=${input.sandboxType}` : "";
-      router.push(`/tasks/${task.id}${sandboxParam}`);
+      router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);
     } catch (error) {
-      console.error("Failed to create task:", error);
+      console.error("Failed to create session:", error);
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleTaskClick = (taskId: string) => {
-    router.push(`/tasks/${taskId}`);
+  const handleSessionClick = (sessionId: string) => {
+    router.push(`/sessions/${sessionId}`);
   };
 
   if (sessionLoading && hasSessionCookie) {
@@ -100,16 +95,16 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
           What should we ship next?
         </h1>
 
-        <TaskInput onSubmit={handleCreateTask} isLoading={isCreating} />
+        <SessionStarter onSubmit={handleCreateSession} isLoading={isCreating} />
 
         <div className="mt-8 w-full max-w-2xl">
-          <Tabs defaultValue="tasks">
+          <Tabs defaultValue="sessions">
             <TabsList className="h-auto w-auto justify-start gap-8 bg-transparent p-0">
               <TabsTrigger
-                value="tasks"
+                value="sessions"
                 className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
               >
-                Tasks
+                Sessions
               </TabsTrigger>
               <TabsTrigger
                 value="archive"
@@ -118,13 +113,13 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
                 Archive
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="tasks" className="mt-6">
+            <TabsContent value="sessions" className="mt-6">
               {loading ? (
                 <TaskListSkeleton />
               ) : (
-                <TaskList
-                  tasks={tasks.filter((t) => t.status !== "archived")}
-                  onTaskClick={handleTaskClick}
+                <SessionList
+                  sessions={sessions.filter((s) => s.status !== "archived")}
+                  onSessionClick={handleSessionClick}
                 />
               )}
             </TabsContent>
@@ -132,10 +127,10 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
               {loading ? (
                 <TaskListSkeleton />
               ) : (
-                <TaskList
-                  tasks={tasks.filter((t) => t.status === "archived")}
-                  onTaskClick={handleTaskClick}
-                  emptyMessage="No archived tasks"
+                <SessionList
+                  sessions={sessions.filter((s) => s.status === "archived")}
+                  onSessionClick={handleSessionClick}
+                  emptyMessage="No archived sessions"
                 />
               )}
             </TabsContent>
@@ -155,7 +150,9 @@ function CliConnectBanner() {
 
   return (
     <div className="inline-flex items-center gap-3 rounded-full border border-border/60 bg-muted/70 px-4 py-1.5 text-sm text-muted-foreground">
-      <span className="text-foreground">Run tasks locally with the CLI.</span>
+      <span className="text-foreground">
+        Run sessions locally with the CLI.
+      </span>
       <Link
         href="/settings/tokens"
         className="text-foreground underline decoration-foreground/40 underline-offset-4 transition hover:decoration-foreground"

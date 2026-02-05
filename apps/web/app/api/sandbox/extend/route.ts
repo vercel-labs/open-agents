@@ -1,11 +1,11 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { EXTEND_TIMEOUT_DURATION_MS } from "@/lib/sandbox/config";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface ExtendRequest {
-  taskId: string;
+  sessionId: string;
 }
 
 export async function POST(req: Request) {
@@ -21,26 +21,26 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId } = body;
+  const { sessionId } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "Missing taskId" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(task.sandboxState);
+    const sandbox = await connectSandbox(sessionRecord.sandboxState);
     if (!sandbox.extendTimeout) {
       return Response.json(
         { error: "Extend timeout not supported by this sandbox type" },
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (typeof sandbox.getState === "function") {
       const newState = sandbox.getState();
       if (newState) {
-        await updateTask(taskId, { sandboxState: newState as SandboxState });
+        await updateSession(sessionId, { sandboxState: newState as SandboxState });
       }
     }
 

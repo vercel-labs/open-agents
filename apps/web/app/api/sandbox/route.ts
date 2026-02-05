@@ -4,12 +4,13 @@ import {
   type SandboxState,
 } from "@open-harness/sandbox";
 import { after } from "next/server";
-import { getUserGitHubToken } from "@/lib/github/user-token";
-import { getServerSession } from "@/lib/session/get-server-session";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
-import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
+import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
+
 const WORKING_DIR = "/vercel/sandbox";
 
 /**
@@ -29,7 +30,7 @@ interface CreateSandboxRequest {
   repoUrl?: string;
   branch?: string;
   isNewBranch?: boolean;
-  taskId?: string;
+  sessionId?: string;
   sandboxId?: string;
   sandboxType?: "hybrid" | "vercel" | "just-bash";
 }
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
     repoUrl,
     branch = "main",
     isNewBranch = false,
-    taskId,
+    sessionId,
     sandboxId: providedSandboxId,
     sandboxType = "hybrid",
   } = body;
@@ -63,14 +64,14 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Validate task ownership
-  let task;
-  if (taskId) {
-    task = await getTaskById(taskId);
-    if (!task) {
-      return Response.json({ error: "Task not found" }, { status: 404 });
+  // Validate session ownership
+  let sessionRecord;
+  if (sessionId) {
+    sessionRecord = await getSessionById(sessionId);
+    if (!sessionRecord) {
+      return Response.json({ error: "Session not found" }, { status: 404 });
     }
-    if (task.userId !== session.user.id) {
+    if (sessionRecord.userId !== session.user.id) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
   }
@@ -177,22 +178,22 @@ export async function POST(req: Request) {
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         scheduleBackgroundWork: (cb) => after(cb),
-        hooks: taskId
+        hooks: sessionId
           ? {
               onCloudSandboxReady: async (sandboxId) => {
-                const currentTask = await getTaskById(taskId);
-                if (currentTask?.sandboxState?.type === "hybrid") {
-                  await updateTask(taskId, {
+                const currentSession = await getSessionById(sessionId);
+                if (currentSession?.sandboxState?.type === "hybrid") {
+                  await updateSession(sessionId, {
                     sandboxState: { type: "hybrid", sandboxId },
                   });
                   console.log(
-                    `[Sandbox] Cloud sandbox ready for task ${taskId}: ${sandboxId}`,
+                    `[Sandbox] Cloud sandbox ready for session ${sessionId}: ${sandboxId}`,
                   );
                 }
               },
               onCloudSandboxFailed: async (error) => {
                 console.error(
-                  `[Sandbox] Cloud sandbox failed for task ${taskId}:`,
+                  `[Sandbox] Cloud sandbox failed for session ${sessionId}:`,
                   error.message,
                 );
               },
@@ -202,8 +203,8 @@ export async function POST(req: Request) {
     });
   }
 
-  if (taskId && sandbox.getState) {
-    await updateTask(taskId, {
+  if (sessionId && sandbox.getState) {
+    await updateSession(sessionId, {
       sandboxState: sandbox.getState() as SandboxState,
     });
   }
@@ -235,32 +236,32 @@ export async function DELETE(req: Request) {
   if (
     !body ||
     typeof body !== "object" ||
-    !("taskId" in body) ||
-    typeof (body as Record<string, unknown>).taskId !== "string"
+    !("sessionId" in body) ||
+    typeof (body as Record<string, unknown>).sessionId !== "string"
   ) {
-    return Response.json({ error: "Missing taskId" }, { status: 400 });
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  const { taskId } = body as { taskId: string };
+  const { sessionId } = body as { sessionId: string };
 
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   // If there's no sandbox to stop, return success (idempotent)
-  if (!canOperateOnSandbox(task.sandboxState)) {
+  if (!canOperateOnSandbox(sessionRecord.sandboxState)) {
     return Response.json({ success: true, alreadyStopped: true });
   }
 
   // Connect and stop using unified API
-  const sandbox = await connectSandbox(task.sandboxState);
+  const sandbox = await connectSandbox(sessionRecord.sandboxState);
   await sandbox.stop();
 
-  await updateTask(taskId, {
-    sandboxState: clearSandboxState(task.sandboxState),
+  await updateSession(sessionId, {
+    sandboxState: clearSandboxState(sessionRecord.sandboxState),
   });
 
   return Response.json({ success: true });

@@ -1,15 +1,15 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
-  taskId: string;
+  sessionId: string;
 }
 
 interface RestoreSnapshotRequest {
-  taskId: string;
+  sessionId: string;
 }
 
 /**
@@ -29,26 +29,26 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId } = body;
+  const { sessionId } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "Missing taskId" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!canOperateOnSandbox(task.sandboxState)) {
+  if (!canOperateOnSandbox(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(task.sandboxState);
+    const sandbox = await connectSandbox(sessionRecord.sandboxState);
 
     if (!sandbox.snapshot) {
       return Response.json(
@@ -60,11 +60,11 @@ export async function POST(req: Request) {
     // Create snapshot (automatically stops the sandbox)
     const result = await sandbox.snapshot();
 
-    // Update task with snapshot info (now stores snapshotId instead of downloadUrl)
+    // Update session with snapshot info (now stores snapshotId instead of downloadUrl)
     // Also clear sandbox state but preserve the type for future restoration
-    const clearedState = clearSandboxState(task.sandboxState);
+    const clearedState = clearSandboxState(sessionRecord.sandboxState);
 
-    await updateTask(taskId, {
+    await updateSession(sessionId, {
       snapshotUrl: result.snapshotId,
       snapshotCreatedAt: new Date(),
       sandboxState: clearedState,
@@ -99,34 +99,34 @@ export async function PUT(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId } = body;
+  const { sessionId } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "Missing taskId" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify task ownership and get snapshot URL
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership and get snapshot URL
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!task.snapshotUrl) {
+  if (!sessionRecord.snapshotUrl) {
     return Response.json(
-      { error: "No snapshot available for this task" },
+      { error: "No snapshot available for this session" },
       { status: 404 },
     );
   }
-  if (!task.sandboxState) {
+  if (!sessionRecord.sandboxState) {
     return Response.json(
       { error: "No sandbox state available for restoration" },
       { status: 400 },
     );
   }
   // Save the type before narrowing checks (TypeScript loses track after multiple guards)
-  const sandboxType = task.sandboxState.type;
+  const sandboxType = sessionRecord.sandboxState.type;
   if (sandboxType === "just-bash") {
     return Response.json(
       { error: "Snapshot restoration not supported for just-bash sandboxes" },
@@ -135,7 +135,7 @@ export async function PUT(req: Request) {
   }
   // Warn if sandbox appears to still be running (has sandboxId)
   // This shouldn't happen in normal flow since snapshot stops the sandbox
-  if (canOperateOnSandbox(task.sandboxState)) {
+  if (canOperateOnSandbox(sessionRecord.sandboxState)) {
     return Response.json(
       { error: "Cannot restore: a sandbox is still running. Stop it first." },
       { status: 400 },
@@ -147,23 +147,23 @@ export async function PUT(req: Request) {
     // Do NOT spread full sandboxState as it may contain a stale sandboxId
     // which would cause connectSandbox to reconnect instead of restore
     const sandbox = await connectSandbox(
-      { type: sandboxType, snapshotId: task.snapshotUrl },
+      { type: sandboxType, snapshotId: sessionRecord.snapshotUrl },
       { timeout: DEFAULT_SANDBOX_TIMEOUT_MS },
     );
 
-    // Update task with new sandbox state
+    // Update session with new sandbox state
     const newState = sandbox.getState?.();
     if (newState) {
-      await updateTask(taskId, {
+      await updateSession(sessionId, {
         sandboxState: newState as Parameters<
-          typeof updateTask
+          typeof updateSession
         >[1]["sandboxState"],
       });
     }
 
     return Response.json({
       success: true,
-      restoredFrom: task.snapshotUrl,
+      restoredFrom: sessionRecord.snapshotUrl,
       sandboxId: "id" in sandbox ? sandbox.id : undefined,
     });
   } catch (error) {

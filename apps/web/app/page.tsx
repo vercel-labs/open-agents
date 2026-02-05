@@ -5,7 +5,7 @@ import { HomePage } from "./home-page";
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "Review recent runs and start new tasks in Open Harness.",
+  description: "Review recent runs and start new sessions in Open Harness.",
 };
 
 export default async function Home() {

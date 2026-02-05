@@ -1,9 +1,9 @@
-import { getTaskById } from "@/lib/db/tasks";
+import { getSessionById } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
 import type { DiffResponse } from "../route";
 
 type RouteContext = {
-  params: Promise<{ id: string }>;
+  params: Promise<{ sessionId: string }>;
 };
 
 export type CachedDiffResponse = {
@@ -18,17 +18,17 @@ export async function GET(_req: Request, context: RouteContext) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { id: taskId } = await context.params;
+  const { sessionId } = await context.params;
 
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!task.cachedDiff) {
+  if (!sessionRecord.cachedDiff) {
     return Response.json(
       { error: "No cached diff available" },
       { status: 404 },
@@ -38,9 +38,10 @@ export async function GET(_req: Request, context: RouteContext) {
   // Note: cachedDiff is stored as jsonb and cast to DiffResponse without runtime validation.
   // This is safe as long as the schema is only written by our own diff route.
   const response: CachedDiffResponse = {
-    data: task.cachedDiff as DiffResponse,
+    data: sessionRecord.cachedDiff as DiffResponse,
     cachedAt:
-      task.cachedDiffUpdatedAt?.toISOString() ?? new Date().toISOString(),
+      sessionRecord.cachedDiffUpdatedAt?.toISOString() ??
+      new Date().toISOString(),
     isStale: true,
   };
 

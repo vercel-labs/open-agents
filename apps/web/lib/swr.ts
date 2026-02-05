@@ -22,5 +22,5 @@ export const fetcher = async <T>(url: string): Promise<T> => {
  *
  * - Session/auth data: revalidateOnFocus: true (detect login state changes)
  * - GitHub data (branches, repos, models): default (true) - relatively static, cheap to refetch
- * - Task diff/files: revalidateOnFocus: false - requires sandbox connection, avoid unnecessary errors
- */
+ * - Session diff/files: revalidateOnFocus: false - requires sandbox connection, avoid unnecessary errors
+*/

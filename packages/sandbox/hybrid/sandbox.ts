@@ -11,11 +11,11 @@
  * - Detects commands that require Vercel (git, npm, curl, etc.)
  */
 
-import type { Sandbox, SandboxStats, ExecResult } from "../interface";
+import type { Dirent } from "fs";
+import type { ExecResult, Sandbox, SandboxStats } from "../interface";
+import type { JustBashSandbox } from "../just-bash/sandbox";
 import type { PendingOperation, SandboxStatus } from "../types";
 import type { HybridState } from "./state";
-import type { JustBashSandbox } from "../just-bash/sandbox";
-import type { Dirent } from "fs";
 
 /**
  * Commands that require Vercel (git, npm, network operations).
@@ -78,8 +78,24 @@ export interface HybridSandboxConfig {
  */
 export class HybridSandbox implements Sandbox {
   readonly type = "hybrid" as const;
-  readonly expiresAt: number | undefined;
-  readonly timeout: number | undefined;
+  private _expiresAt: number | undefined;
+  private _timeout: number | undefined;
+
+  get expiresAt(): number | undefined {
+    // After handoff, return Vercel's expiration
+    if (this.state === "vercel" && this.vercel) {
+      return this.vercel.expiresAt;
+    }
+    return this._expiresAt;
+  }
+
+  get timeout(): number | undefined {
+    // After handoff, return Vercel's timeout
+    if (this.state === "vercel" && this.vercel) {
+      return this.vercel.timeout;
+    }
+    return this._timeout;
+  }
 
   private justBash: Sandbox | null;
   private vercel: Sandbox | null = null;
@@ -91,8 +107,8 @@ export class HybridSandbox implements Sandbox {
     this.justBash = config.justBash;
     this._pendingOperations = config.pendingOperations ?? [];
     this.onVercelRequired = config.onVercelRequired;
-    this.expiresAt = this.justBash.expiresAt;
-    this.timeout = this.justBash.timeout;
+    this._expiresAt = this.justBash.expiresAt;
+    this._timeout = this.justBash.timeout;
   }
 
   /**

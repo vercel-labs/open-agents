@@ -65,7 +65,7 @@ export const accounts = pgTable(
   ],
 );
 
-export const tasks = pgTable("tasks", {
+export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -81,13 +81,11 @@ export const tasks = pgTable("tasks", {
   repoName: text("repo_name"),
   branch: text("branch"),
   cloneUrl: text("clone_url"),
-  // Model configuration
-  modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
-  // Whether this task uses a new auto-generated branch
+  // Whether this session uses a new auto-generated branch
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
   // Unified sandbox state
   sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
-  // Git stats (for display in task list)
+  // Git stats (for display in session list)
   linesAdded: integer("lines_added").default(0),
   linesRemoved: integer("lines_removed").default(0),
   // PR info if created
@@ -107,11 +105,22 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const taskMessages = pgTable("task_messages", {
+export const chats = pgTable("chats", {
   id: text("id").primaryKey(),
-  taskId: text("task_id")
+  sessionId: text("session_id")
     .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
+    .references(() => sessions.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: text("id").primaryKey(),
+  chatId: text("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
   role: text("role", {
     enum: ["user", "assistant"],
   }).notNull(),
@@ -120,10 +129,12 @@ export const taskMessages = pgTable("task_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export type Task = typeof tasks.$inferSelect;
-export type NewTask = typeof tasks.$inferInsert;
-export type TaskMessage = typeof taskMessages.$inferSelect;
-export type NewTaskMessage = typeof taskMessages.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+export type Chat = typeof chats.$inferSelect;
+export type NewChat = typeof chats.$inferInsert;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type NewChatMessage = typeof chatMessages.$inferInsert;
 
 // Linked accounts for external platforms (Slack, Discord, etc.)
 export const linkedAccounts = pgTable(

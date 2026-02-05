@@ -46,8 +46,8 @@ export function PreferencesSectionSkeleton() {
       <CardHeader>
         <CardTitle>Agent Preferences</CardTitle>
         <CardDescription>
-          Default settings for new tasks. You can override these when creating a
-          task.
+          Default settings for new sessions. You can override these when
+          starting a session or chat.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -59,7 +59,7 @@ export function PreferencesSectionSkeleton() {
             </SelectTrigger>
           </Select>
           <p className="text-xs text-muted-foreground">
-            The AI model used for agent tasks.
+            The AI model used for new chats.
           </p>
         </div>
 
@@ -71,7 +71,7 @@ export function PreferencesSectionSkeleton() {
             </SelectTrigger>
           </Select>
           <p className="text-xs text-muted-foreground">
-            The execution environment for agent tasks.
+            The execution environment for new sessions.
           </p>
         </div>
       </CardContent>
@@ -120,8 +120,8 @@ export function PreferencesSection() {
       <CardHeader>
         <CardTitle>Agent Preferences</CardTitle>
         <CardDescription>
-          Default settings for new tasks. You can override these when creating a
-          task.
+          Default settings for new sessions. You can override these when
+          starting a session or chat.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -144,7 +144,7 @@ export function PreferencesSection() {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            The AI model used for agent tasks.
+            The AI model used for new chats.
           </p>
         </div>
 
@@ -167,7 +167,7 @@ export function PreferencesSection() {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            The execution environment for agent tasks.
+            The execution environment for new sessions.
           </p>
         </div>
       </CardContent>

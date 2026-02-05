@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
+import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import { extractMention, filterFileSuggestions } from "@/lib/file-suggestions";
 
 interface UseFileSuggestionsOptions {

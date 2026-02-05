@@ -2,17 +2,17 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
-import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
-import type { CachedDiffResponse } from "@/app/api/tasks/[id]/diff/cached/route";
+import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
+import type { CachedDiffResponse } from "@/app/api/sessions/[sessionId]/diff/cached/route";
 
-export interface UseTaskDiffOptions {
+export interface UseSessionDiffOptions {
   /** Initial cached diff data to show while loading */
   initialData?: DiffResponse | null;
   /** Initial cached timestamp */
   initialCachedAt?: Date | null;
 }
 
-export interface UseTaskDiffReturn {
+export interface UseSessionDiffReturn {
   diff: DiffResponse | null;
   isLoading: boolean;
   error: string | null;
@@ -24,41 +24,37 @@ export interface UseTaskDiffReturn {
   refresh: () => Promise<DiffResponse | undefined>;
 }
 
-export function useTaskDiff(
-  taskId: string,
+export function useSessionDiff(
+  sessionId: string,
   sandboxConnected: boolean,
-  options?: UseTaskDiffOptions,
-): UseTaskDiffReturn {
-  // Primary: fetch from live sandbox when connected
+  options?: UseSessionDiffOptions,
+): UseSessionDiffReturn {
   const {
     data: liveData,
     error: liveError,
     isLoading: liveLoading,
     mutate: mutateLive,
   } = useSWR<DiffResponse>(
-    sandboxConnected ? `/api/tasks/${taskId}/diff` : null,
+    sandboxConnected ? `/api/sessions/${sessionId}/diff` : null,
     fetcher,
     {
       revalidateOnFocus: false,
-      // Don't show stale data when reconnecting - let the cached endpoint handle it
       revalidateIfStale: true,
     },
   );
 
-  // Fallback: fetch cached diff when sandbox disconnected
   const {
     data: cachedData,
     error: cachedError,
     isLoading: cachedLoading,
   } = useSWR<CachedDiffResponse>(
-    !sandboxConnected ? `/api/tasks/${taskId}/diff/cached` : null,
+    !sandboxConnected ? `/api/sessions/${sessionId}/diff/cached` : null,
     fetcher,
     {
       revalidateOnFocus: false,
     },
   );
 
-  // Determine which data to use
   if (sandboxConnected) {
     return {
       diff: liveData ?? options?.initialData ?? null,
@@ -70,7 +66,6 @@ export function useTaskDiff(
     };
   }
 
-  // Sandbox disconnected - use cached data
   if (cachedData) {
     return {
       diff: cachedData.data,
@@ -82,7 +77,6 @@ export function useTaskDiff(
     };
   }
 
-  // Use initial data while loading cached
   if (cachedLoading && options?.initialData) {
     return {
       diff: options.initialData,
@@ -94,7 +88,6 @@ export function useTaskDiff(
     };
   }
 
-  // No cached data available
   return {
     diff: options?.initialData ?? null,
     isLoading: cachedLoading,

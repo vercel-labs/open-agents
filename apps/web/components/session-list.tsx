@@ -1,11 +1,11 @@
 "use client";
 
 import { GitMerge } from "lucide-react";
-import type { Task } from "@/lib/db/schema";
+import type { Session } from "@/lib/db/schema";
 
-interface TaskListProps {
-  tasks: Task[];
-  onTaskClick: (taskId: string) => void;
+interface SessionListProps {
+  sessions: Session[];
+  onSessionClick: (sessionId: string) => void;
   emptyMessage?: string;
 }
 
@@ -17,11 +17,11 @@ function formatTime(date: Date): string {
   });
 }
 
-function groupTasksByDate(tasks: Task[]): Map<string, Task[]> {
-  const groups = new Map<string, Task[]>();
+function groupSessionsByDate(sessions: Session[]): Map<string, Session[]> {
+  const groups = new Map<string, Session[]>();
 
-  for (const task of tasks) {
-    const date = new Date(task.createdAt);
+  for (const session of sessions) {
+    const date = new Date(session.createdAt);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -41,7 +41,7 @@ function groupTasksByDate(tasks: Task[]): Map<string, Task[]> {
     }
 
     const existing = groups.get(groupKey) ?? [];
-    groups.set(groupKey, [...existing, task]);
+    groups.set(groupKey, [...existing, session]);
   }
 
   return groups;
@@ -81,14 +81,14 @@ function PrStatus({ status }: { status: "open" | "merged" | "closed" | null }) {
   return null;
 }
 
-export function TaskList({
-  tasks,
-  onTaskClick,
-  emptyMessage = "No tasks yet. Create one above!",
-}: TaskListProps) {
-  const groupedTasks = groupTasksByDate(tasks);
+export function SessionList({
+  sessions,
+  onSessionClick,
+  emptyMessage = "No sessions yet. Create one above!",
+}: SessionListProps) {
+  const groupedSessions = groupSessionsByDate(sessions);
 
-  if (tasks.length === 0) {
+  if (sessions.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground">
         {emptyMessage}
@@ -98,39 +98,39 @@ export function TaskList({
 
   return (
     <div className="space-y-6">
-      {Array.from(groupedTasks.entries()).map(([dateGroup, groupTasks]) => (
+      {Array.from(groupedSessions.entries()).map(([dateGroup, groupSessions]) => (
         <div key={dateGroup}>
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {dateGroup}
           </h3>
           <div className="space-y-1">
-            {groupTasks.map((task) => (
+            {groupSessions.map((session) => (
               <button
-                key={task.id}
+                key={session.id}
                 type="button"
-                onClick={() => onTaskClick(task.id)}
+                onClick={() => onSessionClick(session.id)}
                 className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">
-                    {task.title}
+                    {session.title}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {formatTime(new Date(task.createdAt))}
-                    {task.repoName && (
+                    {formatTime(new Date(session.createdAt))}
+                    {session.repoName && (
                       <>
                         {" "}
                         <span className="text-muted-foreground/50">-</span>{" "}
-                        {task.repoName}
+                        {session.repoName}
                       </>
                     )}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <PrStatus status={task.prStatus} />
+                  <PrStatus status={session.prStatus} />
                   <DiffStats
-                    added={task.linesAdded}
-                    removed={task.linesRemoved}
+                    added={session.linesAdded}
+                    removed={session.linesRemoved}
                   />
                 </div>
               </button>

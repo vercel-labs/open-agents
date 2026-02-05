@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, X, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import type { DiffFile } from "@/app/api/tasks/[id]/diff/route";
-import { useTaskChatContext } from "./task-context";
+import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
+import { useSessionChatContext } from "./session-chat-context";
 
 type DiffViewerProps = {
   onClose: () => void;
@@ -224,7 +224,7 @@ function FileEntry({
 
 export function DiffViewer({ onClose }: DiffViewerProps) {
   const { diff, diffLoading, diffError, diffCachedAt, sandboxInfo } =
-    useTaskChatContext();
+    useSessionChatContext();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   // Show stale indicator if sandbox is offline (even if data came from a live fetch earlier)

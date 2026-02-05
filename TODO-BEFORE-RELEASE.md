@@ -19,6 +19,7 @@ To work through these todos, follow this pattern:
 
 ### Critical
 
+- [x] Preserve persisted sandbox type on reconnect fallback (do not default to `hybrid` when `?sandbox` is absent; reuse session/chat sandbox type)
 - [x] Model selector (in flight)
 - [x] Add loading state in repository selection dropdown
 - [x] Three dots menu is non-functional - remove or implement

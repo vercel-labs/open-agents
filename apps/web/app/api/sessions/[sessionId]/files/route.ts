@@ -1,5 +1,5 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getTaskById } from "@/lib/db/tasks";
+import { getSessionById } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -14,7 +14,7 @@ export type FilesResponse = {
 };
 
 type RouteContext = {
-  params: Promise<{ id: string }>;
+  params: Promise<{ sessionId: string }>;
 };
 
 /**
@@ -68,22 +68,22 @@ export async function GET(_req: Request, context: RouteContext) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { id: taskId } = await context.params;
+  const { sessionId } = await context.params;
 
-  // Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(task.sandboxState);
+    const sandbox = await connectSandbox(sessionRecord.sandboxState);
     const cwd = sandbox.workingDirectory;
 
     // Run git commands in parallel to get both tracked and untracked files

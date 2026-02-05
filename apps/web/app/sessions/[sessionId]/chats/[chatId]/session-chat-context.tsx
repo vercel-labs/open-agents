@@ -12,13 +12,13 @@ import {
 import { DefaultChatTransport, isToolUIPart } from "ai";
 import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import type { WebAgentUIMessage } from "@/app/types";
-import type { Task } from "@/lib/db/schema";
+import type { Chat, Session } from "@/lib/db/schema";
 import type { SandboxState } from "@open-harness/sandbox";
-import type { DiffResponse } from "@/app/api/tasks/[id]/diff/route";
-import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
+import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
+import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
-import { useTaskDiff } from "@/hooks/use-task-diff";
-import { useTaskFiles } from "@/hooks/use-task-files";
+import { useSessionDiff } from "@/hooks/use-session-diff";
+import { useSessionFiles } from "@/hooks/use-session-files";
 
 export type SandboxInfo = {
   createdAt: number;
@@ -33,15 +33,17 @@ export type ReconnectionStatus =
   | "failed"
   | "no_sandbox";
 
-type TaskChatContextValue = {
-  task: Task;
+type SessionChatContextValue = {
+  session: Session;
+  chatInfo: Chat;
   chat: UseChatHelpers<WebAgentUIMessage>;
   sandboxInfo: SandboxInfo | null;
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
-  archiveTask: () => Promise<void>;
-  updateTaskTitle: (title: string) => Promise<void>;
-  /** Whether the task had persisted messages when it was loaded */
+  archiveSession: () => Promise<void>;
+  updateSessionTitle: (title: string) => Promise<void>;
+  updateChatModel: (modelId: string) => Promise<void>;
+  /** Whether the chat had persisted messages when it was loaded */
   hadInitialMessages: boolean;
   /** Diff data (from live sandbox or cache) */
   diff: DiffResponse | null;
@@ -63,9 +65,9 @@ type TaskChatContextValue = {
   filesError: string | null;
   /** Trigger a files refresh */
   refreshFiles: () => Promise<void>;
-  /** Update task snapshot info after saving */
-  updateTaskSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
-  /** Update sandbox type in task state */
+  /** Update session snapshot info after saving */
+  updateSessionSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
+  /** Update sandbox type in session state */
   setSandboxType: (type: "just-bash" | "vercel" | "hybrid") => void;
   /** Current status of sandbox reconnection attempt */
   reconnectionStatus: ReconnectionStatus;
@@ -73,9 +75,13 @@ type TaskChatContextValue = {
   attemptReconnection: () => Promise<void>;
 };
 
-const TaskChatContext = createContext<TaskChatContextValue | undefined>(
+const SessionChatContext = createContext<SessionChatContextValue | undefined>(
   undefined,
 );
+
+// Keep sandbox connection state across chat route transitions in the same session.
+// This avoids flicker/loading indicators when switching chats that share one sandbox.
+const sandboxInfoCache = new Map<string, SandboxInfo>();
 
 /**
  * Custom predicate for auto-submitting messages.
@@ -117,28 +123,34 @@ function shouldAutoSubmit({
   );
 }
 
-type TaskChatProviderProps = {
-  task: Task;
+type SessionChatProviderProps = {
+  session: Session;
+  chat: Chat;
   initialMessages: WebAgentUIMessage[];
   children: ReactNode;
 };
 
-export function TaskChatProvider({
-  task: initialTask,
+export function SessionChatProvider({
+  session: initialSession,
+  chat: initialChat,
   initialMessages,
   children,
-}: TaskChatProviderProps) {
-  const [task, setTask] = useState<Task>(initialTask);
+}: SessionChatProviderProps) {
+  const sessionId = initialSession.id;
+  const [sessionRecord, setSessionRecord] =
+    useState<Session>(initialSession);
+  const [chatInfo, setChatInfo] = useState<Chat>(initialChat);
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
         body: () => ({
-          taskId: task.id,
+          sessionId: sessionRecord.id,
+          chatId: chatInfo.id,
         }),
       }),
-    [task.id],
+    [sessionRecord.id, chatInfo.id],
   );
 
   const chat = useChat<WebAgentUIMessage>({
@@ -147,31 +159,39 @@ export function TaskChatProvider({
     sendAutomaticallyWhen: shouldAutoSubmit,
   });
 
-  const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(null);
+  const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(
+    () => sandboxInfoCache.get(sessionId) ?? null,
+  );
 
   const setSandboxInfo = useCallback((info: SandboxInfo) => {
     setSandboxInfoState(info);
-  }, []);
+    sandboxInfoCache.set(sessionId, info);
+  }, [sessionId]);
 
   const clearSandboxInfo = useCallback(() => {
     setSandboxInfoState(null);
+    sandboxInfoCache.delete(sessionId);
     // Preserve the sandbox type for restoration, but clear other state
-    setTask((prev) => ({
+    setSessionRecord((prev) => ({
       ...prev,
       sandboxState: prev.sandboxState
         ? ({ type: prev.sandboxState.type } as SandboxState)
         : null,
     }));
-  }, []);
+  }, [sessionId]);
 
   const [reconnectionStatus, setReconnectionStatus] =
-    useState<ReconnectionStatus>("idle");
+    useState<ReconnectionStatus>(() =>
+      sandboxInfoCache.has(sessionId) ? "connected" : "idle",
+    );
 
   const attemptReconnection = useCallback(async () => {
     setReconnectionStatus("checking");
 
     try {
-      const response = await fetch(`/api/sandbox/reconnect?taskId=${task.id}`);
+      const response = await fetch(
+        `/api/sandbox/reconnect?sessionId=${sessionRecord.id}`,
+      );
 
       if (!response.ok) {
         console.error("Reconnection request failed:", response.status);
@@ -185,14 +205,17 @@ export function TaskChatProvider({
         // Calculate timeout from expiresAt if available, otherwise sandbox has no timeout
         const now = Date.now();
         const timeout = data.expiresAt ? data.expiresAt - now : null;
-        setSandboxInfoState({
+        const nextSandboxInfo = {
           createdAt: now,
           timeout,
-        });
+        };
+        setSandboxInfoState(nextSandboxInfo);
+        sandboxInfoCache.set(sessionId, nextSandboxInfo);
         setReconnectionStatus("connected");
       } else if (data.status === "no_sandbox") {
+        sandboxInfoCache.delete(sessionId);
         // Preserve the sandbox type for restoration, but clear other state
-        setTask((prev) => ({
+        setSessionRecord((prev) => ({
           ...prev,
           sandboxState: prev.sandboxState
             ? ({ type: prev.sandboxState.type } as SandboxState)
@@ -200,8 +223,9 @@ export function TaskChatProvider({
         }));
         setReconnectionStatus("no_sandbox");
       } else {
+        sandboxInfoCache.delete(sessionId);
         // Preserve the sandbox type for restoration, but clear other state
-        setTask((prev) => ({
+        setSessionRecord((prev) => ({
           ...prev,
           sandboxState: prev.sandboxState
             ? ({ type: prev.sandboxState.type } as SandboxState)
@@ -213,18 +237,18 @@ export function TaskChatProvider({
       console.error("Failed to reconnect to sandbox:", error);
       setReconnectionStatus("failed");
     }
-  }, [task.id]);
+  }, [sessionRecord.id, sessionId]);
 
-  const updateTaskSnapshot = useCallback(
+  const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
-      setTask((prev) => ({ ...prev, snapshotUrl, snapshotCreatedAt }));
+      setSessionRecord((prev) => ({ ...prev, snapshotUrl, snapshotCreatedAt }));
     },
     [],
   );
 
   const setSandboxType = useCallback(
     (type: "just-bash" | "vercel" | "hybrid") => {
-      setTask((prev) => {
+      setSessionRecord((prev) => {
         if (!prev.sandboxState) {
           return {
             ...prev,
@@ -255,9 +279,9 @@ export function TaskChatProvider({
     isStale: diffIsStale,
     cachedAt: diffCachedAt,
     refresh: refreshDiffSWR,
-  } = useTaskDiff(task.id, sandboxConnected, {
-    initialData: initialTask.cachedDiff as DiffResponse | null,
-    initialCachedAt: initialTask.cachedDiffUpdatedAt ?? null,
+  } = useSessionDiff(sessionRecord.id, sandboxConnected, {
+    initialData: initialSession.cachedDiff as DiffResponse | null,
+    initialCachedAt: initialSession.cachedDiffUpdatedAt ?? null,
   });
 
   const {
@@ -265,13 +289,13 @@ export function TaskChatProvider({
     isLoading: filesLoading,
     error: filesError,
     refresh: refreshFilesSWR,
-  } = useTaskFiles(task.id, sandboxConnected);
+  } = useSessionFiles(sessionRecord.id, sandboxConnected);
 
-  // Update local task state when fresh diff data is received from the live sandbox.
+  // Update local session state when fresh diff data is received from the live sandbox.
   // This ensures cachedDiff is available when the sandbox disconnects.
   useEffect(() => {
     if (diff && !diffIsStale) {
-      setTask((prev) => ({
+      setSessionRecord((prev) => ({
         ...prev,
         cachedDiff: diff,
         cachedDiffUpdatedAt: new Date(),
@@ -287,57 +311,80 @@ export function TaskChatProvider({
     await refreshFilesSWR();
   }, [refreshFilesSWR]);
 
-  const archiveTask = useCallback(async () => {
-    const res = await fetch(`/api/tasks/${task.id}`, {
+  const archiveSession = useCallback(async () => {
+    const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "archived" }),
     });
 
-    const data = (await res.json()) as { task?: Task; error?: string };
+    const data = (await res.json()) as { session?: Session; error?: string };
 
     if (!res.ok) {
-      throw new Error(data.error ?? "Failed to archive task");
+      throw new Error(data.error ?? "Failed to archive session");
     }
 
-    if (data.task) {
-      setTask(data.task);
+    if (data.session) {
+      setSessionRecord(data.session);
     }
-  }, [task.id]);
+  }, [sessionRecord.id]);
 
-  const updateTaskTitle = useCallback(
+  const updateSessionTitle = useCallback(
     async (title: string) => {
-      const res = await fetch(`/api/tasks/${task.id}`, {
+      const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
 
-      const data = (await res.json()) as { task?: Task; error?: string };
+      const data = (await res.json()) as { session?: Session; error?: string };
 
       if (!res.ok) {
-        throw new Error(data.error ?? "Failed to update task title");
+        throw new Error(data.error ?? "Failed to update session title");
       }
 
-      if (data.task) {
-        setTask(data.task);
+      if (data.session) {
+        setSessionRecord(data.session);
       }
     },
-    [task.id],
+    [sessionRecord.id],
+  );
+
+  const updateChatModel = useCallback(
+    async (modelId: string) => {
+      const res = await fetch(
+        `/api/sessions/${sessionRecord.id}/chats/${chatInfo.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modelId }),
+        },
+      );
+
+      const data = (await res.json()) as { chat?: Chat; error?: string };
+      if (!res.ok || !data.chat) {
+        throw new Error(data.error ?? "Failed to update chat model");
+      }
+
+      setChatInfo(data.chat);
+    },
+    [sessionRecord.id, chatInfo.id],
   );
 
   const hadInitialMessages = initialMessages.length > 0;
 
   return (
-    <TaskChatContext.Provider
+    <SessionChatContext.Provider
       value={{
-        task,
+        session: sessionRecord,
+        chatInfo,
         chat,
         sandboxInfo,
         setSandboxInfo,
         clearSandboxInfo,
-        archiveTask,
-        updateTaskTitle,
+        archiveSession,
+        updateSessionTitle,
+        updateChatModel,
         hadInitialMessages,
         diff,
         diffLoading,
@@ -349,22 +396,22 @@ export function TaskChatProvider({
         filesLoading,
         filesError,
         refreshFiles,
-        updateTaskSnapshot,
+        updateSessionSnapshot,
         setSandboxType,
         reconnectionStatus,
         attemptReconnection,
       }}
     >
       {children}
-    </TaskChatContext.Provider>
+    </SessionChatContext.Provider>
   );
 }
 
-export function useTaskChatContext() {
-  const context = useContext(TaskChatContext);
+export function useSessionChatContext() {
+  const context = useContext(SessionChatContext);
   if (!context) {
     throw new Error(
-      "useTaskChatContext must be used within a TaskChatProvider",
+      "useSessionChatContext must be used within a SessionChatProvider",
     );
   }
   return context;

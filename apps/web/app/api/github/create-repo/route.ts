@@ -1,6 +1,6 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway } from "ai";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { createRepository } from "@/lib/github/client";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -13,11 +13,11 @@ export const maxDuration = 120;
 const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
 
 interface CreateRepoRequest {
-  taskId: string;
+  sessionId: string;
   repoName: string;
   description?: string;
   isPrivate?: boolean;
-  taskTitle: string;
+  sessionTitle: string;
 }
 
 export async function POST(req: Request) {
@@ -35,10 +35,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId, repoName, description, isPrivate, taskTitle } = body;
+  const { sessionId, repoName, description, isPrivate, sessionTitle } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "Task ID is required" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Session ID is required" }, { status: 400 });
   }
   if (!repoName) {
     return Response.json(
@@ -47,24 +47,24 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // 3. Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Task should not already have a repo
-  if (task.cloneUrl) {
+  // Session should not already have a repo
+  if (sessionRecord.cloneUrl) {
     return Response.json(
-      { error: "Task already has a repository" },
+      { error: "Session already has a repository" },
       { status: 400 },
     );
   }
 
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   }
 
   // 5. Connect to sandbox
-  const sandbox = await connectSandbox(task.sandboxState);
+  const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
 
   // 6. Check if there are any files to push
@@ -186,8 +186,8 @@ export async function POST(req: Request) {
   const diffResult = await sandbox.exec("git diff --cached --stat", cwd, 30000);
   let commitMessage = "Initial commit";
 
-  // Sanitize taskTitle to prevent prompt injection and limit length
-  const sanitizedTaskTitle = taskTitle
+  // Sanitize sessionTitle to prevent prompt injection and limit length
+  const sanitizedSessionTitle = sessionTitle
     .slice(0, 200)
     .replace(/[^\w\s.,!?-]/g, "");
 
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
       model: gateway("anthropic/claude-haiku-4.5"),
       prompt: `Generate a concise git commit message for an initial commit of a new project. Use conventional commit format. One line only, max 72 characters.
 
-Task context: ${sanitizedTaskTitle}
+Session context: ${sanitizedSessionTitle}
 
 Files being committed:
 ${diffResult.stdout.slice(0, 4000)}
@@ -232,8 +232,8 @@ Respond with ONLY the commit message, nothing else.`,
     return repoCreatedError(`Failed to push: ${pushOutput.slice(0, 100)}`);
   }
 
-  // 16. Update task with new repo info
-  await updateTask(taskId, {
+  // 16. Update session with new repo info
+  await updateSession(sessionId, {
     repoOwner: repoResult.owner,
     repoName: repoResult.repoName,
     cloneUrl: `https://github.com/${repoResult.owner}/${repoResult.repoName}`,

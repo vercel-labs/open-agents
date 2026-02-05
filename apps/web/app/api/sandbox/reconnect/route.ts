@@ -1,7 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getServerSession } from "@/lib/session/get-server-session";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { clearSandboxState, isSandboxActive } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 export type ReconnectStatus =
   | "connected"
@@ -23,36 +23,36 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const url = new URL(req.url);
-  const taskId = url.searchParams.get("taskId");
+  const sessionId = url.searchParams.get("sessionId");
 
-  if (!taskId) {
-    return Response.json({ error: "Missing taskId" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // No active sandbox
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({
       status: "no_sandbox",
-      hasSnapshot: !!task.snapshotUrl,
+      hasSnapshot: !!sessionRecord.snapshotUrl,
     } satisfies ReconnectResponse);
   }
 
-  const state = task.sandboxState;
+  const state = sessionRecord.sandboxState;
 
   // Pre-handoff hybrid (has files) - always available since JustBash is in-memory
   // No expiresAt for pre-handoff since JustBash doesn't timeout
   if (state.type === "hybrid" && state.files && !state.sandboxId) {
     return Response.json({
       status: "connected",
-      hasSnapshot: !!task.snapshotUrl,
+      hasSnapshot: !!sessionRecord.snapshotUrl,
     } satisfies ReconnectResponse);
   }
 
@@ -61,17 +61,17 @@ export async function GET(req: Request): Promise<Response> {
     const sandbox = await connectSandbox(state);
     return Response.json({
       status: "connected",
-      hasSnapshot: !!task.snapshotUrl,
+      hasSnapshot: !!sessionRecord.snapshotUrl,
       expiresAt: sandbox.expiresAt,
     } satisfies ReconnectResponse);
   } catch {
     // Sandbox no longer exists (expired or stopped)
-    await updateTask(taskId, {
-      sandboxState: clearSandboxState(task.sandboxState),
+    await updateSession(sessionId, {
+      sandboxState: clearSandboxState(sessionRecord.sandboxState),
     });
     return Response.json({
       status: "expired",
-      hasSnapshot: !!task.snapshotUrl,
+      hasSnapshot: !!sessionRecord.snapshotUrl,
     } satisfies ReconnectResponse);
   }
 }

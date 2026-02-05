@@ -1,6 +1,6 @@
 "use client";
 
-import { TaskInput } from "@/components/task-input";
+import { SessionStarter } from "@/components/session-starter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -229,16 +229,16 @@ export function HomeSkeleton() {
           What should we ship next?
         </h1>
 
-        <TaskInput onSubmit={NOOP} isLoading />
+        <SessionStarter onSubmit={NOOP} isLoading />
 
         <div className="mt-8 w-full max-w-2xl">
-          <Tabs defaultValue="tasks">
+          <Tabs defaultValue="sessions">
             <TabsList className="h-auto w-auto justify-start gap-8 bg-transparent p-0">
               <TabsTrigger
-                value="tasks"
+                value="sessions"
                 className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
               >
-                Tasks
+                Sessions
               </TabsTrigger>
               <TabsTrigger
                 value="archive"
@@ -247,7 +247,7 @@ export function HomeSkeleton() {
                 Archive
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="tasks" className="mt-6">
+            <TabsContent value="sessions" className="mt-6">
               <TaskListSkeleton />
             </TabsContent>
             <TabsContent value="archive" className="mt-6">

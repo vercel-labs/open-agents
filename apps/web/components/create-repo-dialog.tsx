@@ -15,12 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import type { Task } from "@/lib/db/schema";
+import type { Session } from "@/lib/db/schema";
 
 interface CreateRepoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  task: Task;
+  session: Session;
   hasSandbox: boolean;
 }
 
@@ -43,7 +43,7 @@ function slugify(text: string): string {
 export function CreateRepoDialog({
   open,
   onOpenChange,
-  task,
+  session,
   hasSandbox,
 }: CreateRepoDialogProps) {
   const [repoName, setRepoName] = useState("");
@@ -56,15 +56,15 @@ export function CreateRepoDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      // Generate a suggested repo name from the task title
-      const suggestedName = slugify(task.title);
+      // Generate a suggested repo name from the session title
+      const suggestedName = slugify(session.title);
       setRepoName(suggestedName);
       setDescription("");
       setIsPrivate(false);
       setResult(null);
       setError(null);
     }
-  }, [open, task.title]);
+  }, [open, session.title]);
 
   const handleCreate = async () => {
     if (!repoName.trim()) {
@@ -85,11 +85,11 @@ export function CreateRepoDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
+          sessionId: session.id,
           repoName: repoName.trim(),
           description: description.trim() || undefined,
           isPrivate,
-          taskTitle: task.title,
+          sessionTitle: session.title,
         }),
       });
 
@@ -115,7 +115,7 @@ export function CreateRepoDialog({
 
   const handleClose = () => {
     onOpenChange(false);
-    // If repo was created, reload the page to update task state
+    // If repo was created, reload the page to update session state
     if (result) {
       window.location.reload();
     }

@@ -1,9 +1,9 @@
 import { createPullRequest } from "@/lib/github/client";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreatePRRequest {
-  taskId: string;
+  sessionId: string;
   repoUrl: string;
   branchName?: string;
   title: string;
@@ -26,9 +26,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId, repoUrl, branchName, title, body: prBody, baseBranch } = body;
+  const {
+    sessionId,
+    repoUrl,
+    branchName,
+    title,
+    body: prBody,
+    baseBranch,
+  } = body;
 
-  if (!taskId || !repoUrl || !title || !baseBranch) {
+  if (!sessionId || !repoUrl || !title || !baseBranch) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -47,16 +54,16 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // 3. Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const resolvedBranch = task.branch ?? branchName;
+  const resolvedBranch = sessionRecord.branch ?? branchName;
 
   if (!resolvedBranch) {
     return Response.json({ error: "Branch name is required" }, { status: 400 });
@@ -90,15 +97,15 @@ export async function POST(req: Request) {
     return Response.json({ error }, { status: isClientError ? 400 : 502 });
   }
 
-  // 5. Update task with PR info
-  const updatedTask = await updateTask(taskId, {
+  // 5. Update session with PR info
+  const updatedSession = await updateSession(sessionId, {
     prNumber: result.prNumber,
     prStatus: "open",
   });
 
-  if (!updatedTask) {
-    // PR was created but task update failed - log error but still return PR info
-    console.error(`Failed to update task ${taskId} with PR info`);
+  if (!updatedSession) {
+    // PR was created but session update failed - log error but still return PR info
+    console.error(`Failed to update session ${sessionId} with PR info`);
   }
 
   // 6. Return success

@@ -1,4 +1,4 @@
-import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
+import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 
 /**
  * Extract the @ mention from input text at the cursor position

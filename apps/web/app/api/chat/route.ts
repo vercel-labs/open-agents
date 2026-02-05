@@ -2,15 +2,18 @@ import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import { convertToModelMessages, gateway, type LanguageModelUsage } from "ai";
 import { nanoid } from "nanoid";
-import { WebAgentUIMessage } from "@/app/types";
 import { webAgent } from "@/app/config";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import type { WebAgentUIMessage } from "@/app/types";
 import {
-  createTaskMessageIfNotExists,
-  getTaskById,
-  updateTask,
-  upsertTaskMessage,
-} from "@/lib/db/tasks";
+  createChatMessageIfNotExists,
+  getChatById,
+  getChatMessages,
+  getSessionById,
+  updateChat,
+  updateSession,
+  upsertChatMessage,
+} from "@/lib/db/sessions";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -20,7 +23,8 @@ export const maxDuration = 300;
 
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
-  taskId?: string;
+  sessionId?: string;
+  chatId?: string;
 }
 
 export async function POST(req: Request) {
@@ -37,24 +41,31 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { messages, taskId } = body;
+  const { messages, sessionId, chatId } = body;
 
-  // 2. Require taskId to ensure sandbox ownership verification
-  if (!taskId) {
-    return Response.json({ error: "taskId is required" }, { status: 400 });
+  // 2. Require sessionId and chatId to ensure sandbox ownership verification
+  if (!sessionId || !chatId) {
+    return Response.json(
+      { error: "sessionId and chatId are required" },
+      { status: 400 },
+    );
   }
 
-  // 3. Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // 3. Verify session + chat ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  const chat = await getChatById(chatId);
+  if (!chat || chat.sessionId !== sessionId) {
+    return Response.json({ error: "Chat not found" }, { status: 404 });
   }
 
   // 4. Require active sandbox
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -67,7 +78,7 @@ export async function POST(req: Request) {
   const githubToken = await getUserGitHubToken();
 
   // Connect sandbox (handles all modes, handoff, restoration)
-  const sandbox = await connectSandbox(task.sandboxState, {
+  const sandbox = await connectSandbox(sessionRecord.sandboxState, {
     env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
   });
 
@@ -82,7 +93,7 @@ export async function POST(req: Request) {
 
   // Save user message immediately (incremental persistence)
   // Only save if the message has an ID (non-empty string) and hasn't been persisted yet
-  if (taskId && messages.length > 0) {
+  if (chatId && messages.length > 0) {
     const userMessage = messages[messages.length - 1];
     if (
       userMessage &&
@@ -92,20 +103,42 @@ export async function POST(req: Request) {
     ) {
       try {
         // Use idempotent insert to handle race conditions gracefully
-        await createTaskMessageIfNotExists({
+        await createChatMessageIfNotExists({
           id: userMessage.id,
-          taskId,
+          chatId,
           role: "user",
           parts: userMessage,
         });
+
+        // Update chat title to first 30 chars of user's first message
+        const existingMessages = await getChatMessages(chatId);
+        if (existingMessages.length === 1) {
+          // This is the first message - extract text content for the title
+          const textContent = userMessage.parts
+            .filter(
+              (part): part is { type: "text"; text: string } =>
+                part.type === "text",
+            )
+            .map((part) => part.text)
+            .join(" ")
+            .trim();
+
+          if (textContent.length > 0) {
+            const title =
+              textContent.length > 30
+                ? `${textContent.slice(0, 30)}...`
+                : textContent;
+            await updateChat(chatId, { title });
+          }
+        }
       } catch (error) {
         console.error("Failed to save user message:", error);
       }
     }
   }
 
-  // Resolve model from task's modelId, falling back to default if invalid
-  const modelId = task.modelId ?? DEFAULT_MODEL_ID;
+  // Resolve model from chat's modelId, falling back to default if invalid
+  const modelId = chat.modelId ?? DEFAULT_MODEL_ID;
   let model;
   try {
     model = gateway(modelId);
@@ -156,12 +189,12 @@ export async function POST(req: Request) {
       return undefined;
     },
     onFinish: async ({ responseMessage }) => {
-      if (taskId) {
+      if (chatId) {
         // Save assistant message (upsert to handle tool results added client-side)
         try {
-          await upsertTaskMessage({
+          await upsertChatMessage({
             id: responseMessage.id,
-            taskId,
+            chatId,
             role: "assistant",
             parts: responseMessage,
           });
@@ -183,17 +216,17 @@ export async function POST(req: Request) {
               "files" in currentState &&
               !currentState.sandboxId
             ) {
-              const currentTask = await getTaskById(taskId);
+              const currentSession = await getSessionById(sessionId);
               if (
-                currentTask?.sandboxState?.type === "hybrid" &&
-                currentTask.sandboxState.sandboxId
+                currentSession?.sandboxState?.type === "hybrid" &&
+                currentSession.sandboxState.sandboxId
               ) {
                 // Background work has completed - use the sandboxId from DB
                 // but also include pending operations from this session
-                await updateTask(taskId, {
+                await updateSession(sessionId, {
                   sandboxState: {
                     type: "hybrid",
-                    sandboxId: currentTask.sandboxState.sandboxId,
+                    sandboxId: currentSession.sandboxState.sandboxId,
                     pendingOperations:
                       "pendingOperations" in currentState
                         ? currentState.pendingOperations
@@ -204,7 +237,7 @@ export async function POST(req: Request) {
               }
             }
 
-            await updateTask(taskId, {
+            await updateSession(sessionId, {
               sandboxState: currentState,
             });
           } catch (error) {

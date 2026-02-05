@@ -28,12 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Task } from "@/lib/db/schema";
+import type { Session } from "@/lib/db/schema";
 
 interface CreatePRDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  task: Task;
+  session: Session;
   hasSandbox: boolean;
 }
 
@@ -48,7 +48,7 @@ type WizardStep = "create-branch" | "commit" | "generate";
 export function CreatePRDialog({
   open,
   onOpenChange,
-  task,
+  session,
   hasSandbox,
 }: CreatePRDialogProps) {
   const [title, setTitle] = useState("");
@@ -97,7 +97,7 @@ export function CreatePRDialog({
       const res = await fetch("/api/git-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: task.id }),
+        body: JSON.stringify({ sessionId: session.id }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -113,7 +113,7 @@ export function CreatePRDialog({
     } finally {
       setIsCheckingStatus(false);
     }
-  }, [hasSandbox, task.id]);
+  }, [hasSandbox, session.id]);
 
   useEffect(() => {
     if (open && hasSandbox) {
@@ -122,7 +122,7 @@ export function CreatePRDialog({
   }, [open, hasSandbox, checkGitStatus]);
 
   // Determine which step to show after git status check completes
-  const currentBranch = resolvedBranch ?? task.branch ?? baseBranch;
+  const currentBranch = resolvedBranch ?? session.branch ?? baseBranch;
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isOnBaseBranch = displayBranch === baseBranch;
   const needsNewBranch = isOnBaseBranch || isDetachedHead;
@@ -143,7 +143,7 @@ export function CreatePRDialog({
     setIsLoadingBranches(true);
     try {
       const res = await fetch(
-        `/api/github/branches?owner=${task.repoOwner}&repo=${task.repoName}`,
+        `/api/github/branches?owner=${session.repoOwner}&repo=${session.repoName}`,
       );
       if (!res.ok) {
         throw new Error("Failed to fetch branches");
@@ -161,14 +161,14 @@ export function CreatePRDialog({
     } finally {
       setIsLoadingBranches(false);
     }
-  }, [task.repoOwner, task.repoName]);
+  }, [session.repoOwner, session.repoName]);
 
   // Fetch branches when dialog opens
   useEffect(() => {
-    if (open && task.repoOwner && task.repoName) {
+    if (open && session.repoOwner && session.repoName) {
       fetchBranches();
     }
-  }, [open, task.repoOwner, task.repoName, fetchBranches]);
+  }, [open, session.repoOwner, session.repoName, fetchBranches]);
 
   const handleCreateBranch = async () => {
     if (!hasSandbox) {
@@ -182,8 +182,8 @@ export function CreatePRDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
-          taskTitle: task.title,
+          sessionId: session.id,
+          sessionTitle: session.title,
           baseBranch,
           branchName: displayBranch,
           createBranchOnly: true,
@@ -226,8 +226,8 @@ export function CreatePRDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
-          taskTitle: task.title,
+          sessionId: session.id,
+          sessionTitle: session.title,
           baseBranch,
           branchName: displayBranch,
           commitOnly: true,
@@ -264,8 +264,8 @@ export function CreatePRDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
-          taskTitle: task.title,
+          sessionId: session.id,
+          sessionTitle: session.title,
           baseBranch,
           branchName: displayBranch,
         }),
@@ -301,8 +301,8 @@ export function CreatePRDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
-          repoUrl: task.cloneUrl,
+          sessionId: session.id,
+          repoUrl: session.cloneUrl,
           branchName: displayBranch,
           title,
           body,
@@ -337,7 +337,7 @@ export function CreatePRDialog({
         <DialogHeader>
           <DialogTitle>Create Pull Request</DialogTitle>
           <DialogDescription>
-            {task.repoOwner}/{task.repoName} - {displayBranch}
+            {session.repoOwner}/{session.repoName} - {displayBranch}
           </DialogDescription>
         </DialogHeader>
 

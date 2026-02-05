@@ -85,6 +85,13 @@
       "when": 1769542531400,
       "tag": "0011_massive_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1770286716005,
+      "tag": "0012_flashy_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

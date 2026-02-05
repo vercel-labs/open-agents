@@ -1,10 +1,10 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getTaskById } from "@/lib/db/tasks";
+import { getSessionById } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface GitStatusRequest {
-  taskId: string;
+  sessionId: string;
 }
 
 export async function POST(req: Request) {
@@ -20,26 +20,26 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { taskId } = body;
+  const { sessionId } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "taskId is required" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "sessionId is required" }, { status: 400 });
   }
 
-  // Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(task.sandboxState);
+    const sandbox = await connectSandbox(sessionRecord.sandboxState);
     const cwd = sandbox.workingDirectory;
 
     // Get current branch - detect detached HEAD explicitly

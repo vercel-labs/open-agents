@@ -1,56 +1,77 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import type { AskUserQuestionInput, TaskToolUIPart } from "@open-harness/agent";
 import { isToolUIPart } from "ai";
-import type { ComponentProps, ReactNode } from "react";
-import { Children, cloneElement, isValidElement } from "react";
-import type { BundledTheme } from "shiki";
-import { Streamdown } from "streamdown";
 import {
+  Archive,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  Square,
-  X,
-  Archive,
-  GitPullRequest,
+  Check,
   FolderGit2,
   GitCompare,
-  Paperclip,
+  GitPullRequest,
   Loader2,
+  MessageSquare,
   Mic,
+  Paperclip,
   Pencil,
-  Check,
+  Plus,
+  Square,
+  Trash2,
+  X,
 } from "lucide-react";
-
+import { useRouter } from "next/navigation";
+import type { ComponentProps, ReactNode } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { BundledTheme } from "shiki";
+import { Streamdown } from "streamdown";
+import type { WebAgentUIMessagePart, WebAgentUIToolPart } from "@/app/types";
+import { CreatePRDialog } from "@/components/create-pr-dialog";
+import { CreateRepoDialog } from "@/components/create-repo-dialog";
+import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
+import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
+import { ModelSelectorCompact } from "@/components/model-selector-compact";
+import { QuestionPanel } from "@/components/question-panel";
+import { TaskGroupView } from "@/components/task-group-view";
+import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ToolCall } from "@/components/tool-call";
-import { TaskGroupView } from "@/components/task-group-view";
-import { QuestionPanel } from "@/components/question-panel";
-import { CreatePRDialog } from "@/components/create-pr-dialog";
-import { CreateRepoDialog } from "@/components/create-repo-dialog";
-import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
-import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
-import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
+import { useFileSuggestions } from "@/hooks/use-file-suggestions";
+import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
+import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import {
-  DEFAULT_SANDBOX_TIMEOUT_MS,
   AUTO_EXTEND_THRESHOLD_MS,
+  DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "@/lib/sandbox/config";
-import type { WebAgentUIToolPart, WebAgentUIMessagePart } from "@/app/types";
-import type { TaskToolUIPart, AskUserQuestionInput } from "@open-harness/agent";
-
-import { useTaskChatContext, type SandboxInfo } from "./task-context";
 import { DiffViewer } from "./diff-viewer";
-import { useFileSuggestions } from "@/hooks/use-file-suggestions";
-import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
+import {
+  type SandboxInfo,
+  useSessionChatContext,
+} from "./session-chat-context";
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -82,7 +103,7 @@ async function createSandbox(
   cloneUrl: string | undefined,
   branch: string | undefined,
   isNewBranch: boolean,
-  taskId: string,
+  sessionId: string,
   sandboxType?: string,
 ): Promise<CreateSandboxResponse> {
   const response = await fetch("/api/sandbox", {
@@ -92,7 +113,7 @@ async function createSandbox(
       repoUrl: cloneUrl,
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
-      taskId,
+      sessionId,
       sandboxType: sandboxType ?? "hybrid",
     }),
   });
@@ -521,14 +542,8 @@ function SandboxInputOverlay({
   );
 }
 
-export function TaskDetailContent() {
+export function SessionChatContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const sandboxTypeParam = searchParams.get("sandbox") as
-    | "hybrid"
-    | "vercel"
-    | "just-bash"
-    | null;
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
@@ -610,24 +625,26 @@ export function TaskDetailContent() {
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
   const {
-    task,
+    session,
+    chatInfo,
     chat,
     sandboxInfo,
     setSandboxInfo,
     clearSandboxInfo,
-    archiveTask,
-    updateTaskTitle,
+    archiveSession,
+    updateSessionTitle,
+    updateChatModel,
     hadInitialMessages,
     diff,
     refreshDiff,
     files,
     filesLoading,
     refreshFiles,
-    updateTaskSnapshot,
+    updateSessionSnapshot,
     setSandboxType,
     reconnectionStatus,
     attemptReconnection,
-  } = useTaskChatContext();
+  } = useSessionChatContext();
   const sandboxTimeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const {
     messages,
@@ -638,6 +655,108 @@ export function TaskDetailContent() {
     addToolOutput,
     stop,
   } = chat;
+  const {
+    chats,
+    createChat,
+    renameChat,
+    deleteChat,
+    loading: chatsLoading,
+    refreshChats,
+  } = useSessionChats(session.id);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingChatTitle, setEditingChatTitle] = useState("");
+  const [isUpdatingModel, setIsUpdatingModel] = useState(false);
+  const chatTitleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (editingChatId && chatTitleInputRef.current) {
+      chatTitleInputRef.current.focus();
+      chatTitleInputRef.current.select();
+    }
+  }, [editingChatId]);
+
+  // Refresh chats list when the first message completes to pick up the auto-generated title
+  useEffect(() => {
+    if (
+      !hadInitialMessages &&
+      status === "ready" &&
+      messages.some((m) => m.role === "assistant")
+    ) {
+      refreshChats();
+    }
+  }, [hadInitialMessages, status, messages, refreshChats]);
+
+  const handleChatSwitch = useCallback(
+    (nextChatId: string) => {
+      if (nextChatId === chatInfo.id) return;
+      router.push(`/sessions/${session.id}/chats/${nextChatId}`);
+    },
+    [router, session.id, chatInfo.id],
+  );
+
+  const handleCreateChat = useCallback(async () => {
+    try {
+      const newChat = await createChat();
+      router.push(`/sessions/${session.id}/chats/${newChat.id}`);
+    } catch (err) {
+      console.error("Failed to create chat:", err);
+    }
+  }, [createChat, router, session.id]);
+
+  const handleRenameChat = useCallback(
+    async (targetChatId: string, nextTitle: string) => {
+      const trimmedTitle = nextTitle.trim();
+      if (!trimmedTitle) {
+        setEditingChatId(null);
+        return;
+      }
+      try {
+        await renameChat(targetChatId, trimmedTitle);
+      } catch (err) {
+        console.error("Failed to rename chat:", err);
+      } finally {
+        setEditingChatId(null);
+      }
+    },
+    [renameChat],
+  );
+
+  const handleDeleteChat = useCallback(
+    async (targetChatId: string) => {
+      if (chats.length <= 1) return;
+      const targetChat = chats.find((c) => c.id === targetChatId);
+      const confirmed = window.confirm(
+        `Delete chat "${targetChat?.title ?? "Untitled"}"?`,
+      );
+      if (!confirmed) return;
+
+      const fallbackChat = chats.find((c) => c.id !== targetChatId);
+      try {
+        await deleteChat(targetChatId);
+        if (targetChatId === chatInfo.id && fallbackChat) {
+          router.replace(`/sessions/${session.id}/chats/${fallbackChat.id}`);
+        }
+      } catch (err) {
+        console.error("Failed to delete chat:", err);
+      }
+    },
+    [chats, deleteChat, chatInfo.id, router, session.id],
+  );
+
+  const handleModelChange = useCallback(
+    async (modelId: string) => {
+      if (!modelId || modelId === chatInfo.modelId) return;
+      try {
+        setIsUpdatingModel(true);
+        await updateChatModel(modelId);
+      } catch (err) {
+        console.error("Failed to update chat model:", err);
+      } finally {
+        setIsUpdatingModel(false);
+      }
+    },
+    [chatInfo.modelId, updateChatModel],
+  );
 
   const handleFileSelect = (
     value: string,
@@ -681,13 +800,13 @@ export function TaskDetailContent() {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
+          sessionId: session.id,
         }),
       });
     } finally {
       clearSandboxInfo();
     }
-  }, [sandboxInfo, task.id, clearSandboxInfo]);
+  }, [sandboxInfo, session.id, clearSandboxInfo]);
 
   const saveSnapshot = useCallback(async (): Promise<{
     success: boolean;
@@ -699,7 +818,7 @@ export function TaskDetailContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
+          sessionId: session.id,
         }),
       });
 
@@ -721,14 +840,14 @@ export function TaskDetailContent() {
       console.error("Failed to save snapshot:", err);
       return { success: false };
     }
-  }, [task.id]);
+  }, [session.id]);
 
   const handleSaveAndKill = useCallback(async () => {
     if (!sandboxInfo || isSavingSnapshotRef.current) return;
 
     // Only save snapshot for sandbox types that support it
     // just-bash state is already persisted after each message via getState()
-    const supportsSnapshot = task.sandboxState?.type !== "just-bash";
+    const supportsSnapshot = session.sandboxState?.type !== "just-bash";
 
     if (supportsSnapshot) {
       isSavingSnapshotRef.current = true;
@@ -736,7 +855,7 @@ export function TaskDetailContent() {
       try {
         const result = await saveSnapshot();
         if (result.success && result.downloadUrl && result.createdAt) {
-          updateTaskSnapshot(result.downloadUrl, new Date(result.createdAt));
+          updateSessionSnapshot(result.downloadUrl, new Date(result.createdAt));
         }
       } finally {
         setIsSavingSnapshot(false);
@@ -748,8 +867,8 @@ export function TaskDetailContent() {
     await handleKillSandbox();
   }, [
     sandboxInfo,
-    task.sandboxState?.type,
-    updateTaskSnapshot,
+    session.sandboxState?.type,
+    updateSessionSnapshot,
     handleKillSandbox,
     saveSnapshot,
   ]);
@@ -762,7 +881,7 @@ export function TaskDetailContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
+          sessionId: session.id,
         }),
       });
 
@@ -792,13 +911,13 @@ export function TaskDetailContent() {
     } finally {
       setIsExtendingSandbox(false);
     }
-  }, [sandboxInfo, task.id, setSandboxInfo]);
+  }, [sandboxInfo, session.id, setSandboxInfo]);
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const isSavingSnapshotRef = useRef(false);
 
   const handleRestoreSnapshot = async () => {
-    if (!task.snapshotUrl) return;
+    if (!session.snapshotUrl) return;
 
     setIsRestoringSnapshot(true);
     setRestoreError(null);
@@ -811,7 +930,7 @@ export function TaskDetailContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: task.id,
+          sessionId: session.id,
         }),
       });
 
@@ -829,8 +948,8 @@ export function TaskDetailContent() {
       });
 
       // Update sandbox type from the preserved state
-      if (task.sandboxState?.type) {
-        setSandboxType(task.sandboxState.type);
+      if (session.sandboxState?.type) {
+        setSandboxType(session.sandboxState.type);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -843,14 +962,15 @@ export function TaskDetailContent() {
   const handleCreateNewSandbox = useCallback(async () => {
     setIsCreatingSandbox(true);
     try {
-      const branchExistsOnOrigin = task.prNumber != null;
-      const shouldCreateNewBranch = task.isNewBranch && !branchExistsOnOrigin;
+      const branchExistsOnOrigin = session.prNumber != null;
+      const shouldCreateNewBranch =
+        session.isNewBranch && !branchExistsOnOrigin;
       const newSandbox = await createSandbox(
-        task.cloneUrl ?? undefined,
-        task.branch ?? undefined,
+        session.cloneUrl ?? undefined,
+        session.branch ?? undefined,
         shouldCreateNewBranch,
-        task.id,
-        task.sandboxState?.type ?? sandboxTypeParam ?? "hybrid",
+        session.id,
+        session.sandboxState?.type ?? "hybrid",
       );
       setSandboxInfo(newSandbox);
       setSandboxType(newSandbox.type);
@@ -860,13 +980,12 @@ export function TaskDetailContent() {
       setIsCreatingSandbox(false);
     }
   }, [
-    task.prNumber,
-    task.isNewBranch,
-    task.cloneUrl,
-    task.branch,
-    task.id,
-    task.sandboxState?.type,
-    sandboxTypeParam,
+    session.prNumber,
+    session.isNewBranch,
+    session.cloneUrl,
+    session.branch,
+    session.id,
+    session.sandboxState?.type,
     setSandboxInfo,
     setSandboxType,
   ]);
@@ -883,17 +1002,13 @@ export function TaskDetailContent() {
     }
   }, [status]);
 
-  // Attempt to reconnect to existing sandbox on page refresh
+  // Track whether we've auto-attempted sandbox startup for this page load.
+  const hasAutoStartedSandboxRef = useRef(false);
+
+  // Attempt to reconnect to existing sandbox if session has saved state.
   useEffect(() => {
-    // Only attempt reconnection if:
-    // 1. We have initial messages (returning to an existing conversation)
-    // 2. Task has sandboxState (sandbox was created before)
-    // 3. No current sandboxInfo (haven't reconnected yet)
-    // 4. Not already creating a sandbox
-    // 5. Reconnection status is idle (haven't tried yet)
     if (
-      hadInitialMessages &&
-      task.sandboxState &&
+      session.sandboxState &&
       !sandboxInfo &&
       !isCreatingSandbox &&
       reconnectionStatus === "idle"
@@ -901,69 +1016,80 @@ export function TaskDetailContent() {
       attemptReconnection();
     }
   }, [
-    hadInitialMessages,
-    task.sandboxState,
+    session.sandboxState,
     sandboxInfo,
     isCreatingSandbox,
     reconnectionStatus,
     attemptReconnection,
   ]);
 
-  // Auto-send initial message when task loads and no messages exist
-  // Use hadInitialMessages to prevent race condition on remount
-  const hasSentInitialMessage = useRef(hadInitialMessages);
-  useEffect(() => {
-    if (messages.length === 0 && !hasSentInitialMessage.current) {
-      hasSentInitialMessage.current = true;
-
-      // Create sandbox and send first message
-      const initTask = async () => {
-        // Always create a sandbox - either with repo or empty
-        setIsCreatingSandbox(true);
-        try {
-          // For isNewBranch tasks: use newBranch pattern if branch doesn't exist on origin.
-          // Branch only exists on origin if a PR was created (which pushes the branch).
-          const branchExistsOnOrigin = task.prNumber != null;
-          const shouldCreateNewBranch =
-            task.isNewBranch && !branchExistsOnOrigin;
-          const newSandbox = await createSandbox(
-            task.cloneUrl ?? undefined,
-            task.branch ?? undefined,
-            shouldCreateNewBranch,
-            task.id,
-            sandboxTypeParam ?? "hybrid",
-          );
-          setSandboxInfo(newSandbox);
-          setSandboxType(newSandbox.type);
-        } catch (err) {
-          console.error("Failed to create sandbox:", err);
-          return;
-        } finally {
-          setIsCreatingSandbox(false);
-        }
-
-        // Send initial message for all tasks (with or without repo)
-        sendMessage({ text: task.title });
-      };
-
-      initTask();
+  const ensureSandboxReady = useCallback(async () => {
+    if (isSandboxValid(sandboxInfo)) {
+      return true;
+    }
+    if (isCreatingSandbox) {
+      return false;
+    }
+    try {
+      setIsCreatingSandbox(true);
+      const branchExistsOnOrigin = session.prNumber != null;
+      const shouldCreateNewBranch =
+        session.isNewBranch && !branchExistsOnOrigin;
+      const newSandbox = await createSandbox(
+        session.cloneUrl ?? undefined,
+        session.branch ?? undefined,
+        shouldCreateNewBranch,
+        session.id,
+        session.sandboxState?.type ?? "hybrid",
+      );
+      setSandboxInfo(newSandbox);
+      setSandboxType(newSandbox.type);
+      return true;
+    } catch (err) {
+      console.error("Failed to create sandbox:", err);
+      return false;
+    } finally {
+      setIsCreatingSandbox(false);
     }
   }, [
-    messages.length,
-    sendMessage,
+    sandboxInfo,
+    isCreatingSandbox,
+    session.prNumber,
+    session.isNewBranch,
+    session.cloneUrl,
+    session.branch,
+    session.id,
+    session.sandboxState?.type,
     setSandboxInfo,
     setSandboxType,
-    task.id,
-    task.cloneUrl,
-    task.branch,
-    task.isNewBranch,
-    task.prNumber,
-    sandboxTypeParam,
-    task.title,
+  ]);
+
+  // Auto-create sandbox right away for new sessions/chats.
+  useEffect(() => {
+    if (hasAutoStartedSandboxRef.current) return;
+    if (sandboxInfo || isCreatingSandbox) return;
+
+    // If we have stored sandbox state, wait for reconnect attempt first.
+    if (session.sandboxState && reconnectionStatus === "idle") return;
+    if (session.sandboxState && reconnectionStatus === "checking") return;
+    if (session.sandboxState && reconnectionStatus === "connected") {
+      hasAutoStartedSandboxRef.current = true;
+      return;
+    }
+
+    hasAutoStartedSandboxRef.current = true;
+    void ensureSandboxReady();
+  }, [
+    session.sandboxState,
+    reconnectionStatus,
+    sandboxInfo,
+    isCreatingSandbox,
+    ensureSandboxReady,
   ]);
 
   // Track tool completions to trigger diff refresh
   const prevToolStatesRef = useRef<Map<string, string>>(new Map());
+  const hasInitializedToolStatesRef = useRef(false);
   // Track if we've auto-opened the diff panel (don't re-open if user closed it)
   const hasAutoOpenedDiffRef = useRef(false);
 
@@ -982,6 +1108,12 @@ export function TaskDetailContent() {
   }, [messages]);
 
   useEffect(() => {
+    if (!hasInitializedToolStatesRef.current) {
+      prevToolStatesRef.current = currentToolStates;
+      hasInitializedToolStatesRef.current = true;
+      return;
+    }
+
     let hasFileChange = false;
     const fileModifyingTools = ["tool-write", "tool-edit"];
 
@@ -1012,7 +1144,7 @@ export function TaskDetailContent() {
         !showDiffPanel &&
         !hasAutoOpenedDiffRef.current &&
         sandboxInfo &&
-        task.sandboxState?.type !== "just-bash"
+        session.sandboxState?.type !== "just-bash"
       ) {
         hasAutoOpenedDiffRef.current = true;
         setShowDiffPanel(true);
@@ -1028,7 +1160,7 @@ export function TaskDetailContent() {
     messages,
     showDiffPanel,
     sandboxInfo,
-    task.sandboxState?.type,
+    session.sandboxState?.type,
     refreshDiff,
     refreshFiles,
   ]);
@@ -1116,108 +1248,219 @@ export function TaskDetailContent() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      <aside className="hidden w-72 shrink-0 border-r border-border bg-muted/20 md:flex md:flex-col">
+        <div className="border-b border-border p-3">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="mb-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Sessions
+          </button>
+          {isEditingTitle ? (
+            <div className="flex items-center gap-1">
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (editedTitle.trim()) {
+                      try {
+                        await updateSessionTitle(editedTitle.trim());
+                      } catch (err) {
+                        console.error("Failed to update title:", err);
+                      }
+                    }
+                    setIsEditingTitle(false);
+                  } else if (e.key === "Escape") {
+                    setIsEditingTitle(false);
+                  }
+                }}
+                onBlur={async () => {
+                  if (editedTitle.trim() && editedTitle !== session.title) {
+                    try {
+                      await updateSessionTitle(editedTitle.trim());
+                    } catch (err) {
+                      console.error("Failed to update title:", err);
+                    }
+                  }
+                  setIsEditingTitle(false);
+                }}
+                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  if (editedTitle.trim()) {
+                    try {
+                      await updateSessionTitle(editedTitle.trim());
+                    } catch (err) {
+                      console.error("Failed to update title:", err);
+                    }
+                  }
+                  setIsEditingTitle(false);
+                }}
+                className="rounded p-1 hover:bg-muted"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setEditedTitle(session.title);
+                setIsEditingTitle(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+            >
+              <span className="truncate text-sm font-medium">
+                {session.title}
+              </span>
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCreateChat}
+            disabled={chatsLoading}
+            className="mt-3 w-full justify-start"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New chat
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="space-y-1">
+            {chats.map((c) => (
+              <div
+                key={c.id}
+                className={`group flex items-center gap-1 rounded-md pr-1 ${
+                  c.id === chatInfo.id ? "bg-secondary" : "hover:bg-muted"
+                }`}
+              >
+                {editingChatId === c.id ? (
+                  <input
+                    ref={chatTitleInputRef}
+                    type="text"
+                    value={editingChatTitle}
+                    onChange={(e) => setEditingChatTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleRenameChat(c.id, editingChatTitle);
+                      } else if (e.key === "Escape") {
+                        setEditingChatId(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      void handleRenameChat(c.id, editingChatTitle);
+                    }}
+                    className="h-8 min-w-0 flex-1 rounded bg-transparent px-2 text-sm focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleChatSwitch(c.id)}
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                      c.id === chatInfo.id
+                        ? "text-secondary-foreground"
+                        : "text-muted-foreground group-hover:text-foreground"
+                    }`}
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{c.title}</span>
+                  </button>
+                )}
+                {editingChatId !== c.id && (
+                  <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingChatId(c.id);
+                        setEditingChatTitle(c.title);
+                      }}
+                      className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                      aria-label={`Rename ${c.title}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleDeleteChat(c.id);
+                      }}
+                      disabled={chats.length <= 1}
+                      className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={`Delete ${c.title}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+
       {/* Main chat area */}
       <div className="flex flex-1 flex-col">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="rounded-lg p-2 hover:bg-muted"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
             <div className="flex items-center gap-2 text-sm">
-              {task.repoName ? (
+              {session.repoName ? (
                 <>
                   <span className="font-medium text-foreground">
-                    {task.repoName}
+                    {session.repoName}
                   </span>
-                  {(task.branch ?? sandboxInfo?.currentBranch) && (
+                  {(session.branch ?? sandboxInfo?.currentBranch) && (
                     <>
                       <span className="text-muted-foreground/40">/</span>
                       <span className="text-muted-foreground">
-                        {task.branch ?? sandboxInfo?.currentBranch}
+                        {session.branch ?? sandboxInfo?.currentBranch}
                       </span>
                     </>
                   )}
                 </>
-              ) : isEditingTitle ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (editedTitle.trim()) {
-                          try {
-                            await updateTaskTitle(editedTitle.trim());
-                          } catch (err) {
-                            console.error("Failed to update title:", err);
-                          }
-                        }
-                        setIsEditingTitle(false);
-                      } else if (e.key === "Escape") {
-                        setIsEditingTitle(false);
-                      }
-                    }}
-                    onBlur={async () => {
-                      if (editedTitle.trim() && editedTitle !== task.title) {
-                        try {
-                          await updateTaskTitle(editedTitle.trim());
-                        } catch (err) {
-                          console.error("Failed to update title:", err);
-                        }
-                      }
-                      setIsEditingTitle(false);
-                    }}
-                    className="w-40 rounded border border-border bg-transparent px-2 py-0.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (editedTitle.trim()) {
-                        try {
-                          await updateTaskTitle(editedTitle.trim());
-                        } catch (err) {
-                          console.error("Failed to update title:", err);
-                        }
-                      }
-                      setIsEditingTitle(false);
-                    }}
-                    className="rounded p-1 hover:bg-muted"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                </div>
               ) : (
-                <div className="flex items-center gap-1">
-                  <span
-                    className="max-w-[200px] truncate text-muted-foreground"
-                    title={task.title}
-                  >
-                    {task.title}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditedTitle(task.title);
-                      setIsEditingTitle(true);
-                    }}
-                    className="rounded p-1 hover:bg-muted"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </div>
+                <span className="text-muted-foreground">{session.title}</span>
               )}
+            </div>
+            <div className="flex items-center gap-2 md:hidden">
+              <Select value={chatInfo.id} onValueChange={handleChatSwitch}>
+                <SelectTrigger className="h-8 w-[160px]">
+                  <SelectValue placeholder="Select chat" />
+                </SelectTrigger>
+                <SelectContent>
+                  {chats.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleCreateChat}
+                disabled={chatsLoading}
+                className="h-8 w-8"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
             <SandboxHeaderBadge
               sandboxInfo={sandboxInfo}
-              sandboxType={task.sandboxState?.type}
+              sandboxType={session.sandboxState?.type}
               isCreating={isCreatingSandbox}
               isSavingSnapshot={isSavingSnapshot}
               isRestoring={isRestoringSnapshot}
@@ -1236,14 +1479,14 @@ export function TaskDetailContent() {
                 if (sandboxInfo) {
                   await handleSaveAndKill();
                 }
-                await archiveTask();
+                await archiveSession();
                 router.push("/");
               }}
             >
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>
-            {task.sandboxState?.type === "just-bash" ? (
+            {session.sandboxState?.type === "just-bash" ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
@@ -1262,7 +1505,7 @@ export function TaskDetailContent() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDiffPanel(!showDiffPanel)}
-                disabled={!diff && !task.cachedDiff}
+                disabled={!diff && !session.cachedDiff}
               >
                 <GitCompare className="mr-2 h-4 w-4" />
                 Diff
@@ -1280,33 +1523,33 @@ export function TaskDetailContent() {
                   )}
               </Button>
             )}
-            {task?.cloneUrl ? (
-              // Task has a repo - show PR buttons
-              task?.prNumber ? (
+            {session?.cloneUrl ? (
+              // Session has a repo - show PR buttons
+              session?.prNumber ? (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const prUrl = `https://github.com/${task.repoOwner}/${task.repoName}/pull/${task.prNumber}`;
+                    const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
                     window.open(prUrl, "_blank");
                   }}
                 >
                   <GitPullRequest className="mr-2 h-4 w-4" />
-                  View PR #{task.prNumber}
+                  View PR #{session.prNumber}
                 </Button>
               ) : (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPrDialogOpen(true)}
-                  disabled={!task?.branch}
+                  disabled={!session?.branch}
                 >
                   <GitPullRequest className="mr-2 h-4 w-4" />
                   Create PR
                 </Button>
               )
-            ) : task.sandboxState?.type === "just-bash" ? null : (
-              // Task has no repo - show Create Repo button (not available for in-memory sandboxes)
+            ) : session.sandboxState?.type === "just-bash" ? null : (
+              // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
               <Button
                 variant="outline"
                 size="sm"
@@ -1548,10 +1791,13 @@ export function TaskDetailContent() {
                 />
               )}
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   const hasContent = input.trim() || images.length > 0;
-                  if (!hasContent || !isSandboxValid(sandboxInfo)) return;
+                  if (!hasContent) return;
+
+                  const ready = await ensureSandboxReady();
+                  if (!ready) return;
 
                   const messageText = input;
                   const files = getFileParts();
@@ -1587,7 +1833,7 @@ export function TaskDetailContent() {
                   sandboxInfo={sandboxInfo}
                   isCreating={isCreatingSandbox}
                   isRestoring={isRestoringSnapshot}
-                  hasSnapshot={!!task.snapshotUrl}
+                  hasSnapshot={!!session.snapshotUrl}
                   onRestore={handleRestoreSnapshot}
                   onCreateNew={handleCreateNewSandbox}
                 />
@@ -1659,10 +1905,27 @@ export function TaskDetailContent() {
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
-                    {task.modelId && (
-                      <span className="text-xs text-muted-foreground/60">
-                        {task.modelId}
-                      </span>
+                    {messages.length === 0 && chatInfo.modelId ? (
+                      <div
+                        className={
+                          status === "streaming" || isUpdatingModel
+                            ? "pointer-events-none opacity-60"
+                            : undefined
+                        }
+                      >
+                        <ModelSelectorCompact
+                          value={chatInfo.modelId}
+                          onChange={(modelId) => {
+                            void handleModelChange(modelId);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      chatInfo.modelId && (
+                        <span className="text-xs text-muted-foreground/60">
+                          {chatInfo.modelId}
+                        </span>
+                      )
                     )}
                     {/* TODO: Derive context limit from model ID instead of hardcoding */}
                     <ContextUsageIndicator
@@ -1708,7 +1971,10 @@ export function TaskDetailContent() {
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!input.trim() && images.length === 0}
+                        disabled={
+                          (!input.trim() && images.length === 0) ||
+                          isUpdatingModel
+                        }
                         className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
                       >
                         <ArrowUp className="h-4 w-4" />
@@ -1730,27 +1996,27 @@ export function TaskDetailContent() {
       </div>
 
       {/* Create PR Dialog */}
-      {task && (
+      {session && (
         <CreatePRDialog
           open={prDialogOpen}
           onOpenChange={setPrDialogOpen}
-          task={task}
+          session={session}
           hasSandbox={sandboxInfo !== null}
         />
       )}
 
       {/* Create Repo Dialog */}
-      {task && (
+      {session && (
         <CreateRepoDialog
           open={repoDialogOpen}
           onOpenChange={setRepoDialogOpen}
-          task={task}
+          session={session}
           hasSandbox={sandboxInfo !== null}
         />
       )}
 
       {/* Diff Viewer Panel */}
-      {showDiffPanel && (sandboxInfo || Boolean(task.cachedDiff)) && (
+      {showDiffPanel && (sandboxInfo || Boolean(session.cachedDiff)) && (
         <DiffViewer onClose={() => setShowDiffPanel(false)} />
       )}
     </div>

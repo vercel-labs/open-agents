@@ -1,9 +1,9 @@
+import { z } from "zod";
 import { connectSandbox } from "@open-harness/sandbox";
 import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
-import { getTaskById, updateTask } from "@/lib/db/tasks";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { z } from "zod";
 
 const prContentSchema = z.object({
   title: z.string().describe("A concise PR title, max 72 characters"),
@@ -42,8 +42,8 @@ function looksLikeCommitHash(str: string): boolean {
 export const maxDuration = 120;
 
 interface GeneratePRRequest {
-  taskId: string;
-  taskTitle: string;
+  sessionId: string;
+  sessionTitle: string;
   baseBranch: string;
   branchName: string;
   createBranchOnly?: boolean;
@@ -66,27 +66,27 @@ export async function POST(req: Request) {
   }
 
   const {
-    taskId,
-    taskTitle,
+    sessionId,
+    sessionTitle,
     baseBranch,
     branchName,
     createBranchOnly,
     commitOnly,
   } = body;
 
-  if (!taskId) {
-    return Response.json({ error: "Task ID is required" }, { status: 400 });
+  if (!sessionId) {
+    return Response.json({ error: "Session ID is required" }, { status: 400 });
   }
 
-  // Verify task ownership
-  const task = await getTaskById(taskId);
-  if (!task) {
-    return Response.json({ error: "Task not found" }, { status: 404 });
+  // Verify session ownership
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
   }
-  if (task.userId !== session.user.id) {
+  if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(task.sandboxState)) {
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
   }
 
   // 3. Connect to sandbox
-  const sandbox = await connectSandbox(task.sandboxState);
+  const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
 
   // 3a. Resolve live branch from sandbox
@@ -250,8 +250,8 @@ export async function POST(req: Request) {
   }
 
   if (resolvedBranch !== branchName) {
-    await updateTask(taskId, { branch: resolvedBranch }).catch((error) => {
-      console.error("Failed to update task branch:", error);
+    await updateSession(sessionId, { branch: resolvedBranch }).catch((error) => {
+      console.error("Failed to update session branch:", error);
     });
   }
 
@@ -289,7 +289,7 @@ export async function POST(req: Request) {
       model: gateway("anthropic/claude-haiku-4.5"),
       prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
-Task context: ${taskTitle}
+Session context: ${sessionTitle}
 
 Diff:
 ${diffForCommit.slice(0, 8000)}
@@ -550,7 +550,7 @@ Respond with ONLY the commit message, nothing else.`,
       }),
       prompt: `Generate a pull request title and body for these changes.
 
-Task: ${taskTitle}
+Session: ${sessionTitle}
 Branch: ${resolvedBranch} -> ${baseBranch}
 
 Changes summary:
@@ -563,7 +563,7 @@ ${commitLog}`,
     // Handle case where output is undefined (model failed to generate valid object)
     if (!output) {
       prContent = {
-        title: taskTitle,
+        title: sessionTitle,
         body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
       };
     } else {
@@ -573,7 +573,7 @@ ${commitLog}`,
     if (NoObjectGeneratedError.isInstance(error)) {
       // Fallback if structured output generation fails
       prContent = {
-        title: taskTitle,
+        title: sessionTitle,
         body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
       };
     } else {

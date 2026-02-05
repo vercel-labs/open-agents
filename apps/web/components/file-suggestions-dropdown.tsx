@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { FileIcon, FolderIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { FileSuggestion } from "@/app/api/tasks/[id]/files/route";
+import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 
 interface FileSuggestionsDropdownProps {
   suggestions: FileSuggestion[];
