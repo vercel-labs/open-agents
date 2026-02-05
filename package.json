@@ -47,7 +47,7 @@
   },
   "packageManager": "bun@1.2.14",
   "dependencies": {
-    "ai": "^6.0.59",
+    "ai": "^6.0.72",
     "zod": "^4.3.5"
   }
 }
