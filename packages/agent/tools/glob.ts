@@ -117,9 +117,30 @@ EXAMPLES:
           searchDir = path.join(searchDir, ...literalPrefix);
         }
 
-        const findArgs: string[] = [
-          "find",
-          shellEscape(searchDir),
+        // Determine maxdepth from remaining wildcard directory segments.
+        // e.g., "src/*/utils.ts" → literalPrefix ["src"], remaining dir ["*"], name "utils.ts"
+        //   → maxdepth 2 (one dir level + the file)
+        // e.g., "src/**/*.tsx" → remaining dir ["**"] → no maxdepth (recursive)
+        // e.g., "*.json" → no remaining dir segments → maxdepth 1 (current dir only)
+        const remainingDirSegments = patternParts.slice(
+          literalPrefix.length,
+          patternParts.length - 1,
+        );
+        const hasRecursiveWildcard = remainingDirSegments.some(
+          (s) => s === "**",
+        );
+
+        let maxDepth: number | undefined;
+        if (!hasRecursiveWildcard) {
+          // Each * segment = one directory level, +1 for the file itself
+          maxDepth = remainingDirSegments.length + 1;
+        }
+
+        const findArgs: string[] = ["find", shellEscape(searchDir)];
+        if (maxDepth !== undefined) {
+          findArgs.push("-maxdepth", String(maxDepth));
+        }
+        findArgs.push(
           "-not",
           "-path",
           "'*/.*'",
@@ -130,27 +151,17 @@ EXAMPLES:
           "f",
           "-name",
           shellEscape(namePattern),
-        ];
+        );
 
-        // Use stat to get size and mtime for each file.
-        // Detect GNU stat vs BSD stat for cross-platform support.
-        // Output format: mtime_epoch\tsize\tpath
-        const statCmd = [
-          findArgs.join(" "),
-          "-exec",
-          "sh -c '",
-          "if stat --version >/dev/null 2>&1;",
-          "then",
-          // GNU stat (Linux)
-          `stat -c "%Y\\t%s\\t$1" "$1";`,
-          "else",
-          // BSD stat (macOS)
-          `stat -f "%m\\t%z\\t$1" "$1";`,
-          "fi",
-          "' _ {} \\;",
+        // Get file metadata (mtime, size) along with paths.
+        // GNU find -printf (Linux): outputs mtime/size/path directly, no -exec needed.
+        // Falls back to BSD stat (macOS) if -printf is unavailable.
+        const findBase = findArgs.join(" ");
+        const command = [
+          `{ ${findBase} -printf '%T@\\t%s\\t%p\\n' 2>/dev/null`,
+          `|| ${findBase} -exec stat -f '%m%t%z%t%N' {} + ; }`,
+          `| sort -t$'\\t' -k1 -rn | head -n ${limit}`,
         ].join(" ");
-
-        const command = statCmd + ` | sort -t'\t' -k1 -rn | head -n ${limit}`;
 
         const result = await sandbox.exec(
           command,
@@ -162,7 +173,7 @@ EXAMPLES:
         if (!result.success && result.exitCode !== 1) {
           return {
             success: false,
-            error: `Glob failed: ${result.stderr}`,
+            error: `Glob failed (exit ${result.exitCode}): ${result.stdout.slice(0, 500)}`,
           };
         }
 
@@ -189,7 +200,7 @@ EXAMPLES:
           });
         }
 
-        return {
+        const response: Record<string, unknown> = {
           success: true,
           pattern,
           baseDir: searchDir,
@@ -200,6 +211,17 @@ EXAMPLES:
             modifiedAt: new Date(f.modifiedAt).toISOString(),
           })),
         };
+
+        // Include debug info when no results found to aid diagnosis
+        if (files.length === 0) {
+          response._debug = {
+            command,
+            exitCode: result.exitCode,
+            stdoutPreview: result.stdout.slice(0, 500),
+          };
+        }
+
+        return response;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {

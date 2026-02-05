@@ -49,7 +49,7 @@ export const grepTool = () =>
         workingDirectory: ctx.workingDirectory,
       });
     },
-    description: `Search for patterns in files using JavaScript regular expressions.
+    description: `Search for patterns in files using POSIX Extended Regular Expressions (ERE).
 
 WHEN TO USE:
 - Finding where a function, variable, or string literal is used
@@ -62,7 +62,8 @@ WHEN NOT TO USE:
 - Directory listings, builds, or other shell tasks (use bashTool instead)
 
 USAGE:
-- Uses JavaScript RegExp syntax (e.g., "log.*Error", "function\\s+\\w+")
+- Uses POSIX ERE syntax (e.g., "log.*Error", "function[[:space:]]+[a-zA-Z_]+")
+- Perl-style shorthands like \\s, \\w, \\d are NOT supported; use POSIX classes instead: [[:space:]], [[:alnum:]_], [[:digit:]]
 - Search a specific file OR an entire directory via the path parameter
 - Optionally filter files with glob (e.g., "*.ts", "*.test.js")
 - Matches are SINGLE-LINE: patterns do not span across newline characters
@@ -96,8 +97,7 @@ EXAMPLES:
         const args: string[] = ["grep", "-rn"];
         if (!caseSensitive) args.push("-i");
 
-        args.push("--exclude-dir=.*", "--exclude-dir=node_modules");
-        args.push("--null");
+        args.push("--exclude-dir='.*'", "--exclude-dir='node_modules'");
 
         if (glob) {
           args.push(`--include=${shellEscape(glob)}`);
@@ -117,7 +117,7 @@ EXAMPLES:
         if (!result.success && result.exitCode !== 1) {
           return {
             success: false,
-            error: `Grep failed: ${result.stderr}`,
+            error: `Grep failed (exit ${result.exitCode}): ${result.stdout.slice(0, 500)}`,
           };
         }
 
@@ -129,19 +129,24 @@ EXAMPLES:
         for (const line of lines) {
           if (matches.length >= maxTotal) break;
 
-          // With --null, format is: file\0line:content
-          // Fall back to colon-based parsing if NUL not present
+          // grep -rn output format: file:line:content
+          // Use last-known-good parsing: find first colon after the path
+          // For absolute paths like /vercel/sandbox/file.ts:10:content,
+          // we need to handle the colon after the path correctly
           const nulIndex = line.indexOf("\0");
           let file: string;
           let rest: string;
           if (nulIndex !== -1) {
+            // NUL-separated format (if --null was used)
             file = line.slice(0, nulIndex);
             rest = line.slice(nulIndex + 1);
           } else {
-            const firstColon = line.indexOf(":");
-            if (firstColon === -1) continue;
-            file = line.slice(0, firstColon);
-            rest = line.slice(firstColon + 1);
+            // Colon-separated: find the line number portion (file:LINE_NUM:content)
+            // Match the pattern ":digits:" to separate file path from line number
+            const match = line.match(/:(\d+):/);
+            if (!match || match.index === undefined) continue;
+            file = line.slice(0, match.index);
+            rest = line.slice(match.index + 1);
           }
           const colonIndex = rest.indexOf(":");
           if (colonIndex === -1) continue;
@@ -163,13 +168,24 @@ EXAMPLES:
           });
         }
 
-        return {
+        const response: Record<string, unknown> = {
           success: true,
           pattern,
           matchCount: matches.length,
           filesWithMatches: filesSet.size,
           matches,
         };
+
+        // Include debug info when no results found to aid diagnosis
+        if (matches.length === 0) {
+          response._debug = {
+            command,
+            exitCode: result.exitCode,
+            stdoutPreview: result.stdout.slice(0, 500),
+          };
+        }
+
+        return response;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
