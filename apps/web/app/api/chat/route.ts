@@ -20,8 +20,8 @@ import {
 } from "@/lib/db/sessions";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
-import { createRedisClient } from "@/lib/redis";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
+import { onStopSignal } from "@/lib/stop-signal";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -157,35 +157,23 @@ export async function POST(req: Request) {
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
-  // Create abort controller with Redis pub/sub for instant stop
+  // Create abort controller with shared Redis pub/sub for instant stop
   const controller = new AbortController();
-  const stopChannel = `stop:${chatId}`;
-  const subscriber = createRedisClient();
-  let subscriberCleaned = false;
+  const unsubscribeStop = await onStopSignal(chatId, () => {
+    controller.abort();
+  });
 
-  const cleanupSubscriber = () => {
-    if (subscriberCleaned) return;
-    subscriberCleaned = true;
-    subscriber.unsubscribe().catch(() => {});
-    subscriber.disconnect();
-  };
   let finalizeStreamPromise: Promise<void> | undefined;
   const finalizeStream = () => {
     if (finalizeStreamPromise) {
       return finalizeStreamPromise;
     }
     finalizeStreamPromise = (async () => {
-      cleanupSubscriber();
+      unsubscribeStop();
       await updateChatActiveStreamId(chatId, null);
     })();
     return finalizeStreamPromise;
   };
-
-  await subscriber.subscribe(stopChannel);
-  subscriber.on("message", () => {
-    controller.abort();
-    cleanupSubscriber();
-  });
 
   const result = await webAgent.stream({
     messages: modelMessages,
@@ -230,7 +218,10 @@ export async function POST(req: Request) {
     },
     async consumeSseStream({ stream }) {
       const streamId = nanoid();
-      await resumableStreamContext.createNewResumableStream(streamId, () => stream);
+      await resumableStreamContext.createNewResumableStream(
+        streamId,
+        () => stream,
+      );
       await updateChatActiveStreamId(chatId, streamId);
     },
     onFinish: async ({ responseMessage }) => {
