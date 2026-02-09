@@ -27,8 +27,21 @@ export function EditRenderer({
 
   const oldLines = oldString.split("\n");
   const newLines = newString.split("\n");
-  const additions = newLines.filter((l) => !oldLines.includes(l)).length;
-  const removals = oldLines.filter((l) => !newLines.includes(l)).length;
+
+  // Count additions and removals using multiset comparison to handle duplicate lines
+  const oldCounts = new Map<string, number>();
+  for (const l of oldLines) oldCounts.set(l, (oldCounts.get(l) ?? 0) + 1);
+  const newCounts = new Map<string, number>();
+  for (const l of newLines) newCounts.set(l, (newCounts.get(l) ?? 0) + 1);
+
+  let additions = 0;
+  for (const [line, count] of newCounts) {
+    additions += Math.max(0, count - (oldCounts.get(line) ?? 0));
+  }
+  let removals = 0;
+  for (const [line, count] of oldCounts) {
+    removals += Math.max(0, count - (newCounts.get(line) ?? 0));
+  }
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
