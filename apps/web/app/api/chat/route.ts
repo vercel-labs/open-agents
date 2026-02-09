@@ -163,16 +163,9 @@ export async function POST(req: Request) {
     controller.abort();
   });
 
-  let finalizeStreamPromise: Promise<void> | undefined;
-  const finalizeStream = () => {
-    if (finalizeStreamPromise) {
-      return finalizeStreamPromise;
-    }
-    finalizeStreamPromise = (async () => {
-      unsubscribeStop();
-      await updateChatActiveStreamId(chatId, null);
-    })();
-    return finalizeStreamPromise;
+  const finalizeStream = async () => {
+    unsubscribeStop();
+    await updateChatActiveStreamId(chatId, null);
   };
 
   const result = await webAgent.stream({
