@@ -100,7 +100,9 @@ export async function POST(req: Request) {
       const nextState = sandbox.getState() as SandboxState;
       await updateSession(sessionId, {
         sandboxState: nextState,
-        lifecycleVersion: getNextLifecycleVersion(sessionRecord?.lifecycleVersion),
+        lifecycleVersion: getNextLifecycleVersion(
+          sessionRecord?.lifecycleVersion,
+        ),
         ...buildActiveLifecycleUpdate(nextState),
       });
       kickSandboxLifecycleWorkflow({
@@ -240,7 +242,9 @@ export async function POST(req: Request) {
     const nextState = sandbox.getState() as SandboxState;
     await updateSession(sessionId, {
       sandboxState: nextState,
-      lifecycleVersion: getNextLifecycleVersion(sessionRecord?.lifecycleVersion),
+      lifecycleVersion: getNextLifecycleVersion(
+        sessionRecord?.lifecycleVersion,
+      ),
       ...buildActiveLifecycleUpdate(nextState),
     });
 

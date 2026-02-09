@@ -4,7 +4,11 @@ import {
   buildHibernatedLifecycleUpdate,
   getSandboxExpiresAtDate,
 } from "@/lib/sandbox/lifecycle";
-import { clearSandboxState } from "@/lib/sandbox/utils";
+import {
+  clearSandboxState,
+  hasRuntimeSandboxState,
+  isSandboxUnavailableError,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export type ReconnectStatus =
@@ -37,48 +41,6 @@ function buildLifecyclePayload(
     hibernateAfter: sessionRecord?.hibernateAfter?.getTime() ?? null,
     sandboxExpiresAt: sessionRecord?.sandboxExpiresAt?.getTime() ?? null,
   };
-}
-
-function hasRuntimeSandboxState(state: unknown): boolean {
-  if (!state || typeof state !== "object") return false;
-
-  const sandboxState = state as {
-    type?: unknown;
-    sandboxId?: unknown;
-    files?: unknown;
-  };
-
-  if (sandboxState.type === "vercel") {
-    return (
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0
-    );
-  }
-
-  if (sandboxState.type === "hybrid") {
-    const hasSandboxId =
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0;
-    const hasFiles =
-      sandboxState.files !== undefined && sandboxState.files !== null;
-    return hasSandboxId || hasFiles;
-  }
-
-  if (sandboxState.type === "just-bash") {
-    return sandboxState.files !== undefined && sandboxState.files !== null;
-  }
-
-  return false;
-}
-
-function isSandboxUnavailableError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("expected a stream of command data") ||
-    normalized.includes("sandbox is stopped") ||
-    normalized.includes("not found") ||
-    normalized.includes("sandbox probe failed")
-  );
 }
 
 function getStateExpiresAt(state: unknown): number | undefined {
@@ -195,10 +157,17 @@ export async function GET(req: Request): Promise<Response> {
       console.warn(
         `[Reconnect] session=${sessionId} transient reconnect error, preserving runtime state: ${message}`,
       );
+      // Only forward expiresAt if it's still in the future; stale values
+      // cause the client to compute a zero/negative timeout and flip to expired.
+      const rawExpiresAt = getStateExpiresAt(state);
+      const safeExpiresAt =
+        rawExpiresAt !== undefined && rawExpiresAt > Date.now()
+          ? rawExpiresAt
+          : undefined;
       return Response.json({
         status: "connected",
         hasSnapshot: !!sessionRecord.snapshotUrl,
-        expiresAt: getStateExpiresAt(state),
+        expiresAt: safeExpiresAt,
         lifecycle: buildLifecyclePayload(sessionRecord),
       } satisfies ReconnectResponse);
     }

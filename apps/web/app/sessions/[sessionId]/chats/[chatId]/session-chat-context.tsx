@@ -308,7 +308,8 @@ export function SessionChatProvider({
 
       const serverTimeMs = lifecycle.serverTime;
       const clockOffsetMs = serverTimeMs - localNow;
-      const state = (lifecycle.state as Session["lifecycleState"] | null) ?? null;
+      const state =
+        (lifecycle.state as Session["lifecycleState"] | null) ?? null;
 
       setLifecycleTiming({
         serverTimeMs,
@@ -336,8 +337,8 @@ export function SessionChatProvider({
     [],
   );
 
-  const attemptReconnection = useCallback(
-    async (): Promise<ReconnectionStatus> => {
+  const attemptReconnection =
+    useCallback(async (): Promise<ReconnectionStatus> => {
       setReconnectionStatus("checking");
 
       try {
@@ -408,107 +409,110 @@ export function SessionChatProvider({
         setReconnectionStatus("failed");
         return "failed";
       }
-    },
-    [sessionRecord.id, sessionId, applyLifecycleTiming],
-  );
+    }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
 
-  const syncSandboxStatus = useCallback(async (): Promise<SandboxStatusSyncResult> => {
-    const THROTTLE_MS = 5_000;
-    const now = Date.now();
+  const syncSandboxStatus =
+    useCallback(async (): Promise<SandboxStatusSyncResult> => {
+      const THROTTLE_MS = 5_000;
+      const now = Date.now();
 
-    if (statusSyncRef.current.inFlight) {
-      return statusSyncRef.current.inFlight;
-    }
-    if (now - statusSyncRef.current.lastAt < THROTTLE_MS) {
-      return statusSyncRef.current.lastResult;
-    }
-
-    const run = (async (): Promise<SandboxStatusSyncResult> => {
-    try {
-      const response = await fetch(
-        `/api/sandbox/status?sessionId=${sessionRecord.id}`,
-      );
-      if (!response.ok) {
-        return "unknown";
+      if (statusSyncRef.current.inFlight) {
+        return statusSyncRef.current.inFlight;
+      }
+      if (now - statusSyncRef.current.lastAt < THROTTLE_MS) {
+        return statusSyncRef.current.lastResult;
       }
 
-      const data = (await response.json()) as SandboxStatusResponse;
-      setHasSnapshotState(data.hasSnapshot);
-      if (!data.hasSnapshot) {
-        setSessionRecord((prev) => ({
-          ...prev,
-          snapshotUrl: null,
-          snapshotCreatedAt: null,
-        }));
-      }
-      applyLifecycleTiming(data.lifecycle);
-
-      if (data.status === "no_sandbox") {
-        setSandboxInfoState(null);
-        sandboxInfoCache.delete(sessionId);
-        setSessionRecord((prev) => ({
-          ...prev,
-          sandboxState: prev.sandboxState
-            ? ({ type: prev.sandboxState.type } as SandboxState)
-            : null,
-        }));
-        setReconnectionStatus((prev) =>
-          prev === "checking" ? prev : "no_sandbox",
-        );
-        return "no_sandbox";
-      }
-
-      setSandboxInfoState((prev) => {
-        const expiresAtMs = data.lifecycle.sandboxExpiresAt;
-        if (expiresAtMs !== null) {
-          const currentExpiresAt =
-            prev && prev.timeout !== null ? prev.createdAt + prev.timeout : null;
-          if (
-            currentExpiresAt !== null &&
-            Math.abs(currentExpiresAt - expiresAtMs) <= 1_000
-          ) {
-            return prev;
+      const run = (async (): Promise<SandboxStatusSyncResult> => {
+        try {
+          const response = await fetch(
+            `/api/sandbox/status?sessionId=${sessionRecord.id}`,
+          );
+          if (!response.ok) {
+            return "unknown";
           }
 
-          const nextTimeout = Math.max(0, expiresAtMs - Date.now());
-          const nextSandboxInfo = {
-            createdAt: Date.now(),
-            timeout: nextTimeout,
-          };
-          sandboxInfoCache.set(sessionId, nextSandboxInfo);
-          return nextSandboxInfo;
+          const data = (await response.json()) as SandboxStatusResponse;
+          setHasSnapshotState(data.hasSnapshot);
+          if (!data.hasSnapshot) {
+            setSessionRecord((prev) => ({
+              ...prev,
+              snapshotUrl: null,
+              snapshotCreatedAt: null,
+            }));
+          }
+          applyLifecycleTiming(data.lifecycle);
+
+          if (data.status === "no_sandbox") {
+            setSandboxInfoState(null);
+            sandboxInfoCache.delete(sessionId);
+            setSessionRecord((prev) => ({
+              ...prev,
+              sandboxState: prev.sandboxState
+                ? ({ type: prev.sandboxState.type } as SandboxState)
+                : null,
+            }));
+            setReconnectionStatus((prev) =>
+              prev === "checking" ? prev : "no_sandbox",
+            );
+            return "no_sandbox";
+          }
+
+          setSandboxInfoState((prev) => {
+            const expiresAtMs = data.lifecycle.sandboxExpiresAt;
+            if (expiresAtMs !== null) {
+              const currentExpiresAt =
+                prev && prev.timeout !== null
+                  ? prev.createdAt + prev.timeout
+                  : null;
+              if (
+                currentExpiresAt !== null &&
+                Math.abs(currentExpiresAt - expiresAtMs) <= 1_000
+              ) {
+                return prev;
+              }
+
+              const nextTimeout = Math.max(0, expiresAtMs - Date.now());
+              const nextSandboxInfo = {
+                createdAt: Date.now(),
+                timeout: nextTimeout,
+              };
+              sandboxInfoCache.set(sessionId, nextSandboxInfo);
+              return nextSandboxInfo;
+            }
+
+            if (prev && prev.timeout === null) {
+              return prev;
+            }
+
+            const nextSandboxInfo = {
+              createdAt: Date.now(),
+              timeout: null,
+            };
+            sandboxInfoCache.set(sessionId, nextSandboxInfo);
+            return nextSandboxInfo;
+          });
+          setReconnectionStatus((prev) =>
+            prev === "checking" ? prev : "connected",
+          );
+          return "active";
+        } catch {
+          // Best-effort poll; keep last known state on transient errors.
+          return "unknown";
         }
+      })();
 
-        if (prev && prev.timeout === null) {
-          return prev;
-        }
+      statusSyncRef.current.inFlight = run;
 
-        const nextSandboxInfo = {
-          createdAt: Date.now(),
-          timeout: null,
-        };
-        sandboxInfoCache.set(sessionId, nextSandboxInfo);
-        return nextSandboxInfo;
-      });
-      setReconnectionStatus((prev) => (prev === "checking" ? prev : "connected"));
-      return "active";
-    } catch {
-      // Best-effort poll; keep last known state on transient errors.
-      return "unknown";
-    }
-    })();
-
-    statusSyncRef.current.inFlight = run;
-
-    try {
-      const result = await run;
-      statusSyncRef.current.lastAt = Date.now();
-      statusSyncRef.current.lastResult = result;
-      return result;
-    } finally {
-      statusSyncRef.current.inFlight = null;
-    }
-  }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
+      try {
+        const result = await run;
+        statusSyncRef.current.lastAt = Date.now();
+        statusSyncRef.current.lastResult = result;
+        return result;
+      } finally {
+        statusSyncRef.current.inFlight = null;
+      }
+    }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
 
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
@@ -543,7 +547,9 @@ export function SessionChatProvider({
     asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "hybrid";
   const supportsDiff = preferredSandboxType !== "just-bash";
   const supportsRepoCreation = preferredSandboxType !== "just-bash";
-  const hasRuntimeSandboxState = hasRuntimeSandboxData(sessionRecord.sandboxState);
+  const hasRuntimeSandboxState = hasRuntimeSandboxData(
+    sessionRecord.sandboxState,
+  );
   const hasSnapshot = hasSnapshotState || !!sessionRecord.snapshotUrl;
 
   // Use SWR hooks for diff and files

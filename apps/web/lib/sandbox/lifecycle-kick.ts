@@ -3,7 +3,10 @@ import "server-only";
 import { start } from "workflow/api";
 import { updateSession } from "@/lib/db/sessions";
 import { sandboxLifecycleWorkflow } from "@/app/workflows/sandbox-lifecycle";
-import { evaluateSandboxLifecycle, type SandboxLifecycleReason } from "./lifecycle";
+import {
+  evaluateSandboxLifecycle,
+  type SandboxLifecycleReason,
+} from "./lifecycle";
 
 interface KickSandboxLifecycleInput {
   sessionId: string;

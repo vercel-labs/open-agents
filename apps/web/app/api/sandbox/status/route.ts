@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { getSessionById } from "@/lib/db/sessions";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export type SandboxStatusResponse = {
@@ -15,38 +16,6 @@ export type SandboxStatusResponse = {
     sandboxExpiresAt: number | null;
   };
 };
-
-function hasRuntimeSandboxState(state: unknown): boolean {
-  if (!state || typeof state !== "object") return false;
-
-  const sandboxState = state as {
-    type?: unknown;
-    sandboxId?: unknown;
-    files?: unknown;
-  };
-
-  if (sandboxState.type === "vercel") {
-    return (
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0
-    );
-  }
-
-  if (sandboxState.type === "hybrid") {
-    const hasSandboxId =
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0;
-    const hasFiles =
-      sandboxState.files !== undefined && sandboxState.files !== null;
-    return hasSandboxId || hasFiles;
-  }
-
-  if (sandboxState.type === "just-bash") {
-    return sandboxState.files !== undefined && sandboxState.files !== null;
-  }
-
-  return false;
-}
 
 export async function GET(req: Request): Promise<Response> {
   const session = await getServerSession();

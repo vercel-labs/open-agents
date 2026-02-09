@@ -1,7 +1,11 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
-import { clearSandboxState } from "@/lib/sandbox/utils";
+import {
+  clearSandboxState,
+  hasRuntimeSandboxState,
+  isSandboxUnavailableError,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export type FileSuggestion = {
@@ -17,42 +21,6 @@ export type FilesResponse = {
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
-
-function hasRuntimeSandboxState(state: unknown): boolean {
-  if (!state || typeof state !== "object") return false;
-
-  const sandboxState = state as {
-    type?: unknown;
-    sandboxId?: unknown;
-    files?: unknown;
-  };
-
-  if (sandboxState.type === "vercel") {
-    return (
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0
-    );
-  }
-
-  if (sandboxState.type === "hybrid") {
-    const hasSandboxId =
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0;
-    const hasFiles =
-      sandboxState.files !== undefined && sandboxState.files !== null;
-    return hasSandboxId || hasFiles;
-  }
-
-  if (sandboxState.type === "just-bash") {
-    return sandboxState.files !== undefined && sandboxState.files !== null;
-  }
-
-  return false;
-}
-
-function isSandboxStreamUnavailable(message: string): boolean {
-  return message.toLowerCase().includes("expected a stream of command data");
-}
 
 /**
  * Parse git ls-files output and extract files and directories
@@ -138,7 +106,7 @@ export async function GET(_req: Request, context: RouteContext) {
 
     if (!trackedResult.success) {
       const stderr = trackedResult.stderr ?? "";
-      if (isSandboxStreamUnavailable(stderr)) {
+      if (isSandboxUnavailableError(stderr)) {
         await updateSession(sessionId, {
           sandboxState: clearSandboxState(sessionRecord.sandboxState),
           ...buildHibernatedLifecycleUpdate(),
@@ -157,7 +125,7 @@ export async function GET(_req: Request, context: RouteContext) {
 
     if (!untrackedResult.success) {
       const stderr = untrackedResult.stderr ?? "";
-      if (isSandboxStreamUnavailable(stderr)) {
+      if (isSandboxUnavailableError(stderr)) {
         await updateSession(sessionId, {
           sandboxState: clearSandboxState(sessionRecord.sandboxState),
           ...buildHibernatedLifecycleUpdate(),
@@ -191,7 +159,7 @@ export async function GET(_req: Request, context: RouteContext) {
     return Response.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isSandboxStreamUnavailable(message)) {
+    if (isSandboxUnavailableError(message)) {
       await updateSession(sessionId, {
         sandboxState: clearSandboxState(sessionRecord.sandboxState),
         ...buildHibernatedLifecycleUpdate(),

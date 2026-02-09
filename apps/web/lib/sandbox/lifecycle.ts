@@ -169,6 +169,9 @@ export async function evaluateSandboxLifecycle(
 
     const sandbox = await connectSandbox(sandboxState);
     if (!sandbox.snapshot) {
+      await updateSession(sessionId, {
+        ...buildActiveLifecycleUpdate(sandboxState),
+      });
       return { action: "skipped", reason: "snapshot-not-supported" };
     }
 
