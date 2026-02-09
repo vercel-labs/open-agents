@@ -1963,7 +1963,7 @@ export function SessionChatContent() {
                         onClick={() => {
                           fetch(`/api/chat/${chatInfo.id}/stop`, {
                             method: "POST",
-                          });
+                          }).catch(() => {});
                           stop();
                         }}
                         className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"

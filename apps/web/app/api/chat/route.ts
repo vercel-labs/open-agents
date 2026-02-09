@@ -162,11 +162,21 @@ export async function POST(req: Request) {
   const controller = new AbortController();
   const stopChannel = `stop:${chatId}`;
   const subscriber = createRedisClient();
+  let subscriberCleaned = false;
 
   const cleanupSubscriber = () => {
+    if (subscriberCleaned) return;
+    subscriberCleaned = true;
     subscriber.unsubscribe().catch(() => {});
     subscriber.disconnect();
   };
+
+  // Safety net: ensure Redis cleanup and activeStreamId reset even if
+  // onFinish doesn't fire (e.g. stream error, request abort, timeout)
+  after(async () => {
+    cleanupSubscriber();
+    await updateChatActiveStreamId(chatId, null);
+  });
 
   await subscriber.subscribe(stopChannel);
   subscriber.on("message", () => {
