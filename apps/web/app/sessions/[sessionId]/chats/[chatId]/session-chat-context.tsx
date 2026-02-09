@@ -167,7 +167,7 @@ export function SessionChatProvider({
     id: chatInfo.id,
     transport,
     messages: initialMessages,
-    resume: hadInitialMessages,
+    resume: hadInitialMessages && !!initialChat.activeStreamId,
     sendAutomaticallyWhen: shouldAutoSubmit,
   });
 

@@ -1,5 +1,10 @@
+import { after } from "next/server";
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
-import { getChatById, getSessionById } from "@/lib/db/sessions";
+import {
+  getChatById,
+  getSessionById,
+  updateChatActiveStreamId,
+} from "@/lib/db/sessions";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -35,6 +40,9 @@ export async function GET(_request: Request, context: RouteContext) {
   );
 
   if (!stream) {
+    // Stream no longer exists in Redis (expired or finished) — clear the stale
+    // activeStreamId so future page loads don't attempt another resume.
+    after(updateChatActiveStreamId(chatId, null));
     return new Response(null, { status: 204 });
   }
 
