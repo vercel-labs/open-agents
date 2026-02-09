@@ -1,9 +1,7 @@
 import { sleep } from "workflow";
 import { getSessionById } from "@/lib/db/sessions";
-import { SANDBOX_HARD_TIMEOUT_GUARD_MS } from "@/lib/sandbox/config";
 import {
   evaluateSandboxLifecycle,
-  getSandboxExpiresAtMs,
   type SandboxLifecycleEvaluationResult,
   type SandboxLifecycleReason,
 } from "@/lib/sandbox/lifecycle";
@@ -33,20 +31,13 @@ async function computeLifecycleWakeDecision(
     return { shouldContinue: false, reason: "sandbox-not-operable" };
   }
 
-  const expiresAtMs =
-    getSandboxExpiresAtMs(state) ?? session.sandboxExpiresAt?.getTime();
-  if (expiresAtMs === undefined) {
-    return { shouldContinue: false, reason: "missing-expiry" };
-  }
-
-  const wakeCandidates = [expiresAtMs - SANDBOX_HARD_TIMEOUT_GUARD_MS];
-  if (session.hibernateAfter) {
-    wakeCandidates.push(session.hibernateAfter.getTime());
+  if (!session.hibernateAfter) {
+    return { shouldContinue: false, reason: "missing-hibernate-after" };
   }
 
   return {
     shouldContinue: true,
-    wakeAtMs: Math.min(...wakeCandidates),
+    wakeAtMs: session.hibernateAfter.getTime(),
   };
 }
 

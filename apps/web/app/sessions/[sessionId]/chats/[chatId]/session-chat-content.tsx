@@ -695,7 +695,7 @@ export function SessionChatContent() {
         const errorMsg = payload.error ?? "Unknown error";
 
         // If a sandbox is already running (for example after a lifecycle
-        // rollover/restore), reconnect instead of surfacing a blocking error.
+        // restore), reconnect instead of surfacing a blocking error.
         if (errorMsg.includes("sandbox is still running")) {
           const reconnected = await waitForSandboxReady();
           if (!reconnected) {

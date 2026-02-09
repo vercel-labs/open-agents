@@ -6,11 +6,7 @@ import {
   type SnapshotResult,
 } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import {
-  DEFAULT_SANDBOX_TIMEOUT_MS,
-  SANDBOX_HARD_TIMEOUT_GUARD_MS,
-  SANDBOX_INACTIVITY_TIMEOUT_MS,
-} from "./config";
+import { SANDBOX_INACTIVITY_TIMEOUT_MS } from "./config";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
 export type SandboxLifecycleState =
@@ -35,7 +31,7 @@ export type SandboxLifecycleReason =
   | "status-check-overdue";
 
 export interface SandboxLifecycleEvaluationResult {
-  action: "skipped" | "hibernated" | "rolled-over" | "failed";
+  action: "skipped" | "hibernated" | "failed";
   reason?: string;
 }
 
@@ -154,21 +150,14 @@ export async function evaluateSandboxLifecycle(
     return { action: "skipped", reason: "just-bash" };
   }
 
-  const expiresAtMs =
-    getSandboxExpiresAtMs(sandboxState) ?? session.sandboxExpiresAt?.getTime();
-  if (expiresAtMs === undefined) {
-    return { action: "skipped", reason: "missing-expires-at" };
-  }
-
   const nowMs = Date.now();
   const lastActivityMs =
     session.lastActivityAt?.getTime() ?? session.updatedAt.getTime();
   const hibernateAfterMs = lastActivityMs + SANDBOX_INACTIVITY_TIMEOUT_MS;
 
   const isInactive = nowMs >= hibernateAfterMs;
-  const nearHardTimeout = nowMs >= expiresAtMs - SANDBOX_HARD_TIMEOUT_GUARD_MS;
 
-  if (!isInactive && !nearHardTimeout) {
+  if (!isInactive) {
     return { action: "skipped", reason: "not-due-yet" };
   }
 
@@ -210,40 +199,6 @@ export async function evaluateSandboxLifecycle(
     }
 
     const snapshotCreatedAt = new Date();
-
-    // Hard-timeout rollover for active sessions: snapshot (which stops the old
-    // sandbox), then immediately restore into a fresh sandbox generation.
-    if (nearHardTimeout && !isInactive) {
-      await updateSession(sessionId, {
-        lifecycleState: "restoring",
-        snapshotUrl: snapshot.snapshotId,
-        snapshotCreatedAt,
-      });
-
-      const restoredSandbox = await connectSandbox(
-        { type: sandboxState.type, snapshotId: snapshot.snapshotId },
-        { timeout: DEFAULT_SANDBOX_TIMEOUT_MS },
-      );
-
-      const restoredState =
-        (restoredSandbox.getState?.() as SandboxState | undefined) ??
-        ({ type: sandboxState.type } as SandboxState);
-      const activityAt = new Date();
-
-      await updateSession(sessionId, {
-        snapshotUrl: snapshot.snapshotId,
-        snapshotCreatedAt,
-        sandboxState: restoredState,
-        ...buildActiveLifecycleUpdate(restoredState, {
-          activityAt,
-          lifecycleState: "active",
-        }),
-      });
-      console.log(
-        `[Lifecycle] Rolled over sandbox for session ${sessionId} (reason=${reason}, snapshotId=${snapshot.snapshotId}).`,
-      );
-      return { action: "rolled-over" };
-    }
 
     await updateSession(sessionId, {
       snapshotUrl: snapshot.snapshotId,

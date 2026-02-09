@@ -1,6 +1,6 @@
 # Sandbox lifecycle
 
-This document describes how sandbox lifecycle management works, including automatic hibernation, hard-timeout rollover, and manual restore.
+This document describes how sandbox lifecycle management works, including automatic hibernation and manual restore.
 
 ## Timeouts
 
@@ -8,7 +8,6 @@ This document describes how sandbox lifecycle management works, including automa
 |---|---|---|---|
 | `DEFAULT_SANDBOX_TIMEOUT_MS` | 3 min | 5 hours | Hard VM expiry from Vercel |
 | `SANDBOX_INACTIVITY_TIMEOUT_MS` | 1 min | 30 min | Inactivity window before hibernate |
-| `SANDBOX_HARD_TIMEOUT_GUARD_MS` | 30s | 2 min | Buffer before hard expiry to trigger rollover |
 
 Configured in `lib/sandbox/config.ts`.
 
@@ -41,18 +40,11 @@ Configured in `lib/sandbox/config.ts`.
             │       │                              "Resume"
             │       │ kick workflow W(n+1)          (restore)
             └───────┘
-
- Near hard timeout (last G seconds) + user active?
-            │
-            ▼
-    ┌───────────────┐
-    │  rolling over  │
-    │ snapshot() +   │──▶ back to active (new sandbox generation)
-    │ restore()      │    kick workflow W(n+1)
-    └───────────────┘
 ```
 
-Where **I** = inactivity timeout, **H** = hard timeout, **G** = guard window.
+Where **I** = inactivity timeout, **H** = hard timeout.
+
+When the hard timeout is reached while the sandbox is still active, it hibernates the same way as inactivity — snapshot and stop. The user can manually resume if needed. This is simpler than automatic rollover and sufficient because the hard timeout (5 hours) is long enough that inactivity hibernation will almost always trigger first.
 
 ## How workflows work
 
@@ -61,12 +53,11 @@ Each lifecycle event calls `kickSandboxLifecycleWorkflow()`, which calls `start(
 A single workflow run does:
 
 1. Read session from DB
-2. Compute `wakeAtMs = min(hibernateAfter, expiresAt - G)`
+2. Compute `wakeAtMs = hibernateAfter`
 3. `sleep(wakeAtMs)` — durable sleep that survives deploys and serverless cold starts
 4. Wake up and evaluate:
    - **User inactive** (`now >= hibernateAfter`) → **hibernate** (snapshot + stop)
-   - **Near hard timeout** (`now >= expiresAt - G`) AND user active → **rollover** (snapshot + restore into fresh sandbox)
-   - **Neither** → **skip** ("not-due-yet"), then retry once with fresh DB state
+   - **Still active** → **skip** ("not-due-yet"), then retry once with fresh DB state
 5. Exit
 
 ### Multiple concurrent workflows
@@ -74,7 +65,7 @@ A single workflow run does:
 Each kick creates a new run. Multiple runs can coexist for the same session. This is safe because:
 
 - They all sleep until different wake times based on when they were kicked
-- The first one to act (hibernate or rollover) clears runtime state
+- The first one to act (hibernate) clears runtime state
 - Subsequent runs wake up, see no operable sandbox, and exit immediately
 - Workflow runs are cheap — sleep is free
 
