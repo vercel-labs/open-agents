@@ -3,9 +3,10 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { MultiFileDiff } from "@pierre/diffs/react";
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
-import { createEditDiffLines } from "@open-harness/shared/lib/diff";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import { defaultDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
@@ -24,16 +25,10 @@ export function EditRenderer({
   const oldString = input?.oldString ?? "";
   const newString = input?.newString ?? "";
 
-  // Collapsed view: limited to 10 lines
-  const { lines, additions, removals } = createEditDiffLines(
-    oldString,
-    newString,
-    1,
-    10,
-  );
-
-  // Expanded view: show all lines (up to 500)
-  const fullDiff = createEditDiffLines(oldString, newString, 3, 500);
+  const oldLines = oldString.split("\n");
+  const newLines = newString.split("\n");
+  const additions = newLines.filter((l) => !oldLines.includes(l)).length;
+  const removals = oldLines.filter((l) => !newLines.includes(l)).length;
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
@@ -57,11 +52,8 @@ export function EditRenderer({
           ? "bg-red-500"
           : "bg-green-500";
 
-  // Has expandable content if the diff is large
-  const hasExpandableContent =
-    fullDiff.lines.length > lines.length ||
-    oldString.length > 200 ||
-    newString.length > 200;
+  // Has expandable content if strings are substantial
+  const hasExpandableContent = oldString.length > 200 || newString.length > 200;
 
   const handleClick = () => {
     if (hasExpandableContent) {
@@ -77,51 +69,6 @@ export function EditRenderer({
       }
     }
   };
-
-  const renderDiffLines = (
-    diffLines: ReturnType<typeof createEditDiffLines>["lines"],
-  ) => (
-    <div className="overflow-hidden rounded border border-border bg-muted font-mono text-xs">
-      {diffLines.map((line, i) => (
-        <div
-          key={i}
-          className={cn(
-            "flex",
-            line.type === "addition" && "bg-green-950/50",
-            line.type === "removal" && "bg-red-950/50",
-          )}
-        >
-          {line.type === "separator" ? (
-            <span className="px-2 py-0.5 text-muted-foreground">
-              {line.content}
-            </span>
-          ) : (
-            <>
-              <span className="w-10 shrink-0 px-2 py-0.5 text-right text-muted-foreground">
-                {line.lineNumber ?? ""}
-              </span>
-              <span
-                className={cn(
-                  "w-4 shrink-0 py-0.5 text-center",
-                  line.type === "addition" && "text-green-500",
-                  line.type === "removal" && "text-red-500",
-                )}
-              >
-                {line.type === "addition"
-                  ? "+"
-                  : line.type === "removal"
-                    ? "-"
-                    : " "}
-              </span>
-              <span className="truncate py-0.5 pr-2 text-foreground">
-                {isExpanded ? line.content : line.content.slice(0, 80)}
-              </span>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <div
@@ -192,9 +139,13 @@ export function EditRenderer({
               </span>
             </div>
 
-            {lines.length > 0 && (
-              <div className="ml-5 mt-2">{renderDiffLines(lines)}</div>
-            )}
+            <div className="ml-5 mt-2 max-h-40 overflow-hidden">
+              <MultiFileDiff
+                oldFile={{ name: rawFilePath, contents: oldString }}
+                newFile={{ name: rawFilePath, contents: newString }}
+                options={defaultDiffOptions}
+              />
+            </div>
           </>
         )}
 
@@ -206,22 +157,21 @@ export function EditRenderer({
             <span className="font-medium">{filePath}</span>
             <span> with </span>
             <span className="text-green-500">
-              {fullDiff.additions} addition{fullDiff.additions !== 1 ? "s" : ""}
+              {additions} addition{additions !== 1 ? "s" : ""}
             </span>
             <span> and </span>
             <span className="text-red-500">
-              {fullDiff.removals} removal{fullDiff.removals !== 1 ? "s" : ""}
+              {removals} removal{removals !== 1 ? "s" : ""}
             </span>
           </div>
 
           {/* Full diff view */}
-          <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Full Diff
-            </div>
-            <div className="max-h-96 overflow-auto">
-              {renderDiffLines(fullDiff.lines)}
-            </div>
+          <div className="max-h-96 overflow-auto">
+            <MultiFileDiff
+              oldFile={{ name: rawFilePath, contents: oldString }}
+              newFile={{ name: rawFilePath, contents: newString }}
+              options={defaultDiffOptions}
+            />
           </div>
 
           {/* Raw old/new strings for debugging */}
