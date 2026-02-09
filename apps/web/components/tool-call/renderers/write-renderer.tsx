@@ -3,9 +3,10 @@
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { File as DiffsFile } from "@pierre/diffs/react";
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
-import { createNewFileCodeLines } from "@open-harness/shared/lib/diff";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import { defaultFileOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
@@ -23,12 +24,8 @@ export function WriteRenderer({
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
   const content = input?.content ?? "";
 
-  const { lines, totalLines, hiddenLines } = createNewFileCodeLines(
-    content,
-    rawFilePath,
-    undefined,
-    10,
-  );
+  const totalLines = content.split("\n").length;
+  const hiddenLines = Math.max(0, totalLines - 10);
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
@@ -135,20 +132,12 @@ export function WriteRenderer({
               </span>
             </div>
 
-            {lines.length > 0 && (
-              <div className="ml-5 mt-2 overflow-hidden rounded border border-border bg-muted p-2 font-mono text-xs">
-                {lines.map((line, i) => (
-                  <div key={i} className="truncate text-foreground">
-                    {line.content}
-                  </div>
-                ))}
-                {hiddenLines > 0 && (
-                  <div className="text-muted-foreground">
-                    ... {hiddenLines} more line{hiddenLines !== 1 ? "s" : ""}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="ml-5 mt-2 max-h-40 overflow-hidden">
+              <DiffsFile
+                file={{ name: rawFilePath, contents: content }}
+                options={defaultFileOptions}
+              />
+            </div>
           </>
         )}
 
@@ -164,13 +153,11 @@ export function WriteRenderer({
             </span>
           </div>
 
-          <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Full Content
-            </div>
-            <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted p-2 font-mono text-xs text-foreground">
-              {content}
-            </pre>
+          <div className="max-h-96 overflow-auto">
+            <DiffsFile
+              file={{ name: rawFilePath, contents: content }}
+              options={defaultFileOptions}
+            />
           </div>
         </div>
       )}
