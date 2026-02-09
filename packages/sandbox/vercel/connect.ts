@@ -25,10 +25,15 @@ export async function connectVercel(
 ): Promise<VercelSandbox> {
   // Reconnect to existing VM
   if (state.sandboxId) {
-    // Calculate remaining timeout from persisted expiresAt
+    // Calculate remaining timeout from persisted expiresAt.
+    // If persisted expiry is stale/expired, skip it so reconnect falls back to
+    // VercelSandbox's default reconnect timeout instead of immediately expiring.
     let remainingTimeout: number | undefined;
     if (state.expiresAt) {
-      remainingTimeout = Math.max(0, state.expiresAt - Date.now());
+      const remaining = state.expiresAt - Date.now();
+      if (remaining > 10_000) {
+        remainingTimeout = remaining;
+      }
     }
 
     return VercelSandbox.connect(state.sandboxId, {

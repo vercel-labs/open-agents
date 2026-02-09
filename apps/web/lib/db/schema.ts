@@ -85,6 +85,24 @@ export const sessions = pgTable("sessions", {
   isNewBranch: boolean("is_new_branch").default(false).notNull(),
   // Unified sandbox state
   sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
+  // Lifecycle orchestration state for sandbox management
+  lifecycleState: text("lifecycle_state", {
+    enum: [
+      "provisioning",
+      "active",
+      "hibernating",
+      "hibernated",
+      "restoring",
+      "archived",
+      "failed",
+    ],
+  }),
+  lifecycleVersion: integer("lifecycle_version").notNull().default(0),
+  lastActivityAt: timestamp("last_activity_at"),
+  sandboxExpiresAt: timestamp("sandbox_expires_at"),
+  hibernateAfter: timestamp("hibernate_after"),
+  lifecycleRunId: text("lifecycle_run_id"),
+  lifecycleError: text("lifecycle_error"),
   // Git stats (for display in session list)
   linesAdded: integer("lines_added").default(0),
   linesRemoved: integer("lines_removed").default(0),

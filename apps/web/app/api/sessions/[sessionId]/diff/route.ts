@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { connectSandbox } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { isSandboxActive } from "@/lib/sandbox/utils";
+import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
+import { clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export type DiffFile = {
@@ -25,6 +26,42 @@ export type DiffResponse = {
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
+
+function hasRuntimeSandboxState(state: unknown): boolean {
+  if (!state || typeof state !== "object") return false;
+
+  const sandboxState = state as {
+    type?: unknown;
+    sandboxId?: unknown;
+    files?: unknown;
+  };
+
+  if (sandboxState.type === "vercel") {
+    return (
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0
+    );
+  }
+
+  if (sandboxState.type === "hybrid") {
+    const hasSandboxId =
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0;
+    const hasFiles =
+      sandboxState.files !== undefined && sandboxState.files !== null;
+    return hasSandboxId || hasFiles;
+  }
+
+  if (sandboxState.type === "just-bash") {
+    return sandboxState.files !== undefined && sandboxState.files !== null;
+  }
+
+  return false;
+}
+
+function isSandboxStreamUnavailable(message: string): boolean {
+  return message.toLowerCase().includes("expected a stream of command data");
+}
 
 /**
  * Unescape C-style escape sequences in git quoted paths
@@ -171,28 +208,47 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(sessionRecord.sandboxState)) {
+  if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
+  }
+  const sandboxState = sessionRecord.sandboxState;
+  if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const sandbox = await connectSandbox(sandboxState);
     const cwd = sandbox.workingDirectory;
 
-    // Run git commands in parallel
-    const [nameStatusResult, numstatResult, diffResult, untrackedResult] =
-      await Promise.all([
-        sandbox.exec("git diff HEAD --name-status", cwd, 30000),
-        sandbox.exec("git diff HEAD --numstat", cwd, 30000),
-        sandbox.exec("git diff HEAD", cwd, 60000),
-        // Get untracked files (new files not yet staged)
-        sandbox.exec("git ls-files --others --exclude-standard", cwd, 30000),
-      ]);
+    // Run git commands sequentially; some sandbox backends are not reliable
+    // with concurrent command streams after reconnect.
+    const nameStatusResult = await sandbox.exec(
+      "git diff HEAD --name-status",
+      cwd,
+      30000,
+    );
+    const numstatResult = await sandbox.exec("git diff HEAD --numstat", cwd, 30000);
+    const diffResult = await sandbox.exec("git diff HEAD", cwd, 60000);
+    const untrackedResult = await sandbox.exec(
+      "git ls-files --others --exclude-standard",
+      cwd,
+      30000,
+    );
 
     // Check if git commands failed (e.g., not a git repo or HEAD doesn't exist)
     if (!nameStatusResult.success || !diffResult.success) {
       const stderr =
         nameStatusResult.stderr || diffResult.stderr || "Unknown git error";
+      if (isSandboxStreamUnavailable(stderr)) {
+        await updateSession(sessionId, {
+          sandboxState: clearSandboxState(sessionRecord.sandboxState),
+          ...buildHibernatedLifecycleUpdate(),
+        });
+        return Response.json(
+          { error: "Sandbox is unavailable. Please resume sandbox." },
+          { status: 409 },
+        );
+      }
       console.error("Git command failed:", stderr);
       return Response.json(
         {
@@ -201,6 +257,21 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         },
         { status: 400 },
       );
+    }
+
+    if (!numstatResult.success || !untrackedResult.success) {
+      const stderr =
+        numstatResult.stderr || untrackedResult.stderr || "Unknown git error";
+      if (isSandboxStreamUnavailable(stderr)) {
+        await updateSession(sessionId, {
+          sandboxState: clearSandboxState(sessionRecord.sandboxState),
+          ...buildHibernatedLifecycleUpdate(),
+        });
+        return Response.json(
+          { error: "Sandbox is unavailable. Please resume sandbox." },
+          { status: 409 },
+        );
+      }
     }
 
     // Parse outputs
@@ -303,6 +374,17 @@ ${diffLines}`;
 
     return Response.json(response);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isSandboxStreamUnavailable(message)) {
+      await updateSession(sessionId, {
+        sandboxState: clearSandboxState(sessionRecord.sandboxState),
+        ...buildHibernatedLifecycleUpdate(),
+      });
+      return Response.json(
+        { error: "Sandbox is unavailable. Please resume sandbox." },
+        { status: 409 },
+      );
+    }
     console.error("Failed to get diff:", error);
     return Response.json(
       { error: "Failed to connect to sandbox" },

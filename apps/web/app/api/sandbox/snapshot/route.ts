@@ -2,6 +2,12 @@ import { connectSandbox } from "@open-harness/sandbox";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import {
+  buildActiveLifecycleUpdate,
+  buildHibernatedLifecycleUpdate,
+  getNextLifecycleVersion,
+} from "@/lib/sandbox/lifecycle";
 import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
@@ -68,6 +74,13 @@ export async function POST(req: Request) {
       snapshotUrl: result.snapshotId,
       snapshotCreatedAt: new Date(),
       sandboxState: clearedState,
+      lifecycleVersion: getNextLifecycleVersion(sessionRecord.lifecycleVersion),
+      ...buildHibernatedLifecycleUpdate(),
+    });
+
+    kickSandboxLifecycleWorkflow({
+      sessionId,
+      reason: "manual-snapshot",
     });
 
     return Response.json({
@@ -114,12 +127,18 @@ export async function PUT(req: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!sessionRecord.snapshotUrl) {
+    console.error(
+      `[Snapshot Restore] session=${sessionId} error=no_snapshot sandboxType=${sessionRecord.sandboxState?.type ?? "null"}`,
+    );
     return Response.json(
       { error: "No snapshot available for this session" },
       { status: 404 },
     );
   }
   if (!sessionRecord.sandboxState) {
+    console.error(
+      `[Snapshot Restore] session=${sessionId} error=no_sandbox_state hasSnapshot=true`,
+    );
     return Response.json(
       { error: "No sandbox state available for restoration" },
       { status: 400 },
@@ -136,10 +155,14 @@ export async function PUT(req: Request) {
   // Warn if sandbox appears to still be running (has sandboxId)
   // This shouldn't happen in normal flow since snapshot stops the sandbox
   if (canOperateOnSandbox(sessionRecord.sandboxState)) {
-    return Response.json(
-      { error: "Cannot restore: a sandbox is still running. Stop it first." },
-      { status: 400 },
+    console.log(
+      `[Snapshot Restore] session=${sessionId} already_running=true sandboxType=${sandboxType}`,
     );
+    return Response.json({
+      success: true,
+      alreadyRunning: true,
+      restoredFrom: sessionRecord.snapshotUrl,
+    });
   }
 
   try {
@@ -153,13 +176,25 @@ export async function PUT(req: Request) {
 
     // Update session with new sandbox state
     const newState = sandbox.getState?.();
-    if (newState) {
-      await updateSession(sessionId, {
-        sandboxState: newState as Parameters<
-          typeof updateSession
-        >[1]["sandboxState"],
-      });
-    }
+    const restoredState = (newState ?? {
+      type: sandboxType,
+      snapshotId: sessionRecord.snapshotUrl,
+    }) as Parameters<typeof updateSession>[1]["sandboxState"];
+
+    await updateSession(sessionId, {
+      sandboxState: restoredState,
+      lifecycleVersion: getNextLifecycleVersion(sessionRecord.lifecycleVersion),
+      ...buildActiveLifecycleUpdate(restoredState),
+    });
+
+    kickSandboxLifecycleWorkflow({
+      sessionId,
+      reason: "snapshot-restored",
+    });
+
+    console.log(
+      `[Snapshot Restore] session=${sessionId} success=true sandboxType=${sandboxType} sandboxId=${"id" in sandbox ? sandbox.id : "n/a"} restoredFrom=${sessionRecord.snapshotUrl}`,
+    );
 
     return Response.json({
       success: true,
@@ -168,6 +203,9 @@ export async function PUT(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[Snapshot Restore] session=${sessionId} success=false error=${message}`,
+    );
     return Response.json(
       { error: `Failed to restore snapshot: ${message}` },
       { status: 500 },
