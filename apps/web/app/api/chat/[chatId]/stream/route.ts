@@ -1,7 +1,6 @@
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
-import { after } from "next/server";
-import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { getChatById, getSessionById } from "@/lib/db/sessions";
+import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
@@ -31,8 +30,9 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response(null, { status: 204 });
   }
 
-  const streamContext = createResumableStreamContext({ waitUntil: after });
-  const stream = await streamContext.resumeExistingStream(chat.activeStreamId);
+  const stream = await resumableStreamContext.resumeExistingStream(
+    chat.activeStreamId,
+  );
 
   if (!stream) {
     return new Response(null, { status: 204 });

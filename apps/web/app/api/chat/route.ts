@@ -6,8 +6,6 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
-import { after } from "next/server";
-import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -23,6 +21,7 @@ import {
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { createRedisClient } from "@/lib/redis";
+import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -170,13 +169,17 @@ export async function POST(req: Request) {
     subscriber.unsubscribe().catch(() => {});
     subscriber.disconnect();
   };
-
-  // Safety net: ensure Redis cleanup and activeStreamId reset even if
-  // onFinish doesn't fire (e.g. stream error, request abort, timeout)
-  after(async () => {
-    cleanupSubscriber();
-    await updateChatActiveStreamId(chatId, null);
-  });
+  let finalizeStreamPromise: Promise<void> | undefined;
+  const finalizeStream = () => {
+    if (finalizeStreamPromise) {
+      return finalizeStreamPromise;
+    }
+    finalizeStreamPromise = (async () => {
+      cleanupSubscriber();
+      await updateChatActiveStreamId(chatId, null);
+    })();
+    return finalizeStreamPromise;
+  };
 
   await subscriber.subscribe(stopChannel);
   subscriber.on("message", () => {
@@ -200,12 +203,13 @@ export async function POST(req: Request) {
     abortSignal: controller.signal,
   });
 
-  result.consumeStream();
+  void result.consumeStream().then(
+    () => finalizeStream(),
+    () => finalizeStream(),
+  );
 
   // Track last step usage for message metadata
   let lastStepUsage: LanguageModelUsage | undefined;
-
-  const streamContext = createResumableStreamContext({ waitUntil: after });
 
   // Save assistant message on finish, and persist sandbox state if applicable
   return result.toUIMessageStreamResponse({
@@ -226,12 +230,11 @@ export async function POST(req: Request) {
     },
     async consumeSseStream({ stream }) {
       const streamId = nanoid();
-      await streamContext.createNewResumableStream(streamId, () => stream);
+      await resumableStreamContext.createNewResumableStream(streamId, () => stream);
       await updateChatActiveStreamId(chatId, streamId);
     },
     onFinish: async ({ responseMessage }) => {
-      cleanupSubscriber();
-      await updateChatActiveStreamId(chatId, null);
+      await finalizeStream();
 
       if (chatId) {
         // Save assistant message (upsert to handle tool results added client-side)
