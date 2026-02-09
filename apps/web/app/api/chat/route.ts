@@ -86,12 +86,6 @@ export async function POST(req: Request) {
       activityAt: requestStartedAt,
     }),
   });
-  kickSandboxLifecycleWorkflow({
-    sessionId,
-    reason: "chat-started",
-    scheduleBackgroundWork: (cb) => after(cb),
-  });
-
   const modelMessages = await convertToModelMessages(messages, {
     ignoreIncompleteToolCalls: true,
     tools: webAgent.tools,
