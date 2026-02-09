@@ -12,8 +12,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withWorkflow(nextConfig, {
-  workflows: {
-    dirs: ["app"],
-  },
-});
+export default withWorkflow(nextConfig);
