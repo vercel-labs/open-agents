@@ -1960,7 +1960,12 @@ export function SessionChatContent() {
                       <Button
                         type="button"
                         size="icon"
-                        onClick={stop}
+                        onClick={() => {
+                          fetch(`/api/chat/${chatInfo.id}/stop`, {
+                            method: "POST",
+                          });
+                          stop();
+                        }}
                         className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         <Square className="h-3 w-3 fill-current" />

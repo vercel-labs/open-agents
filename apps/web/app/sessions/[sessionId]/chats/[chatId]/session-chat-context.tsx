@@ -154,13 +154,20 @@ export function SessionChatProvider({
           sessionId: sessionRecord.id,
           chatId: chatInfo.id,
         }),
+        prepareReconnectToStreamRequest: ({ id }) => ({
+          api: `/api/chat/${id}/stream`,
+        }),
       }),
     [sessionRecord.id, chatInfo.id],
   );
 
+  const hadInitialMessages = initialMessages.length > 0;
+
   const chat = useChat<WebAgentUIMessage>({
+    id: chatInfo.id,
     transport,
     messages: initialMessages,
+    resume: hadInitialMessages,
     sendAutomaticallyWhen: shouldAutoSubmit,
   });
 
@@ -422,8 +429,6 @@ export function SessionChatProvider({
     },
     [sessionRecord.id, chatInfo.id],
   );
-
-  const hadInitialMessages = initialMessages.length > 0;
 
   return (
     <SessionChatContext.Provider

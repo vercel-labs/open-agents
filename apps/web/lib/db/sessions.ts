@@ -117,6 +117,16 @@ export async function updateChat(
   return chat;
 }
 
+export async function updateChatActiveStreamId(
+  chatId: string,
+  streamId: string | null,
+) {
+  await db
+    .update(chats)
+    .set({ activeStreamId: streamId })
+    .where(eq(chats.id, chatId));
+}
+
 export async function deleteChat(chatId: string) {
   await db.delete(chats).where(eq(chats.id, chatId));
 }

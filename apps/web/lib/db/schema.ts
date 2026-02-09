@@ -112,6 +112,7 @@ export const chats = pgTable("chats", {
     .references(() => sessions.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
+  activeStreamId: text("active_stream_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -1,0 +1,42 @@
+import { UI_MESSAGE_STREAM_HEADERS } from "ai";
+import { after } from "next/server";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
+import { getChatById, getSessionById } from "@/lib/db/sessions";
+import { getServerSession } from "@/lib/session/get-server-session";
+
+type RouteContext = {
+  params: Promise<{ chatId: string }>;
+};
+
+export async function GET(_request: Request, context: RouteContext) {
+  const session = await getServerSession();
+  if (!session?.user) {
+    return new Response("Not authenticated", { status: 401 });
+  }
+
+  const { chatId } = await context.params;
+
+  const chat = await getChatById(chatId);
+  if (!chat) {
+    return new Response("Chat not found", { status: 404 });
+  }
+
+  // Verify ownership through the session chain
+  const sessionRecord = await getSessionById(chat.sessionId);
+  if (!sessionRecord || sessionRecord.userId !== session.user.id) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  if (!chat.activeStreamId) {
+    return new Response(null, { status: 204 });
+  }
+
+  const streamContext = createResumableStreamContext({ waitUntil: after });
+  const stream = await streamContext.resumeExistingStream(chat.activeStreamId);
+
+  if (!stream) {
+    return new Response(null, { status: 204 });
+  }
+
+  return new Response(stream, { headers: UI_MESSAGE_STREAM_HEADERS });
+}

@@ -6,6 +6,8 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -14,11 +16,13 @@ import {
   getChatMessages,
   getSessionById,
   updateChat,
+  updateChatActiveStreamId,
   updateSession,
   upsertChatMessage,
 } from "@/lib/db/sessions";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { createRedisClient } from "@/lib/redis";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -154,6 +158,22 @@ export async function POST(req: Request) {
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
+  // Create abort controller with Redis pub/sub for instant stop
+  const controller = new AbortController();
+  const stopChannel = `stop:${chatId}`;
+  const subscriber = createRedisClient();
+
+  const cleanupSubscriber = () => {
+    subscriber.unsubscribe().catch(() => {});
+    subscriber.disconnect();
+  };
+
+  await subscriber.subscribe(stopChannel);
+  subscriber.on("message", () => {
+    controller.abort();
+    cleanupSubscriber();
+  });
+
   const result = await webAgent.stream({
     messages: modelMessages,
     options: {
@@ -167,13 +187,15 @@ export async function POST(req: Request) {
       },
       ...(skills.length > 0 && { skills }),
     },
-    abortSignal: req.signal,
+    abortSignal: controller.signal,
   });
 
   result.consumeStream();
 
   // Track last step usage for message metadata
   let lastStepUsage: LanguageModelUsage | undefined;
+
+  const streamContext = createResumableStreamContext({ waitUntil: after });
 
   // Save assistant message on finish, and persist sandbox state if applicable
   return result.toUIMessageStreamResponse({
@@ -192,7 +214,15 @@ export async function POST(req: Request) {
       }
       return undefined;
     },
+    async consumeSseStream({ stream }) {
+      const streamId = nanoid();
+      await streamContext.createNewResumableStream(streamId, () => stream);
+      await updateChatActiveStreamId(chatId, streamId);
+    },
     onFinish: async ({ responseMessage }) => {
+      cleanupSubscriber();
+      await updateChatActiveStreamId(chatId, null);
+
       if (chatId) {
         // Save assistant message (upsert to handle tool results added client-side)
         try {
