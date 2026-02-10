@@ -170,7 +170,9 @@ export async function POST(req: Request) {
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
-  // Create abort controller with shared Redis pub/sub for instant stop
+  // Use Redis stop signals as the sole cancellation mechanism for generation.
+  // We intentionally do not bind `req.signal` so a transient client disconnect
+  // does not cancel work; clients can reconnect via resumable streams.
   const controller = new AbortController();
   const unsubscribeStop = await onStopSignal(chatId, () => {
     controller.abort();
