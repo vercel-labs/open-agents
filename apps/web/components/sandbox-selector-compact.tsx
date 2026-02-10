@@ -24,7 +24,7 @@ interface SandboxOption {
   description: string;
 }
 
-const SANDBOX_OPTIONS: SandboxOption[] = [
+export const SANDBOX_OPTIONS: SandboxOption[] = [
   {
     id: "vercel",
     name: "Vercel",
@@ -42,7 +42,7 @@ const SANDBOX_OPTIONS: SandboxOption[] = [
   },
 ];
 
-export const DEFAULT_SANDBOX_TYPE: SandboxType = "hybrid";
+export const DEFAULT_SANDBOX_TYPE: SandboxType = "vercel";
 
 interface SandboxSelectorCompactProps {
   value: SandboxType;

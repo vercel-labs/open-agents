@@ -27,9 +27,6 @@ import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
 
-// Allow streaming responses up to 5 minutes per response turn.
-export const maxDuration = 300;
-
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
   sessionId?: string;

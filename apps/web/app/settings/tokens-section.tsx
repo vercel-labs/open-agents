@@ -368,28 +368,23 @@ export function TokensSectionSkeleton() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {[0, 1].map((index) => (
-          <div
-            key={`token-skeleton-${index}`}
-            className="flex items-center justify-between rounded-lg border p-4"
-          >
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-3 w-32" />
-              <Skeleton className="h-3 w-28" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon-sm" disabled>
-                <Skeleton className="h-4 w-4" />
-                <span className="sr-only">Rename</span>
-              </Button>
-              <Button variant="ghost" size="icon-sm" disabled>
-                <Skeleton className="h-4 w-4" />
-                <span className="sr-only">Revoke</span>
-              </Button>
-            </div>
+        <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="space-y-1">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-28" />
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon-sm" disabled>
+              <Skeleton className="h-4 w-4" />
+              <span className="sr-only">Rename</span>
+            </Button>
+            <Button variant="ghost" size="icon-sm" disabled>
+              <Skeleton className="h-4 w-4" />
+              <span className="sr-only">Revoke</span>
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

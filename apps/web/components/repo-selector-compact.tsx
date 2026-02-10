@@ -171,10 +171,8 @@ export function RepoSelectorCompact({
   };
 
   const displayText = selectedRepo
-    ? `${selectedOwner}/${selectedRepo}`.length > 20
-      ? `${selectedRepo.slice(0, 18)}...`
-      : selectedRepo
-    : "Select repo...";
+    ? `${selectedOwner}/${selectedRepo}`
+    : "Select repository...";
 
   const isInitialLoading = ownersLoading && owners.length === 0;
 
@@ -183,20 +181,23 @@ export function RepoSelectorCompact({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
+          className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-400 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
         >
           {isInitialLoading ? (
-            <Loader2Icon className="h-4 w-4 animate-spin" />
+            <Loader2Icon className="h-4 w-4 shrink-0 animate-spin" />
           ) : (
-            <Folder className="h-4 w-4" />
+            <Folder className="h-4 w-4 shrink-0" />
           )}
-          <span className="max-w-[150px] truncate">
+          <span className="flex-1 truncate text-left">
             {isInitialLoading ? "Loading..." : displayText}
           </span>
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDown className="h-3 w-3 shrink-0" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+      >
         {!sessionLoading && !hasGitHub ? (
           <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
             <GitHubIcon className="size-8 text-muted-foreground" />

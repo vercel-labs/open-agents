@@ -7,9 +7,9 @@ import type {
   SandboxStats,
   SnapshotResult,
 } from "../interface";
+import type { SandboxStatus } from "../types";
 import type { VercelSandboxConfig, VercelSandboxConnectConfig } from "./config";
 import type { VercelState } from "./state";
-import type { SandboxStatus } from "../types";
 
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
@@ -203,6 +203,7 @@ export class VercelSandbox implements Sandbox {
   Use the $GITHUB_TOKEN environment variable directly (do not paste the actual token):
   curl -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/OWNER/REPO/pulls -d '{"title":"...","head":"branch","base":"main","body":"..."}'
 - Node.js runtime with npm/pnpm available
+- Installing Bun: run \`curl -fsSL https://bun.com/install | bash\`, then \`echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc\`, then verify with \`bun --version\`
 - Sandbox host: ${this.host} (use domain(port) method to get URLs for exposed ports)`;
   }
 
