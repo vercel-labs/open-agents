@@ -4,7 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 export async function upsertUser(userData: {
-  provider: "github";
+  provider: "github" | "vercel";
   externalId: string;
   accessToken: string;
   refreshToken?: string;
@@ -13,8 +13,16 @@ export async function upsertUser(userData: {
   email?: string;
   name?: string;
   avatarUrl?: string;
+  tokenExpiresAt?: Date;
 }): Promise<string> {
-  const { provider, externalId, accessToken, refreshToken, scope } = userData;
+  const {
+    provider,
+    externalId,
+    accessToken,
+    refreshToken,
+    scope,
+    tokenExpiresAt,
+  } = userData;
 
   const existingUser = await db
     .select({ id: users.id })
@@ -29,6 +37,7 @@ export async function upsertUser(userData: {
         accessToken,
         refreshToken,
         scope,
+        tokenExpiresAt,
         username: userData.username,
         email: userData.email,
         name: userData.name,

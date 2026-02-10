@@ -52,16 +52,21 @@ export async function POST(req: Request) {
     sandboxType = "hybrid",
   } = body;
 
-  // Get user's GitHub token
-  const githubToken = await getUserGitHubToken();
-  if (!githubToken) {
-    return Response.json({ error: "GitHub not connected" }, { status: 401 });
-  }
-
-  // Get session for git user info
+  // Get session for auth
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  // Get user's GitHub token (may be null if GitHub not linked)
+  const githubToken = await getUserGitHubToken();
+
+  // Require GitHub token when a repo is requested
+  if (repoUrl && !githubToken) {
+    return Response.json(
+      { error: "Connect GitHub to access repositories" },
+      { status: 403 },
+    );
   }
 
   // Validate session ownership
@@ -79,8 +84,13 @@ export async function POST(req: Request) {
   const gitUser = {
     name: session.user.name ?? session.user.username,
     email:
-      session.user.email ?? `${session.user.username}@users.noreply.github.com`,
+      session.user.email ?? `${session.user.username}@users.noreply.vercel.app`,
   };
+
+  const env: Record<string, string> = {};
+  if (githubToken) {
+    env.GITHUB_TOKEN = githubToken;
+  }
 
   // ============================================
   // RECONNECT: Existing sandbox
@@ -88,7 +98,7 @@ export async function POST(req: Request) {
   if (providedSandboxId) {
     const sandbox = await connectSandbox({
       state: { type: "hybrid", sandboxId: providedSandboxId },
-      options: { env: { GITHUB_TOKEN: githubToken } },
+      options: { env },
     });
 
     return Response.json({
@@ -113,7 +123,7 @@ export async function POST(req: Request) {
       tarballResult = await downloadAndExtractTarball(
         repoUrl,
         branch,
-        githubToken,
+        githubToken ?? undefined,
         WORKING_DIR,
       );
     } catch {
@@ -132,7 +142,7 @@ export async function POST(req: Request) {
     ? {
         repo: repoUrl,
         branch: isNewBranch ? undefined : branch,
-        token: githubToken,
+        token: githubToken ?? undefined,
       }
     : undefined;
 
@@ -147,9 +157,7 @@ export async function POST(req: Request) {
         workingDirectory: WORKING_DIR,
         source,
       },
-      options: {
-        env: { GITHUB_TOKEN: githubToken },
-      },
+      options: { env },
     });
   } else if (sandboxType === "vercel") {
     // Cloud-first sandbox
@@ -159,7 +167,7 @@ export async function POST(req: Request) {
         source,
       },
       options: {
-        env: { GITHUB_TOKEN: githubToken },
+        env,
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       },
@@ -174,7 +182,7 @@ export async function POST(req: Request) {
         source,
       },
       options: {
-        env: { GITHUB_TOKEN: githubToken },
+        env,
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         scheduleBackgroundWork: (cb) => after(cb),

@@ -1,10 +1,17 @@
 "use client";
 
-import { ArrowLeft, Key, Settings as SettingsIcon, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Key,
+  Link2,
+  Settings as SettingsIcon,
+  User,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { cn } from "@/lib/utils";
+import { AccountsSectionSkeleton } from "./accounts-section";
 import { PreferencesSectionSkeleton } from "./preferences-section";
 import { ProfileSectionSkeleton } from "./profile-section";
 import { TokensSectionSkeleton } from "./tokens-section";
@@ -27,6 +34,12 @@ const sidebarItems = [
     label: "Connected Clients",
     href: "/settings/tokens",
     icon: Key,
+  },
+  {
+    id: "accounts",
+    label: "Connected Accounts",
+    href: "/settings/accounts",
+    icon: Link2,
   },
 ];
 
@@ -100,6 +113,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <PreferencesSectionSkeleton />
     ) : activeItem?.id === "tokens" ? (
       <TokensSectionSkeleton />
+    ) : activeItem?.id === "accounts" ? (
+      <AccountsSectionSkeleton />
     ) : (
       <ProfileSectionSkeleton />
     );

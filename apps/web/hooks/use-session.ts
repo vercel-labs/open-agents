@@ -18,5 +18,6 @@ export function useSession() {
     session: data ?? null,
     loading: isLoading,
     isAuthenticated: !!data?.user,
+    hasGitHub: data?.hasGitHub ?? false,
   };
 }
