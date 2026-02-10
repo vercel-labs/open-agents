@@ -1,7 +1,8 @@
-import { z } from "zod";
 import { connectSandbox } from "@open-harness/sandbox";
-import { generateText, gateway, NoObjectGeneratedError, Output } from "ai";
+import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
+import { z } from "zod";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { getRepoToken } from "@/lib/github/get-repo-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -110,6 +111,22 @@ export async function POST(req: Request) {
   // 3. Connect to sandbox
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
+
+  if (sessionRecord.repoOwner && sessionRecord.repoName) {
+    try {
+      const tokenResult = await getRepoToken(
+        session.user.id,
+        sessionRecord.repoOwner,
+      );
+      const authUrl = `https://x-access-token:${tokenResult.token}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+      await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 5000);
+    } catch {
+      return Response.json(
+        { error: "No GitHub token available for this repository" },
+        { status: 403 },
+      );
+    }
+  }
 
   // 3a. Resolve live branch from sandbox
   let resolvedBranch = branchName === "HEAD" ? baseBranch : branchName;

@@ -9,6 +9,7 @@ import {
   UserIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -25,10 +26,12 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-interface Owner {
-  login: string;
-  name: string;
-  avatar_url: string;
+interface Installation {
+  installationId: number;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  repositorySelection: "all" | "selected";
+  installationUrl: string | null;
 }
 
 interface Repo {
@@ -38,12 +41,35 @@ interface Repo {
   private: boolean;
 }
 
+const installationSchema = z.object({
+  installationId: z.number(),
+  accountLogin: z.string(),
+  accountType: z.enum(["User", "Organization"]),
+  repositorySelection: z.enum(["all", "selected"]),
+  installationUrl: z.string().nullable(),
+});
+
+const installationsSchema = z.array(installationSchema);
+
+const repoSchema = z.object({
+  name: z.string(),
+  full_name: z.string(),
+  description: z.string().nullable(),
+  private: z.boolean(),
+});
+
+const reposSchema = z.array(repoSchema);
+
+function getCurrentPathWithSearch(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 export function RepoSelector({
   onRepoSelect,
 }: {
   onRepoSelect: (owner: string, repo: string) => void;
 }) {
-  const [owners, setOwners] = useState<Owner[]>([]);
+  const [installations, setInstallations] = useState<Installation[]>([]);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
@@ -55,70 +81,91 @@ export function RepoSelector({
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [repoRefreshTrigger, setRepoRefreshTrigger] = useState(0);
-
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadOwners = async () => {
-      setOwnersLoading(true);
-      try {
-        const [userRes, orgsRes] = await Promise.all([
-          fetch("/api/github/user"),
-          fetch("/api/github/orgs"),
-        ]);
+  const startGitHubInstall = useCallback(() => {
+    const params = new URLSearchParams({
+      next: getCurrentPathWithSearch(),
+    });
+    window.location.href = `/api/github/app/install?${params.toString()}`;
+  }, []);
 
-        if (!userRes.ok) {
-          const data = await userRes.json().catch(() => ({}));
-          setError(data.error || "Failed to fetch GitHub user");
+  const selectedInstallation = installations.find(
+    (installation) => installation.accountLogin === selectedOwner,
+  );
+
+  useEffect(() => {
+    const loadInstallations = async () => {
+      setOwnersLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/github/installations");
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          const parsed = z
+            .object({ error: z.string().optional() })
+            .safeParse(data);
+          setError(parsed.success ? (parsed.data.error ?? "") : "");
+          if (!parsed.success || !parsed.data.error) {
+            setError("Connect GitHub to access repositories");
+          }
           return;
         }
 
-        const user = (await userRes.json()) as Owner;
-        const orgs = orgsRes.ok ? ((await orgsRes.json()) as Owner[]) : [];
+        const json = await response.json();
+        const parsed = installationsSchema.safeParse(json);
+        if (!parsed.success) {
+          setError("Failed to load GitHub installations");
+          return;
+        }
 
-        const allOwners = [
-          {
-            login: user.login,
-            name: user.name || user.login,
-            avatar_url: user.avatar_url,
-          },
-          ...orgs,
-        ];
-        setOwners(allOwners);
-        setSelectedOwner(allOwners[0]?.login || "");
-      } catch (err) {
-        console.error("Failed to load owners:", err);
+        setInstallations(parsed.data);
+        setSelectedOwner(parsed.data[0]?.accountLogin ?? "");
+      } catch {
         setError("Failed to load GitHub data");
       } finally {
         setOwnersLoading(false);
       }
     };
 
-    loadOwners();
+    loadInstallations();
   }, []);
 
   const loadRepos = useCallback(async () => {
-    if (!selectedOwner) return;
+    if (!selectedInstallation) {
+      setRepos([]);
+      return;
+    }
 
     setReposLoading(true);
     setRepos([]);
     try {
       const params = new URLSearchParams({
-        owner: selectedOwner,
+        installation_id: `${selectedInstallation.installationId}`,
         limit: "50",
       });
       if (debouncedRepoSearch) {
         params.set("query", debouncedRepoSearch);
       }
-      const res = await fetch(`/api/github/repos?${params.toString()}`);
-      const data = (await res.json()) as Repo[];
-      setRepos(data);
-    } catch (error) {
-      console.error("Failed to load repos:", error);
+
+      const response = await fetch(
+        `/api/github/installations/repos?${params.toString()}`,
+      );
+      if (!response.ok) {
+        return;
+      }
+
+      const json = await response.json();
+      const parsed = reposSchema.safeParse(json);
+      if (parsed.success) {
+        setRepos(parsed.data);
+      }
+    } catch (loadError) {
+      console.error("Failed to load repos:", loadError);
     } finally {
       setReposLoading(false);
     }
-  }, [selectedOwner, debouncedRepoSearch]);
+  }, [selectedInstallation, debouncedRepoSearch]);
 
   useEffect(() => {
     loadRepos();
@@ -127,10 +174,7 @@ export function RepoSelector({
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Revalidate the server cache
-      await fetch("/api/github/repos/revalidate", { method: "POST" });
-      // Trigger a refetch
-      setRepoRefreshTrigger((v) => v + 1);
+      setRepoRefreshTrigger((value) => value + 1);
     } finally {
       setIsRefreshing(false);
     }
@@ -164,14 +208,20 @@ export function RepoSelector({
     return (
       <div className="flex flex-col items-center gap-4">
         <p className="text-sm text-destructive">{error}</p>
-        <Button
-          variant="outline"
-          onClick={() => {
-            window.location.href = "/api/auth/github/link";
-          }}
-        >
-          Connect GitHub
+        <Button variant="outline" onClick={startGitHubInstall}>
+          Continue on GitHub
         </Button>
+      </div>
+    );
+  }
+
+  if (!ownersLoading && installations.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <p className="text-sm text-muted-foreground">
+          Install the GitHub App to choose repository access.
+        </p>
+        <Button onClick={startGitHubInstall}>Choose repositories</Button>
       </div>
     );
   }
@@ -192,7 +242,7 @@ export function RepoSelector({
               ) : selectedOwner ? (
                 <span className="truncate">{selectedOwner}</span>
               ) : (
-                <span className="text-muted-foreground">Select owner</span>
+                <span className="text-muted-foreground">Select account</span>
               )}
             </div>
             <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
@@ -200,27 +250,31 @@ export function RepoSelector({
         </PopoverTrigger>
         <PopoverContent className="w-48 p-0">
           <Command>
-            <CommandInput placeholder="Search owners..." />
+            <CommandInput placeholder="Search accounts..." />
             <CommandList>
               <CommandEmpty>
-                {ownersLoading ? "Loading..." : "No owners found."}
+                {ownersLoading ? "Loading..." : "No accounts found."}
               </CommandEmpty>
               <CommandGroup>
-                {owners.map((owner) => (
+                {installations.map((installation) => (
                   <CommandItem
-                    key={owner.login}
-                    value={owner.login}
-                    onSelect={() => handleOwnerSelect(owner.login)}
+                    key={installation.installationId}
+                    value={installation.accountLogin}
+                    onSelect={() =>
+                      handleOwnerSelect(installation.accountLogin)
+                    }
                   >
                     <CheckIcon
                       className={cn(
                         "mr-2 size-4",
-                        selectedOwner === owner.login
+                        selectedOwner === installation.accountLogin
                           ? "opacity-100"
                           : "opacity-0",
                       )}
                     />
-                    <span className="truncate">{owner.login}</span>
+                    <span className="truncate">
+                      {installation.accountLogin}
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

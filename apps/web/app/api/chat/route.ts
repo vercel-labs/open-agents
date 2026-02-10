@@ -19,14 +19,15 @@ import {
   updateSession,
   upsertChatMessage,
 } from "@/lib/db/sessions";
+import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
-import { onStopSignal } from "@/lib/stop-signal";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { onStopSignal } from "@/lib/stop-signal";
 
 // Allow streaming responses up to 5 minutes per response turn.
 export const maxDuration = 300;
@@ -94,13 +95,41 @@ export async function POST(req: Request) {
     tools: webAgent.tools,
   });
 
-  // Get the GitHub token to pass as env var
-  const githubToken = await getUserGitHubToken();
+  // Resolve a repo-scoped GitHub token when possible.
+  let githubToken: string | null = null;
+  if (sessionRecord.repoOwner) {
+    try {
+      const tokenResult = await getRepoToken(
+        session.user.id,
+        sessionRecord.repoOwner,
+      );
+      githubToken = tokenResult.token;
+    } catch {
+      githubToken = await getUserGitHubToken();
+    }
+  } else {
+    githubToken = await getUserGitHubToken();
+  }
 
   // Connect sandbox (handles all modes, handoff, restoration)
   const sandbox = await connectSandbox(sessionRecord.sandboxState, {
     env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
   });
+
+  if (githubToken && sessionRecord.repoOwner && sessionRecord.repoName) {
+    const authUrl = `https://x-access-token:${githubToken}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+    const remoteResult = await sandbox.exec(
+      `git remote set-url origin "${authUrl}"`,
+      sandbox.workingDirectory,
+      5000,
+    );
+
+    if (!remoteResult.success) {
+      console.warn(
+        `Failed to refresh git remote auth for session ${sessionId}: ${remoteResult.stderr ?? remoteResult.stdout}`,
+      );
+    }
+  }
 
   // Discover skills from the sandbox's working directory
   // Only project-level skills (no user home directory in remote sandboxes)

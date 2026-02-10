@@ -1,3 +1,4 @@
+import type { SandboxState } from "@open-harness/sandbox";
 import {
   boolean,
   integer,
@@ -7,7 +8,6 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { SandboxState } from "@open-harness/sandbox";
 
 export const users = pgTable(
   "users",
@@ -62,6 +62,37 @@ export const accounts = pgTable(
     uniqueIndex("accounts_user_id_provider_idx").on(
       table.userId,
       table.provider,
+    ),
+  ],
+);
+
+export const githubInstallations = pgTable(
+  "github_installations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    installationId: integer("installation_id").notNull(),
+    accountLogin: text("account_login").notNull(),
+    accountType: text("account_type", {
+      enum: ["User", "Organization"],
+    }).notNull(),
+    repositorySelection: text("repository_selection", {
+      enum: ["all", "selected"],
+    }).notNull(),
+    installationUrl: text("installation_url"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("github_installations_user_installation_idx").on(
+      table.userId,
+      table.installationId,
+    ),
+    uniqueIndex("github_installations_user_account_idx").on(
+      table.userId,
+      table.accountLogin,
     ),
   ],
 );
@@ -155,6 +186,8 @@ export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;
+export type GitHubInstallation = typeof githubInstallations.$inferSelect;
+export type NewGitHubInstallation = typeof githubInstallations.$inferInsert;
 
 // Linked accounts for external platforms (Slack, Discord, etc.)
 export const linkedAccounts = pgTable(

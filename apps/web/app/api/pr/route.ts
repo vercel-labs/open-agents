@@ -1,5 +1,6 @@
-import { createPullRequest } from "@/lib/github/client";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { createPullRequest, parseGitHubUrl } from "@/lib/github/client";
+import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreatePRRequest {
@@ -45,6 +46,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid repository URL" }, { status: 400 });
   }
 
+  const parsedRepoUrl = parseGitHubUrl(repoUrl);
+  if (!parsedRepoUrl) {
+    return Response.json({ error: "Invalid repository URL" }, { status: 400 });
+  }
+
   // Validate branch names to prevent injection
   const safeBranchPattern = /^[\w\-/.]+$/;
   if (!safeBranchPattern.test(baseBranch)) {
@@ -73,6 +79,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid branch name" }, { status: 400 });
   }
 
+  let githubToken: string;
+  try {
+    const tokenResult = await getRepoToken(
+      session.user.id,
+      parsedRepoUrl.owner,
+    );
+    githubToken = tokenResult.token;
+  } catch {
+    return Response.json(
+      { error: "No GitHub token available for this repository" },
+      { status: 403 },
+    );
+  }
+
   // 4. Create PR using existing function
   const result = await createPullRequest({
     repoUrl,
@@ -80,6 +100,7 @@ export async function POST(req: Request) {
     title,
     body: prBody || "",
     baseBranch,
+    token: githubToken,
   });
 
   if (!result.success) {

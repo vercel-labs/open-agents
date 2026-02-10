@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedGitHubRepos } from "@/lib/github/cached-api";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getRepoToken } from "@/lib/github/get-repo-token";
+import { listInstallationRepositories } from "@/lib/github/installation-repos";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    return NextResponse.json(
-      { error: "GitHub not connected" },
-      { status: 401 },
-    );
-  }
-
-  const token = await getUserGitHubToken();
-
-  if (!token) {
     return NextResponse.json(
       { error: "GitHub not connected" },
       { status: 401 },
@@ -41,11 +33,36 @@ export async function GET(request: NextRequest) {
       : undefined;
   const query = queryParam?.trim() || undefined;
 
+  let tokenResult: Awaited<ReturnType<typeof getRepoToken>>;
   try {
-    const repos = await getCachedGitHubRepos(session.user.id, token, owner, {
-      limit,
-      query,
-    });
+    tokenResult = await getRepoToken(session.user.id, owner);
+  } catch {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+
+  try {
+    if (tokenResult.type === "installation") {
+      const repos = await listInstallationRepositories(tokenResult.token, {
+        owner,
+        limit,
+        query,
+      });
+
+      return NextResponse.json(repos);
+    }
+
+    const repos = await getCachedGitHubRepos(
+      session.user.id,
+      tokenResult.token,
+      owner,
+      {
+        limit,
+        query,
+      },
+    );
 
     if (!repos) {
       return NextResponse.json(

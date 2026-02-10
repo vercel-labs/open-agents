@@ -1,21 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/session/get-server-session";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getCachedGitHubBranches } from "@/lib/github/cached-api";
+import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
 
   if (!session?.user?.id) {
-    return NextResponse.json(
-      { error: "GitHub not connected" },
-      { status: 401 },
-    );
-  }
-
-  const token = await getUserGitHubToken();
-
-  if (!token) {
     return NextResponse.json(
       { error: "GitHub not connected" },
       { status: 401 },
@@ -33,10 +24,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  let tokenResult: Awaited<ReturnType<typeof getRepoToken>>;
+  try {
+    tokenResult = await getRepoToken(session.user.id, owner);
+  } catch {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+
   try {
     const result = await getCachedGitHubBranches(
       session.user.id,
-      token,
+      tokenResult.token,
       owner,
       repo,
     );

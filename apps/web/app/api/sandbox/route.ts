@@ -5,14 +5,16 @@ import {
 } from "@open-harness/sandbox";
 import { after } from "next/server";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { parseGitHubUrl } from "@/lib/github/client";
+import { getRepoToken } from "@/lib/github/get-repo-token";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -63,15 +65,28 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  // Get user's GitHub token (may be null if GitHub not linked)
-  const githubToken = await getUserGitHubToken();
+  let githubToken: string | null = null;
 
-  // Require GitHub token when a repo is requested
-  if (repoUrl && !githubToken) {
-    return Response.json(
-      { error: "Connect GitHub to access repositories" },
-      { status: 403 },
-    );
+  if (repoUrl) {
+    const parsedRepo = parseGitHubUrl(repoUrl);
+    if (!parsedRepo) {
+      return Response.json(
+        { error: "Invalid GitHub repository URL" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const tokenResult = await getRepoToken(session.user.id, parsedRepo.owner);
+      githubToken = tokenResult.token;
+    } catch {
+      return Response.json(
+        { error: "Connect GitHub to access repositories" },
+        { status: 403 },
+      );
+    }
+  } else {
+    githubToken = await getUserGitHubToken();
   }
 
   // Validate session ownership

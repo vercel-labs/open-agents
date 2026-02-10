@@ -3,13 +3,16 @@
 import {
   CheckIcon,
   ChevronDown,
+  ExternalLink,
   Folder,
   Loader2Icon,
   LockIcon,
   RefreshCw,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { z } from "zod";
 import {
   Command,
   CommandEmpty,
@@ -41,11 +44,23 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-interface Owner {
-  login: string;
-  name: string;
-  avatar_url: string;
+interface Installation {
+  installationId: number;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  repositorySelection: "all" | "selected";
+  installationUrl: string | null;
 }
+
+const installationSchema = z.object({
+  installationId: z.number(),
+  accountLogin: z.string(),
+  accountType: z.enum(["User", "Organization"]),
+  repositorySelection: z.enum(["all", "selected"]),
+  installationUrl: z.string().nullable(),
+});
+
+const installationsSchema = z.array(installationSchema);
 
 interface Repo {
   name: string;
@@ -60,25 +75,20 @@ interface RepoSelectorCompactProps {
   onSelect: (owner: string, repo: string) => void;
 }
 
-async function fetchOwners(): Promise<Owner[]> {
-  const [userRes, orgsRes] = await Promise.all([
-    fetch("/api/github/user"),
-    fetch("/api/github/orgs"),
-  ]);
+function getCurrentPathWithSearch(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
 
-  if (!userRes.ok) return [];
+async function fetchInstallations(): Promise<Installation[]> {
+  const response = await fetch("/api/github/installations");
+  if (!response.ok) {
+    return [];
+  }
 
-  const user = (await userRes.json()) as Owner;
-  const orgs = orgsRes.ok ? ((await orgsRes.json()) as Owner[]) : [];
+  const json = await response.json();
+  const parsed = installationsSchema.safeParse(json);
 
-  return [
-    {
-      login: user.login,
-      name: user.name || user.login,
-      avatar_url: user.avatar_url,
-    },
-    ...orgs,
-  ];
+  return parsed.success ? parsed.data : [];
 }
 
 export function RepoSelectorCompact({
@@ -97,16 +107,25 @@ export function RepoSelectorCompact({
   // Track whether we've auto-selected an owner
   const hasAutoSelectedRef = useRef(false);
 
-  // Fetch owners (user + orgs) — skip when GitHub isn't linked
-  const { data: owners = [], isLoading: ownersLoading } = useSWR<Owner[]>(
-    hasGitHub ? "github-owners" : null,
-    fetchOwners,
+  const startGitHubInstall = useCallback(() => {
+    const params = new URLSearchParams({
+      next: getCurrentPathWithSearch(),
+    });
+    window.location.href = `/api/github/app/install?${params.toString()}`;
+  }, []);
+
+  const { data: installations = [], isLoading: installationsLoading } = useSWR<
+    Installation[]
+  >(hasGitHub ? "github-installations" : null, fetchInstallations);
+
+  const currentInstallation = installations.find(
+    (installation) => installation.accountLogin === currentOwner,
   );
 
   // Build the repos URL for current owner
-  const reposUrl = currentOwner
-    ? `/api/github/repos?${new URLSearchParams({
-        owner: currentOwner,
+  const reposUrl = currentInstallation
+    ? `/api/github/installations/repos?${new URLSearchParams({
+        installation_id: `${currentInstallation.installationId}`,
         limit: "50",
         ...(debouncedRepoSearch ? { query: debouncedRepoSearch } : {}),
       }).toString()}`
@@ -122,29 +141,29 @@ export function RepoSelectorCompact({
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Revalidate the server cache
-      await fetch("/api/github/repos/revalidate", { method: "POST" });
-      // Then refetch the data - use regex to match all repo URLs for this owner
+      // Refetch repos for the selected installation.
       await mutate(
         (key) =>
           typeof key === "string" &&
-          key.startsWith("/api/github/repos?") &&
-          key.includes(`owner=${currentOwner}`),
+          key.startsWith("/api/github/installations/repos?") &&
+          key.includes(
+            `installation_id=${currentInstallation?.installationId ?? ""}`,
+          ),
         undefined,
         { revalidate: true },
       );
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentOwner, mutate]);
+  }, [currentInstallation?.installationId, mutate]);
 
   // Auto-select first owner when data loads (only once)
   useEffect(() => {
-    if (owners[0] && !currentOwner && !hasAutoSelectedRef.current) {
+    if (installations[0] && !currentOwner && !hasAutoSelectedRef.current) {
       hasAutoSelectedRef.current = true;
-      setCurrentOwner(owners[0].login);
+      setCurrentOwner(installations[0].accountLogin);
     }
-  }, [owners, currentOwner]);
+  }, [installations, currentOwner]);
 
   // Sync currentOwner with selectedOwner prop
   useEffect(() => {
@@ -176,7 +195,7 @@ export function RepoSelectorCompact({
       : selectedRepo
     : "Select repo...";
 
-  const isInitialLoading = ownersLoading && owners.length === 0;
+  const isInitialLoading = installationsLoading && installations.length === 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -201,19 +220,35 @@ export function RepoSelectorCompact({
           <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
             <GitHubIcon className="size-8 text-muted-foreground" />
             <div className="space-y-1">
-              <p className="text-sm font-medium">Connect GitHub</p>
+              <p className="text-sm font-medium">Install GitHub App</p>
               <p className="text-xs text-muted-foreground">
-                Link your GitHub account to access your repositories.
+                Continue on GitHub to choose which repositories are available.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => {
-                window.location.href = "/api/auth/github/link";
-              }}
+              onClick={startGitHubInstall}
               className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
             >
-              Connect to GitHub
+              Choose repositories
+            </button>
+          </div>
+        ) : !installationsLoading && installations.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+            <GitHubIcon className="size-8 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Install GitHub App</p>
+              <p className="text-xs text-muted-foreground">
+                Install the GitHub App to choose which repositories are
+                available.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startGitHubInstall}
+              className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+            >
+              Choose repositories
             </button>
           </div>
         ) : (
@@ -225,34 +260,36 @@ export function RepoSelectorCompact({
             />
             <CommandList>
               <CommandEmpty>
-                {ownersLoading || reposLoading
+                {installationsLoading || reposLoading
                   ? "Loading..."
                   : "No repositories found."}
               </CommandEmpty>
 
               {/* Owner selector */}
               <CommandGroup heading="Account">
-                {ownersLoading && owners.length === 0 ? (
+                {installationsLoading && installations.length === 0 ? (
                   <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
                     <Loader2Icon className="size-4 animate-spin" />
                     <span>Loading accounts...</span>
                   </div>
                 ) : (
-                  owners.map((owner) => (
+                  installations.map((installation) => (
                     <CommandItem
-                      key={owner.login}
-                      value={`owner:${owner.login}`}
-                      onSelect={() => setCurrentOwner(owner.login)}
+                      key={installation.installationId}
+                      value={`owner:${installation.accountLogin}`}
+                      onSelect={() =>
+                        setCurrentOwner(installation.accountLogin)
+                      }
                     >
                       <CheckIcon
                         className={cn(
                           "mr-2 size-4",
-                          currentOwner === owner.login
+                          currentOwner === installation.accountLogin
                             ? "opacity-100"
                             : "opacity-0",
                         )}
                       />
-                      <span>{owner.login}</span>
+                      <span>{installation.accountLogin}</span>
                     </CommandItem>
                   ))
                 )}
@@ -274,6 +311,28 @@ export function RepoSelectorCompact({
                     className={cn("size-3", isRefreshing && "animate-spin")}
                   />
                   {isRefreshing ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+              <div className="flex items-center justify-between px-2 pb-1 text-xs">
+                {currentInstallation?.installationUrl ? (
+                  <Link
+                    href={currentInstallation.installationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Manage repository access
+                    <ExternalLink className="size-3" />
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">&nbsp;</span>
+                )}
+                <button
+                  type="button"
+                  onClick={startGitHubInstall}
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Install to organization
                 </button>
               </div>
 
