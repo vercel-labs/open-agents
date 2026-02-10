@@ -22,14 +22,11 @@ import {
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
-import { onStopSignal } from "@/lib/stop-signal";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-// Allow streaming responses up to 5 minutes per response turn.
-export const maxDuration = 300;
+import { onStopSignal } from "@/lib/stop-signal";
 
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
