@@ -110,7 +110,7 @@ export function SessionList({
                   key={session.id}
                   type="button"
                   onClick={() => onSessionClick(session.id)}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">
@@ -127,7 +127,7 @@ export function SessionList({
                       )}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-3">
                     <PrStatus status={session.prStatus} />
                     <DiffStats
                       added={session.linesAdded}

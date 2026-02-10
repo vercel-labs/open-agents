@@ -263,3 +263,5 @@ Use `catalog:` for shared external versions:
 - Use `/installations/select_target` instead of `/installations/new` for the GitHub App install URL; the latter silently redirects to an existing personal installation's settings page instead of showing the account/org picker.
 - GitHub App callbacks that process OAuth `code` or `installation_id` must validate a server-stored `state` nonce before linking accounts or syncing installations; never trust callback query params without CSRF/state verification.
 - Installation sync that prunes DB records must fetch all GitHub API pages first (`per_page=100` + pagination); pruning from a partial page can silently remove valid installations.
+- For lifecycle workflow kicks in request handlers, call `kickSandboxLifecycleWorkflow(...)` directly instead of wrapping it in `after(...)`; delayed/deferred scheduling can miss the initial hibernation timer for idle sessions.
+- Hybrid sandbox wrappers must delegate `snapshot()` to the underlying cloud sandbox after handoff; if `snapshot` is missing on hybrid, lifecycle hibernation skips snapshotting and expired sessions fall back to creating a new sandbox.

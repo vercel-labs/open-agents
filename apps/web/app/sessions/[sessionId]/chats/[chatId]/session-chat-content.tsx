@@ -12,6 +12,7 @@ import {
   GitCompare,
   GitPullRequest,
   Loader2,
+  Menu,
   MessageSquare,
   Mic,
   Paperclip,
@@ -46,12 +47,11 @@ import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
@@ -385,6 +385,7 @@ export function SessionChatContent() {
   const [isDragging, setIsDragging] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -543,6 +544,7 @@ export function SessionChatContent() {
   const handleChatSwitch = useCallback(
     (nextChatId: string) => {
       if (nextChatId === chatInfo.id) return;
+      setMobileSidebarOpen(false);
       router.push(`/sessions/${session.id}/chats/${nextChatId}`);
     },
     [router, session.id, chatInfo.id],
@@ -1186,61 +1188,33 @@ export function SessionChatContent() {
 
   if (error) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-dvh items-center justify-center bg-background">
         <p className="text-destructive">{error.message}</p>
       </div>
     );
   }
 
-  return (
-    <div className="flex h-screen bg-background text-foreground">
-      <aside className="hidden w-72 shrink-0 border-r border-border bg-muted/20 md:flex md:flex-col">
-        <div className="border-b border-border p-3">
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="mb-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Sessions
-          </button>
-          {isEditingTitle ? (
-            <div className="flex items-center gap-1">
-              <input
-                ref={titleInputRef}
-                type="text"
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (editedTitle.trim()) {
-                      try {
-                        await updateSessionTitle(editedTitle.trim());
-                      } catch (err) {
-                        console.error("Failed to update title:", err);
-                      }
-                    }
-                    setIsEditingTitle(false);
-                  } else if (e.key === "Escape") {
-                    setIsEditingTitle(false);
-                  }
-                }}
-                onBlur={async () => {
-                  if (editedTitle.trim() && editedTitle !== session.title) {
-                    try {
-                      await updateSessionTitle(editedTitle.trim());
-                    } catch (err) {
-                      console.error("Failed to update title:", err);
-                    }
-                  }
-                  setIsEditingTitle(false);
-                }}
-                className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <button
-                type="button"
-                onClick={async () => {
+  const sidebarContent = (
+    <>
+      <div className="border-b border-border p-3">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="mb-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Sessions
+        </button>
+        {isEditingTitle ? (
+          <div className="flex items-center gap-1">
+            <input
+              ref={titleInputRef}
+              type="text"
+              value={editedTitle}
+              onChange={(e) => setEditedTitle(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
                   if (editedTitle.trim()) {
                     try {
                       await updateSessionTitle(editedTitle.trim());
@@ -1249,262 +1223,302 @@ export function SessionChatContent() {
                     }
                   }
                   setIsEditingTitle(false);
-                }}
-                className="rounded p-1 hover:bg-muted"
-              >
-                <Check className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
+                } else if (e.key === "Escape") {
+                  setIsEditingTitle(false);
+                }
+              }}
+              onBlur={async () => {
+                if (editedTitle.trim() && editedTitle !== session.title) {
+                  try {
+                    await updateSessionTitle(editedTitle.trim());
+                  } catch (err) {
+                    console.error("Failed to update title:", err);
+                  }
+                }
+                setIsEditingTitle(false);
+              }}
+              className="h-8 flex-1 rounded border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
             <button
               type="button"
-              onClick={() => {
-                setEditedTitle(session.title);
-                setIsEditingTitle(true);
+              onClick={async () => {
+                if (editedTitle.trim()) {
+                  try {
+                    await updateSessionTitle(editedTitle.trim());
+                  } catch (err) {
+                    console.error("Failed to update title:", err);
+                  }
+                }
+                setIsEditingTitle(false);
               }}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+              className="rounded p-1 hover:bg-muted"
             >
-              <span className="truncate text-sm font-medium">
-                {session.title}
-              </span>
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+              <Check className="h-3.5 w-3.5" />
             </button>
-          )}
-          <Button
+          </div>
+        ) : (
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCreateChat}
-            disabled={chatsLoading}
-            className="mt-3 w-full justify-start"
+            onClick={() => {
+              setEditedTitle(session.title);
+              setIsEditingTitle(true);
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            New chat
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <div className="space-y-1">
-            {chats.map((c) => (
-              <div
-                key={c.id}
-                className={`group flex items-center gap-1 rounded-md pr-1 ${
-                  c.id === chatInfo.id ? "bg-secondary" : "hover:bg-muted"
-                }`}
-              >
-                {editingChatId === c.id ? (
-                  <input
-                    ref={chatTitleInputRef}
-                    type="text"
-                    value={editingChatTitle}
-                    onChange={(e) => setEditingChatTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleRenameChat(c.id, editingChatTitle);
-                      } else if (e.key === "Escape") {
-                        setEditingChatId(null);
-                      }
-                    }}
-                    onBlur={() => {
+            <span className="truncate text-sm font-medium">
+              {session.title}
+            </span>
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setMobileSidebarOpen(false);
+            handleCreateChat();
+          }}
+          disabled={chatsLoading}
+          className="mt-3 w-full justify-start"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New chat
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="space-y-1">
+          {chats.map((c) => (
+            <div
+              key={c.id}
+              className={`group flex items-center gap-1 rounded-md pr-1 ${
+                c.id === chatInfo.id ? "bg-secondary" : "hover:bg-muted"
+              }`}
+            >
+              {editingChatId === c.id ? (
+                <input
+                  ref={chatTitleInputRef}
+                  type="text"
+                  value={editingChatTitle}
+                  onChange={(e) => setEditingChatTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
                       void handleRenameChat(c.id, editingChatTitle);
-                    }}
-                    className="h-8 min-w-0 flex-1 rounded bg-transparent px-2 text-sm focus:outline-none"
-                  />
-                ) : (
+                    } else if (e.key === "Escape") {
+                      setEditingChatId(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    void handleRenameChat(c.id, editingChatTitle);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded bg-transparent px-2 text-sm focus:outline-none"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleChatSwitch(c.id)}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                    c.id === chatInfo.id
+                      ? "text-secondary-foreground"
+                      : "text-muted-foreground group-hover:text-foreground"
+                  }`}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{c.title}</span>
+                </button>
+              )}
+              {editingChatId !== c.id && (
+                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
                     type="button"
-                    onClick={() => handleChatSwitch(c.id)}
-                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
-                      c.id === chatInfo.id
-                        ? "text-secondary-foreground"
-                        : "text-muted-foreground group-hover:text-foreground"
-                    }`}
+                    onClick={() => {
+                      setEditingChatId(c.id);
+                      setEditingChatTitle(c.title);
+                    }}
+                    className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                    aria-label={`Rename ${c.title}`}
                   >
-                    <MessageSquare className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{c.title}</span>
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
-                )}
-                {editingChatId !== c.id && (
-                  <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingChatId(c.id);
-                        setEditingChatTitle(c.title);
-                      }}
-                      className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
-                      aria-label={`Rename ${c.title}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleDeleteChat(c.id);
-                      }}
-                      disabled={chats.length <= 1}
-                      className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label={`Delete ${c.title}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      {/* Main chat area */}
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              {session.repoName ? (
-                <>
-                  <span className="font-medium text-foreground">
-                    {session.repoName}
-                  </span>
-                  {(session.branch ?? sandboxInfo?.currentBranch) && (
-                    <>
-                      <span className="text-muted-foreground/40">/</span>
-                      <span className="text-muted-foreground">
-                        {session.branch ?? sandboxInfo?.currentBranch}
-                      </span>
-                    </>
-                  )}
-                </>
-              ) : (
-                <span className="text-muted-foreground">{session.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDeleteChat(c.id);
+                    }}
+                    disabled={chats.length <= 1}
+                    className="rounded p-1.5 text-muted-foreground hover:bg-background/60 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={`Delete ${c.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-2 md:hidden">
-              <Select value={chatInfo.id} onValueChange={handleChatSwitch}>
-                <SelectTrigger className="h-8 w-[160px]">
-                  <SelectValue placeholder="Select chat" />
-                </SelectTrigger>
-                <SelectContent>
-                  {chats.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
+          ))}
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-72 shrink-0 border-r border-border bg-muted/20 md:flex md:flex-col">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile sidebar Sheet */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="flex w-72 flex-col p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation</SheetTitle>
+          </SheetHeader>
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
+
+      {/* Main chat area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header */}
+        <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 md:gap-4">
+              {/* Menu button - mobile only */}
+              <button
                 type="button"
-                variant="ghost"
-                size="icon"
-                onClick={handleCreateChat}
-                disabled={chatsLoading}
-                className="h-8 w-8"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="shrink-0 md:hidden"
               >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <SandboxHeaderBadge
-              sandboxInfo={sandboxInfo}
-              isActive={isSandboxActive}
-              isCreating={isCreatingSandbox}
-              isRestoring={isRestoringSnapshot}
-              isReconnecting={isReconnectingSandbox}
-              isHibernating={isHibernatingUi}
-            />
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${sandboxUiStatus.className}`}
-            >
-              {sandboxUiStatus.label}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void archiveSession().catch((error) => {
-                  console.error("Failed to archive session:", error);
-                });
-                router.push("/");
-              }}
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
-            </Button>
-            {!supportsDiff ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button variant="ghost" size="sm" disabled>
-                      <GitCompare className="mr-2 h-4 w-4" />
-                      Diff
-                    </Button>
+                <Menu className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                {session.repoName ? (
+                  <>
+                    <span className="truncate font-medium text-foreground">
+                      {session.repoName}
+                    </span>
+                    {(session.branch ?? sandboxInfo?.currentBranch) && (
+                      <>
+                        <span className="hidden text-muted-foreground/40 sm:inline">
+                          /
+                        </span>
+                        <span className="hidden text-muted-foreground sm:inline">
+                          {session.branch ?? sandboxInfo?.currentBranch}
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span className="truncate text-muted-foreground">
+                    {session.title}
                   </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={8}>
-                  Not available for in-memory sandboxes
-                </TooltipContent>
-              </Tooltip>
-            ) : (
+                )}
+              </div>
+              <SandboxHeaderBadge
+                sandboxInfo={sandboxInfo}
+                isActive={isSandboxActive}
+                isCreating={isCreatingSandbox}
+                isRestoring={isRestoringSnapshot}
+                isReconnecting={isReconnectingSandbox}
+                isHibernating={isHibernatingUi}
+              />
+              <span
+                className={`hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:inline ${sandboxUiStatus.className}`}
+              >
+                {sandboxUiStatus.label}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 md:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowDiffPanel(!showDiffPanel)}
-                disabled={!diff && !session.cachedDiff}
+                onClick={() => {
+                  void archiveSession().catch((error) => {
+                    console.error("Failed to archive session:", error);
+                  });
+                  router.push("/");
+                }}
               >
-                <GitCompare className="mr-2 h-4 w-4" />
-                Diff
-                {diff &&
-                  (diff.summary.totalAdditions > 0 ||
-                    diff.summary.totalDeletions > 0) && (
-                    <span className="ml-2 text-xs">
-                      <span className="text-green-500">
-                        +{diff.summary.totalAdditions}
-                      </span>{" "}
-                      <span className="text-red-400">
-                        -{diff.summary.totalDeletions}
-                      </span>
-                    </span>
-                  )}
+                <Archive className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Archive</span>
               </Button>
-            )}
-            {session?.cloneUrl ? (
-              // Session has a repo - show PR buttons
-              session?.prNumber ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                    window.open(prUrl, "_blank");
-                  }}
-                >
-                  <GitPullRequest className="mr-2 h-4 w-4" />
-                  View PR #{session.prNumber}
-                </Button>
+              {!supportsDiff ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button variant="ghost" size="sm" disabled>
+                        <GitCompare className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline">Diff</span>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={8}>
+                    Not available for in-memory sandboxes
+                  </TooltipContent>
+                </Tooltip>
               ) : (
                 <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiffPanel(!showDiffPanel)}
+                  disabled={!diff && !session.cachedDiff}
+                >
+                  <GitCompare className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Diff</span>
+                  {diff &&
+                    (diff.summary.totalAdditions > 0 ||
+                      diff.summary.totalDeletions > 0) && (
+                      <span className="ml-1 text-xs md:ml-2">
+                        <span className="text-green-500">
+                          +{diff.summary.totalAdditions}
+                        </span>{" "}
+                        <span className="text-red-400">
+                          -{diff.summary.totalDeletions}
+                        </span>
+                      </span>
+                    )}
+                </Button>
+              )}
+              {session?.cloneUrl ? (
+                // Session has a repo - show PR buttons
+                session?.prNumber ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
+                      window.open(prUrl, "_blank");
+                    }}
+                  >
+                    <GitPullRequest className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">
+                      View PR #{session.prNumber}
+                    </span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPrDialogOpen(true)}
+                    disabled={!session?.branch}
+                  >
+                    <GitPullRequest className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Create PR</span>
+                  </Button>
+                )
+              ) : !supportsRepoCreation ? null : (
+                // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
+                <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPrDialogOpen(true)}
-                  disabled={!session?.branch}
+                  onClick={() => setRepoDialogOpen(true)}
                 >
-                  <GitPullRequest className="mr-2 h-4 w-4" />
-                  Create PR
+                  <FolderGit2 className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Create Repo</span>
                 </Button>
-              )
-            ) : !supportsRepoCreation ? null : (
-              // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRepoDialogOpen(true)}
-              >
-                <FolderGit2 className="mr-2 h-4 w-4" />
-                Create Repo
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </header>
 

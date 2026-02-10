@@ -1,11 +1,14 @@
 #!/bin/zsh
 
 git fetch origin
-bun install
+
+# Copy env files from main worktree as base
 cp "$GWT_MAIN_PATH/apps/cli/.env" apps/cli/.env
 cp "$GWT_MAIN_PATH/apps/web/.env" apps/web/.env
 
+# Pull fresh Vercel env to main worktree and copy to this worktree
 vc env pull "$GWT_MAIN_PATH/.env.local" --cwd "$GWT_MAIN_PATH"
-grep "^VERCEL_OIDC_TOKEN=" "$GWT_MAIN_PATH/.env.local" >> apps/cli/.env
-grep "^VERCEL_OIDC_TOKEN=" "$GWT_MAIN_PATH/.env.local" >> apps/web/.env
-grep "^BLOB_READ_WRITE_TOKEN=" "$GWT_MAIN_PATH/.env.local" >> apps/web/.env
+cp "$GWT_MAIN_PATH/.env.local" .env.local
+
+# Delegate to setup script for dependency install and env sync
+./scripts/setup.sh --no-pull

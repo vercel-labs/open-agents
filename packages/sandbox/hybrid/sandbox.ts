@@ -12,7 +12,12 @@
  */
 
 import type { Dirent } from "fs";
-import type { ExecResult, Sandbox, SandboxStats } from "../interface";
+import type {
+  ExecResult,
+  Sandbox,
+  SandboxStats,
+  SnapshotResult,
+} from "../interface";
 import type { JustBashSandbox } from "../just-bash/sandbox";
 import type { PendingOperation, SandboxStatus } from "../types";
 import type { HybridState } from "./state";
@@ -278,6 +283,14 @@ export class HybridSandbox implements Sandbox {
       await this.vercel.stop();
     }
     // Don't stop JustBash - it will be serialized for persistence
+  }
+
+  async snapshot(): Promise<SnapshotResult> {
+    if (!this.vercel || !this.vercel.snapshot) {
+      throw new Error("Snapshot is only supported after cloud handoff");
+    }
+
+    return this.vercel.snapshot();
   }
 
   /**

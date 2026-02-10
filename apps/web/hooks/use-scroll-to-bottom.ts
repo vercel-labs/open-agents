@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useScrollToBottom<T extends HTMLElement>() {
   const containerRef = useRef<T>(null);
-  const [isAtBottom, setIsAtBottom] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const scrollToBottom = useCallback(() => {
     if (containerRef.current) {
@@ -22,6 +22,9 @@ export function useScrollToBottom<T extends HTMLElement>() {
     const container = containerRef.current;
     if (container) {
       container.addEventListener("scroll", handleScroll);
+      // Scroll to bottom on initial mount
+      container.scrollTop = container.scrollHeight;
+      handleScroll();
       return () => container.removeEventListener("scroll", handleScroll);
     }
   }, [handleScroll]);

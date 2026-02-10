@@ -439,11 +439,11 @@ export function QuestionPanel({
         </div>
 
         {/* Footer */}
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-xs text-muted-foreground">
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="hidden text-xs text-muted-foreground sm:block">
             1-4 select option &middot; Esc cancel
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel}>
               <X className="mr-1 h-4 w-4" />
               Cancel

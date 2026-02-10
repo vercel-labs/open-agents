@@ -6,7 +6,6 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
-import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -28,9 +27,6 @@ import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
-
-// Allow streaming responses up to 5 minutes per response turn.
-export const maxDuration = 300;
 
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
@@ -318,7 +314,6 @@ export async function POST(req: Request) {
                 kickSandboxLifecycleWorkflow({
                   sessionId,
                   reason: "chat-finished",
-                  scheduleBackgroundWork: (cb) => after(cb),
                 });
                 return;
               }
@@ -332,7 +327,6 @@ export async function POST(req: Request) {
             kickSandboxLifecycleWorkflow({
               sessionId,
               reason: "chat-finished",
-              scheduleBackgroundWork: (cb) => after(cb),
             });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);

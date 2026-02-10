@@ -133,7 +133,6 @@ export async function POST(req: Request) {
       kickSandboxLifecycleWorkflow({
         sessionId,
         reason: "sandbox-created",
-        scheduleBackgroundWork: (cb) => after(cb),
       });
     }
 
@@ -274,7 +273,6 @@ export async function POST(req: Request) {
     kickSandboxLifecycleWorkflow({
       sessionId,
       reason: "sandbox-created",
-      scheduleBackgroundWork: (cb) => after(cb),
     });
   }
 

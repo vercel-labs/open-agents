@@ -1,14 +1,14 @@
 "use client";
 
+import { History } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SignedOutHero } from "@/components/auth/signed-out-hero";
-import { HomeSkeleton, TaskListSkeleton } from "@/components/home-skeleton";
+import { HomeSkeleton } from "@/components/home-skeleton";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
-import { SessionList } from "@/components/session-list";
+import { SessionDrawer } from "@/components/session-drawer";
 import { SessionStarter } from "@/components/session-starter";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 import { useCliTokens } from "@/hooks/use-cli-tokens";
 import { useSession } from "@/hooks/use-session";
@@ -24,7 +24,12 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
   const { sessions, loading, createSession } = useSessions({
     enabled: isAuthenticated,
   });
+
+  const activeSessionCount = sessions.filter(
+    (s) => s.status !== "archived",
+  ).length;
   const [isCreating, setIsCreating] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleCreateSession = async (input: {
     repoOwner?: string;
@@ -85,58 +90,43 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
         <div className="hidden sm:flex sm:justify-self-center">
           <CliConnectBanner />
         </div>
-        <div className="flex sm:justify-self-end">
+        <div className="flex items-center gap-2 sm:justify-self-end">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <History className="h-4 w-4" />
+            <span>Sessions</span>
+            {loading ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-transparent">
+                0
+              </span>
+            ) : activeSessionCount > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+                {activeSessionCount}
+              </span>
+            ) : null}
+          </button>
           <UserAvatarDropdown />
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col items-center px-6 pt-16">
+      <main className="flex flex-1 flex-col items-center px-6 pt-8 sm:pt-16">
         <h1 className="mb-8 text-3xl font-light text-foreground">
           What should we ship next?
         </h1>
 
         <SessionStarter onSubmit={handleCreateSession} isLoading={isCreating} />
-
-        <div className="mt-8 w-full max-w-2xl">
-          <Tabs defaultValue="sessions">
-            <TabsList className="h-auto w-auto justify-start gap-8 bg-transparent p-0">
-              <TabsTrigger
-                value="sessions"
-                className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
-              >
-                Sessions
-              </TabsTrigger>
-              <TabsTrigger
-                value="archive"
-                className="relative h-auto rounded-none border-0 bg-transparent px-0 pb-3 pt-0 text-sm font-normal text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:font-normal data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent data-[state=active]:after:absolute data-[state=active]:after:-bottom-px data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-px data-[state=active]:after:bg-foreground"
-              >
-                Archive
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="sessions" className="mt-6">
-              {loading ? (
-                <TaskListSkeleton />
-              ) : (
-                <SessionList
-                  sessions={sessions.filter((s) => s.status !== "archived")}
-                  onSessionClick={handleSessionClick}
-                />
-              )}
-            </TabsContent>
-            <TabsContent value="archive" className="mt-6">
-              {loading ? (
-                <TaskListSkeleton />
-              ) : (
-                <SessionList
-                  sessions={sessions.filter((s) => s.status === "archived")}
-                  onSessionClick={handleSessionClick}
-                  emptyMessage="No archived sessions"
-                />
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
       </main>
+
+      <SessionDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        sessions={sessions}
+        loading={loading}
+        onSessionClick={handleSessionClick}
+      />
     </div>
   );
 }
