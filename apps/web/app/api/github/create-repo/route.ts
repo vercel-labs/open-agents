@@ -86,21 +86,28 @@ export async function POST(req: Request) {
       session.user.id,
       owner,
     );
-    if (installation) {
-      accountType = installation.accountType;
+    if (!installation) {
+      return Response.json(
+        {
+          error: `No GitHub App installation found for "${owner}". Install the GitHub App on that account first.`,
+        },
+        { status: 400 },
+      );
+    }
 
-      try {
-        installationToken = await getInstallationToken(
-          installation.installationId,
-        );
-      } catch (error) {
-        console.error(`Failed to get installation token for ${owner}:`, error);
-      }
+    accountType = installation.accountType;
 
-      // Only use installation token for org repos (createInOrg)
-      if (installation.accountType === "Organization" && installationToken) {
-        repoToken = installationToken;
-      }
+    try {
+      installationToken = await getInstallationToken(
+        installation.installationId,
+      );
+    } catch (error) {
+      console.error(`Failed to get installation token for ${owner}:`, error);
+    }
+
+    // Only use installation token for org repos (createInOrg)
+    if (installation.accountType === "Organization" && installationToken) {
+      repoToken = installationToken;
     }
   }
 
@@ -205,8 +212,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // For pushing, prefer installation token (has Contents write permission)
-  const pushToken = installationToken ?? repoToken;
+  // For orgs, use installation token for push (has Contents write permission).
+  // For personal accounts, use the same OAuth token that created the repo —
+  // the installation token may not have access if repositorySelection is "selected".
+  const pushToken =
+    accountType === "Organization" && installationToken
+      ? installationToken
+      : repoToken;
   const authUrl = repoResult.cloneUrl.replace(
     "https://",
     `https://x-access-token:${pushToken}@`,
