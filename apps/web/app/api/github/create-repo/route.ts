@@ -2,7 +2,6 @@ import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText } from "ai";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { createRepository } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -165,14 +164,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let pushToken = githubToken;
-  try {
-    const tokenResult = await getRepoToken(session.user.id, repoResult.owner);
-    pushToken = tokenResult.token;
-  } catch (error) {
-    console.error("Falling back to user token for new repo push:", error);
-  }
-
+  const pushToken = githubToken;
   const authUrl = repoResult.cloneUrl.replace(
     "https://",
     `https://x-access-token:${pushToken}@`,

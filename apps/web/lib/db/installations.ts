@@ -1,4 +1,4 @@
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, eq, notInArray, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "./client";
 import {
@@ -25,7 +25,10 @@ export async function upsertInstallation(
     .where(
       and(
         eq(githubInstallations.userId, data.userId),
-        eq(githubInstallations.installationId, data.installationId),
+        or(
+          eq(githubInstallations.installationId, data.installationId),
+          eq(githubInstallations.accountLogin, data.accountLogin),
+        ),
       ),
     )
     .limit(1);
@@ -36,6 +39,7 @@ export async function upsertInstallation(
     const [updated] = await db
       .update(githubInstallations)
       .set({
+        installationId: data.installationId,
         accountLogin: data.accountLogin,
         accountType: data.accountType,
         repositorySelection: data.repositorySelection,
