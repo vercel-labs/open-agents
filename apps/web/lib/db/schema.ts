@@ -25,6 +25,7 @@ export const users = pgTable(
     name: text("name"),
     avatarUrl: text("avatar_url"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    tokenExpiresAt: timestamp("token_expires_at"),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     lastLoginAt: timestamp("last_login_at").defaultNow().notNull(),
   },

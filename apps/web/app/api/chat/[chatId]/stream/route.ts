@@ -42,7 +42,9 @@ export async function GET(_request: Request, context: RouteContext) {
   if (!stream) {
     // Stream no longer exists in Redis (expired or finished) — clear the stale
     // activeStreamId so future page loads don't attempt another resume.
-    after(updateChatActiveStreamId(chatId, null));
+    after(async () => {
+      await updateChatActiveStreamId(chatId, null);
+    });
     return new Response(null, { status: 204 });
   }
 

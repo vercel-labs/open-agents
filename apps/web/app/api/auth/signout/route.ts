@@ -1,30 +1,28 @@
 import { type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
+import { revokeVercelToken } from "@/lib/vercel/oauth";
+import { getUserVercelToken } from "@/lib/vercel/token";
 
 export async function POST(req: NextRequest): Promise<Response> {
   const session = await getServerSession();
 
-  if (session?.authProvider === "github") {
-    try {
-      const token = await getUserGitHubToken();
-      if (token) {
-        await fetch(
-          `https://api.github.com/applications/${process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID}/token`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Basic ${Buffer.from(`${process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID}:${process.env.GITHUB_CLIENT_SECRET}`).toString("base64")}`,
-              Accept: "application/vnd.github.v3+json",
-            },
-            body: JSON.stringify({ access_token: token }),
-          },
-        );
+  if (session?.user?.id) {
+    // Revoke Vercel token if signed in with Vercel
+    if (session.authProvider === "vercel") {
+      try {
+        const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
+        const clientSecret = process.env.VERCEL_APP_CLIENT_SECRET;
+        if (clientId && clientSecret) {
+          const token = await getUserVercelToken(session.user.id);
+          if (token) {
+            await revokeVercelToken({ token, clientId, clientSecret });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to revoke Vercel token:", error);
       }
-    } catch (error) {
-      console.error("Failed to revoke GitHub token:", error);
     }
   }
 

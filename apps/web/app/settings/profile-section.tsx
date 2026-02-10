@@ -18,7 +18,7 @@ export function ProfileSectionSkeleton() {
       <CardHeader>
         <CardTitle>Profile</CardTitle>
         <CardDescription>
-          Your profile information is synced from GitHub.
+          Your profile information is synced from Vercel.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -65,7 +65,7 @@ export function ProfileSection() {
       <CardHeader>
         <CardTitle>Profile</CardTitle>
         <CardDescription>
-          Your profile information is synced from GitHub.
+          Your profile information is synced from Vercel.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

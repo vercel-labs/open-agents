@@ -4,6 +4,10 @@ This file provides guidance for AI coding agents working in this repository.
 
 **This is a living document.** When you make a mistake or learn something new about this codebase, update this file to prevent the same mistake from happening again. Add lessons learned to the relevant section, or create a new "Lessons Learned" section at the bottom if needed.
 
+## Development Mode
+
+This project is in active development. Do not worry about database migrations — the schema can be changed directly and the database reset as needed. Prioritize speed and correctness over backwards compatibility.
+
 ## Commands
 
 ```bash

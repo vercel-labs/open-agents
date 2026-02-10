@@ -24,8 +24,22 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useSession } from "@/hooks/use-session";
 import { fetcher } from "@/lib/swr";
 import { cn } from "@/lib/utils";
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
+    </svg>
+  );
+}
 
 interface Owner {
   login: string;
@@ -72,6 +86,7 @@ export function RepoSelectorCompact({
   selectedRepo,
   onSelect,
 }: RepoSelectorCompactProps) {
+  const { hasGitHub, loading: sessionLoading } = useSession();
   const [open, setOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
   const [repoSearch, setRepoSearch] = useState("");
@@ -82,9 +97,9 @@ export function RepoSelectorCompact({
   // Track whether we've auto-selected an owner
   const hasAutoSelectedRef = useRef(false);
 
-  // Fetch owners (user + orgs)
+  // Fetch owners (user + orgs) — skip when GitHub isn't linked
   const { data: owners = [], isLoading: ownersLoading } = useSWR<Owner[]>(
-    "github-owners",
+    hasGitHub ? "github-owners" : null,
     fetchOwners,
   );
 
@@ -182,108 +197,129 @@ export function RepoSelectorCompact({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="start">
-        <Command>
-          <CommandInput
-            placeholder="Search repositories..."
-            value={repoSearch}
-            onValueChange={setRepoSearch}
-          />
-          <CommandList>
-            <CommandEmpty>
-              {ownersLoading || reposLoading
-                ? "Loading..."
-                : "No repositories found."}
-            </CommandEmpty>
-
-            {/* Owner selector */}
-            <CommandGroup heading="Account">
-              {ownersLoading && owners.length === 0 ? (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-                  <Loader2Icon className="size-4 animate-spin" />
-                  <span>Loading accounts...</span>
-                </div>
-              ) : (
-                owners.map((owner) => (
-                  <CommandItem
-                    key={owner.login}
-                    value={`owner:${owner.login}`}
-                    onSelect={() => setCurrentOwner(owner.login)}
-                  >
-                    <CheckIcon
-                      className={cn(
-                        "mr-2 size-4",
-                        currentOwner === owner.login
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                    />
-                    <span>{owner.login}</span>
-                  </CommandItem>
-                ))
-              )}
-            </CommandGroup>
-
-            <CommandSeparator />
-            <div className="flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground">
-              <span>
-                Showing repos for{" "}
-                <span className="text-foreground">{currentOwner}</span>
-              </span>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-              >
-                <RefreshCw
-                  className={cn("size-3", isRefreshing && "animate-spin")}
-                />
-                {isRefreshing ? "Refreshing..." : "Refresh"}
-              </button>
+        {!sessionLoading && !hasGitHub ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+            <GitHubIcon className="size-8 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Connect GitHub</p>
+              <p className="text-xs text-muted-foreground">
+                Link your GitHub account to access your repositories.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/api/auth/github/link";
+              }}
+              className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+            >
+              Connect to GitHub
+            </button>
+          </div>
+        ) : (
+          <Command>
+            <CommandInput
+              placeholder="Search repositories..."
+              value={repoSearch}
+              onValueChange={setRepoSearch}
+            />
+            <CommandList>
+              <CommandEmpty>
+                {ownersLoading || reposLoading
+                  ? "Loading..."
+                  : "No repositories found."}
+              </CommandEmpty>
 
-            {/* Repos for current owner */}
-            <CommandGroup>
-              {reposLoading ? (
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-                  <Loader2Icon className="size-4 animate-spin" />
-                  <span>Loading repositories...</span>
-                </div>
-              ) : repos.length === 0 ? (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                  No repositories found.
-                </div>
-              ) : (
-                repos.slice(0, 50).map((repo) => (
-                  <CommandItem
-                    key={repo.full_name}
-                    value={repo.name}
-                    onSelect={() => handleRepoSelect(repo)}
-                  >
-                    <CheckIcon
-                      className={cn(
-                        "mr-2 size-4",
-                        selectedRepo === repo.name &&
-                          selectedOwner === currentOwner
-                          ? "opacity-100"
-                          : "opacity-0",
+              {/* Owner selector */}
+              <CommandGroup heading="Account">
+                {ownersLoading && owners.length === 0 ? (
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                    <Loader2Icon className="size-4 animate-spin" />
+                    <span>Loading accounts...</span>
+                  </div>
+                ) : (
+                  owners.map((owner) => (
+                    <CommandItem
+                      key={owner.login}
+                      value={`owner:${owner.login}`}
+                      onSelect={() => setCurrentOwner(owner.login)}
+                    >
+                      <CheckIcon
+                        className={cn(
+                          "mr-2 size-4",
+                          currentOwner === owner.login
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      <span>{owner.login}</span>
+                    </CommandItem>
+                  ))
+                )}
+              </CommandGroup>
+
+              <CommandSeparator />
+              <div className="flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground">
+                <span>
+                  Showing repos for{" "}
+                  <span className="text-foreground">{currentOwner}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={cn("size-3", isRefreshing && "animate-spin")}
+                  />
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+
+              {/* Repos for current owner */}
+              <CommandGroup>
+                {reposLoading ? (
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                    <Loader2Icon className="size-4 animate-spin" />
+                    <span>Loading repositories...</span>
+                  </div>
+                ) : repos.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No repositories found.
+                  </div>
+                ) : (
+                  repos.slice(0, 50).map((repo) => (
+                    <CommandItem
+                      key={repo.full_name}
+                      value={repo.name}
+                      onSelect={() => handleRepoSelect(repo)}
+                    >
+                      <CheckIcon
+                        className={cn(
+                          "mr-2 size-4",
+                          selectedRepo === repo.name &&
+                            selectedOwner === currentOwner
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      <span className="truncate">{repo.name}</span>
+                      {repo.private && (
+                        <LockIcon className="ml-auto size-3 text-muted-foreground" />
                       )}
-                    />
-                    <span className="truncate">{repo.name}</span>
-                    {repo.private && (
-                      <LockIcon className="ml-auto size-3 text-muted-foreground" />
-                    )}
-                  </CommandItem>
-                ))
-              )}
-              {repos.length === 50 && !debouncedRepoSearch && (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  Showing first 50 results. Use search to narrow.
-                </div>
-              )}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+                    </CommandItem>
+                  ))
+                )}
+                {repos.length === 50 && !debouncedRepoSearch && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    Showing first 50 results. Use search to narrow.
+                  </div>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        )}
       </PopoverContent>
     </Popover>
   );

@@ -167,7 +167,7 @@ export function RepoSelector({
         <Button
           variant="outline"
           onClick={() => {
-            window.location.href = "/api/auth/signin/github";
+            window.location.href = "/api/auth/github/link";
           }}
         >
           Connect GitHub
