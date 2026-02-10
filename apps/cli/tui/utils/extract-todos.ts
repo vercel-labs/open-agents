@@ -1,5 +1,5 @@
+import type { TodoItem } from "@open-harness/agent";
 import { isToolUIPart } from "ai";
-import type { TodoItem } from "../../agent/types";
 import type { TUIAgentUIMessage, TUIAgentUIToolPart } from "../types";
 
 function isTodoWritePart(

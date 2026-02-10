@@ -4,13 +4,6 @@ import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultModelLabel, discoverSkills } from "@open-harness/agent";
-import {
-  createTUI,
-  fetchAvailableModels,
-  loadSettings,
-  type Settings,
-  saveSettings,
-} from "@open-harness/tui";
 import { loadAgentsMd } from "./agents-md";
 import { handleAuthCommand } from "./auth/commands";
 import { getWebAppUrl } from "./auth/config";
@@ -22,6 +15,13 @@ import {
   type SandboxType,
 } from "./sandbox-factory";
 import { showSpinner } from "./spinner";
+import {
+  createTUI,
+  fetchAvailableModels,
+  loadSettings,
+  type Settings,
+  saveSettings,
+} from "./tui";
 
 /**
  * Get the current git branch for a directory.
