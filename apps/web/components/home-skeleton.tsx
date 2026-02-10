@@ -24,6 +24,7 @@ export function HomeSkeleton() {
           </div>
           <span className="text-lg font-semibold">Open Harness</span>
         </div>
+        <div className="hidden sm:block" />
         <div className="flex items-center gap-2 sm:justify-self-end">
           <button
             type="button"

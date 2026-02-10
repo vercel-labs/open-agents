@@ -24,6 +24,10 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
   const { sessions, loading, createSession } = useSessions({
     enabled: isAuthenticated,
   });
+
+  const activeSessionCount = sessions.filter(
+    (s) => s.status !== "archived",
+  ).length;
   const [isCreating, setIsCreating] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -94,6 +98,15 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
           >
             <History className="h-4 w-4" />
             <span>Sessions</span>
+            {loading ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-transparent">
+                0
+              </span>
+            ) : activeSessionCount > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+                {activeSessionCount}
+              </span>
+            ) : null}
           </button>
           <UserAvatarDropdown />
         </div>
