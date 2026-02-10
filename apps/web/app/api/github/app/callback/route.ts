@@ -200,6 +200,7 @@ export async function GET(req: Request): Promise<Response> {
 
   cookieStore.delete("github_app_install_redirect_to");
   cookieStore.delete("github_app_install_state");
+  cookieStore.delete("github_reconnect");
 
   return Response.redirect(redirectUrl);
 }

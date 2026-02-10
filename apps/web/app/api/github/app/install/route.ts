@@ -15,6 +15,28 @@ function sanitizeRedirectTo(rawRedirectTo: string | null): string {
   return rawRedirectTo;
 }
 
+function setInstallCookies(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  redirectTo: string,
+  state: string,
+) {
+  cookieStore.set("github_app_install_redirect_to", redirectTo, {
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 60 * 15,
+    sameSite: "lax",
+  });
+
+  cookieStore.set("github_app_install_state", state, {
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 60 * 15,
+    sameSite: "lax",
+  });
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await getServerSession();
 
@@ -39,21 +61,27 @@ export async function GET(req: NextRequest): Promise<Response> {
   const cookieStore = await cookies();
   const state = generateState();
 
-  cookieStore.set("github_app_install_redirect_to", redirectTo, {
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    maxAge: 60 * 15,
-    sameSite: "lax",
-  });
+  setInstallCookies(cookieStore, redirectTo, state);
 
-  cookieStore.set("github_app_install_state", state, {
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    maxAge: 60 * 15,
-    sameSite: "lax",
-  });
+  // When the user disconnected their GitHub account (reconnect cookie is set),
+  // the GitHub App may still be installed on their GitHub account. Sending them
+  // to the install page would just show the existing installation settings
+  // instead of re-authorizing. Redirect to the OAuth authorize URL so they
+  // re-link their account and we can sync existing installations.
+  const isReconnect = cookieStore.get("github_reconnect")?.value === "1";
+  if (isReconnect) {
+    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+    if (clientId) {
+      const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+      authorizeUrl.searchParams.set("client_id", clientId);
+      authorizeUrl.searchParams.set("state", state);
+      // Use the app callback so the existing handler exchanges the code,
+      // links the account, and syncs installations in one step.
+      const callbackUrl = new URL("/api/github/app/callback", req.url);
+      authorizeUrl.searchParams.set("redirect_uri", callbackUrl.toString());
+      return Response.redirect(authorizeUrl);
+    }
+  }
 
   // When a specific target_id is provided (numeric GitHub account/org ID),
   // link directly to the install permissions page for that account.
