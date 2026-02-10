@@ -1359,30 +1359,42 @@ export function SessionChatContent() {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 md:px-4 md:py-3">
+          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+            {/* Back button - mobile only */}
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="shrink-0 md:hidden"
+            >
+              <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <div className="flex min-w-0 items-center gap-2 text-sm">
               {session.repoName ? (
                 <>
-                  <span className="font-medium text-foreground">
+                  <span className="truncate font-medium text-foreground">
                     {session.repoName}
                   </span>
                   {(session.branch ?? sandboxInfo?.currentBranch) && (
                     <>
-                      <span className="text-muted-foreground/40">/</span>
-                      <span className="text-muted-foreground">
+                      <span className="hidden text-muted-foreground/40 sm:inline">
+                        /
+                      </span>
+                      <span className="hidden text-muted-foreground sm:inline">
                         {session.branch ?? sandboxInfo?.currentBranch}
                       </span>
                     </>
                   )}
                 </>
               ) : (
-                <span className="text-muted-foreground">{session.title}</span>
+                <span className="truncate text-muted-foreground">
+                  {session.title}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-2 md:hidden">
               <Select value={chatInfo.id} onValueChange={handleChatSwitch}>
-                <SelectTrigger className="h-8 w-[160px]">
+                <SelectTrigger className="h-8 w-[140px] sm:w-[160px]">
                   <SelectValue placeholder="Select chat" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1413,12 +1425,12 @@ export function SessionChatContent() {
               isHibernating={isHibernatingUi}
             />
             <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${sandboxUiStatus.className}`}
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${sandboxUiStatus.className}`}
             >
               {sandboxUiStatus.label}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -1429,16 +1441,16 @@ export function SessionChatContent() {
                 router.push("/");
               }}
             >
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
+              <Archive className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Archive</span>
             </Button>
             {!supportsDiff ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
                     <Button variant="ghost" size="sm" disabled>
-                      <GitCompare className="mr-2 h-4 w-4" />
-                      Diff
+                      <GitCompare className="h-4 w-4 md:mr-2" />
+                      <span className="hidden md:inline">Diff</span>
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -1453,12 +1465,12 @@ export function SessionChatContent() {
                 onClick={() => setShowDiffPanel(!showDiffPanel)}
                 disabled={!diff && !session.cachedDiff}
               >
-                <GitCompare className="mr-2 h-4 w-4" />
-                Diff
+                <GitCompare className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Diff</span>
                 {diff &&
                   (diff.summary.totalAdditions > 0 ||
                     diff.summary.totalDeletions > 0) && (
-                    <span className="ml-2 text-xs">
+                    <span className="ml-1 text-xs md:ml-2">
                       <span className="text-green-500">
                         +{diff.summary.totalAdditions}
                       </span>{" "}
@@ -1480,8 +1492,10 @@ export function SessionChatContent() {
                     window.open(prUrl, "_blank");
                   }}
                 >
-                  <GitPullRequest className="mr-2 h-4 w-4" />
-                  View PR #{session.prNumber}
+                  <GitPullRequest className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">
+                    View PR #{session.prNumber}
+                  </span>
                 </Button>
               ) : (
                 <Button
@@ -1490,8 +1504,8 @@ export function SessionChatContent() {
                   onClick={() => setPrDialogOpen(true)}
                   disabled={!session?.branch}
                 >
-                  <GitPullRequest className="mr-2 h-4 w-4" />
-                  Create PR
+                  <GitPullRequest className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Create PR</span>
                 </Button>
               )
             ) : !supportsRepoCreation ? null : (
@@ -1501,8 +1515,8 @@ export function SessionChatContent() {
                 size="sm"
                 onClick={() => setRepoDialogOpen(true)}
               >
-                <FolderGit2 className="mr-2 h-4 w-4" />
-                Create Repo
+                <FolderGit2 className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Create Repo</span>
               </Button>
             )}
           </div>

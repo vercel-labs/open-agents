@@ -150,7 +150,7 @@ export function DiffViewer({ onClose }: DiffViewerProps) {
   };
 
   return (
-    <div className="flex h-full w-[500px] min-w-0 flex-col overflow-hidden border-l border-border bg-card">
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card md:relative md:inset-auto md:z-auto md:h-full md:w-[500px] md:min-w-0 md:border-l md:border-border">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
