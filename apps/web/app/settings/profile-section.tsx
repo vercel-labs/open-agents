@@ -33,15 +33,15 @@ export function ProfileSectionSkeleton() {
         <div className="grid gap-4 pt-4">
           <div className="grid gap-2">
             <Label>Username</Label>
-            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-5 w-32" />
           </div>
           <div className="grid gap-2">
             <Label>Email</Label>
-            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-5 w-40" />
           </div>
           <div className="grid gap-2">
             <Label>Name</Label>
-            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-5 w-36" />
           </div>
         </div>
       </CardContent>
