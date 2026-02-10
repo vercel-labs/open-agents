@@ -22,6 +22,10 @@ import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
 import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
+import {
+  getOrCreateChatInstance,
+  removeChatInstance,
+} from "@/lib/chat-instance-manager";
 
 const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
@@ -238,13 +242,37 @@ export function SessionChatProvider({
 
   const hadInitialMessages = initialMessages.length > 0;
 
+  const { instance: chatInstance, alreadyExisted } = useMemo(
+    () =>
+      getOrCreateChatInstance(chatInfo.id, {
+        id: chatInfo.id,
+        transport,
+        messages: initialMessages,
+        sendAutomaticallyWhen: shouldAutoSubmit,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only create once per chatId; init values are only used at creation time
+    [chatInfo.id],
+  );
+
+  // Only resume on fresh page load (new Chat instance + active stream in DB).
+  // If instance already existed, the stream is either still running or finished —
+  // no resume needed since the instance tracked it the whole time.
+  const shouldResume = !alreadyExisted && !!initialChat.activeStreamId;
+
   const chat = useChat<WebAgentUIMessage>({
-    id: chatInfo.id,
-    transport,
-    messages: initialMessages,
-    resume: !!initialChat.activeStreamId,
-    sendAutomaticallyWhen: shouldAutoSubmit,
+    chat: chatInstance,
+    resume: shouldResume,
   });
+
+  // Cleanup: remove idle instances when leaving a chat
+  useEffect(() => {
+    return () => {
+      // Only clean up if the chat is not actively streaming
+      if (chatInstance.status === "ready") {
+        removeChatInstance(chatInfo.id);
+      }
+    };
+  }, [chatInfo.id, chatInstance]);
 
   const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(
     () => sandboxInfoCache.get(sessionId) ?? null,
