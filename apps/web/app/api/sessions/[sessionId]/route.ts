@@ -70,7 +70,19 @@ export async function PATCH(
   const shouldStopSandboxAfterArchive =
     body.status === "archived" && existingSession.status !== "archived";
 
-  const updatedSession = await updateSession(sessionId, body);
+  const updatePayload: UpdateSessionRequest &
+    Partial<{
+      lifecycleState: "archived";
+      sandboxExpiresAt: null;
+      hibernateAfter: null;
+    }> = { ...body };
+  if (shouldStopSandboxAfterArchive) {
+    updatePayload.lifecycleState = "archived";
+    updatePayload.sandboxExpiresAt = null;
+    updatePayload.hibernateAfter = null;
+  }
+
+  const updatedSession = await updateSession(sessionId, updatePayload);
   if (!updatedSession) {
     return Response.json({ error: "Session not found" }, { status: 404 });
   }
@@ -91,6 +103,10 @@ export async function PATCH(
 
         await updateSession(sessionId, {
           sandboxState: clearSandboxState(archivedSession.sandboxState),
+          lifecycleState: "archived",
+          sandboxExpiresAt: null,
+          hibernateAfter: null,
+          lifecycleError: null,
         });
       } catch (error) {
         console.error(

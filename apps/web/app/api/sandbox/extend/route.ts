@@ -1,6 +1,11 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { EXTEND_TIMEOUT_DURATION_MS } from "@/lib/sandbox/config";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import {
+  buildActiveLifecycleUpdate,
+  getNextLifecycleVersion,
+} from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -55,9 +60,18 @@ export async function POST(req: Request) {
       if (newState) {
         await updateSession(sessionId, {
           sandboxState: newState as SandboxState,
+          lifecycleVersion: getNextLifecycleVersion(
+            sessionRecord.lifecycleVersion,
+          ),
+          ...buildActiveLifecycleUpdate(newState as SandboxState),
         });
       }
     }
+
+    kickSandboxLifecycleWorkflow({
+      sessionId,
+      reason: "timeout-extended",
+    });
 
     return Response.json({
       success: true,

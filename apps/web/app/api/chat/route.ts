@@ -6,6 +6,7 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -14,15 +15,20 @@ import {
   getChatMessages,
   getSessionById,
   updateChat,
+  updateChatActiveStreamId,
   updateSession,
   upsertChatMessage,
 } from "@/lib/db/sessions";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { resumableStreamContext } from "@/lib/resumable-stream-context";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
+import { onStopSignal } from "@/lib/stop-signal";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
-// Allow streaming responses up to 5 minutes (matching sandbox timeout)
+// Allow streaming responses up to 5 minutes per response turn.
 export const maxDuration = 300;
 
 interface ChatRequestBody {
@@ -73,6 +79,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
+  // Refresh lifecycle activity timestamps immediately so that any running
+  // lifecycle workflow sees that the sandbox is in active use. Without this,
+  // a long-running AI response could cause the sandbox to appear idle and
+  // get hibernated mid-request.
+  const requestStartedAt = new Date();
+  await updateSession(sessionId, {
+    ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
+      activityAt: requestStartedAt,
+    }),
+  });
   const modelMessages = await convertToModelMessages(messages, {
     ignoreIncompleteToolCalls: true,
     tools: webAgent.tools,
@@ -154,6 +170,17 @@ export async function POST(req: Request) {
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
+  // Create abort controller with shared Redis pub/sub for instant stop
+  const controller = new AbortController();
+  const unsubscribeStop = await onStopSignal(chatId, () => {
+    controller.abort();
+  });
+
+  const finalizeStream = async () => {
+    unsubscribeStop();
+    await updateChatActiveStreamId(chatId, null);
+  };
+
   const result = await webAgent.stream({
     messages: modelMessages,
     options: {
@@ -167,10 +194,13 @@ export async function POST(req: Request) {
       },
       ...(skills.length > 0 && { skills }),
     },
-    abortSignal: req.signal,
+    abortSignal: controller.signal,
   });
 
-  result.consumeStream();
+  void result.consumeStream().then(
+    () => finalizeStream(),
+    () => finalizeStream(),
+  );
 
   // Track last step usage for message metadata
   let lastStepUsage: LanguageModelUsage | undefined;
@@ -192,8 +222,20 @@ export async function POST(req: Request) {
       }
       return undefined;
     },
+    async consumeSseStream({ stream }) {
+      const streamId = nanoid();
+      await resumableStreamContext.createNewResumableStream(
+        streamId,
+        () => stream,
+      );
+      await updateChatActiveStreamId(chatId, streamId);
+    },
     onFinish: async ({ responseMessage }) => {
+      await finalizeStream();
+
       if (chatId) {
+        const activityAt = new Date();
+
         // Save assistant message (upsert to handle tool results added client-side)
         try {
           await upsertChatMessage({
@@ -227,15 +269,25 @@ export async function POST(req: Request) {
               ) {
                 // Background work has completed - use the sandboxId from DB
                 // but also include pending operations from this session
+                const mergedHybridState: SandboxState = {
+                  type: "hybrid",
+                  sandboxId: currentSession.sandboxState.sandboxId,
+                  pendingOperations:
+                    "pendingOperations" in currentState
+                      ? currentState.pendingOperations
+                      : undefined,
+                };
                 await updateSession(sessionId, {
-                  sandboxState: {
-                    type: "hybrid",
-                    sandboxId: currentSession.sandboxState.sandboxId,
-                    pendingOperations:
-                      "pendingOperations" in currentState
-                        ? currentState.pendingOperations
-                        : undefined,
-                  },
+                  sandboxState: mergedHybridState,
+                  ...buildActiveLifecycleUpdate(mergedHybridState, {
+                    activityAt,
+                  }),
+                });
+
+                kickSandboxLifecycleWorkflow({
+                  sessionId,
+                  reason: "chat-finished",
+                  scheduleBackgroundWork: (cb) => after(cb),
                 });
                 return;
               }
@@ -243,9 +295,29 @@ export async function POST(req: Request) {
 
             await updateSession(sessionId, {
               sandboxState: currentState,
+              ...buildActiveLifecycleUpdate(currentState, { activityAt }),
+            });
+
+            kickSandboxLifecycleWorkflow({
+              sessionId,
+              reason: "chat-finished",
+              scheduleBackgroundWork: (cb) => after(cb),
             });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);
+            // Even if sandbox state persistence fails, keep activity timestamps current.
+            try {
+              await updateSession(sessionId, {
+                ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
+                  activityAt,
+                }),
+              });
+            } catch (activityError) {
+              console.error(
+                "Failed to persist lifecycle activity:",
+                activityError,
+              );
+            }
           }
         }
       }

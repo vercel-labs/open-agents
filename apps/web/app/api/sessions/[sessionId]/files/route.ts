@@ -1,6 +1,11 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getSessionById } from "@/lib/db/sessions";
-import { isSandboxActive } from "@/lib/sandbox/utils";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
+import {
+  clearSandboxState,
+  hasRuntimeSandboxState,
+  isSandboxUnavailableError,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export type FileSuggestion = {
@@ -78,26 +83,58 @@ export async function GET(_req: Request, context: RouteContext) {
   if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!isSandboxActive(sessionRecord.sandboxState)) {
+  if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
+  }
+  const sandboxState = sessionRecord.sandboxState;
+  if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const sandbox = await connectSandbox(sandboxState);
     const cwd = sandbox.workingDirectory;
 
-    // Run git commands in parallel to get both tracked and untracked files
-    const [trackedResult, untrackedResult] = await Promise.all([
-      sandbox.exec("git ls-files", cwd, 30000),
-      sandbox.exec("git ls-files --others --exclude-standard", cwd, 30000),
-    ]);
+    // Run git commands sequentially; some sandbox backends are not reliable
+    // with concurrent command streams after reconnect.
+    const trackedResult = await sandbox.exec("git ls-files", cwd, 30000);
+    const untrackedResult = await sandbox.exec(
+      "git ls-files --others --exclude-standard",
+      cwd,
+      30000,
+    );
 
     if (!trackedResult.success) {
+      const stderr = trackedResult.stderr ?? "";
+      if (isSandboxUnavailableError(stderr)) {
+        await updateSession(sessionId, {
+          sandboxState: clearSandboxState(sessionRecord.sandboxState),
+          ...buildHibernatedLifecycleUpdate(),
+        });
+        return Response.json(
+          { error: "Sandbox is unavailable. Please resume sandbox." },
+          { status: 409 },
+        );
+      }
       console.error("Git ls-files failed:", trackedResult.stderr);
       return Response.json(
         { error: "Failed to list files. Ensure this is a git repository." },
         { status: 400 },
       );
+    }
+
+    if (!untrackedResult.success) {
+      const stderr = untrackedResult.stderr ?? "";
+      if (isSandboxUnavailableError(stderr)) {
+        await updateSession(sessionId, {
+          sandboxState: clearSandboxState(sessionRecord.sandboxState),
+          ...buildHibernatedLifecycleUpdate(),
+        });
+        return Response.json(
+          { error: "Sandbox is unavailable. Please resume sandbox." },
+          { status: 409 },
+        );
+      }
     }
 
     // Combine tracked and untracked files
@@ -121,6 +158,17 @@ export async function GET(_req: Request, context: RouteContext) {
 
     return Response.json(response);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isSandboxUnavailableError(message)) {
+      await updateSession(sessionId, {
+        sandboxState: clearSandboxState(sessionRecord.sandboxState),
+        ...buildHibernatedLifecycleUpdate(),
+      });
+      return Response.json(
+        { error: "Sandbox is unavailable. Please resume sandbox." },
+        { status: 409 },
+      );
+    }
     console.error("Failed to list files:", error);
     return Response.json(
       { error: "Failed to connect to sandbox" },

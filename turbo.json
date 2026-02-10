@@ -4,15 +4,21 @@
     "build": {
       "dependsOn": ["^build"],
       "env": [
-        "POSTGRES_URL",
-        "NEXT_PUBLIC_AUTH_PROVIDERS",
-        "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
-        "VERCEL_APP_CLIENT_SECRET",
-        "NEXT_PUBLIC_GITHUB_CLIENT_ID",
+        "BLOB_READ_WRITE_TOKEN",
+        "CLI_TOKEN_ENCRYPTION_KEY",
+        "ENCRYPTION_KEY",
         "GITHUB_CLIENT_SECRET",
         "JWE_SECRET",
-        "CLI_TOKEN_ENCRYPTION_KEY",
-        "BLOB_READ_WRITE_TOKEN"
+        "KV_REST_API_READ_ONLY_TOKEN",
+        "KV_REST_API_TOKEN",
+        "KV_REST_API_URL",
+        "KV_URL",
+        "NEXT_PUBLIC_AUTH_PROVIDERS",
+        "NEXT_PUBLIC_GITHUB_CLIENT_ID",
+        "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
+        "POSTGRES_URL",
+        "REDIS_URL",
+        "VERCEL_APP_CLIENT_SECRET"
       ],
       "outputs": ["dist/**"]
     },

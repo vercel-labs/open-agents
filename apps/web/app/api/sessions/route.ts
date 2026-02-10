@@ -94,6 +94,8 @@ export async function POST(req: Request) {
         cloneUrl,
         isNewBranch: isNewBranch ?? false,
         sandboxState: { type: sandboxType },
+        lifecycleState: "provisioning",
+        lifecycleVersion: 0,
       },
       initialChat: {
         id: nanoid(),

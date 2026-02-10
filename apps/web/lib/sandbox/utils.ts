@@ -55,6 +55,62 @@ export function canOperateOnSandbox(
 }
 
 /**
+ * Check if an unknown value (e.g. from DB jsonb) represents sandbox state
+ * with runtime data (sandboxId for cloud, files for local).
+ *
+ * Unlike the typed `hasRuntimeState`, this accepts `unknown` so callers
+ * don't need to narrow to `SandboxState` first.
+ */
+export function hasRuntimeSandboxState(state: unknown): boolean {
+  if (!state || typeof state !== "object") return false;
+
+  const sandboxState = state as {
+    type?: unknown;
+    sandboxId?: unknown;
+    files?: unknown;
+  };
+
+  if (sandboxState.type === "vercel") {
+    return (
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0
+    );
+  }
+
+  if (sandboxState.type === "hybrid") {
+    const hasSandboxId =
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0;
+    const hasFiles =
+      sandboxState.files !== undefined && sandboxState.files !== null;
+    return hasSandboxId || hasFiles;
+  }
+
+  if (sandboxState.type === "just-bash") {
+    return sandboxState.files !== undefined && sandboxState.files !== null;
+  }
+
+  return false;
+}
+
+/**
+ * Check if an error message indicates the sandbox VM is permanently
+ * unavailable (stopped, not found, or stream closed).
+ *
+ * Use this to decide whether to clear sandbox runtime state in DB.
+ * Transient errors (timeouts, network blips) should NOT match.
+ */
+export function isSandboxUnavailableError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("expected a stream of command data") ||
+    normalized.includes("sandbox is stopped") ||
+    normalized.includes("sandbox not found") ||
+    normalized.includes("sandbox probe failed")
+  );
+}
+
+/**
  * Check if the sandbox state has runtime state (active sandbox).
  * Used internally to determine if sandbox is currently running.
  */

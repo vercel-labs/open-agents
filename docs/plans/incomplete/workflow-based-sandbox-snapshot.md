@@ -1,147 +1,205 @@
-# Workflow-Based Sandbox Snapshotting
+# Workflow-Based Sandbox Lifecycle
 
-## Problem
+## Product Goal
 
-When a user creates a Vercel sandbox, it has a timeout (e.g., 5 minutes). Currently, snapshots are only taken when the client page is open and triggers the `onTimeout` hook. If the user closes the browser tab before the timeout, the sandbox expires without being snapshotted, and their work is lost.
+Sandbox lifecycle should feel invisible in the web app:
 
-## Goal
+1. User starts a new session and gets a usable sandbox quickly.
+2. User keeps working without manual timeout babysitting.
+3. If user disappears, state is preserved automatically.
+4. When user returns, work resumes with minimal latency.
+5. When user is done, they create a PR and archive cleanly.
 
-Automatically snapshot sandboxes before they expire, regardless of whether the client page is open.
+Snapshotting is a core mechanism, but the system should optimize the full lifecycle (latency, reliability, and cost), not only timeout rescue.
 
-## Assumptions
+## Current Gaps
 
-1. Vercel Workflow SDK can schedule durable work that survives server restarts
-2. Workflows can `sleep()` for arbitrary durations without consuming resources
-3. Multiple workflows for the same task are safe (idempotency handles duplicates)
-4. The client may extend the timeout multiple times while working
+1. Timeout/snapshot behavior still depends heavily on a live client.
+2. Timeout metadata is mostly implicit in `sandboxState` JSON.
+3. Lifecycle actions are route-local (`/api/sandbox`, `/api/sandbox/extend`, `/api/chat`) instead of centrally orchestrated.
+4. UX still surfaces timeout pressure (extend warning) instead of making lifecycle mostly automatic.
 
-## Proposed Solution
+## Design Principles
 
-Use Vercel's Workflow SDK to schedule a snapshot before expiry:
+1. Server is source of truth for lifecycle; client is advisory only.
+2. Keep hot sandboxes alive while there is recent activity.
+3. Snapshot on transitions (idle/stop/failure windows), not every response.
+4. Creating a snapshot is also a shutdown event: once snapshotted, the running sandbox is no longer reachable until restore/reconnect.
+5. Use durable orchestration with idempotent steps and supersession tokens.
+6. Prefer explicit lifecycle columns over querying inside JSON state blobs.
 
-```
-Sandbox Created (expiresAt: T)
-    │
-    ├─▶ Start Workflow (sleeps until T - 60s)
-    │
-    ▼
-User Extends Timeout (expiresAt: T+5min)
-    │
-    ├─▶ Start NEW Workflow (sleeps until T+5min - 60s)
-    │
-    ▼
-Original Workflow wakes
-    │
-    ├─▶ Checks DB: expiresAt changed? YES → Skip (superseded)
-    │
-    ▼
-New Workflow wakes
-    │
-    ├─▶ Checks DB: expiresAt matches? YES → Snapshot
-```
+## Target Lifecycle Model
 
-### Idempotency Design
+### Session States
 
-Each workflow is started with the `expiresAt` timestamp it was created for. When it wakes:
+1. `provisioning`: sandbox being created.
+2. `active`: sandbox running and eligible for auto-extend.
+3. `hibernating`: snapshot in progress.
+4. `hibernated`: no active sandbox, snapshot available.
+5. `restoring`: sandbox being restored from snapshot.
+6. `archived`: session done (PR created or explicitly stopped).
+7. `failed`: terminal failure requiring user action.
 
-1. Fetch task from DB
-2. Compare current `expiresAt` with workflow's `expiresAt`
-3. If different → skip (a newer workflow is responsible)
-4. If sandbox archived (no `sandboxId`) → skip
-5. Otherwise → take snapshot
+### Core Timestamps
 
-This means:
-- Old workflows become no-ops when timeout is extended
-- Multiple workflows can safely exist for the same task
-- No need to cancel workflows on extension
+1. `lastActivityAt`: updated on every successful chat turn.
+2. `sandboxExpiresAt`: copied from sandbox runtime (`expiresAt`) for fast checks.
+3. `hibernateAfter`: inactivity deadline (for example, `lastActivityAt + 10m`).
+4. `snapshotCreatedAt`: latest durable checkpoint timestamp.
 
-## Implementation Plan
+## Orchestration Design (Workflow)
 
-### 1. Install Workflow SDK
+Use short-run, event-kicked workflows (not a single self-looping run).
 
-```bash
-bun add workflow
-```
+### Inputs
 
-### 2. Configure Next.js
+1. `sessionId`
+2. `lifecycleVersion` (incremented when a new lifecycle generation supersedes stale runs)
+3. Optional `reason` (`created`, `extended`, `activity`, `manual-stop`, `retry`)
 
-Wrap `next.config.ts` with `withWorkflow()`:
+### Run Shape
 
-```typescript
-import { withWorkflow } from "workflow/next";
+1. `use step`: load session lifecycle row.
+2. Exit if row version differs from workflow version.
+3. Exit if `archived` or `failed`.
+4. Compute next deadline (`min(sandboxExpiresAt - SNAPSHOT_GUARD_MS, hibernateAfter)`).
+5. `sleep()` until that deadline.
+6. `use step`: re-read row and decide one transition:
+   - Snapshot + clear running sandbox if idle or near expiry (snapshot shuts down sandbox automatically).
+   - Skip if already hibernated/archived by another actor.
+7. Persist transition and exit.
 
-export default withWorkflow(nextConfig);
-```
+### Kick Sources
 
-### 3. Create Workflow File
+1. Sandbox create / cloud-ready transition.
+2. Chat activity completion (`onFinish`) that updates `lastActivityAt`.
+3. Manual stop/snapshot operations.
+4. Explicit timeout extension (if retained as fallback tooling).
 
-Create `workflows/sandbox-snapshot.ts`:
+### Idempotency and Concurrency
 
-```typescript
-import { sleep } from "workflow";
+1. Every mutating step checks `lifecycleVersion` before write.
+2. Snapshot step uses a lease/compare-and-set so only one worker snapshots.
+3. Duplicate workflow starts are safe: stale runs self-terminate on version mismatch.
 
-async function checkShouldSnapshot(taskId: string, workflowExpiresAt: number) {
-  "use step";
-  // Fetch task, check if expiresAt matches, check if sandbox is active
-  // Return { shouldSnapshot: boolean, sandboxState?, result? }
-}
+## Performance Strategy
 
-async function createSnapshot(taskId: string, sandboxState: SandboxState) {
-  "use step";
-  // Connect to sandbox, snapshot, update task
-}
+1. Keep one running sandbox during active chat streaks.
+2. Remove client-side auto-extend logic entirely.
+3. Set long server timeout (`5 hours`) so timeout management is not user-visible during normal work.
+4. Hibernate based on inactivity (`30 minutes`) or near-expiry guard window, not every message.
+5. Restore lazily when next message arrives, then return to `active`.
+6. (Optional) Prewarm on session-open if last state is hibernated and user likely to continue.
 
-export async function sandboxSnapshotWorkflow(taskId: string, workflowExpiresAt: number) {
-  "use workflow";
+This avoids per-turn cold starts while still giving reliable persistence when users close tabs.
 
-  const snapshotTime = workflowExpiresAt - 60_000; // 1 min before expiry
-  const sleepMs = snapshotTime - Date.now();
+### Initial Policy Defaults
 
-  if (sleepMs > 0) {
-    await sleep(sleepMs);
-  }
+1. Inactivity hibernation target: `30 minutes` from last activity.
+2. Creating a PR does not require a final snapshot checkpoint before archive.
+3. Default sandbox runtime timeout: `5 hours`.
+4. Client auto-extend: disabled.
 
-  const check = await checkShouldSnapshot(taskId, workflowExpiresAt);
-  if (!check.shouldSnapshot) {
-    return check.result;
-  }
+### Hard Timeout Rollover (`5h` Edge Case)
 
-  return createSnapshot(taskId, check.sandboxState);
-}
-```
+When a sandbox approaches the hard timeout, lifecycle logic must not rely on user action:
 
-### 4. Start Workflow on Sandbox Creation
+1. Wake at `sandboxExpiresAt - HARD_TIMEOUT_GUARD_MS`.
+2. If session is actively being used, run rollover:
+   - Create snapshot (this shuts down the current sandbox).
+   - Immediately restore into a new sandbox from that snapshot.
+   - Persist new `sandboxState` + `sandboxExpiresAt`.
+   - Keep lifecycle state as `active`.
+   - Coordinate with chat in-flight state so rollover does not interrupt an active response stream.
+3. If session is not actively being used, run normal hibernation:
+   - Create snapshot (sandbox shuts down).
+   - Persist hibernated state and wait for next message restore.
+4. If rollover snapshot/restore fails, fail safe by preserving snapshot when possible and marking lifecycle for retry/error handling (never silently drop state).
 
-In `app/api/sandbox/route.ts`, start workflow when sandbox is created:
+## Required Data Model Changes
 
-- For **vercel** type: Start immediately (has `expiresAt` right away)
-- For **hybrid** type: Start in `onCloudSandboxReady` hook (only has `expiresAt` after cloud sandbox is ready)
+Add lifecycle-focused columns to `sessions` (names can vary):
 
-### 5. Start New Workflow on Extension
+1. `lifecycleState` (`provisioning|active|hibernating|hibernated|restoring|archived|failed`)
+2. `lifecycleVersion` (integer, monotonic)
+3. `lastActivityAt` (timestamp)
+4. `sandboxExpiresAt` (timestamp)
+5. `hibernateAfter` (timestamp)
+6. `lifecycleRunId` (text, optional for observability)
+7. `lifecycleError` (text, nullable)
 
-In `app/api/sandbox/extend/route.ts`, start a new workflow with the updated `expiresAt`.
+Keep existing:
 
-## Open Questions
+1. `sandboxState` for connect/restore details.
+2. `snapshotUrl` + `snapshotCreatedAt` for durable checkpoint reference.
 
-### 1. Background Task Compatibility
+## Integration Points in Current Code
 
-The `onCloudSandboxReady` hook runs via Next.js `after()` (background task). Need to verify the Workflow SDK's `start()` function works correctly in this context.
+1. `apps/web/app/api/sandbox/route.ts`
+   - After sandbox creation and state persistence, initialize lifecycle fields and start workflow.
+   - For hybrid, also trigger lifecycle kick from `onCloudSandboxReady` when cloud sandbox becomes active.
 
-### 2. Auto-Extend Race Condition
+2. `apps/web/app/api/chat/route.ts`
+   - On successful assistant completion, update `lastActivityAt`.
+   - Persist latest `sandboxState` and `sandboxExpiresAt`.
+   - Fire a lightweight lifecycle "activity kick" (idempotent one-shot workflow).
 
-The client auto-extends when `timeRemaining <= 60s` and page is visible. The snapshot workflow also wakes at 60s before expiry. These could race. Options:
+3. `apps/web/app/api/sandbox/extend/route.ts`
+   - Keep only as explicit/manual fallback (not a primary UX path).
+   - After extend, persist `sandboxExpiresAt`, increment lifecycle version when needed, and kick workflow.
 
-- **Accept it**: If page is open, auto-extend fires first, workflow sees "superseded" - correct behavior
-- **Adjust timing**: Snapshot at 90s, auto-extend at 60s - workflow always wins if page is closed
+4. `apps/web/app/api/sandbox/snapshot/route.ts`
+   - Reuse shared snapshot transition logic so manual snapshot and workflow snapshot follow the same state machine.
 
-### 3. Workflow Discovery
+## Rollout Plan
 
-The Workflow SDK needs to discover workflow files. May need to configure `dirs` option in `withWorkflow()` if workflows aren't in default locations (`app/`, `pages/`).
+### Phase 1: Reliability Baseline
 
-## Testing Plan
+1. Add lifecycle columns and write-path updates.
+2. Start one-shot workflow runs on sandbox create/ready/activity/extend.
+3. Implement "snapshot before expiry" guard with supersession checks.
 
-1. Reduce timeouts for faster testing (2 min instead of 5 min)
-2. Create sandbox, close browser tab, verify workflow snapshots
-3. Create sandbox, extend timeout, verify old workflow skips
-4. Create sandbox, manually stop, verify workflow skips
-5. Check workflow dashboard: `npx workflow web`
+Success criteria:
+1. No state loss when tab is closed before timeout.
+2. Duplicate workflow runs cause no duplicate snapshots or broken states.
+
+### Phase 2: Inactivity Hibernation
+
+1. Drive hibernation from `lastActivityAt` + policy.
+2. Remove timeout-driven client UX (including auto-extend behavior).
+3. Ensure first message after idle transparently restores sandbox.
+
+Success criteria:
+1. Users can leave and return without manual recovery actions.
+2. Most sessions avoid explicit "extend timeout" interaction.
+
+### Phase 3: Seamless Performance
+
+1. Tune inactivity thresholds and guard windows from metrics.
+2. Add optional prewarm for likely-return sessions.
+3. Remove remaining client-side lifecycle coupling where safe.
+
+Success criteria:
+1. Fast first action in new sessions.
+2. Low frequency of visible lifecycle interruptions.
+3. Stable snapshot/restore latency and failure rates.
+
+## Metrics and SLOs
+
+Track at minimum:
+
+1. `time_to_first_command_ms` (new session perceived startup)
+2. `resume_latency_ms` (hibernated -> active on next message)
+3. `snapshot_success_rate`
+4. `restore_success_rate`
+5. `lifecycle_interruptions_per_session` (user-visible timeout/restore friction)
+6. `idle_runtime_minutes_saved` (cost efficiency)
+
+## Decisions
+
+1. Workflow shape: short-run event-kicked workflows (not self-looping).
+2. Client auto-extend: remove (no long-term redundancy path).
+3. Inactivity threshold: `30 minutes`.
+4. Default sandbox timeout: `5 hours`.
+5. PR archive flow: no mandatory final snapshot checkpoint.
+6. Hard-timeout behavior: pre-expiry rollover for active sessions (snapshot -> immediate restore), otherwise snapshot -> hibernate.
