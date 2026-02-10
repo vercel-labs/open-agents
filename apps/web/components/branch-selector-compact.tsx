@@ -98,14 +98,17 @@ export function BranchSelectorCompact({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300"
+          className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-400 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
         >
-          <GitBranch className="h-4 w-4" />
-          <span className="max-w-[120px] truncate">{getDisplayText()}</span>
-          <ChevronDown className="h-3 w-3" />
+          <GitBranch className="h-4 w-4 shrink-0" />
+          <span className="flex-1 truncate text-left">{getDisplayText()}</span>
+          <ChevronDown className="h-3 w-3 shrink-0" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+      >
         <Command>
           <CommandInput placeholder="Search branches..." />
           <CommandList>
