@@ -90,7 +90,7 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col items-center px-6 pt-16">
+      <main className="flex flex-1 flex-col items-center px-6 pt-8 sm:pt-16">
         <h1 className="mb-8 text-3xl font-light text-foreground">
           What should we ship next?
         </h1>
