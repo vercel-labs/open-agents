@@ -129,6 +129,12 @@ function useGitHubReturnToast() {
             "The GitHub App is not set up on this deployment. Contact the administrator.",
         });
         break;
+      case "invalid_state":
+        toast.error("GitHub installation callback expired", {
+          description:
+            "Please start the installation again from this page to continue.",
+        });
+        break;
       default:
         break;
     }

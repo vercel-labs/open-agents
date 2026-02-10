@@ -1,29 +1,12 @@
 import { cookies } from "next/headers";
-import { z } from "zod";
 import { encrypt } from "@/lib/crypto";
 import { upsertGitHubAccount } from "@/lib/db/accounts";
-import { upsertInstallation } from "@/lib/db/installations";
-import { getAppOctokit, isGitHubAppConfigured } from "@/lib/github/app-auth";
 import { syncUserInstallations } from "@/lib/github/installations-sync";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-const installationDetailsSchema = z.object({
-  id: z.number(),
-  repository_selection: z.enum(["all", "selected"]),
-  html_url: z.string().url().nullable().optional(),
-  account: z.object({
-    login: z.string(),
-    type: z.string(),
-  }),
-});
 
 interface GitHubUser {
   id: number;
   login: string;
-}
-
-function normalizeAccountType(type: string): "User" | "Organization" {
-  return type === "Organization" ? "Organization" : "User";
 }
 
 function parseInstallationId(value: string | null): number | null {
@@ -154,6 +137,18 @@ export async function GET(req: Request): Promise<Response> {
     requestUrl.searchParams.get("installation_id"),
   );
   const oauthCode = requestUrl.searchParams.get("code");
+  const callbackState = requestUrl.searchParams.get("state");
+  const expectedState = cookieStore.get("github_app_install_state")?.value;
+
+  if (
+    (oauthCode || installationId) &&
+    (!callbackState || !expectedState || callbackState !== expectedState)
+  ) {
+    cookieStore.delete("github_app_install_redirect_to");
+    cookieStore.delete("github_app_install_state");
+    redirectUrl.searchParams.set("github", "invalid_state");
+    return Response.redirect(redirectUrl);
+  }
 
   // ── Step 1: Handle OAuth code if present ──────────────────────────────
   // When "Request user authorization (OAuth) during installation" is enabled
@@ -165,7 +160,7 @@ export async function GET(req: Request): Promise<Response> {
     userToken = await exchangeOAuthCode(oauthCode, session.user.id);
   }
 
-  // ── Step 2: Sync installations ────────────────────────────────────────
+  // ── Step 2: Sync installations from user-scoped data ──────────────────
   let synced = false;
 
   // Prefer the freshly-obtained token; fall back to an existing stored token
@@ -180,35 +175,6 @@ export async function GET(req: Request): Promise<Response> {
       synced = true;
     } catch (error) {
       console.error("Failed syncing installations from user token:", error);
-    }
-  }
-
-  // Fallback: if we have an installation_id but no user token worked,
-  // fetch the single installation via the App-level API
-  if (!synced && installationId && isGitHubAppConfigured()) {
-    try {
-      const octokit = getAppOctokit();
-      const response = await octokit.request(
-        "GET /app/installations/{installation_id}",
-        {
-          installation_id: installationId,
-        },
-      );
-
-      const parsed = installationDetailsSchema.safeParse(response.data);
-      if (parsed.success) {
-        await upsertInstallation({
-          userId: session.user.id,
-          installationId: parsed.data.id,
-          accountLogin: parsed.data.account.login,
-          accountType: normalizeAccountType(parsed.data.account.type),
-          repositorySelection: parsed.data.repository_selection,
-          installationUrl: parsed.data.html_url ?? null,
-        });
-        synced = true;
-      }
-    } catch (error) {
-      console.error("Failed syncing installation from app callback:", error);
     }
   }
 
@@ -233,6 +199,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   cookieStore.delete("github_app_install_redirect_to");
+  cookieStore.delete("github_app_install_state");
 
   return Response.redirect(redirectUrl);
 }

@@ -23,27 +23,46 @@ function normalizeAccountType(type: string): "User" | "Organization" {
 }
 
 async function fetchUserInstallations(userToken: string) {
-  const response = await fetch("https://api.github.com/user/installations", {
-    headers: {
-      Authorization: `Bearer ${userToken}`,
-      Accept: "application/vnd.github.v3+json",
-    },
-  });
+  const installations: z.infer<typeof userInstallationSchema>[] = [];
+  const perPage = 100;
+  let page = 1;
 
-  if (!response.ok) {
-    const responseText = await response.text();
-    throw new Error(
-      `Failed to fetch GitHub installations: ${response.status} ${responseText}`,
-    );
+  while (true) {
+    const url = new URL("https://api.github.com/user/installations");
+    url.searchParams.set("per_page", String(perPage));
+    url.searchParams.set("page", String(page));
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${userToken}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      throw new Error(
+        `Failed to fetch GitHub installations page ${page}: ${response.status} ${responseText}`,
+      );
+    }
+
+    const json = await response.json();
+    const parsed = userInstallationsResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new Error(`Invalid GitHub installations response on page ${page}`);
+    }
+
+    const currentPageInstallations = parsed.data.installations;
+    installations.push(...currentPageInstallations);
+
+    if (currentPageInstallations.length < perPage) {
+      break;
+    }
+
+    page += 1;
   }
 
-  const json = await response.json();
-  const parsed = userInstallationsResponseSchema.safeParse(json);
-  if (!parsed.success) {
-    throw new Error("Invalid GitHub installations response");
-  }
-
-  return parsed.data.installations;
+  return installations;
 }
 
 export async function syncUserInstallations(

@@ -1,3 +1,4 @@
+import { generateState } from "arctic";
 import { cookies } from "next/headers";
 import { type NextRequest } from "next/server";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -36,7 +37,17 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const cookieStore = await cookies();
+  const state = generateState();
+
   cookieStore.set("github_app_install_redirect_to", redirectTo, {
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 60 * 15,
+    sameSite: "lax",
+  });
+
+  cookieStore.set("github_app_install_state", state, {
     path: "/",
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
@@ -49,14 +60,16 @@ export async function GET(req: NextRequest): Promise<Response> {
   // Otherwise, use select_target to always show the account/org picker.
   // (installations/new silently redirects to existing personal install settings.)
   const targetId = req.nextUrl.searchParams.get("target_id");
-
-  if (targetId && /^\d+$/.test(targetId)) {
-    return Response.redirect(
-      `https://github.com/apps/${appSlug}/installations/new/permissions?target_id=${targetId}`,
-    );
-  }
-
-  return Response.redirect(
+  const installUrl = new URL(
     `https://github.com/apps/${appSlug}/installations/select_target`,
   );
+  installUrl.searchParams.set("state", state);
+
+  if (targetId && /^\d+$/.test(targetId)) {
+    installUrl.pathname = `/apps/${appSlug}/installations/new/permissions`;
+    installUrl.searchParams.set("target_id", targetId);
+    return Response.redirect(installUrl);
+  }
+
+  return Response.redirect(installUrl);
 }
