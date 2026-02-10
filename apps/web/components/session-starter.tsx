@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { RepoSelectorCompact } from "./repo-selector-compact";
+import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
+import { RepoSelectorCompact } from "./repo-selector-compact";
 import {
-  SANDBOX_OPTIONS,
   DEFAULT_SANDBOX_TYPE,
+  SANDBOX_OPTIONS,
   type SandboxType,
 } from "./sandbox-selector-compact";
+
+type SessionMode = "empty" | "repo";
 
 interface SessionStarterProps {
   onSubmit: (session: {
@@ -26,6 +28,7 @@ interface SessionStarterProps {
 }
 
 export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
+  const [mode, setMode] = useState<SessionMode>("empty");
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -56,21 +59,33 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
     setIsNewBranch(newBranch);
   };
 
+  const handleModeChange = (newMode: SessionMode) => {
+    setMode(newMode);
+    if (newMode === "empty") {
+      handleRepoClear();
+    }
+  };
+
   const handleSubmit = () => {
     if (isLoading) return;
 
     onSubmit({
-      repoOwner: selectedOwner || undefined,
-      repoName: selectedRepo || undefined,
-      branch: selectedBranch || undefined,
+      repoOwner: mode === "repo" ? selectedOwner || undefined : undefined,
+      repoName: mode === "repo" ? selectedRepo || undefined : undefined,
+      branch: mode === "repo" ? selectedBranch || undefined : undefined,
       cloneUrl:
-        selectedOwner && selectedRepo
+        mode === "repo" && selectedOwner && selectedRepo
           ? `https://github.com/${selectedOwner}/${selectedRepo}`
           : undefined,
-      isNewBranch,
+      isNewBranch: mode === "repo" ? isNewBranch : false,
       sandboxType,
     });
   };
+
+  const buttonLabel =
+    mode === "repo" && selectedOwner && selectedRepo
+      ? `Start with ${selectedOwner}/${selectedRepo}`
+      : "Start session";
 
   return (
     <div
@@ -80,43 +95,75 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
       )}
     >
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-neutral-400">
-            Repository
-          </label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <RepoSelectorCompact
-                selectedOwner={selectedOwner}
-                selectedRepo={selectedRepo}
-                onSelect={handleRepoSelect}
-              />
-            </div>
-            {selectedOwner && selectedRepo && (
-              <button
-                type="button"
-                onClick={handleRepoClear}
-                className="flex items-center justify-center self-stretch rounded-md border border-white/10 bg-white/[0.03] px-3 text-neutral-500 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {/* Segmented toggle */}
+        <div className="flex rounded-lg bg-white/[0.04] p-1">
+          <button
+            type="button"
+            onClick={() => handleModeChange("empty")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
+              mode === "empty"
+                ? "bg-white/10 text-neutral-100 shadow-sm"
+                : "text-neutral-400 hover:text-neutral-300",
             )}
-          </div>
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Empty sandbox
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange("repo")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
+              mode === "repo"
+                ? "bg-white/10 text-neutral-100 shadow-sm"
+                : "text-neutral-400 hover:text-neutral-300",
+            )}
+          >
+            <GitBranch className="h-3.5 w-3.5" />
+            From repository
+          </button>
         </div>
 
-        {selectedOwner && selectedRepo && (
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-neutral-400">
-              Branch
-            </label>
-            <BranchSelectorCompact
-              owner={selectedOwner}
-              repo={selectedRepo}
-              value={selectedBranch}
-              isNewBranch={isNewBranch}
-              onChange={handleBranchChange}
-            />
+        {/* Repo mode: show repo/branch pickers */}
+        {mode === "repo" && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <RepoSelectorCompact
+                  selectedOwner={selectedOwner}
+                  selectedRepo={selectedRepo}
+                  onSelect={handleRepoSelect}
+                />
+              </div>
+              {selectedOwner && selectedRepo && (
+                <button
+                  type="button"
+                  onClick={handleRepoClear}
+                  className="flex items-center justify-center self-stretch rounded-md border border-white/10 bg-white/[0.03] px-3 text-neutral-500 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {selectedOwner && selectedRepo && (
+              <BranchSelectorCompact
+                owner={selectedOwner}
+                repo={selectedRepo}
+                value={selectedBranch}
+                isNewBranch={isNewBranch}
+                onChange={handleBranchChange}
+              />
+            )}
           </div>
+        )}
+
+        {/* Empty mode: brief description */}
+        {mode === "empty" && (
+          <p className="text-center text-sm text-neutral-500">
+            Start with a blank sandbox -- no repository required.
+          </p>
         )}
 
         <button
@@ -130,7 +177,7 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
               : "bg-neutral-200 text-neutral-900 hover:bg-neutral-300",
           )}
         >
-          Start session
+          {buttonLabel}
         </button>
 
         <p className="text-center text-xs text-muted-foreground">
