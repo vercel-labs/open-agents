@@ -63,10 +63,7 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
-import {
-  AUTO_EXTEND_THRESHOLD_MS,
-  DEFAULT_SANDBOX_TIMEOUT_MS,
-} from "@/lib/sandbox/config";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { DiffViewer } from "./diff-viewer";
 import {
   type SandboxInfo,
@@ -96,7 +93,7 @@ const shikiThemes = ["github-dark", "github-dark"] as [
 ];
 
 type CreateSandboxResponse = SandboxInfo & {
-  type: "just-bash" | "vercel" | "hybrid";
+  type: string;
 };
 
 async function createSandbox(
@@ -124,7 +121,7 @@ async function createSandbox(
     );
   }
   const data = (await response.json()) as {
-    mode: "just-bash" | "vercel" | "hybrid";
+    mode: string;
   } & SandboxInfo;
   return { ...data, type: data.mode };
 }
@@ -133,32 +130,7 @@ function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
   if (!sandboxInfo) return false;
   if (sandboxInfo.timeout === null) return true; // No timeout = always valid
   const expiresAt = sandboxInfo.createdAt + sandboxInfo.timeout;
-  return Date.now() < expiresAt - 10_000;
-}
-
-function useSandboxTimeRemaining(sandboxInfo: SandboxInfo | null) {
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!sandboxInfo || sandboxInfo.timeout === null) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    const { createdAt, timeout } = sandboxInfo;
-
-    const updateTime = () => {
-      const expiresAt = createdAt + timeout;
-      const remaining = expiresAt - Date.now();
-      setTimeRemaining(remaining > 0 ? remaining : 0);
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [sandboxInfo]);
-
-  return timeRemaining;
+  return Date.now() < expiresAt;
 }
 
 function formatTokens(tokens: number): string {
@@ -166,6 +138,10 @@ function formatTokens(tokens: number): string {
     return `${(tokens / 1000).toFixed(1)}k`;
   }
   return tokens.toString();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function CircularProgress({
@@ -266,116 +242,27 @@ function ContextUsageIndicator({
 
 function SandboxHeaderBadge({
   sandboxInfo,
-  sandboxType,
+  isActive,
   isCreating,
-  isSavingSnapshot,
   isRestoring,
-  isExtending,
-  timeRemaining,
-  onExtend,
-  onSaveAndKill,
+  isReconnecting,
+  isHibernating,
 }: {
   sandboxInfo: SandboxInfo | null;
-  sandboxType?: string;
+  isActive: boolean;
   isCreating: boolean;
-  isSavingSnapshot: boolean;
   isRestoring: boolean;
-  isExtending: boolean;
-  timeRemaining: number | null;
-  onExtend: () => Promise<boolean>;
-  onSaveAndKill: () => void;
+  isReconnecting: boolean;
+  isHibernating: boolean;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const hasAutoSavedRef = useRef(false);
-  const hasAutoExtendedRef = useRef(false);
-  const autoExtendRetryCountRef = useRef(0);
-  const MAX_AUTO_EXTEND_RETRIES = 3;
+  // Creating/restoring/transition state.
+  if (isCreating || isRestoring || isReconnecting || isHibernating) {
+    const transitionLabel = isHibernating
+      ? "Hibernating sandbox..."
+      : isReconnecting
+        ? "Reconnecting sandbox..."
+        : "Creating sandbox...";
 
-  // Reset auto-save flag when sandbox changes
-  useEffect(() => {
-    hasAutoSavedRef.current = false;
-  }, [sandboxInfo]);
-
-  // Reset auto-extend flag when sandbox changes or time goes back up (after successful extend)
-  useEffect(() => {
-    if (
-      !sandboxInfo ||
-      timeRemaining === null ||
-      timeRemaining > AUTO_EXTEND_THRESHOLD_MS
-    ) {
-      hasAutoExtendedRef.current = false;
-      autoExtendRetryCountRef.current = 0;
-    }
-  }, [sandboxInfo, timeRemaining]);
-
-  // Reset stopping state when sandbox becomes inactive
-  useEffect(() => {
-    if (!sandboxInfo) {
-      setIsStopping(false);
-    }
-  }, [sandboxInfo]);
-
-  // Auto-save when timeout reached
-  useEffect(() => {
-    if (
-      timeRemaining !== null &&
-      timeRemaining <= 0 &&
-      !hasAutoSavedRef.current &&
-      !isSavingSnapshot
-    ) {
-      hasAutoSavedRef.current = true;
-      setIsStopping(true);
-      onSaveAndKill();
-    }
-  }, [timeRemaining, isSavingSnapshot, onSaveAndKill]);
-
-  // Auto-extend when window is visible and time is low
-  useEffect(() => {
-    const tryAutoExtend = async () => {
-      if (
-        timeRemaining !== null &&
-        timeRemaining > 0 &&
-        timeRemaining <= AUTO_EXTEND_THRESHOLD_MS &&
-        !hasAutoExtendedRef.current &&
-        !isExtending &&
-        document.visibilityState === "visible"
-      ) {
-        hasAutoExtendedRef.current = true;
-        const success = await onExtend();
-        // Allow retry on failure, up to max retries
-        if (!success) {
-          autoExtendRetryCountRef.current += 1;
-          if (autoExtendRetryCountRef.current < MAX_AUTO_EXTEND_RETRIES) {
-            hasAutoExtendedRef.current = false;
-          }
-        }
-      }
-    };
-
-    // Check immediately
-    tryAutoExtend();
-
-    // Also check when visibility changes (user returns to tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        tryAutoExtend();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [timeRemaining, isExtending, onExtend]);
-
-  const handleStop = () => {
-    setIsStopping(true);
-    onSaveAndKill();
-  };
-
-  // Creating or restoring - show spinner dot
-  if (isCreating || isRestoring) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -384,35 +271,14 @@ function SandboxHeaderBadge({
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
-          {isRestoring ? "Restoring sandbox..." : "Creating sandbox..."}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  // Stopping - show optimistic pausing state
-  if (isStopping && sandboxInfo) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="flex items-center justify-center">
-            <Loader2 className="size-3 animate-spin text-muted-foreground" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={8}>
-          Pausing sandbox...
+          {isRestoring ? "Restoring sandbox..." : transitionLabel}
         </TooltipContent>
       </Tooltip>
     );
   }
 
   // Inactive - show gray dot
-  // Note: timeRemaining is null for just-bash (no timeout), so check timeout !== null
-  if (
-    !sandboxInfo ||
-    (sandboxInfo.timeout !== null &&
-      (timeRemaining === null || timeRemaining <= 0))
-  ) {
+  if (!sandboxInfo || !isActive) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -427,39 +293,9 @@ function SandboxHeaderBadge({
     );
   }
 
-  // For just-bash (no timeout), skip countdown logic and show active state
-  if (sandboxInfo.timeout === null) {
-    return (
-      <div
-        className="flex items-center gap-1"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center p-1">
-              <span className="size-2.5 rounded-full bg-green-500" />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={8}>
-            Sandbox active (in-memory)
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    );
-  }
-
-  // At this point timeout is not null, so timeRemaining must be a number
-  // (we returned early for null timeout above, and the inactive check handles null/0 timeRemaining)
-  if (timeRemaining === null) return null;
-
-  // Active - show green dot with X on hover (no countdown displayed, auto-extend handles it)
+  // Active - show green dot
   return (
-    <div
-      className="flex items-center gap-1"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="flex items-center gap-1">
       <Tooltip>
         <TooltipTrigger asChild>
           <div className="flex items-center p-1">
@@ -467,60 +303,49 @@ function SandboxHeaderBadge({
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
-          {sandboxType ? `Sandbox active (${sandboxType})` : "Sandbox active"}
+          Sandbox active
         </TooltipContent>
       </Tooltip>
-
-      {/* X button on hover (not shown for in-memory sandboxes) */}
-      {isHovered && sandboxType !== "just-bash" && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleStop}
-              disabled={isSavingSnapshot}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-            >
-              <X className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={8}>
-            Save and pause
-          </TooltipContent>
-        </Tooltip>
-      )}
     </div>
   );
 }
 
 function SandboxInputOverlay({
-  sandboxInfo,
+  isSandboxActive,
   isCreating,
   isRestoring,
+  isReconnecting,
+  isHibernating,
   hasSnapshot,
   onRestore,
   onCreateNew,
 }: {
-  sandboxInfo: SandboxInfo | null;
+  isSandboxActive: boolean;
   isCreating: boolean;
   isRestoring: boolean;
+  isReconnecting: boolean;
+  isHibernating: boolean;
   hasSnapshot: boolean;
   onRestore: () => void;
   onCreateNew: () => void;
 }) {
-  const isActive = !isCreating && !isRestoring && isSandboxValid(sandboxInfo);
-
-  if (isActive) {
+  if (isSandboxActive && !isCreating && !isRestoring) {
     return null;
   }
 
-  if (isCreating || isRestoring) {
+  if (isCreating || isRestoring || isReconnecting || isHibernating) {
     return (
       <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
         <div className="flex items-center gap-3 rounded-full bg-background/90 px-4 py-2 text-muted-foreground shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">
-            {isRestoring ? "Restoring snapshot..." : "Creating sandbox..."}
+            {isRestoring
+              ? "Restoring snapshot..."
+              : isHibernating
+                ? "Hibernating sandbox..."
+                : isReconnecting
+                  ? "Reconnecting sandbox..."
+                  : "Creating sandbox..."}
           </span>
         </div>
       </div>
@@ -529,15 +354,21 @@ function SandboxInputOverlay({
 
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
-      {hasSnapshot ? (
+      <div className="flex items-center gap-2">
         <Button onClick={onRestore} size="sm" className="shadow-sm">
           Resume sandbox
         </Button>
-      ) : (
-        <Button onClick={onCreateNew} size="sm" className="shadow-sm">
-          Create sandbox
-        </Button>
-      )}
+        {!hasSnapshot && (
+          <Button
+            onClick={onCreateNew}
+            size="sm"
+            variant="outline"
+            className="shadow-sm"
+          >
+            Create sandbox
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -546,9 +377,7 @@ export function SessionChatContent() {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
-  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
-  const [isExtendingSandbox, setIsExtendingSandbox] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -630,7 +459,6 @@ export function SessionChatContent() {
     chat,
     sandboxInfo,
     setSandboxInfo,
-    clearSandboxInfo,
     archiveSession,
     updateSessionTitle,
     updateChatModel,
@@ -640,12 +468,17 @@ export function SessionChatContent() {
     files,
     filesLoading,
     refreshFiles,
-    updateSessionSnapshot,
-    setSandboxType,
+    preferredSandboxType,
+    supportsDiff,
+    supportsRepoCreation,
+    hasRuntimeSandboxState,
+    hasSnapshot,
+    setSandboxTypeFromUnknown,
     reconnectionStatus,
+    lifecycleTiming,
+    syncSandboxStatus,
     attemptReconnection,
   } = useSessionChatContext();
-  const sandboxTimeRemaining = useSandboxTimeRemaining(sandboxInfo);
   const {
     messages,
     error,
@@ -667,6 +500,27 @@ export function SessionChatContent() {
   const [editingChatTitle, setEditingChatTitle] = useState("");
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const chatTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const lastStatusSyncAtRef = useRef(0);
+  const statusSyncInFlightRef = useRef(false);
+
+  const requestStatusSync = useCallback(
+    async (mode: "normal" | "force" = "normal"): Promise<void> => {
+      const now = Date.now();
+      if (statusSyncInFlightRef.current) return;
+      if (mode === "normal" && now - lastStatusSyncAtRef.current < 5_000) {
+        return;
+      }
+
+      statusSyncInFlightRef.current = true;
+      try {
+        await syncSandboxStatus();
+        lastStatusSyncAtRef.current = Date.now();
+      } finally {
+        statusSyncInFlightRef.current = false;
+      }
+    },
+    [syncSandboxStatus],
+  );
 
   useEffect(() => {
     if (editingChatId && chatTitleInputRef.current) {
@@ -793,132 +647,29 @@ export function SessionChatContent() {
     onSelect: handleFileSelect,
   });
 
-  const handleKillSandbox = useCallback(async () => {
-    if (!sandboxInfo) return;
-    try {
-      await fetch("/api/sandbox", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-        }),
-      });
-    } finally {
-      clearSandboxInfo();
-    }
-  }, [sandboxInfo, session.id, clearSandboxInfo]);
-
-  const saveSnapshot = useCallback(async (): Promise<{
-    success: boolean;
-    downloadUrl?: string;
-    createdAt?: number;
-  }> => {
-    try {
-      const response = await fetch("/api/sandbox/snapshot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        console.error("Failed to save snapshot:", error.error);
-        return { success: false };
-      }
-      const data = (await response.json()) as {
-        snapshotId: string;
-        createdAt: number;
-      };
-      return {
-        success: true,
-        downloadUrl: data.snapshotId,
-        createdAt: data.createdAt,
-      };
-    } catch (err) {
-      console.error("Failed to save snapshot:", err);
-      return { success: false };
-    }
-  }, [session.id]);
-
-  const handleSaveAndKill = useCallback(async () => {
-    if (!sandboxInfo || isSavingSnapshotRef.current) return;
-
-    // Only save snapshot for sandbox types that support it
-    // just-bash state is already persisted after each message via getState()
-    const supportsSnapshot = session.sandboxState?.type !== "just-bash";
-
-    if (supportsSnapshot) {
-      isSavingSnapshotRef.current = true;
-      setIsSavingSnapshot(true);
-      try {
-        const result = await saveSnapshot();
-        if (result.success && result.downloadUrl && result.createdAt) {
-          updateSessionSnapshot(result.downloadUrl, new Date(result.createdAt));
-        }
-      } finally {
-        setIsSavingSnapshot(false);
-        isSavingSnapshotRef.current = false;
-      }
-    }
-
-    // Kill sandbox (regardless of save result or type)
-    await handleKillSandbox();
-  }, [
-    sandboxInfo,
-    session.sandboxState?.type,
-    updateSessionSnapshot,
-    handleKillSandbox,
-    saveSnapshot,
-  ]);
-
-  const handleExtendSandbox = useCallback(async (): Promise<boolean> => {
-    if (!sandboxInfo) return false;
-    setIsExtendingSandbox(true);
-    try {
-      const response = await fetch("/api/sandbox/extend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        console.error("Failed to extend sandbox:", error.error);
-        return false;
-      }
-
-      const data = (await response.json()) as {
-        expiresAt: number;
-        extendedBy: number;
-      };
-
-      // Update sandbox info with new expiration
-      // Use a single timestamp to avoid drift between createdAt and timeout calculation
-      const now = Date.now();
-      setSandboxInfo({
-        ...sandboxInfo,
-        createdAt: now,
-        timeout: data.expiresAt - now,
-      });
-      return true;
-    } catch (err) {
-      console.error("Failed to extend sandbox:", err);
-      return false;
-    } finally {
-      setIsExtendingSandbox(false);
-    }
-  }, [sandboxInfo, session.id, setSandboxInfo]);
-
   const [restoreError, setRestoreError] = useState<string | null>(null);
-  const isSavingSnapshotRef = useRef(false);
 
-  const handleRestoreSnapshot = async () => {
-    if (!session.snapshotUrl) return;
+  const waitForSandboxReady = useCallback(
+    async (maxAttempts = 8): Promise<boolean> => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const result = await attemptReconnection();
+        if (result === "connected") {
+          return true;
+        }
 
+        // Keep lifecycle timing fresh during restore retries, but do not treat
+        // DB-only "active" as fully ready until reconnect confirms connectivity.
+        await syncSandboxStatus();
+        if (attempt < maxAttempts) {
+          await sleep(attempt * 350);
+        }
+      }
+      return false;
+    },
+    [attemptReconnection, syncSandboxStatus],
+  );
+
+  const handleRestoreSnapshot = useCallback(async () => {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
 
@@ -934,10 +685,40 @@ export function SessionChatContent() {
         }),
       });
 
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        success?: boolean;
+        alreadyRunning?: boolean;
+      };
+
       if (!response.ok) {
-        const error = (await response.json()) as { error?: string };
-        const errorMsg = error.error ?? "Unknown error";
+        const errorMsg = payload.error ?? "Unknown error";
+
+        // If a sandbox is already running (for example after a lifecycle
+        // restore), reconnect instead of surfacing a blocking error.
+        if (errorMsg.includes("sandbox is still running")) {
+          const reconnected = await waitForSandboxReady();
+          if (!reconnected) {
+            setRestoreError(
+              "Sandbox is already running. Refresh in a few seconds if it does not reconnect automatically.",
+            );
+          }
+          return;
+        }
+
         setRestoreError(`Snapshot restore failed: ${errorMsg}`);
+        return;
+      }
+
+      if (payload.alreadyRunning) {
+        const reconnected = await waitForSandboxReady();
+        if (!reconnected) {
+          setRestoreError(
+            "Sandbox is already running. Refresh in a few seconds if it does not reconnect automatically.",
+          );
+        } else {
+          void requestStatusSync("force");
+        }
         return;
       }
 
@@ -947,9 +728,17 @@ export function SessionChatContent() {
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       });
 
-      // Update sandbox type from the preserved state
-      if (session.sandboxState?.type) {
-        setSandboxType(session.sandboxState.type);
+      // Keep preferred sandbox mode aligned with the preserved session state.
+      setSandboxTypeFromUnknown(session.sandboxState?.type);
+
+      // Refresh local timeout/connection data from server state.
+      const reconnected = await waitForSandboxReady();
+      if (!reconnected) {
+        setRestoreError(
+          "Snapshot restored, but reconnect did not complete yet. Try Resume sandbox again.",
+        );
+      } else {
+        void requestStatusSync("force");
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -957,7 +746,14 @@ export function SessionChatContent() {
     } finally {
       setIsRestoringSnapshot(false);
     }
-  };
+  }, [
+    session.id,
+    session.sandboxState,
+    setSandboxInfo,
+    setSandboxTypeFromUnknown,
+    requestStatusSync,
+    waitForSandboxReady,
+  ]);
 
   const handleCreateNewSandbox = useCallback(async () => {
     setIsCreatingSandbox(true);
@@ -970,10 +766,11 @@ export function SessionChatContent() {
         session.branch ?? undefined,
         shouldCreateNewBranch,
         session.id,
-        session.sandboxState?.type ?? "hybrid",
+        preferredSandboxType,
       );
       setSandboxInfo(newSandbox);
-      setSandboxType(newSandbox.type);
+      setSandboxTypeFromUnknown(newSandbox.type);
+      void requestStatusSync("force");
     } catch (err) {
       console.error("Failed to create sandbox:", err);
     } finally {
@@ -985,9 +782,10 @@ export function SessionChatContent() {
     session.cloneUrl,
     session.branch,
     session.id,
-    session.sandboxState?.type,
+    preferredSandboxType,
     setSandboxInfo,
-    setSandboxType,
+    setSandboxTypeFromUnknown,
+    requestStatusSync,
   ]);
 
   useEffect(() => {
@@ -1002,25 +800,99 @@ export function SessionChatContent() {
     }
   }, [status]);
 
+  // After a chat turn completes, immediately sync status from the server.
+  // If the sandbox was hibernated during the turn (tool calls failed), this
+  // updates the UI right away instead of waiting for the next 15s poll.
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const wasStreaming = prevStatusRef.current === "streaming";
+    prevStatusRef.current = status;
+    if (wasStreaming && status === "ready") {
+      void requestStatusSync("force");
+    }
+  }, [status, requestStatusSync]);
+
   // Track whether we've auto-attempted sandbox startup for this page load.
   const hasAutoStartedSandboxRef = useRef(false);
+  const hasAutoRestoredSnapshotRef = useRef(false);
+  const shouldAutoResumeOnEntryRef = useRef(true);
 
-  // Attempt to reconnect to existing sandbox if session has saved state.
+  // Attempt a single reconnect probe on entry to pick up authoritative server state
+  // (connected sandbox, no sandbox, and snapshot availability).
   useEffect(() => {
     if (
-      session.sandboxState &&
       !sandboxInfo &&
       !isCreatingSandbox &&
+      !isRestoringSnapshot &&
       reconnectionStatus === "idle"
     ) {
-      attemptReconnection();
+      void attemptReconnection();
     }
   }, [
-    session.sandboxState,
     sandboxInfo,
     isCreatingSandbox,
+    isRestoringSnapshot,
     reconnectionStatus,
     attemptReconnection,
+  ]);
+
+  // Auto-resume is only for entering an already-paused session.
+  // Once this tab has had an active connection, do not auto-resume again.
+  useEffect(() => {
+    if (sandboxInfo || reconnectionStatus === "connected") {
+      shouldAutoResumeOnEntryRef.current = false;
+    }
+  }, [sandboxInfo, reconnectionStatus]);
+
+  // Auto-resume paused sessions on entry once we know there is no active runtime sandbox.
+  useEffect(() => {
+    if (!hasSnapshot) {
+      hasAutoRestoredSnapshotRef.current = false;
+      return;
+    }
+    if (!shouldAutoResumeOnEntryRef.current) return;
+    if (sandboxInfo || isCreatingSandbox || isRestoringSnapshot) return;
+    if (reconnectionStatus === "checking") return;
+    if (hasRuntimeSandboxState && reconnectionStatus !== "no_sandbox") return;
+    if (hasAutoRestoredSnapshotRef.current) return;
+
+    hasAutoRestoredSnapshotRef.current = true;
+    shouldAutoResumeOnEntryRef.current = false;
+    void handleRestoreSnapshot();
+  }, [
+    session.id,
+    hasSnapshot,
+    sandboxInfo,
+    isCreatingSandbox,
+    isRestoringSnapshot,
+    hasRuntimeSandboxState,
+    reconnectionStatus,
+    handleRestoreSnapshot,
+  ]);
+
+  // Server-authoritative lifecycle state: lightweight status poll every 15s.
+  useEffect(() => {
+    if (isCreatingSandbox || isRestoringSnapshot) return;
+
+    const poll = () => {
+      if (reconnectionStatus === "checking") return;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+      void requestStatusSync("normal");
+    };
+
+    poll();
+    const interval = setInterval(poll, 15_000);
+    return () => clearInterval(interval);
+  }, [
+    isCreatingSandbox,
+    isRestoringSnapshot,
+    reconnectionStatus,
+    requestStatusSync,
   ]);
 
   const ensureSandboxReady = useCallback(async () => {
@@ -1040,10 +912,11 @@ export function SessionChatContent() {
         session.branch ?? undefined,
         shouldCreateNewBranch,
         session.id,
-        session.sandboxState?.type ?? "hybrid",
+        preferredSandboxType,
       );
       setSandboxInfo(newSandbox);
-      setSandboxType(newSandbox.type);
+      setSandboxTypeFromUnknown(newSandbox.type);
+      void requestStatusSync("force");
       return true;
     } catch (err) {
       console.error("Failed to create sandbox:", err);
@@ -1059,15 +932,15 @@ export function SessionChatContent() {
     session.cloneUrl,
     session.branch,
     session.id,
-    session.sandboxState?.type,
+    preferredSandboxType,
     setSandboxInfo,
-    setSandboxType,
+    setSandboxTypeFromUnknown,
+    requestStatusSync,
   ]);
 
   // Auto-create sandbox right away for new sessions/chats.
   useEffect(() => {
-    if (hasAutoStartedSandboxRef.current) return;
-    if (sandboxInfo || isCreatingSandbox) return;
+    if (sandboxInfo || isCreatingSandbox || isRestoringSnapshot) return;
 
     // If we have stored sandbox state, wait for reconnect attempt first.
     if (session.sandboxState && reconnectionStatus === "idle") return;
@@ -1077,13 +950,22 @@ export function SessionChatContent() {
       return;
     }
 
+    // Snapshotted sessions are resumed by the auto-restore-on-entry effect.
+    if (hasSnapshot) {
+      return;
+    }
+
+    if (hasAutoStartedSandboxRef.current) return;
     hasAutoStartedSandboxRef.current = true;
+
     void ensureSandboxReady();
   }, [
     session.sandboxState,
+    hasSnapshot,
     reconnectionStatus,
     sandboxInfo,
     isCreatingSandbox,
+    isRestoringSnapshot,
     ensureSandboxReady,
   ]);
 
@@ -1144,7 +1026,7 @@ export function SessionChatContent() {
         !showDiffPanel &&
         !hasAutoOpenedDiffRef.current &&
         sandboxInfo &&
-        session.sandboxState?.type !== "just-bash"
+        supportsDiff
       ) {
         hasAutoOpenedDiffRef.current = true;
         setShowDiffPanel(true);
@@ -1160,7 +1042,7 @@ export function SessionChatContent() {
     messages,
     showDiffPanel,
     sandboxInfo,
-    session.sandboxState?.type,
+    supportsDiff,
     refreshDiff,
     refreshFiles,
   ]);
@@ -1237,6 +1119,70 @@ export function SessionChatContent() {
       });
     }
   }, [questionToolCallId, addToolOutput]);
+
+  const isReconnectingSandbox =
+    reconnectionStatus === "checking" &&
+    !sandboxInfo &&
+    !isCreatingSandbox &&
+    !isRestoringSnapshot;
+  const isHibernatingTransition =
+    isReconnectingSandbox && hasSnapshot && !hasRuntimeSandboxState;
+  const isServerHibernating = lifecycleTiming.state === "hibernating";
+  const isServerRestoring = lifecycleTiming.state === "restoring";
+  const isServerHibernated = lifecycleTiming.state === "hibernated";
+  const isHibernatingUi = isHibernatingTransition || isServerHibernating;
+
+  // Sandbox is active only when BOTH the local connection info is valid AND
+  // the server agrees the lifecycle is active (not hibernating/hibernated/failed).
+  const serverSaysActive =
+    lifecycleTiming.state === null ||
+    lifecycleTiming.state === "active" ||
+    lifecycleTiming.state === "provisioning";
+  const isSandboxActive = isSandboxValid(sandboxInfo) && serverSaysActive;
+
+  const sandboxUiStatus = (() => {
+    if (isCreatingSandbox) {
+      return { label: "Creating", className: "bg-amber-500/15 text-amber-700" };
+    }
+    if (isRestoringSnapshot || isServerRestoring) {
+      return {
+        label: "Restoring",
+        className: "bg-amber-500/15 text-amber-700",
+      };
+    }
+    if (isHibernatingUi) {
+      return {
+        label: "Hibernating",
+        className: "bg-amber-500/15 text-amber-700",
+      };
+    }
+    if (isReconnectingSandbox) {
+      return {
+        label: "Reconnecting",
+        className: "bg-amber-500/15 text-amber-700",
+      };
+    }
+    // Server says hibernated — show Paused regardless of local sandboxInfo
+    if (isServerHibernated && hasSnapshot) {
+      return { label: "Paused", className: "bg-muted text-muted-foreground" };
+    }
+    if (isSandboxActive) {
+      return {
+        label: "Active",
+        className: "bg-emerald-500/15 text-emerald-700",
+      };
+    }
+    if (hasSnapshot) {
+      return { label: "Paused", className: "bg-muted text-muted-foreground" };
+    }
+    if (reconnectionStatus === "failed") {
+      return {
+        label: "Connection issue",
+        className: "bg-destructive/10 text-destructive",
+      };
+    }
+    return { label: "No sandbox", className: "bg-muted text-muted-foreground" };
+  })();
 
   if (error) {
     return (
@@ -1460,15 +1406,17 @@ export function SessionChatContent() {
             </div>
             <SandboxHeaderBadge
               sandboxInfo={sandboxInfo}
-              sandboxType={session.sandboxState?.type}
+              isActive={isSandboxActive}
               isCreating={isCreatingSandbox}
-              isSavingSnapshot={isSavingSnapshot}
               isRestoring={isRestoringSnapshot}
-              isExtending={isExtendingSandbox}
-              timeRemaining={sandboxTimeRemaining}
-              onExtend={handleExtendSandbox}
-              onSaveAndKill={handleSaveAndKill}
+              isReconnecting={isReconnectingSandbox}
+              isHibernating={isHibernatingUi}
             />
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${sandboxUiStatus.className}`}
+            >
+              {sandboxUiStatus.label}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -1484,7 +1432,7 @@ export function SessionChatContent() {
               <Archive className="mr-2 h-4 w-4" />
               Archive
             </Button>
-            {session.sandboxState?.type === "just-bash" ? (
+            {!supportsDiff ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
@@ -1546,7 +1494,7 @@ export function SessionChatContent() {
                   Create PR
                 </Button>
               )
-            ) : session.sandboxState?.type === "just-bash" ? null : (
+            ) : !supportsRepoCreation ? null : (
               // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
               <Button
                 variant="outline"
@@ -1828,10 +1776,12 @@ export function SessionChatContent() {
               >
                 {/* Sandbox overlay when inactive */}
                 <SandboxInputOverlay
-                  sandboxInfo={sandboxInfo}
+                  isSandboxActive={isSandboxActive}
                   isCreating={isCreatingSandbox}
                   isRestoring={isRestoringSnapshot}
-                  hasSnapshot={!!session.snapshotUrl}
+                  isReconnecting={isReconnectingSandbox && !isHibernatingUi}
+                  isHibernating={isHibernatingUi}
+                  hasSnapshot={hasSnapshot}
                   onRestore={handleRestoreSnapshot}
                   onCreateNew={handleCreateNewSandbox}
                 />

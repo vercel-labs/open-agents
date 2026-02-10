@@ -8,6 +8,11 @@ import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import {
+  buildActiveLifecycleUpdate,
+  getNextLifecycleVersion,
+} from "@/lib/sandbox/lifecycle";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -90,6 +95,22 @@ export async function POST(req: Request) {
       state: { type: "hybrid", sandboxId: providedSandboxId },
       options: { env: { GITHUB_TOKEN: githubToken } },
     });
+
+    if (sessionId && sandbox.getState) {
+      const nextState = sandbox.getState() as SandboxState;
+      await updateSession(sessionId, {
+        sandboxState: nextState,
+        lifecycleVersion: getNextLifecycleVersion(
+          sessionRecord?.lifecycleVersion,
+        ),
+        ...buildActiveLifecycleUpdate(nextState),
+      });
+      kickSandboxLifecycleWorkflow({
+        sessionId,
+        reason: "sandbox-created",
+        scheduleBackgroundWork: (cb) => after(cb),
+      });
+    }
 
     return Response.json({
       sandboxId: providedSandboxId,
@@ -183,15 +204,29 @@ export async function POST(req: Request) {
               onCloudSandboxReady: async (sandboxId) => {
                 const currentSession = await getSessionById(sessionId);
                 if (currentSession?.sandboxState?.type === "hybrid") {
+                  const nextState: SandboxState = { type: "hybrid", sandboxId };
                   await updateSession(sessionId, {
-                    sandboxState: { type: "hybrid", sandboxId },
+                    sandboxState: nextState,
+                    lifecycleVersion: getNextLifecycleVersion(
+                      currentSession.lifecycleVersion,
+                    ),
+                    ...buildActiveLifecycleUpdate(nextState),
                   });
                   console.log(
                     `[Sandbox] Cloud sandbox ready for session ${sessionId}: ${sandboxId}`,
                   );
+
+                  kickSandboxLifecycleWorkflow({
+                    sessionId,
+                    reason: "cloud-ready",
+                  });
                 }
               },
               onCloudSandboxFailed: async (error) => {
+                await updateSession(sessionId, {
+                  lifecycleState: "failed",
+                  lifecycleError: error.message,
+                });
                 console.error(
                   `[Sandbox] Cloud sandbox failed for session ${sessionId}:`,
                   error.message,
@@ -204,8 +239,19 @@ export async function POST(req: Request) {
   }
 
   if (sessionId && sandbox.getState) {
+    const nextState = sandbox.getState() as SandboxState;
     await updateSession(sessionId, {
-      sandboxState: sandbox.getState() as SandboxState,
+      sandboxState: nextState,
+      lifecycleVersion: getNextLifecycleVersion(
+        sessionRecord?.lifecycleVersion,
+      ),
+      ...buildActiveLifecycleUpdate(nextState),
+    });
+
+    kickSandboxLifecycleWorkflow({
+      sessionId,
+      reason: "sandbox-created",
+      scheduleBackgroundWork: (cb) => after(cb),
     });
   }
 
@@ -262,6 +308,10 @@ export async function DELETE(req: Request) {
 
   await updateSession(sessionId, {
     sandboxState: clearSandboxState(sessionRecord.sandboxState),
+    lifecycleState: sessionRecord.snapshotUrl ? "hibernated" : "provisioning",
+    sandboxExpiresAt: null,
+    hibernateAfter: null,
+    lifecycleError: null,
   });
 
   return Response.json({ success: true });

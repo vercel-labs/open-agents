@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronRight, X, FileText, Loader2 } from "lucide-react";
+import { PatchDiff } from "@pierre/diffs/react";
 import { cn } from "@/lib/utils";
+import { defaultDiffOptions } from "@/lib/diffs-config";
 import { Button } from "@/components/ui/button";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import { useSessionChatContext } from "./session-chat-context";
@@ -10,62 +12,6 @@ import { useSessionChatContext } from "./session-chat-context";
 type DiffViewerProps = {
   onClose: () => void;
 };
-
-type DiffLineType = "context" | "addition" | "deletion" | "header" | "info";
-
-type ParsedDiffLine = {
-  type: DiffLineType;
-  content: string;
-  oldLineNum?: number;
-  newLineNum?: number;
-};
-
-function parseDiffContent(diff: string): ParsedDiffLine[] {
-  const lines: ParsedDiffLine[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("diff --git")) {
-      lines.push({ type: "header", content: line });
-    } else if (
-      line.startsWith("index ") ||
-      line.startsWith("---") ||
-      line.startsWith("+++")
-    ) {
-      lines.push({ type: "info", content: line });
-    } else if (line.startsWith("@@")) {
-      // Parse hunk header: @@ -start,count +start,count @@
-      const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/);
-      if (match) {
-        oldLine = parseInt(match[1] ?? "1", 10);
-        newLine = parseInt(match[2] ?? "1", 10);
-      }
-      lines.push({ type: "info", content: line });
-    } else if (line.startsWith("+")) {
-      lines.push({
-        type: "addition",
-        content: line.slice(1),
-        newLineNum: newLine++,
-      });
-    } else if (line.startsWith("-")) {
-      lines.push({
-        type: "deletion",
-        content: line.slice(1),
-        oldLineNum: oldLine++,
-      });
-    } else if (line.startsWith(" ") || line === "") {
-      lines.push({
-        type: "context",
-        content: line.slice(1) || "",
-        oldLineNum: oldLine++,
-        newLineNum: newLine++,
-      });
-    }
-  }
-
-  return lines;
-}
 
 function formatTimestamp(date: Date) {
   return date.toLocaleString("en-US", {
@@ -129,7 +75,6 @@ function FileEntry({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  const parsedLines = parseDiffContent(file.diff);
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.slice(0, -fileName.length);
 
@@ -165,57 +110,9 @@ function FileEntry({
         </div>
       </button>
 
-      {isExpanded && parsedLines.length > 0 && (
-        <div className="overflow-x-auto border-t border-border bg-muted/30">
-          <div className="min-w-max font-mono text-xs">
-            {parsedLines.map((line, i) => {
-              if (line.type === "header" || line.type === "info") {
-                return (
-                  <div
-                    key={i}
-                    className="flex bg-muted/50 px-2 py-0.5 text-muted-foreground"
-                  >
-                    <span className="w-16 shrink-0" />
-                    <span className="truncate">{line.content}</span>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex",
-                    line.type === "addition" && "bg-green-950/40",
-                    line.type === "deletion" && "bg-red-950/40",
-                  )}
-                >
-                  <span className="w-8 shrink-0 select-none border-r border-border px-1 py-0.5 text-right text-muted-foreground">
-                    {line.oldLineNum ?? ""}
-                  </span>
-                  <span className="w-8 shrink-0 select-none border-r border-border px-1 py-0.5 text-right text-muted-foreground">
-                    {line.newLineNum ?? ""}
-                  </span>
-                  <span
-                    className={cn(
-                      "w-4 shrink-0 select-none py-0.5 text-center",
-                      line.type === "addition" && "text-green-500",
-                      line.type === "deletion" && "text-red-400",
-                    )}
-                  >
-                    {line.type === "addition"
-                      ? "+"
-                      : line.type === "deletion"
-                        ? "-"
-                        : " "}
-                  </span>
-                  <span className="flex-1 whitespace-pre py-0.5 pr-2">
-                    {line.content}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+      {isExpanded && file.diff && (
+        <div className="border-t border-border">
+          <PatchDiff patch={file.diff} options={defaultDiffOptions} />
         </div>
       )}
     </div>
@@ -253,7 +150,7 @@ export function DiffViewer({ onClose }: DiffViewerProps) {
   };
 
   return (
-    <div className="flex h-full w-[500px] flex-col border-l border-border bg-card">
+    <div className="flex h-full w-[500px] min-w-0 flex-col overflow-hidden border-l border-border bg-card">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">

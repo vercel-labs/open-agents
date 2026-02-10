@@ -7,6 +7,7 @@ import {
   getSessionById,
 } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { DiffsProvider } from "@/components/diffs-provider";
 import { SessionChatProvider } from "./session-chat-context";
 import { SessionChatContent } from "./session-chat-content";
 
@@ -57,12 +58,14 @@ export default async function SessionChatPage({
   const initialMessages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
 
   return (
-    <SessionChatProvider
-      session={sessionRecord}
-      chat={chat}
-      initialMessages={initialMessages}
-    >
-      <SessionChatContent />
-    </SessionChatProvider>
+    <DiffsProvider>
+      <SessionChatProvider
+        session={sessionRecord}
+        chat={chat}
+        initialMessages={initialMessages}
+      >
+        <SessionChatContent />
+      </SessionChatProvider>
+    </DiffsProvider>
   );
 }

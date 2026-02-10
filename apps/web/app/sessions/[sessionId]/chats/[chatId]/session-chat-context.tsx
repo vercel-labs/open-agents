@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useMemo,
+  useRef,
   useState,
   useCallback,
   useEffect,
@@ -18,8 +19,50 @@ import type { SandboxState } from "@open-harness/sandbox";
 import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
+import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
+
+const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
+type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
+
+function asKnownSandboxType(value: unknown): KnownSandboxType | null {
+  if (typeof value !== "string") return null;
+  return KNOWN_SANDBOX_TYPES.includes(value as KnownSandboxType)
+    ? (value as KnownSandboxType)
+    : null;
+}
+
+function hasRuntimeSandboxData(state: unknown): boolean {
+  if (!state || typeof state !== "object") return false;
+
+  const sandboxState = state as {
+    type?: unknown;
+    sandboxId?: unknown;
+    files?: unknown;
+  };
+
+  const sandboxType = asKnownSandboxType(sandboxState.type);
+  if (!sandboxType) return false;
+
+  if (sandboxType === "vercel") {
+    return (
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0
+    );
+  }
+
+  if (sandboxType === "hybrid") {
+    const hasSandboxId =
+      typeof sandboxState.sandboxId === "string" &&
+      sandboxState.sandboxId.length > 0;
+    const hasFiles =
+      sandboxState.files !== undefined && sandboxState.files !== null;
+    return hasSandboxId || hasFiles;
+  }
+
+  return sandboxState.files !== undefined && sandboxState.files !== null;
+}
 
 export type SandboxInfo = {
   createdAt: number;
@@ -33,6 +76,21 @@ export type ReconnectionStatus =
   | "connected"
   | "failed"
   | "no_sandbox";
+
+export type LifecycleTimingInfo = {
+  serverTimeMs: number;
+  clockOffsetMs: number;
+  state: Session["lifecycleState"] | null;
+  lastActivityAtMs: number | null;
+  hibernateAfterMs: number | null;
+  sandboxExpiresAtMs: number | null;
+};
+
+export type SandboxStatusSyncResult = "active" | "no_sandbox" | "unknown";
+
+function toMs(value: Date | null | undefined): number | null {
+  return value ? value.getTime() : null;
+}
 
 type SessionChatContextValue = {
   session: Session;
@@ -68,12 +126,26 @@ type SessionChatContextValue = {
   refreshFiles: () => Promise<void>;
   /** Update session snapshot info after saving */
   updateSessionSnapshot: (snapshotUrl: string, snapshotCreatedAt: Date) => void;
-  /** Update sandbox type in session state */
-  setSandboxType: (type: "just-bash" | "vercel" | "hybrid") => void;
+  /** Preferred sandbox mode to request when creating a new sandbox */
+  preferredSandboxType: string;
+  /** Whether the current sandbox mode supports git diff */
+  supportsDiff: boolean;
+  /** Whether creating a repo is supported for the current sandbox mode */
+  supportsRepoCreation: boolean;
+  /** Whether session state currently has runtime sandbox data */
+  hasRuntimeSandboxState: boolean;
+  /** Whether the session currently has a saved snapshot available */
+  hasSnapshot: boolean;
+  /** Update sandbox type in session state if valid */
+  setSandboxTypeFromUnknown: (type: unknown) => void;
   /** Current status of sandbox reconnection attempt */
   reconnectionStatus: ReconnectionStatus;
+  /** Latest lifecycle timing snapshot from the server */
+  lifecycleTiming: LifecycleTimingInfo;
+  /** Refresh lifecycle status from DB without probing sandbox connectivity */
+  syncSandboxStatus: () => Promise<SandboxStatusSyncResult>;
   /** Attempt to reconnect to an existing sandbox */
-  attemptReconnection: () => Promise<void>;
+  attemptReconnection: () => Promise<ReconnectionStatus>;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -145,6 +217,9 @@ export function SessionChatProvider({
   const sessionId = initialSession.id;
   const [sessionRecord, setSessionRecord] = useState<Session>(initialSession);
   const [chatInfo, setChatInfo] = useState<Chat>(initialChat);
+  const [hasSnapshotState, setHasSnapshotState] = useState<boolean>(
+    !!initialSession.snapshotUrl,
+  );
 
   const transport = useMemo(
     () =>
@@ -199,45 +274,131 @@ export function SessionChatProvider({
     useState<ReconnectionStatus>(() =>
       sandboxInfoCache.has(sessionId) ? "connected" : "idle",
     );
+  const statusSyncRef = useRef<{
+    lastAt: number;
+    inFlight: Promise<SandboxStatusSyncResult> | null;
+    lastResult: SandboxStatusSyncResult;
+  }>({
+    lastAt: 0,
+    inFlight: null,
+    lastResult: "unknown",
+  });
+  const [lifecycleTiming, setLifecycleTiming] = useState<LifecycleTimingInfo>(
+    () => {
+      const serverTimeMs = Date.now();
+      return {
+        serverTimeMs,
+        clockOffsetMs: 0,
+        state: initialSession.lifecycleState ?? null,
+        lastActivityAtMs: toMs(initialSession.lastActivityAt),
+        hibernateAfterMs: toMs(initialSession.hibernateAfter),
+        sandboxExpiresAtMs: toMs(initialSession.sandboxExpiresAt),
+      };
+    },
+  );
 
-  const attemptReconnection = useCallback(async () => {
-    setReconnectionStatus("checking");
-
-    try {
-      const response = await fetch(
-        `/api/sandbox/reconnect?sessionId=${sessionRecord.id}`,
-      );
-
-      if (!response.ok) {
-        console.error("Reconnection request failed:", response.status);
-        setReconnectionStatus("failed");
+  const applyLifecycleTiming = useCallback(
+    (
+      lifecycle: ReconnectResponse["lifecycle"] | null | undefined,
+      fallbackState?: Session["lifecycleState"] | null,
+    ) => {
+      const localNow = Date.now();
+      if (!lifecycle) {
+        setLifecycleTiming((prev) => ({
+          ...prev,
+          serverTimeMs: localNow,
+          clockOffsetMs: 0,
+          state: fallbackState ?? prev.state,
+        }));
         return;
       }
 
-      const data = (await response.json()) as ReconnectResponse;
+      const serverTimeMs = lifecycle.serverTime;
+      const clockOffsetMs = serverTimeMs - localNow;
+      const state =
+        (lifecycle.state as Session["lifecycleState"] | null) ?? null;
 
-      if (data.status === "connected") {
-        // Calculate timeout from expiresAt if available, otherwise sandbox has no timeout
-        const now = Date.now();
-        const timeout = data.expiresAt ? data.expiresAt - now : null;
-        const nextSandboxInfo = {
-          createdAt: now,
-          timeout,
-        };
-        setSandboxInfoState(nextSandboxInfo);
-        sandboxInfoCache.set(sessionId, nextSandboxInfo);
-        setReconnectionStatus("connected");
-      } else if (data.status === "no_sandbox") {
-        sandboxInfoCache.delete(sessionId);
-        // Preserve the sandbox type for restoration, but clear other state
-        setSessionRecord((prev) => ({
-          ...prev,
-          sandboxState: prev.sandboxState
-            ? ({ type: prev.sandboxState.type } as SandboxState)
-            : null,
-        }));
-        setReconnectionStatus("no_sandbox");
-      } else {
+      setLifecycleTiming({
+        serverTimeMs,
+        clockOffsetMs,
+        state,
+        lastActivityAtMs: lifecycle.lastActivityAt,
+        hibernateAfterMs: lifecycle.hibernateAfter,
+        sandboxExpiresAtMs: lifecycle.sandboxExpiresAt,
+      });
+
+      setSessionRecord((prev) => ({
+        ...prev,
+        lifecycleState: state,
+        lastActivityAt: lifecycle.lastActivityAt
+          ? new Date(lifecycle.lastActivityAt)
+          : null,
+        hibernateAfter: lifecycle.hibernateAfter
+          ? new Date(lifecycle.hibernateAfter)
+          : null,
+        sandboxExpiresAt: lifecycle.sandboxExpiresAt
+          ? new Date(lifecycle.sandboxExpiresAt)
+          : null,
+      }));
+    },
+    [],
+  );
+
+  const attemptReconnection =
+    useCallback(async (): Promise<ReconnectionStatus> => {
+      setReconnectionStatus("checking");
+
+      try {
+        const response = await fetch(
+          `/api/sandbox/reconnect?sessionId=${sessionRecord.id}`,
+        );
+
+        if (!response.ok) {
+          console.error("Reconnection request failed:", response.status);
+          setReconnectionStatus("failed");
+          return "failed";
+        }
+
+        const data = (await response.json()) as ReconnectResponse;
+        setHasSnapshotState(data.hasSnapshot);
+        if (!data.hasSnapshot) {
+          setSessionRecord((prev) => ({
+            ...prev,
+            snapshotUrl: null,
+            snapshotCreatedAt: null,
+          }));
+        }
+        applyLifecycleTiming(data.lifecycle);
+
+        if (data.status === "connected") {
+          // Calculate timeout from expiresAt if available, otherwise sandbox has no timeout
+          const now = Date.now();
+          const timeout = data.expiresAt ? data.expiresAt - now : null;
+          const nextSandboxInfo = {
+            createdAt: now,
+            timeout,
+          };
+          setSandboxInfoState(nextSandboxInfo);
+          sandboxInfoCache.set(sessionId, nextSandboxInfo);
+          setReconnectionStatus("connected");
+          return "connected";
+        }
+
+        if (data.status === "no_sandbox" || data.status === "expired") {
+          setSandboxInfoState(null);
+          sandboxInfoCache.delete(sessionId);
+          // Preserve the sandbox type for restoration, but clear other state
+          setSessionRecord((prev) => ({
+            ...prev,
+            sandboxState: prev.sandboxState
+              ? ({ type: prev.sandboxState.type } as SandboxState)
+              : null,
+          }));
+          setReconnectionStatus("no_sandbox");
+          return "no_sandbox";
+        }
+
+        setSandboxInfoState(null);
         sandboxInfoCache.delete(sessionId);
         // Preserve the sandbox type for restoration, but clear other state
         setSessionRecord((prev) => ({
@@ -247,40 +408,156 @@ export function SessionChatProvider({
             : null,
         }));
         setReconnectionStatus("failed");
+        return "failed";
+      } catch (error) {
+        console.error("Failed to reconnect to sandbox:", error);
+        setSandboxInfoState(null);
+        applyLifecycleTiming(null, "failed");
+        setReconnectionStatus("failed");
+        return "failed";
       }
-    } catch (error) {
-      console.error("Failed to reconnect to sandbox:", error);
-      setReconnectionStatus("failed");
-    }
-  }, [sessionRecord.id, sessionId]);
+    }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
+
+  const syncSandboxStatus =
+    useCallback(async (): Promise<SandboxStatusSyncResult> => {
+      const THROTTLE_MS = 5_000;
+      const now = Date.now();
+
+      if (statusSyncRef.current.inFlight) {
+        return statusSyncRef.current.inFlight;
+      }
+      if (now - statusSyncRef.current.lastAt < THROTTLE_MS) {
+        return statusSyncRef.current.lastResult;
+      }
+
+      const run = (async (): Promise<SandboxStatusSyncResult> => {
+        try {
+          const response = await fetch(
+            `/api/sandbox/status?sessionId=${sessionRecord.id}`,
+          );
+          if (!response.ok) {
+            return "unknown";
+          }
+
+          const data = (await response.json()) as SandboxStatusResponse;
+          setHasSnapshotState(data.hasSnapshot);
+          if (!data.hasSnapshot) {
+            setSessionRecord((prev) => ({
+              ...prev,
+              snapshotUrl: null,
+              snapshotCreatedAt: null,
+            }));
+          }
+          applyLifecycleTiming(data.lifecycle);
+
+          if (data.status === "no_sandbox") {
+            setSandboxInfoState(null);
+            sandboxInfoCache.delete(sessionId);
+            setSessionRecord((prev) => ({
+              ...prev,
+              sandboxState: prev.sandboxState
+                ? ({ type: prev.sandboxState.type } as SandboxState)
+                : null,
+            }));
+            setReconnectionStatus((prev) =>
+              prev === "checking" ? prev : "no_sandbox",
+            );
+            return "no_sandbox";
+          }
+
+          setSandboxInfoState((prev) => {
+            const expiresAtMs = data.lifecycle.sandboxExpiresAt;
+            if (expiresAtMs !== null) {
+              const currentExpiresAt =
+                prev && prev.timeout !== null
+                  ? prev.createdAt + prev.timeout
+                  : null;
+              if (
+                currentExpiresAt !== null &&
+                Math.abs(currentExpiresAt - expiresAtMs) <= 1_000
+              ) {
+                return prev;
+              }
+
+              const nextTimeout = Math.max(0, expiresAtMs - Date.now());
+              const nextSandboxInfo = {
+                createdAt: Date.now(),
+                timeout: nextTimeout,
+              };
+              sandboxInfoCache.set(sessionId, nextSandboxInfo);
+              return nextSandboxInfo;
+            }
+
+            if (prev && prev.timeout === null) {
+              return prev;
+            }
+
+            const nextSandboxInfo = {
+              createdAt: Date.now(),
+              timeout: null,
+            };
+            sandboxInfoCache.set(sessionId, nextSandboxInfo);
+            return nextSandboxInfo;
+          });
+          setReconnectionStatus((prev) =>
+            prev === "checking" ? prev : "connected",
+          );
+          return "active";
+        } catch {
+          // Best-effort poll; keep last known state on transient errors.
+          return "unknown";
+        }
+      })();
+
+      statusSyncRef.current.inFlight = run;
+
+      try {
+        const result = await run;
+        statusSyncRef.current.lastAt = Date.now();
+        statusSyncRef.current.lastResult = result;
+        return result;
+      } finally {
+        statusSyncRef.current.inFlight = null;
+      }
+    }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
 
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
+      setHasSnapshotState(true);
       setSessionRecord((prev) => ({ ...prev, snapshotUrl, snapshotCreatedAt }));
     },
     [],
   );
 
-  const setSandboxType = useCallback(
-    (type: "just-bash" | "vercel" | "hybrid") => {
-      setSessionRecord((prev) => {
-        if (!prev.sandboxState) {
-          return {
-            ...prev,
-            sandboxState: { type } as SandboxState,
-          };
-        }
+  const setSandboxTypeFromUnknown = useCallback((type: unknown) => {
+    const sandboxType = asKnownSandboxType(type);
+    if (!sandboxType) return;
+
+    setSessionRecord((prev) => {
+      if (!prev.sandboxState) {
         return {
           ...prev,
-          sandboxState: {
-            ...prev.sandboxState,
-            type,
-          } as SandboxState,
+          sandboxState: { type: sandboxType } as SandboxState,
         };
-      });
-    },
-    [],
+      }
+      return {
+        ...prev,
+        sandboxState: {
+          ...prev.sandboxState,
+          type: sandboxType,
+        } as SandboxState,
+      };
+    });
+  }, []);
+
+  const preferredSandboxType =
+    asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "hybrid";
+  const supportsDiff = preferredSandboxType !== "just-bash";
+  const supportsRepoCreation = preferredSandboxType !== "just-bash";
+  const hasRuntimeSandboxState = hasRuntimeSandboxData(
+    sessionRecord.sandboxState,
   );
+  const hasSnapshot = hasSnapshotState || !!sessionRecord.snapshotUrl;
 
   // Use SWR hooks for diff and files
   const sandboxConnected = sandboxInfo !== null;
@@ -454,8 +731,15 @@ export function SessionChatProvider({
         filesError,
         refreshFiles,
         updateSessionSnapshot,
-        setSandboxType,
+        preferredSandboxType,
+        supportsDiff,
+        supportsRepoCreation,
+        hasRuntimeSandboxState,
+        hasSnapshot,
+        setSandboxTypeFromUnknown,
         reconnectionStatus,
+        lifecycleTiming,
+        syncSandboxStatus,
         attemptReconnection,
       }}
     >

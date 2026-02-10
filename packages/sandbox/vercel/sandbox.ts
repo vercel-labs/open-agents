@@ -14,6 +14,8 @@ import type { SandboxStatus } from "../types";
 const MAX_OUTPUT_LENGTH = 50_000;
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 const TIMEOUT_BUFFER_MS = 30_000; // 30 seconds buffer for beforeStop hook
+const MAX_SDK_TIMEOUT_MS = 18_000_000; // Vercel API limit: 5 hours
+const MAX_PROACTIVE_TIMEOUT_MS = MAX_SDK_TIMEOUT_MS - TIMEOUT_BUFFER_MS;
 const DEFAULT_RECONNECT_TIMEOUT_MS = 300_000; // 5 minutes default timeout for reconnected sandboxes
 
 /**
@@ -239,8 +241,16 @@ export class VercelSandbox implements Sandbox {
           }
       : undefined;
 
-    // Calculate SDK timeout with buffer for beforeStop hook
-    const sdkTimeout = timeout + TIMEOUT_BUFFER_MS;
+    // Clamp proactive timeout to stay under the SDK's hard max when buffer is applied.
+    const effectiveTimeout = Math.min(timeout, MAX_PROACTIVE_TIMEOUT_MS);
+    if (effectiveTimeout !== timeout) {
+      console.warn(
+        `[VercelSandbox] Requested timeout ${timeout}ms exceeds max supported proactive timeout ${MAX_PROACTIVE_TIMEOUT_MS}ms; clamping.`,
+      );
+    }
+
+    // Calculate SDK timeout with buffer for beforeStop hook.
+    const sdkTimeout = effectiveTimeout + TIMEOUT_BUFFER_MS;
 
     const sdk = await VercelSandboxSDK.create({
       ...(sourceConfig && { source: sourceConfig }),
@@ -337,7 +347,7 @@ export class VercelSandbox implements Sandbox {
       env,
       currentBranch,
       hooks,
-      timeout,
+      effectiveTimeout,
       startTime,
     );
 
