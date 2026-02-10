@@ -13,6 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { Session } from "@/lib/db/schema";
@@ -28,6 +35,13 @@ interface CreateRepoResult {
   repoUrl: string;
   owner: string;
   repoName: string;
+}
+
+interface Installation {
+  installationId: number;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  repositorySelection: string;
 }
 
 function slugify(text: string): string {
@@ -52,8 +66,11 @@ export function CreateRepoDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [result, setResult] = useState<CreateRepoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [installations, setInstallations] = useState<Installation[]>([]);
+  const [selectedOwner, setSelectedOwner] = useState<string>("");
+  const [loadingInstallations, setLoadingInstallations] = useState(false);
 
-  // Reset state when dialog opens
+  // Fetch installations when dialog opens
   useEffect(() => {
     if (open) {
       // Generate a suggested repo name from the session title
@@ -63,6 +80,25 @@ export function CreateRepoDialog({
       setIsPrivate(false);
       setResult(null);
       setError(null);
+
+      // Fetch available installations
+      setLoadingInstallations(true);
+      fetch("/api/github/installations")
+        .then((res) => res.json())
+        .then((data: Installation[]) => {
+          setInstallations(Array.isArray(data) ? data : []);
+          // Auto-select first installation if available
+          if (Array.isArray(data) && data.length > 0 && data[0]) {
+            setSelectedOwner(data[0].accountLogin);
+          } else {
+            setSelectedOwner("");
+          }
+        })
+        .catch(() => {
+          setInstallations([]);
+          setSelectedOwner("");
+        })
+        .finally(() => setLoadingInstallations(false));
     }
   }, [open, session.title]);
 
@@ -74,6 +110,13 @@ export function CreateRepoDialog({
 
     if (!hasSandbox) {
       setError("Sandbox not active. Please wait for sandbox to start.");
+      return;
+    }
+
+    if (!selectedOwner) {
+      setError(
+        "Select an account to create the repository under. Install the GitHub App on an account first.",
+      );
       return;
     }
 
@@ -90,6 +133,7 @@ export function CreateRepoDialog({
           description: description.trim() || undefined,
           isPrivate,
           sessionTitle: session.title,
+          owner: selectedOwner,
         }),
       });
 
@@ -165,9 +209,51 @@ export function CreateRepoDialog({
           // Form
           <>
             <div className="grid gap-4 py-4">
+              {/* Owner / Account Picker */}
+              <div className="grid gap-2">
+                <Label htmlFor="repo-owner">Owner</Label>
+                {loadingInstallations ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading accounts...
+                  </div>
+                ) : installations.length > 0 ? (
+                  <Select
+                    value={selectedOwner}
+                    onValueChange={setSelectedOwner}
+                    disabled={isCreating}
+                  >
+                    <SelectTrigger id="repo-owner" className="w-full">
+                      <SelectValue placeholder="Select an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {installations.map((inst) => (
+                        <SelectItem
+                          key={inst.installationId}
+                          value={inst.accountLogin}
+                        >
+                          {inst.accountLogin}
+                          {inst.accountType === "Organization" ? " (org)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No GitHub App installations found. Install the GitHub App on
+                    an account first.
+                  </p>
+                )}
+              </div>
+
               {/* Repository Name */}
               <div className="grid gap-2">
                 <Label htmlFor="repo-name">Repository name</Label>
+                {selectedOwner && (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedOwner}/{repoName || "..."}
+                  </p>
+                )}
                 <Input
                   id="repo-name"
                   placeholder="my-awesome-project"
@@ -228,7 +314,12 @@ export function CreateRepoDialog({
               </Button>
               <Button
                 onClick={handleCreate}
-                disabled={isCreating || !repoName.trim() || !hasSandbox}
+                disabled={
+                  isCreating ||
+                  !repoName.trim() ||
+                  !hasSandbox ||
+                  !selectedOwner
+                }
               >
                 {isCreating ? (
                   <>
