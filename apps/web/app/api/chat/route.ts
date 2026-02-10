@@ -6,7 +6,6 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
-import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -22,11 +21,11 @@ import {
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
-import { onStopSignal } from "@/lib/stop-signal";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { onStopSignal } from "@/lib/stop-signal";
 
 // Allow streaming responses up to 5 minutes per response turn.
 export const maxDuration = 300;
@@ -289,7 +288,6 @@ export async function POST(req: Request) {
                 kickSandboxLifecycleWorkflow({
                   sessionId,
                   reason: "chat-finished",
-                  scheduleBackgroundWork: (cb) => after(cb),
                 });
                 return;
               }
@@ -303,7 +301,6 @@ export async function POST(req: Request) {
             kickSandboxLifecycleWorkflow({
               sessionId,
               reason: "chat-finished",
-              scheduleBackgroundWork: (cb) => after(cb),
             });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);

@@ -258,3 +258,5 @@ Use `catalog:` for shared external versions:
 - When the lifecycle workflow inline fallback runs (SDK unavailable), it evaluates immediately and skips because the sandbox isn't due yet; the status endpoint should detect overdue `hibernateAfter` and kick the lifecycle as a safety net.
 - Lifecycle workflow must retry after a `skipped/not-due-yet` evaluation; without retry the sandbox never hibernates unless a new event kicks a fresh workflow.
 - Next.js `after()` defers callbacks until the response is fully sent; for streaming endpoints this means `after()` runs after the entire stream completes, not at call time. Use fire-and-forget (`void run()`) for lifecycle kicks that must happen at request start.
+- For lifecycle workflow kicks in request handlers, call `kickSandboxLifecycleWorkflow(...)` directly instead of wrapping it in `after(...)`; delayed/deferred scheduling can miss the initial hibernation timer for idle sessions.
+- Hybrid sandbox wrappers must delegate `snapshot()` to the underlying cloud sandbox after handoff; if `snapshot` is missing on hybrid, lifecycle hibernation skips snapshotting and expired sessions fall back to creating a new sandbox.

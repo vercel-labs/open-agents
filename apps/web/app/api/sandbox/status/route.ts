@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { getSessionById } from "@/lib/db/sessions";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
@@ -59,12 +58,10 @@ export async function GET(req: Request): Promise<Response> {
     const now = Date.now();
     const hibernateAfterMs = sessionRecord.hibernateAfter.getTime();
     if (isExpired || now >= hibernateAfterMs) {
-      after(() =>
-        kickSandboxLifecycleWorkflow({
-          sessionId: sessionRecord.id,
-          reason: "status-check-overdue",
-        }),
-      );
+      kickSandboxLifecycleWorkflow({
+        sessionId: sessionRecord.id,
+        reason: "status-check-overdue",
+      });
     }
   }
 

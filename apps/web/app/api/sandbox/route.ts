@@ -8,11 +8,11 @@ import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -118,7 +118,6 @@ export async function POST(req: Request) {
       kickSandboxLifecycleWorkflow({
         sessionId,
         reason: "sandbox-created",
-        scheduleBackgroundWork: (cb) => after(cb),
       });
     }
 
@@ -259,7 +258,6 @@ export async function POST(req: Request) {
     kickSandboxLifecycleWorkflow({
       sessionId,
       reason: "sandbox-created",
-      scheduleBackgroundWork: (cb) => after(cb),
     });
   }
 
