@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       outputTokens: number;
     };
     modelId?: string;
+    agentType?: "main" | "subagent";
   };
   try {
     body = (await req.json()) as typeof body;
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
   try {
     await recordUsage(verification.userId, {
       source: "cli",
+      agentType: body.agentType ?? "main",
       model: body.modelId ?? "unknown/unknown",
       messages: (body.messages ?? []) as Parameters<
         typeof recordUsage

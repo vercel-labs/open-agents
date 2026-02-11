@@ -4,7 +4,7 @@ export {
   getModelLabel,
   MODEL_CONTEXT_LIMITS,
 } from "./context-management/model-limits";
-export { gateway, type GatewayConfig, type GatewayOptions } from "./models";
+export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
 export type { OpenHarnessAgentCallOptions } from "./open-harness-agent";
 export {
   defaultModel,
@@ -45,3 +45,9 @@ export type {
   TodoItem,
   TodoStatus,
 } from "./types";
+export {
+  addLanguageModelUsage,
+  collectTaskToolUsage,
+  collectTaskToolUsageEvents,
+  sumLanguageModelUsage,
+} from "./usage";

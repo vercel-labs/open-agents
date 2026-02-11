@@ -132,6 +132,7 @@ NOTE: The executor subagent requires user approval before running because it has
   ) {
     const sandbox = getSandbox(experimental_context, "task");
     const model = getModel(experimental_context, "task");
+    const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =
       subagentType === "explorer" ? explorerSubagent : executorSubagent;
@@ -152,11 +153,19 @@ NOTE: The executor subagent requires user approval before running because it has
           // Track per-step usage from finish-step events
           if (part.type === "finish-step") {
             lastStepUsage = part.usage;
-            return { lastStepUsage, totalMessageUsage: undefined };
+            return {
+              lastStepUsage,
+              totalMessageUsage: undefined,
+              modelId: subagentModelId,
+            };
           }
           // On finish, include both the last step usage and total message usage
           if (part.type === "finish") {
-            return { lastStepUsage, totalMessageUsage: part.totalUsage };
+            return {
+              lastStepUsage,
+              totalMessageUsage: part.totalUsage,
+              modelId: subagentModelId,
+            };
           }
         },
       }),

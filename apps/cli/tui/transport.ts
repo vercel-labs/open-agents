@@ -1,4 +1,9 @@
-import { defaultModelLabel, type GatewayConfig } from "@open-harness/agent";
+import {
+  collectTaskToolUsageEvents,
+  defaultModelLabel,
+  type GatewayConfig,
+  sumLanguageModelUsage,
+} from "@open-harness/agent";
 import {
   type ChatTransport,
   convertToModelMessages,
@@ -160,18 +165,24 @@ export function createAgentTransport({
           }
 
           // Report usage to web app when connected via gateway
-          if (gatewayConfig && totalMessageUsage) {
-            const baseUrl = gatewayConfig.baseURL.replace(
-              /\/api\/ai-proxy$/,
-              "",
-            );
-            const cachedInputTokens =
-              totalMessageUsage.inputTokenDetails?.cacheReadTokens ??
-              totalMessageUsage.cachedInputTokens ??
-              0;
-            const lastAssistantMessage = allMessages
-              .filter((m) => m.role === "assistant")
-              .at(-1);
+          if (!gatewayConfig) {
+            return;
+          }
+
+          const lastAssistantMessage = allMessages
+            .filter((m) => m.role === "assistant")
+            .at(-1);
+          const baseUrl = gatewayConfig.baseURL.replace(/\/api\/ai-proxy$/, "");
+          const cachedInputTokensFor = (usage: LanguageModelUsage) =>
+            usage.inputTokenDetails?.cacheReadTokens ??
+            usage.cachedInputTokens ??
+            0;
+          const postUsage = (
+            usage: LanguageModelUsage,
+            usageModelId: string,
+            agentType: "main" | "subagent",
+            messages: TUIAgentUIMessage[] = [],
+          ) => {
             void fetch(`${baseUrl}/api/usage`, {
               method: "POST",
               headers: {
@@ -179,15 +190,52 @@ export function createAgentTransport({
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                messages: lastAssistantMessage ? [lastAssistantMessage] : [],
+                messages,
                 usage: {
-                  inputTokens: totalMessageUsage.inputTokens ?? 0,
-                  cachedInputTokens,
-                  outputTokens: totalMessageUsage.outputTokens ?? 0,
+                  inputTokens: usage.inputTokens ?? 0,
+                  cachedInputTokens: cachedInputTokensFor(usage),
+                  outputTokens: usage.outputTokens ?? 0,
                 },
-                modelId,
+                modelId: usageModelId,
+                agentType,
               }),
             }).catch(() => {});
+          };
+
+          if (totalMessageUsage) {
+            postUsage(
+              totalMessageUsage,
+              modelId,
+              "main",
+              lastAssistantMessage ? [lastAssistantMessage] : [],
+            );
+          }
+
+          const lastTaskMessage = [...allMessages].reverse().find((message) => {
+            if (message.role !== "assistant") {
+              return false;
+            }
+            return collectTaskToolUsageEvents(message).length > 0;
+          });
+
+          if (!lastTaskMessage) {
+            return;
+          }
+
+          const subagentUsageEvents =
+            collectTaskToolUsageEvents(lastTaskMessage);
+          const subagentUsageByModel = new Map<string, LanguageModelUsage>();
+          for (const event of subagentUsageEvents) {
+            const eventModelId = event.modelId ?? modelId;
+            const existing = subagentUsageByModel.get(eventModelId);
+            const combined = sumLanguageModelUsage(existing, event.usage);
+            if (combined) {
+              subagentUsageByModel.set(eventModelId, combined);
+            }
+          }
+
+          for (const [eventModelId, usage] of subagentUsageByModel) {
+            postUsage(usage, eventModelId, "subagent");
           }
         },
       });

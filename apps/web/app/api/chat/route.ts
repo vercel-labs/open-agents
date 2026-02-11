@@ -1,8 +1,14 @@
-import { discoverSkills, gateway } from "@open-harness/agent";
+import {
+  collectTaskToolUsageEvents,
+  discoverSkills,
+  gateway,
+  sumLanguageModelUsage,
+} from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import {
   convertToModelMessages,
   type GatewayModelId,
+  type LanguageModel,
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
@@ -473,22 +479,55 @@ export async function POST(req: Request) {
           }
         }
 
-        // Record usage event (fire-and-forget)
-        if (totalMessageUsage) {
-          const cachedInputTokens =
-            totalMessageUsage.inputTokenDetails?.cacheReadTokens ??
-            totalMessageUsage.cachedInputTokens ??
-            0;
+        const cachedInputTokensFor = (usage: LanguageModelUsage) =>
+          usage.inputTokenDetails?.cacheReadTokens ??
+          usage.cachedInputTokens ??
+          0;
+        const postUsage = (
+          usage: LanguageModelUsage,
+          usageModel: LanguageModel | string,
+          agentType: "main" | "subagent",
+          messages: WebAgentUIMessage[] = [],
+        ) => {
           void recordUsage(session.user.id, {
             source: "web",
-            model,
-            messages: [responseMessage],
+            agentType,
+            model: usageModel,
+            messages,
             usage: {
-              inputTokens: totalMessageUsage.inputTokens ?? 0,
-              cachedInputTokens,
-              outputTokens: totalMessageUsage.outputTokens ?? 0,
+              inputTokens: usage.inputTokens ?? 0,
+              cachedInputTokens: cachedInputTokensFor(usage),
+              outputTokens: usage.outputTokens ?? 0,
             },
           }).catch((e) => console.error("Failed to record usage:", e));
+        };
+
+        if (totalMessageUsage) {
+          postUsage(totalMessageUsage, model, "main", [responseMessage]);
+        }
+
+        const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
+        if (subagentUsageEvents.length === 0) {
+          return;
+        }
+
+        const defaultModelId =
+          typeof model === "string" ? model : model.modelId;
+        const subagentUsageByModel = new Map<string, LanguageModelUsage>();
+        for (const event of subagentUsageEvents) {
+          const eventModelId = event.modelId ?? defaultModelId;
+          if (!eventModelId) {
+            continue;
+          }
+          const existing = subagentUsageByModel.get(eventModelId);
+          const combined = sumLanguageModelUsage(existing, event.usage);
+          if (combined) {
+            subagentUsageByModel.set(eventModelId, combined);
+          }
+        }
+
+        for (const [eventModelId, usage] of subagentUsageByModel) {
+          postUsage(usage, eventModelId, "subagent");
         }
       }
     },
