@@ -18,7 +18,8 @@ export function useSessionChats(sessionId: string | null) {
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
     fetcher,
     {
-      refreshInterval: 5_000,
+      refreshInterval: (latestData) =>
+        latestData?.chats.some((chat) => chat.isStreaming) ? 1_000 : 5_000,
       refreshWhenHidden: false,
       revalidateOnFocus: true,
     },

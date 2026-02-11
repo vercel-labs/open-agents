@@ -367,7 +367,7 @@ export async function POST(req: Request) {
           console.warn(
             `Skipped assistant message upsert due to ID scope conflict: ${pendingAssistantSnapshot.id}`,
           );
-        } else {
+        } else if (upsertResult.status === "inserted") {
           await updateChatAssistantActivity(chatId, new Date());
         }
       } catch (error) {
@@ -397,7 +397,7 @@ export async function POST(req: Request) {
             console.warn(
               `Skipped assistant onFinish upsert due to ID scope conflict: ${responseMessage.id}`,
             );
-          } else {
+          } else if (upsertResult.status === "inserted") {
             await updateChatAssistantActivity(chatId, activityAt);
           }
         } catch (error) {

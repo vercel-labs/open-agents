@@ -537,6 +537,24 @@ export function SessionChatContent() {
 
   const requestMarkChatRead = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      // For passive/background-triggered marks, require focus too.
+      // Force marks run on route entry/turn completion and should not wait for
+      // focus when the tab is already visible.
+      if (
+        mode === "normal" &&
+        typeof document !== "undefined" &&
+        !document.hasFocus()
+      ) {
+        return;
+      }
+
       const now = Date.now();
       const isSameChat = markReadRef.current.lastChatId === chatInfo.id;
       if (markReadRef.current.inFlight) return;
@@ -869,8 +887,9 @@ export function SessionChatContent() {
     if (wasStreaming && status === "ready") {
       void requestStatusSync("force");
       void requestMarkChatRead("force");
+      void refreshChats();
     }
-  }, [status, requestStatusSync, requestMarkChatRead]);
+  }, [status, requestStatusSync, requestMarkChatRead, refreshChats]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
   const hasAutoStartedSandboxRef = useRef(false);
