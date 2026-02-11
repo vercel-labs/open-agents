@@ -24,6 +24,7 @@ import { fetcher } from "@/lib/swr";
 interface DailyUsageRow {
   date: string;
   source: "web" | "cli";
+  agentType: "main" | "subagent";
   provider: string | null;
   modelId: string | null;
   inputTokens: number;
@@ -240,19 +241,30 @@ export function UsageSection() {
     fetcher,
   );
 
-  const { webTotals, cliTotals, totals, chartData, modelUsage } =
-    useMemo(() => {
-      const usage = data?.usage ?? [];
-      const web = usage.filter((r) => r.source === "web");
-      const cli = usage.filter((r) => r.source === "cli");
-      return {
-        webTotals: sumRows(web),
-        cliTotals: sumRows(cli),
-        totals: sumRows(usage),
-        chartData: mergeDays(usage),
-        modelUsage: aggregateByModel(usage),
-      };
-    }, [data]);
+  const {
+    webTotals,
+    cliTotals,
+    totals,
+    chartData,
+    modelUsage,
+    mainTotals,
+    subagentTotals,
+  } = useMemo(() => {
+    const usage = data?.usage ?? [];
+    const web = usage.filter((r) => r.source === "web");
+    const cli = usage.filter((r) => r.source === "cli");
+    const main = usage.filter((r) => r.agentType === "main");
+    const subagent = usage.filter((r) => r.agentType === "subagent");
+    return {
+      webTotals: sumRows(web),
+      cliTotals: sumRows(cli),
+      totals: sumRows(usage),
+      chartData: mergeDays(usage),
+      modelUsage: aggregateByModel(usage),
+      mainTotals: sumRows(main),
+      subagentTotals: sumRows(subagent),
+    };
+  }, [data]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -274,10 +286,36 @@ export function UsageSection() {
   const totalTokens = totals.inputTokens + totals.outputTokens;
   const webTokens = webTotals.inputTokens + webTotals.outputTokens;
   const cliTokens = cliTotals.inputTokens + cliTotals.outputTokens;
+  const mainTokens = mainTotals.inputTokens + mainTotals.outputTokens;
+  const subagentTokens =
+    subagentTotals.inputTokens + subagentTotals.outputTokens;
 
   const hasWeb = webTotals.messageCount > 0;
   const hasCli = cliTotals.messageCount > 0;
   const hasBoth = hasWeb && hasCli;
+  const hasSubagent = subagentTotals.messageCount > 0;
+  const hasUsage = totals.messageCount > 0;
+
+  const tokenDetailParts: string[] = [];
+  if (hasBoth) {
+    tokenDetailParts.push(
+      `${formatTokens(webTokens)} web · ${formatTokens(cliTokens)} cli`,
+    );
+  }
+  if (hasSubagent) {
+    tokenDetailParts.push(
+      `${formatTokens(mainTokens)} main · ${formatTokens(subagentTokens)} subagent`,
+    );
+  }
+  const tokenDetail =
+    tokenDetailParts.length > 0 ? tokenDetailParts.join(" · ") : undefined;
+  const hasTokenTotal = totalTokens > 0;
+  const mainShare =
+    hasUsage && hasTokenTotal
+      ? Math.round((mainTokens / totalTokens) * 100)
+      : 0;
+  const subagentShare =
+    hasUsage && hasTokenTotal ? Math.max(0, 100 - mainShare) : 0;
 
   return (
     <Card>
@@ -293,11 +331,7 @@ export function UsageSection() {
           <StatBlock
             label="Total tokens"
             value={formatTokens(totalTokens)}
-            detail={
-              hasBoth
-                ? `${formatTokens(webTokens)} web · ${formatTokens(cliTokens)} cli`
-                : undefined
-            }
+            detail={tokenDetail}
           />
           <StatBlock
             label="Messages"
@@ -318,6 +352,25 @@ export function UsageSection() {
             }
           />
         </div>
+
+        {/* Agent split */}
+        {hasUsage && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Agent split</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <StatBlock
+                label="Main agent"
+                value={formatTokens(mainTokens)}
+                detail={`${mainShare}% of total`}
+              />
+              <StatBlock
+                label="Subagents"
+                value={formatTokens(subagentTokens)}
+                detail={`${subagentShare}% of total`}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Activity chart */}
         <ContributionChart data={chartData} />
