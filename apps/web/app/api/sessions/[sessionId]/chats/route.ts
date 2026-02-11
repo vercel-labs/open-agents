@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import {
   createChat,
-  getChatsBySessionId,
+  getChatSummariesBySessionId,
   getSessionById,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
@@ -26,7 +26,7 @@ export async function GET(_req: Request, context: RouteContext) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const chats = await getChatsBySessionId(sessionId);
+  const chats = await getChatSummariesBySessionId(sessionId, session.user.id);
   return Response.json({ chats });
 }
 

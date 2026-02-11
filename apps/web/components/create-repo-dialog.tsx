@@ -29,6 +29,13 @@ interface CreateRepoDialogProps {
   onOpenChange: (open: boolean) => void;
   session: Session;
   hasSandbox: boolean;
+  onRepoCreated?: (result: {
+    repoUrl: string;
+    owner: string;
+    repoName: string;
+    cloneUrl: string;
+    branch: string;
+  }) => void;
 }
 
 interface CreateRepoResult {
@@ -59,6 +66,7 @@ export function CreateRepoDialog({
   onOpenChange,
   session,
   hasSandbox,
+  onRepoCreated,
 }: CreateRepoDialogProps) {
   const [repoName, setRepoName] = useState("");
   const [description, setDescription] = useState("");
@@ -143,11 +151,15 @@ export function CreateRepoDialog({
         throw new Error(data.error || "Failed to create repository");
       }
 
-      setResult({
-        repoUrl: data.repoUrl,
-        owner: data.owner,
-        repoName: data.repoName,
-      });
+      const createResult = {
+        repoUrl: data.repoUrl as string,
+        owner: data.owner as string,
+        repoName: data.repoName as string,
+        cloneUrl: data.cloneUrl as string,
+        branch: data.branch as string,
+      };
+      setResult(createResult);
+      onRepoCreated?.(createResult);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create repository",
@@ -159,10 +171,6 @@ export function CreateRepoDialog({
 
   const handleClose = () => {
     onOpenChange(false);
-    // If repo was created, reload the page to update session state
-    if (result) {
-      window.location.reload();
-    }
   };
 
   return (

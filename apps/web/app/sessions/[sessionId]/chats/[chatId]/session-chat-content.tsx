@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  ExternalLink,
   FolderGit2,
   GitCompare,
   GitPullRequest,
@@ -64,6 +65,7 @@ import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { cn } from "@/lib/utils";
 import { DiffViewer } from "./diff-viewer";
 import {
   type SandboxInfo,
@@ -386,6 +388,7 @@ export function SessionChatContent() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -394,6 +397,10 @@ export function SessionChatContent() {
     clearError: clearRecordingError,
     toggleRecording,
   } = useAudioRecording();
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const handleMicClick = async () => {
     clearRecordingError();
@@ -458,6 +465,7 @@ export function SessionChatContent() {
     session,
     chatInfo,
     chat,
+    initialMessages,
     sandboxInfo,
     setSandboxInfo,
     archiveSession,
@@ -479,6 +487,7 @@ export function SessionChatContent() {
     lifecycleTiming,
     syncSandboxStatus,
     attemptReconnection,
+    updateSessionRepo,
   } = useSessionChatContext();
   const {
     messages,
@@ -494,15 +503,31 @@ export function SessionChatContent() {
     createChat,
     renameChat,
     deleteChat,
+    markChatRead,
+    setChatStreaming,
+    setChatTitle,
+    clearChatTitle,
     loading: chatsLoading,
     refreshChats,
   } = useSessionChats(session.id);
+  const renderMessages = hasMounted ? messages : initialMessages;
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingChatTitle, setEditingChatTitle] = useState("");
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const chatTitleInputRef = useRef<HTMLInputElement | null>(null);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
+  const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
+  const hasSetOptimisticTitleRef = useRef(false);
+  const markReadRef = useRef<{
+    lastAt: number;
+    lastChatId: string | null;
+    inFlight: boolean;
+  }>({
+    lastAt: 0,
+    lastChatId: null,
+    inFlight: false,
+  });
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -523,6 +548,56 @@ export function SessionChatContent() {
     [syncSandboxStatus],
   );
 
+  const requestMarkChatRead = useCallback(
+    async (mode: "normal" | "force" = "normal"): Promise<void> => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      // For passive/background-triggered marks, require focus too.
+      // Force marks run on route entry/turn completion and should not wait for
+      // focus when the tab is already visible.
+      if (
+        mode === "normal" &&
+        typeof document !== "undefined" &&
+        !document.hasFocus()
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      const isSameChat = markReadRef.current.lastChatId === chatInfo.id;
+      if (markReadRef.current.inFlight) return;
+      if (
+        mode === "normal" &&
+        isSameChat &&
+        now - markReadRef.current.lastAt < 3_000
+      ) {
+        return;
+      }
+
+      markReadRef.current.inFlight = true;
+      try {
+        await markChatRead(chatInfo.id);
+        markReadRef.current.lastAt = Date.now();
+        markReadRef.current.lastChatId = chatInfo.id;
+      } catch (err) {
+        console.error("Failed to mark chat read:", err);
+      } finally {
+        markReadRef.current.inFlight = false;
+      }
+    },
+    [chatInfo.id, markChatRead],
+  );
+  const requestMarkChatReadRef = useRef(requestMarkChatRead);
+
+  useEffect(() => {
+    requestMarkChatReadRef.current = requestMarkChatRead;
+  }, [requestMarkChatRead]);
+
   useEffect(() => {
     if (editingChatId && chatTitleInputRef.current) {
       chatTitleInputRef.current.focus();
@@ -540,6 +615,28 @@ export function SessionChatContent() {
       refreshChats();
     }
   }, [hadInitialMessages, status, messages, refreshChats]);
+
+  useEffect(() => {
+    void requestMarkChatReadRef.current("force");
+  }, [chatInfo.id]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void requestMarkChatRead("normal");
+      }
+    };
+    const handleWindowFocus = () => {
+      void requestMarkChatRead("normal");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [requestMarkChatRead]);
 
   const handleChatSwitch = useCallback(
     (nextChatId: string) => {
@@ -807,12 +904,37 @@ export function SessionChatContent() {
   // updates the UI right away instead of waiting for the next 15s poll.
   const prevStatusRef = useRef(status);
   useEffect(() => {
-    const wasStreaming = prevStatusRef.current === "streaming";
+    const prevStatus = prevStatusRef.current;
+    const wasStreaming = prevStatus === "streaming";
+    const becameReady = status === "ready" && prevStatus !== "ready";
+    const becameError = status === "error" && prevStatus !== "error";
+    const shouldClearStreaming = status === "error" || becameReady;
     prevStatusRef.current = status;
+    if (shouldClearStreaming) {
+      void setChatStreaming(chatInfo.id, false);
+    }
+    if (becameError && pendingOptimisticTitleChatIdRef.current) {
+      void clearChatTitle(pendingOptimisticTitleChatIdRef.current);
+      pendingOptimisticTitleChatIdRef.current = null;
+      hasSetOptimisticTitleRef.current = false;
+    }
+    if (becameReady) {
+      pendingOptimisticTitleChatIdRef.current = null;
+    }
     if (wasStreaming && status === "ready") {
       void requestStatusSync("force");
+      void requestMarkChatRead("force");
+      void refreshChats();
     }
-  }, [status, requestStatusSync]);
+  }, [
+    status,
+    chatInfo.id,
+    setChatStreaming,
+    clearChatTitle,
+    requestStatusSync,
+    requestMarkChatRead,
+    refreshChats,
+  ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
   const hasAutoStartedSandboxRef = useRef(false);
@@ -1055,8 +1177,8 @@ export function SessionChatContent() {
   // Get token usage from the most recent assistant message (current context usage)
   const tokenUsage = useMemo(() => {
     // Find the last assistant message with usage metadata
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
+    for (let i = renderMessages.length - 1; i >= 0; i--) {
+      const message = renderMessages[i];
       if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
         return {
           inputTokens: message.metadata.lastStepUsage.inputTokens ?? 0,
@@ -1065,12 +1187,12 @@ export function SessionChatContent() {
       }
     }
     return { inputTokens: 0, outputTokens: 0 };
-  }, [messages]);
+  }, [renderMessages]);
 
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
     useMemo(() => {
-      const lastMessage = messages[messages.length - 1];
+      const lastMessage = renderMessages[renderMessages.length - 1];
       if (lastMessage?.role === "assistant") {
         for (const p of lastMessage.parts) {
           if (
@@ -1095,7 +1217,7 @@ export function SessionChatContent() {
         pendingQuestionPart: null,
         questionToolCallId: null,
       };
-    }, [messages]);
+    }, [renderMessages]);
 
   // Handle question submission
   const handleQuestionSubmit = useCallback(
@@ -1291,7 +1413,7 @@ export function SessionChatContent() {
           {chats.map((c) => (
             <div
               key={c.id}
-              className={`group flex items-center gap-1 rounded-md pr-1 ${
+              className={`group relative flex items-center rounded-md ${
                 c.id === chatInfo.id ? "bg-secondary" : "hover:bg-muted"
               }`}
             >
@@ -1318,7 +1440,7 @@ export function SessionChatContent() {
                 <button
                   type="button"
                   onClick={() => handleChatSwitch(c.id)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 pr-10 text-left text-sm transition-colors ${
                     c.id === chatInfo.id
                       ? "text-secondary-foreground"
                       : "text-muted-foreground group-hover:text-foreground"
@@ -1328,8 +1450,23 @@ export function SessionChatContent() {
                   <span className="truncate">{c.title}</span>
                 </button>
               )}
+              {c.isStreaming && (
+                <span
+                  className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-white animate-pulse transition-opacity group-hover:opacity-0"
+                  aria-label="Streaming response"
+                />
+              )}
+              {editingChatId !== c.id &&
+                c.id !== chatInfo.id &&
+                !c.isStreaming &&
+                c.hasUnread && (
+                  <span
+                    className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity group-hover:opacity-0"
+                    aria-label="Unread messages"
+                  />
+                )}
               {editingChatId !== c.id && (
-                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                   <button
                     type="button"
                     onClick={() => {
@@ -1395,9 +1532,22 @@ export function SessionChatContent() {
               <div className="flex min-w-0 items-center gap-2 text-sm">
                 {session.repoName ? (
                   <>
-                    <span className="truncate font-medium text-foreground">
-                      {session.repoName}
-                    </span>
+                    {session.cloneUrl ? (
+                      /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
+                      <a
+                        href={`https://github.com/${session.repoOwner}/${session.repoName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 truncate font-medium text-foreground hover:underline"
+                      >
+                        {session.repoName}
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      </a>
+                    ) : (
+                      <span className="truncate font-medium text-foreground">
+                        {session.repoName}
+                      </span>
+                    )}
                     {(session.branch ?? sandboxInfo?.currentBranch) && (
                       <>
                         <span className="hidden text-muted-foreground/40 sm:inline">
@@ -1527,8 +1677,9 @@ export function SessionChatContent() {
           <div ref={containerRef} className="h-full overflow-y-auto">
             <div className="mx-auto max-w-3xl px-4 py-8">
               <div className="space-y-6">
-                {messages.map((m, messageIndex) => {
-                  const isLastMessage = messageIndex === messages.length - 1;
+                {renderMessages.map((m, messageIndex) => {
+                  const isLastMessage =
+                    messageIndex === renderMessages.length - 1;
                   const isMessageStreaming =
                     status === "streaming" && isLastMessage;
 
@@ -1612,7 +1763,10 @@ export function SessionChatContent() {
                       return (
                         <div
                           key={`${m.id}-${i}`}
-                          className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                          className={cn(
+                            "flex",
+                            m.role === "user" ? "justify-end" : "justify-start",
+                          )}
                         >
                           {m.role === "user" ? (
                             <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
@@ -1764,7 +1918,32 @@ export function SessionChatContent() {
                   setInput("");
                   clearImages();
 
-                  sendMessage({ text: messageText, files });
+                  const shouldSetOptimisticTitle =
+                    !hadInitialMessages && !hasSetOptimisticTitleRef.current;
+                  const trimmedText = messageText.trim();
+                  if (shouldSetOptimisticTitle && trimmedText.length > 0) {
+                    const nextTitle =
+                      trimmedText.length > 30
+                        ? `${trimmedText.slice(0, 30)}...`
+                        : trimmedText;
+                    hasSetOptimisticTitleRef.current = true;
+                    pendingOptimisticTitleChatIdRef.current = chatInfo.id;
+                    void setChatTitle(chatInfo.id, nextTitle);
+                  }
+                  void setChatStreaming(chatInfo.id, true);
+                  try {
+                    await sendMessage({ text: messageText, files });
+                  } catch (err) {
+                    if (pendingOptimisticTitleChatIdRef.current) {
+                      void clearChatTitle(
+                        pendingOptimisticTitleChatIdRef.current,
+                      );
+                      pendingOptimisticTitleChatIdRef.current = null;
+                      hasSetOptimisticTitleRef.current = false;
+                    }
+                    void setChatStreaming(chatInfo.id, false);
+                    console.error("Failed to send message:", err);
+                  }
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -1867,7 +2046,7 @@ export function SessionChatContent() {
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
-                    {messages.length === 0 && chatInfo.modelId ? (
+                    {renderMessages.length === 0 && chatInfo.modelId ? (
                       <div
                         className={
                           status === "streaming" || isUpdatingModel
@@ -1979,6 +2158,14 @@ export function SessionChatContent() {
           onOpenChange={setRepoDialogOpen}
           session={session}
           hasSandbox={sandboxInfo !== null}
+          onRepoCreated={(result) => {
+            updateSessionRepo({
+              cloneUrl: result.cloneUrl,
+              repoOwner: result.owner,
+              repoName: result.repoName,
+              branch: result.branch,
+            });
+          }}
         />
       )}
 

@@ -1,32 +1,32 @@
 "use client";
 
+import { type UseChatHelpers, useChat } from "@ai-sdk/react";
+import type { SandboxState } from "@open-harness/sandbox";
+import { isToolUIPart } from "ai";
 import {
   createContext,
+  type ReactNode,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
-  useCallback,
-  useEffect,
-  type ReactNode,
 } from "react";
-import { isToolUIPart } from "ai";
-import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
-import { useChat, type UseChatHelpers } from "@ai-sdk/react";
 import { useSWRConfig } from "swr";
-import type { WebAgentUIMessage } from "@/app/types";
-import type { Chat, Session } from "@/lib/db/schema";
-import type { SandboxState } from "@open-harness/sandbox";
-import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
-import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
 import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
+import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
+import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
+import type { WebAgentUIMessage } from "@/app/types";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
+import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
   getOrCreateChatInstance,
   removeChatInstance,
 } from "@/lib/chat-instance-manager";
+import type { Chat, Session } from "@/lib/db/schema";
 
 const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
@@ -110,6 +110,8 @@ type SessionChatContextValue = {
   updateChatModel: (modelId: string) => Promise<void>;
   /** Whether the chat had persisted messages when it was loaded */
   hadInitialMessages: boolean;
+  /** The initial message snapshot used for SSR hydration */
+  initialMessages: WebAgentUIMessage[];
   /** Diff data (from live sandbox or cache) */
   diff: DiffResponse | null;
   /** Whether diff is loading */
@@ -152,6 +154,13 @@ type SessionChatContextValue = {
   syncSandboxStatus: () => Promise<SandboxStatusSyncResult>;
   /** Attempt to reconnect to an existing sandbox */
   attemptReconnection: () => Promise<ReconnectionStatus>;
+  /** Update session repo info after creating a repo */
+  updateSessionRepo: (info: {
+    cloneUrl: string;
+    repoOwner: string;
+    repoName: string;
+    branch: string;
+  }) => void;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -559,6 +568,24 @@ export function SessionChatProvider({
       }
     }, [sessionRecord.id, sessionId, applyLifecycleTiming]);
 
+  const updateSessionRepo = useCallback(
+    (info: {
+      cloneUrl: string;
+      repoOwner: string;
+      repoName: string;
+      branch: string;
+    }) => {
+      setSessionRecord((prev) => ({
+        ...prev,
+        cloneUrl: info.cloneUrl,
+        repoOwner: info.repoOwner,
+        repoName: info.repoName,
+        branch: info.branch,
+      }));
+    },
+    [],
+  );
+
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
       setHasSnapshotState(true);
@@ -758,6 +785,7 @@ export function SessionChatProvider({
         updateSessionTitle,
         updateChatModel,
         hadInitialMessages,
+        initialMessages,
         diff,
         diffLoading,
         diffError,
@@ -779,6 +807,7 @@ export function SessionChatProvider({
         lifecycleTiming,
         syncSandboxStatus,
         attemptReconnection,
+        updateSessionRepo,
       }}
     >
       {children}

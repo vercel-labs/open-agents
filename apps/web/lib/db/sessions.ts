@@ -1,9 +1,11 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
+  chatReads,
   chatMessages,
   chats,
   type NewChat,
+  type NewChatRead,
   type NewChatMessage,
   type NewSession,
   sessions,
@@ -105,6 +107,49 @@ export async function getChatsBySessionId(sessionId: string) {
   });
 }
 
+export type ChatSummary = typeof chats.$inferSelect & {
+  hasUnread: boolean;
+  isStreaming: boolean;
+};
+
+/**
+ * Returns chats with per-user unread flags for sidebar rendering.
+ */
+export async function getChatSummariesBySessionId(
+  sessionId: string,
+  userId: string,
+): Promise<ChatSummary[]> {
+  const rows = await db
+    .select({
+      id: chats.id,
+      sessionId: chats.sessionId,
+      title: chats.title,
+      modelId: chats.modelId,
+      activeStreamId: chats.activeStreamId,
+      lastAssistantMessageAt: chats.lastAssistantMessageAt,
+      createdAt: chats.createdAt,
+      updatedAt: chats.updatedAt,
+      hasUnread: sql<boolean>`
+        CASE
+          WHEN ${chats.lastAssistantMessageAt} IS NULL THEN false
+          WHEN ${chatReads.lastReadAt} IS NULL THEN true
+          WHEN ${chats.lastAssistantMessageAt} > ${chatReads.lastReadAt} THEN true
+          ELSE false
+        END
+      `,
+      isStreaming: sql<boolean>`${chats.activeStreamId} IS NOT NULL`,
+    })
+    .from(chats)
+    .leftJoin(
+      chatReads,
+      and(eq(chatReads.chatId, chats.id), eq(chatReads.userId, userId)),
+    )
+    .where(eq(chats.sessionId, sessionId))
+    .orderBy(desc(chats.createdAt));
+
+  return rows;
+}
+
 export async function updateChat(
   chatId: string,
   data: Partial<Omit<NewChat, "id" | "sessionId" | "createdAt">>,
@@ -112,6 +157,21 @@ export async function updateChat(
   const [chat] = await db
     .update(chats)
     .set({ ...data, updatedAt: new Date() })
+    .where(eq(chats.id, chatId))
+    .returning();
+  return chat;
+}
+
+export async function updateChatAssistantActivity(
+  chatId: string,
+  activityAt: Date,
+) {
+  const [chat] = await db
+    .update(chats)
+    .set({
+      lastAssistantMessageAt: activityAt,
+      updatedAt: activityAt,
+    })
     .where(eq(chats.id, chatId))
     .returning();
   return chat;
@@ -246,4 +306,28 @@ export async function getChatMessages(chatId: string) {
     where: eq(chatMessages.chatId, chatId),
     orderBy: [chatMessages.createdAt, chatMessages.id],
   });
+}
+
+export async function markChatRead(
+  data: Pick<NewChatRead, "userId" | "chatId">,
+) {
+  const now = new Date();
+  const [chatRead] = await db
+    .insert(chatReads)
+    .values({
+      userId: data.userId,
+      chatId: data.chatId,
+      lastReadAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [chatReads.userId, chatReads.chatId],
+      set: {
+        lastReadAt: now,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  return chatRead;
 }
