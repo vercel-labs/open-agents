@@ -575,6 +575,11 @@ export function SessionChatContent() {
     },
     [chatInfo.id, markChatRead],
   );
+  const requestMarkChatReadRef = useRef(requestMarkChatRead);
+
+  useEffect(() => {
+    requestMarkChatReadRef.current = requestMarkChatRead;
+  }, [requestMarkChatRead]);
 
   useEffect(() => {
     if (editingChatId && chatTitleInputRef.current) {
@@ -595,8 +600,8 @@ export function SessionChatContent() {
   }, [hadInitialMessages, status, messages, refreshChats]);
 
   useEffect(() => {
-    void requestMarkChatRead("force");
-  }, [chatInfo.id, requestMarkChatRead]);
+    void requestMarkChatReadRef.current("force");
+  }, [chatInfo.id]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
