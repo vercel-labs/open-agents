@@ -212,31 +212,19 @@ export function UsageSectionSkeleton() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Agent split pie chart */}
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <div className="grid gap-4 md:grid-cols-[160px,1fr]">
-              <Skeleton className="h-36 w-36 rounded-full" />
-              <div className="space-y-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-full" />
-                ))}
+          {Array.from({ length: 3 }).map((_, sectionIndex) => (
+            <div key={sectionIndex} className="space-y-2">
+              <Skeleton className="h-4 w-28" />
+              <div className="grid gap-4 md:grid-cols-[160px,1fr]">
+                <Skeleton className="h-36 w-36 rounded-full" />
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-4 w-full" />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Model breakdown */}
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <div className="grid gap-4 md:grid-cols-[160px,1fr]">
-              <Skeleton className="h-36 w-36 rounded-full" />
-              <div className="space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-full" />
-                ))}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -465,6 +453,19 @@ export function UsageSection() {
     },
   ];
 
+  const sourceSegments: PieSegment[] = [
+    {
+      label: "Web app",
+      value: webTokens,
+      color: CHART_COLORS[2] ?? "var(--chart-3)",
+    },
+    {
+      label: "CLI",
+      value: cliTokens,
+      color: CHART_COLORS[3] ?? "var(--chart-4)",
+    },
+  ];
+
   const modelSegments = (() => {
     const totalsByModel = modelUsage.map((m) => ({
       modelId: m.modelId,
@@ -545,6 +546,18 @@ export function UsageSection() {
                 segments={agentSegments}
                 centerLabel="Total tokens"
                 emptyLabel="No agent usage"
+              />
+            </div>
+          )}
+
+          {/* App split */}
+          {(hasWeb || hasCli) && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">App split</h3>
+              <UsagePieChart
+                segments={sourceSegments}
+                centerLabel="Total tokens"
+                emptyLabel="No app usage"
               />
             </div>
           )}
