@@ -9,14 +9,14 @@ import { nanoid } from "nanoid";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
+  compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
   getChatMessages,
   getSessionById,
   updateChat,
-  updateChatActiveStreamId,
   updateSession,
-  upsertChatMessage,
+  upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -33,6 +33,29 @@ interface ChatRequestBody {
   sessionId?: string;
   chatId?: string;
 }
+
+const STREAM_TOKEN_SEPARATOR = ":";
+
+const createStreamToken = (startedAtMs: number) =>
+  `${startedAtMs}${STREAM_TOKEN_SEPARATOR}${nanoid()}`;
+
+const parseStreamTokenStartedAt = (streamToken: string | null) => {
+  if (!streamToken) {
+    return null;
+  }
+
+  const separatorIndex = streamToken.indexOf(STREAM_TOKEN_SEPARATOR);
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const startedAt = Number(streamToken.slice(0, separatorIndex));
+  if (!Number.isFinite(startedAt)) {
+    return null;
+  }
+
+  return startedAt;
+};
 
 export async function POST(req: Request) {
   // 1. Validate session
@@ -81,6 +104,7 @@ export async function POST(req: Request) {
   // a long-running AI response could cause the sandbox to appear idle and
   // get hibernated mid-request.
   const requestStartedAt = new Date();
+  const requestStartedAtMs = requestStartedAt.getTime();
   await updateSession(sessionId, {
     ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
       activityAt: requestStartedAt,
@@ -136,48 +160,83 @@ export async function POST(req: Request) {
   );
   const skills = await discoverSkills(sandbox, skillDirs);
 
-  // Save user message immediately (incremental persistence)
-  // Only save if the message has an ID (non-empty string) and hasn't been persisted yet
+  let ownedStreamToken = createStreamToken(requestStartedAtMs);
+
+  const claimStreamOwnership = async () => {
+    // Retry once if another request updates activeStreamId between our read and CAS.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const latestChat = await getChatById(chatId);
+      const activeStreamId = latestChat?.activeStreamId ?? null;
+      const activeStartedAt = parseStreamTokenStartedAt(activeStreamId);
+
+      if (
+        activeStartedAt !== null &&
+        activeStartedAt > requestStartedAtMs &&
+        activeStreamId !== ownedStreamToken
+      ) {
+        return false;
+      }
+
+      const claimed = await compareAndSetChatActiveStreamId(
+        chatId,
+        activeStreamId,
+        ownedStreamToken,
+      );
+      if (claimed) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  let pendingAssistantSnapshot: WebAgentUIMessage | null = null;
+
+  // Save the latest incoming user message immediately (incremental persistence).
+  // Assistant snapshots are persisted after stream ownership is atomically claimed.
   if (chatId && messages.length > 0) {
-    const userMessage = messages[messages.length - 1];
+    const latestMessage = messages[messages.length - 1];
     if (
-      userMessage &&
-      userMessage.role === "user" &&
-      typeof userMessage.id === "string" &&
-      userMessage.id.length > 0
+      latestMessage &&
+      (latestMessage.role === "user" || latestMessage.role === "assistant") &&
+      typeof latestMessage.id === "string" &&
+      latestMessage.id.length > 0
     ) {
       try {
-        // Use idempotent insert to handle race conditions gracefully
-        await createChatMessageIfNotExists({
-          id: userMessage.id,
-          chatId,
-          role: "user",
-          parts: userMessage,
-        });
+        if (latestMessage.role === "user") {
+          await createChatMessageIfNotExists({
+            id: latestMessage.id,
+            chatId,
+            role: "user",
+            parts: latestMessage,
+          });
 
-        // Update chat title to first 30 chars of user's first message
-        const existingMessages = await getChatMessages(chatId);
-        if (existingMessages.length === 1) {
-          // This is the first message - extract text content for the title
-          const textContent = userMessage.parts
-            .filter(
-              (part): part is { type: "text"; text: string } =>
-                part.type === "text",
-            )
-            .map((part) => part.text)
-            .join(" ")
-            .trim();
+          // Update chat title to first 30 chars of user's first message
+          const existingMessages = await getChatMessages(chatId);
+          if (existingMessages.length === 1) {
+            // This is the first message - extract text content for the title
+            const textContent = latestMessage.parts
+              .filter(
+                (part): part is { type: "text"; text: string } =>
+                  part.type === "text",
+              )
+              .map((part) => part.text)
+              .join(" ")
+              .trim();
 
-          if (textContent.length > 0) {
-            const title =
-              textContent.length > 30
-                ? `${textContent.slice(0, 30)}...`
-                : textContent;
-            await updateChat(chatId, { title });
+            if (textContent.length > 0) {
+              const title =
+                textContent.length > 30
+                  ? `${textContent.slice(0, 30)}...`
+                  : textContent;
+              await updateChat(chatId, { title });
+            }
           }
+        } else {
+          pendingAssistantSnapshot = latestMessage;
         }
       } catch (error) {
-        console.error("Failed to save user message:", error);
+        console.error("Failed to save latest chat message:", error);
       }
     }
   }
@@ -203,30 +262,62 @@ export async function POST(req: Request) {
     controller.abort();
   });
 
-  const finalizeStream = async () => {
+  let stopSignalClosed = false;
+  const closeStopSignal = () => {
+    if (stopSignalClosed) {
+      return;
+    }
+    stopSignalClosed = true;
     unsubscribeStop();
-    await updateChatActiveStreamId(chatId, null);
   };
 
-  const result = await webAgent.stream({
-    messages: modelMessages,
-    options: {
-      sandbox,
-      model,
-      // TODO: consider enabling approvals for non-cloud-sandbox environments
-      approval: {
-        type: "interactive",
-        autoApprove: "all",
-        sessionRules: [],
+  let streamTokenCleared = false;
+  const clearOwnedStreamToken = async () => {
+    if (streamTokenCleared) {
+      return false;
+    }
+    streamTokenCleared = true;
+    try {
+      return await compareAndSetChatActiveStreamId(
+        chatId,
+        ownedStreamToken,
+        null,
+      );
+    } catch (error) {
+      console.error("Failed to finalize active stream token:", error);
+      return false;
+    }
+  };
+
+  let result;
+  try {
+    result = await webAgent.stream({
+      messages: modelMessages,
+      options: {
+        sandbox,
+        model,
+        // TODO: consider enabling approvals for non-cloud-sandbox environments
+        approval: {
+          type: "interactive",
+          autoApprove: "all",
+          sessionRules: [],
+        },
+        ...(skills.length > 0 && { skills }),
       },
-      ...(skills.length > 0 && { skills }),
-    },
-    abortSignal: controller.signal,
-  });
+      abortSignal: controller.signal,
+    });
+  } catch (error) {
+    closeStopSignal();
+    await clearOwnedStreamToken();
+    throw error;
+  }
 
   void result.consumeStream().then(
-    () => finalizeStream(),
-    () => finalizeStream(),
+    () => closeStopSignal(),
+    async () => {
+      closeStopSignal();
+      await clearOwnedStreamToken();
+    },
   );
 
   // Track last step usage for message metadata
@@ -250,27 +341,60 @@ export async function POST(req: Request) {
       return undefined;
     },
     async consumeSseStream({ stream }) {
-      const streamId = nanoid();
       await resumableStreamContext.createNewResumableStream(
-        streamId,
+        ownedStreamToken,
         () => stream,
       );
-      await updateChatActiveStreamId(chatId, streamId);
+
+      const claimed = await claimStreamOwnership();
+      if (!claimed) {
+        return;
+      }
+
+      if (!pendingAssistantSnapshot) {
+        return;
+      }
+
+      try {
+        const upsertResult = await upsertChatMessageScoped({
+          id: pendingAssistantSnapshot.id,
+          chatId,
+          role: "assistant",
+          parts: pendingAssistantSnapshot,
+        });
+        if (upsertResult.status === "conflict") {
+          console.warn(
+            `Skipped assistant message upsert due to ID scope conflict: ${pendingAssistantSnapshot.id}`,
+          );
+        }
+      } catch (error) {
+        console.error("Failed to save latest chat message:", error);
+      }
     },
     onFinish: async ({ responseMessage }) => {
-      await finalizeStream();
-
       if (chatId) {
+        closeStopSignal();
+        const stillOwnsStream = await clearOwnedStreamToken();
+
+        if (!stillOwnsStream) {
+          return;
+        }
+
         const activityAt = new Date();
 
         // Save assistant message (upsert to handle tool results added client-side)
         try {
-          await upsertChatMessage({
+          const upsertResult = await upsertChatMessageScoped({
             id: responseMessage.id,
             chatId,
             role: "assistant",
             parts: responseMessage,
           });
+          if (upsertResult.status === "conflict") {
+            console.warn(
+              `Skipped assistant onFinish upsert due to ID scope conflict: ${responseMessage.id}`,
+            );
+          }
         } catch (error) {
           console.error("Failed to save assistant message:", error);
         }

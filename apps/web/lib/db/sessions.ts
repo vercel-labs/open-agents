@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -127,6 +127,29 @@ export async function updateChatActiveStreamId(
     .where(eq(chats.id, chatId));
 }
 
+/**
+ * Atomically updates activeStreamId only when the current value matches
+ * `expectedStreamId`. Returns true when the update succeeds.
+ */
+export async function compareAndSetChatActiveStreamId(
+  chatId: string,
+  expectedStreamId: string | null,
+  nextStreamId: string | null,
+) {
+  const activeStreamMatch =
+    expectedStreamId === null
+      ? isNull(chats.activeStreamId)
+      : eq(chats.activeStreamId, expectedStreamId);
+
+  const [updated] = await db
+    .update(chats)
+    .set({ activeStreamId: nextStreamId })
+    .where(and(eq(chats.id, chatId), activeStreamMatch))
+    .returning({ id: chats.id });
+
+  return Boolean(updated);
+}
+
 export async function deleteChat(chatId: string) {
   await db.delete(chats).where(eq(chats.id, chatId));
 }
@@ -167,6 +190,49 @@ export async function upsertChatMessage(data: NewChatMessage) {
     })
     .returning();
   return message;
+}
+
+type UpsertChatMessageScopedResult =
+  | { status: "inserted"; message: typeof chatMessages.$inferSelect }
+  | { status: "updated"; message: typeof chatMessages.$inferSelect }
+  | { status: "conflict" };
+
+/**
+ * Upserts a chat message only when the existing row matches the same chat and role.
+ * This prevents accidental overwrite when an ID collision occurs across chats/roles.
+ */
+export async function upsertChatMessageScoped(
+  data: NewChatMessage,
+): Promise<UpsertChatMessageScopedResult> {
+  return db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(chatMessages)
+      .values(data)
+      .onConflictDoNothing({ target: chatMessages.id })
+      .returning();
+
+    if (inserted) {
+      return { status: "inserted", message: inserted };
+    }
+
+    const [updated] = await tx
+      .update(chatMessages)
+      .set({ parts: data.parts })
+      .where(
+        and(
+          eq(chatMessages.id, data.id),
+          eq(chatMessages.chatId, data.chatId),
+          eq(chatMessages.role, data.role),
+        ),
+      )
+      .returning();
+
+    if (updated) {
+      return { status: "updated", message: updated };
+    }
+
+    return { status: "conflict" };
+  });
 }
 
 export async function getChatMessageById(messageId: string) {

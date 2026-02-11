@@ -5,9 +5,9 @@ type ChatInstanceInit = ConstructorParameters<
   typeof Chat<WebAgentUIMessage>
 >[0];
 
-// NOTE: Instances are retained while streaming (status !== "ready") and only
-// cleaned up when the user revisits the chat and then navigates away.
-// If usage scales to many concurrent chats, consider adding a size bound or TTL.
+// Instances are scoped to an active chat route and removed on route teardown.
+// This avoids accumulating background streams/message buffers when users switch
+// between multiple chats quickly.
 const chatInstances = new Map<string, Chat<WebAgentUIMessage>>();
 
 export function getOrCreateChatInstance(
