@@ -230,7 +230,15 @@ Available skills:
 ${skillsList}
 
 When a skill is relevant, invoke it IMMEDIATELY using the skill tool.
-If you see a <command-name> tag in the conversation, the skill is already loaded - follow its instructions directly.`;
+If you see a <command-name> tag in the conversation, the skill is already loaded - follow its instructions directly.
+
+To find and install new skills, use \`npx skills\`. Prefer \`-a amp\` (the universal agent format) so skills work across all agents.
+
+\`\`\`
+npx skills find <keyword>              # search for skills
+npx skills add vercel/ai -y -a amp     # install the AI SDK skill
+npx skills --help                      # all options
+\`\`\``;
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
