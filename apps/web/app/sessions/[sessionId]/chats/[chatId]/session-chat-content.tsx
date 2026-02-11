@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  ExternalLink,
   FolderGit2,
   GitCompare,
   GitPullRequest,
@@ -479,6 +480,7 @@ export function SessionChatContent() {
     lifecycleTiming,
     syncSandboxStatus,
     attemptReconnection,
+    updateSessionRepo,
   } = useSessionChatContext();
   const {
     messages,
@@ -1395,9 +1397,22 @@ export function SessionChatContent() {
               <div className="flex min-w-0 items-center gap-2 text-sm">
                 {session.repoName ? (
                   <>
-                    <span className="truncate font-medium text-foreground">
-                      {session.repoName}
-                    </span>
+                    {session.cloneUrl ? (
+                      /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
+                      <a
+                        href={`https://github.com/${session.repoOwner}/${session.repoName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 truncate font-medium text-foreground hover:underline"
+                      >
+                        {session.repoName}
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      </a>
+                    ) : (
+                      <span className="truncate font-medium text-foreground">
+                        {session.repoName}
+                      </span>
+                    )}
                     {(session.branch ?? sandboxInfo?.currentBranch) && (
                       <>
                         <span className="hidden text-muted-foreground/40 sm:inline">
@@ -1979,6 +1994,14 @@ export function SessionChatContent() {
           onOpenChange={setRepoDialogOpen}
           session={session}
           hasSandbox={sandboxInfo !== null}
+          onRepoCreated={(result) => {
+            updateSessionRepo({
+              cloneUrl: result.cloneUrl,
+              repoOwner: result.owner,
+              repoName: result.repoName,
+              branch: result.branch,
+            });
+          }}
         />
       )}
 
