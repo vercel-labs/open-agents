@@ -59,6 +59,11 @@ export const skillTool = tool({
       return false;
     }
 
+    // Auto-approve all skills when autoApprove is "all"
+    if (approval.autoApprove === "all") {
+      return false;
+    }
+
     // Check if a session rule matches this skill
     if (skillMatchesApprovalRule(skill, approval.sessionRules)) {
       return false;
