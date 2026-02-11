@@ -15,6 +15,7 @@ import {
   getChatMessages,
   getSessionById,
   updateChat,
+  updateChatAssistantActivity,
   updateSession,
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
@@ -366,6 +367,8 @@ export async function POST(req: Request) {
           console.warn(
             `Skipped assistant message upsert due to ID scope conflict: ${pendingAssistantSnapshot.id}`,
           );
+        } else {
+          await updateChatAssistantActivity(chatId, new Date());
         }
       } catch (error) {
         console.error("Failed to save latest chat message:", error);
@@ -394,6 +397,8 @@ export async function POST(req: Request) {
             console.warn(
               `Skipped assistant onFinish upsert due to ID scope conflict: ${responseMessage.id}`,
             );
+          } else {
+            await updateChatAssistantActivity(chatId, activityAt);
           }
         } catch (error) {
           console.error("Failed to save assistant message:", error);

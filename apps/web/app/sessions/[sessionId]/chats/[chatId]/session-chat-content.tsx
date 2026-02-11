@@ -496,6 +496,7 @@ export function SessionChatContent() {
     createChat,
     renameChat,
     deleteChat,
+    markChatRead,
     loading: chatsLoading,
     refreshChats,
   } = useSessionChats(session.id);
@@ -505,6 +506,15 @@ export function SessionChatContent() {
   const chatTitleInputRef = useRef<HTMLInputElement | null>(null);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
+  const markReadRef = useRef<{
+    lastAt: number;
+    lastChatId: string | null;
+    inFlight: boolean;
+  }>({
+    lastAt: 0,
+    lastChatId: null,
+    inFlight: false,
+  });
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -525,6 +535,29 @@ export function SessionChatContent() {
     [syncSandboxStatus],
   );
 
+  const requestMarkChatRead = useCallback(
+    async (mode: "normal" | "force" = "normal"): Promise<void> => {
+      const now = Date.now();
+      const isSameChat = markReadRef.current.lastChatId === chatInfo.id;
+      if (markReadRef.current.inFlight) return;
+      if (mode === "normal" && isSameChat && now - markReadRef.current.lastAt < 3_000) {
+        return;
+      }
+
+      markReadRef.current.inFlight = true;
+      try {
+        await markChatRead(chatInfo.id);
+        markReadRef.current.lastAt = Date.now();
+        markReadRef.current.lastChatId = chatInfo.id;
+      } catch (err) {
+        console.error("Failed to mark chat read:", err);
+      } finally {
+        markReadRef.current.inFlight = false;
+      }
+    },
+    [chatInfo.id, markChatRead],
+  );
+
   useEffect(() => {
     if (editingChatId && chatTitleInputRef.current) {
       chatTitleInputRef.current.focus();
@@ -542,6 +575,28 @@ export function SessionChatContent() {
       refreshChats();
     }
   }, [hadInitialMessages, status, messages, refreshChats]);
+
+  useEffect(() => {
+    void requestMarkChatRead("force");
+  }, [chatInfo.id, requestMarkChatRead]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void requestMarkChatRead("normal");
+      }
+    };
+    const handleWindowFocus = () => {
+      void requestMarkChatRead("normal");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [requestMarkChatRead]);
 
   const handleChatSwitch = useCallback(
     (nextChatId: string) => {
@@ -813,8 +868,9 @@ export function SessionChatContent() {
     prevStatusRef.current = status;
     if (wasStreaming && status === "ready") {
       void requestStatusSync("force");
+      void requestMarkChatRead("force");
     }
-  }, [status, requestStatusSync]);
+  }, [status, requestStatusSync, requestMarkChatRead]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
   const hasAutoStartedSandboxRef = useRef(false);
@@ -1293,7 +1349,7 @@ export function SessionChatContent() {
           {chats.map((c) => (
             <div
               key={c.id}
-              className={`group flex items-center gap-1 rounded-md pr-1 ${
+              className={`group relative flex items-center rounded-md ${
                 c.id === chatInfo.id ? "bg-secondary" : "hover:bg-muted"
               }`}
             >
@@ -1320,7 +1376,7 @@ export function SessionChatContent() {
                 <button
                   type="button"
                   onClick={() => handleChatSwitch(c.id)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 pr-10 text-left text-sm transition-colors ${
                     c.id === chatInfo.id
                       ? "text-secondary-foreground"
                       : "text-muted-foreground group-hover:text-foreground"
@@ -1330,8 +1386,23 @@ export function SessionChatContent() {
                   <span className="truncate">{c.title}</span>
                 </button>
               )}
+              {editingChatId !== c.id && c.id !== chatInfo.id && c.isStreaming && (
+                <span
+                  className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-white animate-pulse transition-opacity group-hover:opacity-0"
+                  aria-label="Streaming response"
+                />
+              )}
+              {editingChatId !== c.id &&
+                c.id !== chatInfo.id &&
+                !c.isStreaming &&
+                c.hasUnread && (
+                  <span
+                    className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity group-hover:opacity-0"
+                    aria-label="Unread messages"
+                  />
+                )}
               {editingChatId !== c.id && (
-                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                   <button
                     type="button"
                     onClick={() => {
