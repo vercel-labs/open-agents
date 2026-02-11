@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  BarChart3,
   Key,
   Link2,
   Menu,
@@ -23,6 +24,7 @@ import { AccountsSectionSkeleton } from "./accounts-section";
 import { PreferencesSectionSkeleton } from "./preferences-section";
 import { ProfileSectionSkeleton } from "./profile-section";
 import { TokensSectionSkeleton } from "./tokens-section";
+import { UsageSectionSkeleton } from "./usage-section";
 
 const sidebarItems = [
   {
@@ -48,6 +50,12 @@ const sidebarItems = [
     label: "Connected Accounts",
     href: "/settings/accounts",
     icon: Link2,
+  },
+  {
+    id: "usage",
+    label: "Usage",
+    href: "/settings/usage",
+    icon: BarChart3,
   },
 ];
 
@@ -168,6 +176,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <TokensSectionSkeleton />
     ) : activeItem?.id === "accounts" ? (
       <AccountsSectionSkeleton />
+    ) : activeItem?.id === "usage" ? (
+      <UsageSectionSkeleton />
     ) : (
       <ProfileSectionSkeleton />
     );

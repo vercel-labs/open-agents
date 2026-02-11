@@ -18,6 +18,7 @@ import {
   updateSession,
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
+import { recordUsage } from "@/lib/db/usage";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
@@ -322,6 +323,7 @@ export async function POST(req: Request) {
 
   // Track last step usage for message metadata
   let lastStepUsage: LanguageModelUsage | undefined;
+  let totalMessageUsage: LanguageModelUsage | undefined;
 
   // Save assistant message on finish, and persist sandbox state if applicable
   return result.toUIMessageStreamResponse({
@@ -336,6 +338,7 @@ export async function POST(req: Request) {
       }
       // On finish, include both the last step usage and total message usage
       if (part.type === "finish") {
+        totalMessageUsage = part.totalUsage;
         return { lastStepUsage, totalMessageUsage: part.totalUsage };
       }
       return undefined;
@@ -468,6 +471,18 @@ export async function POST(req: Request) {
               );
             }
           }
+        }
+
+        // Record usage event (fire-and-forget)
+        if (totalMessageUsage) {
+          void recordUsage(session.user.id, {
+            source: "web",
+            messages: [responseMessage],
+            usage: {
+              inputTokens: totalMessageUsage.inputTokens ?? 0,
+              outputTokens: totalMessageUsage.outputTokens ?? 0,
+            },
+          }).catch((e) => console.error("Failed to record usage:", e));
         }
       }
     },

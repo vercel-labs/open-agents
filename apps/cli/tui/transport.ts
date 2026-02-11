@@ -114,6 +114,7 @@ export function createAgentTransport({
       let currentSessionId = persistence?.getSessionId() ?? null;
       // Track last step usage for message metadata
       let lastStepUsage: LanguageModelUsage | undefined;
+      let totalMessageUsage: LanguageModelUsage | undefined;
 
       return result.toUIMessageStream<TUIAgentUIMessage>({
         originalMessages: messages,
@@ -127,34 +128,57 @@ export function createAgentTransport({
           }
           // On finish, include both the last step usage and total message usage
           if (part.type === "finish") {
+            totalMessageUsage = part.totalUsage;
             return { lastStepUsage, totalMessageUsage: part.totalUsage };
           }
         },
         onFinish: async ({ messages: allMessages }) => {
-          if (!persistence) return;
+          if (persistence) {
+            try {
+              // Get current branch at save time
+              const branch = persistence.getBranch();
 
-          try {
-            // Get current branch at save time
-            const branch = persistence.getBranch();
+              // Create session if needed
+              if (!currentSessionId) {
+                currentSessionId = await createSession(
+                  persistence.projectPath,
+                  branch,
+                );
+                persistence.onSessionCreated(currentSessionId);
+              }
 
-            // Create session if needed
-            if (!currentSessionId) {
-              currentSessionId = await createSession(
+              // Save all messages (overwrites file)
+              await saveSession(
                 persistence.projectPath,
+                currentSessionId,
                 branch,
+                allMessages,
               );
-              persistence.onSessionCreated(currentSessionId);
+            } catch {
+              // Ignore persistence errors
             }
+          }
 
-            // Save all messages (overwrites file)
-            await saveSession(
-              persistence.projectPath,
-              currentSessionId,
-              branch,
-              allMessages,
+          // Report usage to web app when connected via gateway
+          if (gatewayConfig && totalMessageUsage) {
+            const baseUrl = gatewayConfig.baseURL.replace(
+              /\/api\/ai-proxy$/,
+              "",
             );
-          } catch {
-            // Ignore persistence errors
+            const lastAssistantMessage = allMessages
+              .filter((m) => m.role === "assistant")
+              .at(-1);
+            void fetch(`${baseUrl}/api/usage`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${gatewayConfig.apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                messages: lastAssistantMessage ? [lastAssistantMessage] : [],
+                usage: totalMessageUsage,
+              }),
+            }).catch(() => {});
           }
         },
       });

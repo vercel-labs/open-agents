@@ -270,3 +270,23 @@ export const userPreferences = pgTable("user_preferences", {
 
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type NewUserPreferences = typeof userPreferences.$inferInsert;
+
+// Usage tracking — one row per assistant turn (append-only)
+export const usageEvents = pgTable("usage_events", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  source: text("source", { enum: ["web", "cli"] })
+    .notNull()
+    .default("web"),
+  provider: text("provider"),
+  modelId: text("model_id"),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  toolCallCount: integer("tool_call_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type UsageEvent = typeof usageEvents.$inferSelect;
+export type NewUsageEvent = typeof usageEvents.$inferInsert;
