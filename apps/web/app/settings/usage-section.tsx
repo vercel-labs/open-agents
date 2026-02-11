@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { ContributionChart } from "@/components/contribution-chart";
 import {
@@ -11,14 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { fetcher } from "@/lib/swr";
 
 interface DailyUsageRow {
@@ -53,6 +45,13 @@ interface MergedDay {
   toolCallCount: number;
 }
 
+interface PieSegment {
+  label: string;
+  value: number;
+  color: string;
+  detail?: string;
+}
+
 interface UsageResponse {
   usage: DailyUsageRow[];
 }
@@ -80,6 +79,46 @@ function sumRows(rows: DailyUsageRow[]) {
       toolCallCount: 0,
     },
   );
+}
+
+const CHART_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+function polarToCartesian(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  angleInDegrees: number,
+) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians),
+  };
+}
+
+function buildPieSegment(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+) {
+  const startOuter = polarToCartesian(centerX, centerY, radius, endAngle);
+  const endOuter = polarToCartesian(centerX, centerY, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${centerX} ${centerY}`,
+    `L ${startOuter.x} ${startOuter.y}`,
+    `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${endOuter.x} ${endOuter.y}`,
+    "Z",
+  ].join(" ");
 }
 
 /** Aggregate rows by model across all dates */
@@ -172,48 +211,158 @@ export function UsageSectionSkeleton() {
           <div className="mt-1 h-3" />
         </div>
 
-        {/* Model breakdown */}
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-28" />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Skeleton className="h-3 w-10" />
-                </TableHead>
-                <TableHead>
-                  <Skeleton className="h-3 w-14" />
-                </TableHead>
-                <TableHead className="text-right">
-                  <Skeleton className="ml-auto h-3 w-20" />
-                </TableHead>
-                <TableHead className="text-right">
-                  <Skeleton className="ml-auto h-3 w-20" />
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-28" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-16" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Skeleton className="ml-auto h-4 w-32" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Skeleton className="ml-auto h-4 w-10" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Agent split pie chart */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <div className="grid gap-4 md:grid-cols-[160px,1fr]">
+              <Skeleton className="h-36 w-36 rounded-full" />
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-4 w-full" />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Model breakdown */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <div className="grid gap-4 md:grid-cols-[160px,1fr]">
+              <Skeleton className="h-36 w-36 rounded-full" />
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-4 w-full" />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function UsagePieChart({
+  segments,
+  centerLabel,
+  emptyLabel,
+}: {
+  segments: PieSegment[];
+  centerLabel: string;
+  emptyLabel: string;
+}) {
+  const visibleSegments = segments.filter((segment) => segment.value > 0);
+  const total = visibleSegments.reduce(
+    (sum, segment) => sum + segment.value,
+    0,
+  );
+  const [hoveredSegment, setHoveredSegment] = useState<PieSegment | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const size = 120;
+  const center = size / 2;
+  const radius = 60;
+  let currentAngle = 0;
+
+  return (
+    <div className="grid gap-4 md:grid-cols-[160px,1fr]">
+      <div className="relative mx-auto h-36 w-36">
+        <div className="absolute inset-0 rounded-full ring-1 ring-border" />
+        {visibleSegments.length === 0 ? (
+          <div className="absolute inset-0 rounded-full bg-muted" />
+        ) : (
+          <svg
+            className="absolute inset-0 h-full w-full"
+            viewBox={`0 0 ${size} ${size}`}
+            role="img"
+            aria-label={centerLabel}
+          >
+            {visibleSegments.map((segment) => {
+              const startAngle = currentAngle;
+              const angle = (segment.value / total) * 360;
+              const endAngle = startAngle + angle;
+              currentAngle = endAngle;
+              const path = buildPieSegment(
+                center,
+                center,
+                radius,
+                startAngle,
+                endAngle,
+              );
+              const tooltipLabel = segment.detail
+                ? `${segment.label} · ${segment.detail}`
+                : segment.label;
+              return (
+                <path
+                  key={segment.label}
+                  d={path}
+                  fill={segment.color}
+                  className="cursor-pointer"
+                  role="img"
+                  aria-label={tooltipLabel}
+                  onMouseEnter={() => setHoveredSegment(segment)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onMouseMove={(event) => {
+                    const svg = event.currentTarget.ownerSVGElement;
+                    const rect = svg ? svg.getBoundingClientRect() : null;
+                    if (!rect) return;
+                    setTooltipPosition({
+                      x: event.clientX - rect.left,
+                      y: event.clientY - rect.top,
+                    });
+                  }}
+                />
+              );
+            })}
+          </svg>
+        )}
+        {hoveredSegment ? (
+          <div
+            className="pointer-events-none absolute z-10 w-fit whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm"
+            style={{
+              left: Math.min(tooltipPosition.x + 12, size - 8),
+              top: Math.min(tooltipPosition.y + 12, size - 8),
+            }}
+          >
+            <div className="font-medium">{hoveredSegment.label}</div>
+            <div>{formatTokens(hoveredSegment.value)} tokens</div>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-col gap-2">
+        {visibleSegments.length === 0 ? (
+          <div className="text-sm text-muted-foreground">{emptyLabel}</div>
+        ) : (
+          visibleSegments.map((segment) => {
+            const share =
+              total > 0 ? Math.round((segment.value / total) * 100) : 0;
+            return (
+              <div
+                key={segment.label}
+                className="flex items-center gap-2 text-sm"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-sm"
+                  style={{ backgroundColor: segment.color }}
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="font-medium">{segment.label}</span>
+                  {segment.detail ? (
+                    <span className="text-xs text-muted-foreground">
+                      {segment.detail}
+                    </span>
+                  ) : null}
+                </div>
+                <span className="ml-auto text-muted-foreground">
+                  {formatTokens(segment.value)}
+                </span>
+                <span className="text-muted-foreground">({share}%)</span>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -293,7 +442,6 @@ export function UsageSection() {
   const hasWeb = webTotals.messageCount > 0;
   const hasCli = cliTotals.messageCount > 0;
   const hasBoth = hasWeb && hasCli;
-  const hasSubagent = subagentTotals.messageCount > 0;
   const hasUsage = totals.messageCount > 0;
 
   const tokenDetailParts: string[] = [];
@@ -302,20 +450,52 @@ export function UsageSection() {
       `${formatTokens(webTokens)} web · ${formatTokens(cliTokens)} cli`,
     );
   }
-  if (hasSubagent) {
-    tokenDetailParts.push(
-      `${formatTokens(mainTokens)} main · ${formatTokens(subagentTokens)} subagent`,
-    );
-  }
   const tokenDetail =
     tokenDetailParts.length > 0 ? tokenDetailParts.join(" · ") : undefined;
-  const hasTokenTotal = totalTokens > 0;
-  const mainShare =
-    hasUsage && hasTokenTotal
-      ? Math.round((mainTokens / totalTokens) * 100)
-      : 0;
-  const subagentShare =
-    hasUsage && hasTokenTotal ? Math.max(0, 100 - mainShare) : 0;
+  const agentSegments: PieSegment[] = [
+    {
+      label: "Main agent",
+      value: mainTokens,
+      color: CHART_COLORS[0] ?? "var(--chart-1)",
+    },
+    {
+      label: "Subagents",
+      value: subagentTokens,
+      color: CHART_COLORS[1] ?? "var(--chart-2)",
+    },
+  ];
+
+  const modelSegments = (() => {
+    const totalsByModel = modelUsage.map((m) => ({
+      modelId: m.modelId,
+      provider: m.provider,
+      totalTokens: m.inputTokens + m.outputTokens,
+    }));
+
+    const topModels = totalsByModel
+      .filter((m) => m.totalTokens > 0)
+      .slice(0, 5);
+
+    const otherTotal = totalsByModel
+      .slice(5)
+      .reduce((sum, m) => sum + m.totalTokens, 0);
+
+    const segments: PieSegment[] = topModels.map((m, index) => ({
+      label: displayModelId(m.modelId),
+      value: m.totalTokens,
+      color: CHART_COLORS[index % CHART_COLORS.length] ?? "var(--chart-1)",
+    }));
+
+    if (otherTotal > 0) {
+      segments.push({
+        label: "Other",
+        value: otherTotal,
+        color: "var(--muted-foreground)",
+      });
+    }
+
+    return segments;
+  })();
 
   return (
     <Card>
@@ -353,67 +533,36 @@ export function UsageSection() {
           />
         </div>
 
-        {/* Agent split */}
-        {hasUsage && (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Agent split</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <StatBlock
-                label="Main agent"
-                value={formatTokens(mainTokens)}
-                detail={`${mainShare}% of total`}
-              />
-              <StatBlock
-                label="Subagents"
-                value={formatTokens(subagentTokens)}
-                detail={`${subagentShare}% of total`}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Activity chart */}
         <ContributionChart data={chartData} />
 
-        {/* Model breakdown */}
-        {modelUsage.length > 0 ? (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Usage by model</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead className="text-right">Input tokens</TableHead>
-                  <TableHead className="text-right">Output tokens</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {modelUsage.map((m) => (
-                  <TableRow key={m.modelId}>
-                    <TableCell className="font-medium">
-                      {displayModelId(m.modelId)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.provider}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatTokens(m.inputTokens)}
-                      {m.cachedInputTokens > 0
-                        ? ` (${formatTokens(m.cachedInputTokens)} cached)`
-                        : ""}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatTokens(m.outputTokens)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No model data</p>
-        )}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Agent split */}
+          {hasUsage && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Agent split</h3>
+              <UsagePieChart
+                segments={agentSegments}
+                centerLabel="Total tokens"
+                emptyLabel="No agent usage"
+              />
+            </div>
+          )}
+
+          {/* Model breakdown */}
+          {modelUsage.length > 0 ? (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Usage by model</h3>
+              <UsagePieChart
+                segments={modelSegments}
+                centerLabel="Total tokens"
+                emptyLabel="No model usage"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No model data</p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
