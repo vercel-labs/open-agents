@@ -63,41 +63,40 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   setInstallCookies(cookieStore, redirectTo, state);
 
-  // When the user disconnected their GitHub account (reconnect cookie is set),
-  // the GitHub App may still be installed on their GitHub account. Sending them
-  // to the install page would just show the existing installation settings
-  // instead of re-authorizing. Redirect to the OAuth authorize URL so they
-  // re-link their account and we can sync existing installations.
-  const isReconnect = cookieStore.get("github_reconnect")?.value === "1";
-  if (isReconnect) {
-    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
-    if (clientId) {
-      const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
-      authorizeUrl.searchParams.set("client_id", clientId);
-      authorizeUrl.searchParams.set("state", state);
-      // Use the app callback so the existing handler exchanges the code,
-      // links the account, and syncs installations in one step.
-      const callbackUrl = new URL("/api/github/app/callback", req.url);
-      authorizeUrl.searchParams.set("redirect_uri", callbackUrl.toString());
-      return Response.redirect(authorizeUrl);
-    }
-  }
-
   // When a specific target_id is provided (numeric GitHub account/org ID),
-  // link directly to the install permissions page for that account.
-  // Otherwise, use select_target to always show the account/org picker.
-  // (installations/new silently redirects to existing personal install settings.)
+  // the user already has a linked GitHub account and wants to install the app
+  // on a particular account/org. Send them to the GitHub App install page.
   const targetId = req.nextUrl.searchParams.get("target_id");
-  const installUrl = new URL(
-    `https://github.com/apps/${appSlug}/installations/select_target`,
-  );
-  installUrl.searchParams.set("state", state);
-
   if (targetId && /^\d+$/.test(targetId)) {
-    installUrl.pathname = `/apps/${appSlug}/installations/new/permissions`;
+    const installUrl = new URL(
+      `https://github.com/apps/${appSlug}/installations/new/permissions`,
+    );
+    installUrl.searchParams.set("state", state);
     installUrl.searchParams.set("target_id", targetId);
     return Response.redirect(installUrl);
   }
 
+  // For the initial "Connect GitHub" flow, always use the OAuth authorize URL
+  // with an explicit redirect_uri. The select_target install page only
+  // triggers a callback redirect for NEW installations; if the app is already
+  // installed it just shows the installation settings page with no redirect.
+  // OAuth works regardless of installation state and lets us dynamically pick
+  // the correct callback domain (dev vs production). The callback handler
+  // exchanges the code, links the account, and syncs existing installations.
+  const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+  if (clientId) {
+    const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+    authorizeUrl.searchParams.set("client_id", clientId);
+    authorizeUrl.searchParams.set("state", state);
+    const callbackUrl = new URL("/api/github/app/callback", req.url);
+    authorizeUrl.searchParams.set("redirect_uri", callbackUrl.toString());
+    return Response.redirect(authorizeUrl);
+  }
+
+  // Fallback: if no client ID configured, try the install page directly.
+  const installUrl = new URL(
+    `https://github.com/apps/${appSlug}/installations/select_target`,
+  );
+  installUrl.searchParams.set("state", state);
   return Response.redirect(installUrl);
 }
