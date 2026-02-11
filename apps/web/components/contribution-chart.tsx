@@ -20,7 +20,7 @@ interface ContributionChartProps {
 }
 
 const DAYS_IN_WEEK = 7;
-const WEEKS = 40;
+const WEEKS = 39;
 const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
 function getIntensity(
@@ -142,7 +142,7 @@ export function ContributionChart({ data }: ContributionChartProps) {
   const step = cellSize + cellGap;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 overflow-x-auto">
       {/* Month labels */}
       <div className="flex" style={{ paddingLeft: 32 }}>
         {monthLabels.map((m, i) => (

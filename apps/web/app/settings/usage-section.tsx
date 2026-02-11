@@ -140,19 +140,77 @@ export function UsageSectionSkeleton() {
       <CardHeader>
         <CardTitle>Usage</CardTitle>
         <CardDescription>
-          Token consumption and activity over the past 40 weeks.
+          Token consumption and activity over the past 39 weeks.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Summary stats - match StatBlock: text-xs + text-lg + text-xs */}
         <div className="grid grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="space-y-1">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-6 w-24" />
+            <div key={i}>
+              <div className="text-xs">
+                <Skeleton className="h-3 w-20" />
+              </div>
+              <div className="text-lg">
+                <Skeleton className="h-5 w-16" />
+              </div>
+              <div className="text-xs">
+                <Skeleton className="h-3 w-28" />
+              </div>
             </div>
           ))}
         </div>
-        <Skeleton className="h-[120px] w-full rounded-md" />
+
+        {/* Activity chart - match ContributionChart exact layout height */}
+        <div className="flex flex-col gap-1">
+          {/* Month labels row */}
+          <div className="h-4" />
+          {/* Grid: 7 * (12 + 2) - 2 = 96 */}
+          <Skeleton className="h-[96px] w-full rounded-md" />
+          {/* Legend row */}
+          <div className="mt-1 h-3" />
+        </div>
+
+        {/* Model breakdown */}
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-28" />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <Skeleton className="h-3 w-10" />
+                </TableHead>
+                <TableHead>
+                  <Skeleton className="h-3 w-14" />
+                </TableHead>
+                <TableHead className="text-right">
+                  <Skeleton className="ml-auto h-3 w-20" />
+                </TableHead>
+                <TableHead className="text-right">
+                  <Skeleton className="ml-auto h-3 w-20" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-16" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="ml-auto h-4 w-32" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="ml-auto h-4 w-10" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -226,7 +284,7 @@ export function UsageSection() {
       <CardHeader>
         <CardTitle>Usage</CardTitle>
         <CardDescription>
-          Token consumption and activity over the past 40 weeks.
+          Token consumption and activity over the past 39 weeks.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
