@@ -558,7 +558,11 @@ export function SessionChatContent() {
       const now = Date.now();
       const isSameChat = markReadRef.current.lastChatId === chatInfo.id;
       if (markReadRef.current.inFlight) return;
-      if (mode === "normal" && isSameChat && now - markReadRef.current.lastAt < 3_000) {
+      if (
+        mode === "normal" &&
+        isSameChat &&
+        now - markReadRef.current.lastAt < 3_000
+      ) {
         return;
       }
 
@@ -1410,12 +1414,14 @@ export function SessionChatContent() {
                   <span className="truncate">{c.title}</span>
                 </button>
               )}
-              {editingChatId !== c.id && c.id !== chatInfo.id && c.isStreaming && (
-                <span
-                  className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-white animate-pulse transition-opacity group-hover:opacity-0"
-                  aria-label="Streaming response"
-                />
-              )}
+              {editingChatId !== c.id &&
+                c.id !== chatInfo.id &&
+                c.isStreaming && (
+                  <span
+                    className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-white animate-pulse transition-opacity group-hover:opacity-0"
+                    aria-label="Streaming response"
+                  />
+                )}
               {editingChatId !== c.id &&
                 c.id !== chatInfo.id &&
                 !c.isStreaming &&

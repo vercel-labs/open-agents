@@ -308,7 +308,9 @@ export async function getChatMessages(chatId: string) {
   });
 }
 
-export async function markChatRead(data: Pick<NewChatRead, "userId" | "chatId">) {
+export async function markChatRead(
+  data: Pick<NewChatRead, "userId" | "chatId">,
+) {
   const now = new Date();
   const [chatRead] = await db
     .insert(chatReads)

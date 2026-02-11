@@ -1,9 +1,5 @@
 import { getServerSession } from "@/lib/session/get-server-session";
-import {
-  getChatById,
-  getSessionById,
-  markChatRead,
-} from "@/lib/db/sessions";
+import { getChatById, getSessionById, markChatRead } from "@/lib/db/sessions";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
