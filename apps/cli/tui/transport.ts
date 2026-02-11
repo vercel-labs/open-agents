@@ -1,22 +1,22 @@
-import {
-  generateId,
-  type ChatTransport,
-  type LanguageModelUsage,
-  convertToModelMessages,
-  smoothStream,
-  pruneMessages,
-} from "ai";
 import { defaultModelLabel, type GatewayConfig } from "@open-harness/agent";
+import {
+  type ChatTransport,
+  convertToModelMessages,
+  generateId,
+  type LanguageModelUsage,
+  pruneMessages,
+  smoothStream,
+} from "ai";
+import { getModelById } from "./lib/models";
+import { createSession, saveSession } from "./lib/session-storage";
+import type { Settings } from "./lib/settings";
 import type {
+  ApprovalRule,
+  AutoAcceptMode,
   TUIAgent,
   TUIAgentCallOptions,
   TUIAgentUIMessage,
-  AutoAcceptMode,
-  ApprovalRule,
 } from "./types";
-import type { Settings } from "./lib/settings";
-import { getModelById } from "./lib/models";
-import { createSession, saveSession } from "./lib/session-storage";
 
 export type PersistenceConfig = {
   getSessionId: () => string | null;
@@ -165,6 +165,10 @@ export function createAgentTransport({
               /\/api\/ai-proxy$/,
               "",
             );
+            const cachedInputTokens =
+              totalMessageUsage.inputTokenDetails?.cacheReadTokens ??
+              totalMessageUsage.cachedInputTokens ??
+              0;
             const lastAssistantMessage = allMessages
               .filter((m) => m.role === "assistant")
               .at(-1);
@@ -176,7 +180,11 @@ export function createAgentTransport({
               },
               body: JSON.stringify({
                 messages: lastAssistantMessage ? [lastAssistantMessage] : [],
-                usage: totalMessageUsage,
+                usage: {
+                  inputTokens: totalMessageUsage.inputTokens ?? 0,
+                  cachedInputTokens,
+                  outputTokens: totalMessageUsage.outputTokens ?? 0,
+                },
                 modelId,
               }),
             }).catch(() => {});

@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
 
   let body: {
     messages: unknown[];
-    usage: { inputTokens: number; outputTokens: number };
+    usage: {
+      inputTokens: number;
+      cachedInputTokens?: number;
+      outputTokens: number;
+    };
     modelId?: string;
   };
   try {
@@ -53,6 +57,7 @@ export async function POST(req: NextRequest) {
       >[1]["messages"],
       usage: {
         inputTokens: body.usage?.inputTokens ?? 0,
+        cachedInputTokens: body.usage?.cachedInputTokens ?? 0,
         outputTokens: body.usage?.outputTokens ?? 0,
       },
     });

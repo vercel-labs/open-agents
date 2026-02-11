@@ -12,7 +12,11 @@ export async function recordUsage(
     source: UsageSource;
     model: LanguageModel;
     messages: UIMessage[];
-    usage: { inputTokens: number; outputTokens: number };
+    usage: {
+      inputTokens: number;
+      cachedInputTokens: number;
+      outputTokens: number;
+    };
   },
 ) {
   const toolCallCount = data.messages
@@ -33,6 +37,7 @@ export async function recordUsage(
     provider: provider ?? null,
     modelId: modelId ?? null,
     inputTokens: data.usage.inputTokens,
+    cachedInputTokens: data.usage.cachedInputTokens,
     outputTokens: data.usage.outputTokens,
     toolCallCount,
   });
@@ -44,6 +49,7 @@ export interface DailyUsage {
   provider: string | null;
   modelId: string | null;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   messageCount: number;
   toolCallCount: number;
@@ -64,6 +70,7 @@ export async function getUsageHistory(
       provider: usageEvents.provider,
       modelId: usageEvents.modelId,
       inputTokens: sql<number>`sum(${usageEvents.inputTokens})::int`,
+      cachedInputTokens: sql<number>`sum(${usageEvents.cachedInputTokens})::int`,
       outputTokens: sql<number>`sum(${usageEvents.outputTokens})::int`,
       messageCount: sql<number>`count(*)::int`,
       toolCallCount: sql<number>`sum(${usageEvents.toolCallCount})::int`,

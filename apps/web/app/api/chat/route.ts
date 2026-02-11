@@ -475,12 +475,17 @@ export async function POST(req: Request) {
 
         // Record usage event (fire-and-forget)
         if (totalMessageUsage) {
+          const cachedInputTokens =
+            totalMessageUsage.inputTokenDetails?.cacheReadTokens ??
+            totalMessageUsage.cachedInputTokens ??
+            0;
           void recordUsage(session.user.id, {
             source: "web",
             model,
             messages: [responseMessage],
             usage: {
               inputTokens: totalMessageUsage.inputTokens ?? 0,
+              cachedInputTokens,
               outputTokens: totalMessageUsage.outputTokens ?? 0,
             },
           }).catch((e) => console.error("Failed to record usage:", e));

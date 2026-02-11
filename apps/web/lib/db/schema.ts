@@ -283,6 +283,7 @@ export const usageEvents = pgTable("usage_events", {
   provider: text("provider"),
   modelId: text("model_id"),
   inputTokens: integer("input_tokens").notNull().default(0),
+  cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
   toolCallCount: integer("tool_call_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),

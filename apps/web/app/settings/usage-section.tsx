@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import useSWR from "swr";
+import { ContributionChart } from "@/components/contribution-chart";
 import {
   Card,
   CardContent,
@@ -18,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ContributionChart } from "@/components/contribution-chart";
 import { fetcher } from "@/lib/swr";
 
 interface DailyUsageRow {
@@ -27,6 +27,7 @@ interface DailyUsageRow {
   provider: string | null;
   modelId: string | null;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   messageCount: number;
   toolCallCount: number;
@@ -36,6 +37,7 @@ interface ModelUsage {
   modelId: string;
   provider: string;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   messageCount: number;
   toolCallCount: number;
@@ -44,6 +46,7 @@ interface ModelUsage {
 interface MergedDay {
   date: string;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   messageCount: number;
   toolCallCount: number;
@@ -63,11 +66,18 @@ function sumRows(rows: DailyUsageRow[]) {
   return rows.reduce(
     (acc, d) => ({
       inputTokens: acc.inputTokens + d.inputTokens,
+      cachedInputTokens: acc.cachedInputTokens + d.cachedInputTokens,
       outputTokens: acc.outputTokens + d.outputTokens,
       messageCount: acc.messageCount + d.messageCount,
       toolCallCount: acc.toolCallCount + d.toolCallCount,
     }),
-    { inputTokens: 0, outputTokens: 0, messageCount: 0, toolCallCount: 0 },
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+    },
   );
 }
 
@@ -79,6 +89,7 @@ function aggregateByModel(rows: DailyUsageRow[]): ModelUsage[] {
     const existing = map.get(r.modelId);
     if (existing) {
       existing.inputTokens += r.inputTokens;
+      existing.cachedInputTokens += r.cachedInputTokens;
       existing.outputTokens += r.outputTokens;
       existing.messageCount += r.messageCount;
       existing.toolCallCount += r.toolCallCount;
@@ -87,13 +98,14 @@ function aggregateByModel(rows: DailyUsageRow[]): ModelUsage[] {
         modelId: r.modelId,
         provider: r.provider ?? "unknown",
         inputTokens: r.inputTokens,
+        cachedInputTokens: r.cachedInputTokens,
         outputTokens: r.outputTokens,
         messageCount: r.messageCount,
         toolCallCount: r.toolCallCount,
       });
     }
   }
-  return [...map.values()].sort(
+  return [...map.values()].toSorted(
     (a, b) => b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
   );
 }
@@ -111,6 +123,7 @@ function mergeDays(rows: DailyUsageRow[]): MergedDay[] {
     const existing = map.get(r.date);
     if (existing) {
       existing.inputTokens += r.inputTokens;
+      existing.cachedInputTokens += r.cachedInputTokens;
       existing.outputTokens += r.outputTokens;
       existing.messageCount += r.messageCount;
       existing.toolCallCount += r.toolCallCount;
@@ -262,8 +275,6 @@ export function UsageSection() {
                   <TableHead>Provider</TableHead>
                   <TableHead className="text-right">Input tokens</TableHead>
                   <TableHead className="text-right">Output tokens</TableHead>
-                  <TableHead className="text-right">Messages</TableHead>
-                  <TableHead className="text-right">Tool calls</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -277,15 +288,12 @@ export function UsageSection() {
                     </TableCell>
                     <TableCell className="text-right">
                       {formatTokens(m.inputTokens)}
+                      {m.cachedInputTokens > 0
+                        ? ` (${formatTokens(m.cachedInputTokens)} cached)`
+                        : ""}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatTokens(m.outputTokens)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {m.messageCount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {m.toolCallCount.toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))}
