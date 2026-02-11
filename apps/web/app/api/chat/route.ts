@@ -35,6 +35,9 @@ import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
 
+const cachedInputTokensFor = (usage: LanguageModelUsage) =>
+  usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
   sessionId?: string;
@@ -479,10 +482,6 @@ export async function POST(req: Request) {
           }
         }
 
-        const cachedInputTokensFor = (usage: LanguageModelUsage) =>
-          usage.inputTokenDetails?.cacheReadTokens ??
-          usage.cachedInputTokens ??
-          0;
         const postUsage = (
           usage: LanguageModelUsage,
           usageModel: LanguageModel | string,

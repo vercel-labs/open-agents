@@ -1,7 +1,29 @@
+import type { UIMessage } from "ai";
 import type { NextRequest } from "next/server";
 import { verifyAccessToken } from "@/lib/db/cli-tokens";
 import { getUsageHistory, recordUsage } from "@/lib/db/usage";
 import { getSessionFromReq } from "@/lib/session/server";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isUiMessageLike(value: unknown): value is UIMessage {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value.role !== "string") {
+    return false;
+  }
+  return Array.isArray(value.parts);
+}
+
+function parseNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return value;
+}
 
 /**
  * POST /api/usage — Record usage from CLI clients (Bearer token auth)
@@ -33,34 +55,41 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: {
-    messages: unknown[];
-    usage: {
-      inputTokens: number;
-      cachedInputTokens?: number;
-      outputTokens: number;
-    };
-    modelId?: string;
-    agentType?: "main" | "subagent";
-  };
+  let body: unknown;
   try {
-    body = (await req.json()) as typeof body;
+    body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const parsedBody = isRecord(body) ? body : {};
+  const rawMessages = Array.isArray(parsedBody.messages)
+    ? parsedBody.messages
+    : [];
+  const messages = rawMessages.filter(isUiMessageLike);
+  const usage = isRecord(parsedBody.usage) ? parsedBody.usage : {};
+  const inputTokens = parseNumber(usage.inputTokens) ?? 0;
+  const cachedInputTokens = parseNumber(usage.cachedInputTokens) ?? 0;
+  const outputTokens = parseNumber(usage.outputTokens) ?? 0;
+  const modelId =
+    typeof parsedBody.modelId === "string"
+      ? parsedBody.modelId
+      : "unknown/unknown";
+  const agentType =
+    parsedBody.agentType === "subagent" || parsedBody.agentType === "main"
+      ? parsedBody.agentType
+      : "main";
+
   try {
     await recordUsage(verification.userId, {
       source: "cli",
-      agentType: body.agentType ?? "main",
-      model: body.modelId ?? "unknown/unknown",
-      messages: (body.messages ?? []) as Parameters<
-        typeof recordUsage
-      >[1]["messages"],
+      agentType,
+      model: modelId,
+      messages,
       usage: {
-        inputTokens: body.usage?.inputTokens ?? 0,
-        cachedInputTokens: body.usage?.cachedInputTokens ?? 0,
-        outputTokens: body.usage?.outputTokens ?? 0,
+        inputTokens,
+        cachedInputTokens,
+        outputTokens,
       },
     });
   } catch (error) {

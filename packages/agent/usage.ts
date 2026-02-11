@@ -80,13 +80,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
   if (!isRecord(value)) {
     return false;
   }
   const inputTokenDetails = value.inputTokenDetails;
   const outputTokenDetails = value.outputTokenDetails;
-  return isRecord(inputTokenDetails) && isRecord(outputTokenDetails);
+  return (
+    isRecord(inputTokenDetails) ||
+    isRecord(outputTokenDetails) ||
+    isNumber(value.inputTokens) ||
+    isNumber(value.outputTokens) ||
+    isNumber(value.totalTokens) ||
+    isNumber(value.cachedInputTokens) ||
+    isNumber(value.reasoningTokens)
+  );
 }
 
 function extractTaskOutputUsage(

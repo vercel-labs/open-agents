@@ -23,6 +23,9 @@ import type {
   TUIAgentUIMessage,
 } from "./types";
 
+const cachedInputTokensFor = (usage: LanguageModelUsage) =>
+  usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+
 export type PersistenceConfig = {
   getSessionId: () => string | null;
   projectPath: string;
@@ -173,10 +176,6 @@ export function createAgentTransport({
             .filter((m) => m.role === "assistant")
             .at(-1);
           const baseUrl = gatewayConfig.baseURL.replace(/\/api\/ai-proxy$/, "");
-          const cachedInputTokensFor = (usage: LanguageModelUsage) =>
-            usage.inputTokenDetails?.cacheReadTokens ??
-            usage.cachedInputTokens ??
-            0;
           const postUsage = (
             usage: LanguageModelUsage,
             usageModelId: string,
@@ -211,19 +210,15 @@ export function createAgentTransport({
             );
           }
 
-          const lastTaskMessage = [...allMessages].reverse().find((message) => {
-            if (message.role !== "assistant") {
-              return false;
-            }
-            return collectTaskToolUsageEvents(message).length > 0;
-          });
-
-          if (!lastTaskMessage) {
+          if (!lastAssistantMessage) {
             return;
           }
 
           const subagentUsageEvents =
-            collectTaskToolUsageEvents(lastTaskMessage);
+            collectTaskToolUsageEvents(lastAssistantMessage);
+          if (subagentUsageEvents.length === 0) {
+            return;
+          }
           const subagentUsageByModel = new Map<string, LanguageModelUsage>();
           for (const event of subagentUsageEvents) {
             const eventModelId = event.modelId ?? modelId;
