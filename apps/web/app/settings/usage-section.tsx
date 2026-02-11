@@ -57,6 +57,7 @@ interface UsageResponse {
 }
 
 function formatTokens(n: number) {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
@@ -251,6 +252,8 @@ function UsagePieChart({
   const center = size / 2;
   const radius = 60;
   let currentAngle = 0;
+  const singleSegment =
+    visibleSegments.length === 1 ? visibleSegments[0] : undefined;
 
   return (
     <div className="grid gap-4 md:grid-cols-[160px,1fr]">
@@ -265,43 +268,70 @@ function UsagePieChart({
             role="img"
             aria-label={centerLabel}
           >
-            {visibleSegments.map((segment) => {
-              const startAngle = currentAngle;
-              const angle = (segment.value / total) * 360;
-              const endAngle = startAngle + angle;
-              currentAngle = endAngle;
-              const path = buildPieSegment(
-                center,
-                center,
-                radius,
-                startAngle,
-                endAngle,
-              );
-              const tooltipLabel = segment.detail
-                ? `${segment.label} · ${segment.detail}`
-                : segment.label;
-              return (
-                <path
-                  key={segment.label}
-                  d={path}
-                  fill={segment.color}
-                  className="cursor-pointer"
-                  role="img"
-                  aria-label={tooltipLabel}
-                  onMouseEnter={() => setHoveredSegment(segment)}
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onMouseMove={(event) => {
-                    const svg = event.currentTarget.ownerSVGElement;
-                    const rect = svg ? svg.getBoundingClientRect() : null;
-                    if (!rect) return;
-                    setTooltipPosition({
-                      x: event.clientX - rect.left,
-                      y: event.clientY - rect.top,
-                    });
-                  }}
-                />
-              );
-            })}
+            {singleSegment ? (
+              <circle
+                cx={center}
+                cy={center}
+                r={radius}
+                fill={singleSegment.color}
+                className="cursor-pointer"
+                role="img"
+                aria-label={
+                  singleSegment.detail
+                    ? `${singleSegment.label} · ${singleSegment.detail}`
+                    : singleSegment.label
+                }
+                onMouseEnter={() => setHoveredSegment(singleSegment)}
+                onMouseLeave={() => setHoveredSegment(null)}
+                onMouseMove={(event) => {
+                  const svg = event.currentTarget.ownerSVGElement;
+                  const rect = svg ? svg.getBoundingClientRect() : null;
+                  if (!rect) return;
+                  setTooltipPosition({
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top,
+                  });
+                }}
+              />
+            ) : (
+              visibleSegments.map((segment) => {
+                const startAngle = currentAngle;
+                const angle = (segment.value / total) * 360;
+                const endAngle = startAngle + angle;
+                currentAngle = endAngle;
+                const path = buildPieSegment(
+                  center,
+                  center,
+                  radius,
+                  startAngle,
+                  endAngle,
+                );
+                const tooltipLabel = segment.detail
+                  ? `${segment.label} · ${segment.detail}`
+                  : segment.label;
+                return (
+                  <path
+                    key={segment.label}
+                    d={path}
+                    fill={segment.color}
+                    className="cursor-pointer"
+                    role="img"
+                    aria-label={tooltipLabel}
+                    onMouseEnter={() => setHoveredSegment(segment)}
+                    onMouseLeave={() => setHoveredSegment(null)}
+                    onMouseMove={(event) => {
+                      const svg = event.currentTarget.ownerSVGElement;
+                      const rect = svg ? svg.getBoundingClientRect() : null;
+                      if (!rect) return;
+                      setTooltipPosition({
+                        x: event.clientX - rect.left,
+                        y: event.clientY - rect.top,
+                      });
+                    }}
+                  />
+                );
+              })
+            )}
           </svg>
         )}
         {hoveredSegment ? (

@@ -417,6 +417,7 @@ export async function POST(req: Request) {
         if (sandbox.getState) {
           try {
             const currentState = sandbox.getState() as SandboxState;
+            let sandboxStateToPersist = currentState;
 
             // For hybrid sandboxes in pre-handoff state (has files, no sandboxId),
             // check if background work has already set a sandboxId we should preserve
@@ -432,7 +433,7 @@ export async function POST(req: Request) {
               ) {
                 // Background work has completed - use the sandboxId from DB
                 // but also include pending operations from this session
-                const mergedHybridState: SandboxState = {
+                sandboxStateToPersist = {
                   type: "hybrid",
                   sandboxId: currentSession.sandboxState.sandboxId,
                   pendingOperations:
@@ -440,24 +441,14 @@ export async function POST(req: Request) {
                       ? currentState.pendingOperations
                       : undefined,
                 };
-                await updateSession(sessionId, {
-                  sandboxState: mergedHybridState,
-                  ...buildActiveLifecycleUpdate(mergedHybridState, {
-                    activityAt,
-                  }),
-                });
-
-                kickSandboxLifecycleWorkflow({
-                  sessionId,
-                  reason: "chat-finished",
-                });
-                return;
               }
             }
 
             await updateSession(sessionId, {
-              sandboxState: currentState,
-              ...buildActiveLifecycleUpdate(currentState, { activityAt }),
+              sandboxState: sandboxStateToPersist,
+              ...buildActiveLifecycleUpdate(sandboxStateToPersist, {
+                activityAt,
+              }),
             });
 
             kickSandboxLifecycleWorkflow({

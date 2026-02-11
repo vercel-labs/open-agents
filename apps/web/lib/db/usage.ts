@@ -12,7 +12,7 @@ export async function recordUsage(
   data: {
     source: UsageSource;
     agentType?: UsageAgentType;
-    model: LanguageModel;
+    model: LanguageModel | string;
     messages: UIMessage[];
     usage: {
       inputTokens: number;
@@ -77,7 +77,7 @@ export async function getUsageHistory(
       inputTokens: sql<number>`sum(${usageEvents.inputTokens})::int`,
       cachedInputTokens: sql<number>`sum(${usageEvents.cachedInputTokens})::int`,
       outputTokens: sql<number>`sum(${usageEvents.outputTokens})::int`,
-      messageCount: sql<number>`count(*)::int`,
+      messageCount: sql<number>`sum(case when ${usageEvents.agentType} = 'main' then 1 else 0 end)::int`,
       toolCallCount: sql<number>`sum(${usageEvents.toolCallCount})::int`,
     })
     .from(usageEvents)
