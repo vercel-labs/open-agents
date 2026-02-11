@@ -5,11 +5,13 @@ import { db } from "./client";
 import { usageEvents } from "./schema";
 
 export type UsageSource = "web" | "cli";
+export type UsageAgentType = "main" | "subagent";
 
 export async function recordUsage(
   userId: string,
   data: {
     source: UsageSource;
+    agentType?: UsageAgentType;
     model: LanguageModel;
     messages: UIMessage[];
     usage: {
@@ -34,6 +36,7 @@ export async function recordUsage(
     id: nanoid(),
     userId,
     source: data.source,
+    agentType: data.agentType ?? "main",
     provider: provider ?? null,
     modelId: modelId ?? null,
     inputTokens: data.usage.inputTokens,
@@ -46,6 +49,7 @@ export async function recordUsage(
 export interface DailyUsage {
   date: string;
   source: UsageSource;
+  agentType: UsageAgentType;
   provider: string | null;
   modelId: string | null;
   inputTokens: number;
@@ -67,6 +71,7 @@ export async function getUsageHistory(
     .select({
       date: sql<string>`date(${usageEvents.createdAt})`,
       source: usageEvents.source,
+      agentType: usageEvents.agentType,
       provider: usageEvents.provider,
       modelId: usageEvents.modelId,
       inputTokens: sql<number>`sum(${usageEvents.inputTokens})::int`,
@@ -82,6 +87,7 @@ export async function getUsageHistory(
     .groupBy(
       sql`date(${usageEvents.createdAt})`,
       usageEvents.source,
+      usageEvents.agentType,
       usageEvents.provider,
       usageEvents.modelId,
     )

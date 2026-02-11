@@ -280,6 +280,9 @@ export const usageEvents = pgTable("usage_events", {
   source: text("source", { enum: ["web", "cli"] })
     .notNull()
     .default("web"),
+  agentType: text("agent_type", { enum: ["main", "subagent"] })
+    .notNull()
+    .default("main"),
   provider: text("provider"),
   modelId: text("model_id"),
   inputTokens: integer("input_tokens").notNull().default(0),
