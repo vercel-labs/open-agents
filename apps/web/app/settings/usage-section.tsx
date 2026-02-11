@@ -10,12 +10,31 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ContributionChart } from "@/components/contribution-chart";
 import { fetcher } from "@/lib/swr";
 
 interface DailyUsageRow {
   date: string;
   source: "web" | "cli";
+  provider: string | null;
+  modelId: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  messageCount: number;
+  toolCallCount: number;
+}
+
+interface ModelUsage {
+  modelId: string;
+  provider: string;
   inputTokens: number;
   outputTokens: number;
   messageCount: number;
@@ -50,6 +69,39 @@ function sumRows(rows: DailyUsageRow[]) {
     }),
     { inputTokens: 0, outputTokens: 0, messageCount: 0, toolCallCount: 0 },
   );
+}
+
+/** Aggregate rows by model across all dates */
+function aggregateByModel(rows: DailyUsageRow[]): ModelUsage[] {
+  const map = new Map<string, ModelUsage>();
+  for (const r of rows) {
+    if (!r.modelId) continue;
+    const existing = map.get(r.modelId);
+    if (existing) {
+      existing.inputTokens += r.inputTokens;
+      existing.outputTokens += r.outputTokens;
+      existing.messageCount += r.messageCount;
+      existing.toolCallCount += r.toolCallCount;
+    } else {
+      map.set(r.modelId, {
+        modelId: r.modelId,
+        provider: r.provider ?? "unknown",
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        messageCount: r.messageCount,
+        toolCallCount: r.toolCallCount,
+      });
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) => b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
+  );
+}
+
+/** Strip provider prefix from model ID (e.g. "anthropic/claude-haiku-4.5" → "claude-haiku-4.5") */
+function displayModelId(modelId: string): string {
+  const slashIndex = modelId.indexOf("/");
+  return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
 }
 
 /** Merge per-source rows into one row per date for the chart */
@@ -117,17 +169,19 @@ export function UsageSection() {
     fetcher,
   );
 
-  const { webTotals, cliTotals, totals, chartData } = useMemo(() => {
-    const usage = data?.usage ?? [];
-    const web = usage.filter((r) => r.source === "web");
-    const cli = usage.filter((r) => r.source === "cli");
-    return {
-      webTotals: sumRows(web),
-      cliTotals: sumRows(cli),
-      totals: sumRows(usage),
-      chartData: mergeDays(usage),
-    };
-  }, [data]);
+  const { webTotals, cliTotals, totals, chartData, modelUsage } =
+    useMemo(() => {
+      const usage = data?.usage ?? [];
+      const web = usage.filter((r) => r.source === "web");
+      const cli = usage.filter((r) => r.source === "cli");
+      return {
+        webTotals: sumRows(web),
+        cliTotals: sumRows(cli),
+        totals: sumRows(usage),
+        chartData: mergeDays(usage),
+        modelUsage: aggregateByModel(usage),
+      };
+    }, [data]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -196,6 +250,51 @@ export function UsageSection() {
 
         {/* Activity chart */}
         <ContributionChart data={chartData} />
+
+        {/* Model breakdown */}
+        {modelUsage.length > 0 ? (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Usage by model</h3>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead className="text-right">Input tokens</TableHead>
+                  <TableHead className="text-right">Output tokens</TableHead>
+                  <TableHead className="text-right">Messages</TableHead>
+                  <TableHead className="text-right">Tool calls</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {modelUsage.map((m) => (
+                  <TableRow key={m.modelId}>
+                    <TableCell className="font-medium">
+                      {displayModelId(m.modelId)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {m.provider}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatTokens(m.inputTokens)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatTokens(m.outputTokens)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.messageCount.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.toolCallCount.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No model data</p>
+        )}
       </CardContent>
     </Card>
   );

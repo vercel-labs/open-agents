@@ -477,6 +477,7 @@ export async function POST(req: Request) {
         if (totalMessageUsage) {
           void recordUsage(session.user.id, {
             source: "web",
+            model,
             messages: [responseMessage],
             usage: {
               inputTokens: totalMessageUsage.inputTokens ?? 0,

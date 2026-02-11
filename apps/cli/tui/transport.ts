@@ -177,6 +177,7 @@ export function createAgentTransport({
               body: JSON.stringify({
                 messages: lastAssistantMessage ? [lastAssistantMessage] : [],
                 usage: totalMessageUsage,
+                modelId,
               }),
             }).catch(() => {});
           }

@@ -1,4 +1,4 @@
-import { isToolUIPart, type UIMessage } from "ai";
+import { isToolUIPart, type LanguageModel, type UIMessage } from "ai";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "./client";
@@ -10,6 +10,7 @@ export async function recordUsage(
   userId: string,
   data: {
     source: UsageSource;
+    model: LanguageModel;
     messages: UIMessage[];
     usage: { inputTokens: number; outputTokens: number };
   },
@@ -18,10 +19,19 @@ export async function recordUsage(
     .flatMap((m) => m.parts)
     .filter(isToolUIPart).length;
 
+  const provider =
+    typeof data.model === "string"
+      ? data.model.split("/")[0]
+      : data.model.provider;
+  const modelId =
+    typeof data.model === "string" ? data.model : data.model.modelId;
+
   await db.insert(usageEvents).values({
     id: nanoid(),
     userId,
     source: data.source,
+    provider: provider ?? null,
+    modelId: modelId ?? null,
     inputTokens: data.usage.inputTokens,
     outputTokens: data.usage.outputTokens,
     toolCallCount,
@@ -31,6 +41,8 @@ export async function recordUsage(
 export interface DailyUsage {
   date: string;
   source: UsageSource;
+  provider: string | null;
+  modelId: string | null;
   inputTokens: number;
   outputTokens: number;
   messageCount: number;
@@ -49,6 +61,8 @@ export async function getUsageHistory(
     .select({
       date: sql<string>`date(${usageEvents.createdAt})`,
       source: usageEvents.source,
+      provider: usageEvents.provider,
+      modelId: usageEvents.modelId,
       inputTokens: sql<number>`sum(${usageEvents.inputTokens})::int`,
       outputTokens: sql<number>`sum(${usageEvents.outputTokens})::int`,
       messageCount: sql<number>`count(*)::int`,
@@ -58,7 +72,12 @@ export async function getUsageHistory(
     .where(
       sql`${usageEvents.userId} = ${userId} and ${usageEvents.createdAt} >= ${sinceIso}`,
     )
-    .groupBy(sql`date(${usageEvents.createdAt})`, usageEvents.source)
+    .groupBy(
+      sql`date(${usageEvents.createdAt})`,
+      usageEvents.source,
+      usageEvents.provider,
+      usageEvents.modelId,
+    )
     .orderBy(sql`date(${usageEvents.createdAt})`);
 
   return rows;

@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   let body: {
     messages: unknown[];
     usage: { inputTokens: number; outputTokens: number };
+    modelId?: string;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
   try {
     await recordUsage(verification.userId, {
       source: "cli",
+      model: body.modelId ?? "unknown/unknown",
       messages: (body.messages ?? []) as Parameters<
         typeof recordUsage
       >[1]["messages"],
