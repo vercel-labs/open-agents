@@ -276,3 +276,4 @@ Use `catalog:` for shared external versions:
 - Chat list streaming indicators should poll more frequently while any chat is actively streaming (for example ~1s) and fall back to a slower cadence when idle, to avoid delayed white-to-complete indicator transitions after chat switches.
 - Optimistic chat-title previews for `"New chat"` must have an explicit rollback on send failures; otherwise the sidebar can keep a title that was never persisted if the first request errors.
 - `hadInitialMessages` is an initial-load snapshot, not a live "first turn" signal; guard one-time optimistic UI (like first-message title previews) with a dedicated runtime ref/state that resets on send failure.
+- In the GitHub App install flow, do a user-token installation sync before redirecting after OAuth-only callbacks or treating zero local installation rows as "not installed"; GitHub can skip callback emissions for pre-existing installs.

@@ -2,6 +2,8 @@ import { generateState } from "arctic";
 import { NextResponse, type NextRequest } from "next/server";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
+import { decrypt } from "@/lib/crypto";
+import { syncUserInstallations } from "@/lib/github/installations-sync";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null): string {
@@ -81,14 +83,27 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const ghAccount = await getGitHubAccount(session.user.id);
-  const installations = ghAccount
+  let installations = ghAccount
     ? await getInstallationsByUserId(session.user.id)
     : [];
 
   if (ghAccount) {
     if (installations.length === 0) {
-      // Linked account but no installations — go directly to the install page
-      // for their personal account so they don't have to pick from the picker.
+      try {
+        const userToken = decrypt(ghAccount.accessToken);
+        await syncUserInstallations(session.user.id, userToken);
+        installations = await getInstallationsByUserId(session.user.id);
+      } catch (error) {
+        console.error("Failed to sync GitHub installations in install flow:", {
+          userId: session.user.id,
+          error,
+        });
+      }
+    }
+
+    if (installations.length === 0) {
+      // Linked account and still no installations after a sync-first refresh.
+      // Route to personal-account install for the fastest initial install path.
       const installUrl = new URL(
         `https://github.com/apps/${appSlug}/installations/new/permissions`,
       );

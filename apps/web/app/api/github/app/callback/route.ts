@@ -171,21 +171,9 @@ export async function GET(req: Request): Promise<Response> {
     oauthResult = await exchangeOAuthCode(oauthCode, session.user.id);
   }
 
-  // ── Step 1b: Chain to install if OAuth completed without installation ─
-  // When the callback receives only an OAuth code (no installation_id), the
-  // user just linked their GitHub account but hasn't installed the app yet.
-  // Chain directly to the install flow with their GitHub ID as target_id so
-  // they land on the actual GitHub App install page in one continuous flow.
-  if (oauthResult && !installationId) {
-    const installUrl = new URL("/api/github/app/install", req.url);
-    installUrl.searchParams.set("target_id", oauthResult.githubUserId);
-    installUrl.searchParams.set("next", redirectTo);
-    // Don't clear cookies — the install route will set fresh ones
-    return NextResponse.redirect(installUrl);
-  }
-
   // ── Step 2: Sync installations from user-scoped data ──────────────────
   let synced = false;
+  let syncedInstallationsCount: number | null = null;
 
   // Prefer the freshly-obtained token; fall back to an existing stored token
   const tokenForSync =
@@ -196,11 +184,29 @@ export async function GET(req: Request): Promise<Response> {
 
   if (resolvedToken) {
     try {
-      await syncUserInstallations(session.user.id, resolvedToken);
+      syncedInstallationsCount = await syncUserInstallations(
+        session.user.id,
+        resolvedToken,
+      );
       synced = true;
     } catch (error) {
       console.error("Failed syncing installations from user token:", error);
     }
+  }
+
+  // ── Step 2b: Chain to install only when OAuth completed and no installs ─
+  // If OAuth linked an account and sync already found installations, skip
+  // chaining through install to avoid dead-ends where GitHub doesn't emit a
+  // second callback for pre-existing installs.
+  const hasExistingInstallations =
+    syncedInstallationsCount !== null && syncedInstallationsCount > 0;
+
+  if (oauthResult && !installationId && !hasExistingInstallations) {
+    const installUrl = new URL("/api/github/app/install", req.url);
+    installUrl.searchParams.set("target_id", oauthResult.githubUserId);
+    installUrl.searchParams.set("next", redirectTo);
+    // Don't clear cookies — the install route will set fresh ones
+    return NextResponse.redirect(installUrl);
   }
 
   // ── Step 3: Determine result status ───────────────────────────────────
@@ -218,7 +224,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   redirectUrl.searchParams.set("github", githubStatus);
-  if (!installationId) {
+  if (!installationId && !synced) {
     redirectUrl.searchParams.set("missing_installation_id", "1");
   }
 
