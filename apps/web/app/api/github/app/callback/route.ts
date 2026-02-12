@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { encrypt } from "@/lib/crypto";
 import { upsertGitHubAccount } from "@/lib/db/accounts";
@@ -36,16 +37,15 @@ function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
 
 /**
  * Exchange an OAuth authorization code for an access token and link the
- * GitHub account to the current user. This handles the `code` parameter
- * that GitHub sends when "Request user authorization (OAuth) during
- * installation" is enabled on the GitHub App.
+ * GitHub account to the current user.
  *
- * Returns the access token on success, or null if the exchange fails.
+ * Returns the access token and GitHub user ID on success, or null if the
+ * exchange fails.
  */
 async function exchangeOAuthCode(
   code: string,
   userId: string,
-): Promise<string | null> {
+): Promise<{ token: string; githubUserId: string } | null> {
   const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
@@ -108,11 +108,20 @@ async function exchangeOAuthCode(
       username: githubUser.login,
     });
 
-    return tokenData.access_token;
+    return { token: tokenData.access_token, githubUserId: `${githubUser.id}` };
   } catch (error) {
     console.error("OAuth code exchange error:", error);
     return null;
   }
+}
+
+/** Create a redirect response that clears the install cookies. */
+function redirectAndClearCookies(url: string | URL): NextResponse {
+  const response = NextResponse.redirect(url);
+  response.cookies.delete("github_app_install_redirect_to");
+  response.cookies.delete("github_app_install_state");
+  response.cookies.delete("github_reconnect");
+  return response;
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -129,7 +138,7 @@ export async function GET(req: Request): Promise<Response> {
       "next",
       `${requestUrl.pathname}${requestUrl.search}`,
     );
-    return Response.redirect(signinUrl);
+    return NextResponse.redirect(signinUrl);
   }
 
   const redirectUrl = new URL(redirectTo, req.url);
@@ -138,26 +147,41 @@ export async function GET(req: Request): Promise<Response> {
   );
   const oauthCode = requestUrl.searchParams.get("code");
   const callbackState = requestUrl.searchParams.get("state");
+  const setupAction = requestUrl.searchParams.get("setup_action");
   const expectedState = cookieStore.get("github_app_install_state")?.value;
 
-  if (
-    (oauthCode || installationId) &&
-    (!callbackState || !expectedState || callbackState !== expectedState)
-  ) {
-    cookieStore.delete("github_app_install_redirect_to");
-    cookieStore.delete("github_app_install_state");
+  // State validation: require matching state when an OAuth code is present
+  // (CSRF protection for token exchange). For installation-only callbacks
+  // (just installation_id, no code), state may be absent.
+  const hasOAuthPayload = Boolean(oauthCode);
+  const stateValid =
+    callbackState && expectedState && callbackState === expectedState;
+
+  if (hasOAuthPayload && !stateValid) {
     redirectUrl.searchParams.set("github", "invalid_state");
-    return Response.redirect(redirectUrl);
+    return redirectAndClearCookies(redirectUrl);
   }
 
   // ── Step 1: Handle OAuth code if present ──────────────────────────────
-  // When "Request user authorization (OAuth) during installation" is enabled
-  // on the GitHub App, GitHub sends a `code` alongside `installation_id`.
-  // Exchange it for a user token and link the GitHub account in one step.
-  let userToken: string | null = null;
+  // The install route sends users without a linked GitHub account through
+  // OAuth first. Exchange the code for a token and link the account.
+  let oauthResult: { token: string; githubUserId: string } | null = null;
 
   if (oauthCode) {
-    userToken = await exchangeOAuthCode(oauthCode, session.user.id);
+    oauthResult = await exchangeOAuthCode(oauthCode, session.user.id);
+  }
+
+  // ── Step 1b: Chain to install if OAuth completed without installation ─
+  // When the callback receives only an OAuth code (no installation_id), the
+  // user just linked their GitHub account but hasn't installed the app yet.
+  // Chain directly to the install flow with their GitHub ID as target_id so
+  // they land on the actual GitHub App install page in one continuous flow.
+  if (oauthResult && !installationId) {
+    const installUrl = new URL("/api/github/app/install", req.url);
+    installUrl.searchParams.set("target_id", oauthResult.githubUserId);
+    installUrl.searchParams.set("next", redirectTo);
+    // Don't clear cookies — the install route will set fresh ones
+    return NextResponse.redirect(installUrl);
   }
 
   // ── Step 2: Sync installations from user-scoped data ──────────────────
@@ -165,7 +189,8 @@ export async function GET(req: Request): Promise<Response> {
 
   // Prefer the freshly-obtained token; fall back to an existing stored token
   const tokenForSync =
-    userToken ?? (await import("@/lib/github/user-token")).getUserGitHubToken();
+    oauthResult?.token ??
+    (await import("@/lib/github/user-token")).getUserGitHubToken();
   const resolvedToken =
     typeof tokenForSync === "string" ? tokenForSync : await tokenForSync;
 
@@ -180,7 +205,6 @@ export async function GET(req: Request): Promise<Response> {
 
   // ── Step 3: Determine result status ───────────────────────────────────
   // GitHub sends setup_action=install|update|request to indicate what happened
-  const setupAction = requestUrl.searchParams.get("setup_action");
 
   let githubStatus: string;
   if (synced && setupAction === "request") {
@@ -198,9 +222,5 @@ export async function GET(req: Request): Promise<Response> {
     redirectUrl.searchParams.set("missing_installation_id", "1");
   }
 
-  cookieStore.delete("github_app_install_redirect_to");
-  cookieStore.delete("github_app_install_state");
-  cookieStore.delete("github_reconnect");
-
-  return Response.redirect(redirectUrl);
+  return redirectAndClearCookies(redirectUrl);
 }

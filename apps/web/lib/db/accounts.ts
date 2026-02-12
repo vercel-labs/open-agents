@@ -48,13 +48,16 @@ export async function upsertGitHubAccount(data: {
   return id;
 }
 
-export async function getGitHubAccount(
-  userId: string,
-): Promise<{ accessToken: string; username: string } | null> {
+export async function getGitHubAccount(userId: string): Promise<{
+  accessToken: string;
+  username: string;
+  externalUserId: string;
+} | null> {
   const result = await db
     .select({
       accessToken: accounts.accessToken,
       username: accounts.username,
+      externalUserId: accounts.externalUserId,
     })
     .from(accounts)
     .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
