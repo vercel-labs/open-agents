@@ -25,7 +25,6 @@ export type SandboxLifecycleReason =
   | "sandbox-created"
   | "cloud-ready"
   | "timeout-extended"
-  | "manual-snapshot"
   | "snapshot-restored"
   | "reconnect"
   | "manual-stop"

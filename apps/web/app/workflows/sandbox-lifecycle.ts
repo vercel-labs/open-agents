@@ -1,5 +1,6 @@
 import { sleep } from "workflow";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { SANDBOX_LIFECYCLE_MIN_SLEEP_MS } from "@/lib/sandbox/config";
 import {
   evaluateSandboxLifecycle,
   getLifecycleDueAtMs,
@@ -78,9 +79,11 @@ export async function sandboxLifecycleWorkflow(
     }
 
     const now = Date.now();
-    if (decision.wakeAtMs > now) {
-      await sleep(new Date(decision.wakeAtMs));
-    }
+    const wakeAtMs = Math.max(
+      decision.wakeAtMs,
+      now + SANDBOX_LIFECYCLE_MIN_SLEEP_MS,
+    );
+    await sleep(new Date(wakeAtMs));
 
     const evaluation = await runLifecycleEvaluation(sessionId, reason);
 
