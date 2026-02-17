@@ -14,6 +14,11 @@ interface ChatsResponse {
   chats: SessionChatListItem[];
 }
 
+type CreateChatResult = {
+  chat: Chat;
+  persisted: Promise<Chat>;
+};
+
 type StreamingOverlay = {
   setAt: number;
   seenServerStreaming: boolean;
@@ -213,38 +218,85 @@ export function useSessionChats(sessionId: string | null) {
     setOverlayVersion((value) => value + 1);
   }, [data, optimisticOverlay, sessionId]);
 
-  const createChat = async () => {
+  const createChat = (): CreateChatResult => {
     if (!sessionId) {
       throw new Error("Missing sessionId");
     }
 
-    const res = await fetch(`/api/sessions/${sessionId}/chats`, {
-      method: "POST",
-    });
+    const now = new Date();
+    const optimisticChat: Chat = {
+      id: crypto.randomUUID(),
+      sessionId,
+      title: "New chat",
+      modelId: data?.chats[0]?.modelId ?? null,
+      activeStreamId: null,
+      lastAssistantMessageAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
 
-    const responseData = (await res.json()) as { chat?: Chat; error?: string };
-
-    if (!res.ok || !responseData.chat) {
-      throw new Error(responseData.error ?? "Failed to create chat");
-    }
-
-    const createdChat = responseData.chat;
-
-    await mutate(
+    void mutate(
       (current) => ({
         chats: [
           {
-            ...createdChat,
+            ...optimisticChat,
             hasUnread: false,
             isStreaming: false,
           },
-          ...(current?.chats ?? []),
+          ...(current?.chats ?? []).filter(
+            (chat) => chat.id !== optimisticChat.id,
+          ),
         ],
       }),
       { revalidate: false },
     );
 
-    return createdChat;
+    const persisted = (async () => {
+      const res = await fetch(`/api/sessions/${sessionId}/chats`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: optimisticChat.id }),
+      });
+
+      const responseData = (await res.json()) as {
+        chat?: Chat;
+        error?: string;
+      };
+
+      if (!res.ok || !responseData.chat) {
+        await mutate(
+          (current) => ({
+            chats: (current?.chats ?? []).filter(
+              (chat) => chat.id !== optimisticChat.id,
+            ),
+          }),
+          { revalidate: false },
+        );
+        throw new Error(responseData.error ?? "Failed to create chat");
+      }
+
+      const createdChat = responseData.chat;
+
+      await mutate(
+        (current) => ({
+          chats: [
+            {
+              ...createdChat,
+              hasUnread: false,
+              isStreaming: false,
+            },
+            ...(current?.chats ?? []).filter(
+              (chat) => chat.id !== createdChat.id,
+            ),
+          ],
+        }),
+        { revalidate: false },
+      );
+
+      return createdChat;
+    })();
+
+    return { chat: optimisticChat, persisted };
   };
 
   const renameChat = async (chatId: string, title: string) => {

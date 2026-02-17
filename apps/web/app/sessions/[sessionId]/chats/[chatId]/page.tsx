@@ -1,18 +1,39 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
+import { DiffsProvider } from "@/components/diffs-provider";
 import {
   getChatById,
   getChatMessages,
   getSessionById,
 } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { DiffsProvider } from "@/components/diffs-provider";
-import { SessionChatProvider } from "./session-chat-context";
 import { SessionChatContent } from "./session-chat-content";
+import { SessionChatProvider } from "./session-chat-context";
 
 interface SessionChatPageProps {
   params: Promise<{ sessionId: string; chatId: string }>;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getChatByIdWithRetry(
+  chatId: string,
+  sessionId: string,
+): Promise<Awaited<ReturnType<typeof getChatById>>> {
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const chat = await getChatById(chatId);
+    if (chat && chat.sessionId === sessionId) {
+      return chat;
+    }
+    if (attempt < maxAttempts) {
+      await sleep(80);
+    }
+  }
+  return undefined;
 }
 
 export async function generateMetadata({
@@ -48,8 +69,8 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
-  const chat = await getChatById(chatId);
-  if (!chat || chat.sessionId !== sessionId) {
+  const chat = await getChatByIdWithRetry(chatId, sessionId);
+  if (!chat) {
     notFound();
   }
 
