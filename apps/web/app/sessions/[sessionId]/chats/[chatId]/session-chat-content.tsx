@@ -48,6 +48,16 @@ import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Drawer,
   DrawerContent,
   DrawerHeader,
@@ -1577,19 +1587,40 @@ export function SessionChatContent() {
               </span>
             </div>
             <div className="flex items-center gap-1 md:gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  void archiveSession().catch((error) => {
-                    console.error("Failed to archive session:", error);
-                  });
-                  router.push("/");
-                }}
-              >
-                <Archive className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Archive</span>
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Archive className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Archive</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent showCloseButton={false}>
+                  <DialogHeader>
+                    <DialogTitle>Archive session?</DialogTitle>
+                    <DialogDescription>
+                      This will stop the sandbox and archive the session. You
+                      can still view it in the archive tab.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Button
+                        onClick={() => {
+                          void archiveSession().catch((error: unknown) => {
+                            console.error("Failed to archive session:", error);
+                          });
+                          router.push("/");
+                        }}
+                      >
+                        Archive
+                      </Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               {!supportsDiff ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
