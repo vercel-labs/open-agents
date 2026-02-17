@@ -71,7 +71,6 @@ import {
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
@@ -400,7 +399,6 @@ export function SessionChatContent() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const isMobile = useIsMobile();
   const [hasMounted, setHasMounted] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1502,23 +1500,19 @@ export function SessionChatContent() {
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-foreground">
       {/* Desktop sidebar */}
-      {!isMobile && (
-        <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-muted/20">
-          {sidebarContent}
-        </aside>
-      )}
+      <aside className="hidden w-72 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
+        {sidebarContent}
+      </aside>
 
       {/* Mobile sidebar Drawer */}
-      {isMobile && (
-        <Drawer open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-          <DrawerContent className="h-[85dvh]">
-            <DrawerHeader className="sr-only">
-              <DrawerTitle>Navigation</DrawerTitle>
-            </DrawerHeader>
-            {sidebarContent}
-          </DrawerContent>
-        </Drawer>
-      )}
+      <Drawer open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <DrawerContent className="h-[85dvh] md:hidden">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>Navigation</DrawerTitle>
+          </DrawerHeader>
+          {sidebarContent}
+        </DrawerContent>
+      </Drawer>
 
       {/* Main chat area */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1527,15 +1521,13 @@ export function SessionChatContent() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2 md:gap-4">
               {/* Menu button - mobile only */}
-              {isMobile && (
-                <button
-                  type="button"
-                  onClick={() => setMobileSidebarOpen(true)}
-                  className="shrink-0"
-                >
-                  <Menu className="h-4 w-4 text-muted-foreground" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="shrink-0 md:hidden"
+              >
+                <Menu className="h-4 w-4 text-muted-foreground" />
+              </button>
               <div className="flex min-w-0 items-center gap-2 text-sm">
                 {session.repoName ? (
                   <>
