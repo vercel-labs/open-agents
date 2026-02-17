@@ -48,11 +48,11 @@ import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Tooltip,
   TooltipContent,
@@ -1494,15 +1494,19 @@ export function SessionChatContent() {
         {sidebarContent}
       </aside>
 
-      {/* Mobile sidebar Sheet */}
-      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-        <SheetContent side="left" className="flex w-72 flex-col p-0">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Navigation</SheetTitle>
-          </SheetHeader>
+      {/* Mobile sidebar Drawer */}
+      <Drawer
+        open={mobileSidebarOpen}
+        onOpenChange={setMobileSidebarOpen}
+        direction="left"
+      >
+        <DrawerContent className="flex h-full w-[85vw] max-w-sm flex-col p-0">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>Navigation</DrawerTitle>
+          </DrawerHeader>
           {sidebarContent}
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
 
       {/* Main chat area */}
       <div className="flex min-w-0 flex-1 flex-col">

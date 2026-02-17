@@ -2,6 +2,12 @@
 
 import { Archive, GitMerge } from "lucide-react";
 import { useState } from "react";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
@@ -9,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Session } from "@/lib/db/schema";
 
 interface SessionDrawerProps {
@@ -144,13 +151,12 @@ function SessionGroup({
 
 type DrawerTab = "sessions" | "archive";
 
-export function SessionDrawer({
-  open,
-  onOpenChange,
+function SessionDrawerInner({
   sessions,
   loading,
   onSessionClick,
-}: SessionDrawerProps) {
+  onOpenChange,
+}: Omit<SessionDrawerProps, "open">) {
   const [tab, setTab] = useState<DrawerTab>("sessions");
 
   const activeSessions = sessions.filter((s) => s.status !== "archived");
@@ -165,84 +171,124 @@ export function SessionDrawer({
   };
 
   return (
+    <>
+      <div className="border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Sessions</h2>
+        </div>
+        <div className="flex gap-1 pt-1">
+          <button
+            type="button"
+            onClick={() => setTab("sessions")}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              tab === "sessions"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Active
+            {activeSessions.length > 0 && (
+              <span className="ml-1.5 text-muted-foreground">
+                {activeSessions.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("archive")}
+            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              tab === "archive"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Archive className="h-3 w-3" />
+            Archive
+            {archivedSessions.length > 0 && (
+              <span className="ml-1 text-muted-foreground">
+                {archivedSessions.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {loading ? (
+            <SessionDrawerSkeleton />
+          ) : displayedSessions.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              {tab === "sessions" ? "No sessions yet" : "No archived sessions"}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Array.from(groupedSessions.entries()).map(
+                ([dateGroup, groupSessions]) => (
+                  <SessionGroup
+                    key={dateGroup}
+                    dateGroup={dateGroup}
+                    sessions={groupSessions}
+                    onSessionClick={handleSessionClick}
+                  />
+                ),
+              )}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </>
+  );
+}
+
+export function SessionDrawer({
+  open,
+  onOpenChange,
+  sessions,
+  loading,
+  onSessionClick,
+}: SessionDrawerProps) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent className="h-[85dvh]">
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>Sessions</DrawerTitle>
+          </DrawerHeader>
+          <SessionDrawerInner
+            sessions={sessions}
+            loading={loading}
+            onSessionClick={onSessionClick}
+            onOpenChange={onOpenChange}
+          />
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         className="flex flex-col gap-0 p-0 sm:max-w-sm"
       >
-        <SheetHeader className="border-b px-4 py-3">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-base">Sessions</SheetTitle>
-          </div>
-          <div className="flex gap-1 pt-1">
-            <button
-              type="button"
-              onClick={() => setTab("sessions")}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                tab === "sessions"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Active
-              {activeSessions.length > 0 && (
-                <span className="ml-1.5 text-muted-foreground">
-                  {activeSessions.length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("archive")}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                tab === "archive"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Archive className="h-3 w-3" />
-              Archive
-              {archivedSessions.length > 0 && (
-                <span className="ml-1 text-muted-foreground">
-                  {archivedSessions.length}
-                </span>
-              )}
-            </button>
-          </div>
+        <SheetHeader className="sr-only">
+          <SheetTitle>Sessions</SheetTitle>
         </SheetHeader>
-
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {loading ? (
-              <DrawerSkeleton />
-            ) : displayedSessions.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                {tab === "sessions"
-                  ? "No sessions yet"
-                  : "No archived sessions"}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {Array.from(groupedSessions.entries()).map(
-                  ([dateGroup, groupSessions]) => (
-                    <SessionGroup
-                      key={dateGroup}
-                      dateGroup={dateGroup}
-                      sessions={groupSessions}
-                      onSessionClick={handleSessionClick}
-                    />
-                  ),
-                )}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+        <SessionDrawerInner
+          sessions={sessions}
+          loading={loading}
+          onSessionClick={onSessionClick}
+          onOpenChange={onOpenChange}
+        />
       </SheetContent>
     </Sheet>
   );
 }
 
-function DrawerSkeleton() {
+function SessionDrawerSkeleton() {
   return (
     <div className="space-y-4 p-3">
       <div>
