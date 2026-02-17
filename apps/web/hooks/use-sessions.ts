@@ -1,7 +1,7 @@
 "use client";
 
-import useSWR from "swr";
-import type { Session } from "@/lib/db/schema";
+import useSWR, { useSWRConfig } from "swr";
+import type { Chat, Session } from "@/lib/db/schema";
 import { fetcher } from "@/lib/swr";
 
 interface CreateSessionInput {
@@ -20,7 +20,7 @@ interface SessionsResponse {
 
 interface CreateSessionResponse {
   session: Session;
-  chat: { id: string };
+  chat: Chat;
 }
 
 export function useSessions(options?: { enabled?: boolean }) {
@@ -29,6 +29,7 @@ export function useSessions(options?: { enabled?: boolean }) {
     enabled ? "/api/sessions" : null,
     fetcher,
   );
+  const { mutate: globalMutate } = useSWRConfig();
 
   const sessions = data?.sessions ?? [];
 
@@ -41,7 +42,7 @@ export function useSessions(options?: { enabled?: boolean }) {
 
     const responseData = (await res.json()) as {
       session?: Session;
-      chat?: { id: string };
+      chat?: Chat;
       error?: string;
     };
 
@@ -51,6 +52,25 @@ export function useSessions(options?: { enabled?: boolean }) {
 
     const createdSession = responseData.session;
     const createdChat = responseData.chat;
+
+    // Pre-seed the session chats SWR cache so the sidebar shows the
+    // initial chat immediately on navigation instead of waiting for a
+    // fresh fetch.
+    void globalMutate(
+      `/api/sessions/${createdSession.id}/chats`,
+      {
+        chats: [
+          {
+            ...createdChat,
+            hasUnread: false,
+            isStreaming: false,
+          },
+        ],
+        defaultModelId: createdChat.modelId,
+      },
+      { revalidate: false },
+    );
+
     await mutate(
       {
         sessions: [createdSession, ...sessions],
@@ -61,7 +81,7 @@ export function useSessions(options?: { enabled?: boolean }) {
     return {
       session: createdSession,
       chat: createdChat,
-    } as CreateSessionResponse;
+    } satisfies CreateSessionResponse;
   };
 
   const archiveSession = async (sessionId: string) => {
