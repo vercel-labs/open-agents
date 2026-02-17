@@ -3,8 +3,10 @@ import "server-only";
 import { start } from "workflow/api";
 import { sandboxLifecycleWorkflow } from "@/app/workflows/sandbox-lifecycle";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { SANDBOX_LIFECYCLE_STALE_RUN_GRACE_MS } from "./config";
 import {
   evaluateSandboxLifecycle,
+  getLifecycleDueAtMs,
   type SandboxLifecycleReason,
 } from "./lifecycle";
 import { canOperateOnSandbox } from "./utils";
@@ -71,10 +73,38 @@ function shouldStartLifecycle(
   return true;
 }
 
+function isLifecycleRunStale(
+  session: NonNullable<Awaited<ReturnType<typeof getSessionById>>>,
+): boolean {
+  if (!session.lifecycleRunId) {
+    return false;
+  }
+  if (session.lifecycleState !== "active") {
+    return false;
+  }
+
+  const dueAtMs = getLifecycleDueAtMs(session);
+  const overdueMs = Date.now() - dueAtMs;
+
+  return overdueMs > SANDBOX_LIFECYCLE_STALE_RUN_GRACE_MS;
+}
+
 export function kickSandboxLifecycleWorkflow(input: KickSandboxLifecycleInput) {
   const run = async () => {
     const session = await getSessionById(input.sessionId);
-    if (!shouldStartLifecycle(session)) {
+    if (!session) {
+      return;
+    }
+
+    const sessionForStart = isLifecycleRunStale(session)
+      ? { ...session, lifecycleRunId: null }
+      : session;
+
+    if (sessionForStart !== session) {
+      await updateSession(input.sessionId, { lifecycleRunId: null });
+    }
+
+    if (!shouldStartLifecycle(sessionForStart)) {
       return;
     }
 

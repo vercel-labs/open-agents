@@ -60,6 +60,30 @@ A workflow run does:
    - **Still active** → **skip** ("not-due-yet") and loop with fresh DB state
 5. Exit and clear `lifecycleRunId` when hibernated or no longer operable
 
+### Simple flow
+
+- Start sandbox → start one workflow run
+- Workflow sleeps until the next due time
+- On wake, it either sleeps again or snapshots and stops
+- The workflow only updates its sleep after it wakes, not on every message
+
+### Scenarios
+
+Example 1: user keeps sending messages
+
+- T=0:00 sandbox starts, workflow sleeps until T=0:20
+- T=0:10 message, `hibernateAfter = 0:30`
+- T=0:20 workflow wakes, sees not due, sleeps until T=0:30
+- T=0:25 message, `hibernateAfter = 0:45`
+- T=0:30 workflow wakes, sees not due, sleeps until T=0:45
+
+Example 2: user stops after a message
+
+- T=0:00 sandbox starts, workflow sleeps until T=0:20
+- T=0:10 message, `hibernateAfter = 0:30`
+- T=0:20 workflow wakes, sees not due, sleeps until T=0:30
+- T=0:30 workflow wakes, sees due, snapshots and stops
+
 ### Example timeline
 
 ```
@@ -107,6 +131,7 @@ These are **not** refreshed on:
 1. **Status endpoint** (`GET /api/sandbox/status`) - polled every 15s by the client. If the sandbox is overdue for hibernation but the lifecycle hasn't acted, it triggers a workflow kick. If a run is already active, the kick is ignored.
 2. **Workflow retry** - if evaluation returns "not-due-yet" (activity happened during sleep), re-computes the next wake time and loops.
 3. **Inline fallback** - if `start(workflow)` fails (workflow SDK unavailable in dev), runs `evaluateSandboxLifecycle()` synchronously as a fallback.
+4. **Stale lease guard** - if a workflow lease is overdue by more than 2 minutes, clear the lease so a fresh run can start.
 
 ## Client-side UI sync
 

@@ -14,3 +14,6 @@ export const SANDBOX_INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** Buffer for sandbox expiry checks (10 seconds) */
 export const SANDBOX_EXPIRES_BUFFER_MS = 10 * 1000;
+
+/** Grace window before treating a lifecycle run as stale (2 minutes) */
+export const SANDBOX_LIFECYCLE_STALE_RUN_GRACE_MS = 2 * 60 * 1000;
