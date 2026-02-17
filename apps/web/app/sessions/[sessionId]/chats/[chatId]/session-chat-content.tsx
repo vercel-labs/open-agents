@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Children,
@@ -378,6 +378,7 @@ function SandboxInputOverlay({
 
 export function SessionChatContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
@@ -531,6 +532,8 @@ export function SessionChatContent() {
   const statusSyncInFlightRef = useRef(false);
   const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
   const hasSetOptimisticTitleRef = useRef(false);
+  const pathnameRef = useRef(pathname);
+  const sidebarActiveChatIdRef = useRef<string | null>(null);
   const markReadRef = useRef<{
     lastAt: number;
     lastChatId: string | null;
@@ -623,6 +626,14 @@ export function SessionChatContent() {
 
   const sidebarActiveChatId = optimisticActiveChatId ?? chatInfo.id;
 
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    sidebarActiveChatIdRef.current = sidebarActiveChatId;
+  }, [sidebarActiveChatId]);
+
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
     if (
@@ -677,8 +688,8 @@ export function SessionChatContent() {
         console.error("Failed to create chat:", err);
         void refreshChats();
         if (
-          typeof window !== "undefined" &&
-          window.location.pathname === optimisticPath
+          sidebarActiveChatIdRef.current === newChat.id ||
+          pathnameRef.current === optimisticPath
         ) {
           setOptimisticActiveChatId(previousChatId);
           router.replace(`/sessions/${session.id}/chats/${previousChatId}`);

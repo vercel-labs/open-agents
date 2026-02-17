@@ -19,18 +19,24 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isOptimisticChatId(chatId: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    chatId,
+  );
+}
+
 async function getChatByIdWithRetry(
   chatId: string,
   sessionId: string,
 ): Promise<Awaited<ReturnType<typeof getChatById>>> {
-  const maxAttempts = 6;
+  const maxAttempts = isOptimisticChatId(chatId) ? 4 : 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const chat = await getChatById(chatId);
     if (chat && chat.sessionId === sessionId) {
       return chat;
     }
     if (attempt < maxAttempts) {
-      await sleep(80);
+      await sleep(40);
     }
   }
   return undefined;
@@ -71,6 +77,9 @@ export default async function SessionChatPage({
 
   const chat = await getChatByIdWithRetry(chatId, sessionId);
   if (!chat) {
+    if (isOptimisticChatId(chatId)) {
+      redirect(`/sessions/${sessionId}`);
+    }
     notFound();
   }
 

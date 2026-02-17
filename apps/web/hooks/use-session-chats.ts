@@ -11,6 +11,7 @@ export type SessionChatListItem = Chat & {
 };
 
 interface ChatsResponse {
+  defaultModelId: string | null;
   chats: SessionChatListItem[];
 }
 
@@ -30,16 +31,39 @@ type ChatOptimisticOverlay = {
 };
 
 const STREAMING_RACE_GRACE_MS = 12_000;
+const OVERLAY_INACTIVE_TTL_MS = 5 * 60_000;
 
 // Persist optimistic chat UI state across chat route transitions.
 const sessionChatOverlays = new Map<
   string,
   Map<string, ChatOptimisticOverlay>
 >();
+const overlayCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearOverlayCleanup(sessionId: string): void {
+  const existingTimer = overlayCleanupTimers.get(sessionId);
+  if (!existingTimer) {
+    return;
+  }
+
+  clearTimeout(existingTimer);
+  overlayCleanupTimers.delete(sessionId);
+}
+
+function scheduleOverlayCleanup(sessionId: string): void {
+  clearOverlayCleanup(sessionId);
+  const timer = setTimeout(() => {
+    sessionChatOverlays.delete(sessionId);
+    overlayCleanupTimers.delete(sessionId);
+  }, OVERLAY_INACTIVE_TTL_MS);
+  overlayCleanupTimers.set(sessionId, timer);
+}
 
 function getSessionOverlay(
   sessionId: string,
 ): Map<string, ChatOptimisticOverlay> {
+  clearOverlayCleanup(sessionId);
+
   const existing = sessionChatOverlays.get(sessionId);
   if (existing) {
     return existing;
@@ -67,11 +91,22 @@ function overlaysEqual(
 }
 
 export function useSessionChats(sessionId: string | null) {
-  const [overlayVersion, setOverlayVersion] = useState(0);
+  const [_overlayVersion, setOverlayVersion] = useState(0);
   const optimisticOverlay = useMemo(
     () => (sessionId ? getSessionOverlay(sessionId) : null),
     [sessionId],
   );
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    clearOverlayCleanup(sessionId);
+    return () => {
+      scheduleOverlayCleanup(sessionId);
+    };
+  }, [sessionId]);
 
   const { data, error, isLoading, mutate } = useSWR<ChatsResponse>(
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
@@ -108,6 +143,7 @@ export function useSessionChats(sessionId: string | null) {
           optimisticOverlay.delete(chatId);
           if (optimisticOverlay.size === 0) {
             sessionChatOverlays.delete(sessionId);
+            clearOverlayCleanup(sessionId);
           }
           setOverlayVersion((value) => value + 1);
         }
@@ -124,25 +160,21 @@ export function useSessionChats(sessionId: string | null) {
     [optimisticOverlay, sessionId],
   );
 
-  const chats = useMemo(
-    () =>
-      (data?.chats ?? []).map((chat) => {
-        const overlay = optimisticOverlay?.get(chat.id);
-        if (!overlay) {
-          return chat;
-        }
+  const chats = (data?.chats ?? []).map((chat) => {
+    const overlay = optimisticOverlay?.get(chat.id);
+    if (!overlay) {
+      return chat;
+    }
 
-        let next = chat;
-        if (overlay.title && chat.title === "New chat") {
-          next = { ...next, title: overlay.title };
-        }
-        if (overlay.streaming && !chat.isStreaming) {
-          next = { ...next, isStreaming: true };
-        }
-        return next;
-      }),
-    [data, optimisticOverlay, overlayVersion],
-  );
+    let next = chat;
+    if (overlay.title && chat.title === "New chat") {
+      next = { ...next, title: overlay.title };
+    }
+    if (overlay.streaming && !chat.isStreaming) {
+      next = { ...next, isStreaming: true };
+    }
+    return next;
+  });
 
   useEffect(() => {
     if (!data || !optimisticOverlay || !sessionId) {
@@ -214,9 +246,21 @@ export function useSessionChats(sessionId: string | null) {
 
     if (optimisticOverlay.size === 0) {
       sessionChatOverlays.delete(sessionId);
+      clearOverlayCleanup(sessionId);
     }
     setOverlayVersion((value) => value + 1);
   }, [data, optimisticOverlay, sessionId]);
+
+  const toChatsResponse = useCallback(
+    (
+      current: ChatsResponse | undefined,
+      nextChats: SessionChatListItem[],
+    ): ChatsResponse => ({
+      defaultModelId: current?.defaultModelId ?? data?.defaultModelId ?? null,
+      chats: nextChats,
+    }),
+    [data?.defaultModelId],
+  );
 
   const createChat = (): CreateChatResult => {
     if (!sessionId) {
@@ -228,7 +272,7 @@ export function useSessionChats(sessionId: string | null) {
       id: crypto.randomUUID(),
       sessionId,
       title: "New chat",
-      modelId: data?.chats[0]?.modelId ?? null,
+      modelId: data?.defaultModelId ?? null,
       activeStreamId: null,
       lastAssistantMessageAt: null,
       createdAt: now,
@@ -236,8 +280,8 @@ export function useSessionChats(sessionId: string | null) {
     };
 
     void mutate(
-      (current) => ({
-        chats: [
+      (current) =>
+        toChatsResponse(current, [
           {
             ...optimisticChat,
             hasUnread: false,
@@ -246,8 +290,7 @@ export function useSessionChats(sessionId: string | null) {
           ...(current?.chats ?? []).filter(
             (chat) => chat.id !== optimisticChat.id,
           ),
-        ],
-      }),
+        ]),
       { revalidate: false },
     );
 
@@ -265,11 +308,13 @@ export function useSessionChats(sessionId: string | null) {
 
       if (!res.ok || !responseData.chat) {
         await mutate(
-          (current) => ({
-            chats: (current?.chats ?? []).filter(
-              (chat) => chat.id !== optimisticChat.id,
+          (current) =>
+            toChatsResponse(
+              current,
+              (current?.chats ?? []).filter(
+                (chat) => chat.id !== optimisticChat.id,
+              ),
             ),
-          }),
           { revalidate: false },
         );
         throw new Error(responseData.error ?? "Failed to create chat");
@@ -278,8 +323,8 @@ export function useSessionChats(sessionId: string | null) {
       const createdChat = responseData.chat;
 
       await mutate(
-        (current) => ({
-          chats: [
+        (current) =>
+          toChatsResponse(current, [
             {
               ...createdChat,
               hasUnread: false,
@@ -288,8 +333,7 @@ export function useSessionChats(sessionId: string | null) {
             ...(current?.chats ?? []).filter(
               (chat) => chat.id !== createdChat.id,
             ),
-          ],
-        }),
+          ]),
         { revalidate: false },
       );
 
@@ -317,11 +361,13 @@ export function useSessionChats(sessionId: string | null) {
 
     const updatedChat = responseData.chat;
     await mutate(
-      (current) => ({
-        chats: (current?.chats ?? []).map((chat) =>
-          chat.id === chatId ? { ...chat, ...updatedChat } : chat,
+      (current) =>
+        toChatsResponse(
+          current,
+          (current?.chats ?? []).map((chat) =>
+            chat.id === chatId ? { ...chat, ...updatedChat } : chat,
+          ),
         ),
-      }),
       { revalidate: false },
     );
 
@@ -347,9 +393,11 @@ export function useSessionChats(sessionId: string | null) {
     }
 
     await mutate(
-      (current) => ({
-        chats: (current?.chats ?? []).filter((chat) => chat.id !== chatId),
-      }),
+      (current) =>
+        toChatsResponse(
+          current,
+          (current?.chats ?? []).filter((chat) => chat.id !== chatId),
+        ),
       { revalidate: false },
     );
   };
@@ -373,11 +421,13 @@ export function useSessionChats(sessionId: string | null) {
     }
 
     await mutate(
-      (current) => ({
-        chats: (current?.chats ?? []).map((chat) =>
-          chat.id === chatId ? { ...chat, hasUnread: false } : chat,
+      (current) =>
+        toChatsResponse(
+          current,
+          (current?.chats ?? []).map((chat) =>
+            chat.id === chatId ? { ...chat, hasUnread: false } : chat,
+          ),
         ),
-      }),
       { revalidate: false },
     );
   };
@@ -405,11 +455,12 @@ export function useSessionChats(sessionId: string | null) {
           return current;
         }
 
-        return {
-          chats: current.chats.map((chat) =>
+        return toChatsResponse(
+          current,
+          current.chats.map((chat) =>
             chat.id === chatId ? { ...chat, isStreaming } : chat,
           ),
-        };
+        );
       },
       { revalidate: false },
     );

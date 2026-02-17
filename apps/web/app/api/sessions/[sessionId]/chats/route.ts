@@ -27,8 +27,11 @@ export async function GET(_req: Request, context: RouteContext) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const chats = await getChatSummariesBySessionId(sessionId, session.user.id);
-  return Response.json({ chats });
+  const [chats, preferences] = await Promise.all([
+    getChatSummariesBySessionId(sessionId, session.user.id),
+    getUserPreferences(session.user.id),
+  ]);
+  return Response.json({ chats, defaultModelId: preferences.defaultModelId });
 }
 
 export async function POST(req: Request, context: RouteContext) {
