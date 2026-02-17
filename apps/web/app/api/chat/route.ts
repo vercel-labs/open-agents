@@ -31,7 +31,6 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
@@ -454,11 +453,6 @@ export async function POST(req: Request) {
               ...buildActiveLifecycleUpdate(sandboxStateToPersist, {
                 activityAt,
               }),
-            });
-
-            kickSandboxLifecycleWorkflow({
-              sessionId,
-              reason: "chat-finished",
             });
           } catch (error) {
             console.error("Failed to persist sandbox state:", error);

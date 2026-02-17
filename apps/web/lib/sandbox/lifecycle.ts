@@ -6,7 +6,10 @@ import {
   type SnapshotResult,
 } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { SANDBOX_INACTIVITY_TIMEOUT_MS } from "./config";
+import {
+  SANDBOX_EXPIRES_BUFFER_MS,
+  SANDBOX_INACTIVITY_TIMEOUT_MS,
+} from "./config";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
 export type SandboxLifecycleState =
@@ -21,8 +24,6 @@ export type SandboxLifecycleState =
 export type SandboxLifecycleReason =
   | "sandbox-created"
   | "cloud-ready"
-  | "chat-started"
-  | "chat-finished"
   | "timeout-extended"
   | "manual-snapshot"
   | "snapshot-restored"
@@ -33,6 +34,13 @@ export type SandboxLifecycleReason =
 export interface SandboxLifecycleEvaluationResult {
   action: "skipped" | "hibernated" | "failed";
   reason?: string;
+}
+
+interface LifecycleTimingSource {
+  hibernateAfter: Date | null;
+  lastActivityAt: Date | null;
+  sandboxExpiresAt: Date | null;
+  updatedAt: Date;
 }
 
 function extractSnapshotConflictDetails(error: unknown): string {
@@ -116,15 +124,42 @@ export function buildHibernatedLifecycleUpdate(): LifecycleUpdate {
     lifecycleState: "hibernated",
     sandboxExpiresAt: null,
     hibernateAfter: null,
+    lifecycleRunId: null,
     lifecycleError: null,
   };
 }
 
+function getInactivityDueAtMs(source: LifecycleTimingSource): number {
+  if (source.hibernateAfter) {
+    return source.hibernateAfter.getTime();
+  }
+
+  const lastActivityMs =
+    source.lastActivityAt?.getTime() ?? source.updatedAt.getTime();
+  return lastActivityMs + SANDBOX_INACTIVITY_TIMEOUT_MS;
+}
+
+function getExpiryDueAtMs(source: LifecycleTimingSource): number | null {
+  if (!source.sandboxExpiresAt) {
+    return null;
+  }
+  return source.sandboxExpiresAt.getTime() - SANDBOX_EXPIRES_BUFFER_MS;
+}
+
+export function getLifecycleDueAtMs(source: LifecycleTimingSource): number {
+  const inactivityDueAtMs = getInactivityDueAtMs(source);
+  const expiryDueAtMs = getExpiryDueAtMs(source);
+  if (expiryDueAtMs === null) {
+    return inactivityDueAtMs;
+  }
+  return Math.min(inactivityDueAtMs, expiryDueAtMs);
+}
+
 /**
- * One-shot lifecycle evaluator for event-kicked orchestration.
+ * One-shot lifecycle evaluator for workflow orchestration.
  *
- * This intentionally performs a single evaluation pass and exits.
- * Callers kick it from lifecycle events (create, chat-finished, extend, etc).
+ * This performs a single evaluation pass and exits.
+ * The durable workflow loops and calls this when it wakes.
  */
 export async function evaluateSandboxLifecycle(
   sessionId: string,
@@ -139,9 +174,6 @@ export async function evaluateSandboxLifecycle(
     return { action: "skipped", reason: "session-archived" };
   }
 
-  const lifecycleRunId = `${reason}:${Date.now()}`;
-  await updateSession(sessionId, { lifecycleRunId });
-
   const sandboxState = session.sandboxState;
   if (!canOperateOnSandbox(sandboxState)) {
     return { action: "skipped", reason: "sandbox-not-operable" };
@@ -151,11 +183,8 @@ export async function evaluateSandboxLifecycle(
   }
 
   const nowMs = Date.now();
-  const lastActivityMs =
-    session.lastActivityAt?.getTime() ?? session.updatedAt.getTime();
-  const hibernateAfterMs = lastActivityMs + SANDBOX_INACTIVITY_TIMEOUT_MS;
-
-  const isInactive = nowMs >= hibernateAfterMs;
+  const dueAtMs = getLifecycleDueAtMs(session);
+  const isInactive = nowMs >= dueAtMs;
 
   if (!isInactive) {
     return { action: "skipped", reason: "not-due-yet" };
@@ -217,6 +246,7 @@ export async function evaluateSandboxLifecycle(
     const message = error instanceof Error ? error.message : String(error);
     await updateSession(sessionId, {
       lifecycleState: "failed",
+      lifecycleRunId: null,
       lifecycleError: message,
     });
     console.error(

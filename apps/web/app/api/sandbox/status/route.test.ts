@@ -21,6 +21,7 @@ const sessionRecord = {
   sandboxExpiresAt: new Date(Date.now() + 5 * 60_000),
   snapshotUrl: null,
   lastActivityAt: new Date(Date.now() - 5_000),
+  updatedAt: new Date(Date.now() - 5_000),
 };
 
 mock.module("@/lib/session/get-server-session", () => ({

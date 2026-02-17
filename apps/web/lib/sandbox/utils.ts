@@ -1,4 +1,5 @@
 import type { SandboxState } from "@open-harness/sandbox";
+import { SANDBOX_EXPIRES_BUFFER_MS } from "./config";
 
 /**
  * Type guard to check if a sandbox is active and ready to accept operations.
@@ -18,7 +19,7 @@ export function isSandboxActive(
 
   // Check expiration first (with 10s buffer for clock skew)
   if ("expiresAt" in state && state.expiresAt !== undefined) {
-    if (Date.now() >= state.expiresAt - 10_000) {
+    if (Date.now() >= state.expiresAt - SANDBOX_EXPIRES_BUFFER_MS) {
       return false;
     }
   }

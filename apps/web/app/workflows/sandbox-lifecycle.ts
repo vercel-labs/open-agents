@@ -1,7 +1,8 @@
 import { sleep } from "workflow";
-import { getSessionById } from "@/lib/db/sessions";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import {
   evaluateSandboxLifecycle,
+  getLifecycleDueAtMs,
   type SandboxLifecycleEvaluationResult,
   type SandboxLifecycleReason,
 } from "@/lib/sandbox/lifecycle";
@@ -15,12 +16,16 @@ interface LifecycleWakeDecision {
 
 async function computeLifecycleWakeDecision(
   sessionId: string,
+  runId: string,
 ): Promise<LifecycleWakeDecision> {
   "use step";
 
   const session = await getSessionById(sessionId);
   if (!session) {
     return { shouldContinue: false, reason: "session-not-found" };
+  }
+  if (session.lifecycleRunId !== runId) {
+    return { shouldContinue: false, reason: "run-replaced" };
   }
   if (session.status === "archived" || session.lifecycleState === "archived") {
     return { shouldContinue: false, reason: "session-archived" };
@@ -31,13 +36,9 @@ async function computeLifecycleWakeDecision(
     return { shouldContinue: false, reason: "sandbox-not-operable" };
   }
 
-  if (!session.hibernateAfter) {
-    return { shouldContinue: false, reason: "missing-hibernate-after" };
-  }
-
   return {
     shouldContinue: true,
-    wakeAtMs: session.hibernateAfter.getTime(),
+    wakeAtMs: getLifecycleDueAtMs(session),
   };
 }
 
@@ -49,44 +50,48 @@ async function runLifecycleEvaluation(
   return evaluateSandboxLifecycle(sessionId, reason);
 }
 
+async function clearLifecycleRunIdIfOwned(
+  sessionId: string,
+  runId: string,
+): Promise<void> {
+  "use step";
+
+  const session = await getSessionById(sessionId);
+  if (!session || session.lifecycleRunId !== runId) {
+    return;
+  }
+
+  await updateSession(sessionId, { lifecycleRunId: null });
+}
+
 export async function sandboxLifecycleWorkflow(
   sessionId: string,
   reason: SandboxLifecycleReason,
+  runId: string,
 ) {
   "use workflow";
-
-  const decision = await computeLifecycleWakeDecision(sessionId);
-  if (!decision.shouldContinue || decision.wakeAtMs === undefined) {
-    return { skipped: true, reason: decision.reason ?? "no-decision" };
-  }
-
-  const now = Date.now();
-  if (decision.wakeAtMs > now) {
-    await sleep(new Date(decision.wakeAtMs));
-  }
-
-  const evaluation = await runLifecycleEvaluation(sessionId, reason);
-
-  // If the evaluation skipped because activity happened during the sleep,
-  // re-compute the next wake time and try once more. Without this retry,
-  // the sandbox would never hibernate until a new event kicks a fresh workflow.
-  if (evaluation.action === "skipped" && evaluation.reason === "not-due-yet") {
-    const retryDecision = await computeLifecycleWakeDecision(sessionId);
-    if (!retryDecision.shouldContinue || retryDecision.wakeAtMs === undefined) {
-      return {
-        skipped: true,
-        reason: retryDecision.reason ?? "no-decision-on-retry",
-      };
+  while (true) {
+    const decision = await computeLifecycleWakeDecision(sessionId, runId);
+    if (!decision.shouldContinue || decision.wakeAtMs === undefined) {
+      await clearLifecycleRunIdIfOwned(sessionId, runId);
+      return { skipped: true, reason: decision.reason ?? "no-decision" };
     }
 
-    const retryNow = Date.now();
-    if (retryDecision.wakeAtMs > retryNow) {
-      await sleep(new Date(retryDecision.wakeAtMs));
+    const now = Date.now();
+    if (decision.wakeAtMs > now) {
+      await sleep(new Date(decision.wakeAtMs));
     }
 
-    const retryEvaluation = await runLifecycleEvaluation(sessionId, reason);
-    return { skipped: false, evaluation: retryEvaluation };
-  }
+    const evaluation = await runLifecycleEvaluation(sessionId, reason);
 
-  return { skipped: false, evaluation };
+    if (
+      evaluation.action === "skipped" &&
+      evaluation.reason === "not-due-yet"
+    ) {
+      continue;
+    }
+
+    await clearLifecycleRunIdIfOwned(sessionId, runId);
+    return { skipped: false, evaluation };
+  }
 }

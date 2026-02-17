@@ -1,14 +1,14 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getServerSession } from "@/lib/session/get-server-session";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
-import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
   buildActiveLifecycleUpdate,
   buildHibernatedLifecycleUpdate,
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
-import { clearSandboxState, canOperateOnSandbox } from "@/lib/sandbox/utils";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreateSnapshotRequest {
   sessionId: string;
@@ -76,11 +76,6 @@ export async function POST(req: Request) {
       sandboxState: clearedState,
       lifecycleVersion: getNextLifecycleVersion(sessionRecord.lifecycleVersion),
       ...buildHibernatedLifecycleUpdate(),
-    });
-
-    kickSandboxLifecycleWorkflow({
-      sessionId,
-      reason: "manual-snapshot",
     });
 
     return Response.json({

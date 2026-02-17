@@ -1,4 +1,6 @@
 import { getSessionById } from "@/lib/db/sessions";
+import { SANDBOX_EXPIRES_BUFFER_MS } from "@/lib/sandbox/config";
+import { getLifecycleDueAtMs } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -43,21 +45,19 @@ export async function GET(req: Request): Promise<Response> {
   // Use the same 10s buffer as the chat route's isSandboxActive() so they agree.
   let isExpired = false;
   if (hasRuntimeState && sessionRecord.sandboxExpiresAt) {
-    isExpired = Date.now() >= sessionRecord.sandboxExpiresAt.getTime() - 10_000;
+    isExpired =
+      Date.now() >=
+      sessionRecord.sandboxExpiresAt.getTime() - SANDBOX_EXPIRES_BUFFER_MS;
   }
 
   const isActive = hasRuntimeState && !isExpired;
 
   // Safety net: if the sandbox has stale runtime state (expired or overdue for
   // hibernation), kick the lifecycle to clean up DB state in the background.
-  if (
-    hasRuntimeState &&
-    sessionRecord.lifecycleState === "active" &&
-    sessionRecord.hibernateAfter
-  ) {
+  if (hasRuntimeState && sessionRecord.lifecycleState === "active") {
     const now = Date.now();
-    const hibernateAfterMs = sessionRecord.hibernateAfter.getTime();
-    if (isExpired || now >= hibernateAfterMs) {
+    const dueAtMs = getLifecycleDueAtMs(sessionRecord);
+    if (isExpired || now >= dueAtMs) {
       kickSandboxLifecycleWorkflow({
         sessionId: sessionRecord.id,
         reason: "status-check-overdue",

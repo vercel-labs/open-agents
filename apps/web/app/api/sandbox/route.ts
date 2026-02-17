@@ -332,6 +332,7 @@ export async function DELETE(req: Request) {
     lifecycleState: sessionRecord.snapshotUrl ? "hibernated" : "provisioning",
     sandboxExpiresAt: null,
     hibernateAfter: null,
+    lifecycleRunId: null,
     lifecycleError: null,
   });
 
