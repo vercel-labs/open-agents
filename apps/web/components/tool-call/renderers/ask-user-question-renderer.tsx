@@ -61,20 +61,20 @@ export function AskUserQuestionRenderer({
   };
 
   return (
-    <div
-      className={cn(
-        "my-2 rounded-lg border border-border bg-card p-3",
-        hasExpandableContent && "cursor-pointer hover:bg-accent/50",
-      )}
-      {...(hasExpandableContent && {
-        onClick: handleClick,
-        onKeyDown: handleKeyDown,
-        role: "button",
-        tabIndex: 0,
-        "aria-expanded": isExpanded,
-      })}
-    >
-      <div className="flex items-center gap-2">
+    <div className="my-2 rounded-lg border border-border bg-card p-3">
+      <div
+        className={cn(
+          "flex items-center gap-2",
+          hasExpandableContent && "cursor-pointer",
+        )}
+        {...(hasExpandableContent && {
+          onClick: handleClick,
+          onKeyDown: handleKeyDown,
+          role: "button",
+          tabIndex: 0,
+          "aria-expanded": isExpanded,
+        })}
+      >
         {state.running || isStreaming ? (
           <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
         ) : (

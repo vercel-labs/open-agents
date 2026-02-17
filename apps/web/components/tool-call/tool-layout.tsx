@@ -1,9 +1,9 @@
 "use client";
 
+import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { type ReactNode, useState } from "react";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "./approval-buttons";
 
@@ -63,27 +63,27 @@ export function ToolLayout({
   };
 
   return (
-    <div
-      className={cn(
-        "my-2 rounded-lg border border-border bg-card p-3",
-        hasExpandedContent && "cursor-pointer hover:bg-accent/50",
-      )}
-      {...(hasExpandedContent && {
-        onClick: handleClick,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (hasExpandedContent) {
-              setIsExpanded(!isExpanded);
+    <div className="my-2 rounded-lg border border-border bg-card p-3">
+      <div
+        className={cn(
+          "flex items-center gap-2",
+          hasExpandedContent && "cursor-pointer",
+        )}
+        {...(hasExpandedContent && {
+          onClick: handleClick,
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              if (hasExpandedContent) {
+                setIsExpanded(!isExpanded);
+              }
             }
-          }
-        },
-        role: "button",
-        tabIndex: 0,
-        "aria-expanded": isExpanded,
-      })}
-    >
-      <div className="flex items-center gap-2">
+          },
+          role: "button",
+          tabIndex: 0,
+          "aria-expanded": isExpanded,
+        })}
+      >
         <StatusDot state={state} />
         <span
           className={cn(
