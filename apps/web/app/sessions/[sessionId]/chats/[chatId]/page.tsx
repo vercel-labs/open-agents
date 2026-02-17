@@ -25,18 +25,23 @@ function isOptimisticChatId(chatId: string): boolean {
   );
 }
 
+const OPTIMISTIC_CHAT_RETRY_DELAY_MS = 100;
+const OPTIMISTIC_CHAT_RETRY_ATTEMPTS = 50;
+
 async function getChatByIdWithRetry(
   chatId: string,
   sessionId: string,
 ): Promise<Awaited<ReturnType<typeof getChatById>>> {
-  const maxAttempts = isOptimisticChatId(chatId) ? 4 : 1;
+  const maxAttempts = isOptimisticChatId(chatId)
+    ? OPTIMISTIC_CHAT_RETRY_ATTEMPTS
+    : 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const chat = await getChatById(chatId);
     if (chat && chat.sessionId === sessionId) {
       return chat;
     }
     if (attempt < maxAttempts) {
-      await sleep(40);
+      await sleep(OPTIMISTIC_CHAT_RETRY_DELAY_MS);
     }
   }
   return undefined;

@@ -154,6 +154,9 @@ export function useSessionChats(sessionId: string | null) {
         return;
       }
 
+      if (!sessionChatOverlays.has(sessionId)) {
+        sessionChatOverlays.set(sessionId, optimisticOverlay);
+      }
       optimisticOverlay.set(chatId, next);
       setOverlayVersion((value) => value + 1);
     },
