@@ -7,14 +7,14 @@
       "packages/*"
     ],
     "catalog": {
-      "ai": "^6.0.27",
-      "@ai-sdk/anthropic": "^3.0.1",
+      "ai": "^6.0.85",
+      "@ai-sdk/anthropic": "^3.0.43",
       "@ai-sdk/react": "^3.0.29",
-      "zod": "^4.3.5"
+      "zod": "^4.3.6"
     }
   },
   "overrides": {
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "scripts": {
     "cli": "AI_SDK_LOG_WARNINGS=true NODE_ENV=development OPEN_HARNESS_URL=http://localhost:3000 bun run apps/cli/index.ts",
@@ -45,9 +45,5 @@
     "@opentui/core-linux-x64": "^0.1.75",
     "@opentui/core-win32-x64": "^0.1.75"
   },
-  "packageManager": "bun@1.2.14",
-  "dependencies": {
-    "ai": "^6.0.72",
-    "zod": "^4.3.5"
-  }
+  "packageManager": "bun@1.2.14"
 }

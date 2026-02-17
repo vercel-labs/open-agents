@@ -19,13 +19,14 @@
     "@open-harness/shared": "workspace:*",
     "@opentui/core": "^0.1.75",
     "@opentui/react": "^0.1.75",
+    "ai": "catalog:",
     "ink": "^6.6.0",
     "ink-spinner": "^5.0.0",
     "marked": "^17.0.1",
     "react": "^19.2.3"
   },
   "devDependencies": {
-    "@ai-sdk/react": "^3.0.3",
+    "@ai-sdk/react": "catalog:",
     "@open-harness/tsconfig": "workspace:*",
     "@types/bun": "latest",
     "@types/node": "^22",
