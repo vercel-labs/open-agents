@@ -36,7 +36,10 @@ async function startLifecycleRun(
       `[Lifecycle] Failed to start workflow run for session ${sessionId}; using inline fallback:`,
       error,
     );
-    await updateSession(sessionId, { lifecycleRunId: null });
+    const current = await getSessionById(sessionId);
+    if (current?.lifecycleRunId === runId) {
+      await updateSession(sessionId, { lifecycleRunId: null });
+    }
     const fallbackResult = await evaluateSandboxLifecycle(sessionId, reason);
     console.log(
       `[Lifecycle] Inline fallback completed for session ${sessionId} (reason=${reason}, action=${fallbackResult.action}${fallbackResult.reason ? `, detail=${fallbackResult.reason}` : ""}).`,
@@ -109,16 +112,6 @@ export function kickSandboxLifecycleWorkflow(input: KickSandboxLifecycleInput) {
     }
 
     const runId = createLifecycleRunId();
-    await updateSession(input.sessionId, { lifecycleRunId: runId });
-
-    // Re-read to verify our write won the race (another caller may have
-    // clobbered our runId between the shouldStartLifecycle check and the
-    // updateSession call above).
-    const verified = await getSessionById(input.sessionId);
-    if (!verified || verified.lifecycleRunId !== runId) {
-      return;
-    }
-
     await startLifecycleRun(input.sessionId, input.reason, runId);
   };
 

@@ -48,7 +48,7 @@ When the hard timeout is reached while the sandbox is still active, it hibernate
 
 ## How workflows work
 
-Each session keeps at most one durable workflow run. `kickSandboxLifecycleWorkflow()` starts the workflow only when no run is active and stores a lease token in `sessions.lifecycleRunId`. The workflow checks the lease before each sleep so older runs exit when replaced.
+Each session keeps at most one durable workflow run. `kickSandboxLifecycleWorkflow()` starts the workflow only when no run is active. The workflow then claims a lease token in `sessions.lifecycleRunId` and checks it before each sleep so older runs exit when replaced.
 
 A workflow run does:
 

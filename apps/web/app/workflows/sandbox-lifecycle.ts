@@ -15,6 +15,27 @@ interface LifecycleWakeDecision {
   reason?: string;
 }
 
+async function claimLifecycleLease(
+  sessionId: string,
+  runId: string,
+): Promise<boolean> {
+  const current = await getSessionById(sessionId);
+  if (!current) {
+    return false;
+  }
+
+  if (current.lifecycleRunId && current.lifecycleRunId !== runId) {
+    return false;
+  }
+
+  if (current.lifecycleRunId !== runId) {
+    await updateSession(sessionId, { lifecycleRunId: runId });
+  }
+
+  const verified = await getSessionById(sessionId);
+  return verified?.lifecycleRunId === runId;
+}
+
 async function computeLifecycleWakeDecision(
   sessionId: string,
   runId: string,
@@ -25,9 +46,6 @@ async function computeLifecycleWakeDecision(
   if (!session) {
     return { shouldContinue: false, reason: "session-not-found" };
   }
-  if (session.lifecycleRunId !== runId) {
-    return { shouldContinue: false, reason: "run-replaced" };
-  }
   if (session.status === "archived" || session.lifecycleState === "archived") {
     return { shouldContinue: false, reason: "session-archived" };
   }
@@ -35,6 +53,9 @@ async function computeLifecycleWakeDecision(
   const state = session.sandboxState;
   if (!canOperateOnSandbox(state) || state.type === "just-bash") {
     return { shouldContinue: false, reason: "sandbox-not-operable" };
+  }
+  if (!(await claimLifecycleLease(sessionId, runId))) {
+    return { shouldContinue: false, reason: "run-replaced" };
   }
 
   return {

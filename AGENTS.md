@@ -277,3 +277,4 @@ Use `catalog:` for shared external versions:
 - Optimistic chat-title previews for `"New chat"` must have an explicit rollback on send failures; otherwise the sidebar can keep a title that was never persisted if the first request errors.
 - `hadInitialMessages` is an initial-load snapshot, not a live "first turn" signal; guard one-time optimistic UI (like first-message title previews) with a dedicated runtime ref/state that resets on send failure.
 - In the GitHub App install flow, do a user-token installation sync before redirecting after OAuth-only callbacks or treating zero local installation rows as "not installed"; GitHub can skip callback emissions for pre-existing installs.
+- For sandbox lifecycle kicks, do not persist `lifecycleRunId` before `start(...)`; start first and let the durable workflow claim/verify the lease so canceled fire-and-forget kicks cannot strand a stale lease.
