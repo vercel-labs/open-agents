@@ -2,7 +2,7 @@
 
 import { PatchDiff } from "@pierre/diffs/react";
 import { ChevronDown, ChevronRight, FileText, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultDiffOptions, splitDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
 import { useSessionChatContext } from "./session-chat-context";
@@ -135,6 +136,7 @@ function FileEntry({
 export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
   const { diff, diffLoading, diffError, diffCachedAt, sandboxInfo } =
     useSessionChatContext();
+  const isMobile = useIsMobile();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
 
@@ -162,6 +164,12 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
   const collapseAll = () => {
     setExpandedFiles(new Set());
   };
+
+  useEffect(() => {
+    if (isMobile && diffStyle !== "unified") {
+      setDiffStyle("unified");
+    }
+  }, [diffStyle, isMobile]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
