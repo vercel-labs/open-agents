@@ -196,7 +196,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
             </div>
             <div className="flex items-center gap-1">
               {/* Unified / Split toggle - hidden on mobile, unified forced */}
-              <div className="hidden items-center rounded-md border border-border sm:flex">
+              <div className="hidden items-center rounded-md border border-border md:flex">
                 <button
                   type="button"
                   onClick={() => setDiffStyle("unified")}
