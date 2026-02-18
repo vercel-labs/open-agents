@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { encrypt } from "@/lib/crypto";
 import { upsertGitHubAccount } from "@/lib/db/accounts";
 import { syncUserInstallations } from "@/lib/github/installations-sync";
@@ -74,6 +74,8 @@ async function exchangeOAuthCode(
     const tokenData = (await tokenResponse.json()) as {
       access_token?: string;
       scope?: string;
+      refresh_token?: string;
+      expires_in?: number;
       error_description?: string;
     };
 
@@ -104,6 +106,12 @@ async function exchangeOAuthCode(
       userId,
       externalUserId: `${githubUser.id}`,
       accessToken: encrypt(tokenData.access_token),
+      refreshToken: tokenData.refresh_token
+        ? encrypt(tokenData.refresh_token)
+        : undefined,
+      expiresAt: tokenData.expires_in
+        ? new Date(Date.now() + tokenData.expires_in * 1000)
+        : undefined,
       scope: tokenData.scope,
       username: githubUser.login,
     });

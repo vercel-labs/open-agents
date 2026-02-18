@@ -1,12 +1,14 @@
+import { and, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { db } from "./client";
 import { accounts } from "./schema";
-import { eq, and } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 export async function upsertGitHubAccount(data: {
   userId: string;
   externalUserId: string;
   accessToken: string;
+  refreshToken?: string;
+  expiresAt?: Date;
   scope?: string;
   username: string;
 }): Promise<string> {
@@ -24,6 +26,8 @@ export async function upsertGitHubAccount(data: {
       .set({
         externalUserId: data.externalUserId,
         accessToken: data.accessToken,
+        refreshToken: data.refreshToken ?? null,
+        expiresAt: data.expiresAt ?? null,
         scope: data.scope,
         username: data.username,
         updatedAt: new Date(),
@@ -40,6 +44,8 @@ export async function upsertGitHubAccount(data: {
     provider: "github",
     externalUserId: data.externalUserId,
     accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    expiresAt: data.expiresAt,
     scope: data.scope,
     username: data.username,
     createdAt: now,
@@ -50,12 +56,16 @@ export async function upsertGitHubAccount(data: {
 
 export async function getGitHubAccount(userId: string): Promise<{
   accessToken: string;
+  refreshToken: string | null;
+  expiresAt: Date | null;
   username: string;
   externalUserId: string;
 } | null> {
   const result = await db
     .select({
       accessToken: accounts.accessToken,
+      refreshToken: accounts.refreshToken,
+      expiresAt: accounts.expiresAt,
       username: accounts.username,
       externalUserId: accounts.externalUserId,
     })
@@ -64,6 +74,25 @@ export async function getGitHubAccount(userId: string): Promise<{
     .limit(1);
 
   return result[0] ?? null;
+}
+
+export async function updateGitHubAccountTokens(
+  userId: string,
+  data: {
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  },
+): Promise<void> {
+  await db
+    .update(accounts)
+    .set({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? null,
+      expiresAt: data.expiresAt ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")));
 }
 
 export async function deleteGitHubAccount(userId: string): Promise<void> {
