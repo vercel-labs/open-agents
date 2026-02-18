@@ -48,7 +48,9 @@ interface EnsureForkOptions {
   forkOwner: string;
 }
 
-type EnsureForkResult = { success: true } | { success: false; error: string };
+type EnsureForkResult =
+  | { success: true; forkRepoName: string }
+  | { success: false; error: string };
 
 const FORK_PUSH_RETRY_ATTEMPTS = 12;
 const FORK_PUSH_RETRY_DELAY_MS = 2000;
@@ -70,11 +72,14 @@ function sleep(ms: number): Promise<void> {
 function isPermissionPushError(output: string): boolean {
   const lowerOutput = output.toLowerCase();
   return (
-    lowerOutput.includes("permission") ||
-    lowerOutput.includes("403") ||
-    lowerOutput.includes("denied") ||
+    lowerOutput.includes("permission to") ||
+    lowerOutput.includes("permission denied") ||
+    lowerOutput.includes("the requested url returned error: 403") ||
+    lowerOutput.includes("access denied") ||
     lowerOutput.includes("authentication failed") ||
-    lowerOutput.includes("invalid username")
+    lowerOutput.includes("invalid username") ||
+    lowerOutput.includes("unable to access") ||
+    lowerOutput.includes("resource not accessible by integration")
   );
 }
 
@@ -128,7 +133,15 @@ async function ensureForkExists({
   });
 
   if (publicForkResponse.ok) {
-    return { success: true };
+    const repoData: unknown = await publicForkResponse.json();
+    const forkRepoName =
+      typeof repoData === "object" &&
+      repoData !== null &&
+      "name" in repoData &&
+      typeof repoData.name === "string"
+        ? repoData.name
+        : upstreamRepo;
+    return { success: true, forkRepoName };
   }
 
   const existingForkResponse = await fetch(forkRepoUrl, {
@@ -137,7 +150,15 @@ async function ensureForkExists({
   });
 
   if (existingForkResponse.ok) {
-    return { success: true };
+    const repoData: unknown = await existingForkResponse.json();
+    const forkRepoName =
+      typeof repoData === "object" &&
+      repoData !== null &&
+      "name" in repoData &&
+      typeof repoData.name === "string"
+        ? repoData.name
+        : upstreamRepo;
+    return { success: true, forkRepoName };
   }
 
   if (existingForkResponse.status !== 404) {
@@ -182,7 +203,15 @@ async function ensureForkExists({
     };
   }
 
-  return { success: true };
+  const createData: unknown = await createForkResponse.json().catch(() => null);
+  const forkRepoName =
+    typeof createData === "object" &&
+    createData !== null &&
+    "name" in createData &&
+    typeof createData.name === "string"
+      ? createData.name
+      : upstreamRepo;
+  return { success: true, forkRepoName };
 }
 
 // Allow up to 2 minutes for AI generation and git operations
@@ -634,7 +663,8 @@ Respond with ONLY the commit message, nothing else.`,
             );
           }
 
-          const forkAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${forkOwner}/${sessionRecord.repoName}.git`;
+          const { forkRepoName } = forkResult;
+          const forkAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${forkOwner}/${forkRepoName}.git`;
 
           await sandbox.exec(
             "git remote remove fork 2>/dev/null || true",
@@ -673,7 +703,7 @@ Respond with ONLY the commit message, nothing else.`,
             if (pushForkResult.success) {
               pushToForkSucceeded = true;
               console.log(
-                `[generate-pr] Push to origin denied; pushed branch to fork ${forkOwner}/${sessionRecord.repoName}`,
+                `[generate-pr] Push to origin denied; pushed branch to fork ${forkOwner}/${forkRepoName}`,
               );
               prHeadOwner = forkOwner;
               gitActions.pushed = true;
@@ -711,7 +741,7 @@ Respond with ONLY the commit message, nothing else.`,
 
             return Response.json(
               {
-                error: `Failed to push to fork ${forkOwner}/${sessionRecord.repoName}: ${redactGitHubToken(lastPushForkOutput).slice(0, 200)}`,
+                error: `Failed to push to fork ${forkOwner}/${forkRepoName}: ${redactGitHubToken(lastPushForkOutput).slice(0, 200)}`,
               },
               { status: 500 },
             );
