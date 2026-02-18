@@ -287,3 +287,4 @@ Use `catalog:` for shared external versions:
 - For PR/push flows, installation tokens can fail on repos outside selected installation scope even when the user's GitHub token has write access; retry origin push/PR creation with user token before forcing fork fallback.
 - Even when branch push succeeds, GitHub PR creation can still return `403 Resource not accessible by integration`; expose a compare URL fallback so users can complete PR creation manually in the browser.
 - For manual compare fallback, include `title` and `body` query params on the GitHub compare URL so PR details are prefilled when API creation is unavailable.
+- Preserve fork PR metadata across retries: if a branch already tracks `fork/<branch>` and no new push is needed, derive and return `prHeadOwner` from fork upstream/remote state so later PR creation still uses a qualified head ref.

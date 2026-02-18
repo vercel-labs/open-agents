@@ -94,6 +94,20 @@ function redactGitHubToken(text: string): string {
   );
 }
 
+function extractGitHubOwnerFromRemoteUrl(remoteUrl: string): string | null {
+  const trimmedRemoteUrl = remoteUrl.trim();
+  if (!trimmedRemoteUrl) {
+    return null;
+  }
+
+  const githubUrlMatch = trimmedRemoteUrl.match(/github\.com[:/]([^/]+)\/[^/]+$/i);
+  if (githubUrlMatch?.[1]) {
+    return githubUrlMatch[1];
+  }
+
+  return null;
+}
+
 async function ensureForkExists({
   token,
   upstreamOwner,
@@ -499,6 +513,24 @@ Respond with ONLY the commit message, nothing else.`,
   const needsPush =
     trackingResult.stdout.includes("needs-push") ||
     trackingResult.stdout.trim().length > 0;
+
+  const upstreamRefResult = await sandbox.exec(
+    "git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true",
+    cwd,
+    10000,
+  );
+  const upstreamRef = upstreamRefResult.stdout.trim();
+  if (upstreamRef.startsWith("fork/")) {
+    const forkUrlResult = await sandbox.exec(
+      "git remote get-url fork 2>/dev/null || true",
+      cwd,
+      10000,
+    );
+    const forkOwner = extractGitHubOwnerFromRemoteUrl(forkUrlResult.stdout);
+    if (forkOwner) {
+      prHeadOwner = forkOwner;
+    }
+  }
 
   if (needsPush) {
     // 5a. Fetch latest from origin to check for conflicts
