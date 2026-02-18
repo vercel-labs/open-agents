@@ -396,21 +396,22 @@ function ShareDialog({
   sessionId: string;
   initialShareId: string | null;
 }) {
-  const baseUrlFromEnv = process.env.NEXT_PUBLIC_VERCEL_URL
-    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-    : null;
   const [open, setOpen] = useState(false);
   const [shareId, setShareId] = useState(initialShareId);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [baseUrl, setBaseUrl] = useState<string | null>(baseUrlFromEnv);
+  const [baseUrl, setBaseUrl] = useState<string | null>(
+    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
+      : null,
+  );
 
   useEffect(() => {
-    if (!baseUrlFromEnv) {
+    if (!baseUrl) {
       setBaseUrl(window.location.origin);
     }
-  }, [baseUrlFromEnv]);
+  }, []);
 
   const shareUrl = shareId && baseUrl ? `${baseUrl}/shared/${shareId}` : null;
 
