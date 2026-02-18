@@ -117,11 +117,19 @@ export async function PATCH(
           snapshotCreatedAt?: Date;
         } = {};
         if (sandbox.snapshot) {
-          const result = await sandbox.snapshot();
-          snapshotFields = {
-            snapshotUrl: result.snapshotId,
-            snapshotCreatedAt: new Date(),
-          };
+          try {
+            const result = await sandbox.snapshot();
+            snapshotFields = {
+              snapshotUrl: result.snapshotId,
+              snapshotCreatedAt: new Date(),
+            };
+          } catch (snapshotError) {
+            console.error(
+              `[Sessions] Snapshot failed for session ${sessionId}, falling back to stop:`,
+              snapshotError,
+            );
+            await sandbox.stop();
+          }
         } else {
           await sandbox.stop();
         }
