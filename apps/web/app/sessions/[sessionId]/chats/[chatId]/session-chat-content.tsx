@@ -477,6 +477,7 @@ export function SessionChatContent() {
     session,
     chatInfo,
     chat,
+    stopChatStream,
     initialMessages,
     sandboxInfo,
     setSandboxInfo,
@@ -509,7 +510,6 @@ export function SessionChatContent() {
     status,
     addToolApprovalResponse,
     addToolOutput,
-    stop,
   } = chat;
   const {
     chats,
@@ -2175,7 +2175,7 @@ export function SessionChatContent() {
                           fetch(`/api/chat/${chatInfo.id}/stop`, {
                             method: "POST",
                           }).catch(() => {});
-                          stop();
+                          stopChatStream();
                         }}
                         className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >

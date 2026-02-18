@@ -5,20 +5,67 @@ type ChatInstanceInit = ConstructorParameters<
   typeof Chat<WebAgentUIMessage>
 >[0];
 
+type ManagedChatInstance = {
+  instance: Chat<WebAgentUIMessage>;
+  transport: ChatInstanceInit["transport"];
+};
+
+type AbortableTransport = {
+  abort: () => void;
+};
+
+function isAbortableTransport(value: unknown): value is AbortableTransport {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "abort" in value &&
+    typeof value.abort === "function"
+  );
+}
+
 // Instances are scoped to an active chat route and removed on route teardown.
 // This avoids accumulating background streams/message buffers when users switch
 // between multiple chats quickly.
-const chatInstances = new Map<string, Chat<WebAgentUIMessage>>();
+const chatInstances = new Map<string, ManagedChatInstance>();
 
 export function getOrCreateChatInstance(
   chatId: string,
   init: ChatInstanceInit,
-): { instance: Chat<WebAgentUIMessage>; alreadyExisted: boolean } {
+): {
+  instance: Chat<WebAgentUIMessage>;
+  transport: ChatInstanceInit["transport"];
+  alreadyExisted: boolean;
+} {
   const existing = chatInstances.get(chatId);
-  if (existing) return { instance: existing, alreadyExisted: true };
+  if (existing) {
+    return {
+      instance: existing.instance,
+      transport: existing.transport,
+      alreadyExisted: true,
+    };
+  }
+
   const instance = new Chat<WebAgentUIMessage>(init);
-  chatInstances.set(chatId, instance);
-  return { instance, alreadyExisted: false };
+  const managed = {
+    instance,
+    transport: init.transport,
+  };
+  chatInstances.set(chatId, managed);
+
+  return {
+    instance,
+    transport: init.transport,
+    alreadyExisted: false,
+  };
+}
+
+export function abortChatInstanceTransport(chatId: string): void {
+  const managed = chatInstances.get(chatId);
+  if (!managed || !isAbortableTransport(managed.transport)) {
+    return;
+  }
+
+  managed.transport.abort();
 }
 
 export function removeChatInstance(chatId: string): void {

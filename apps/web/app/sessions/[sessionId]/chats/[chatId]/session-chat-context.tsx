@@ -23,6 +23,7 @@ import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
 import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
+  abortChatInstanceTransport,
   getOrCreateChatInstance,
   removeChatInstance,
 } from "@/lib/chat-instance-manager";
@@ -102,6 +103,7 @@ type SessionChatContextValue = {
   session: Session;
   chatInfo: Chat;
   chat: UseChatHelpers<WebAgentUIMessage>;
+  stopChatStream: () => void;
   sandboxInfo: SandboxInfo | null;
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
@@ -270,6 +272,11 @@ export function SessionChatProvider({
     [chatInfo.id],
   );
 
+  const stopChatStream = useCallback(() => {
+    void chatInstance.stop();
+    abortChatInstanceTransport(chatInfo.id);
+  }, [chatInfo.id, chatInstance]);
+
   // Only resume on fresh page load (new Chat instance + active stream in DB).
   // If instance already existed, the stream is either still running or finished —
   // no resume needed since the instance tracked it the whole time.
@@ -282,21 +289,20 @@ export function SessionChatProvider({
   });
 
   // Cleanup: always release chat instances when leaving a route.
-  // If this chat is still streaming, stop the local stream processing so
+  // If this chat is still streaming, stop local stream processing so
   // background chats do not consume render/CPU budget in this tab.
-  // Also abort the transport's fetch connections — the SDK's reconnectToStream
+  // Also abort the instance transport fetch connections. reconnectToStream
   // does not pass an abort signal, so chatInstance.stop() alone cannot cancel
-  // resumed streams. Without this, navigating away from a resumed chat leaves
-  // an immortal stream consumer on the main thread.
+  // resumed streams.
   useEffect(() => {
     return () => {
       if (chatInstance.status === "streaming") {
-        chatInstance.stop();
+        void chatInstance.stop();
       }
-      transport.abort();
+      abortChatInstanceTransport(chatInfo.id);
       removeChatInstance(chatInfo.id);
     };
-  }, [chatInfo.id, chatInstance, transport]);
+  }, [chatInfo.id, chatInstance]);
 
   const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(
     () => sandboxInfoCache.get(sessionId) ?? null,
@@ -813,6 +819,7 @@ export function SessionChatProvider({
         session: sessionRecord,
         chatInfo,
         chat,
+        stopChatStream,
         sandboxInfo,
         setSandboxInfo,
         clearSandboxInfo,
