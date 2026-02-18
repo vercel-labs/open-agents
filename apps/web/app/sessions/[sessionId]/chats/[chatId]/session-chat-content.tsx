@@ -427,7 +427,7 @@ function ShareDialog({
     if (!baseUrl) {
       setBaseUrl(window.location.origin);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; baseUrl never changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   const shareUrl = shareId && baseUrl ? `${baseUrl}/shared/${shareId}` : null;
@@ -2183,6 +2183,7 @@ export function SessionChatContent() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
+                  if (isArchived) return;
                   const hasContent = input.trim() || images.length > 0;
                   if (!hasContent) return;
 
@@ -2319,6 +2320,7 @@ export function SessionChatContent() {
                       variant="ghost"
                       size="icon"
                       onClick={openFilePicker}
+                      disabled={isArchived}
                       className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
                     >
                       <Paperclip className="h-4 w-4" />
@@ -2359,7 +2361,7 @@ export function SessionChatContent() {
                       variant="ghost"
                       size="icon"
                       onClick={handleMicClick}
-                      disabled={recordingState === "processing"}
+                      disabled={isArchived || recordingState === "processing"}
                       className={`relative h-8 w-8 rounded-full ${
                         recordingState === "recording"
                           ? "text-red-500"
@@ -2395,6 +2397,7 @@ export function SessionChatContent() {
                         type="submit"
                         size="icon"
                         disabled={
+                          isArchived ||
                           (!input.trim() && images.length === 0) ||
                           isUpdatingModel
                         }

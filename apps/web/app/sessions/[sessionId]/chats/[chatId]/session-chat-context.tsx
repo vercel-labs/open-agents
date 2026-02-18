@@ -777,6 +777,7 @@ export function SessionChatProvider({
     const optimisticSession: Session = {
       ...sessionRecord,
       status: "running",
+      lifecycleState: null,
     };
 
     setSessionRecord(optimisticSession);
