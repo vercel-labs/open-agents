@@ -773,27 +773,9 @@ export function SessionChatProvider({
   }, [sessionRecord, mutate]);
 
   const unarchiveSession = useCallback(async () => {
-    const previousSession = sessionRecord;
-    const optimisticSession: Session = {
-      ...sessionRecord,
-      status: "running",
-      lifecycleState: null,
-    };
-
-    setSessionRecord(optimisticSession);
-    await mutate<SessionsResponse>(
-      "/api/sessions",
-      (current) =>
-        current
-          ? {
-              sessions: current.sessions.map((s) =>
-                s.id === sessionRecord.id ? optimisticSession : s,
-              ),
-            }
-          : current,
-      { revalidate: false },
-    );
-
+    // Wait for server confirmation before updating local state so that
+    // sandbox-related effects (reconnect probe, auto-restore, auto-create)
+    // don't fire until the server has actually reset the session.
     const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -803,23 +785,14 @@ export function SessionChatProvider({
     const data = (await res.json()) as { session?: Session; error?: string };
 
     if (!res.ok) {
-      setSessionRecord(previousSession);
-      await mutate<SessionsResponse>(
-        "/api/sessions",
-        (current) =>
-          current
-            ? {
-                sessions: current.sessions.map((s) =>
-                  s.id === sessionRecord.id ? previousSession : s,
-                ),
-              }
-            : current,
-        { revalidate: false },
-      );
       throw new Error(data.error ?? "Failed to unarchive session");
     }
 
-    const nextSession = data.session ?? optimisticSession;
+    const nextSession: Session = data.session ?? {
+      ...sessionRecord,
+      status: "running",
+      lifecycleState: null,
+    };
     setSessionRecord(nextSession);
     await mutate<SessionsResponse>(
       "/api/sessions",

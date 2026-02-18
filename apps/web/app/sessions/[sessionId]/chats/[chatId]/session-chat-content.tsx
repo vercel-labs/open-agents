@@ -563,6 +563,7 @@ export function SessionChatContent() {
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
+  const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -1809,14 +1810,26 @@ export function SessionChatContent() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  disabled={isUnarchiving}
                   onClick={() => {
-                    void unarchiveSession().catch((error: unknown) => {
-                      console.error("Failed to unarchive session:", error);
-                    });
+                    setIsUnarchiving(true);
+                    void unarchiveSession()
+                      .catch((error: unknown) => {
+                        console.error("Failed to unarchive session:", error);
+                      })
+                      .finally(() => {
+                        setIsUnarchiving(false);
+                      });
                   }}
                 >
-                  <ArchiveRestore className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Unarchive</span>
+                  {isUnarchiving ? (
+                    <Loader2 className="h-4 w-4 animate-spin md:mr-2" />
+                  ) : (
+                    <ArchiveRestore className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">
+                    {isUnarchiving ? "Unarchiving..." : "Unarchive"}
+                  </span>
                 </Button>
               ) : (
                 <Dialog>

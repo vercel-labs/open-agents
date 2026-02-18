@@ -76,6 +76,7 @@ export async function PATCH(
   const updatePayload: UpdateSessionRequest &
     Partial<{
       lifecycleState: "archived" | null;
+      lifecycleError: null;
       sandboxExpiresAt: null;
       hibernateAfter: null;
     }> = { ...body };
@@ -88,6 +89,7 @@ export async function PATCH(
     // Reset lifecycle state so the session can be resumed normally.
     // If there is a snapshot the client will auto-restore it on entry.
     updatePayload.lifecycleState = null;
+    updatePayload.lifecycleError = null;
   }
 
   const updatedSession = await updateSession(sessionId, updatePayload);
