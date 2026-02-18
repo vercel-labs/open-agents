@@ -361,29 +361,19 @@ function SandboxInputOverlay({
     );
   }
 
-  if (isSandboxActive && !isCreating && !isRestoring) {
+  // During sandbox creation/restoration/reconnection, don't block the input.
+  // The submit button is disabled separately, and the header badge shows status.
+  if (
+    isSandboxActive ||
+    isCreating ||
+    isRestoring ||
+    isReconnecting ||
+    isHibernating
+  ) {
     return null;
   }
 
-  if (isCreating || isRestoring || isReconnecting || isHibernating) {
-    return (
-      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
-        <div className="flex items-center gap-3 rounded-full bg-background/90 px-4 py-2 text-muted-foreground shadow-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">
-            {isRestoring
-              ? "Restoring snapshot..."
-              : isHibernating
-                ? "Hibernating sandbox..."
-                : isReconnecting
-                  ? "Reconnecting sandbox..."
-                  : "Creating sandbox..."}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
+  // Sandbox is fully inactive and not transitioning -- show resume/create buttons
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
       <div className="flex items-center gap-2">
@@ -2196,12 +2186,9 @@ export function SessionChatContent() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  if (isArchived) return;
+                  if (isArchived || !isSandboxActive) return;
                   const hasContent = input.trim() || images.length > 0;
                   if (!hasContent) return;
-
-                  const ready = await ensureSandboxReady();
-                  if (!ready) return;
 
                   const messageText = input;
                   const files = getFileParts();
@@ -2406,18 +2393,30 @@ export function SessionChatContent() {
                         <Square className="h-3 w-3 fill-current" />
                       </Button>
                     ) : (
-                      <Button
-                        type="submit"
-                        size="icon"
-                        disabled={
-                          isArchived ||
-                          (!input.trim() && images.length === 0) ||
-                          isUpdatingModel
-                        }
-                        className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              type="submit"
+                              size="icon"
+                              disabled={
+                                isArchived ||
+                                (!input.trim() && images.length === 0) ||
+                                isUpdatingModel ||
+                                !isSandboxActive
+                              }
+                              className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!isSandboxActive && !isArchived && (
+                          <TooltipContent side="top" sideOffset={8}>
+                            Waiting for sandbox...
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
                     )}
                   </div>
                 </div>
