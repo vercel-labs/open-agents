@@ -400,6 +400,7 @@ function ShareDialog({
   const [shareId, setShareId] = useState(initialShareId);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const shareUrl = shareId
     ? `${window.location.origin}/shared/${shareId}`
@@ -407,13 +408,19 @@ function ShareDialog({
 
   async function enableSharing() {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/share`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Failed to enable sharing");
+      if (!res.ok) {
+        setError("Failed to enable sharing");
+        return;
+      }
       const data = (await res.json()) as { shareId: string };
       setShareId(data.shareId);
+    } catch {
+      setError("Failed to enable sharing");
     } finally {
       setIsLoading(false);
     }
@@ -421,13 +428,19 @@ function ShareDialog({
 
   async function disableSharing() {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/share`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed to disable sharing");
+      if (!res.ok) {
+        setError("Failed to disable sharing");
+        return;
+      }
       setShareId(null);
       setCopied(false);
+    } catch {
+      setError("Failed to disable sharing");
     } finally {
       setIsLoading(false);
     }
@@ -456,6 +469,7 @@ function ShareDialog({
             Anyone with the link can view the conversation in read-only mode.
           </DialogDescription>
         </DialogHeader>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {shareId ? (
           <>
             <div className="flex items-center gap-2">

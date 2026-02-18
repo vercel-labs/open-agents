@@ -50,11 +50,12 @@ export default async function SharedPage({ params }: SharedPageProps) {
   // Sort chats oldest-first for reading order
   chatsWithMessages.reverse();
 
+  const { title, repoOwner, repoName, branch, cloneUrl } = session;
+
   return (
     <SharedChatContent
-      session={session}
+      session={{ title, repoOwner, repoName, branch, cloneUrl }}
       chats={chatsWithMessages}
-      shareId={shareId}
     />
   );
 }

@@ -14,7 +14,7 @@ import type {
 } from "@/app/types";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
-import type { Chat, Session } from "@/lib/db/schema";
+import type { Chat } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import "streamdown/styles.css";
 
@@ -45,13 +45,20 @@ type ChatWithMessages = {
   messages: WebAgentUIMessage[];
 };
 
+type SharedSession = {
+  title: string;
+  repoOwner: string | null;
+  repoName: string | null;
+  branch: string | null;
+  cloneUrl: string | null;
+};
+
 export function SharedChatContent({
   session,
   chats,
 }: {
-  session: Session;
+  session: SharedSession;
   chats: ChatWithMessages[];
-  shareId: string;
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">

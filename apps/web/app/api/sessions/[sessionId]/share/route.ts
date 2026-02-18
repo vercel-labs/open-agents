@@ -1,4 +1,7 @@
+import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { db } from "@/lib/db/client";
+import { sessions } from "@/lib/db/schema";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -31,10 +34,21 @@ export async function POST(
     return Response.json({ shareId: existingSession.shareId });
   }
 
+  // Use conditional update to avoid race condition where two concurrent
+  // requests both see shareId as null and overwrite each other
   const shareId = nanoid(12);
-  const updated = await updateSession(sessionId, { shareId });
+  const [updated] = await db
+    .update(sessions)
+    .set({ shareId, updatedAt: new Date() })
+    .where(and(eq(sessions.id, sessionId), isNull(sessions.shareId)))
+    .returning();
 
   if (!updated) {
+    // Another request already set a shareId -- fetch and return it
+    const refreshed = await getSessionById(sessionId);
+    if (refreshed?.shareId) {
+      return Response.json({ shareId: refreshed.shareId });
+    }
     return Response.json(
       { error: "Failed to update session" },
       { status: 500 },
