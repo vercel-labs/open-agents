@@ -3,8 +3,8 @@ import {
   boolean,
   integer,
   jsonb,
-  primaryKey,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -151,6 +151,8 @@ export const sessions = pgTable("sessions", {
   // Cached diff for offline viewing
   cachedDiff: jsonb("cached_diff"),
   cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
+  // Sharing
+  shareId: text("share_id").unique(),
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

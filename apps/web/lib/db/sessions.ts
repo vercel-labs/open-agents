@@ -1,12 +1,12 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
-  chatReads,
   chatMessages,
+  chatReads,
   chats,
   type NewChat,
-  type NewChatRead,
   type NewChatMessage,
+  type NewChatRead,
   type NewSession,
   sessions,
 } from "./schema";
@@ -56,6 +56,12 @@ export async function createSessionWithInitialChat(
 export async function getSessionById(sessionId: string) {
   return db.query.sessions.findFirst({
     where: eq(sessions.id, sessionId),
+  });
+}
+
+export async function getSessionByShareId(shareId: string) {
+  return db.query.sessions.findFirst({
+    where: eq(sessions.shareId, shareId),
   });
 }
 

@@ -8,10 +8,12 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  Copy,
   ExternalLink,
   FolderGit2,
   GitCompare,
   GitPullRequest,
+  Link2,
   Loader2,
   Menu,
   MessageSquare,
@@ -19,6 +21,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Share2,
   Square,
   Trash2,
   X,
@@ -383,6 +386,134 @@ function SandboxInputOverlay({
         )}
       </div>
     </div>
+  );
+}
+
+function ShareDialog({
+  sessionId,
+  initialShareId,
+}: {
+  sessionId: string;
+  initialShareId: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [shareId, setShareId] = useState(initialShareId);
+  const [isLoading, setIsLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = shareId
+    ? `${window.location.origin}/shared/${shareId}`
+    : null;
+
+  async function enableSharing() {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/share`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to enable sharing");
+      const data = (await res.json()) as { shareId: string };
+      setShareId(data.shareId);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function disableSharing() {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/share`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to disable sharing");
+      setShareId(null);
+      setCopied(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function copyLink() {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Share2 className="h-4 w-4 md:mr-2" />
+          <span className="hidden md:inline">Share</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Share session</DialogTitle>
+          <DialogDescription>
+            Anyone with the link can view the conversation in read-only mode.
+          </DialogDescription>
+        </DialogHeader>
+        {shareId ? (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
+                <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{shareUrl}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyLink}
+                className="shrink-0"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <DialogFooter className="flex-row justify-between sm:justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => void disableSharing()}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Revoke link
+              </Button>
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">
+                  Close
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </>
+        ) : (
+          <DialogFooter>
+            <Button
+              onClick={() => void enableSharing()}
+              disabled={isLoading}
+              className="w-full"
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="mr-2 h-4 w-4" />
+              )}
+              Create share link
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1615,6 +1746,10 @@ export function SessionChatContent() {
               </span>
             </div>
             <div className="flex items-center gap-1 md:gap-2">
+              <ShareDialog
+                sessionId={session.id}
+                initialShareId={session.shareId}
+              />
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="ghost" size="sm">
