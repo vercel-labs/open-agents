@@ -161,6 +161,11 @@ type SessionChatContextValue = {
     repoName: string;
     branch: string;
   }) => void;
+  /** Update local PR metadata after creating/discovering a PR */
+  updateSessionPullRequest: (info: {
+    prNumber: number;
+    prStatus: "open" | "merged" | "closed";
+  }) => void;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -586,6 +591,36 @@ export function SessionChatProvider({
     [],
   );
 
+  const updateSessionPullRequest = useCallback(
+    (info: { prNumber: number; prStatus: "open" | "merged" | "closed" }) => {
+      setSessionRecord((prev) => ({
+        ...prev,
+        prNumber: info.prNumber,
+        prStatus: info.prStatus,
+      }));
+
+      void mutate<SessionsResponse>(
+        "/api/sessions",
+        (current) =>
+          current
+            ? {
+                sessions: current.sessions.map((s) =>
+                  s.id === sessionId
+                    ? {
+                        ...s,
+                        prNumber: info.prNumber,
+                        prStatus: info.prStatus,
+                      }
+                    : s,
+                ),
+              }
+            : current,
+        { revalidate: false },
+      );
+    },
+    [mutate, sessionId],
+  );
+
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
       setHasSnapshotState(true);
@@ -808,6 +843,7 @@ export function SessionChatProvider({
         syncSandboxStatus,
         attemptReconnection,
         updateSessionRepo,
+        updateSessionPullRequest,
       }}
     >
       {children}
