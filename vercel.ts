@@ -1,26 +1,24 @@
-const bypassSecret = "$VERCEL_AUTOMATION_BYPASS_SECRET";
+import { routes, type VercelConfig } from "@vercel/config/v1";
 
-const config = {
-  headers: [
-    {
-      source: "/api/(.*)",
-      headers: [
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+
+const bypassHeaders = bypassSecret
+  ? [
+      routes.header("/api/(.*)", [
         {
           key: "x-vercel-protection-bypass",
           value: bypassSecret,
         },
-      ],
-    },
-    {
-      source: "/install",
-      headers: [
+      ]),
+      routes.header("/install", [
         {
           key: "x-vercel-protection-bypass",
           value: bypassSecret,
         },
-      ],
-    },
-  ],
+      ]),
+    ]
+  : [];
+
+export const config: VercelConfig = {
+  headers: bypassHeaders,
 };
-
-export default config;
