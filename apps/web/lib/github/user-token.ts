@@ -43,6 +43,13 @@ async function refreshGitHubToken(
       },
     );
 
+    if (!response.ok) {
+      console.error(
+        `GitHub token refresh returned HTTP ${response.status}: ${response.statusText}`,
+      );
+      return null;
+    }
+
     const data = (await response.json()) as
       | GitHubTokenRefreshResponse
       | { error: string; error_description?: string };
@@ -100,13 +107,23 @@ export async function getUserGitHubToken(): Promise<string | null> {
     const refreshed = await refreshGitHubToken(decryptedRefresh);
     if (!refreshed) return null;
 
-    // Persist the new tokens
+    // Persist the new tokens. If persistence fails, still return the token
+    // so the current request succeeds. The refresh token has already been
+    // consumed by GitHub (they rotate on use), so failing to persist would
+    // permanently break the user's connection on the next request.
     const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
-    await updateGitHubAccountTokens(session.user.id, {
-      accessToken: encrypt(refreshed.access_token),
-      refreshToken: encrypt(refreshed.refresh_token),
-      expiresAt: newExpiresAt,
-    });
+    try {
+      await updateGitHubAccountTokens(session.user.id, {
+        accessToken: encrypt(refreshed.access_token),
+        refreshToken: encrypt(refreshed.refresh_token),
+        expiresAt: newExpiresAt,
+      });
+    } catch (persistError) {
+      console.error(
+        "Failed to persist refreshed GitHub tokens. The current request will succeed, but subsequent requests may fail:",
+        persistError,
+      );
+    }
 
     return refreshed.access_token;
   } catch (error) {
