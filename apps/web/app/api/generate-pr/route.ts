@@ -100,7 +100,9 @@ function extractGitHubOwnerFromRemoteUrl(remoteUrl: string): string | null {
     return null;
   }
 
-  const githubUrlMatch = trimmedRemoteUrl.match(/github\.com[:/]([^/]+)\/[^/]+$/i);
+  const githubUrlMatch = trimmedRemoteUrl.match(
+    /github\.com[:/]([^/]+)\/[^/]+$/i,
+  );
   if (githubUrlMatch?.[1]) {
     return githubUrlMatch[1];
   }
@@ -605,6 +607,7 @@ Respond with ONLY the commit message, nothing else.`,
 
       if (
         !gitActions.pushed &&
+        isPermissionError &&
         sessionRecord.repoOwner &&
         sessionRecord.repoName
       ) {
