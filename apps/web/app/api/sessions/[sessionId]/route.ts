@@ -109,9 +109,25 @@ export async function PATCH(
         }
 
         const sandbox = await connectSandbox(archivedSession.sandboxState);
-        await sandbox.stop();
+
+        // Snapshot before stopping so the sandbox can be restored on unarchive.
+        // snapshot() automatically stops the sandbox, so no separate stop() needed.
+        let snapshotFields: {
+          snapshotUrl?: string;
+          snapshotCreatedAt?: Date;
+        } = {};
+        if (sandbox.snapshot) {
+          const result = await sandbox.snapshot();
+          snapshotFields = {
+            snapshotUrl: result.snapshotId,
+            snapshotCreatedAt: new Date(),
+          };
+        } else {
+          await sandbox.stop();
+        }
 
         await updateSession(sessionId, {
+          ...snapshotFields,
           sandboxState: clearSandboxState(archivedSession.sandboxState),
           lifecycleState: "archived",
           sandboxExpiresAt: null,
