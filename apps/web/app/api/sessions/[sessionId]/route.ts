@@ -1,12 +1,12 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { after } from "next/server";
-import { getServerSession } from "@/lib/session/get-server-session";
 import {
   deleteSession,
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 interface UpdateSessionRequest {
   title?: string;
@@ -70,9 +70,12 @@ export async function PATCH(
   const shouldStopSandboxAfterArchive =
     body.status === "archived" && existingSession.status !== "archived";
 
+  const shouldUnarchive =
+    body.status === "running" && existingSession.status === "archived";
+
   const updatePayload: UpdateSessionRequest &
     Partial<{
-      lifecycleState: "archived";
+      lifecycleState: "archived" | null;
       sandboxExpiresAt: null;
       hibernateAfter: null;
     }> = { ...body };
@@ -80,6 +83,11 @@ export async function PATCH(
     updatePayload.lifecycleState = "archived";
     updatePayload.sandboxExpiresAt = null;
     updatePayload.hibernateAfter = null;
+  }
+  if (shouldUnarchive) {
+    // Reset lifecycle state so the session can be resumed normally.
+    // If there is a snapshot the client will auto-restore it on entry.
+    updatePayload.lifecycleState = null;
   }
 
   const updatedSession = await updateSession(sessionId, updatePayload);

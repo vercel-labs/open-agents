@@ -108,6 +108,7 @@ type SessionChatContextValue = {
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   archiveSession: () => Promise<void>;
+  unarchiveSession: () => Promise<void>;
   updateSessionTitle: (title: string) => Promise<void>;
   updateChatModel: (modelId: string) => Promise<void>;
   /** Whether the chat had persisted messages when it was loaded */
@@ -771,6 +772,68 @@ export function SessionChatProvider({
     );
   }, [sessionRecord, mutate]);
 
+  const unarchiveSession = useCallback(async () => {
+    const previousSession = sessionRecord;
+    const optimisticSession: Session = {
+      ...sessionRecord,
+      status: "running",
+    };
+
+    setSessionRecord(optimisticSession);
+    await mutate<SessionsResponse>(
+      "/api/sessions",
+      (current) =>
+        current
+          ? {
+              sessions: current.sessions.map((s) =>
+                s.id === sessionRecord.id ? optimisticSession : s,
+              ),
+            }
+          : current,
+      { revalidate: false },
+    );
+
+    const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "running" }),
+    });
+
+    const data = (await res.json()) as { session?: Session; error?: string };
+
+    if (!res.ok) {
+      setSessionRecord(previousSession);
+      await mutate<SessionsResponse>(
+        "/api/sessions",
+        (current) =>
+          current
+            ? {
+                sessions: current.sessions.map((s) =>
+                  s.id === sessionRecord.id ? previousSession : s,
+                ),
+              }
+            : current,
+        { revalidate: false },
+      );
+      throw new Error(data.error ?? "Failed to unarchive session");
+    }
+
+    const nextSession = data.session ?? optimisticSession;
+    setSessionRecord(nextSession);
+    await mutate<SessionsResponse>(
+      "/api/sessions",
+      (current) =>
+        current
+          ? {
+              sessions: current.sessions.map((s) =>
+                s.id === sessionRecord.id ? nextSession : s,
+              ),
+            }
+          : current,
+      { revalidate: false },
+    );
+  }, [sessionRecord, mutate]);
+
   const updateSessionTitle = useCallback(
     async (title: string) => {
       const res = await fetch(`/api/sessions/${sessionRecord.id}`, {
@@ -824,6 +887,7 @@ export function SessionChatProvider({
         setSandboxInfo,
         clearSandboxInfo,
         archiveSession,
+        unarchiveSession,
         updateSessionTitle,
         updateChatModel,
         hadInitialMessages,
