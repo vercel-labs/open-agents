@@ -288,3 +288,4 @@ Use `catalog:` for shared external versions:
 - Even when branch push succeeds, GitHub PR creation can still return `403 Resource not accessible by integration`; expose a compare URL fallback so users can complete PR creation manually in the browser.
 - For manual compare fallback, include `title` and `body` query params on the GitHub compare URL so PR details are prefilled when API creation is unavailable.
 - Preserve fork PR metadata across retries: if a branch already tracks `fork/<branch>` and no new push is needed, derive and return `prHeadOwner` from fork upstream/remote state so later PR creation still uses a qualified head ref.
+- `bunx @vercel/config validate` executes the CLI under Node via its shebang and cannot parse TypeScript-style `vercel.ts` imports; use `bunx --bun @vercel/config validate` (or `bun node_modules/@vercel/config/dist/cli.js validate`) for reliable local validation.
