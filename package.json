@@ -35,7 +35,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
     "@vercel/blob": "^0.27.0",
-    "@vercel/config": "^0.0.31",
     "turbo": "^2.5.4",
     "typescript": "^5"
   },
