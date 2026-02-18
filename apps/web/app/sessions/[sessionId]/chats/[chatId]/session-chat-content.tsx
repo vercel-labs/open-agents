@@ -2282,7 +2282,9 @@ export function SessionChatContent() {
                       // Handle form submission
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        e.currentTarget.form?.requestSubmit();
+                        if (!isArchived && isSandboxActive) {
+                          e.currentTarget.form?.requestSubmit();
+                        }
                       }
                     }}
                     onKeyUp={(e) => {
