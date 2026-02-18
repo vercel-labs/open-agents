@@ -500,6 +500,7 @@ export function SessionChatContent() {
     syncSandboxStatus,
     attemptReconnection,
     updateSessionRepo,
+    updateSessionPullRequest,
   } = useSessionChatContext();
   const {
     messages,
@@ -2215,6 +2216,9 @@ export function SessionChatContent() {
           onOpenChange={setPrDialogOpen}
           session={session}
           hasSandbox={sandboxInfo !== null}
+          onPrDetected={(pr) => {
+            updateSessionPullRequest(pr);
+          }}
         />
       )}
 

@@ -32,6 +32,7 @@ export function parseGitHubUrl(
 export async function createPullRequest(params: {
   repoUrl: string;
   branchName: string;
+  headRef?: string;
   title: string;
   body?: string;
   baseBranch?: string;
@@ -45,6 +46,7 @@ export async function createPullRequest(params: {
   const {
     repoUrl,
     branchName,
+    headRef,
     title,
     body = "",
     baseBranch = "main",
@@ -70,7 +72,7 @@ export async function createPullRequest(params: {
       repo,
       title,
       body,
-      head: branchName,
+      head: headRef ?? branchName,
       base: baseBranch,
     });
 

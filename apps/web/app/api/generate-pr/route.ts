@@ -1,8 +1,10 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
+import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -37,6 +39,179 @@ function generateBranchName(username: string, name?: string | null): string {
  */
 function looksLikeCommitHash(str: string): boolean {
   return /^[0-9a-f]{7,40}$/i.test(str);
+}
+
+interface EnsureForkOptions {
+  token: string;
+  upstreamOwner: string;
+  upstreamRepo: string;
+  forkOwner: string;
+}
+
+type EnsureForkResult =
+  | { success: true; forkRepoName: string }
+  | { success: false; error: string };
+
+const FORK_PUSH_RETRY_ATTEMPTS = 12;
+const FORK_PUSH_RETRY_DELAY_MS = 2000;
+
+function getGitHubHeaders(token: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isPermissionPushError(output: string): boolean {
+  const lowerOutput = output.toLowerCase();
+  return (
+    lowerOutput.includes("permission to") ||
+    lowerOutput.includes("permission denied") ||
+    lowerOutput.includes("the requested url returned error: 403") ||
+    lowerOutput.includes("access denied") ||
+    lowerOutput.includes("authentication failed") ||
+    lowerOutput.includes("invalid username") ||
+    lowerOutput.includes("unable to access") ||
+    lowerOutput.includes("resource not accessible by integration")
+  );
+}
+
+function isRetryableForkPushError(output: string): boolean {
+  const lowerOutput = output.toLowerCase();
+  return (
+    lowerOutput.includes("repository not found") ||
+    lowerOutput.includes("could not read from remote repository") ||
+    lowerOutput.includes("remote not found")
+  );
+}
+
+function redactGitHubToken(text: string): string {
+  return text.replace(
+    /https:\/\/x-access-token:[^@\s]+@github\.com/gi,
+    "https://x-access-token:***@github.com",
+  );
+}
+
+function extractGitHubOwnerFromRemoteUrl(remoteUrl: string): string | null {
+  const trimmedRemoteUrl = remoteUrl.trim();
+  if (!trimmedRemoteUrl) {
+    return null;
+  }
+
+  const githubUrlMatch = trimmedRemoteUrl.match(
+    /github\.com[:/]([^/]+)\/[^/]+$/i,
+  );
+  if (githubUrlMatch?.[1]) {
+    return githubUrlMatch[1];
+  }
+
+  return null;
+}
+
+async function ensureForkExists({
+  token,
+  upstreamOwner,
+  upstreamRepo,
+  forkOwner,
+}: EnsureForkOptions): Promise<EnsureForkResult> {
+  const headers = getGitHubHeaders(token);
+  const forkRepoUrl = `https://api.github.com/repos/${forkOwner}/${upstreamRepo}`;
+
+  const publicForkResponse = await fetch(forkRepoUrl, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    cache: "no-store",
+  });
+
+  if (publicForkResponse.ok) {
+    const repoData: unknown = await publicForkResponse.json();
+    const forkRepoName =
+      typeof repoData === "object" &&
+      repoData !== null &&
+      "name" in repoData &&
+      typeof repoData.name === "string"
+        ? repoData.name
+        : upstreamRepo;
+    return { success: true, forkRepoName };
+  }
+
+  const existingForkResponse = await fetch(forkRepoUrl, {
+    headers,
+    cache: "no-store",
+  });
+
+  if (existingForkResponse.ok) {
+    const repoData: unknown = await existingForkResponse.json();
+    const forkRepoName =
+      typeof repoData === "object" &&
+      repoData !== null &&
+      "name" in repoData &&
+      typeof repoData.name === "string"
+        ? repoData.name
+        : upstreamRepo;
+    return { success: true, forkRepoName };
+  }
+
+  if (existingForkResponse.status !== 404) {
+    const responseText = await existingForkResponse.text();
+    return {
+      success: false,
+      error: `Failed to check fork repository: ${responseText.slice(0, 200)}`,
+    };
+  }
+
+  const createForkResponse = await fetch(
+    `https://api.github.com/repos/${upstreamOwner}/${upstreamRepo}/forks`,
+    {
+      method: "POST",
+      headers,
+      cache: "no-store",
+    },
+  );
+
+  if (
+    !createForkResponse.ok &&
+    createForkResponse.status !== 202 &&
+    createForkResponse.status !== 422
+  ) {
+    const responseText = await createForkResponse.text();
+    const lowerResponseText = responseText.toLowerCase();
+
+    if (
+      createForkResponse.status === 403 &&
+      lowerResponseText.includes("resource not accessible by integration")
+    ) {
+      return {
+        success: false,
+        error:
+          "GitHub denied automatic fork creation for this token. Create a fork manually on GitHub, then retry creating the PR.",
+      };
+    }
+
+    return {
+      success: false,
+      error: `Failed to create fork: ${responseText.slice(0, 200)}`,
+    };
+  }
+
+  const createData: unknown = await createForkResponse.json().catch(() => null);
+  const forkRepoName =
+    typeof createData === "object" &&
+    createData !== null &&
+    "name" in createData &&
+    typeof createData.name === "string"
+      ? createData.name
+      : upstreamRepo;
+  return { success: true, forkRepoName };
 }
 
 // Allow up to 2 minutes for AI generation and git operations
@@ -111,14 +286,16 @@ export async function POST(req: Request) {
   // 3. Connect to sandbox
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
+  let repoTokenResult: Awaited<ReturnType<typeof getRepoToken>> | null = null;
+  let cachedUserToken: string | null = null;
 
   if (sessionRecord.repoOwner && sessionRecord.repoName) {
     try {
-      const tokenResult = await getRepoToken(
+      repoTokenResult = await getRepoToken(
         session.user.id,
         sessionRecord.repoOwner,
       );
-      const authUrl = `https://x-access-token:${tokenResult.token}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+      const authUrl = `https://x-access-token:${repoTokenResult.token}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
       await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 5000);
     } catch {
       return Response.json(
@@ -282,19 +459,12 @@ export async function POST(req: Request) {
     committed?: boolean;
     commitMessage?: string;
     pushed?: boolean;
+    pushedToFork?: boolean;
   } = {};
+  let prHeadOwner: string | null = null;
 
   if (hasUncommittedChanges) {
-    // 4a. Get diff for commit message generation
-    const diffResult = await sandbox.exec("git diff HEAD", cwd, 30000);
-    const stagedDiffResult = await sandbox.exec(
-      "git diff --cached",
-      cwd,
-      30000,
-    );
-    const diffForCommit = diffResult.stdout + stagedDiffResult.stdout;
-
-    // 4b. Stage all changes
+    // 4a. Stage all changes first so untracked files are included in diff
     const addResult = await sandbox.exec("git add -A", cwd, 10000);
     if (!addResult.success) {
       return Response.json(
@@ -303,10 +473,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // 4b. Get staged diff for commit message generation
+    const stagedDiffResult = await sandbox.exec(
+      "git diff --cached",
+      cwd,
+      30000,
+    );
+    const diffForCommit = stagedDiffResult.stdout;
+
+    const fallbackCommitMessage = "chore: update repository changes";
+
     // 4c. Generate commit message with AI
-    const commitMsgResult = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
-      prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
+    let commitMessage = fallbackCommitMessage;
+    if (diffForCommit.trim()) {
+      const commitMsgResult = await generateText({
+        model: gateway("anthropic/claude-haiku-4.5"),
+        prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
 Session context: ${sessionTitle}
 
@@ -314,9 +496,16 @@ Diff:
 ${diffForCommit.slice(0, 8000)}
 
 Respond with ONLY the commit message, nothing else.`,
-    });
+      });
 
-    const commitMessage = commitMsgResult.text.trim();
+      const generatedCommitMessage = commitMsgResult.text
+        .trim()
+        .split("\n")[0]
+        ?.trim();
+      if (generatedCommitMessage && generatedCommitMessage.length > 0) {
+        commitMessage = generatedCommitMessage.slice(0, 72);
+      }
+    }
 
     // 4d. Create commit (escape shell special characters in message)
     // Using single quotes is safest, but we need to handle single quotes in the message
@@ -356,6 +545,24 @@ Respond with ONLY the commit message, nothing else.`,
     trackingResult.stdout.includes("needs-push") ||
     trackingResult.stdout.trim().length > 0;
 
+  const upstreamRefResult = await sandbox.exec(
+    "git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true",
+    cwd,
+    10000,
+  );
+  const upstreamRef = upstreamRefResult.stdout.trim();
+  if (upstreamRef.startsWith("fork/")) {
+    const forkUrlResult = await sandbox.exec(
+      "git remote get-url fork 2>/dev/null || true",
+      cwd,
+      10000,
+    );
+    const forkOwner = extractGitHubOwnerFromRemoteUrl(forkUrlResult.stdout);
+    if (forkOwner) {
+      prHeadOwner = forkOwner;
+    }
+  }
+
   if (needsPush) {
     // 5a. Fetch latest from origin to check for conflicts
     await sandbox.exec("git fetch origin", cwd, 30000);
@@ -369,35 +576,205 @@ Respond with ONLY the commit message, nothing else.`,
     const branchExistsOnRemote = remoteBranchCheck.stdout.trim().length > 0;
 
     // 5c. Push branch
-    const pushResult = await sandbox.exec(
-      `git push -u origin ${resolvedBranch}`,
+    let pushResult = await sandbox.exec(
+      `GIT_TERMINAL_PROMPT=0 git push --verbose -u origin ${resolvedBranch}`,
       cwd,
       60000,
     );
 
     if (!pushResult.success) {
-      const pushOutput = pushResult.stdout.trim() + pushResult.stderr;
+      let pushOutput =
+        `${pushResult.stdout}\n${pushResult.stderr ?? ""}`.trim();
+      let redactedPushOutput = redactGitHubToken(pushOutput);
+      console.log(
+        `[generate-pr] Push to origin failed (exitCode=${pushResult.exitCode}, output=${redactedPushOutput.slice(0, 200) || "none"})`,
+      );
       let errorMessage = "Failed to push branch.";
+      let isPermissionError = isPermissionPushError(pushOutput);
 
       if (
-        pushOutput.includes("rejected") ||
-        pushOutput.includes("non-fast-forward")
+        repoTokenResult?.type === "installation" &&
+        sessionRecord.repoOwner &&
+        sessionRecord.repoName
       ) {
-        if (branchExistsOnRemote) {
-          errorMessage = `Branch '${resolvedBranch}' already exists on remote with different commits. Try creating a new branch or pull the latest changes.`;
-        } else {
-          errorMessage = `Push rejected. The remote may have changes that conflict with your local branch.`;
+        if (!cachedUserToken) {
+          cachedUserToken = await getUserGitHubToken();
         }
-      } else if (
-        pushOutput.includes("permission") ||
-        pushOutput.includes("403")
-      ) {
-        errorMessage = "Permission denied. Check your GitHub access.";
-      } else {
-        errorMessage = `Push failed: ${pushOutput.slice(0, 200)}`;
+
+        if (cachedUserToken) {
+          const userAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+          const setOriginUserAuthResult = await sandbox.exec(
+            `git remote set-url origin "${userAuthUrl}"`,
+            cwd,
+            10000,
+          );
+
+          if (setOriginUserAuthResult.success) {
+            pushResult = await sandbox.exec(
+              `GIT_TERMINAL_PROMPT=0 git push --verbose -u origin ${resolvedBranch}`,
+              cwd,
+              60000,
+            );
+
+            if (pushResult.success) {
+              console.log(
+                `[generate-pr] Push to origin succeeded with user token after installation token failure`,
+              );
+              gitActions.pushed = true;
+            } else {
+              pushOutput =
+                `${pushResult.stdout}\n${pushResult.stderr ?? ""}`.trim();
+              redactedPushOutput = redactGitHubToken(pushOutput);
+              isPermissionError = isPermissionPushError(pushOutput);
+              console.log(
+                `[generate-pr] Push to origin with user token also failed (exitCode=${pushResult.exitCode}, output=${redactedPushOutput.slice(0, 200) || "none"})`,
+              );
+            }
+          }
+        }
       }
 
-      return Response.json({ error: errorMessage }, { status: 500 });
+      if (
+        !gitActions.pushed &&
+        isPermissionError &&
+        sessionRecord.repoOwner &&
+        sessionRecord.repoName
+      ) {
+        if (!cachedUserToken) {
+          cachedUserToken = await getUserGitHubToken();
+        }
+        const githubAccount = await getGitHubAccount(session.user.id);
+
+        if (cachedUserToken && githubAccount?.username) {
+          const forkOwner = githubAccount.username;
+          const forkResult = await ensureForkExists({
+            token: cachedUserToken,
+            upstreamOwner: sessionRecord.repoOwner,
+            upstreamRepo: sessionRecord.repoName,
+            forkOwner,
+          });
+
+          if (!forkResult.success) {
+            return Response.json(
+              {
+                error: `Failed to push to upstream and fork fallback failed: ${forkResult.error}`,
+              },
+              { status: 500 },
+            );
+          }
+
+          const { forkRepoName } = forkResult;
+          const forkAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${forkOwner}/${forkRepoName}.git`;
+
+          await sandbox.exec(
+            "git remote remove fork 2>/dev/null || true",
+            cwd,
+            10000,
+          );
+          const addForkResult = await sandbox.exec(
+            `git remote add fork "${forkAuthUrl}"`,
+            cwd,
+            10000,
+          );
+
+          if (!addForkResult.success) {
+            return Response.json(
+              {
+                error: `Failed to configure fork remote: ${(addForkResult.stderr ?? addForkResult.stdout).slice(0, 200)}`,
+              },
+              { status: 500 },
+            );
+          }
+
+          let pushToForkSucceeded = false;
+          let lastPushForkOutput = "";
+
+          for (
+            let attempt = 1;
+            attempt <= FORK_PUSH_RETRY_ATTEMPTS;
+            attempt += 1
+          ) {
+            const pushForkResult = await sandbox.exec(
+              `GIT_TERMINAL_PROMPT=0 git push --verbose -u fork ${resolvedBranch}`,
+              cwd,
+              60000,
+            );
+
+            if (pushForkResult.success) {
+              pushToForkSucceeded = true;
+              console.log(
+                `[generate-pr] Push to origin denied; pushed branch to fork ${forkOwner}/${forkRepoName}`,
+              );
+              prHeadOwner = forkOwner;
+              gitActions.pushed = true;
+              gitActions.pushedToFork = true;
+              break;
+            }
+
+            lastPushForkOutput =
+              `${pushForkResult.stdout}\n${pushForkResult.stderr ?? ""}`.trim();
+
+            if (
+              isRetryableForkPushError(lastPushForkOutput) &&
+              attempt < FORK_PUSH_RETRY_ATTEMPTS
+            ) {
+              console.log(
+                `[generate-pr] Fork push retry ${attempt}/${FORK_PUSH_RETRY_ATTEMPTS}: waiting for fork repository to become available`,
+              );
+              await sleep(FORK_PUSH_RETRY_DELAY_MS);
+              continue;
+            }
+
+            break;
+          }
+
+          if (!pushToForkSucceeded) {
+            if (isPermissionPushError(lastPushForkOutput)) {
+              return Response.json(
+                {
+                  error:
+                    "Failed to push to your fork. Ensure your linked GitHub account has permission to create and push to forks.",
+                },
+                { status: 403 },
+              );
+            }
+
+            return Response.json(
+              {
+                error: `Failed to push to fork ${forkOwner}/${forkRepoName}: ${redactGitHubToken(lastPushForkOutput).slice(0, 200)}`,
+              },
+              { status: 500 },
+            );
+          }
+        } else {
+          return Response.json(
+            {
+              error:
+                "Failed to push to upstream and no linked GitHub account is available for fork fallback.",
+            },
+            { status: 500 },
+          );
+        }
+      }
+
+      if (!gitActions.pushed) {
+        if (
+          pushOutput.includes("rejected") ||
+          pushOutput.includes("non-fast-forward")
+        ) {
+          if (branchExistsOnRemote) {
+            errorMessage = `Branch '${resolvedBranch}' already exists on remote with different commits. Try creating a new branch or pull the latest changes.`;
+          } else {
+            errorMessage = `Push rejected. The remote may have changes that conflict with your local branch.`;
+          }
+        } else if (isPermissionError) {
+          errorMessage = "Permission denied. Check your GitHub access.";
+        } else {
+          errorMessage = `Push failed: ${redactedPushOutput.slice(0, 200)}`;
+        }
+
+        return Response.json({ error: errorMessage }, { status: 500 });
+      }
     }
 
     gitActions.pushed = true;
@@ -408,6 +785,7 @@ Respond with ONLY the commit message, nothing else.`,
     return Response.json({
       branchName: resolvedBranch,
       gitActions,
+      ...(prHeadOwner ? { prHeadOwner } : {}),
     });
   }
 
@@ -605,6 +983,7 @@ ${commitLog}`,
     title: prContent.title,
     body: prContent.body,
     branchName: resolvedBranch,
+    ...(prHeadOwner ? { prHeadOwner } : {}),
     ...(Object.keys(gitActions).length > 0 && { gitActions }),
   });
 }
