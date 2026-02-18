@@ -1,4 +1,5 @@
-import { deploymentEnv, type VercelConfig } from "@vercel/config/v1";
+import type { VercelConfig } from "@vercel/config/v1";
+import { deploymentEnv } from "@vercel/config/v1";
 
 const bypassSecret = deploymentEnv("VERCEL_AUTOMATION_BYPASS_SECRET");
 
