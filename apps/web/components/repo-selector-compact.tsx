@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import useSWR from "swr";
 import { z } from "zod";
 import {
   Command,
@@ -27,8 +27,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  InstallationRepo,
+  useInstallationRepos,
+} from "@/hooks/use-installation-repos";
 import { useSession } from "@/hooks/use-session";
-import { fetcher } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -61,13 +64,6 @@ const installationSchema = z.object({
 });
 
 const installationsSchema = z.array(installationSchema);
-
-interface Repo {
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean;
-}
 
 interface RepoSelectorCompactProps {
   selectedOwner: string;
@@ -102,7 +98,6 @@ export function RepoSelectorCompact({
   const [repoSearch, setRepoSearch] = useState("");
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { mutate } = useSWRConfig();
 
   // Track whether we've auto-selected an owner
   const hasAutoSelectedRef = useRef(false);
@@ -122,40 +117,28 @@ export function RepoSelectorCompact({
     (installation) => installation.accountLogin === currentOwner,
   );
 
-  // Build the repos URL for current owner
-  const reposUrl = currentInstallation
-    ? `/api/github/installations/repos?${new URLSearchParams({
-        installation_id: `${currentInstallation.installationId}`,
-        limit: "50",
-        ...(debouncedRepoSearch ? { query: debouncedRepoSearch } : {}),
-      }).toString()}`
-    : null;
-
-  // Fetch repos for current owner (conditional fetch)
-  const { data: repos = [], isLoading: reposLoading } = useSWR<Repo[]>(
-    reposUrl,
-    fetcher,
-  );
+  const {
+    repos,
+    isLoading: reposLoading,
+    error: reposError,
+    refresh: refreshRepos,
+  } = useInstallationRepos({
+    installationId: currentInstallation?.installationId ?? null,
+    query: debouncedRepoSearch,
+    limit: 50,
+  });
 
   // Revalidate cache and refetch repos
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Refetch repos for the selected installation.
-      await mutate(
-        (key) =>
-          typeof key === "string" &&
-          key.startsWith("/api/github/installations/repos?") &&
-          key.includes(
-            `installation_id=${currentInstallation?.installationId ?? ""}`,
-          ),
-        undefined,
-        { revalidate: true },
-      );
+      await refreshRepos();
+    } catch (refreshError) {
+      console.error("Failed to refresh repositories:", refreshError);
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentInstallation?.installationId, mutate]);
+  }, [refreshRepos]);
 
   // Auto-select first owner when data loads (only once)
   useEffect(() => {
@@ -184,7 +167,7 @@ export function RepoSelectorCompact({
     setRepoSearch("");
   }, [currentOwner]);
 
-  const handleRepoSelect = (repo: Repo) => {
+  const handleRepoSelect = (repo: InstallationRepo) => {
     onSelect(currentOwner, repo.name);
     setOpen(false);
   };
@@ -261,9 +244,11 @@ export function RepoSelectorCompact({
             />
             <CommandList>
               <CommandEmpty>
-                {installationsLoading || reposLoading
-                  ? "Loading..."
-                  : "No repositories found."}
+                {reposError
+                  ? reposError
+                  : installationsLoading || reposLoading
+                    ? "Loading..."
+                    : "No repositories found."}
               </CommandEmpty>
 
               {/* Owner selector */}

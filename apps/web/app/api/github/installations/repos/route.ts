@@ -1,7 +1,10 @@
+import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getInstallationByUserAndId } from "@/lib/db/installations";
-import { getInstallationToken } from "@/lib/github/app-auth";
-import { listInstallationRepositories } from "@/lib/github/installation-repos";
+import {
+  getCachedInstallationRepositories,
+  getInstallationReposCacheTag,
+} from "@/lib/github/installation-repos";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function parseInstallationId(value: string | null): number | null {
@@ -29,6 +32,7 @@ export async function GET(request: NextRequest) {
     searchParams.get("installation_id"),
   );
   const query = searchParams.get("query")?.trim() || undefined;
+  const refresh = searchParams.get("refresh") === "1";
   const limitParam = searchParams.get("limit");
   const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
   const limit =
@@ -55,8 +59,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const token = await getInstallationToken(installationId);
-    const repos = await listInstallationRepositories(token, {
+    if (refresh) {
+      revalidateTag(getInstallationReposCacheTag(installationId), {
+        expire: 0,
+      });
+    }
+
+    const repos = await getCachedInstallationRepositories({
+      installationId,
       query,
       limit,
       owner: installation.accountLogin,

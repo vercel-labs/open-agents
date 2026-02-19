@@ -1,4 +1,9 @@
+import { unstable_cache } from "next/cache";
 import { z } from "zod";
+import { getInstallationToken } from "@/lib/github/app-auth";
+
+const CACHE_REVALIDATE_SECONDS = 120;
+const INSTALLATION_REPOS_MAX_PAGES = 20;
 
 const installationRepoSchema = z.object({
   name: z.string(),
@@ -23,6 +28,13 @@ interface ListInstallationRepositoriesOptions {
   limit?: number;
 }
 
+interface FetchInstallationRepositoriesOptions {
+  installationId: number;
+  owner?: string;
+  query?: string;
+  limit?: number;
+}
+
 export interface InstallationRepository {
   name: string;
   full_name: string;
@@ -31,6 +43,10 @@ export interface InstallationRepository {
   clone_url: string;
   updated_at: string;
   language: string | null;
+}
+
+export function getInstallationReposCacheTag(installationId: number): string {
+  return `github-installation-repos-${installationId}`;
 }
 
 function normalizeLimit(limit?: number): number {
@@ -45,9 +61,13 @@ export async function listInstallationRepositories(
   token: string,
   options?: ListInstallationRepositoriesOptions,
 ): Promise<InstallationRepository[]> {
-  const allRepos: z.infer<typeof installationRepoSchema>[] = [];
-  const perPage = 100;
-  const maxPages = 20;
+  const ownerFilter = options?.owner?.trim().toLowerCase();
+  const queryFilter = options?.query?.trim().toLowerCase();
+  const limit = normalizeLimit(options?.limit);
+
+  const perPage = queryFilter ? 100 : limit;
+  const maxPages = queryFilter ? INSTALLATION_REPOS_MAX_PAGES : 5;
+  const matchedRepos: z.infer<typeof installationRepoSchema>[] = [];
 
   for (let page = 1; page <= maxPages; page++) {
     const endpoint = `https://api.github.com/installation/repositories?per_page=${perPage}&page=${page}`;
@@ -75,34 +95,34 @@ export async function listInstallationRepositories(
       break;
     }
 
-    allRepos.push(...parsed.data.repositories);
+    const pageMatches = parsed.data.repositories.filter((repo) => {
+      const matchesOwner = ownerFilter
+        ? repo.owner.login.toLowerCase() === ownerFilter
+        : true;
+
+      const matchesQuery = queryFilter
+        ? repo.name.toLowerCase().includes(queryFilter)
+        : true;
+
+      return matchesOwner && matchesQuery;
+    });
+
+    matchedRepos.push(...pageMatches);
+
+    if (matchedRepos.length >= limit) {
+      break;
+    }
 
     if (parsed.data.repositories.length < perPage) {
       break;
     }
   }
 
-  const ownerFilter = options?.owner?.trim().toLowerCase();
-  const queryFilter = options?.query?.trim().toLowerCase();
-  const limit = normalizeLimit(options?.limit);
-
-  const filtered = allRepos.filter((repo) => {
-    const matchesOwner = ownerFilter
-      ? repo.owner.login.toLowerCase() === ownerFilter
-      : true;
-
-    const matchesQuery = queryFilter
-      ? repo.name.toLowerCase().includes(queryFilter)
-      : true;
-
-    return matchesOwner && matchesQuery;
-  });
-
-  filtered.sort((a, b) =>
+  matchedRepos.sort((a, b) =>
     a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
   );
 
-  return filtered.slice(0, limit).map((repo) => ({
+  return matchedRepos.slice(0, limit).map((repo) => ({
     name: repo.name,
     full_name: repo.full_name,
     description: repo.description,
@@ -111,4 +131,36 @@ export async function listInstallationRepositories(
     updated_at: repo.updated_at,
     language: repo.language,
   }));
+}
+
+async function fetchInstallationRepositoriesByInstallation(
+  installationId: number,
+  owner?: string,
+  query?: string,
+  limit?: number,
+): Promise<InstallationRepository[]> {
+  const token = await getInstallationToken(installationId);
+  return listInstallationRepositories(token, {
+    owner,
+    query,
+    limit,
+  });
+}
+
+export function getCachedInstallationRepositories({
+  installationId,
+  owner,
+  query,
+  limit,
+}: FetchInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
+  const cachedFn = unstable_cache(
+    fetchInstallationRepositoriesByInstallation,
+    ["github-installation-repos"],
+    {
+      revalidate: CACHE_REVALIDATE_SECONDS,
+      tags: [getInstallationReposCacheTag(installationId)],
+    },
+  );
+
+  return cachedFn(installationId, owner, query, limit);
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedGitHubRepos } from "@/lib/github/cached-api";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { listInstallationRepositories } from "@/lib/github/installation-repos";
+import { getCachedInstallationRepositories } from "@/lib/github/installation-repos";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET(request: NextRequest) {
@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
 
   try {
     if (tokenResult.type === "installation") {
-      const repos = await listInstallationRepositories(tokenResult.token, {
+      const repos = await getCachedInstallationRepositories({
+        installationId: tokenResult.installationId,
         owner,
         limit,
         query,

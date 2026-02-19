@@ -24,6 +24,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useInstallationRepos } from "@/hooks/use-installation-repos";
 import { cn } from "@/lib/utils";
 
 interface Installation {
@@ -32,13 +33,6 @@ interface Installation {
   accountType: "User" | "Organization";
   repositorySelection: "all" | "selected";
   installationUrl: string | null;
-}
-
-interface Repo {
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean;
 }
 
 const installationSchema = z.object({
@@ -51,15 +45,6 @@ const installationSchema = z.object({
 
 const installationsSchema = z.array(installationSchema);
 
-const repoSchema = z.object({
-  name: z.string(),
-  full_name: z.string(),
-  description: z.string().nullable(),
-  private: z.boolean(),
-});
-
-const reposSchema = z.array(repoSchema);
-
 function getCurrentPathWithSearch(): string {
   return `${window.location.pathname}${window.location.search}`;
 }
@@ -70,17 +55,14 @@ export function RepoSelector({
   onRepoSelect: (owner: string, repo: string) => void;
 }) {
   const [installations, setInstallations] = useState<Installation[]>([]);
-  const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
   const [ownersLoading, setOwnersLoading] = useState(true);
-  const [reposLoading, setReposLoading] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [repoRefreshTrigger, setRepoRefreshTrigger] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const startGitHubInstall = useCallback(() => {
@@ -93,6 +75,17 @@ export function RepoSelector({
   const selectedInstallation = installations.find(
     (installation) => installation.accountLogin === selectedOwner,
   );
+
+  const {
+    repos,
+    isLoading: reposLoading,
+    error: reposError,
+    refresh: refreshRepos,
+  } = useInstallationRepos({
+    installationId: selectedInstallation?.installationId ?? null,
+    query: debouncedRepoSearch,
+    limit: 50,
+  });
 
   useEffect(() => {
     const loadInstallations = async () => {
@@ -131,54 +124,16 @@ export function RepoSelector({
     loadInstallations();
   }, []);
 
-  const loadRepos = useCallback(async () => {
-    if (!selectedInstallation) {
-      setRepos([]);
-      return;
-    }
-
-    setReposLoading(true);
-    setRepos([]);
-    try {
-      const params = new URLSearchParams({
-        installation_id: `${selectedInstallation.installationId}`,
-        limit: "50",
-      });
-      if (debouncedRepoSearch) {
-        params.set("query", debouncedRepoSearch);
-      }
-
-      const response = await fetch(
-        `/api/github/installations/repos?${params.toString()}`,
-      );
-      if (!response.ok) {
-        return;
-      }
-
-      const json = await response.json();
-      const parsed = reposSchema.safeParse(json);
-      if (parsed.success) {
-        setRepos(parsed.data);
-      }
-    } catch (loadError) {
-      console.error("Failed to load repos:", loadError);
-    } finally {
-      setReposLoading(false);
-    }
-  }, [selectedInstallation, debouncedRepoSearch]);
-
-  useEffect(() => {
-    loadRepos();
-  }, [loadRepos, repoRefreshTrigger]);
-
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      setRepoRefreshTrigger((value) => value + 1);
+      await refreshRepos();
+    } catch (refreshError) {
+      console.error("Failed to refresh repositories:", refreshError);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [refreshRepos]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -330,7 +285,11 @@ export function RepoSelector({
             />
             <CommandList>
               <CommandEmpty>
-                {reposLoading ? "Loading..." : "No repositories found."}
+                {reposError
+                  ? reposError
+                  : reposLoading
+                    ? "Loading..."
+                    : "No repositories found."}
               </CommandEmpty>
               <CommandGroup>
                 {repos.slice(0, 50).map((repo) => (
