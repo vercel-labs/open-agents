@@ -37,7 +37,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { BundledTheme } from "shiki";
-import type { WebAgentUIMessagePart, WebAgentUIToolPart } from "@/app/types";
+import type {
+  WebAgentUIMessage,
+  WebAgentUIMessagePart,
+  WebAgentUIToolPart,
+} from "@/app/types";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
@@ -123,6 +127,24 @@ const shikiThemes = ["github-dark", "github-dark"] as [
   BundledTheme,
   BundledTheme,
 ];
+
+type MessageRenderGroup =
+  | {
+      type: "part";
+      part: WebAgentUIMessagePart;
+      index: number;
+    }
+  | {
+      type: "task-group";
+      tasks: TaskToolUIPart[];
+      startIndex: number;
+    };
+
+interface GroupedRenderMessage {
+  message: WebAgentUIMessage;
+  groups: MessageRenderGroup[];
+  isStreaming: boolean;
+}
 
 type CreateSandboxResponse = SandboxInfo & {
   type: string;
@@ -700,6 +722,49 @@ export function SessionChatContent() {
         )),
     [status, lastMessage],
   );
+  const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
+    return renderMessages.map((message, messageIndex) => {
+      const groups: MessageRenderGroup[] = [];
+      let currentTaskGroup: TaskToolUIPart[] = [];
+      let taskGroupStartIndex = 0;
+
+      message.parts.forEach((part, index) => {
+        if (isToolUIPart(part) && part.type === "tool-task") {
+          if (currentTaskGroup.length === 0) {
+            taskGroupStartIndex = index;
+          }
+          currentTaskGroup.push(part);
+          return;
+        }
+
+        if (currentTaskGroup.length > 0) {
+          groups.push({
+            type: "task-group",
+            tasks: currentTaskGroup,
+            startIndex: taskGroupStartIndex,
+          });
+          currentTaskGroup = [];
+        }
+
+        groups.push({ type: "part", part, index });
+      });
+
+      if (currentTaskGroup.length > 0) {
+        groups.push({
+          type: "task-group",
+          tasks: currentTaskGroup,
+          startIndex: taskGroupStartIndex,
+        });
+      }
+
+      return {
+        message,
+        groups,
+        isStreaming:
+          status === "streaming" && messageIndex === renderMessages.length - 1,
+      };
+    });
+  }, [renderMessages, status]);
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
@@ -1656,162 +1721,121 @@ export function SessionChatContent() {
         <div ref={containerRef} className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl px-4 py-8">
             <div className="space-y-6">
-              {renderMessages.map((m, messageIndex) => {
-                const isLastMessage =
-                  messageIndex === renderMessages.length - 1;
-                const isMessageStreaming =
-                  status === "streaming" && isLastMessage;
-
-                type RenderGroup =
-                  | {
-                      type: "part";
-                      part: WebAgentUIMessagePart;
-                      index: number;
-                    }
-                  | {
-                      type: "task-group";
-                      tasks: TaskToolUIPart[];
-                      startIndex: number;
-                    };
-
-                const renderGroups: RenderGroup[] = [];
-                let currentTaskGroup: TaskToolUIPart[] = [];
-                let taskGroupStartIndex = 0;
-
-                m.parts.forEach((part, index) => {
-                  if (isToolUIPart(part) && part.type === "tool-task") {
-                    if (currentTaskGroup.length === 0) {
-                      taskGroupStartIndex = index;
-                    }
-                    currentTaskGroup.push(part as TaskToolUIPart);
-                  } else {
-                    if (currentTaskGroup.length > 0) {
-                      renderGroups.push({
-                        type: "task-group",
-                        tasks: currentTaskGroup,
-                        startIndex: taskGroupStartIndex,
-                      });
-                      currentTaskGroup = [];
-                    }
-                    renderGroups.push({ type: "part", part, index });
-                  }
-                });
-
-                if (currentTaskGroup.length > 0) {
-                  renderGroups.push({
-                    type: "task-group",
-                    tasks: currentTaskGroup,
-                    startIndex: taskGroupStartIndex,
-                  });
-                }
-
-                return renderGroups.map((group) => {
-                  if (group.type === "task-group") {
-                    return (
-                      <div
-                        key={`${m.id}-task-group-${group.startIndex}`}
-                        className="max-w-full"
-                      >
-                        <TaskGroupView
-                          taskParts={group.tasks}
-                          activeApprovalId={
-                            group.tasks.find(
-                              (t) => t.state === "approval-requested",
-                            )?.approval?.id ?? null
-                          }
-                          isStreaming={isMessageStreaming}
-                          onApprove={(id) =>
-                            addToolApprovalResponse({ id, approved: true })
-                          }
-                          onDeny={(id, reason) =>
-                            addToolApprovalResponse({
-                              id,
-                              approved: false,
-                              reason,
-                            })
-                          }
-                        />
-                      </div>
-                    );
-                  }
-
-                  const p = group.part;
-                  const i = group.index;
-
-                  if (p.type === "text") {
-                    return (
-                      <div
-                        key={`${m.id}-${i}`}
-                        className={cn(
-                          "flex",
-                          m.role === "user" ? "justify-end" : "justify-start",
-                        )}
-                      >
-                        {m.role === "user" ? (
-                          <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                            <p className="whitespace-pre-wrap">{p.text}</p>
-                          </div>
-                        ) : (
-                          <div className="max-w-[80%]">
-                            <Streamdown
-                              animated={{
-                                animation: "fadeIn",
-                                duration: 250,
-                                easing: "ease-out",
-                              }}
-                              mode={isMessageStreaming ? "streaming" : "static"}
-                              isAnimating={isMessageStreaming}
-                              shikiTheme={shikiThemes}
-                              components={customComponents}
-                            >
-                              {p.text}
-                            </Streamdown>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (isToolUIPart(p)) {
-                    return (
-                      <div key={`${m.id}-${i}`} className="max-w-full">
-                        <ToolCall
-                          part={p as WebAgentUIToolPart}
-                          isStreaming={isMessageStreaming}
-                          onApprove={(id) =>
-                            addToolApprovalResponse({ id, approved: true })
-                          }
-                          onDeny={(id, reason) =>
-                            addToolApprovalResponse({
-                              id,
-                              approved: false,
-                              reason,
-                            })
-                          }
-                        />
-                      </div>
-                    );
-                  }
-
-                  // Render image attachments
-                  if (p.type === "file" && p.mediaType?.startsWith("image/")) {
-                    return (
-                      <div key={`${m.id}-${i}`} className="flex justify-end">
-                        <div className="max-w-[80%]">
-                          {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-                          <img
-                            src={p.url}
-                            alt={p.filename ?? "Attached image"}
-                            className="max-h-64 rounded-lg"
+              {groupedRenderMessages.map(
+                ({ message: m, groups, isStreaming: isMessageStreaming }) => {
+                  return groups.map((group) => {
+                    if (group.type === "task-group") {
+                      return (
+                        <div
+                          key={`${m.id}-task-group-${group.startIndex}`}
+                          className="max-w-full"
+                        >
+                          <TaskGroupView
+                            taskParts={group.tasks}
+                            activeApprovalId={
+                              group.tasks.find(
+                                (t) => t.state === "approval-requested",
+                              )?.approval?.id ?? null
+                            }
+                            isStreaming={isMessageStreaming}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
                           />
                         </div>
-                      </div>
-                    );
-                  }
+                      );
+                    }
 
-                  return null;
-                });
-              })}
+                    const p = group.part;
+                    const i = group.index;
+
+                    if (p.type === "text") {
+                      return (
+                        <div
+                          key={`${m.id}-${i}`}
+                          className={cn(
+                            "flex",
+                            m.role === "user" ? "justify-end" : "justify-start",
+                          )}
+                        >
+                          {m.role === "user" ? (
+                            <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                              <p className="whitespace-pre-wrap">{p.text}</p>
+                            </div>
+                          ) : (
+                            <div className="max-w-[80%]">
+                              <Streamdown
+                                animated={{
+                                  animation: "fadeIn",
+                                  duration: 250,
+                                  easing: "ease-out",
+                                }}
+                                mode={
+                                  isMessageStreaming ? "streaming" : "static"
+                                }
+                                isAnimating={isMessageStreaming}
+                                shikiTheme={shikiThemes}
+                                components={customComponents}
+                              >
+                                {p.text}
+                              </Streamdown>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (isToolUIPart(p)) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="max-w-full">
+                          <ToolCall
+                            part={p as WebAgentUIToolPart}
+                            isStreaming={isMessageStreaming}
+                            onApprove={(id) =>
+                              addToolApprovalResponse({ id, approved: true })
+                            }
+                            onDeny={(id, reason) =>
+                              addToolApprovalResponse({
+                                id,
+                                approved: false,
+                                reason,
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    }
+
+                    // Render image attachments
+                    if (
+                      p.type === "file" &&
+                      p.mediaType?.startsWith("image/")
+                    ) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="flex justify-end">
+                          <div className="max-w-[80%]">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                            <img
+                              src={p.url}
+                              alt={p.filename ?? "Attached image"}
+                              className="max-h-64 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  });
+                },
+              )}
               {showThinkingIndicator && (
                 <div className="flex justify-start">
                   <p className="animate-pulse text-sm font-medium text-muted-foreground">

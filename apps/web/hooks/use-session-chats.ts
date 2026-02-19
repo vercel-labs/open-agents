@@ -32,6 +32,9 @@ type ChatOptimisticOverlay = {
 
 const STREAMING_RACE_GRACE_MS = 12_000;
 const OVERLAY_INACTIVE_TTL_MS = 5 * 60_000;
+const STREAMING_REFRESH_INTERVAL_MS = 1_000;
+const IDLE_REFRESH_INTERVAL_MS = 8_000;
+const UNFOCUSED_REFRESH_INTERVAL_MS = 15_000;
 
 // Persist optimistic chat UI state across chat route transitions.
 const sessionChatOverlays = new Map<
@@ -112,15 +115,25 @@ export function useSessionChats(sessionId: string | null) {
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
     fetcher,
     {
-      refreshInterval: (latestData) =>
-        latestData?.chats.some((chat) => chat.isStreaming) ||
-        (optimisticOverlay
+      refreshInterval: (latestData) => {
+        const hasStreamingChat =
+          latestData?.chats.some((chat) => chat.isStreaming) ?? false;
+        const hasOptimisticStreaming = optimisticOverlay
           ? Array.from(optimisticOverlay.values()).some(
               (overlay) => overlay.streaming,
             )
-          : false)
-          ? 1_000
-          : 5_000,
+          : false;
+
+        if (hasStreamingChat || hasOptimisticStreaming) {
+          return STREAMING_REFRESH_INTERVAL_MS;
+        }
+
+        if (typeof document !== "undefined" && !document.hasFocus()) {
+          return UNFOCUSED_REFRESH_INTERVAL_MS;
+        }
+
+        return IDLE_REFRESH_INTERVAL_MS;
+      },
       refreshWhenHidden: false,
       revalidateOnFocus: true,
     },

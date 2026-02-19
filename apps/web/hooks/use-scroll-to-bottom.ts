@@ -21,7 +21,7 @@ export function useScrollToBottom<T extends HTMLElement>() {
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
-      container.addEventListener("scroll", handleScroll);
+      container.addEventListener("scroll", handleScroll, { passive: true });
       // Scroll to bottom on initial mount
       container.scrollTop = container.scrollHeight;
       handleScroll();
