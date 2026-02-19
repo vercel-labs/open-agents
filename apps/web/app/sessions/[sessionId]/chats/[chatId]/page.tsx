@@ -63,14 +63,18 @@ export default async function SessionChatPage({
 }: SessionChatPageProps) {
   const { sessionId, chatId } = await params;
 
+  // Start independent fetches in parallel
+  const sessionPromise = getServerSession();
+  const sessionRecordPromise = getSessionById(sessionId);
+
   // Server-side auth check
-  const session = await getServerSession();
+  const session = await sessionPromise;
   if (!session?.user) {
     redirect("/");
   }
 
-  // Fetch session + chat
-  const sessionRecord = await getSessionById(sessionId);
+  // Fetch session record
+  const sessionRecord = await sessionRecordPromise;
   if (!sessionRecord) {
     notFound();
   }
@@ -80,16 +84,17 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
-  const chat = await getChatByIdWithRetry(chatId, sessionId);
+  // Fetch chat and messages in parallel
+  const [chat, dbMessages] = await Promise.all([
+    getChatByIdWithRetry(chatId, sessionId),
+    getChatMessages(chatId),
+  ]);
   if (!chat) {
     if (isOptimisticChatId(chatId)) {
       redirect(`/sessions/${sessionId}`);
     }
     notFound();
   }
-
-  // Fetch messages and transform to WebAgentUIMessage[]
-  const dbMessages = await getChatMessages(chatId);
   const initialMessages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
 
   return (

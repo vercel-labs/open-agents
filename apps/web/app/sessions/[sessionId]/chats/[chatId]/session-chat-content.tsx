@@ -27,6 +27,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import type { ComponentProps, ReactNode } from "react";
 import {
@@ -42,8 +43,6 @@ import {
 import type { BundledTheme } from "shiki";
 import { Streamdown } from "streamdown";
 import type { WebAgentUIMessagePart, WebAgentUIToolPart } from "@/app/types";
-import { CreatePRDialog } from "@/components/create-pr-dialog";
-import { CreateRepoDialog } from "@/components/create-repo-dialog";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
@@ -80,12 +79,25 @@ import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
-import { DiffViewer } from "./diff-viewer";
 import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
 import "streamdown/styles.css";
+
+const DiffViewer = dynamic(
+  () => import("./diff-viewer").then((m) => m.DiffViewer),
+  { ssr: false },
+);
+const CreatePRDialog = dynamic(
+  () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
+  { ssr: false },
+);
+const CreateRepoDialog = dynamic(
+  () =>
+    import("@/components/create-repo-dialog").then((m) => m.CreateRepoDialog),
+  { ssr: false },
+);
 
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
@@ -686,15 +698,24 @@ export function SessionChatContent() {
     loading: chatsLoading,
     refreshChats,
   } = useSessionChats(session.id);
-  const renderMessages = hasMounted ? messages : initialMessages;
-  const lastMessage = renderMessages[renderMessages.length - 1];
-  const showThinkingIndicator =
-    status === "submitted" ||
-    (status === "streaming" &&
-      lastMessage?.role === "assistant" &&
-      !lastMessage.parts.some(
-        (p) => (p.type === "text" && p.text.length > 0) || isToolUIPart(p),
-      ));
+  const renderMessages = useMemo(
+    () => (hasMounted ? messages : initialMessages),
+    [hasMounted, messages, initialMessages],
+  );
+  const lastMessage = useMemo(
+    () => renderMessages[renderMessages.length - 1],
+    [renderMessages],
+  );
+  const showThinkingIndicator = useMemo(
+    () =>
+      status === "submitted" ||
+      (status === "streaming" &&
+        lastMessage?.role === "assistant" &&
+        !lastMessage.parts.some(
+          (p) => (p.type === "text" && p.text.length > 0) || isToolUIPart(p),
+        )),
+    [status, lastMessage],
+  );
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingChatTitle, setEditingChatTitle] = useState("");
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
@@ -1109,7 +1130,7 @@ export function SessionChatContent() {
     if (isAtBottom) {
       scrollToBottom();
     }
-  }, [messages, isAtBottom, scrollToBottom]);
+  }, [messages.length, isAtBottom, scrollToBottom]);
 
   useEffect(() => {
     if (status !== "streaming") {
@@ -1473,7 +1494,7 @@ export function SessionChatContent() {
     lifecycleTiming.state === "provisioning";
   const isSandboxActive = isSandboxValid(sandboxInfo) && serverSaysActive;
 
-  const sandboxUiStatus = (() => {
+  const sandboxUiStatus = useMemo(() => {
     if (isArchived) {
       return { label: "Archived", className: "bg-muted text-muted-foreground" };
     }
@@ -1518,7 +1539,18 @@ export function SessionChatContent() {
       };
     }
     return { label: "No sandbox", className: "bg-muted text-muted-foreground" };
-  })();
+  }, [
+    isArchived,
+    isCreatingSandbox,
+    isRestoringSnapshot,
+    isServerRestoring,
+    isHibernatingUi,
+    isReconnectingSandbox,
+    isServerHibernated,
+    hasSnapshot,
+    isSandboxActive,
+    reconnectionStatus,
+  ]);
 
   if (error) {
     return (
