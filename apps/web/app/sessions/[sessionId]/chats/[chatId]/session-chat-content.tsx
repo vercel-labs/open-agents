@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Children,
@@ -56,12 +56,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { useSessionLayout } from "../../session-layout-context";
 import {
   Tooltip,
   TooltipContent,
@@ -75,7 +70,6 @@ import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
-import { ChatSidebar } from "./chat-sidebar";
 import {
   type SandboxInfo,
   useSessionChatContext,
@@ -567,7 +561,6 @@ function ShareDialog({
 
 export function SessionChatContent() {
   const router = useRouter();
-  const pathname = usePathname();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
@@ -577,7 +570,7 @@ export function SessionChatContent() {
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { openMobileSidebar } = useSessionLayout();
   const hasMounted = useHasMounted();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
@@ -648,7 +641,6 @@ export function SessionChatContent() {
     setSandboxInfo,
     archiveSession,
     unarchiveSession,
-    updateSessionTitle,
     updateChatModel,
     hadInitialMessages,
     diff,
@@ -678,15 +670,10 @@ export function SessionChatContent() {
     addToolOutput,
   } = chat;
   const {
-    chats,
-    createChat,
-    renameChat,
-    deleteChat,
     markChatRead,
     setChatStreaming,
     setChatTitle,
     clearChatTitle,
-    loading: chatsLoading,
     refreshChats,
   } = useSessionChats(session.id);
   const renderMessages = useMemo(
@@ -708,15 +695,10 @@ export function SessionChatContent() {
     [status, lastMessage],
   );
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
-  const [optimisticActiveChatId, setOptimisticActiveChatId] = useState<
-    string | null
-  >(null);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
   const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
   const hasSetOptimisticTitleRef = useRef(false);
-  const pathnameRef = useRef(pathname);
-  const sidebarActiveChatIdRef = useRef<string | null>(null);
   const markReadRef = useRef<{
     lastAt: number;
     lastChatId: string | null;
@@ -796,20 +778,6 @@ export function SessionChatContent() {
     requestMarkChatReadRef.current = requestMarkChatRead;
   }, [requestMarkChatRead]);
 
-  useEffect(() => {
-    setOptimisticActiveChatId(null);
-  }, [chatInfo.id]);
-
-  const sidebarActiveChatId = optimisticActiveChatId ?? chatInfo.id;
-
-  useEffect(() => {
-    pathnameRef.current = pathname;
-  }, [pathname]);
-
-  useEffect(() => {
-    sidebarActiveChatIdRef.current = sidebarActiveChatId;
-  }, [sidebarActiveChatId]);
-
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
     if (
@@ -842,61 +810,6 @@ export function SessionChatContent() {
       window.removeEventListener("focus", handleWindowFocus);
     };
   }, [requestMarkChatRead]);
-
-  const handleChatSwitch = useCallback(
-    (nextChatId: string) => {
-      if (nextChatId === sidebarActiveChatId) return;
-      setOptimisticActiveChatId(nextChatId);
-      setMobileSidebarOpen(false);
-      router.push(`/sessions/${session.id}/chats/${nextChatId}`);
-    },
-    [router, session.id, sidebarActiveChatId],
-  );
-
-  const handleCreateChat = useCallback(() => {
-    const previousChatId = chatInfo.id;
-    try {
-      const { chat: newChat, persisted } = createChat();
-      const optimisticPath = `/sessions/${session.id}/chats/${newChat.id}`;
-      setOptimisticActiveChatId(newChat.id);
-      router.push(`/sessions/${session.id}/chats/${newChat.id}`);
-      void persisted.catch((err) => {
-        console.error("Failed to create chat:", err);
-        void refreshChats();
-        if (
-          sidebarActiveChatIdRef.current === newChat.id ||
-          pathnameRef.current === optimisticPath
-        ) {
-          setOptimisticActiveChatId(previousChatId);
-          router.replace(`/sessions/${session.id}/chats/${previousChatId}`);
-        }
-      });
-    } catch (err) {
-      console.error("Failed to create chat:", err);
-    }
-  }, [chatInfo.id, createChat, refreshChats, router, session.id]);
-
-  const handleDeleteChat = useCallback(
-    async (targetChatId: string) => {
-      if (chats.length <= 1) return;
-      const targetChat = chats.find((c) => c.id === targetChatId);
-      const confirmed = window.confirm(
-        `Delete chat "${targetChat?.title ?? "Untitled"}"?`,
-      );
-      if (!confirmed) return;
-
-      const fallbackChat = chats.find((c) => c.id !== targetChatId);
-      try {
-        await deleteChat(targetChatId);
-        if (targetChatId === chatInfo.id && fallbackChat) {
-          router.replace(`/sessions/${session.id}/chats/${fallbackChat.id}`);
-        }
-      } catch (err) {
-        console.error("Failed to delete chat:", err);
-      }
-    },
-    [chats, deleteChat, chatInfo.id, router, session.id],
-  );
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -1517,748 +1430,702 @@ export function SessionChatContent() {
 
   if (error) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-background">
+      <div className="flex flex-1 items-center justify-center">
         <p className="text-destructive">{error.message}</p>
       </div>
     );
   }
 
-  const sidebarContent = (
-    <ChatSidebar
-      sessionTitle={session.title}
-      updateSessionTitle={updateSessionTitle}
-      chats={chats}
-      chatsLoading={chatsLoading}
-      activeChatId={sidebarActiveChatId}
-      onChatSwitch={handleChatSwitch}
-      onCreateChat={handleCreateChat}
-      onRenameChat={renameChat}
-      onDeleteChat={handleDeleteChat}
-      onCloseMobileSidebar={() => setMobileSidebarOpen(false)}
-    />
-  );
-
   return (
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-72 shrink-0 flex-col border-r border-border bg-muted/20 md:flex">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile sidebar Drawer */}
-      <Drawer open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-        <DrawerContent className="h-[85dvh] md:hidden">
-          <DrawerHeader className="sr-only">
-            <DrawerTitle>Navigation</DrawerTitle>
-          </DrawerHeader>
-          {sidebarContent}
-        </DrawerContent>
-      </Drawer>
-
-      {/* Main chat area */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2 md:gap-4">
-              {/* Menu button - mobile only */}
-              <button
-                type="button"
-                onClick={() => setMobileSidebarOpen(true)}
-                className="shrink-0 md:hidden"
-              >
-                <Menu className="h-4 w-4 text-muted-foreground" />
-              </button>
-              <div className="flex min-w-0 items-center gap-2 text-sm">
-                {session.repoName ? (
-                  <>
-                    {session.cloneUrl ? (
-                      /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-                      <a
-                        href={`https://github.com/${session.repoOwner}/${session.repoName}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 truncate font-medium text-foreground hover:underline"
-                      >
-                        {session.repoName}
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      </a>
-                    ) : (
-                      <span className="truncate font-medium text-foreground">
-                        {session.repoName}
-                      </span>
-                    )}
-                    {(session.branch ?? sandboxInfo?.currentBranch) && (
-                      <>
-                        <span className="hidden text-muted-foreground/40 sm:inline">
-                          /
-                        </span>
-                        <span className="hidden text-muted-foreground sm:inline">
-                          {session.branch ?? sandboxInfo?.currentBranch}
-                        </span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <span className="truncate text-muted-foreground">
-                    {session.title}
-                  </span>
-                )}
-              </div>
-              <SandboxHeaderBadge
-                sandboxInfo={sandboxInfo}
-                isActive={isSandboxActive}
-                isCreating={isCreatingSandbox}
-                isRestoring={isRestoringSnapshot}
-                isReconnecting={isReconnectingSandbox}
-                isHibernating={isHibernatingUi}
-              />
-              <span
-                className={`hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:inline ${sandboxUiStatus.className}`}
-              >
-                {sandboxUiStatus.label}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 md:gap-2">
-              <ShareDialog
-                sessionId={session.id}
-                initialShareId={session.shareId}
-              />
-              {isArchived ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={isUnarchiving}
-                  onClick={() => {
-                    setIsUnarchiving(true);
-                    void unarchiveSession()
-                      .catch((error: unknown) => {
-                        console.error("Failed to unarchive session:", error);
-                      })
-                      .finally(() => {
-                        setIsUnarchiving(false);
-                      });
-                  }}
-                >
-                  {isUnarchiving ? (
-                    <Loader2 className="h-4 w-4 animate-spin md:mr-2" />
+    <>
+      {/* Header */}
+      <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+            {/* Menu button - mobile only */}
+            <button
+              type="button"
+              onClick={openMobileSidebar}
+              className="shrink-0 md:hidden"
+            >
+              <Menu className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              {session.repoName ? (
+                <>
+                  {session.cloneUrl ? (
+                    /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
+                    <a
+                      href={`https://github.com/${session.repoOwner}/${session.repoName}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 truncate font-medium text-foreground hover:underline"
+                    >
+                      {session.repoName}
+                      <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    </a>
                   ) : (
-                    <ArchiveRestore className="h-4 w-4 md:mr-2" />
+                    <span className="truncate font-medium text-foreground">
+                      {session.repoName}
+                    </span>
                   )}
-                  <span className="hidden md:inline">
-                    {isUnarchiving ? "Unarchiving..." : "Unarchive"}
-                  </span>
-                </Button>
-              ) : (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <Archive className="h-4 w-4 md:mr-2" />
-                      <span className="hidden md:inline">Archive</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent showCloseButton={false}>
-                    <DialogHeader>
-                      <DialogTitle>Archive session?</DialogTitle>
-                      <DialogDescription>
-                        This will stop the sandbox and archive the session. You
-                        can still view it in the archive tab.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <DialogClose asChild>
-                        <Button
-                          onClick={() => {
-                            void archiveSession().catch((error: unknown) => {
-                              console.error(
-                                "Failed to archive session:",
-                                error,
-                              );
-                            });
-                            router.push("/");
-                          }}
-                        >
-                          Archive
-                        </Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
-              {!supportsDiff ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button variant="ghost" size="sm" disabled>
-                        <GitCompare className="h-4 w-4 md:mr-2" />
-                        <span className="hidden md:inline">Diff</span>
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={8}>
-                    Not available for in-memory sandboxes
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowDiffPanel(!showDiffPanel)}
-                  disabled={!diff && !session.cachedDiff}
-                >
-                  <GitCompare className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Diff</span>
-                  {diff &&
-                    (diff.summary.totalAdditions > 0 ||
-                      diff.summary.totalDeletions > 0) && (
-                      <span className="ml-1 text-xs md:ml-2">
-                        <span className="text-green-500">
-                          +{diff.summary.totalAdditions}
-                        </span>{" "}
-                        <span className="text-red-400">
-                          -{diff.summary.totalDeletions}
-                        </span>
+                  {(session.branch ?? sandboxInfo?.currentBranch) && (
+                    <>
+                      <span className="hidden text-muted-foreground/40 sm:inline">
+                        /
                       </span>
-                    )}
-                </Button>
+                      <span className="hidden text-muted-foreground sm:inline">
+                        {session.branch ?? sandboxInfo?.currentBranch}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="truncate text-muted-foreground">
+                  {session.title}
+                </span>
               )}
-              {session?.cloneUrl ? (
-                // Session has a repo - show PR buttons
-                session?.prNumber ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                      window.open(prUrl, "_blank");
-                    }}
-                  >
-                    <GitPullRequest className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">
-                      View PR #{session.prNumber}
-                    </span>
-                  </Button>
+            </div>
+            <SandboxHeaderBadge
+              sandboxInfo={sandboxInfo}
+              isActive={isSandboxActive}
+              isCreating={isCreatingSandbox}
+              isRestoring={isRestoringSnapshot}
+              isReconnecting={isReconnectingSandbox}
+              isHibernating={isHibernatingUi}
+            />
+            <span
+              className={`hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:inline ${sandboxUiStatus.className}`}
+            >
+              {sandboxUiStatus.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 md:gap-2">
+            <ShareDialog
+              sessionId={session.id}
+              initialShareId={session.shareId}
+            />
+            {isArchived ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isUnarchiving}
+                onClick={() => {
+                  setIsUnarchiving(true);
+                  void unarchiveSession()
+                    .catch((error: unknown) => {
+                      console.error("Failed to unarchive session:", error);
+                    })
+                    .finally(() => {
+                      setIsUnarchiving(false);
+                    });
+                }}
+              >
+                {isUnarchiving ? (
+                  <Loader2 className="h-4 w-4 animate-spin md:mr-2" />
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPrDialogOpen(true)}
-                    disabled={!session?.branch}
-                  >
-                    <GitPullRequest className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Create PR</span>
+                  <ArchiveRestore className="h-4 w-4 md:mr-2" />
+                )}
+                <span className="hidden md:inline">
+                  {isUnarchiving ? "Unarchiving..." : "Unarchive"}
+                </span>
+              </Button>
+            ) : (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Archive className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Archive</span>
                   </Button>
-                )
-              ) : !supportsRepoCreation ? null : (
-                // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
+                </DialogTrigger>
+                <DialogContent showCloseButton={false}>
+                  <DialogHeader>
+                    <DialogTitle>Archive session?</DialogTitle>
+                    <DialogDescription>
+                      This will stop the sandbox and archive the session. You
+                      can still view it in the archive tab.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Button
+                        onClick={() => {
+                          void archiveSession().catch((error: unknown) => {
+                            console.error("Failed to archive session:", error);
+                          });
+                          router.push("/");
+                        }}
+                      >
+                        Archive
+                      </Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+            {!supportsDiff ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button variant="ghost" size="sm" disabled>
+                      <GitCompare className="h-4 w-4 md:mr-2" />
+                      <span className="hidden md:inline">Diff</span>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={8}>
+                  Not available for in-memory sandboxes
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDiffPanel(!showDiffPanel)}
+                disabled={!diff && !session.cachedDiff}
+              >
+                <GitCompare className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Diff</span>
+                {diff &&
+                  (diff.summary.totalAdditions > 0 ||
+                    diff.summary.totalDeletions > 0) && (
+                    <span className="ml-1 text-xs md:ml-2">
+                      <span className="text-green-500">
+                        +{diff.summary.totalAdditions}
+                      </span>{" "}
+                      <span className="text-red-400">
+                        -{diff.summary.totalDeletions}
+                      </span>
+                    </span>
+                  )}
+              </Button>
+            )}
+            {session?.cloneUrl ? (
+              // Session has a repo - show PR buttons
+              session?.prNumber ? (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setRepoDialogOpen(true)}
+                  onClick={() => {
+                    const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
+                    window.open(prUrl, "_blank");
+                  }}
                 >
-                  <FolderGit2 className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Create Repo</span>
+                  <GitPullRequest className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">
+                    View PR #{session.prNumber}
+                  </span>
                 </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPrDialogOpen(true)}
+                  disabled={!session?.branch}
+                >
+                  <GitPullRequest className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Create PR</span>
+                </Button>
+              )
+            ) : !supportsRepoCreation ? null : (
+              // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRepoDialogOpen(true)}
+              >
+                <FolderGit2 className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Create Repo</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Messages */}
+      <div className="relative flex-1 overflow-hidden">
+        <div ref={containerRef} className="h-full overflow-y-auto">
+          <div className="mx-auto max-w-3xl px-4 py-8">
+            <div className="space-y-6">
+              {renderMessages.map((m, messageIndex) => {
+                const isLastMessage =
+                  messageIndex === renderMessages.length - 1;
+                const isMessageStreaming =
+                  status === "streaming" && isLastMessage;
+
+                type RenderGroup =
+                  | {
+                      type: "part";
+                      part: WebAgentUIMessagePart;
+                      index: number;
+                    }
+                  | {
+                      type: "task-group";
+                      tasks: TaskToolUIPart[];
+                      startIndex: number;
+                    };
+
+                const renderGroups: RenderGroup[] = [];
+                let currentTaskGroup: TaskToolUIPart[] = [];
+                let taskGroupStartIndex = 0;
+
+                m.parts.forEach((part, index) => {
+                  if (isToolUIPart(part) && part.type === "tool-task") {
+                    if (currentTaskGroup.length === 0) {
+                      taskGroupStartIndex = index;
+                    }
+                    currentTaskGroup.push(part as TaskToolUIPart);
+                  } else {
+                    if (currentTaskGroup.length > 0) {
+                      renderGroups.push({
+                        type: "task-group",
+                        tasks: currentTaskGroup,
+                        startIndex: taskGroupStartIndex,
+                      });
+                      currentTaskGroup = [];
+                    }
+                    renderGroups.push({ type: "part", part, index });
+                  }
+                });
+
+                if (currentTaskGroup.length > 0) {
+                  renderGroups.push({
+                    type: "task-group",
+                    tasks: currentTaskGroup,
+                    startIndex: taskGroupStartIndex,
+                  });
+                }
+
+                return renderGroups.map((group) => {
+                  if (group.type === "task-group") {
+                    return (
+                      <div
+                        key={`${m.id}-task-group-${group.startIndex}`}
+                        className="max-w-full"
+                      >
+                        <TaskGroupView
+                          taskParts={group.tasks}
+                          activeApprovalId={
+                            group.tasks.find(
+                              (t) => t.state === "approval-requested",
+                            )?.approval?.id ?? null
+                          }
+                          isStreaming={isMessageStreaming}
+                          onApprove={(id) =>
+                            addToolApprovalResponse({ id, approved: true })
+                          }
+                          onDeny={(id, reason) =>
+                            addToolApprovalResponse({
+                              id,
+                              approved: false,
+                              reason,
+                            })
+                          }
+                        />
+                      </div>
+                    );
+                  }
+
+                  const p = group.part;
+                  const i = group.index;
+
+                  if (p.type === "text") {
+                    return (
+                      <div
+                        key={`${m.id}-${i}`}
+                        className={cn(
+                          "flex",
+                          m.role === "user" ? "justify-end" : "justify-start",
+                        )}
+                      >
+                        {m.role === "user" ? (
+                          <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                            <p className="whitespace-pre-wrap">{p.text}</p>
+                          </div>
+                        ) : (
+                          <div className="max-w-[80%]">
+                            <Streamdown
+                              animated={{
+                                animation: "fadeIn",
+                                duration: 250,
+                                easing: "ease-out",
+                              }}
+                              mode={isMessageStreaming ? "streaming" : "static"}
+                              isAnimating={isMessageStreaming}
+                              shikiTheme={shikiThemes}
+                              components={customComponents}
+                            >
+                              {p.text}
+                            </Streamdown>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (isToolUIPart(p)) {
+                    return (
+                      <div key={`${m.id}-${i}`} className="max-w-full">
+                        <ToolCall
+                          part={p as WebAgentUIToolPart}
+                          isStreaming={isMessageStreaming}
+                          onApprove={(id) =>
+                            addToolApprovalResponse({ id, approved: true })
+                          }
+                          onDeny={(id, reason) =>
+                            addToolApprovalResponse({
+                              id,
+                              approved: false,
+                              reason,
+                            })
+                          }
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Render image attachments
+                  if (p.type === "file" && p.mediaType?.startsWith("image/")) {
+                    return (
+                      <div key={`${m.id}-${i}`} className="flex justify-end">
+                        <div className="max-w-[80%]">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                          <img
+                            src={p.url}
+                            alt={p.filename ?? "Attached image"}
+                            className="max-h-64 rounded-lg"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                });
+              })}
+              {showThinkingIndicator && (
+                <div className="flex justify-start">
+                  <p className="animate-pulse text-sm font-medium text-muted-foreground">
+                    Thinking...
+                  </p>
+                </div>
               )}
             </div>
           </div>
-        </header>
-
-        {/* Messages */}
-        <div className="relative flex-1 overflow-hidden">
-          <div ref={containerRef} className="h-full overflow-y-auto">
-            <div className="mx-auto max-w-3xl px-4 py-8">
-              <div className="space-y-6">
-                {renderMessages.map((m, messageIndex) => {
-                  const isLastMessage =
-                    messageIndex === renderMessages.length - 1;
-                  const isMessageStreaming =
-                    status === "streaming" && isLastMessage;
-
-                  type RenderGroup =
-                    | {
-                        type: "part";
-                        part: WebAgentUIMessagePart;
-                        index: number;
-                      }
-                    | {
-                        type: "task-group";
-                        tasks: TaskToolUIPart[];
-                        startIndex: number;
-                      };
-
-                  const renderGroups: RenderGroup[] = [];
-                  let currentTaskGroup: TaskToolUIPart[] = [];
-                  let taskGroupStartIndex = 0;
-
-                  m.parts.forEach((part, index) => {
-                    if (isToolUIPart(part) && part.type === "tool-task") {
-                      if (currentTaskGroup.length === 0) {
-                        taskGroupStartIndex = index;
-                      }
-                      currentTaskGroup.push(part as TaskToolUIPart);
-                    } else {
-                      if (currentTaskGroup.length > 0) {
-                        renderGroups.push({
-                          type: "task-group",
-                          tasks: currentTaskGroup,
-                          startIndex: taskGroupStartIndex,
-                        });
-                        currentTaskGroup = [];
-                      }
-                      renderGroups.push({ type: "part", part, index });
-                    }
-                  });
-
-                  if (currentTaskGroup.length > 0) {
-                    renderGroups.push({
-                      type: "task-group",
-                      tasks: currentTaskGroup,
-                      startIndex: taskGroupStartIndex,
-                    });
-                  }
-
-                  return renderGroups.map((group) => {
-                    if (group.type === "task-group") {
-                      return (
-                        <div
-                          key={`${m.id}-task-group-${group.startIndex}`}
-                          className="max-w-full"
-                        >
-                          <TaskGroupView
-                            taskParts={group.tasks}
-                            activeApprovalId={
-                              group.tasks.find(
-                                (t) => t.state === "approval-requested",
-                              )?.approval?.id ?? null
-                            }
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    const p = group.part;
-                    const i = group.index;
-
-                    if (p.type === "text") {
-                      return (
-                        <div
-                          key={`${m.id}-${i}`}
-                          className={cn(
-                            "flex",
-                            m.role === "user" ? "justify-end" : "justify-start",
-                          )}
-                        >
-                          {m.role === "user" ? (
-                            <div className="max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                              <p className="whitespace-pre-wrap">{p.text}</p>
-                            </div>
-                          ) : (
-                            <div className="max-w-[80%]">
-                              <Streamdown
-                                animated={{
-                                  animation: "fadeIn",
-                                  duration: 250,
-                                  easing: "ease-out",
-                                }}
-                                mode={
-                                  isMessageStreaming ? "streaming" : "static"
-                                }
-                                isAnimating={isMessageStreaming}
-                                shikiTheme={shikiThemes}
-                                components={customComponents}
-                              >
-                                {p.text}
-                              </Streamdown>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (isToolUIPart(p)) {
-                      return (
-                        <div key={`${m.id}-${i}`} className="max-w-full">
-                          <ToolCall
-                            part={p as WebAgentUIToolPart}
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    // Render image attachments
-                    if (
-                      p.type === "file" &&
-                      p.mediaType?.startsWith("image/")
-                    ) {
-                      return (
-                        <div key={`${m.id}-${i}`} className="flex justify-end">
-                          <div className="max-w-[80%]">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-                            <img
-                              src={p.url}
-                              alt={p.filename ?? "Attached image"}
-                              className="max-h-64 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return null;
-                  });
-                })}
-                {showThinkingIndicator && (
-                  <div className="flex justify-start">
-                    <p className="animate-pulse text-sm font-medium text-muted-foreground">
-                      Thinking...
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          {!isAtBottom && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-secondary text-secondary-foreground hover:bg-accent"
-              onClick={scrollToBottom}
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-          )}
         </div>
-
-        {/* Question Panel */}
-        {hasPendingQuestion && pendingQuestionPart && (
-          <QuestionPanel
-            questions={pendingQuestionPart.input.questions}
-            onSubmit={handleQuestionSubmit}
-            onCancel={handleQuestionCancel}
-          />
+        {!isAtBottom && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-secondary text-secondary-foreground hover:bg-accent"
+            onClick={scrollToBottom}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
         )}
+      </div>
 
-        {/* Input */}
-        <div className="p-4 pb-8">
-          <div className="mx-auto max-w-3xl space-y-2">
-            {restoreError && (
-              <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <span>{restoreError}</span>
-                <button
-                  type="button"
-                  onClick={() => setRestoreError(null)}
-                  className="ml-2 rounded p-0.5 hover:bg-destructive/20"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+      {/* Question Panel */}
+      {hasPendingQuestion && pendingQuestionPart && (
+        <QuestionPanel
+          questions={pendingQuestionPart.input.questions}
+          onSubmit={handleQuestionSubmit}
+          onCancel={handleQuestionCancel}
+        />
+      )}
+
+      {/* Input */}
+      <div className="p-4 pb-8">
+        <div className="mx-auto max-w-3xl space-y-2">
+          {restoreError && (
+            <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <span>{restoreError}</span>
+              <button
+                type="button"
+                onClick={() => setRestoreError(null)}
+                className="ml-2 rounded p-0.5 hover:bg-destructive/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPT_IMAGE_TYPES}
+            multiple
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                addImages(files);
+              }
+              e.target.value = "";
+            }}
+            className="hidden"
+          />
+          <div className="relative">
+            {showSuggestions && (
+              <FileSuggestionsDropdown
+                suggestions={suggestions}
+                selectedIndex={selectedIndex}
+                onSelect={(suggestion) => {
+                  if (mentionInfo) {
+                    handleFileSelect(
+                      suggestion.value,
+                      mentionInfo.mentionStart,
+                      cursorPosition,
+                    );
+                  }
+                }}
+                isLoading={filesLoading}
+              />
             )}
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPT_IMAGE_TYPES}
-              multiple
-              onChange={(e) => {
-                const files = e.target.files;
-                if (files && files.length > 0) {
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (isArchived || !isSandboxActive) return;
+                const hasContent = input.trim() || images.length > 0;
+                if (!hasContent) return;
+
+                const messageText = input;
+                const files = getFileParts();
+                setInput("");
+                clearImages();
+
+                const shouldSetOptimisticTitle =
+                  !hadInitialMessages && !hasSetOptimisticTitleRef.current;
+                const trimmedText = messageText.trim();
+                if (shouldSetOptimisticTitle && trimmedText.length > 0) {
+                  const nextTitle =
+                    trimmedText.length > 30
+                      ? `${trimmedText.slice(0, 30)}...`
+                      : trimmedText;
+                  hasSetOptimisticTitleRef.current = true;
+                  pendingOptimisticTitleChatIdRef.current = chatInfo.id;
+                  void setChatTitle(chatInfo.id, nextTitle);
+                }
+                void setChatStreaming(chatInfo.id, true);
+                try {
+                  await sendMessage({ text: messageText, files });
+                } catch (err) {
+                  if (pendingOptimisticTitleChatIdRef.current) {
+                    void clearChatTitle(
+                      pendingOptimisticTitleChatIdRef.current,
+                    );
+                    pendingOptimisticTitleChatIdRef.current = null;
+                    hasSetOptimisticTitleRef.current = false;
+                  }
+                  void setChatStreaming(chatInfo.id, false);
+                  console.error("Failed to send message:", err);
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                // Only set isDragging to false if we're leaving the form entirely
+                // (not just moving to a child element)
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setIsDragging(false);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
                   addImages(files);
                 }
-                e.target.value = "";
               }}
-              className="hidden"
-            />
-            <div className="relative">
-              {showSuggestions && (
-                <FileSuggestionsDropdown
-                  suggestions={suggestions}
-                  selectedIndex={selectedIndex}
-                  onSelect={(suggestion) => {
-                    if (mentionInfo) {
-                      handleFileSelect(
-                        suggestion.value,
-                        mentionInfo.mentionStart,
-                        cursorPosition,
-                      );
+              className={`overflow-hidden rounded-2xl bg-muted transition-colors ${isDragging ? "ring-2 ring-blue-500/50" : ""}`}
+            >
+              {/* Sandbox overlay when inactive */}
+              <SandboxInputOverlay
+                isSandboxActive={isSandboxActive}
+                isCreating={isCreatingSandbox}
+                isRestoring={isRestoringSnapshot}
+                isReconnecting={isReconnectingSandbox && !isHibernatingUi}
+                isHibernating={isHibernatingUi}
+                isArchived={isArchived}
+                hasSnapshot={hasSnapshot}
+                onRestore={handleRestoreSnapshot}
+                onCreateNew={handleCreateNewSandbox}
+              />
+
+              {/* Image attachments preview */}
+              <ImageAttachmentsPreview images={images} onRemove={removeImage} />
+
+              {/* Textarea area */}
+              <div className="px-4 pb-2 pt-3">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  placeholder="Request changes or ask a question..."
+                  rows={1}
+                  onChange={(e) => {
+                    setInput(e.currentTarget.value);
+                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                  }}
+                  onKeyDown={(e) => {
+                    // Let suggestions handle keyboard events first
+                    if (handleSuggestionsKeyDown(e)) {
+                      return;
+                    }
+                    // Handle form submission
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!isArchived && isSandboxActive) {
+                        e.currentTarget.form?.requestSubmit();
+                      }
                     }
                   }}
-                  isLoading={filesLoading}
-                />
-              )}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (isArchived || !isSandboxActive) return;
-                  const hasContent = input.trim() || images.length > 0;
-                  if (!hasContent) return;
-
-                  const messageText = input;
-                  const files = getFileParts();
-                  setInput("");
-                  clearImages();
-
-                  const shouldSetOptimisticTitle =
-                    !hadInitialMessages && !hasSetOptimisticTitleRef.current;
-                  const trimmedText = messageText.trim();
-                  if (shouldSetOptimisticTitle && trimmedText.length > 0) {
-                    const nextTitle =
-                      trimmedText.length > 30
-                        ? `${trimmedText.slice(0, 30)}...`
-                        : trimmedText;
-                    hasSetOptimisticTitleRef.current = true;
-                    pendingOptimisticTitleChatIdRef.current = chatInfo.id;
-                    void setChatTitle(chatInfo.id, nextTitle);
-                  }
-                  void setChatStreaming(chatInfo.id, true);
-                  try {
-                    await sendMessage({ text: messageText, files });
-                  } catch (err) {
-                    if (pendingOptimisticTitleChatIdRef.current) {
-                      void clearChatTitle(
-                        pendingOptimisticTitleChatIdRef.current,
-                      );
-                      pendingOptimisticTitleChatIdRef.current = null;
-                      hasSetOptimisticTitleRef.current = false;
+                  onKeyUp={(e) => {
+                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                  }}
+                  onClick={(e) => {
+                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                      if (isValidImageType(item.type)) {
+                        const file = item.getAsFile();
+                        if (file) {
+                          e.preventDefault();
+                          addImage(file).catch(() => {
+                            // Silently ignore paste errors - rare edge case
+                          });
+                        }
+                      }
                     }
-                    void setChatStreaming(chatInfo.id, false);
-                    console.error("Failed to send message:", err);
-                  }
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  // Only set isDragging to false if we're leaving the form entirely
-                  // (not just moving to a child element)
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    setIsDragging(false);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  const files = e.dataTransfer.files;
-                  if (files.length > 0) {
-                    addImages(files);
-                  }
-                }}
-                className={`overflow-hidden rounded-2xl bg-muted transition-colors ${isDragging ? "ring-2 ring-blue-500/50" : ""}`}
-              >
-                {/* Sandbox overlay when inactive */}
-                <SandboxInputOverlay
-                  isSandboxActive={isSandboxActive}
-                  isCreating={isCreatingSandbox}
-                  isRestoring={isRestoringSnapshot}
-                  isReconnecting={isReconnectingSandbox && !isHibernatingUi}
-                  isHibernating={isHibernatingUi}
-                  isArchived={isArchived}
-                  hasSnapshot={hasSnapshot}
-                  onRestore={handleRestoreSnapshot}
-                  onCreateNew={handleCreateNewSandbox}
+                  }}
+                  disabled={isArchived || status === "streaming"}
+                  className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  style={{ minHeight: "24px" }}
                 />
+              </div>
 
-                {/* Image attachments preview */}
-                <ImageAttachmentsPreview
-                  images={images}
-                  onRemove={removeImage}
-                />
-
-                {/* Textarea area */}
-                <div className="px-4 pb-2 pt-3">
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    placeholder="Request changes or ask a question..."
-                    rows={1}
-                    onChange={(e) => {
-                      setInput(e.currentTarget.value);
-                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                    }}
-                    onKeyDown={(e) => {
-                      // Let suggestions handle keyboard events first
-                      if (handleSuggestionsKeyDown(e)) {
-                        return;
+              {/* Bottom toolbar */}
+              <div className="flex items-center justify-between px-3 pb-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={openFilePicker}
+                    disabled={isArchived}
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  {renderMessages.length === 0 && chatInfo.modelId ? (
+                    <div
+                      className={
+                        status === "streaming" || isUpdatingModel
+                          ? "pointer-events-none opacity-60"
+                          : undefined
                       }
-                      // Handle form submission
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!isArchived && isSandboxActive) {
-                          e.currentTarget.form?.requestSubmit();
-                        }
-                      }
-                    }}
-                    onKeyUp={(e) => {
-                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                    }}
-                    onClick={(e) => {
-                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                    }}
-                    onPaste={(e) => {
-                      const items = e.clipboardData?.items;
-                      if (!items) return;
-                      for (const item of items) {
-                        if (isValidImageType(item.type)) {
-                          const file = item.getAsFile();
-                          if (file) {
-                            e.preventDefault();
-                            addImage(file).catch(() => {
-                              // Silently ignore paste errors - rare edge case
-                            });
-                          }
-                        }
-                      }
-                    }}
-                    disabled={isArchived || status === "streaming"}
-                    className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    style={{ minHeight: "24px" }}
+                    >
+                      <ModelSelectorCompact
+                        value={chatInfo.modelId}
+                        onChange={(modelId) => {
+                          void handleModelChange(modelId);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    chatInfo.modelId && (
+                      <span className="text-xs text-muted-foreground/60">
+                        {chatInfo.modelId}
+                      </span>
+                    )
+                  )}
+                  {/* TODO: Derive context limit from model ID instead of hardcoding */}
+                  <ContextUsageIndicator
+                    inputTokens={tokenUsage.inputTokens}
+                    outputTokens={tokenUsage.outputTokens}
+                    contextLimit={200_000}
                   />
                 </div>
 
-                {/* Bottom toolbar */}
-                <div className="flex items-center justify-between px-3 pb-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleMicClick}
+                    disabled={isArchived || recordingState === "processing"}
+                    className={`relative h-8 w-8 rounded-full ${
+                      recordingState === "recording"
+                        ? "text-red-500"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {recordingState === "recording" && (
+                      <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
+                    )}
+                    {recordingState === "processing" ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Mic className="h-5 w-5" />
+                    )}
+                  </Button>
+
+                  {status === "streaming" ? (
                     <Button
                       type="button"
-                      variant="ghost"
                       size="icon"
-                      onClick={openFilePicker}
-                      disabled={isArchived}
-                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        fetch(`/api/chat/${chatInfo.id}/stop`, {
+                          method: "POST",
+                        }).catch(() => {});
+                        stopChatStream();
+                      }}
+                      className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      <Paperclip className="h-4 w-4" />
+                      <Square className="h-3 w-3 fill-current" />
                     </Button>
-                    {renderMessages.length === 0 && chatInfo.modelId ? (
-                      <div
-                        className={
-                          status === "streaming" || isUpdatingModel
-                            ? "pointer-events-none opacity-60"
-                            : undefined
-                        }
-                      >
-                        <ModelSelectorCompact
-                          value={chatInfo.modelId}
-                          onChange={(modelId) => {
-                            void handleModelChange(modelId);
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      chatInfo.modelId && (
-                        <span className="text-xs text-muted-foreground/60">
-                          {chatInfo.modelId}
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            type="submit"
+                            size="icon"
+                            disabled={
+                              isArchived ||
+                              (!input.trim() && images.length === 0) ||
+                              isUpdatingModel ||
+                              !isSandboxActive
+                            }
+                            className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
                         </span>
-                      )
-                    )}
-                    {/* TODO: Derive context limit from model ID instead of hardcoding */}
-                    <ContextUsageIndicator
-                      inputTokens={tokenUsage.inputTokens}
-                      outputTokens={tokenUsage.outputTokens}
-                      contextLimit={200_000}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleMicClick}
-                      disabled={isArchived || recordingState === "processing"}
-                      className={`relative h-8 w-8 rounded-full ${
-                        recordingState === "recording"
-                          ? "text-red-500"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {recordingState === "recording" && (
-                        <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
+                      </TooltipTrigger>
+                      {!isSandboxActive && !isArchived && (
+                        <TooltipContent side="top" sideOffset={8}>
+                          Waiting for sandbox...
+                        </TooltipContent>
                       )}
-                      {recordingState === "processing" ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Mic className="h-5 w-5" />
-                      )}
-                    </Button>
-
-                    {status === "streaming" ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        onClick={() => {
-                          fetch(`/api/chat/${chatInfo.id}/stop`, {
-                            method: "POST",
-                          }).catch(() => {});
-                          stopChatStream();
-                        }}
-                        className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        <Square className="h-3 w-3 fill-current" />
-                      </Button>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button
-                              type="submit"
-                              size="icon"
-                              disabled={
-                                isArchived ||
-                                (!input.trim() && images.length === 0) ||
-                                isUpdatingModel ||
-                                !isSandboxActive
-                              }
-                              className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {!isSandboxActive && !isArchived && (
-                          <TooltipContent side="top" sideOffset={8}>
-                            Waiting for sandbox...
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    )}
-                  </div>
+                    </Tooltip>
+                  )}
                 </div>
-              </form>
+              </div>
+            </form>
 
-              {/* Recording error message */}
-              {recordingError && (
-                <p className="mt-2 text-sm text-destructive">
-                  {recordingError}
-                </p>
-              )}
-            </div>
+            {/* Recording error message */}
+            {recordingError && (
+              <p className="mt-2 text-sm text-destructive">{recordingError}</p>
+            )}
           </div>
         </div>
       </div>
@@ -2296,6 +2163,6 @@ export function SessionChatContent() {
 
       {/* Diff Viewer Modal */}
       <DiffViewer open={showDiffPanel} onOpenChange={setShowDiffPanel} />
-    </div>
+    </>
   );
 }
