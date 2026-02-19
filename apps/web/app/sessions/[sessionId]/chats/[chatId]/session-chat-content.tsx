@@ -1077,7 +1077,7 @@ export function SessionChatContent() {
     if (isAtBottom) {
       scrollToBottom();
     }
-  }, [messages.length, isAtBottom, scrollToBottom]);
+  }, [messages, isAtBottom, scrollToBottom]);
 
   useEffect(() => {
     if (status !== "streaming") {
