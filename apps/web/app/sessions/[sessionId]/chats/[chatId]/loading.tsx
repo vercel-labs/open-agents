@@ -70,7 +70,13 @@ export default function Loading() {
         <div className="mx-auto max-w-3xl">
           <div className="overflow-hidden rounded-2xl bg-muted">
             <div className="px-4 pb-2 pt-3">
-              <div className="h-6 w-full" />
+              <textarea
+                disabled
+                rows={1}
+                placeholder="Request changes or ask a question..."
+                className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                style={{ minHeight: "24px" }}
+              />
             </div>
             <div className="flex items-center justify-between px-3 pb-2">
               <div className="flex items-center gap-2">

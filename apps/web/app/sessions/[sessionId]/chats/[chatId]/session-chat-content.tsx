@@ -346,6 +346,7 @@ function SandboxInputOverlay({
   isReconnecting,
   isHibernating,
   isArchived,
+  isInitializing,
   hasSnapshot,
   onRestore,
   onCreateNew,
@@ -356,6 +357,7 @@ function SandboxInputOverlay({
   isReconnecting: boolean;
   isHibernating: boolean;
   isArchived: boolean;
+  isInitializing: boolean;
   hasSnapshot: boolean;
   onRestore: () => void;
   onCreateNew: () => void;
@@ -373,14 +375,15 @@ function SandboxInputOverlay({
     );
   }
 
-  // During sandbox creation/restoration/reconnection, don't block the input.
+  // During sandbox creation/restoration/reconnection/initialization, don't block the input.
   // The submit button is disabled separately, and the header badge shows status.
   if (
     isSandboxActive ||
     isCreating ||
     isRestoring ||
     isReconnecting ||
-    isHibernating
+    isHibernating ||
+    isInitializing
   ) {
     return null;
   }
@@ -1953,6 +1956,7 @@ export function SessionChatContent() {
                 isReconnecting={isReconnectingSandbox && !isHibernatingUi}
                 isHibernating={isHibernatingUi}
                 isArchived={isArchived}
+                isInitializing={reconnectionStatus === "idle"}
                 hasSnapshot={hasSnapshot}
                 onRestore={handleRestoreSnapshot}
                 onCreateNew={handleCreateNewSandbox}
