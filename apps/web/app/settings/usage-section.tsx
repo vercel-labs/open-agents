@@ -397,7 +397,9 @@ function StatBlock({
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
-      {detail && <div className="text-xs text-muted-foreground">{detail}</div>}
+      {detail ? (
+        <div className="text-xs text-muted-foreground">{detail}</div>
+      ) : null}
     </div>
   );
 }

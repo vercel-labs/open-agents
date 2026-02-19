@@ -83,7 +83,9 @@ function SubagentToolCall({
             <span className="text-sm text-muted-foreground">)</span>
           </>
         )}
-        {hasError && <span className="text-sm text-red-500"> - error</span>}
+        {hasError ? (
+          <span className="text-sm text-red-500"> - error</span>
+        ) : null}
       </div>
       {/* Show full input in expanded mode */}
       {expanded && (

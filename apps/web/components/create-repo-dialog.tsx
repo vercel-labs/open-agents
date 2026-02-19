@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { ExternalLink, Check, Loader2, FolderGit2 } from "lucide-react";
 import {
   Dialog,
@@ -51,6 +52,13 @@ interface Installation {
   repositorySelection: string;
 }
 
+async function fetchInstallations(): Promise<Installation[]> {
+  const response = await fetch("/api/github/installations");
+  if (!response.ok) return [];
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -74,41 +82,36 @@ export function CreateRepoDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [result, setResult] = useState<CreateRepoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [installations, setInstallations] = useState<Installation[]>([]);
   const [selectedOwner, setSelectedOwner] = useState<string>("");
-  const [loadingInstallations, setLoadingInstallations] = useState(false);
 
-  // Fetch installations when dialog opens
+  // Use SWR for installations (shares cache with RepoSelectorCompact)
+  const { data: installations = [], isLoading: loadingInstallations } = useSWR<
+    Installation[]
+  >(open ? "github-installations" : null, fetchInstallations);
+
+  // Reset form state when dialog opens
   useEffect(() => {
     if (open) {
-      // Generate a suggested repo name from the session title
       const suggestedName = slugify(session.title);
       setRepoName(suggestedName);
       setDescription("");
       setIsPrivate(false);
       setResult(null);
       setError(null);
-
-      // Fetch available installations
-      setLoadingInstallations(true);
-      fetch("/api/github/installations")
-        .then((res) => res.json())
-        .then((data: Installation[]) => {
-          setInstallations(Array.isArray(data) ? data : []);
-          // Auto-select first installation if available
-          if (Array.isArray(data) && data.length > 0 && data[0]) {
-            setSelectedOwner(data[0].accountLogin);
-          } else {
-            setSelectedOwner("");
-          }
-        })
-        .catch(() => {
-          setInstallations([]);
-          setSelectedOwner("");
-        })
-        .finally(() => setLoadingInstallations(false));
     }
   }, [open, session.title]);
+
+  // Auto-select first installation when data arrives
+  useEffect(() => {
+    if (
+      open &&
+      installations.length > 0 &&
+      !selectedOwner &&
+      installations[0]
+    ) {
+      setSelectedOwner(installations[0].accountLogin);
+    }
+  }, [open, installations, selectedOwner]);
 
   const handleCreate = async () => {
     if (!repoName.trim()) {

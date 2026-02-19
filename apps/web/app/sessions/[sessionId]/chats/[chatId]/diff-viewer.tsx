@@ -250,7 +250,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
         </DialogHeader>
 
         {/* Staleness indicator */}
-        {showStaleIndicator && <StaleBanner cachedAt={diffCachedAt} />}
+        {showStaleIndicator ? <StaleBanner cachedAt={diffCachedAt} /> : null}
 
         {/* Content */}
         <div

@@ -17,7 +17,6 @@
   "dependencies": {
     "@ai-sdk/elevenlabs": "^2.0.5",
     "@ai-sdk/react": "catalog:",
-    "@hookform/resolvers": "^5.2.2",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
     "@open-harness/agent": "workspace:*",
@@ -51,7 +50,6 @@
     "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-hook-form": "^7.70.0",
     "resumable-stream": "^2.2.10",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",

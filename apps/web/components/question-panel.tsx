@@ -275,7 +275,7 @@ export function QuestionPanel({
                       : "bg-muted text-muted-foreground hover:bg-accent",
                 )}
               >
-                {hasAnswer && <Check className="h-3 w-3" />}
+                {hasAnswer ? <Check className="h-3 w-3" /> : null}
                 {q.header}
               </button>
             );
@@ -292,7 +292,7 @@ export function QuestionPanel({
                   : "bg-muted text-muted-foreground hover:bg-accent",
             )}
           >
-            {allAnswered && <Check className="h-3 w-3" />}
+            {allAnswered ? <Check className="h-3 w-3" /> : null}
             Submit
           </button>
         </div>
