@@ -1096,7 +1096,12 @@ export function SessionChatContent() {
   // After a chat turn completes, immediately sync status from the server.
   // If the sandbox was hibernated during the turn (tool calls failed), this
   // updates the UI right away instead of waiting for the next 15s poll.
-  const prevStatusRef = useRef(status);
+  // Initialize to null (not `status`) so the first render always reconciles.
+  // When navigating back to a chat whose stream finished in the background,
+  // status is already "ready" but the optimistic streaming overlay may still
+  // be set.  Starting from null makes `becameReady` true on mount, which
+  // clears the stale overlay immediately.
+  const prevStatusRef = useRef<string | null>(null);
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     const wasStreaming = prevStatus === "streaming";
