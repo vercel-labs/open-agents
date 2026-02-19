@@ -147,8 +147,15 @@ export function SessionLayoutShell({
   const layoutContext = useMemo(
     () => ({
       openMobileSidebar: () => setMobileSidebarOpen(true),
+      session: {
+        title: initialSession.title,
+        repoName: initialSession.repoName,
+        repoOwner: initialSession.repoOwner,
+        cloneUrl: initialSession.cloneUrl,
+        branch: initialSession.branch,
+      },
     }),
-    [],
+    [initialSession],
   );
 
   return (

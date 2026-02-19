@@ -4,6 +4,13 @@ import { createContext, useContext } from "react";
 
 type SessionLayoutContextValue = {
   openMobileSidebar: () => void;
+  session: {
+    title: string;
+    repoName: string | null;
+    repoOwner: string | null;
+    cloneUrl: string | null;
+    branch: string | null;
+  };
 };
 
 export const SessionLayoutContext = createContext<
