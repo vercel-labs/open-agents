@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { getSessionById } from "@/lib/db/sessions";
+import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionLayoutShell } from "./session-layout-shell";
 
@@ -15,12 +15,15 @@ export default async function SessionLayout({
 }: SessionLayoutProps) {
   const { sessionId } = await params;
 
-  const session = await getServerSession();
+  const sessionPromise = getServerSession();
+  const sessionRecordPromise = getSessionByIdCached(sessionId);
+
+  const session = await sessionPromise;
   if (!session?.user) {
     redirect("/");
   }
 
-  const sessionRecord = await getSessionById(sessionId);
+  const sessionRecord = await sessionRecordPromise;
   if (!sessionRecord) {
     notFound();
   }

@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
-import {
-  getChatMessages,
-  getChatsBySessionId,
-  getSessionByShareId,
-} from "@/lib/db/sessions";
+import { getChatMessages, getChatsBySessionId } from "@/lib/db/sessions";
+import { getSessionByShareIdCached } from "@/lib/db/sessions-cache";
 import { SharedChatContent } from "./shared-chat-content";
 
 interface SharedPageProps {
@@ -16,7 +13,7 @@ export async function generateMetadata({
   params,
 }: SharedPageProps): Promise<Metadata> {
   const { shareId } = await params;
-  const session = await getSessionByShareId(shareId);
+  const session = await getSessionByShareIdCached(shareId);
 
   return {
     title: session?.title ?? "Shared Session",
@@ -27,7 +24,7 @@ export async function generateMetadata({
 export default async function SharedPage({ params }: SharedPageProps) {
   const { shareId } = await params;
 
-  const session = await getSessionByShareId(shareId);
+  const session = await getSessionByShareIdCached(shareId);
   if (!session) {
     notFound();
   }

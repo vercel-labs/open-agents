@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   collectTaskToolUsageEvents,
   discoverSkills,
@@ -18,8 +19,8 @@ import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
-  getChatMessages,
   getSessionById,
+  isFirstChatMessage,
   updateChat,
   updateChatAssistantActivity,
   updateSession,
@@ -45,9 +46,32 @@ interface ChatRequestBody {
 }
 
 const STREAM_TOKEN_SEPARATOR = ":";
+const SKILLS_CACHE_TTL_MS = 60_000;
+
+type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
+
+const discoveredSkillsCache = new Map<
+  string,
+  { skills: DiscoveredSkills; expiresAt: number }
+>();
+const remoteAuthFingerprintBySessionId = new Map<string, string>();
 
 const createStreamToken = (startedAtMs: number) =>
   `${startedAtMs}${STREAM_TOKEN_SEPARATOR}${nanoid()}`;
+
+const getRemoteAuthFingerprint = (authUrl: string) =>
+  createHash("sha256").update(authUrl).digest("hex");
+
+const getSkillCacheKey = (sessionId: string, workingDirectory: string) =>
+  `${sessionId}:${workingDirectory}`;
+
+const pruneExpiredSkillCache = (now: number) => {
+  for (const [key, entry] of discoveredSkillsCache) {
+    if (entry.expiresAt <= now) {
+      discoveredSkillsCache.delete(key);
+    }
+  }
+};
 
 const parseStreamTokenStartedAt = (streamToken: string | null) => {
   if (!streamToken) {
@@ -92,14 +116,17 @@ export async function POST(req: Request) {
   }
 
   // 3. Verify session + chat ownership
-  const sessionRecord = await getSessionById(sessionId);
+  const [sessionRecord, chat] = await Promise.all([
+    getSessionById(sessionId),
+    getChatById(chatId),
+  ]);
+
   if (!sessionRecord) {
     return Response.json({ error: "Session not found" }, { status: 404 });
   }
   if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
-  const chat = await getChatById(chatId);
   if (!chat || chat.sessionId !== sessionId) {
     return Response.json({ error: "Chat not found" }, { status: 404 });
   }
@@ -148,17 +175,27 @@ export async function POST(req: Request) {
 
   if (githubToken && sessionRecord.repoOwner && sessionRecord.repoName) {
     const authUrl = `https://x-access-token:${githubToken}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
-    const remoteResult = await sandbox.exec(
-      `git remote set-url origin "${authUrl}"`,
-      sandbox.workingDirectory,
-      5000,
-    );
+    const authFingerprint = getRemoteAuthFingerprint(authUrl);
+    const previousAuthFingerprint =
+      remoteAuthFingerprintBySessionId.get(sessionId);
 
-    if (!remoteResult.success) {
-      console.warn(
-        `Failed to refresh git remote auth for session ${sessionId}: ${remoteResult.stderr ?? remoteResult.stdout}`,
+    if (previousAuthFingerprint !== authFingerprint) {
+      const remoteResult = await sandbox.exec(
+        `git remote set-url origin "${authUrl}"`,
+        sandbox.workingDirectory,
+        5000,
       );
+
+      if (!remoteResult.success) {
+        console.warn(
+          `Failed to refresh git remote auth for session ${sessionId}: ${remoteResult.stderr ?? remoteResult.stdout}`,
+        );
+      } else {
+        remoteAuthFingerprintBySessionId.set(sessionId, authFingerprint);
+      }
     }
+  } else {
+    remoteAuthFingerprintBySessionId.delete(sessionId);
   }
 
   // Discover skills from the sandbox's working directory
@@ -168,7 +205,21 @@ export async function POST(req: Request) {
   const skillDirs = skillBaseFolders.map(
     (folder) => `${sandbox.workingDirectory}/${folder}/skills`,
   );
-  const skills = await discoverSkills(sandbox, skillDirs);
+  const now = Date.now();
+  pruneExpiredSkillCache(now);
+  const skillCacheKey = getSkillCacheKey(sessionId, sandbox.workingDirectory);
+  const cachedSkills = discoveredSkillsCache.get(skillCacheKey);
+
+  let skills: DiscoveredSkills;
+  if (cachedSkills && cachedSkills.expiresAt > now) {
+    skills = cachedSkills.skills;
+  } else {
+    skills = await discoverSkills(sandbox, skillDirs);
+    discoveredSkillsCache.set(skillCacheKey, {
+      skills,
+      expiresAt: now + SKILLS_CACHE_TTL_MS,
+    });
+  }
 
   let ownedStreamToken = createStreamToken(requestStartedAtMs);
 
@@ -214,7 +265,7 @@ export async function POST(req: Request) {
     ) {
       try {
         if (latestMessage.role === "user") {
-          await createChatMessageIfNotExists({
+          const createdUserMessage = await createChatMessageIfNotExists({
             id: latestMessage.id,
             chatId,
             role: "user",
@@ -222,8 +273,11 @@ export async function POST(req: Request) {
           });
 
           // Update chat title to first 30 chars of user's first message
-          const existingMessages = await getChatMessages(chatId);
-          if (existingMessages.length === 1) {
+          const shouldSetTitle =
+            createdUserMessage !== undefined &&
+            (await isFirstChatMessage(chatId, createdUserMessage.id));
+
+          if (shouldSetTitle) {
             // This is the first message - extract text content for the title
             const textContent = latestMessage.parts
               .filter(

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
+import { getChatsBySessionId } from "@/lib/db/sessions";
+import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
 
 interface SessionPageProps {
   params: Promise<{ sessionId: string }>;
@@ -9,12 +10,15 @@ interface SessionPageProps {
 export default async function SessionPage({ params }: SessionPageProps) {
   const { sessionId } = await params;
 
-  const session = await getServerSession();
+  const sessionPromise = getServerSession();
+  const sessionRecordPromise = getSessionByIdCached(sessionId);
+
+  const session = await sessionPromise;
   if (!session?.user) {
     redirect("/");
   }
 
-  const sessionRecord = await getSessionById(sessionId);
+  const sessionRecord = await sessionRecordPromise;
   if (!sessionRecord) {
     notFound();
   }

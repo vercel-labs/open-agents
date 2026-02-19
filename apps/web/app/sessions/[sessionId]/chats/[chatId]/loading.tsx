@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Loader2, Menu } from "lucide-react";
+import Link from "next/link";
 import { useSessionLayout } from "../../session-layout-context";
 
 export default function Loading() {
@@ -23,7 +24,7 @@ export default function Loading() {
               {session.repoName ? (
                 <>
                   {session.cloneUrl ? (
-                    <a
+                    <Link
                       href={`https://github.com/${session.repoOwner}/${session.repoName}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -31,7 +32,7 @@ export default function Loading() {
                     >
                       {session.repoName}
                       <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    </a>
+                    </Link>
                   ) : (
                     <span className="truncate font-medium text-foreground">
                       {session.repoName}

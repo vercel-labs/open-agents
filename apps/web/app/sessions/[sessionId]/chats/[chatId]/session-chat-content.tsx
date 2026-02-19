@@ -37,7 +37,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { BundledTheme } from "shiki";
-import { Streamdown } from "streamdown";
 import type { WebAgentUIMessagePart, WebAgentUIToolPart } from "@/app/types";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
@@ -56,7 +55,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useSessionLayout } from "../../session-layout-context";
 import {
   Tooltip,
   TooltipContent,
@@ -70,6 +68,7 @@ import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
+import { useSessionLayout } from "../../session-layout-context";
 import {
   type SandboxInfo,
   useSessionChatContext,
@@ -87,6 +86,10 @@ const CreatePRDialog = dynamic(
 const CreateRepoDialog = dynamic(
   () =>
     import("@/components/create-repo-dialog").then((m) => m.CreateRepoDialog),
+  { ssr: false },
+);
+const Streamdown = dynamic(
+  () => import("streamdown").then((m) => m.Streamdown),
   { ssr: false },
 );
 
@@ -1614,7 +1617,7 @@ export function SessionChatContent() {
                   size="sm"
                   onClick={() => {
                     const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                    window.open(prUrl, "_blank");
+                    window.open(prUrl, "_blank", "noopener,noreferrer");
                   }}
                 >
                   <GitPullRequest className="h-4 w-4 md:mr-2" />

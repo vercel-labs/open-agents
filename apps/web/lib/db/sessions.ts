@@ -314,6 +314,17 @@ export async function getChatMessages(chatId: string) {
   });
 }
 
+export async function isFirstChatMessage(chatId: string, messageId: string) {
+  const rows = await db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(eq(chatMessages.chatId, chatId))
+    .orderBy(chatMessages.createdAt, chatMessages.id)
+    .limit(2);
+
+  return rows.length === 1 && rows[0]?.id === messageId;
+}
+
 export async function markChatRead(
   data: Pick<NewChatRead, "userId" | "chatId">,
 ) {

@@ -2,11 +2,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
 import { DiffsProvider } from "@/components/diffs-provider";
-import {
-  getChatById,
-  getChatMessages,
-  getSessionById,
-} from "@/lib/db/sessions";
+import { getChatById, getChatMessages } from "@/lib/db/sessions";
+import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionChatContent } from "./session-chat-content";
 import { SessionChatProvider } from "./session-chat-context";
@@ -65,7 +62,7 @@ export default async function SessionChatPage({
 
   // Start independent fetches in parallel
   const sessionPromise = getServerSession();
-  const sessionRecordPromise = getSessionById(sessionId);
+  const sessionRecordPromise = getSessionByIdCached(sessionId);
 
   // Server-side auth check
   const session = await sessionPromise;
@@ -96,11 +93,16 @@ export default async function SessionChatPage({
     notFound();
   }
   const initialMessages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
+  const sessionForClient = {
+    ...sessionRecord,
+    cachedDiff: null,
+    cachedDiffUpdatedAt: null,
+  };
 
   return (
     <DiffsProvider>
       <SessionChatProvider
-        session={sessionRecord}
+        session={sessionForClient}
         chat={chat}
         initialMessages={initialMessages}
       >

@@ -52,14 +52,15 @@ export default async function RepoPage({ params }: RepoPageProps) {
     );
   }
 
+  const preferencesPromise = getUserPreferences(session.user.id);
+
   // Get a GitHub token (if available) for private repo access
-  let token: string | undefined;
-  try {
-    const result = await getRepoToken(session.user.id, username);
-    token = result.token;
-  } catch {
-    // No token available -- will try unauthenticated (works for public repos)
-  }
+  const token = await getRepoToken(session.user.id, username)
+    .then((result) => result.token)
+    .catch(() => {
+      // No token available -- will try unauthenticated (works for public repos)
+      return undefined;
+    });
 
   // Validate the repo exists and get its default branch
   let repoInfo = await fetchRepoInfo(username, repo, token);
@@ -74,7 +75,7 @@ export default async function RepoPage({ params }: RepoPageProps) {
   }
 
   // Use the user's preferred sandbox type and model
-  const preferences = await getUserPreferences(session.user.id);
+  const preferences = await preferencesPromise;
 
   const cloneUrl = `https://github.com/${username}/${repo}.git`;
 
