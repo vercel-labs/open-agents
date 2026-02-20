@@ -580,7 +580,7 @@ export function CreatePRDialog({
                       onChange={(e) => setBody(e.target.value)}
                       disabled={isDisabled}
                       rows={6}
-                      className="resize-y max-h-[12lh] overflow-y-auto"
+                      className="resize-y max-h-48 overflow-y-auto field-sizing-fixed"
                     />
                   </div>
                 </>
