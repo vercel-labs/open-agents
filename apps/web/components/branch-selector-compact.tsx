@@ -66,12 +66,7 @@ export function BranchSelectorCompact({
     if (!owner || !repo) return;
 
     const key = `${owner}/${repo}`;
-    if (
-      data &&
-      !value &&
-      !isNewBranch &&
-      autoSelectedKeyRef.current !== key
-    ) {
+    if (data && !value && !isNewBranch && autoSelectedKeyRef.current !== key) {
       autoSelectedKeyRef.current = key;
       onChange(null, true);
     }
