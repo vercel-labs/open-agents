@@ -2,7 +2,7 @@
 
 import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLastRepo } from "@/hooks/use-last-repo";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { cn } from "@/lib/utils";
@@ -31,34 +31,25 @@ interface SessionStarterProps {
 export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
   const { lastRepo } = useLastRepo();
 
-  const [mode, setMode] = useState<SessionMode>("empty");
-  const [selectedOwner, setSelectedOwner] = useState("");
-  const [selectedRepo, setSelectedRepo] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [mode, setMode] = useState<SessionMode>(() =>
+    lastRepo ? "repo" : "empty",
+  );
+  const [selectedOwner, setSelectedOwner] = useState(
+    () => lastRepo?.owner ?? "",
+  );
+  const [selectedRepo, setSelectedRepo] = useState(() => lastRepo?.repo ?? "");
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(
+    () => lastRepo?.branch ?? null,
+  );
   const [isNewBranch, setIsNewBranch] = useState(false);
-  const hasInteractedRef = useRef(false);
-  const hasAppliedLastRepoRef = useRef(false);
 
   const { preferences } = useUserPreferences();
-
-  useEffect(() => {
-    if (!lastRepo) return;
-    if (hasInteractedRef.current || hasAppliedLastRepoRef.current) return;
-
-    hasAppliedLastRepoRef.current = true;
-    setMode("repo");
-    setSelectedOwner(lastRepo.owner);
-    setSelectedRepo(lastRepo.repo);
-    setSelectedBranch(lastRepo.branch ?? null);
-    setIsNewBranch(false);
-  }, [lastRepo]);
 
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
     SANDBOX_OPTIONS.find((s) => s.id === sandboxType)?.name ?? sandboxType;
 
   const handleRepoSelect = (owner: string, repo: string) => {
-    hasInteractedRef.current = true;
     setSelectedOwner(owner);
     setSelectedRepo(repo);
     setSelectedBranch(null);
@@ -66,7 +57,6 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
   };
 
   const handleRepoClear = () => {
-    hasInteractedRef.current = true;
     setSelectedOwner("");
     setSelectedRepo("");
     setSelectedBranch(null);
@@ -74,13 +64,11 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
   };
 
   const handleBranchChange = (branch: string | null, newBranch: boolean) => {
-    hasInteractedRef.current = true;
     setSelectedBranch(branch);
     setIsNewBranch(newBranch);
   };
 
   const handleModeChange = (newMode: SessionMode) => {
-    hasInteractedRef.current = true;
     setMode(newMode);
     if (newMode === "empty") {
       handleRepoClear();
