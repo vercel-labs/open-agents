@@ -44,6 +44,7 @@ import type {
 } from "@/app/types";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
+import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { TaskGroupView } from "@/components/task-group-view";
@@ -67,6 +68,7 @@ import {
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useSlashCommands } from "@/hooks/use-slash-commands";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
@@ -684,6 +686,8 @@ export function SessionChatContent() {
     files,
     filesLoading,
     refreshFiles,
+    skills,
+    skillsLoading,
     preferredSandboxType,
     supportsDiff,
     supportsRepoCreation,
@@ -938,6 +942,38 @@ export function SessionChatContent() {
     cursorPosition,
     files,
     onSelect: handleFileSelect,
+  });
+
+  const handleSlashCommandSelect = (
+    skillName: string,
+    slashStart: number,
+    cursorPos: number,
+  ) => {
+    const before = input.slice(0, slashStart);
+    const after = input.slice(cursorPos);
+    const newInput = `${before}/${skillName} ${after}`;
+    setInput(newInput);
+    const newCursorPos = slashStart + skillName.length + 2; // / + name + space
+    setCursorPosition(newCursorPos);
+    setTimeout(() => {
+      if (inputRef.current && inputRef.current.value === newInput) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const {
+    showSlashCommands,
+    slashSuggestions,
+    selectedSlashIndex,
+    handleSlashKeyDown,
+    slashInfo,
+  } = useSlashCommands({
+    inputValue: input,
+    cursorPosition,
+    skills,
+    onSelect: handleSlashCommandSelect,
   });
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -1935,6 +1971,22 @@ export function SessionChatContent() {
                 isLoading={filesLoading}
               />
             )}
+            {showSlashCommands && !showSuggestions && (
+              <SlashCommandDropdown
+                suggestions={slashSuggestions}
+                selectedIndex={selectedSlashIndex}
+                onSelect={(suggestion) => {
+                  if (slashInfo) {
+                    handleSlashCommandSelect(
+                      suggestion.name,
+                      slashInfo.slashStart,
+                      cursorPosition,
+                    );
+                  }
+                }}
+                isLoading={skillsLoading}
+              />
+            )}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -2027,6 +2079,9 @@ export function SessionChatContent() {
                   onKeyDown={(e) => {
                     // Let suggestions handle keyboard events first
                     if (handleSuggestionsKeyDown(e)) {
+                      return;
+                    }
+                    if (handleSlashKeyDown(e)) {
                       return;
                     }
                     // Handle form submission
