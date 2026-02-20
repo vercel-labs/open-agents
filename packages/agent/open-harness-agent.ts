@@ -68,7 +68,7 @@ export const openHarnessAgent = new ToolLoopAgent({
   model: defaultModel,
   instructions: buildSystemPrompt({}),
   tools,
-  stopWhen: stepCountIs(50),
+  stopWhen: stepCountIs(100),
   callOptionsSchema,
   prepareStep: ({ messages, model, steps }) => ({
     messages: addCacheControl({

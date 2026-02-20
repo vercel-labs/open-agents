@@ -78,7 +78,7 @@ export const explorerSubagent = new ToolLoopAgent({
     glob: globTool(),
     bash: bashTool(),
   },
-  stopWhen: stepCountIs(30),
+  stopWhen: stepCountIs(100),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
