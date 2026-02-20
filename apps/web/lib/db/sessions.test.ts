@@ -86,7 +86,11 @@ describe("getUsedSessionTitles", () => {
 
   test("returns a Set containing all existing session titles", async () => {
     const { getUsedSessionTitles } = await sessionsModulePromise;
-    fakeSelectRows = [{ title: "Tokyo" }, { title: "Paris" }, { title: "Lagos" }];
+    fakeSelectRows = [
+      { title: "Tokyo" },
+      { title: "Paris" },
+      { title: "Lagos" },
+    ];
 
     const result = await getUsedSessionTitles("user-1");
     expect(result.size).toBe(3);
