@@ -512,8 +512,25 @@ Respond with ONLY the commit message, nothing else.`,
     // Using single quotes is safest, but we need to handle single quotes in the message
     // by ending the quote, adding an escaped single quote, and starting a new quote
     //
-    // Append Co-Authored-By trailer when the push uses an installation token so
-    // GitHub shows "user and bot committed" on the commit (same style as Claude Code).
+    // Set the git author identity to the authenticated user so the commit is
+    // attributed to them. When the GitHub App rewrites the committer on push it
+    // will still show the user as the author. Append a Co-Authored-By trailer for
+    // the bot so GitHub shows "user and bot committed" (same style as Claude Code).
+    const githubAccount = await getGitHubAccount(session.user.id);
+    if (githubAccount?.externalUserId && githubAccount.username) {
+      const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
+      await sandbox.exec(
+        `git config user.name '${githubAccount.username.replace(/'/g, "'\\''")}'`,
+        cwd,
+        5000,
+      );
+      await sandbox.exec(
+        `git config user.email '${userEmail}'`,
+        cwd,
+        5000,
+      );
+    }
+
     const coAuthorTrailer =
       repoTokenResult?.type === "installation" ? getAppCoAuthorTrailer() : null;
     const fullCommitMessage = coAuthorTrailer
