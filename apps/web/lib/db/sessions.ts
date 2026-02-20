@@ -72,6 +72,20 @@ export async function getSessionsByUserId(userId: string) {
   });
 }
 
+/**
+ * Returns a Set of all session titles for a given user.
+ * Used to avoid duplicate random city names when creating new sessions.
+ */
+export async function getUsedSessionTitles(
+  userId: string,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ title: sessions.title })
+    .from(sessions)
+    .where(eq(sessions.userId, userId));
+  return new Set(rows.map((r) => r.title));
+}
+
 export async function updateSession(
   sessionId: string,
   data: Partial<Omit<NewSession, "id" | "userId" | "createdAt">>,

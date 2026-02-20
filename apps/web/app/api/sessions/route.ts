@@ -2,8 +2,10 @@ import { nanoid } from "nanoid";
 import {
   createSessionWithInitialChat,
   getSessionsByUserId,
+  getUsedSessionTitles,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreateSessionRequest {
@@ -32,14 +34,15 @@ function generateBranchName(username: string, name?: string | null): string {
   return `${initials}/${randomSuffix}`;
 }
 
-function resolveSessionTitle(input: CreateSessionRequest): string {
+async function resolveSessionTitle(
+  input: CreateSessionRequest,
+  userId: string,
+): Promise<string> {
   if (input.title && input.title.trim()) {
     return input.title.trim();
   }
-  if (input.repoName) {
-    return input.repoName;
-  }
-  return "New session";
+  const usedNames = await getUsedSessionTitles(userId);
+  return getRandomCityName(usedNames);
 }
 
 export async function GET() {
@@ -80,7 +83,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const title = resolveSessionTitle(body);
+    const title = await resolveSessionTitle(body, session.user.id);
     const preferences = await getUserPreferences(session.user.id);
     const result = await createSessionWithInitialChat({
       session: {
