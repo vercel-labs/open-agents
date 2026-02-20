@@ -3,6 +3,7 @@
 import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useLastRepo } from "@/hooks/use-last-repo";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
@@ -28,10 +29,14 @@ interface SessionStarterProps {
 }
 
 export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
-  const [mode, setMode] = useState<SessionMode>("empty");
-  const [selectedOwner, setSelectedOwner] = useState("");
-  const [selectedRepo, setSelectedRepo] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const { lastRepo } = useLastRepo();
+
+  const [mode, setMode] = useState<SessionMode>(lastRepo ? "repo" : "empty");
+  const [selectedOwner, setSelectedOwner] = useState(lastRepo?.owner ?? "");
+  const [selectedRepo, setSelectedRepo] = useState(lastRepo?.repo ?? "");
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(
+    lastRepo?.branch ?? null,
+  );
   const [isNewBranch, setIsNewBranch] = useState(false);
 
   const { preferences } = useUserPreferences();

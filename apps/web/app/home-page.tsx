@@ -11,6 +11,7 @@ import { SessionDrawer } from "@/components/session-drawer";
 import { SessionStarter } from "@/components/session-starter";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 import { useCliTokens } from "@/hooks/use-cli-tokens";
+import { useLastRepo } from "@/hooks/use-last-repo";
 import { useSession } from "@/hooks/use-session";
 import { useSessions } from "@/hooks/use-sessions";
 
@@ -24,6 +25,7 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
   const { sessions, loading, createSession } = useSessions({
     enabled: isAuthenticated,
   });
+  const { saveLastRepo } = useLastRepo();
 
   const activeSessionCount = sessions.filter(
     (s) => s.status !== "archived",
@@ -49,6 +51,15 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
         isNewBranch: input.isNewBranch,
         sandboxType: input.sandboxType,
       });
+
+      if (input.repoOwner && input.repoName) {
+        saveLastRepo({
+          owner: input.repoOwner,
+          repo: input.repoName,
+          branch: input.branch,
+        });
+      }
+
       router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);
     } catch (error) {
       console.error("Failed to create session:", error);
