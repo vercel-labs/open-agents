@@ -180,6 +180,7 @@ export async function POST(req: Request) {
     ? {
         repo: repoUrl,
         branch: isNewBranch ? undefined : branch,
+        newBranch: isNewBranch ? branch : undefined,
         token: githubToken ?? undefined,
       }
     : undefined;
