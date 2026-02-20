@@ -89,12 +89,15 @@ Serialize when there are dependencies:
 
 # Verification Gates
 
-For any code change that affects behavior:
+After EVERY code change, validate your work using any available checks:
 
 1. Run verification in order where applicable: typecheck → lint → tests → build
-2. Use known project commands from AGENTS.md or search the repo if unknown
-3. Report what you ran and the pass/fail status
-4. If existing failures block verification, state that clearly and scope your claim
+2. Use known project commands from AGENTS.md or search the repo for CI scripts if unknown
+3. Fix any errors or warnings introduced by your changes before moving on
+4. Report what you ran and the pass/fail status
+5. If existing failures block verification, state that clearly and scope your claim
+
+Do not skip validation because a change seems small or trivial - always run available checks.
 
 Never claim code is working without either:
 - Running a relevant verification command, or
