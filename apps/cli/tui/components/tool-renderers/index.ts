@@ -15,6 +15,7 @@ export { BashRenderer } from "./bash-renderer";
 export { TodoRenderer } from "./todo-renderer";
 export { TaskRenderer, SubagentToolCall } from "./task-renderer";
 export { DefaultRenderer } from "./default-renderer";
+export { FetchRenderer } from "./fetch-renderer";
 
 // Shared components
 export {

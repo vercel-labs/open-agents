@@ -15,6 +15,7 @@ import { AskUserQuestionRenderer } from "../components/tool-renderers/ask-user-q
 import { BashRenderer } from "../components/tool-renderers/bash-renderer";
 import { DefaultRenderer } from "../components/tool-renderers/default-renderer";
 import { EditRenderer } from "../components/tool-renderers/edit-renderer";
+import { FetchRenderer } from "../components/tool-renderers/fetch-renderer";
 import { GlobRenderer } from "../components/tool-renderers/glob-renderer";
 import { GrepRenderer } from "../components/tool-renderers/grep-renderer";
 // Import all renderers
@@ -90,6 +91,10 @@ export function renderToolPart(
           state={state}
           isExpanded={isExpanded}
         />
+      );
+    case "tool-web_fetch":
+      return (
+        <FetchRenderer part={part} state={state} isExpanded={isExpanded} />
       );
     case "tool-skill":
       return <DefaultRenderer part={part} state={state} />;

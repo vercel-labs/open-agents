@@ -21,6 +21,7 @@ import {
   skillTool,
   taskTool,
   todoWriteTool,
+  webFetchTool,
   writeFileTool,
 } from "./tools";
 import type { ApprovalConfig, TodoItem } from "./types";
@@ -60,6 +61,7 @@ const tools = {
   task: taskTool,
   ask_user_question: askUserQuestionTool,
   skill: skillTool,
+  web_fetch: webFetchTool,
 } satisfies ToolSet;
 
 export const openHarnessAgent = new ToolLoopAgent({

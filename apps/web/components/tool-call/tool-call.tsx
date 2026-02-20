@@ -19,6 +19,7 @@ import { GrepRenderer } from "./renderers/grep-renderer";
 import { TaskRenderer } from "./renderers/task-renderer";
 import { TodoRenderer } from "./renderers/todo-renderer";
 import { AskUserQuestionRenderer } from "./renderers/ask-user-question-renderer";
+import { FetchRenderer } from "./renderers/fetch-renderer";
 
 export type ToolCallProps = {
   part: WebAgentUIToolPart;
@@ -70,6 +71,8 @@ export function ToolCall({
     case "tool-ask_user_question":
       // AskUserQuestion tool doesn't require approval, handled separately
       return <AskUserQuestionRenderer part={part} state={state} />;
+    case "tool-web_fetch":
+      return <FetchRenderer part={part} state={state} {...approvalProps} />;
     default:
       return (
         <DefaultRenderer
