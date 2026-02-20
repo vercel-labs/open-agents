@@ -24,11 +24,9 @@ export function FetchRenderer({
 
   // Truncate URL for summary display
   const displayUrl = url.length > 60 ? `${url.slice(0, 57)}...` : url;
-  const summary =
-    method === "GET" ? displayUrl : `${method} ${displayUrl}`;
+  const summary = method === "GET" ? displayUrl : `${method} ${displayUrl}`;
 
-  const hasExpandedContent =
-    method !== "GET" || output?.headers || output?.truncated;
+  const hasExpandedContent = method !== "GET" || output?.truncated === true;
 
   const expandedContent = hasExpandedContent ? (
     <div className="space-y-2 text-sm">

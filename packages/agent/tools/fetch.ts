@@ -2,7 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 const fetchInputSchema = z.object({
-  url: z.string().describe("The URL to fetch"),
+  url: z.string().url().describe("The URL to fetch"),
   method: z
     .enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
     .optional()
