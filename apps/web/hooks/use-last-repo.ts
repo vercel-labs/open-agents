@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "openharness-last-repo";
 
@@ -37,11 +37,16 @@ function readLastRepo(): LastRepo | null {
 }
 
 export function useLastRepo() {
-  const lastRepo = useMemo(() => readLastRepo(), []);
+  const [lastRepo, setLastRepo] = useState<LastRepo | null>(null);
+
+  useEffect(() => {
+    setLastRepo(readLastRepo());
+  }, []);
 
   const saveLastRepo = useCallback((repo: LastRepo) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(repo));
+      setLastRepo(repo);
     } catch {
       // localStorage may be unavailable (e.g. private browsing quota exceeded)
     }
