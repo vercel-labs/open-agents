@@ -524,11 +524,7 @@ Respond with ONLY the commit message, nothing else.`,
         cwd,
         5000,
       );
-      await sandbox.exec(
-        `git config user.email '${userEmail}'`,
-        cwd,
-        5000,
-      );
+      await sandbox.exec(`git config user.email '${userEmail}'`, cwd, 5000);
     }
 
     const coAuthorTrailer =
