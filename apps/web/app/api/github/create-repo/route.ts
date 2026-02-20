@@ -2,10 +2,7 @@ import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText } from "ai";
 import { getInstallationByAccountLogin } from "@/lib/db/installations";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import {
-  getAppCoAuthorTrailer,
-  getInstallationToken,
-} from "@/lib/github/app-auth";
+import { getInstallationToken } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -269,13 +266,10 @@ Respond with ONLY the commit message, nothing else.`,
   }
 
   // 13. Create commit
-  // Append Co-Authored-By trailer when the GitHub App installation is involved
-  // so GitHub shows "user and bot committed" on the commit.
-  const coAuthorTrailer = installationToken ? getAppCoAuthorTrailer() : null;
-  const fullCommitMessage = coAuthorTrailer
-    ? `${commitMessage}\n\n${coAuthorTrailer}`
-    : commitMessage;
-  const escapedMessage = fullCommitMessage.replace(/'/g, "'\\''");
+  // Do NOT add a Co-Authored-By trailer for the bot — the bot is already
+  // attributed as committer when pushing via the installation token, and adding
+  // the trailer causes it to appear twice on squash-merged PRs (3 authors).
+  const escapedMessage = commitMessage.replace(/'/g, "'\\''");
   const commitResult = await sandbox.exec(
     `git commit -m '${escapedMessage}'`,
     cwd,

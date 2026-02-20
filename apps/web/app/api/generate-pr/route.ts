@@ -3,7 +3,6 @@ import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -514,8 +513,10 @@ Respond with ONLY the commit message, nothing else.`,
     //
     // Set the git author identity to the authenticated user so the commit is
     // attributed to them. When the GitHub App rewrites the committer on push it
-    // will still show the user as the author. Append a Co-Authored-By trailer for
-    // the bot so GitHub shows "user and bot committed" (same style as Claude Code).
+    // will still show the user as the author. Do NOT add a Co-Authored-By trailer
+    // for the bot — the bot is already attributed as PR creator/committer, and
+    // adding the trailer causes it to appear twice (as committer + co-author) on
+    // squash-merged PRs, resulting in 3 authors instead of 2.
     const githubAccount = await getGitHubAccount(session.user.id);
     if (githubAccount?.externalUserId && githubAccount.username) {
       const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
@@ -527,12 +528,7 @@ Respond with ONLY the commit message, nothing else.`,
       await sandbox.exec(`git config user.email '${userEmail}'`, cwd, 5000);
     }
 
-    const coAuthorTrailer =
-      repoTokenResult?.type === "installation" ? getAppCoAuthorTrailer() : null;
-    const fullCommitMessage = coAuthorTrailer
-      ? `${commitMessage}\n\n${coAuthorTrailer}`
-      : commitMessage;
-    const escapedMessage = fullCommitMessage.replace(/'/g, "'\\''");
+    const escapedMessage = commitMessage.replace(/'/g, "'\\''");
     const commitResult = await sandbox.exec(
       `git commit -m '${escapedMessage}'`,
       cwd,
