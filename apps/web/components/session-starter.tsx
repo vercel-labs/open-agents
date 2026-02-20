@@ -66,8 +66,12 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
     }
   };
 
+  const isRepoSelectionComplete =
+    mode !== "repo" || (selectedOwner && selectedRepo);
+  const isSubmitDisabled = isLoading || !isRepoSelectionComplete;
+
   const handleSubmit = () => {
-    if (isLoading) return;
+    if (isSubmitDisabled) return;
 
     onSubmit({
       repoOwner: mode === "repo" ? selectedOwner || undefined : undefined,
@@ -169,10 +173,10 @@ export function SessionStarter({ onSubmit, isLoading }: SessionStarterProps) {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={isLoading}
+          disabled={isSubmitDisabled}
           className={cn(
             "w-full rounded-md px-4 py-2 text-sm font-medium transition-colors",
-            isLoading
+            isSubmitDisabled
               ? "cursor-not-allowed bg-neutral-700 text-neutral-400"
               : "bg-neutral-200 text-neutral-900 hover:bg-neutral-300",
           )}

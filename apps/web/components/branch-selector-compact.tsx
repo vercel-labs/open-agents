@@ -60,20 +60,20 @@ export function BranchSelectorCompact({
   const branches = data?.branches ?? [];
   const defaultBranch = data?.defaultBranch ?? "main";
 
-  // Auto-select default branch when data loads (only once per owner/repo combo)
+  // Auto-select "new branch" when data loads (only once per owner/repo combo)
   useEffect(() => {
     // Guard against undefined owner/repo to prevent matching "undefined/undefined"
     if (!owner || !repo) return;
 
     const key = `${owner}/${repo}`;
     if (
-      data?.defaultBranch &&
+      data &&
       !value &&
       !isNewBranch &&
       autoSelectedKeyRef.current !== key
     ) {
       autoSelectedKeyRef.current = key;
-      onChange(data.defaultBranch, false);
+      onChange(null, true);
     }
   }, [data, value, isNewBranch, onChange, owner, repo]);
 
