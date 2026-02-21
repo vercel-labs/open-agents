@@ -255,7 +255,7 @@ export function QuestionPanel({
 
   return (
     <div className="px-4 py-4">
-      <div className="mx-auto max-w-3xl rounded-lg border border-border bg-card p-4">
+      <div className="mx-auto max-w-4xl rounded-lg border border-border bg-card p-4">
         {/* Tab bar */}
         <div className="mb-4 flex items-center gap-1 overflow-x-auto">
           {questions.map((q, idx) => {

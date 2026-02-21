@@ -64,7 +64,7 @@ export function SharedChatContent({
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-2">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             {session.repoName ? (
               <>
@@ -107,7 +107,7 @@ export function SharedChatContent({
 
       {/* Messages */}
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-3xl overflow-hidden px-4 py-8">
+        <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
           <div className="space-y-6">
             {chats.map(({ chat, messages }) => (
               <div key={chat.id}>

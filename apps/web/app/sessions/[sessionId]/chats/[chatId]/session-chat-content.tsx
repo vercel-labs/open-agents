@@ -1802,7 +1802,7 @@ export function SessionChatContent() {
       {/* Messages */}
       <div className="relative flex-1 overflow-hidden">
         <div ref={containerRef} className="h-full overflow-y-auto">
-          <div className="mx-auto max-w-3xl overflow-hidden px-4 py-8">
+          <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
             <div className="space-y-6">
               {groupedRenderMessages.map(
                 ({ message: m, groups, isStreaming: isMessageStreaming }) => {
@@ -1954,7 +1954,7 @@ export function SessionChatContent() {
 
       {/* Input */}
       <div className="p-4 pb-8">
-        <div className="mx-auto max-w-3xl space-y-2">
+        <div className="mx-auto max-w-4xl space-y-2">
           {restoreError && (
             <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <span>{restoreError}</span>

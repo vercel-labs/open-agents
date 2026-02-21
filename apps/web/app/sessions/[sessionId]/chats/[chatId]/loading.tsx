@@ -63,7 +63,7 @@ export default function Loading() {
 
       {/* Input area shell */}
       <div className="p-4 pb-8">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-4xl">
           <div className="overflow-hidden rounded-2xl bg-muted">
             <div className="px-4 pb-2 pt-3">
               <textarea
