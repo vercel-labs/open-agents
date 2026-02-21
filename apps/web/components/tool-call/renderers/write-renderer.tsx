@@ -126,10 +126,6 @@ export function WriteRenderer({
             <div className="mt-2 pl-5 text-sm">
               <span>Created </span>
               <span className="font-medium">{filePath}</span>
-              <span className="text-muted-foreground">
-                {" "}
-                ({totalLines} line{totalLines !== 1 ? "s" : ""})
-              </span>
             </div>
 
             <div className="ml-5 mt-2 max-h-40 overflow-hidden">
@@ -147,10 +143,6 @@ export function WriteRenderer({
           <div className="mb-2 text-sm">
             <span>Created </span>
             <span className="font-medium">{filePath}</span>
-            <span className="text-muted-foreground">
-              {" "}
-              ({totalLines} line{totalLines !== 1 ? "s" : ""})
-            </span>
           </div>
 
           <div className="max-h-96 overflow-auto">

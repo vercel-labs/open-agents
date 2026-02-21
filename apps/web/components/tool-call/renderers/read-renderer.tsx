@@ -60,9 +60,9 @@ export function ReadRenderer({
   return (
     <ToolLayout
       name="Read"
-      summary={lines ? `${filePath} (${lines} lines)` : filePath}
+      summary={filePath}
       state={mergedState}
-      output={outputError ?? (lines ? `Read ${lines} lines` : undefined)}
+      output={outputError}
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}
