@@ -1818,7 +1818,7 @@ export function SessionChatContent() {
                         <div
                           key={`${m.id}-${i}`}
                           className={cn(
-                            "flex",
+                            "flex min-w-0",
                             m.role === "user" ? "justify-end" : "justify-start",
                           )}
                         >
@@ -1829,7 +1829,7 @@ export function SessionChatContent() {
                               </p>
                             </div>
                           ) : (
-                            <div className="min-w-0 max-w-[80%]">
+                            <div className="min-w-0 max-w-[80%] overflow-hidden">
                               <Streamdown
                                 animated={{
                                   animation: "fadeIn",
