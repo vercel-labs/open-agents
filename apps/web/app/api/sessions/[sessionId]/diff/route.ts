@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox, type Sandbox } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
@@ -12,7 +12,8 @@ import { getServerSession } from "@/lib/session/get-server-session";
 export type DiffFile = {
   path: string;
   status: "added" | "modified" | "deleted" | "renamed";
-  stagingStatus: "staged" | "unstaged" | "partial";
+  /** May be absent in cached diffs created before this field was introduced. */
+  stagingStatus?: "staged" | "unstaged" | "partial";
   additions: number;
   deletions: number;
   diff: string;
@@ -26,8 +27,8 @@ export type DiffResponse = {
     totalAdditions: number;
     totalDeletions: number;
   };
-  /** The git ref used as the diff base (e.g. "origin/main", "HEAD") */
-  baseRef: string;
+  /** The git ref used as the diff base (e.g. "origin/main", "HEAD"). May be absent in old cached diffs. */
+  baseRef?: string;
 };
 
 type RouteContext = {
@@ -164,6 +165,44 @@ function splitDiffByFile(fullDiff: string): Map<string, string> {
 }
 
 /**
+ * Build a synthetic unified-diff and DiffFile entry for an untracked (new) file.
+ * Returns null if the content is null (unreadable / binary).
+ */
+function buildUntrackedDiffFile(
+  path: string,
+  content: string | null,
+): { file: DiffFile; lineCount: number } | null {
+  if (content === null) return null;
+
+  const trimmed = content.trimEnd();
+  const lines = trimmed.length === 0 ? [] : trimmed.split("\n");
+  const lineCount = lines.length;
+
+  const diffLines = lines.map((line) => `+${line}`).join("\n");
+  const syntheticDiff = `diff --git a/${path} b/${path}
+new file mode 100644
+--- /dev/null
++++ b/${path}
+@@ -0,0 +1,${lineCount} @@
+${diffLines}`;
+
+  return {
+    file: {
+      path,
+      status: "added",
+      stagingStatus: "unstaged",
+      additions: lineCount,
+      deletions: 0,
+      diff: syntheticDiff,
+    },
+    lineCount,
+  };
+}
+
+/** Only allow ref names that look like valid git refs (alphanumeric, slashes, dots, dashes, underscores). */
+const SAFE_REF_PATTERN = /^[a-zA-Z0-9._\-/]+$/;
+
+/**
  * Resolve the best git ref to diff against.
  *
  * 1. If the repo was cloned from a remote, use origin's default branch
@@ -173,7 +212,7 @@ function splitDiffByFile(fullDiff: string): Map<string, string> {
  *    the empty-repo case.
  */
 async function resolveBaseRef(
-  sandbox: { exec: (cmd: string, cwd: string, timeout: number) => Promise<{ success: boolean; stdout: string }> },
+  sandbox: Pick<Sandbox, "exec">,
   cwd: string,
 ): Promise<string | null> {
   // Try remote default branch first
@@ -186,7 +225,7 @@ async function resolveBaseRef(
     // "refs/remotes/origin/main" → "origin/main"
     const full = symRef.stdout.trim();
     const match = full.match(/^refs\/remotes\/(.+)$/);
-    if (match) {
+    if (match && SAFE_REF_PATTERN.test(match[1])) {
       return match[1];
     }
   }
@@ -258,6 +297,13 @@ export async function GET(_req: NextRequest, context: RouteContext) {
             { status: 409 },
           );
         }
+        console.error("Git command failed:", stderr);
+        return Response.json(
+          {
+            error: "Git command failed. Ensure this is a git repository.",
+          },
+          { status: 400 },
+        );
       }
 
       // All files are untracked in a repo with no commits
@@ -282,30 +328,10 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       );
 
       for (const { path, content } of untrackedFileContents) {
-        if (content === null) continue;
-
-        const trimmed = content.trimEnd();
-        const lines = trimmed.length === 0 ? [] : trimmed.split("\n");
-        const lineCount = lines.length;
-
-        const diffLines = lines.map((line) => `+${line}`).join("\n");
-        const syntheticDiff = `diff --git a/${path} b/${path}
-new file mode 100644
---- /dev/null
-+++ b/${path}
-@@ -0,0 +1,${lineCount} @@
-${diffLines}`;
-
-        totalAdditions += lineCount;
-
-        files.push({
-          path,
-          status: "added",
-          stagingStatus: "unstaged",
-          additions: lineCount,
-          deletions: 0,
-          diff: syntheticDiff,
-        });
+        const entry = buildUntrackedDiffFile(path, content);
+        if (!entry) continue;
+        totalAdditions += entry.lineCount;
+        files.push(entry.file);
       }
 
       const statusOrder = { modified: 0, added: 1, renamed: 2, deleted: 3 };
@@ -342,11 +368,7 @@ ${diffLines}`;
       cwd,
       30000,
     );
-    const diffResult = await sandbox.exec(
-      `git diff ${baseRef}`,
-      cwd,
-      60000,
-    );
+    const diffResult = await sandbox.exec(`git diff ${baseRef}`, cwd, 60000);
     const untrackedResult = await sandbox.exec(
       "git ls-files --others --exclude-standard",
       cwd,
@@ -436,9 +458,7 @@ ${diffLines}`;
     // When diffing against a remote base (e.g. origin/main), a file might
     // appear in the full diff because of committed, staged, or unstaged
     // changes. We use the index-level info to classify:
-    function getStagingStatus(
-      filePath: string,
-    ): DiffFile["stagingStatus"] {
+    function getStagingStatus(filePath: string): DiffFile["stagingStatus"] {
       const isStaged = stagedFiles.has(filePath);
       const isUnstaged = unstagedFiles.has(filePath);
       if (isStaged && isUnstaged) return "partial";
@@ -490,33 +510,10 @@ ${diffLines}`;
     );
 
     for (const { path, content } of untrackedFileContents) {
-      // Skip binary files or files we couldn't read
-      if (content === null) continue;
-
-      // Remove trailing newlines before splitting to get accurate line count
-      const trimmed = content.trimEnd();
-      const lines = trimmed.length === 0 ? [] : trimmed.split("\n");
-      const lineCount = lines.length;
-
-      // Generate a synthetic diff for the new file
-      const diffLines = lines.map((line) => `+${line}`).join("\n");
-      const syntheticDiff = `diff --git a/${path} b/${path}
-new file mode 100644
---- /dev/null
-+++ b/${path}
-@@ -0,0 +1,${lineCount} @@
-${diffLines}`;
-
-      totalAdditions += lineCount;
-
-      files.push({
-        path,
-        status: "added",
-        stagingStatus: "unstaged",
-        additions: lineCount,
-        deletions: 0,
-        diff: syntheticDiff,
-      });
+      const entry = buildUntrackedDiffFile(path, content);
+      if (!entry) continue;
+      totalAdditions += entry.lineCount;
+      files.push(entry.file);
     }
 
     // Sort files: modified first, then added, then renamed, then deleted
