@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { isToolUIPart, getToolName } from "ai";
 import type { TaskToolUIPart } from "@open-harness/agent";
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { cn } from "@/lib/utils";
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ApprovalButtons } from "./tool-call/approval-buttons";
 
 type TaskStatus =
@@ -70,7 +71,7 @@ function getLastToolInfo(
 
   let summary = "";
   if (input?.filePath) {
-    summary = String(input.filePath);
+    summary = toRelativePath(String(input.filePath), DEFAULT_WORKING_DIRECTORY);
   } else if (input?.pattern) {
     summary = `"${input.pattern}"`;
   } else if (input?.command) {

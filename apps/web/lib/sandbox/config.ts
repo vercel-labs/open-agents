@@ -29,3 +29,6 @@ export const SANDBOX_LIFECYCLE_MIN_SLEEP_MS = 5 * 1000;
  * - 4321: Astro
  */
 export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321];
+
+/** Default working directory for sandboxes, used for path display */
+export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";

@@ -34,7 +34,7 @@ export function ReadRenderer({
     <div className="space-y-2 text-sm">
       <div>
         <span className="text-muted-foreground">File: </span>
-        <code className="text-foreground">{rawFilePath}</code>
+        <code className="text-foreground">{filePath}</code>
       </div>
       {offset !== undefined && (
         <div>

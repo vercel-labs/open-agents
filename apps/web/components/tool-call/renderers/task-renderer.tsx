@@ -1,12 +1,13 @@
 "use client";
 
 import type { SubagentUIMessage } from "@open-harness/agent";
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
@@ -16,8 +17,10 @@ function getToolSummary(part: SubagentMessagePart): string {
   switch (part.type) {
     case "tool-read":
     case "tool-write":
-    case "tool-edit":
-      return part.input?.filePath ?? "";
+    case "tool-edit": {
+      const fp = part.input?.filePath ?? "";
+      return fp ? toRelativePath(fp, DEFAULT_WORKING_DIRECTORY) : "";
+    }
     case "tool-grep":
     case "tool-glob":
       return part.input?.pattern ? `"${part.input.pattern}"` : "";

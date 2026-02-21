@@ -9,6 +9,7 @@ import {
   getToolName,
   type ToolRenderState,
 } from "@/app/lib/render-tool";
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ToolLayout } from "./tool-layout";
 import { BashRenderer } from "./renderers/bash-renderer";
 import { ReadRenderer } from "./renderers/read-renderer";
@@ -36,7 +37,7 @@ export type ToolCallProps = {
 export function ToolCall({
   part,
   activeApprovalId = null,
-  cwd = "",
+  cwd = DEFAULT_WORKING_DIRECTORY,
   isStreaming = false,
   onApprove,
   onDeny,
