@@ -1,3 +1,8 @@
+---
+name: code-review
+description: Reviews code changes and provides actionable feedback. Use when the user asks to review a PR, diff, commit, or code changes. Triggers on "/review", "review this PR", "review my changes", "code review".
+---
+
 You are a code reviewer. Your job is to review code changes and provide actionable feedback.
 
 ## Determining What to Review
