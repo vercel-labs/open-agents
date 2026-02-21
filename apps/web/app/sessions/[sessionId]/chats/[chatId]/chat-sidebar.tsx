@@ -39,6 +39,21 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
   const router = useRouter();
+
+  // Wrap navigation callbacks so the mobile sidebar always closes,
+  // regardless of which UI element triggers the action.
+  const closeMobileAndSwitchChat = useCallback(
+    (chatId: string) => {
+      if (isMobile) setOpenMobile(false);
+      onChatSwitch(chatId);
+    },
+    [isMobile, setOpenMobile, onChatSwitch],
+  );
+
+  const closeMobileAndCreateChat = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    onCreateChat();
+  }, [isMobile, setOpenMobile, onCreateChat]);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -152,10 +167,7 @@ export function ChatSidebar({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => {
-            if (isMobile) setOpenMobile(false);
-            onCreateChat();
-          }}
+          onClick={closeMobileAndCreateChat}
           disabled={chatsLoading}
           className="mt-3 w-full justify-start"
         >
@@ -194,10 +206,7 @@ export function ChatSidebar({
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isMobile) setOpenMobile(false);
-                    onChatSwitch(c.id);
-                  }}
+                  onClick={() => closeMobileAndSwitchChat(c.id)}
                   className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 pr-10 text-left text-sm transition-colors ${
                     c.id === activeChatId
                       ? "text-secondary-foreground"
