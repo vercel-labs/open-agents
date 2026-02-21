@@ -13,7 +13,7 @@ const prContentSchema = z.object({
   body: z
     .string()
     .describe(
-      "A markdown PR body with: brief summary of changes, list of key changes as bullet points, and notes for reviewers if applicable",
+      "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points",
     ),
 });
 
@@ -974,11 +974,31 @@ Respond with ONLY the commit message, nothing else.`,
   let prContent: z.infer<typeof prContentSchema>;
   try {
     const { output } = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: gateway("anthropic/claude-sonnet-4.5"),
       output: Output.object({
         schema: prContentSchema,
       }),
       prompt: `Generate a pull request title and body for these changes.
+
+The body MUST follow this exact format:
+
+## Summary
+
+<One or two sentences describing the overall purpose of the PR.>
+
+## Changes
+
+**<Group label> (\`<file path>\`)**
+
+- <Change description>
+- <Change description>
+
+**<Group label> (\`<file path>\`)**
+
+- <Change description>
+- <Change description>
+
+Group related changes by area (e.g. API, UI, Config, Tests) and include the file path in backticks after the group label. Each change should be a concise bullet point. If a group has sub-details, use nested bullets.
 
 Session: ${sessionTitle}
 Branch: ${resolvedBranch} -> ${baseBranch}
