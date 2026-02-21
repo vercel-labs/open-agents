@@ -6,6 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --breakpoint-sidebar: 900px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
