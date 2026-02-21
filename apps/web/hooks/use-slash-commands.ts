@@ -101,8 +101,7 @@ export function useSlashCommands({
     return filterSkillSuggestions(skills, slashInfo.partialCommand);
   }, [slashInfo, skills]);
 
-  const showSlashCommands =
-    slashInfo !== null && slashSuggestions.length > 0;
+  const showSlashCommands = slashInfo !== null && slashSuggestions.length > 0;
 
   // Reset state when command changes
   const partialCommand = slashInfo?.partialCommand;
@@ -137,11 +136,7 @@ export function useSlashCommands({
           const selected = slashSuggestions[selectedSlashIndex];
           if (selected && slashInfo) {
             e.preventDefault();
-            onSelect(
-              selected.name,
-              slashInfo.slashStart,
-              cursorPosition,
-            );
+            onSelect(selected.name, slashInfo.slashStart, cursorPosition);
             setDismissed(true);
             return true;
           }

@@ -75,10 +75,7 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const now = Date.now();
     pruneExpiredSkillCache(now);
-    const skillCacheKey = getSkillCacheKey(
-      sessionId,
-      sandbox.workingDirectory,
-    );
+    const skillCacheKey = getSkillCacheKey(sessionId, sandbox.workingDirectory);
     const cachedSkills = discoveredSkillsCache.get(skillCacheKey);
 
     let skills: DiscoveredSkills;
