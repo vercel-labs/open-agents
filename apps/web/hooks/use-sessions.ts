@@ -75,10 +75,7 @@ export function useSessions(options?: { enabled?: boolean }) {
 
     await mutate(
       {
-        sessions: [
-          { ...createdSession, hasUnread: false },
-          ...sessions,
-        ],
+        sessions: [{ ...createdSession, hasUnread: false }, ...sessions],
       },
       { revalidate: false },
     );

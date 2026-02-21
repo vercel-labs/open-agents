@@ -34,7 +34,9 @@ function formatTime(date: Date): string {
   });
 }
 
-function groupSessionsByDate(sessions: SessionWithUnread[]): Map<string, SessionWithUnread[]> {
+function groupSessionsByDate(
+  sessions: SessionWithUnread[],
+): Map<string, SessionWithUnread[]> {
   const groups = new Map<string, SessionWithUnread[]>();
 
   for (const session of sessions) {
