@@ -114,29 +114,34 @@ export function SessionList({
                   onClick={() => onSessionClick(session.id)}
                   className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      {session.title}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatTime(new Date(session.createdAt))}
-                      {session.repoName && (
-                        <>
-                          {" "}
-                          <span className="text-muted-foreground/50">-</span>{" "}
-                          {session.repoName}
-                          {session.branch && (
-                            <>
-                              {" "}
-                              <span className="text-muted-foreground/50">
-                                -
-                              </span>{" "}
-                              {session.branch}
-                            </>
-                          )}
-                        </>
-                      )}
-                    </p>
+                  <div className="flex flex-1 min-w-0 items-center gap-2">
+                    {session.hasUnread && (
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">
+                        {session.title}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatTime(new Date(session.createdAt))}
+                        {session.repoName && (
+                          <>
+                            {" "}
+                            <span className="text-muted-foreground/50">-</span>{" "}
+                            {session.repoName}
+                            {session.branch && (
+                              <>
+                                {" "}
+                                <span className="text-muted-foreground/50">
+                                  -
+                                </span>{" "}
+                                {session.branch}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <PrStatus status={session.prStatus} />
@@ -144,9 +149,6 @@ export function SessionList({
                       added={session.linesAdded}
                       removed={session.linesRemoved}
                     />
-                    {session.hasUnread && (
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                    )}
                   </div>
                 </button>
               ))}

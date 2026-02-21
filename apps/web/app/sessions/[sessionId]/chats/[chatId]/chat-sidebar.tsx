@@ -216,7 +216,7 @@ export function ChatSidebar({
                 !c.isStreaming &&
                 c.hasUnread && (
                   <span
-                    className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity group-hover:opacity-0"
+                    className="pointer-events-none absolute top-1/2 left-1 size-2 -translate-y-1/2 rounded-full bg-emerald-500 transition-opacity group-hover:opacity-0"
                     aria-label="Unread messages"
                   />
                 )}
