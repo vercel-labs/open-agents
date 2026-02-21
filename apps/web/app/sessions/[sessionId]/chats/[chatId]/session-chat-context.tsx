@@ -239,7 +239,7 @@ type SessionChatProviderProps = {
 };
 
 interface SessionsResponse {
-  sessions: Session[];
+  sessions: (Session & { hasUnread?: boolean })[];
 }
 
 export function SessionChatProvider({

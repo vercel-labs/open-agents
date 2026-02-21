@@ -4,6 +4,8 @@ import useSWR, { useSWRConfig } from "swr";
 import type { Chat, Session } from "@/lib/db/schema";
 import { fetcher } from "@/lib/swr";
 
+export type SessionWithUnread = Session & { hasUnread: boolean };
+
 interface CreateSessionInput {
   title?: string;
   repoOwner?: string;
@@ -15,7 +17,7 @@ interface CreateSessionInput {
 }
 
 interface SessionsResponse {
-  sessions: Session[];
+  sessions: SessionWithUnread[];
 }
 
 interface CreateSessionResponse {
@@ -73,7 +75,10 @@ export function useSessions(options?: { enabled?: boolean }) {
 
     await mutate(
       {
-        sessions: [createdSession, ...sessions],
+        sessions: [
+          { ...createdSession, hasUnread: false },
+          ...sessions,
+        ],
       },
       { revalidate: false },
     );
@@ -105,7 +110,9 @@ export function useSessions(options?: { enabled?: boolean }) {
       await mutate(
         (current) => ({
           sessions: (current?.sessions ?? []).map((s) =>
-            s.id === sessionId ? updatedSession : s,
+            s.id === sessionId
+              ? { ...updatedSession, hasUnread: s.hasUnread }
+              : s,
           ),
         }),
         { revalidate: false },

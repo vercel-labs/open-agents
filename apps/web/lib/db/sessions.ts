@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -70,6 +70,42 @@ export async function getSessionsByUserId(userId: string) {
     where: eq(sessions.userId, userId),
     orderBy: [desc(sessions.createdAt)],
   });
+}
+
+export type SessionWithUnread = typeof sessions.$inferSelect & {
+  hasUnread: boolean;
+};
+
+/**
+ * Returns all sessions for a user, each annotated with a `hasUnread` flag
+ * that is true when any chat in the session has unread assistant messages.
+ */
+export async function getSessionsWithUnreadByUserId(
+  userId: string,
+): Promise<SessionWithUnread[]> {
+  const rows = await db
+    .select({
+      ...getTableColumns(sessions),
+      hasUnread: sql<boolean>`COALESCE(BOOL_OR(
+        CASE
+          WHEN ${chats.lastAssistantMessageAt} IS NULL THEN false
+          WHEN ${chatReads.lastReadAt} IS NULL THEN true
+          WHEN ${chats.lastAssistantMessageAt} > ${chatReads.lastReadAt} THEN true
+          ELSE false
+        END
+      ), false)`,
+    })
+    .from(sessions)
+    .leftJoin(chats, eq(chats.sessionId, sessions.id))
+    .leftJoin(
+      chatReads,
+      and(eq(chatReads.chatId, chats.id), eq(chatReads.userId, userId)),
+    )
+    .where(eq(sessions.userId, userId))
+    .groupBy(sessions.id)
+    .orderBy(desc(sessions.createdAt));
+
+  return rows;
 }
 
 /**

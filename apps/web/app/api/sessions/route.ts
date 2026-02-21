@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import {
   createSessionWithInitialChat,
-  getSessionsByUserId,
+  getSessionsWithUnreadByUserId,
   getUsedSessionTitles,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
@@ -51,7 +51,7 @@ export async function GET() {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const sessions = await getSessionsByUserId(session.user.id);
+  const sessions = await getSessionsWithUnreadByUserId(session.user.id);
   return Response.json({ sessions });
 }
 

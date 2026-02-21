@@ -1,10 +1,10 @@
 "use client";
 
 import { GitMerge } from "lucide-react";
-import type { Session } from "@/lib/db/schema";
+import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 interface SessionListProps {
-  sessions: Session[];
+  sessions: SessionWithUnread[];
   onSessionClick: (sessionId: string) => void;
   emptyMessage?: string;
 }
@@ -17,8 +17,8 @@ function formatTime(date: Date): string {
   });
 }
 
-function groupSessionsByDate(sessions: Session[]): Map<string, Session[]> {
-  const groups = new Map<string, Session[]>();
+function groupSessionsByDate(sessions: SessionWithUnread[]): Map<string, SessionWithUnread[]> {
+  const groups = new Map<string, SessionWithUnread[]>();
 
   for (const session of sessions) {
     const date = new Date(session.createdAt);
@@ -142,6 +142,9 @@ export function SessionList({
                       added={session.linesAdded}
                       removed={session.linesRemoved}
                     />
+                    {session.hasUnread && (
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    )}
                   </div>
                 </button>
               ))}
