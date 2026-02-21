@@ -90,6 +90,7 @@ How to invoke:
 
 Important:
 - When a skill is relevant, invoke this tool IMMEDIATELY as your first action
+- When the user's message starts with "/<name>", they are invoking a skill — call this tool FIRST before any other tool
 - NEVER just announce or mention a skill without actually calling this tool
 - Only use skills listed in "Available skills" in your system prompt
 - If you see a <command-name> tag in the conversation, the skill is ALREADY loaded - follow its instructions directly`,

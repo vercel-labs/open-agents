@@ -235,6 +235,11 @@ ${skillsList}
 When a skill is relevant, invoke it IMMEDIATELY using the skill tool.
 If you see a <command-name> tag in the conversation, the skill is already loaded - follow its instructions directly.
 
+IMPORTANT - Slash command detection:
+When the user's message starts with "/<name>" (e.g., "/commit", "/review-pr"), they are invoking a skill.
+Check if "<name>" matches an available skill above. If it does, your FIRST tool call MUST be the skill tool — do not
+read files, search code, or take any other action before invoking the skill.
+
 To find and install new skills, use \`npx skills\`. Prefer \`-a amp\` (the universal agent format) so skills work across all agents.
 
 \`\`\`
