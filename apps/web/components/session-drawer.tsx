@@ -131,6 +131,13 @@ function SessionGroup({
                     {" "}
                     <span className="text-muted-foreground/50">-</span>{" "}
                     {session.repoName}
+                    {session.branch && (
+                      <>
+                        {" "}
+                        <span className="text-muted-foreground/50">-</span>{" "}
+                        {session.branch}
+                      </>
+                    )}
                   </>
                 )}
               </p>
