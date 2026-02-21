@@ -77,6 +77,35 @@ function StatusBadge({ status }: { status: DiffFile["status"] }) {
   );
 }
 
+function StagingBadge({
+  stagingStatus,
+}: {
+  stagingStatus: DiffFile["stagingStatus"];
+}) {
+  if (!stagingStatus || stagingStatus === "staged") return null;
+
+  const styles = {
+    unstaged: "bg-orange-500/20 text-orange-400",
+    partial: "bg-purple-500/20 text-purple-400",
+  };
+
+  const labels = {
+    unstaged: "Unstaged",
+    partial: "Partial",
+  };
+
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+        styles[stagingStatus],
+      )}
+    >
+      {labels[stagingStatus]}
+    </span>
+  );
+}
+
 function FileEntry({
   file,
   isExpanded,
@@ -113,6 +142,7 @@ function FileEntry({
             <span className="font-medium text-foreground">{fileName}</span>
           </span>
           <StatusBadge status={file.status} />
+          <StagingBadge stagingStatus={file.stagingStatus} />
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
           {file.additions > 0 && (
@@ -294,11 +324,21 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
           )}
         </div>
 
-        {/* Footer with file count */}
+        {/* Footer with file count and base ref */}
         {diff && diff.files.length > 0 && (
-          <div className="shrink-0 border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            {diff.summary.totalFiles} file
-            {diff.summary.totalFiles !== 1 && "s"} changed
+          <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
+            <span>
+              {diff.summary.totalFiles} file
+              {diff.summary.totalFiles !== 1 && "s"} changed
+            </span>
+            {diff.baseRef && (
+              <span>
+                vs{" "}
+                <span className="font-mono text-foreground/70">
+                  {diff.baseRef}
+                </span>
+              </span>
+            )}
           </div>
         )}
       </DialogContent>
