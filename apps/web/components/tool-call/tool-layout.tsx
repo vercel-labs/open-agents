@@ -63,7 +63,7 @@ export function ToolLayout({
   };
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card p-3">
+    <div className="my-2 overflow-hidden rounded-lg border border-border bg-card p-3">
       <div
         className={cn(
           "flex min-w-0 items-center gap-2",
@@ -93,9 +93,11 @@ export function ToolLayout({
         >
           {name}
         </span>
-        <span className="text-muted-foreground">(</span>
-        <span className="truncate text-sm text-foreground">{summary}</span>
-        <span className="text-muted-foreground">)</span>
+        <span className="min-w-0 truncate text-sm text-foreground">
+          <span className="text-muted-foreground">(</span>
+          {summary}
+          <span className="text-muted-foreground">)</span>
+        </span>
       </div>
 
       {state.approvalRequested &&

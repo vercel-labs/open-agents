@@ -1776,7 +1776,7 @@ export function SessionChatContent() {
       {/* Messages */}
       <div className="relative flex-1 overflow-hidden">
         <div ref={containerRef} className="h-full overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-8">
+          <div className="mx-auto max-w-3xl overflow-hidden px-4 py-8">
             <div className="space-y-6">
               {groupedRenderMessages.map(
                 ({ message: m, groups, isStreaming: isMessageStreaming }) => {
