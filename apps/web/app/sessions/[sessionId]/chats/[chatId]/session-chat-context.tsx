@@ -290,14 +290,22 @@ export function SessionChatProvider({
   });
 
   // Cleanup: always release chat instances when leaving a route.
-  // If this chat is still streaming, stop local stream processing so
-  // background chats do not consume render/CPU budget in this tab.
+  // If this chat is still streaming or submitted, stop local stream processing
+  // so background chats do not consume render/CPU budget in this tab.
+  // Including "submitted" is important: when the user navigates away
+  // immediately after sending a message, the status is still "submitted"
+  // (the POST hasn't started returning data yet). Without stopping in this
+  // state, the Chat instance's internal state machine is never reset, which
+  // can leave the UI stuck showing a "Thinking..." indicator on re-entry.
   // Also abort the instance transport fetch connections. reconnectToStream
   // does not pass an abort signal, so chatInstance.stop() alone cannot cancel
   // resumed streams.
   useEffect(() => {
     return () => {
-      if (chatInstance.status === "streaming") {
+      if (
+        chatInstance.status === "streaming" ||
+        chatInstance.status === "submitted"
+      ) {
         void chatInstance.stop();
       }
       abortChatInstanceTransport(chatInfo.id);
