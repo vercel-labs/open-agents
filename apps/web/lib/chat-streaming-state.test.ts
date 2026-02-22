@@ -46,6 +46,7 @@ describe("chat streaming state", () => {
       shouldRefreshAfterReadyTransition({
         prevStatus: "submitted",
         status: "ready",
+        hasAssistantRenderableContent: true,
       }),
     ).toBe(true);
 
@@ -53,6 +54,7 @@ describe("chat streaming state", () => {
       shouldRefreshAfterReadyTransition({
         prevStatus: "streaming",
         status: "ready",
+        hasAssistantRenderableContent: true,
       }),
     ).toBe(false);
 
@@ -60,6 +62,15 @@ describe("chat streaming state", () => {
       shouldRefreshAfterReadyTransition({
         prevStatus: "ready",
         status: "ready",
+        hasAssistantRenderableContent: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldRefreshAfterReadyTransition({
+        prevStatus: "submitted",
+        status: "ready",
+        hasAssistantRenderableContent: false,
       }),
     ).toBe(false);
   });

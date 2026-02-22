@@ -1191,6 +1191,7 @@ export function SessionChatContent() {
         shouldRefreshAfterReadyTransition({
           prevStatus,
           status,
+          hasAssistantRenderableContent,
         })
       ) {
         router.refresh();
@@ -1205,6 +1206,7 @@ export function SessionChatContent() {
     requestMarkChatRead,
     refreshChats,
     router,
+    hasAssistantRenderableContent,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.

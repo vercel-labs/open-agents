@@ -24,7 +24,12 @@ export function shouldShowThinkingIndicator(options: {
 export function shouldRefreshAfterReadyTransition(options: {
   prevStatus: ChatUiStatus | null;
   status: ChatUiStatus;
+  hasAssistantRenderableContent: boolean;
 }): boolean {
-  const { prevStatus, status } = options;
-  return prevStatus === "submitted" && status === "ready";
+  const { prevStatus, status, hasAssistantRenderableContent } = options;
+  return (
+    prevStatus === "submitted" &&
+    status === "ready" &&
+    hasAssistantRenderableContent
+  );
 }
