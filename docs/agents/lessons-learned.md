@@ -83,6 +83,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - `hadInitialMessages` is an initial-load snapshot, not a live "first turn" signal; guard one-time optimistic UI (like first-message title previews) with a dedicated runtime ref/state that resets on send failure.
 - When session overlay maps are deleted after becoming empty, any later overlay writes in the same hook instance must re-register the map in the global registry, or optimistic overlays will not survive route transitions.
 - For resumed chat streams, `chat.stop()` alone is insufficient because reconnect fetches are not wired to the active abort signal; always pair stop with aborting the managed transport tied to that chat instance.
+- In Streamdown, `plugins.code.getThemes()` overrides the `shikiTheme` prop; configure code themes in `createCodePlugin(...)` and pass actual custom theme objects for non-bundled themes (for example `vercelLight`/`vercelDark`) or highlighting can fall back to unstyled/plain tokens.
 
 ## GitHub App / PR Flows
 

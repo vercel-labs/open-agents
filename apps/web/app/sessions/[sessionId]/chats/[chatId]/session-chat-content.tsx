@@ -39,9 +39,9 @@ import type {
 } from "@/app/types";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
-import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
+import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Tooltip,
   TooltipContent,
@@ -63,22 +64,17 @@ import {
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
-import { useSlashCommands } from "@/hooks/use-slash-commands";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
+import { useSlashCommands } from "@/hooks/use-slash-commands";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
-import {
-  customComponents,
-  shikiThemes,
-  streamdownPlugins,
-} from "@/lib/streamdown-config";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -1845,8 +1841,6 @@ export function SessionChatContent() {
                                 }
                                 isAnimating={isMessageStreaming}
                                 plugins={streamdownPlugins}
-                                shikiTheme={shikiThemes}
-                                components={customComponents}
                               >
                                 {p.text}
                               </Streamdown>

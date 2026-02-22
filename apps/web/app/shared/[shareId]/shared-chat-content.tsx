@@ -12,11 +12,7 @@ import type {
 import { TaskGroupView } from "@/components/task-group-view";
 import { ToolCall } from "@/components/tool-call";
 import type { Chat } from "@/lib/db/schema";
-import {
-  customComponents,
-  shikiThemes,
-  streamdownPlugins,
-} from "@/lib/streamdown-config";
+import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import "streamdown/styles.css";
 
@@ -185,8 +181,6 @@ export function SharedChatContent({
                                   mode="static"
                                   isAnimating={false}
                                   plugins={streamdownPlugins}
-                                  shikiTheme={shikiThemes}
-                                  components={customComponents}
                                 >
                                   {p.text}
                                 </Streamdown>
