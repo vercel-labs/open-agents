@@ -1,5 +1,5 @@
 import { createCodePlugin } from "@streamdown/code";
-import { vercelDark, vercelLight } from "./vercel-themes";
+import { vercelDark } from "./vercel-themes";
 
 export const streamdownPlugins = {
   code: createCodePlugin({
