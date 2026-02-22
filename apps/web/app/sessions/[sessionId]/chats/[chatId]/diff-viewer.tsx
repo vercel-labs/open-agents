@@ -1,7 +1,13 @@
 "use client";
 
 import { PatchDiff } from "@pierre/diffs/react";
-import { ChevronDown, ChevronRight, FileText, Loader2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import { Button } from "@/components/ui/button";
@@ -164,8 +170,14 @@ function FileEntry({
 }
 
 export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
-  const { diff, diffLoading, diffError, diffCachedAt, sandboxInfo } =
-    useSessionChatContext();
+  const {
+    diff,
+    diffLoading,
+    diffError,
+    diffCachedAt,
+    sandboxInfo,
+    refreshDiff,
+  } = useSessionChatContext();
   const isMobile = useIsMobile();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
@@ -225,6 +237,18 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
               )}
             </div>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refreshDiff()}
+                disabled={diffLoading || !sandboxInfo}
+                className="h-7 px-2 text-xs"
+                title="Refresh diff"
+              >
+                <RefreshCw
+                  className={cn("h-3 w-3", diffLoading && "animate-spin")}
+                />
+              </Button>
               {/* Unified / Split toggle - hidden on mobile, unified forced */}
               <div className="hidden items-center rounded-md border border-border md:flex">
                 <button
