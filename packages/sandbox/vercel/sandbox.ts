@@ -408,7 +408,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
       if (cloneResult.exitCode !== 0) {
         throw new Error(
-          `Failed to clone repository '${source.url}': ${await cloneResult.stdout()}`,
+          `Failed to clone repository '${source.url}': ${await cloneResult.stderr()}`,
         );
       }
     }
@@ -477,7 +477,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
       if (checkoutResult.exitCode !== 0) {
         throw new Error(
-          `Failed to create branch '${source.newBranch}': ${await checkoutResult.stdout()}`,
+          `Failed to create branch '${source.newBranch}': ${await checkoutResult.stderr()}`,
         );
       }
 
