@@ -1784,7 +1784,7 @@ export function SessionChatContent() {
             variant="outline"
             size="sm"
             className="shrink-0 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
-            onClick={retryChatStream}
+            onClick={() => retryChatStream()}
           >
             <RefreshCw className="h-3 w-3" />
             Retry
