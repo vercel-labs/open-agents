@@ -1823,7 +1823,10 @@ export function SessionChatContent() {
 
                     if (isReasoningUIPart(p)) {
                       return (
-                        <div key={`${m.id}-${i}`} className="flex justify-start">
+                        <div
+                          key={`${m.id}-${i}`}
+                          className="flex justify-start"
+                        >
                           <ThinkingBlock
                             text={p.text}
                             isStreaming={

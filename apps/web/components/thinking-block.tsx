@@ -9,7 +9,10 @@ interface ThinkingBlockProps {
   isStreaming?: boolean;
 }
 
-export function ThinkingBlock({ text, isStreaming = false }: ThinkingBlockProps) {
+export function ThinkingBlock({
+  text,
+  isStreaming = false,
+}: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
