@@ -1,7 +1,7 @@
 "use client";
 
 import type { AskUserQuestionInput, TaskToolUIPart } from "@open-harness/agent";
-import { isToolUIPart } from "ai";
+import { isReasoningUIPart, isToolUIPart } from "ai";
 import {
   Archive,
   ArchiveRestore,
@@ -43,6 +43,7 @@ import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { TaskGroupView } from "@/components/task-group-view";
+import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
 import { Button } from "@/components/ui/button";
 import {
@@ -708,7 +709,10 @@ export function SessionChatContent() {
       (status === "streaming" &&
         lastMessage?.role === "assistant" &&
         !lastMessage.parts.some(
-          (p) => (p.type === "text" && p.text.length > 0) || isToolUIPart(p),
+          (p) =>
+            (p.type === "text" && p.text.length > 0) ||
+            isToolUIPart(p) ||
+            isReasoningUIPart(p),
         )),
     [status, lastMessage],
   );
@@ -1816,6 +1820,19 @@ export function SessionChatContent() {
 
                     const p = group.part;
                     const i = group.index;
+
+                    if (isReasoningUIPart(p)) {
+                      return (
+                        <div key={`${m.id}-${i}`} className="flex justify-start">
+                          <ThinkingBlock
+                            text={p.text}
+                            isStreaming={
+                              isMessageStreaming && p.state === "streaming"
+                            }
+                          />
+                        </div>
+                      );
+                    }
 
                     if (p.type === "text") {
                       return (

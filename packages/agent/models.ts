@@ -6,15 +6,15 @@ import {
   type GatewayModelId,
   type LanguageModel,
 } from "ai";
-import type { AnthropicProviderOptions } from "@ai-sdk/anthropic";
+import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 
 const anthropicMiddleware = defaultSettingsMiddleware({
   settings: {
     providerOptions: {
       anthropic: {
-        thinking: { type: "enabled", budgetTokens: 12000 },
-      } satisfies AnthropicProviderOptions,
+        effort: "medium",
+      } satisfies AnthropicLanguageModelOptions,
     },
   },
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import type { TaskToolUIPart } from "@open-harness/agent";
-import { isToolUIPart } from "ai";
+import { isReasoningUIPart, isToolUIPart } from "ai";
 import { ExternalLink } from "lucide-react";
 import { Streamdown } from "streamdown";
 import type {
@@ -10,6 +10,7 @@ import type {
   WebAgentUIToolPart,
 } from "@/app/types";
 import { TaskGroupView } from "@/components/task-group-view";
+import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
 import type { Chat } from "@/lib/db/schema";
 import {
@@ -161,6 +162,17 @@ export function SharedChatContent({
 
                       const p = group.part;
                       const i = group.index;
+
+                      if (isReasoningUIPart(p)) {
+                        return (
+                          <div
+                            key={`${m.id}-${i}`}
+                            className="flex justify-start"
+                          >
+                            <ThinkingBlock text={p.text} isStreaming={false} />
+                          </div>
+                        );
+                      }
 
                       if (p.type === "text") {
                         return (
