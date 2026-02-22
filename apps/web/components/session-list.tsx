@@ -115,9 +115,11 @@ export function SessionList({
                   className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/50"
                 >
                   <div className="flex flex-1 min-w-0 items-center gap-2">
-                    {session.hasUnread && (
+                    {session.hasStreaming ? (
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-white animate-pulse" />
+                    ) : session.hasUnread ? (
                       <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                    )}
+                    ) : null}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">
                         {session.title}

@@ -52,6 +52,7 @@ You have access to: read, grep, glob, bash (read-only commands only)
 - Use grep for searching file contents with regex
 - Use read when you know the specific file path
 - Use bash ONLY for read-only operations (ls, git status, git log, git diff, find)
+- All bash commands automatically run in the working directory — NEVER prepend \`cd /vercel/sandbox &&\` or similar to commands
 - NEVER use bash for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, or any file creation/modification
 - Return file paths as absolute paths in your final response`;
 

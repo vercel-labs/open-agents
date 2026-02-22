@@ -68,6 +68,11 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
+import {
+  isChatInFlight as isChatInFlightStatus,
+  shouldRefreshAfterReadyTransition,
+  shouldShowThinkingIndicator,
+} from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { streamdownPlugins } from "@/lib/streamdown-config";
@@ -95,6 +100,9 @@ const Streamdown = dynamic(
   () => import("streamdown").then((m) => m.Streamdown),
   { ssr: false },
 );
+
+const STREAM_RECOVERY_STALL_MS = 4_000;
+const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
 
 const emptySubscribe = () => () => {};
 function useHasMounted() {
@@ -700,22 +708,28 @@ export function SessionChatContent() {
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
   );
+  const isChatInFlight = isChatInFlightStatus(status);
   const lastMessage = useMemo(
     () => renderMessages[renderMessages.length - 1],
     [renderMessages],
   );
-  const showThinkingIndicator = useMemo(
-    () =>
-      status === "submitted" ||
-      (status === "streaming" &&
-        lastMessage?.role === "assistant" &&
-        !lastMessage.parts.some(
+  const hasAssistantRenderableContent =
+    lastMessage?.role === "assistant"
+      ? lastMessage.parts.some(
           (p) =>
             (p.type === "text" && p.text.length > 0) ||
             isToolUIPart(p) ||
             isReasoningUIPart(p),
-        )),
-    [status, lastMessage],
+        )
+      : false;
+  const showThinkingIndicator = useMemo(
+    () =>
+      shouldShowThinkingIndicator({
+        status,
+        hasAssistantRenderableContent,
+        lastMessageRole: lastMessage?.role,
+      }),
+    [status, hasAssistantRenderableContent, lastMessage?.role],
   );
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {
@@ -756,10 +770,10 @@ export function SessionChatContent() {
         message,
         groups,
         isStreaming:
-          status === "streaming" && messageIndex === renderMessages.length - 1,
+          isChatInFlight && messageIndex === renderMessages.length - 1,
       };
     });
-  }, [renderMessages, status]);
+  }, [renderMessages, isChatInFlight]);
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
@@ -774,6 +788,8 @@ export function SessionChatContent() {
     lastChatId: null,
     inFlight: false,
   });
+  const inFlightStartedAtRef = useRef<number | null>(null);
+  const lastStreamRecoveryAtRef = useRef(0);
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -877,34 +893,89 @@ export function SessionChatContent() {
     };
   }, [requestMarkChatRead]);
 
-  // Auto-recover from transient network errors (e.g. iOS "Load failed") when
-  // the tab becomes visible again or the device comes back online.  The server
-  // intentionally keeps the stream running on client disconnect, so we can
-  // clear the stale error and attempt to reconnect to the resumable stream.
-  // We pass `{ auto: true }` so that recovery is skipped when the user
-  // explicitly stopped the stream — without this, aborting the transport
-  // causes a transient error that the handler would immediately reconnect,
-  // forcing the user to tap stop multiple times (especially on iOS).
+  const maybeRecoverStream = useCallback(() => {
+    const now = Date.now();
+    if (
+      now - lastStreamRecoveryAtRef.current <
+      STREAM_RECOVERY_MIN_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (status === "error") {
+      lastStreamRecoveryAtRef.current = now;
+      retryChatStream({ auto: true });
+      return;
+    }
+
+    if (!isChatInFlight || hasAssistantRenderableContent) {
+      return;
+    }
+
+    const startedAt = inFlightStartedAtRef.current;
+    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
+      return;
+    }
+
+    lastStreamRecoveryAtRef.current = now;
+    retryChatStream({ auto: true });
+  }, [status, isChatInFlight, hasAssistantRenderableContent, retryChatStream]);
+
   useEffect(() => {
-    const recover = () => {
-      if (status === "error") {
-        retryChatStream({ auto: true });
+    if (isChatInFlight) {
+      if (inFlightStartedAtRef.current === null) {
+        inFlightStartedAtRef.current = Date.now();
+      }
+      return;
+    }
+
+    inFlightStartedAtRef.current = null;
+  }, [isChatInFlight, chatInfo.id]);
+
+  // Recover from transient connection drops when the tab regains visibility,
+  // the network comes back, or a stream remains in-flight without any visible
+  // assistant output for too long.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        maybeRecoverStream();
       }
     };
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        recover();
-      }
+    const onFocus = () => {
+      maybeRecoverStream();
     };
 
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", recover);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", maybeRecoverStream);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", maybeRecoverStream);
     };
-  }, [status, retryChatStream]);
+  }, [maybeRecoverStream]);
+
+  useEffect(() => {
+    if (!isChatInFlight || hasAssistantRenderableContent) {
+      return;
+    }
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState !== "visible"
+    ) {
+      return;
+    }
+
+    const startedAt = inFlightStartedAtRef.current;
+    const elapsed = startedAt === null ? 0 : Date.now() - startedAt;
+    const waitMs = Math.max(0, STREAM_RECOVERY_STALL_MS - elapsed);
+    const timeout = setTimeout(() => {
+      maybeRecoverStream();
+    }, waitMs);
+
+    return () => clearTimeout(timeout);
+  }, [isChatInFlight, hasAssistantRenderableContent, maybeRecoverStream]);
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -1136,10 +1207,10 @@ export function SessionChatContent() {
   }, [messages, isAtBottom, scrollToBottom]);
 
   useEffect(() => {
-    if (status !== "streaming") {
+    if (!isChatInFlight) {
       inputRef.current?.focus();
     }
-  }, [status]);
+  }, [isChatInFlight]);
 
   // After a chat turn completes, immediately sync status from the server.
   // If the sandbox was hibernated during the turn (tool calls failed), this
@@ -1153,6 +1224,7 @@ export function SessionChatContent() {
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     const wasStreaming = prevStatus === "streaming";
+    const wasSubmitted = prevStatus === "submitted";
     const becameReady = status === "ready" && prevStatus !== "ready";
     const becameError = status === "error" && prevStatus !== "error";
     const shouldClearStreaming = status === "error" || becameReady;
@@ -1176,10 +1248,23 @@ export function SessionChatContent() {
     if (becameReady) {
       pendingOptimisticTitleChatIdRef.current = null;
     }
-    if (wasStreaming && status === "ready" && isMountedRef.current) {
+    if (
+      (wasStreaming || wasSubmitted) &&
+      status === "ready" &&
+      isMountedRef.current
+    ) {
       void requestStatusSync("force");
       void requestMarkChatRead("force");
       void refreshChats();
+      if (
+        shouldRefreshAfterReadyTransition({
+          prevStatus,
+          status,
+          hasAssistantRenderableContent,
+        })
+      ) {
+        router.refresh();
+      }
     }
   }, [
     status,
@@ -1189,6 +1274,8 @@ export function SessionChatContent() {
     requestStatusSync,
     requestMarkChatRead,
     refreshChats,
+    router,
+    hasAssistantRenderableContent,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
@@ -1961,7 +2048,7 @@ export function SessionChatContent() {
       )}
 
       {/* Input */}
-      <div className="p-4 pb-8">
+      <div className="p-4 pb-2 sm:pb-8">
         <div className="mx-auto max-w-4xl space-y-2">
           {restoreError && (
             <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -2150,7 +2237,7 @@ export function SessionChatContent() {
                       }
                     }
                   }}
-                  disabled={isArchived || status === "streaming"}
+                  disabled={isArchived || isChatInFlight}
                   className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
                   style={{ minHeight: "24px" }}
                 />
@@ -2172,7 +2259,7 @@ export function SessionChatContent() {
                   {renderMessages.length === 0 && chatInfo.modelId ? (
                     <div
                       className={
-                        status === "streaming" || isUpdatingModel
+                        isChatInFlight || isUpdatingModel
                           ? "pointer-events-none opacity-60"
                           : undefined
                       }
@@ -2222,7 +2309,7 @@ export function SessionChatContent() {
                     )}
                   </Button>
 
-                  {status === "streaming" ? (
+                  {isChatInFlight ? (
                     <Button
                       type="button"
                       size="icon"
@@ -2244,8 +2331,15 @@ export function SessionChatContent() {
                           <Button
                             type="submit"
                             size="icon"
+                            onTouchEnd={() => {
+                              // On iOS, tapping submit while the textarea is focused
+                              // causes the keyboard to briefly flash open then closed.
+                              // Blur the textarea immediately to prevent this.
+                              inputRef.current?.blur();
+                            }}
                             disabled={
                               isArchived ||
+                              isChatInFlight ||
                               (!input.trim() && images.length === 0) ||
                               isUpdatingModel ||
                               !isSandboxActive

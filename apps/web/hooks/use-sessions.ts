@@ -4,7 +4,10 @@ import useSWR, { useSWRConfig } from "swr";
 import type { Chat, Session } from "@/lib/db/schema";
 import { fetcher } from "@/lib/swr";
 
-export type SessionWithUnread = Session & { hasUnread: boolean };
+export type SessionWithUnread = Session & {
+  hasUnread: boolean;
+  hasStreaming: boolean;
+};
 
 interface CreateSessionInput {
   title?: string;
@@ -75,7 +78,10 @@ export function useSessions(options?: { enabled?: boolean }) {
 
     await mutate(
       {
-        sessions: [{ ...createdSession, hasUnread: false }, ...sessions],
+        sessions: [
+          { ...createdSession, hasUnread: false, hasStreaming: false },
+          ...sessions,
+        ],
       },
       { revalidate: false },
     );
@@ -108,7 +114,11 @@ export function useSessions(options?: { enabled?: boolean }) {
         (current) => ({
           sessions: (current?.sessions ?? []).map((s) =>
             s.id === sessionId
-              ? { ...updatedSession, hasUnread: s.hasUnread }
+              ? {
+                  ...updatedSession,
+                  hasUnread: s.hasUnread,
+                  hasStreaming: s.hasStreaming,
+                }
               : s,
           ),
         }),

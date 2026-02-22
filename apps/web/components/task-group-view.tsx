@@ -207,7 +207,7 @@ function TaskItem({
       {/* Tree line */}
       <div className={cn("ml-1.5 mr-3 w-px", treeChar)} />
 
-      <div className="flex-1 py-1">
+      <div className="flex-1 min-w-0 py-1">
         {/* Task row */}
         <div className="flex items-center gap-2 min-w-0">
           <TaskStatusIndicator status={status} />
@@ -256,11 +256,11 @@ function TaskItem({
 
         {/* Nested status line - only show if not showing approval buttons */}
         {nestedStatus && !isActiveApproval && (
-          <div className="mt-0.5 flex items-center gap-1.5 pl-5">
+          <div className="mt-0.5 flex items-center gap-1.5 pl-5 min-w-0">
             <span className="text-xs text-muted-foreground">-</span>
             <span
               className={cn(
-                "text-xs",
+                "text-xs truncate",
                 denied
                   ? "text-red-500"
                   : status === "interrupted"

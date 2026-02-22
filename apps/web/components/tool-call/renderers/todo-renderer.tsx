@@ -14,12 +14,6 @@ export function TodoRenderer({
   const todos = input?.todos ?? [];
   const keyPrefix = part.toolCallId ?? "todo";
 
-  const completedCount = todos.filter((t) => t?.status === "completed").length;
-  const inProgressCount = todos.filter(
-    (t) => t?.status === "in_progress",
-  ).length;
-  const pendingCount = todos.filter((t) => t?.status === "pending").length;
-
   const hasExpandableContent = todos.length > 0;
 
   const dotColor = state.denied
@@ -41,15 +35,6 @@ export function TodoRenderer({
         setIsExpanded(!isExpanded);
       }
     }
-  };
-
-  const getSummary = () => {
-    if (todos.length === 0) return "No tasks";
-    const parts = [];
-    if (completedCount > 0) parts.push(`${completedCount} done`);
-    if (inProgressCount > 0) parts.push(`${inProgressCount} in progress`);
-    if (pendingCount > 0) parts.push(`${pendingCount} pending`);
-    return `${todos.length} tasks (${parts.join(", ")})`;
   };
 
   return (
@@ -80,7 +65,6 @@ export function TodoRenderer({
         >
           Todo List
         </span>
-        <span className="text-sm text-muted-foreground">({getSummary()})</span>
       </div>
 
       {/* Expanded full content */}

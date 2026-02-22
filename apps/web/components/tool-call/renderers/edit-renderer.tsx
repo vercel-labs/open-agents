@@ -140,9 +140,6 @@ export function EditRenderer({
         !mergedState.denied && (
           <>
             <div className="mt-2 pl-5 text-sm">
-              <span>Updated </span>
-              <span className="font-medium">{filePath}</span>
-              <span> with </span>
               <span className="text-green-500">
                 {additions} addition{additions !== 1 ? "s" : ""}
               </span>
@@ -166,9 +163,6 @@ export function EditRenderer({
       {isExpanded && showDiff && !mergedState.denied && (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           <div className="text-sm">
-            <span>Updated </span>
-            <span className="font-medium">{filePath}</span>
-            <span> with </span>
             <span className="text-green-500">
               {additions} addition{additions !== 1 ? "s" : ""}
             </span>

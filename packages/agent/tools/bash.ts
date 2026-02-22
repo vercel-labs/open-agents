@@ -192,7 +192,8 @@ WHEN NOT TO USE:
 
 USAGE:
 - Runs bash -c "<command>" in a non-interactive shell (no TTY/PTY)
-- Commands automatically run in the working directory — do NOT prepend "cd /path &&" to commands
+- Commands automatically run in the working directory by default — do NOT prepend "cd /path &&" to commands
+- NEVER prefix commands with "cd /vercel/sandbox &&" or any path — this is the most common mistake and is always wrong
 - Use the cwd parameter ONLY when you need to run in a different directory
 - Commands automatically timeout after ~2 minutes
 - Combined stdout/stderr output is truncated after ~50,000 characters
