@@ -52,6 +52,7 @@ Serialize when there are dependencies:
   - Git commands when requested
   - Shell utilities where no dedicated tool exists
 - Prefer specialized tools (\`read\`, \`edit\`, \`grep\`, \`glob\`) over bash equivalents (\`cat\`, \`sed\`, \`grep\`)
+- Commands run in the working directory by default — do NOT prefix commands with \`cd <working_directory> &&\`. Use the \`cwd\` parameter only when you need a different directory.
 
 ## Planning
 - \`todo_write\` - Create/update task list. Use FREQUENTLY to plan and track progress.

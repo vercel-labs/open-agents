@@ -192,9 +192,10 @@ WHEN NOT TO USE:
 
 USAGE:
 - Runs bash -c "<command>" in a non-interactive shell (no TTY/PTY)
+- Commands automatically run in the working directory — do NOT prepend "cd /path &&" to commands
+- Use the cwd parameter ONLY when you need to run in a different directory
 - Commands automatically timeout after ~2 minutes
 - Combined stdout/stderr output is truncated after ~50,000 characters
-- Use cwd to run in a specific directory; otherwise the current working directory is used
 
 DO NOT USE FOR:
 - File reading (cat, head, tail) - use readFileTool

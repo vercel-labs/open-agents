@@ -262,6 +262,7 @@ export class VercelSandbox implements Sandbox {
 
     return `- Ephemeral sandbox - all work is lost unless committed and pushed to git
 - Default workflow: create a new branch, commit changes, push, and open a PR (since the sandbox is ephemeral, this ensures work is preserved)
+- All bash commands already run in the working directory by default — never prepend \`cd /vercel/sandbox &&\` or similar; just run the command directly
 - Git is already configured (user, email, remote auth) - no setup or verification needed
 - GitHub CLI (gh) is NOT available - use curl with the GitHub API to create PRs
   Use the $GITHUB_TOKEN environment variable directly (do not paste the actual token):
