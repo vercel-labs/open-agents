@@ -25,11 +25,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import type { ComponentProps, ReactNode } from "react";
 import {
-  Children,
-  cloneElement,
-  isValidElement,
   useCallback,
   useEffect,
   useMemo,
@@ -37,7 +33,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { BundledTheme } from "shiki";
 import type {
   WebAgentUIMessage,
   WebAgentUIMessagePart,
@@ -80,7 +75,11 @@ import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
-import { code } from "@streamdown/code";
+import {
+  customComponents,
+  shikiThemes,
+  streamdownPlugins,
+} from "@/lib/streamdown-config";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -109,30 +108,6 @@ function useHasMounted() {
     () => false,
   );
 }
-
-const customComponents = {
-  pre: ({ children, ...props }: ComponentProps<"pre">) => {
-    const processChildren = (child: ReactNode): ReactNode => {
-      if (isValidElement<{ children?: ReactNode; "data-block"?: string }>(child)) {
-        const codeContent = child.props.children;
-        if (typeof codeContent === "string") {
-          return cloneElement(child, {
-            "data-block": "true",
-            children: codeContent.trimEnd(),
-          });
-        }
-        return cloneElement(child, { "data-block": "true" });
-      }
-      return child;
-    };
-    return <pre {...props}>{Children.map(children, processChildren)}</pre>;
-  },
-};
-
-const shikiThemes = ["github-light", "github-dark"] as [
-  BundledTheme,
-  BundledTheme,
-];
 
 type MessageRenderGroup =
   | {
@@ -1878,7 +1853,7 @@ export function SessionChatContent() {
                                   isMessageStreaming ? "streaming" : "static"
                                 }
                                 isAnimating={isMessageStreaming}
-                                plugins={{ code }}
+                                plugins={streamdownPlugins}
                                 shikiTheme={shikiThemes}
                                 components={customComponents}
                               >
