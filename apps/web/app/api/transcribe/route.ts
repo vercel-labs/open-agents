@@ -42,6 +42,18 @@ export async function POST(req: Request) {
     const result = await transcribe({
       model: elevenlabs.transcription("scribe_v1"),
       audio: audio, // base64 string is accepted directly
+      providerOptions: {
+        elevenlabs: {
+          // Disable audio event tagging (e.g., [background noise], [music])
+          // so the transcription focuses only on spoken words
+          tagAudioEvents: false,
+          // Hint that we expect a single primary speaker
+          numSpeakers: 1,
+          // Set English as the expected language for better accuracy
+          // with developer/technical terminology
+          languageCode: "eng",
+        },
+      },
     });
 
     return Response.json({ text: result.text });
