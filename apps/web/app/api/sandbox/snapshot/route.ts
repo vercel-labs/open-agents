@@ -128,6 +128,10 @@ export async function PUT(req: Request) {
   if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
+  // TODO: If the background after() callback in the archive flow crashes before
+  // reaching updateSession (e.g. connectSandbox or sandbox.snapshot() throws),
+  // sandboxState retains runtime data and snapshotUrl stays null. This leaves
+  // the session permanently returning 409 with no self-service recovery path.
   if (!sessionRecord.snapshotUrl) {
     if (hasRuntimeSandboxState(sessionRecord.sandboxState)) {
       console.warn(

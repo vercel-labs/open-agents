@@ -390,6 +390,10 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
     const workingDirectory = DEFAULT_WORKING_DIRECTORY;
 
+    // TODO: `git clone ... .` requires the directory to be empty. If the base
+    // snapshot has files in /vercel/sandbox (dotfiles, tool configs, etc.), the
+    // clone will fail. Consider using git init + remote add + fetch + checkout
+    // instead, which works regardless of existing directory contents.
     if (source && baseSnapshotId) {
       const cloneUrl = source.token
         ? (buildAuthenticatedGitHubUrl(source.url, source.token) ?? source.url)
@@ -425,6 +429,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
     // Configure git to use the token for push operations if provided
     // We modify the remote URL to embed credentials directly (standard CI/CD approach)
+    // TODO: When baseSnapshotId is set, the token is already embedded in the
+    // clone URL above, making this set-url call redundant for that path.
     if (source?.token) {
       const authenticatedUrl = buildAuthenticatedGitHubUrl(
         source.url,
