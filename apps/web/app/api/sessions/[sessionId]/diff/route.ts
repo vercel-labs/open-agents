@@ -274,6 +274,23 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     // - null (for brand-new repos with no commits)
     const baseRef = await resolveBaseRef(sandbox, cwd);
 
+    // When diffing against a remote branch (e.g. origin/main), use
+    // `git merge-base` to find the common ancestor between that branch and
+    // HEAD. This avoids showing unrelated changes that were merged into the
+    // remote branch after the current branch was created.
+    let diffRef = baseRef;
+    if (baseRef && baseRef !== "HEAD") {
+      const mergeBaseResult = await sandbox.exec(
+        `git merge-base ${baseRef} HEAD`,
+        cwd,
+        10000,
+      );
+      if (mergeBaseResult.success && mergeBaseResult.stdout.trim()) {
+        diffRef = mergeBaseResult.stdout.trim();
+      }
+      // If merge-base fails, fall back to the original baseRef
+    }
+
     // Run git commands sequentially; some sandbox backends are not reliable
     // with concurrent command streams after reconnect.
 
@@ -357,18 +374,20 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       return Response.json(response);
     }
 
-    // Normal path: we have a valid base ref to diff against
+    // Normal path: we have a valid base ref to diff against.
+    // Use diffRef (merge-base) so we only see changes introduced on
+    // this branch, not changes merged into the remote default branch.
     const nameStatusResult = await sandbox.exec(
-      `git diff ${baseRef} --name-status`,
+      `git diff ${diffRef} --name-status`,
       cwd,
       30000,
     );
     const numstatResult = await sandbox.exec(
-      `git diff ${baseRef} --numstat`,
+      `git diff ${diffRef} --numstat`,
       cwd,
       30000,
     );
-    const diffResult = await sandbox.exec(`git diff ${baseRef}`, cwd, 60000);
+    const diffResult = await sandbox.exec(`git diff ${diffRef}`, cwd, 60000);
     const untrackedResult = await sandbox.exec(
       "git ls-files --others --exclude-standard",
       cwd,
