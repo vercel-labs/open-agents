@@ -131,15 +131,6 @@
   pre code {
     white-space: pre !important;
   }
-  :not(pre) > code {
-    background-color: var(--muted) !important;
-    color: var(--foreground) !important;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-size: 0.875em;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
   [data-streamdown="inline-code"] {
     overflow-wrap: anywhere;
     word-break: break-word;
