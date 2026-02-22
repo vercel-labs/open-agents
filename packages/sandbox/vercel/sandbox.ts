@@ -23,6 +23,22 @@ interface SandboxRouteLike {
   port: number;
 }
 
+function buildAuthenticatedGitHubUrl(
+  repoUrl: string,
+  token: string,
+): string | null {
+  const githubUrlMatch = repoUrl.match(
+    /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/,
+  );
+
+  if (!githubUrlMatch) {
+    return null;
+  }
+
+  const [, owner, repo] = githubUrlMatch;
+  return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+}
+
 /**
  * Vercel Sandbox implementation using the @vercel/sandbox SDK.
  * Runs code in isolated Firecracker MicroVMs.
@@ -251,7 +267,7 @@ export class VercelSandbox implements Sandbox {
   Use the $GITHUB_TOKEN environment variable directly (do not paste the actual token):
   curl -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/OWNER/REPO/pulls -d '{"title":"...","head":"branch","base":"main","body":"..."}'
 - Node.js runtime with npm/pnpm available
-- Installing Bun: run \`curl -fsSL https://bun.com/install | bash\`, then \`echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc\`, then verify with \`bun --version\`
+- Bun and jq are preinstalled
 - This sandbox already runs on Vercel; do not suggest deploying to Vercel just to obtain a shareable preview link
 ${hostLine}${portLines}${runtimeEnvLine}`;
   }
@@ -309,7 +325,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
   /**
    * Create a new Vercel Sandbox instance.
-   * If a source is provided, the repo will be cloned into the working directory.
+   * If `baseSnapshotId` is provided, sandbox bootstraps from that snapshot first.
+   * If a source is provided with `baseSnapshotId`, the repo is cloned after bootstrap.
    */
   static async create(
     config: VercelSandboxConfig = {},
@@ -322,25 +339,9 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       timeout = 300_000,
       runtime = "node22",
       ports,
+      baseSnapshotId,
       hooks,
     } = config;
-
-    // Build the source config with optional authentication
-    const sourceConfig = source
-      ? source.token
-        ? {
-            type: "git" as const,
-            url: source.url,
-            username: "x-access-token",
-            password: source.token,
-            ...(source.branch && { revision: source.branch }),
-          }
-        : {
-            type: "git" as const,
-            url: source.url,
-            ...(source.branch && { revision: source.branch }),
-          }
-      : undefined;
 
     // Clamp proactive timeout to stay under the SDK's hard max when buffer is applied.
     const effectiveTimeout = Math.min(timeout, MAX_PROACTIVE_TIMEOUT_MS);
@@ -353,15 +354,64 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Calculate SDK timeout with buffer for beforeStop hook.
     const sdkTimeout = effectiveTimeout + TIMEOUT_BUFFER_MS;
 
-    const sdk = await VercelSandboxSDK.create({
-      ...(sourceConfig && { source: sourceConfig }),
+    const createBaseConfig = {
       resources: { vcpus },
       timeout: sdkTimeout,
       runtime,
       ...(ports && { ports }),
-    });
+    };
+
+    let sdk: VercelSandboxSDK;
+    if (baseSnapshotId) {
+      sdk = await VercelSandboxSDK.create({
+        ...createBaseConfig,
+        source: { type: "snapshot", snapshotId: baseSnapshotId },
+      });
+    } else if (source) {
+      sdk = await VercelSandboxSDK.create({
+        ...createBaseConfig,
+        source: source.token
+          ? {
+              type: "git",
+              url: source.url,
+              username: "x-access-token",
+              password: source.token,
+              ...(source.branch && { revision: source.branch }),
+            }
+          : {
+              type: "git",
+              url: source.url,
+              ...(source.branch && { revision: source.branch }),
+            },
+      });
+    } else {
+      sdk = await VercelSandboxSDK.create(createBaseConfig);
+    }
 
     const workingDirectory = DEFAULT_WORKING_DIRECTORY;
+
+    if (source && baseSnapshotId) {
+      const cloneUrl = source.token
+        ? (buildAuthenticatedGitHubUrl(source.url, source.token) ?? source.url)
+        : source.url;
+      const cloneArgs = ["clone"];
+      if (source.branch) {
+        cloneArgs.push("--branch", source.branch);
+      }
+      cloneArgs.push(cloneUrl, ".");
+
+      const cloneResult = await sdk.runCommand({
+        cmd: "git",
+        args: cloneArgs,
+        cwd: workingDirectory,
+      });
+
+      if (cloneResult.exitCode !== 0) {
+        throw new Error(
+          `Failed to clone repository '${source.url}': ${await cloneResult.stdout()}`,
+        );
+      }
+    }
 
     // Initialize git repo for empty sandboxes (no source provided)
     // This ensures git commands work consistently (e.g., for diff viewing)
@@ -376,13 +426,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Configure git to use the token for push operations if provided
     // We modify the remote URL to embed credentials directly (standard CI/CD approach)
     if (source?.token) {
-      // Parse the GitHub URL to extract owner/repo
-      const githubUrlMatch = source.url.match(
-        /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/,
+      const authenticatedUrl = buildAuthenticatedGitHubUrl(
+        source.url,
+        source.token,
       );
-      if (githubUrlMatch) {
-        const [, owner, repo] = githubUrlMatch;
-        const authenticatedUrl = `https://x-access-token:${source.token}@github.com/${owner}/${repo}.git`;
+      if (authenticatedUrl) {
         await sdk.runCommand({
           cmd: "git",
           args: ["remote", "set-url", "origin", authenticatedUrl],

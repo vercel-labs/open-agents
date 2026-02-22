@@ -1,7 +1,7 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { SandboxHooks } from "../interface";
-import type { VercelState } from "./state";
 import { VercelSandbox } from "./sandbox";
+import type { VercelState } from "./state";
 import { configureGitUser } from "./utils";
 
 interface ConnectOptions {
@@ -10,6 +10,7 @@ interface ConnectOptions {
   hooks?: SandboxHooks;
   timeout?: number;
   ports?: number[];
+  baseSnapshotId?: string;
 }
 
 /**
@@ -17,7 +18,7 @@ interface ConnectOptions {
  *
  * - If `sandboxId` is present, reconnects to an existing running VM
  * - If `snapshotId` is present (without sandboxId), restores from native snapshot
- * - If `source` is present, creates a new VM and clones the repo
+ * - If `source` is present, creates a new VM and prepares the repo
  * - Otherwise, creates an empty sandbox
  */
 export async function connectVercel(
@@ -84,6 +85,9 @@ export async function connectVercel(
       hooks: options?.hooks,
       ...(options?.timeout !== undefined && { timeout: options.timeout }),
       ...(options?.ports && { ports: options.ports }),
+      ...(options?.baseSnapshotId && {
+        baseSnapshotId: options.baseSnapshotId,
+      }),
     });
   }
 
@@ -94,5 +98,8 @@ export async function connectVercel(
     hooks: options?.hooks,
     ...(options?.timeout !== undefined && { timeout: options.timeout }),
     ...(options?.ports && { ports: options.ports }),
+    ...(options?.baseSnapshotId && {
+      baseSnapshotId: options.baseSnapshotId,
+    }),
   });
 }

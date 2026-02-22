@@ -67,6 +67,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Reconnect success should refresh full active lifecycle timestamps (`lastActivityAt`, `hibernateAfter`, `sandboxExpiresAt`) before responding; otherwise UI status chips can stay stuck in `Pausing` from stale lifecycle fields.
 - Lifecycle countdown UI windows should scale with configured inactivity timeout; fixed windows (for example 2 minutes) can make short test timeouts (for example 1 minute) appear to be perpetually pausing.
 - Reconnect can return a sandbox handle whose command stream is unusable (`Expected a stream of command data`); reconnect should probe command execution before declaring `connected`, and file/diff routes should treat that error as sandbox-unavailable (hibernated) rather than a git-repo error.
+- Archive uses a deferred background snapshot; if unarchive runs before `snapshotUrl` is persisted, resume/restore can race with `no_snapshot`, so unarchive/restore flows must gate on snapshot readiness (or surface a clear snapshot-in-progress state).
 - Client UI `sandboxUiStatus` must check server `lifecycleTiming.state` (from status poll) as primary source, not only local `sandboxInfo`; otherwise UI stays "Active" after server-side hibernation until the local timeout expires or user refreshes.
 - The `isSandboxActive` client flag must incorporate `lifecycleTiming.state`; local `isSandboxValid(sandboxInfo)` alone is insufficient because the server can hibernate the sandbox while the local timeout is still valid.
 

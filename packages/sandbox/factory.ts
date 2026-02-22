@@ -1,11 +1,11 @@
-import type { Sandbox, SandboxHooks } from "./interface";
-import type { JustBashState } from "./just-bash/state";
-import type { VercelState } from "./vercel/state";
-import type { HybridState } from "./hybrid/state";
-import type { HybridHooks } from "./hybrid/hooks";
-import { connectJustBash } from "./just-bash/connect";
-import { connectVercel } from "./vercel/connect";
 import { connectHybrid } from "./hybrid/connect";
+import type { HybridHooks } from "./hybrid/hooks";
+import type { HybridState } from "./hybrid/state";
+import type { Sandbox, SandboxHooks } from "./interface";
+import { connectJustBash } from "./just-bash/connect";
+import type { JustBashState } from "./just-bash/state";
+import { connectVercel } from "./vercel/connect";
+import type { VercelState } from "./vercel/state";
 
 // Re-export SandboxStatus from types for convenience
 export type { SandboxStatus } from "./types";
@@ -33,6 +33,8 @@ export interface ConnectOptions {
   timeout?: number;
   /** Ports to expose from the sandbox for dev server preview URLs */
   ports?: number[];
+  /** Snapshot ID used as the base image for new cloud sandboxes */
+  baseSnapshotId?: string;
 }
 
 /**
@@ -47,6 +49,8 @@ export interface HybridConnectOptions extends Omit<ConnectOptions, "hooks"> {
   hooks?: HybridHooks;
   /** Ports to expose from the sandbox for dev server preview URLs */
   ports?: number[];
+  /** Snapshot ID used as the base image for new cloud sandboxes */
+  baseSnapshotId?: string;
   /**
    * Schedule background work for cloud sandbox startup.
    * Wire to your runtime's background task mechanism.

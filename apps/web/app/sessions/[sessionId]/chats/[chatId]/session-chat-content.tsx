@@ -349,6 +349,7 @@ function SandboxInputOverlay({
   isHibernating,
   isArchived,
   isInitializing,
+  snapshotPending,
   hasSnapshot,
   onRestore,
   onCreateNew,
@@ -360,6 +361,7 @@ function SandboxInputOverlay({
   isHibernating: boolean;
   isArchived: boolean;
   isInitializing: boolean;
+  snapshotPending: boolean;
   hasSnapshot: boolean;
   onRestore: () => void;
   onCreateNew: () => void;
@@ -370,7 +372,9 @@ function SandboxInputOverlay({
         <div className="flex items-center gap-3 rounded-full bg-background/90 px-4 py-2 text-muted-foreground shadow-sm">
           <Archive className="h-4 w-4" />
           <span className="text-sm">
-            This session is archived. Unarchive it to resume.
+            {snapshotPending
+              ? "Snapshot in progress. Unarchive will be available in a few seconds."
+              : "This session is archived. Unarchive it to resume."}
           </span>
         </div>
       </div>
@@ -394,10 +398,11 @@ function SandboxInputOverlay({
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
       <div className="flex items-center gap-2">
-        <Button onClick={onRestore} size="sm" className="shadow-sm">
-          Resume sandbox
-        </Button>
-        {!hasSnapshot && (
+        {hasSnapshot ? (
+          <Button onClick={onRestore} size="sm" className="shadow-sm">
+            Resume sandbox
+          </Button>
+        ) : (
           <Button
             onClick={onCreateNew}
             size="sm"
@@ -1488,6 +1493,8 @@ export function SessionChatContent() {
     !isRestoringSnapshot;
   const isHibernatingTransition =
     isReconnectingSandbox && hasSnapshot && !hasRuntimeSandboxState;
+  const isArchiveSnapshotPending =
+    isArchived && !hasSnapshot && hasRuntimeSandboxState;
   const isServerHibernating = lifecycleTiming.state === "hibernating";
   const isServerRestoring = lifecycleTiming.state === "restoring";
   const isServerHibernated = lifecycleTiming.state === "hibernated";
@@ -1625,7 +1632,7 @@ export function SessionChatContent() {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={isUnarchiving}
+                disabled={isUnarchiving || isArchiveSnapshotPending}
                 onClick={() => {
                   setIsUnarchiving(true);
                   void unarchiveSession()
@@ -1643,7 +1650,11 @@ export function SessionChatContent() {
                   <ArchiveRestore className="h-4 w-4 md:mr-2" />
                 )}
                 <span className="hidden md:inline">
-                  {isUnarchiving ? "Unarchiving..." : "Unarchive"}
+                  {isUnarchiving
+                    ? "Unarchiving..."
+                    : isArchiveSnapshotPending
+                      ? "Snapshotting..."
+                      : "Unarchive"}
                 </span>
               </Button>
             ) : (
@@ -2078,6 +2089,7 @@ export function SessionChatContent() {
                 isHibernating={isHibernatingUi}
                 isArchived={isArchived}
                 isInitializing={reconnectionStatus === "idle"}
+                snapshotPending={isArchiveSnapshotPending}
                 hasSnapshot={hasSnapshot}
                 onRestore={handleRestoreSnapshot}
                 onCreateNew={handleCreateNewSandbox}

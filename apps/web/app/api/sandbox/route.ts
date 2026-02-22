@@ -10,8 +10,9 @@ import { getRepoToken } from "@/lib/github/get-repo-token";
 import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
-  DEFAULT_SANDBOX_TIMEOUT_MS,
+  DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
+  DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "@/lib/sandbox/config";
 import {
   buildActiveLifecycleUpdate,
@@ -210,6 +211,7 @@ export async function POST(req: Request) {
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         ports: DEFAULT_SANDBOX_PORTS,
+        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
       },
     });
   } else {
@@ -226,6 +228,7 @@ export async function POST(req: Request) {
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         ports: DEFAULT_SANDBOX_PORTS,
+        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
         scheduleBackgroundWork: (cb) => after(cb),
         hooks: sessionId
           ? {

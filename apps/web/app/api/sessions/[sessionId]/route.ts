@@ -5,7 +5,11 @@ import {
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
-import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import {
+  canOperateOnSandbox,
+  clearSandboxState,
+  hasRuntimeSandboxState,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface UpdateSessionRequest {
@@ -72,6 +76,20 @@ export async function PATCH(
 
   const shouldUnarchive =
     body.status === "running" && existingSession.status === "archived";
+
+  if (
+    shouldUnarchive &&
+    !existingSession.snapshotUrl &&
+    hasRuntimeSandboxState(existingSession.sandboxState)
+  ) {
+    return Response.json(
+      {
+        error:
+          "Snapshot is still being created for this archived session. Please try unarchiving again in a few seconds.",
+      },
+      { status: 409 },
+    );
+  }
 
   const updatePayload: UpdateSessionRequest &
     Partial<{

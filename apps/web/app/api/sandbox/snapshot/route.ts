@@ -10,7 +10,11 @@ import {
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
-import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import {
+  canOperateOnSandbox,
+  clearSandboxState,
+  hasRuntimeSandboxState,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreateSnapshotRequest {
@@ -125,6 +129,19 @@ export async function PUT(req: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!sessionRecord.snapshotUrl) {
+    if (hasRuntimeSandboxState(sessionRecord.sandboxState)) {
+      console.warn(
+        `[Snapshot Restore] session=${sessionId} pending=true sandboxType=${sessionRecord.sandboxState?.type ?? "null"}`,
+      );
+      return Response.json(
+        {
+          error:
+            "Snapshot is still being created. Please wait a few seconds and try again.",
+        },
+        { status: 409 },
+      );
+    }
+
     console.error(
       `[Snapshot Restore] session=${sessionId} error=no_snapshot sandboxType=${sessionRecord.sandboxState?.type ?? "null"}`,
     );

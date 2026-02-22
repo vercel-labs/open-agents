@@ -53,6 +53,11 @@ export interface VercelSandboxConfig {
    */
   ports?: number[];
   /**
+   * Optional snapshot ID to use as the base image for new sandboxes.
+   * When provided, the sandbox is created from this snapshot first.
+   */
+  baseSnapshotId?: string;
+  /**
    * Lifecycle hooks for setup and teardown.
    * afterStart is called after the sandbox is created and configured.
    * beforeStop is called before the sandbox is stopped.

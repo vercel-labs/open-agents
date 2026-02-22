@@ -14,9 +14,19 @@ type MockRunCommandResult = {
   stderr?: () => Promise<string>;
   wait?: (params?: { signal?: AbortSignal }) => Promise<MockWaitResult>;
 };
-let runCommandMock = async (_params?: {
+type MockRunCommandParams = {
+  cmd?: string;
+  args?: string[];
+  cwd?: string;
   env?: Record<string, string>;
-}): Promise<MockRunCommandResult> => ({
+};
+
+const createCalls: Array<Record<string, unknown>> = [];
+const runCommandCalls: MockRunCommandParams[] = [];
+
+let runCommandMock = async (
+  _params?: MockRunCommandParams,
+): Promise<MockRunCommandResult> => ({
   exitCode: 0,
   cmdId: "cmd-1",
   stdout: async () => "",
@@ -38,6 +48,25 @@ function domainForPort(port: number): string {
 
 mock.module("@vercel/sandbox", () => ({
   Sandbox: {
+    create: async (params: Record<string, unknown>) => {
+      createCalls.push(params);
+      return {
+        sandboxId: "sbx-created",
+        routes: Array.from(portDomains.keys()).map((port) => {
+          const domain =
+            portDomains.get(port) ?? `https://sbx-${port}.vercel.run`;
+          const subdomain = new URL(domain).host.replace(".vercel.run", "");
+          return { port, subdomain };
+        }),
+        domain: (port: number) => domainForPort(port),
+        runCommand: async (params: MockRunCommandParams) => {
+          runCommandCalls.push(params);
+          lastRunCommandEnv = params.env;
+          return runCommandMock(params);
+        },
+        stop: async () => {},
+      };
+    },
     get: async ({ sandboxId }: { sandboxId: string }) => ({
       sandboxId,
       routes: Array.from(portDomains.keys()).map((port) => {
@@ -47,7 +76,8 @@ mock.module("@vercel/sandbox", () => ({
         return { port, subdomain };
       }),
       domain: (port: number) => domainForPort(port),
-      runCommand: async (params: { env?: Record<string, string> }) => {
+      runCommand: async (params: MockRunCommandParams) => {
+        runCommandCalls.push(params);
         lastRunCommandEnv = params.env;
         return runCommandMock(params);
       },
@@ -63,6 +93,8 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  createCalls.length = 0;
+  runCommandCalls.length = 0;
   portDomains.clear();
   missingPorts.clear();
   portDomains.set(80, "https://sbx-80.vercel.run");
@@ -147,6 +179,52 @@ describe("VercelSandbox.environmentDetails", () => {
     expect(lastRunCommandEnv?.SANDBOX_URL_3000).toBe(
       "https://sbx-3000.vercel.run",
     );
+  });
+});
+
+describe("VercelSandbox.create", () => {
+  test("creates from base snapshot and clones git source", async () => {
+    await sandboxModule.VercelSandbox.create({
+      baseSnapshotId: "snap-base-1",
+      source: {
+        url: "https://github.com/open-harness/example",
+        branch: "main",
+      },
+    });
+
+    expect(createCalls.length).toBe(1);
+    expect(createCalls[0]?.source).toEqual({
+      type: "snapshot",
+      snapshotId: "snap-base-1",
+    });
+    expect(runCommandCalls[0]).toEqual({
+      cmd: "git",
+      args: [
+        "clone",
+        "--branch",
+        "main",
+        "https://github.com/open-harness/example",
+        ".",
+      ],
+      cwd: "/vercel/sandbox",
+    });
+  });
+
+  test("creates empty git repo from base snapshot", async () => {
+    await sandboxModule.VercelSandbox.create({
+      baseSnapshotId: "snap-base-1",
+    });
+
+    expect(createCalls.length).toBe(1);
+    expect(createCalls[0]?.source).toEqual({
+      type: "snapshot",
+      snapshotId: "snap-base-1",
+    });
+    expect(runCommandCalls[0]).toEqual({
+      cmd: "git",
+      args: ["init"],
+      cwd: "/vercel/sandbox",
+    });
   });
 });
 

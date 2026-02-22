@@ -1,11 +1,11 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
-import type { HybridState } from "./state";
-import type { HybridHooks } from "./hooks";
-import { HybridSandbox } from "./sandbox";
 import { connectJustBash } from "../just-bash/connect";
 import { connectVercel } from "../vercel/connect";
 import { VercelSandbox } from "../vercel/sandbox";
 import { configureGitUser } from "../vercel/utils";
+import type { HybridHooks } from "./hooks";
+import { HybridSandbox } from "./sandbox";
+import type { HybridState } from "./state";
 
 /**
  * Connect options for hybrid sandbox.
@@ -22,6 +22,8 @@ export interface HybridConnectOptions {
   timeout?: number;
   /** Ports to expose from the sandbox for dev server preview URLs */
   ports?: number[];
+  /** Snapshot ID used as the base image for new cloud sandboxes */
+  baseSnapshotId?: string;
   /**
    * Schedule background work for cloud sandbox startup.
    * The callback returns a promise that completes when cloud sandbox is ready.
@@ -71,6 +73,7 @@ function startCloudSandboxInBackground(
         hooks: options?.hooks,
         timeout: options?.timeout,
         ports: options?.ports,
+        baseSnapshotId: options?.baseSnapshotId,
       });
 
       // Perform handoff
