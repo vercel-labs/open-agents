@@ -1,11 +1,16 @@
 import type { ComponentProps, ReactNode } from "react";
 import { Children, cloneElement, isValidElement } from "react";
 import type { BundledTheme } from "shiki";
-import { code } from "@streamdown/code";
+import { createCodePlugin } from "@streamdown/code";
+import { vercelLight, vercelDark } from "./vercel-themes";
 
-export const streamdownPlugins = { code };
+export const streamdownPlugins = {
+  code: createCodePlugin({
+    themes: [vercelLight, vercelDark],
+  }),
+};
 
-export const shikiThemes = ["github-light", "github-dark"] as [
+export const shikiThemes = ["vercel-light", "vercel-dark"] as [
   BundledTheme,
   BundledTheme,
 ];

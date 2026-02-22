@@ -1,6 +1,6 @@
 import { registerCustomTheme } from "@pierre/diffs";
 
-const vercelDark = {
+export const vercelDark = {
   colors: {
     "actionBar.toggledBackground": "#242424",
     "activityBarBadge.background": "#52a8ff",
@@ -341,7 +341,7 @@ const vercelDark = {
   type: "dark" as const,
 };
 
-const vercelLight = {
+export const vercelLight = {
   colors: {
     "actionBar.toggledBackground": "#ebebeb",
     "activityBarBadge.background": "#0068d6",
