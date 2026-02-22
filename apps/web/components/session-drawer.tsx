@@ -123,9 +123,11 @@ function SessionGroup({
             className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {session.hasUnread && (
+              {session.hasStreaming ? (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-white animate-pulse" />
+              ) : session.hasUnread ? (
                 <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-              )}
+              ) : null}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {session.title}

@@ -74,6 +74,7 @@ export async function getSessionsByUserId(userId: string) {
 
 export type SessionWithUnread = typeof sessions.$inferSelect & {
   hasUnread: boolean;
+  hasStreaming: boolean;
 };
 
 /**
@@ -94,6 +95,7 @@ export async function getSessionsWithUnreadByUserId(
           ELSE false
         END
       ), false)`,
+      hasStreaming: sql<boolean>`COALESCE(BOOL_OR(${chats.activeStreamId} IS NOT NULL), false)`,
     })
     .from(sessions)
     .leftJoin(chats, eq(chats.sessionId, sessions.id))
