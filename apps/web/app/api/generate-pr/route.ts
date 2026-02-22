@@ -2,7 +2,12 @@ import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { getGitHubAccount } from "@/lib/db/accounts";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  getChatsBySessionId,
+  getChatMessages,
+  getSessionById,
+  updateSession,
+} from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -212,6 +217,47 @@ async function ensureForkExists({
       ? createData.name
       : upstreamRepo;
   return { success: true, forkRepoName };
+}
+
+/**
+ * Extracts user and assistant text parts from all chat messages in a session.
+ * Tool calls and tool results are intentionally excluded to keep context
+ * focused on the human–AI conversation.
+ */
+async function getConversationContext(sessionId: string): Promise<string> {
+  const chats = await getChatsBySessionId(sessionId);
+  if (chats.length === 0) return "";
+
+  const lines: string[] = [];
+
+  for (const chat of chats) {
+    const messages = await getChatMessages(chat.id);
+    for (const message of messages) {
+      if (!Array.isArray(message.parts)) continue;
+
+      const textParts: string[] = [];
+      for (const part of message.parts) {
+        if (
+          typeof part === "object" &&
+          part !== null &&
+          "type" in part &&
+          part.type === "text" &&
+          "text" in part &&
+          typeof part.text === "string" &&
+          part.text.trim().length > 0
+        ) {
+          textParts.push(part.text.trim());
+        }
+      }
+
+      if (textParts.length > 0) {
+        const role = message.role === "user" ? "User" : "Assistant";
+        lines.push(`${role}: ${textParts.join(" ")}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
 }
 
 // Allow up to 2 minutes for AI generation and git operations
@@ -971,6 +1017,12 @@ Respond with ONLY the commit message, nothing else.`,
   }
 
   // 8. Generate PR title and body with AI using structured output
+  // Load conversation context (user + assistant text parts only) for richer PR descriptions
+  const conversationContext = await getConversationContext(sessionId);
+  const conversationSection = conversationContext
+    ? `\nConversation context:\n${conversationContext.slice(0, 8000)}\n`
+    : "";
+
   let prContent: z.infer<typeof prContentSchema>;
   try {
     const { output } = await generateText({
@@ -1002,7 +1054,7 @@ Group related changes by area (e.g. API, UI, Config, Tests) and include the file
 
 Session: ${sessionTitle}
 Branch: ${resolvedBranch} -> ${baseBranch}
-
+${conversationSection}
 Changes summary:
 ${diffStats}
 
