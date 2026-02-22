@@ -35,6 +35,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@streamdown/code": "^1.0.3",
     "@vercel/oidc": "^2.0.0",
     "ai": "catalog:",
     "arctic": "^3.7.0",

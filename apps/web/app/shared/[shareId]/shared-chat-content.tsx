@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Children, cloneElement, isValidElement } from "react";
 import type { BundledTheme } from "shiki";
+import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 import type {
   WebAgentUIMessage,
@@ -21,13 +22,15 @@ import "streamdown/styles.css";
 const customComponents = {
   pre: ({ children, ...props }: ComponentProps<"pre">) => {
     const processChildren = (child: ReactNode): ReactNode => {
-      if (isValidElement<{ children?: ReactNode }>(child)) {
+      if (isValidElement<{ children?: ReactNode; "data-block"?: string }>(child)) {
         const codeContent = child.props.children;
         if (typeof codeContent === "string") {
           return cloneElement(child, {
+            "data-block": "true",
             children: codeContent.trimEnd(),
           });
         }
+        return cloneElement(child, { "data-block": "true" });
       }
       return child;
     };
@@ -35,7 +38,7 @@ const customComponents = {
   },
 };
 
-const shikiThemes = ["github-dark", "github-dark"] as [
+const shikiThemes = ["github-light", "github-dark"] as [
   BundledTheme,
   BundledTheme,
 ];
@@ -204,6 +207,7 @@ export function SharedChatContent({
                                 <Streamdown
                                   mode="static"
                                   isAnimating={false}
+                                  plugins={{ code }}
                                   shikiTheme={shikiThemes}
                                   components={customComponents}
                                 >
