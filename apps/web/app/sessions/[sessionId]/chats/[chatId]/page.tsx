@@ -48,9 +48,10 @@ export async function generateMetadata({
   params,
 }: SessionChatPageProps): Promise<Metadata> {
   const { sessionId } = await params;
+  const sessionRecord = await getSessionByIdCached(sessionId);
 
   return {
-    title: `Session ${sessionId}`,
+    title: sessionRecord?.title ?? `Session ${sessionId}`,
     description: "Review session progress, chats, and outputs.",
   };
 }
