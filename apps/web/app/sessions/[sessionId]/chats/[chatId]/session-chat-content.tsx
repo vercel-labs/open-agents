@@ -1829,7 +1829,7 @@ export function SessionChatContent() {
                               </p>
                             </div>
                           ) : (
-                            <div className="min-w-0 max-w-[80%] overflow-hidden">
+                            <div className="min-w-0 w-full overflow-hidden">
                               <Streamdown
                                 animated={{
                                   animation: "fadeIn",

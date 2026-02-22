@@ -176,7 +176,7 @@ export function SharedChatContent({
                                 </p>
                               </div>
                             ) : (
-                              <div className="min-w-0 max-w-[80%] overflow-hidden">
+                              <div className="min-w-0 w-full overflow-hidden">
                                 <Streamdown
                                   mode="static"
                                   isAnimating={false}
