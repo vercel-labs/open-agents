@@ -1984,7 +1984,7 @@ export function SessionChatContent() {
       )}
 
       {/* Input */}
-      <div className="p-4 pb-8">
+      <div className="p-4 pb-2 sm:pb-8">
         <div className="mx-auto max-w-4xl space-y-2">
           {restoreError && (
             <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

@@ -139,9 +139,7 @@ export function WriteRenderer({
       {/* Expanded full content */}
       {isExpanded && showCode && !mergedState.denied && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-2 text-sm text-muted-foreground">
-            File created
-          </div>
+          <div className="mb-2 text-sm text-muted-foreground">File created</div>
 
           <div className="max-h-96 overflow-auto">
             <DiffsFile
