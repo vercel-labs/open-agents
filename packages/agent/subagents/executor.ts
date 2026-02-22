@@ -48,7 +48,11 @@ Example final response:
 - Do not skip validation because a change seems small or trivial
 
 ## TOOLS
-You have full access to file operations (read, write, edit, grep, glob) and bash commands. Use them to complete your task.`;
+You have full access to file operations (read, write, edit, grep, glob) and bash commands. Use them to complete your task.
+
+## BASH COMMANDS
+- All bash commands automatically run in the working directory — NEVER prepend \`cd /vercel/sandbox &&\` or similar to commands
+- Just run the command directly (e.g., \`npm test\`, not \`cd /vercel/sandbox && npm test\`)`;
 
 const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the task"),
