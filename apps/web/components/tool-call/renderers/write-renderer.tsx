@@ -123,9 +123,8 @@ export function WriteRenderer({
         !mergedState.approvalRequested &&
         !mergedState.denied && (
           <>
-            <div className="mt-2 pl-5 text-sm">
-              <span>Created </span>
-              <span className="font-medium">{filePath}</span>
+            <div className="mt-2 pl-5 text-sm text-muted-foreground">
+              File created
             </div>
 
             <div className="ml-5 mt-2 max-h-40 overflow-hidden">
@@ -140,9 +139,8 @@ export function WriteRenderer({
       {/* Expanded full content */}
       {isExpanded && showCode && !mergedState.denied && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-2 text-sm">
-            <span>Created </span>
-            <span className="font-medium">{filePath}</span>
+          <div className="mb-2 text-sm text-muted-foreground">
+            File created
           </div>
 
           <div className="max-h-96 overflow-auto">
