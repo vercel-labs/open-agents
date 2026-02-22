@@ -881,10 +881,14 @@ export function SessionChatContent() {
   // the tab becomes visible again or the device comes back online.  The server
   // intentionally keeps the stream running on client disconnect, so we can
   // clear the stale error and attempt to reconnect to the resumable stream.
+  // We pass `{ auto: true }` so that recovery is skipped when the user
+  // explicitly stopped the stream — without this, aborting the transport
+  // causes a transient error that the handler would immediately reconnect,
+  // forcing the user to tap stop multiple times (especially on iOS).
   useEffect(() => {
     const recover = () => {
       if (status === "error") {
-        retryChatStream();
+        retryChatStream({ auto: true });
       }
     };
 
@@ -2229,6 +2233,7 @@ export function SessionChatContent() {
                         stopChatStream();
                       }}
                       className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      style={{ touchAction: "manipulation" }}
                     >
                       <Square className="h-3 w-3 fill-current" />
                     </Button>

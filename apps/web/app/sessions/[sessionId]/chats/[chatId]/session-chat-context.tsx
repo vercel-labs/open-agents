@@ -168,7 +168,7 @@ type SessionChatContextValue = {
   /** Attempt to reconnect to an existing sandbox */
   attemptReconnection: () => Promise<ReconnectionStatus>;
   /** Clear a transient chat error and attempt to resume an active stream */
-  retryChatStream: () => void;
+  retryChatStream: (opts?: { auto?: boolean }) => void;
   /** Update session repo info after creating a repo */
   updateSessionRepo: (info: {
     cloneUrl: string;
@@ -285,7 +285,13 @@ export function SessionChatProvider({
     [chatInfo.id],
   );
 
+  // Track explicit user-initiated stops so auto-recovery doesn't immediately
+  // reconnect to the still-running server stream (the main cause of the
+  // "need to tap stop 3 times on iOS" bug).
+  const userStoppedRef = useRef(false);
+
   const stopChatStream = useCallback(() => {
+    userStoppedRef.current = true;
     void chatInstance.stop();
     abortChatInstanceTransport(chatInfo.id);
   }, [chatInfo.id, chatInstance]);
@@ -303,15 +309,42 @@ export function SessionChatProvider({
 
   /**
    * Clear a transient chat error (e.g. iOS "Load failed") and attempt to
-   * resume the server-side stream if one is still active.  This is safe to
-   * call from a visibility-change handler or a manual "Retry" button.
+   * resume the server-side stream if one is still active.
+   *
+   * When called from a manual "Retry" button we always want to reconnect, so
+   * the stopped flag is reset.  When called from the automatic
+   * visibility-change / online recovery handler, the flag is checked first so
+   * that a user-initiated stop is respected and the stream is not silently
+   * restarted.
    */
-  const retryChatStream = useCallback(() => {
-    // Clear the error so the chat UI becomes visible again.
-    chat.clearError();
-    // If the server-side stream is still running, reconnect to it.
-    chat.resumeStream();
-  }, [chat]);
+  const retryChatStream = useCallback(
+    (opts?: { auto?: boolean }) => {
+      // If the user explicitly stopped the stream, don't auto-reconnect.
+      // This prevents the "tap stop 3 times" loop on iOS where aborting the
+      // transport causes a transient error that the auto-recovery immediately
+      // reconnects.
+      if (opts?.auto && userStoppedRef.current) {
+        // Still clear the error so the UI doesn't show a stale error banner.
+        chat.clearError();
+        return;
+      }
+      // Manual retry — reset the flag so the stream can proceed.
+      userStoppedRef.current = false;
+      // Clear the error so the chat UI becomes visible again.
+      chat.clearError();
+      // If the server-side stream is still running, reconnect to it.
+      chat.resumeStream();
+    },
+    [chat],
+  );
+
+  // Reset the user-stopped flag when a new message is sent so that
+  // auto-recovery works normally for the new stream.
+  useEffect(() => {
+    if (chat.status === "submitted") {
+      userStoppedRef.current = false;
+    }
+  }, [chat.status]);
 
   // Cleanup: always release chat instances when leaving a route.
   // If this chat is still streaming or submitted, stop local stream processing
