@@ -209,11 +209,11 @@ function TaskItem({
 
       <div className="flex-1 py-1">
         {/* Task row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <TaskStatusIndicator status={status} />
           <span
             className={cn(
-              "text-sm",
+              "text-sm truncate",
               status === "error" || status === "denied"
                 ? "text-red-500"
                 : "text-foreground",
@@ -221,15 +221,17 @@ function TaskItem({
           >
             {desc}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="hidden text-xs text-muted-foreground sm:inline">
             - {toolCount} tool{toolCount !== 1 ? "s" : ""}
             {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
           </span>
           {approvalRequested && (
-            <span className="text-xs text-yellow-500">[NEEDS APPROVAL]</span>
+            <span className="text-xs text-yellow-500 shrink-0">
+              [NEEDS APPROVAL]
+            </span>
           )}
           {isRunning && elapsedSeconds > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="hidden text-xs text-muted-foreground sm:inline shrink-0">
               - {formatTime(elapsedSeconds)}
             </span>
           )}
