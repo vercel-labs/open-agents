@@ -713,15 +713,22 @@ export function SessionChatContent() {
     () => renderMessages[renderMessages.length - 1],
     [renderMessages],
   );
-  const hasAssistantRenderableContent =
-    lastMessage?.role === "assistant"
-      ? lastMessage.parts.some(
-          (p) =>
-            (p.type === "text" && p.text.length > 0) ||
-            isToolUIPart(p) ||
-            isReasoningUIPart(p),
-        )
-      : false;
+  const hasAssistantRenderableContent = useMemo(
+    () =>
+      lastMessage?.role === "assistant"
+        ? lastMessage.parts.some(
+            (p) =>
+              (p.type === "text" && p.text.length > 0) ||
+              isToolUIPart(p) ||
+              isReasoningUIPart(p),
+          )
+        : false,
+    [lastMessage],
+  );
+  const hasAssistantRenderableContentRef = useRef(
+    hasAssistantRenderableContent,
+  );
+  hasAssistantRenderableContentRef.current = hasAssistantRenderableContent;
   const showThinkingIndicator = useMemo(
     () =>
       shouldShowThinkingIndicator({
@@ -893,7 +900,11 @@ export function SessionChatContent() {
     };
   }, [requestMarkChatRead]);
 
-  const maybeRecoverStream = useCallback(() => {
+  // Keep the recovery logic in a ref so event-listener and timer effects never
+  // churn during streaming.  The ref is updated on every render (cheap) while
+  // the stable wrapper below keeps a constant identity for effects.
+  const maybeRecoverStreamRef = useRef(() => {});
+  maybeRecoverStreamRef.current = () => {
     const now = Date.now();
     if (
       now - lastStreamRecoveryAtRef.current <
@@ -919,7 +930,13 @@ export function SessionChatContent() {
 
     lastStreamRecoveryAtRef.current = now;
     retryChatStream();
-  }, [status, isChatInFlight, hasAssistantRenderableContent, retryChatStream]);
+  };
+
+  // Stable identity wrapper – safe to use in effect dependency arrays without
+  // causing teardown/re-register cycles.
+  const maybeRecoverStream = useCallback(() => {
+    maybeRecoverStreamRef.current();
+  }, []);
 
   useEffect(() => {
     if (isChatInFlight) {
@@ -934,7 +951,8 @@ export function SessionChatContent() {
 
   // Recover from transient connection drops when the tab regains visibility,
   // the network comes back, or a stream remains in-flight without any visible
-  // assistant output for too long.
+  // assistant output for too long.  The listeners are registered once because
+  // maybeRecoverStream has a stable identity (delegates to a ref internally).
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
@@ -1260,7 +1278,8 @@ export function SessionChatContent() {
         shouldRefreshAfterReadyTransition({
           prevStatus,
           status,
-          hasAssistantRenderableContent,
+          hasAssistantRenderableContent:
+            hasAssistantRenderableContentRef.current,
         })
       ) {
         router.refresh();
@@ -1275,7 +1294,6 @@ export function SessionChatContent() {
     requestMarkChatRead,
     refreshChats,
     router,
-    hasAssistantRenderableContent,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
