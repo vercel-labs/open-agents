@@ -290,10 +290,15 @@ export function SessionChatProvider({
     abortChatInstanceTransport(chatInfo.id);
   }, [chatInfo.id, chatInstance]);
 
-  // Only resume on fresh page load (new Chat instance + active stream in DB).
-  // If instance already existed, the stream is either still running or finished —
-  // no resume needed since the instance tracked it the whole time.
-  const shouldResume = !alreadyExisted && !!initialChat.activeStreamId;
+  // Resume whenever the server reports an active stream and the local instance
+  // is either new or currently idle/error. This covers stale instances that can
+  // survive route transitions while avoiding duplicate reconnect attempts for an
+  // already-streaming instance.
+  const shouldResume =
+    !!initialChat.activeStreamId &&
+    (!alreadyExisted ||
+      chatInstance.status === "ready" ||
+      chatInstance.status === "error");
 
   const chat = useChat<WebAgentUIMessage>({
     chat: chatInstance,
@@ -303,15 +308,19 @@ export function SessionChatProvider({
 
   /**
    * Clear a transient chat error (e.g. iOS "Load failed") and attempt to
-   * resume the server-side stream if one is still active.  This is safe to
+   * resume the server-side stream if one is still active. This is safe to
    * call from a visibility-change handler or a manual "Retry" button.
    */
   const retryChatStream = useCallback(() => {
+    // Tear down any stale local fetch before reconnecting.
+    void chatInstance.stop();
+    abortChatInstanceTransport(chatInfo.id);
+
     // Clear the error so the chat UI becomes visible again.
     chat.clearError();
     // If the server-side stream is still running, reconnect to it.
-    chat.resumeStream();
-  }, [chat]);
+    void chat.resumeStream();
+  }, [chat, chatInfo.id, chatInstance]);
 
   // Cleanup: always release chat instances when leaving a route.
   // If this chat is still streaming or submitted, stop local stream processing

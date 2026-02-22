@@ -101,6 +101,9 @@ const Streamdown = dynamic(
   { ssr: false },
 );
 
+const STREAM_RECOVERY_STALL_MS = 4_000;
+const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
+
 const emptySubscribe = () => () => {};
 function useHasMounted() {
   return useSyncExternalStore(
@@ -785,6 +788,8 @@ export function SessionChatContent() {
     lastChatId: null,
     inFlight: false,
   });
+  const inFlightStartedAtRef = useRef<number | null>(null);
+  const lastStreamRecoveryAtRef = useRef(0);
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -888,30 +893,89 @@ export function SessionChatContent() {
     };
   }, [requestMarkChatRead]);
 
-  // Auto-recover from transient network errors (e.g. iOS "Load failed") when
-  // the tab becomes visible again or the device comes back online.  The server
-  // intentionally keeps the stream running on client disconnect, so we can
-  // clear the stale error and attempt to reconnect to the resumable stream.
+  const maybeRecoverStream = useCallback(() => {
+    const now = Date.now();
+    if (
+      now - lastStreamRecoveryAtRef.current <
+      STREAM_RECOVERY_MIN_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (status === "error") {
+      lastStreamRecoveryAtRef.current = now;
+      retryChatStream();
+      return;
+    }
+
+    if (!isChatInFlight || hasAssistantRenderableContent) {
+      return;
+    }
+
+    const startedAt = inFlightStartedAtRef.current;
+    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
+      return;
+    }
+
+    lastStreamRecoveryAtRef.current = now;
+    retryChatStream();
+  }, [status, isChatInFlight, hasAssistantRenderableContent, retryChatStream]);
+
   useEffect(() => {
-    const recover = () => {
-      if (status === "error") {
-        retryChatStream();
+    if (isChatInFlight) {
+      if (inFlightStartedAtRef.current === null) {
+        inFlightStartedAtRef.current = Date.now();
+      }
+      return;
+    }
+
+    inFlightStartedAtRef.current = null;
+  }, [isChatInFlight, chatInfo.id]);
+
+  // Recover from transient connection drops when the tab regains visibility,
+  // the network comes back, or a stream remains in-flight without any visible
+  // assistant output for too long.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        maybeRecoverStream();
       }
     };
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        recover();
-      }
+    const onFocus = () => {
+      maybeRecoverStream();
     };
 
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", recover);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", maybeRecoverStream);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", maybeRecoverStream);
     };
-  }, [status, retryChatStream]);
+  }, [maybeRecoverStream]);
+
+  useEffect(() => {
+    if (!isChatInFlight || hasAssistantRenderableContent) {
+      return;
+    }
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState !== "visible"
+    ) {
+      return;
+    }
+
+    const startedAt = inFlightStartedAtRef.current;
+    const elapsed = startedAt === null ? 0 : Date.now() - startedAt;
+    const waitMs = Math.max(0, STREAM_RECOVERY_STALL_MS - elapsed);
+    const timeout = setTimeout(() => {
+      maybeRecoverStream();
+    }, waitMs);
+
+    return () => clearTimeout(timeout);
+  }, [isChatInFlight, hasAssistantRenderableContent, maybeRecoverStream]);
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
