@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useScrollToBottom<T extends HTMLElement>() {
   const containerRef = useRef<T>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const isAtBottomRef = useRef(true);
 
   const scrollToBottom = useCallback(() => {
     if (containerRef.current) {
@@ -14,7 +15,9 @@ export function useScrollToBottom<T extends HTMLElement>() {
     if (containerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
       const threshold = 10;
-      setIsAtBottom(scrollHeight - scrollTop - clientHeight < threshold);
+      const atBottom = scrollHeight - scrollTop - clientHeight < threshold;
+      isAtBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
     }
   }, []);
 
@@ -25,7 +28,27 @@ export function useScrollToBottom<T extends HTMLElement>() {
       // Scroll to bottom on initial mount
       container.scrollTop = container.scrollHeight;
       handleScroll();
-      return () => container.removeEventListener("scroll", handleScroll);
+
+      // Auto-scroll when content grows (e.g. chunked stream replay).
+      // Uses a ref for the at-bottom check so the callback always reads
+      // the latest scroll position without needing to re-create the observer.
+      const resizeObserver = new ResizeObserver(() => {
+        if (isAtBottomRef.current) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+
+      // Observe the container itself (viewport resize) and its first child
+      // (content height changes from new chunks / messages being appended).
+      resizeObserver.observe(container);
+      if (container.firstElementChild) {
+        resizeObserver.observe(container.firstElementChild);
+      }
+
+      return () => {
+        container.removeEventListener("scroll", handleScroll);
+        resizeObserver.disconnect();
+      };
     }
   }, [handleScroll]);
 
