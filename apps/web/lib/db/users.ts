@@ -1,7 +1,20 @@
+import { and, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { db } from "./client";
 import { users } from "./schema";
-import { eq, and } from "drizzle-orm";
-import { nanoid } from "nanoid";
+
+/**
+ * Check if a user exists in the database by ID.
+ * Returns true if found, false otherwise. Lightweight query (only fetches the ID).
+ */
+export async function userExists(userId: string): Promise<boolean> {
+  const result = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return result.length > 0;
+}
 
 export async function upsertUser(userData: {
   provider: "github" | "vercel";

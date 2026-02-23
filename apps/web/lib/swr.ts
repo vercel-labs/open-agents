@@ -1,18 +1,33 @@
 /**
+ * Error class that preserves the HTTP status code from failed fetch requests.
+ * Used by the global SWR error handler to detect 401s and trigger sign-out.
+ */
+export class FetchError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "FetchError";
+    this.status = status;
+  }
+}
+
+/**
  * Default fetcher for SWR hooks.
  * Parses JSON responses and extracts error messages from failed requests.
+ * Throws FetchError (with HTTP status) on non-OK responses.
  */
 export const fetcher = async <T>(url: string): Promise<T> => {
   const res = await fetch(url);
   if (!res.ok) {
-    const error = new Error("Fetch failed");
+    let message = res.statusText;
     try {
       const data = (await res.json()) as { error?: string };
-      error.message = data.error ?? res.statusText;
+      message = data.error ?? res.statusText;
     } catch {
-      error.message = res.statusText;
+      // keep statusText
     }
-    throw error;
+    throw new FetchError(message, res.status);
   }
   return res.json() as Promise<T>;
 };
