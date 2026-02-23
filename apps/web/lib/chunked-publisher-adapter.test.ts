@@ -124,6 +124,36 @@ describe("createChunkedPublisherAdapter", () => {
     expect(await adapter.incr("k")).toBe(1);
   });
 
+  test("dispatches all frames synchronously before yielding", async () => {
+    // Simulates the upstream pattern where replay + DONE are dispatched via
+    // Promise.all. All replay frames must enter the pipeline before the caller
+    // can dispatch DONE, otherwise DONE arrives between frames.
+    const callOrder: string[] = [];
+
+    const client: RedisLikeClient = {
+      publish: async (_channel: string, message: string) => {
+        callOrder.push(message.startsWith("DONE") ? "DONE" : "frame");
+        return 1;
+      },
+      set: async () => "OK",
+      get: async () => null,
+      incr: async () => 1,
+    };
+    const adapter = createChunkedPublisherAdapter(client);
+
+    const bigMessage = "x".repeat(MAX_REPLAY_FRAME_CHARS * 3);
+    const DONE = "DONE_SENTINEL";
+
+    // Mirror upstream: push both publishes, then Promise.all
+    const promises: Array<Promise<number | unknown>> = [];
+    promises.push(adapter.publish("ch", bigMessage));
+    promises.push(adapter.publish("ch", DONE));
+    await Promise.all(promises);
+
+    // All 3 frames must appear before DONE
+    expect(callOrder).toEqual(["frame", "frame", "frame", "DONE"]);
+  });
+
   test("set passes EX option correctly", async () => {
     let capturedArgs: unknown[] = [];
     const client: RedisLikeClient = {

@@ -33,16 +33,20 @@ export function createChunkedPublisherAdapter(client: RedisLikeClient) {
         return client.publish(channel, message);
       }
 
+      // Dispatch all frames synchronously so they enter the ioredis pipeline
+      // in order BEFORE this async function yields. This prevents the caller
+      // from interleaving a DONE_MESSAGE publish between frames.
       let offset = 0;
-      let lastResult: number | unknown = 0;
+      const framePromises: Array<Promise<number>> = [];
 
       while (offset < message.length) {
         const frame = message.slice(offset, offset + MAX_REPLAY_FRAME_CHARS);
-        lastResult = await client.publish(channel, frame);
+        framePromises.push(client.publish(channel, frame));
         offset += frame.length;
       }
 
-      return lastResult;
+      const results = await Promise.all(framePromises);
+      return results[results.length - 1];
     },
 
     set: (key: string, value: string, options?: { EX?: number }) => {
