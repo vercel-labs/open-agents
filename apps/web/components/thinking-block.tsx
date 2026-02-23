@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Brain } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 interface ThinkingBlockProps {
@@ -14,6 +14,39 @@ export function ThinkingBlock({
   isStreaming = false,
 }: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isStreaming) {
+      if (startTimeRef.current === null) {
+        startTimeRef.current = Date.now();
+      }
+      intervalRef.current = setInterval(() => {
+        setElapsed(
+          Math.floor((Date.now() - (startTimeRef.current ?? Date.now())) / 1000)
+        );
+      }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isStreaming]);
+
+  const formatLabel = () => {
+    if (isStreaming) {
+      return elapsed > 0 ? `Thinking for ${elapsed}s...` : "Thinking...";
+    }
+    return elapsed > 0
+      ? `Thought for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
+      : "Thought";
+  };
 
   return (
     <div className="my-1 max-w-[80%]">
@@ -24,7 +57,7 @@ export function ThinkingBlock({
       >
         <Brain className="h-3.5 w-3.5 shrink-0" />
         <span className={cn(isStreaming && "animate-pulse")}>
-          {isStreaming ? "Thinking..." : "Thought process"}
+          {formatLabel()}
         </span>
         {isOpen ? (
           <ChevronDown className="h-3 w-3" />
