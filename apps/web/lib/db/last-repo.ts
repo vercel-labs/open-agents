@@ -17,7 +17,6 @@ export async function getLastRepoByUserId(userId: string) {
     columns: {
       repoOwner: true,
       repoName: true,
-      branch: true,
     },
   });
 
@@ -26,6 +25,5 @@ export async function getLastRepoByUserId(userId: string) {
   return {
     owner: row.repoOwner,
     repo: row.repoName,
-    branch: row.branch ?? undefined,
   };
 }

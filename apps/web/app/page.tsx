@@ -14,7 +14,7 @@ export default async function Home() {
   const store = await cookies();
   const hasSessionCookie = Boolean(store.get(SESSION_COOKIE_NAME)?.value);
 
-  let lastRepo: { owner: string; repo: string; branch?: string } | null = null;
+  let lastRepo: { owner: string; repo: string } | null = null;
   if (hasSessionCookie) {
     const session = await getServerSession();
     if (session?.user?.id) {
