@@ -11,21 +11,20 @@ import { SessionDrawer } from "@/components/session-drawer";
 import { SessionStarter } from "@/components/session-starter";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 import { useCliTokens } from "@/hooks/use-cli-tokens";
-import { useLastRepo } from "@/hooks/use-last-repo";
 import { useSession } from "@/hooks/use-session";
 import { useSessions } from "@/hooks/use-sessions";
 
 interface HomePageProps {
   hasSessionCookie: boolean;
+  lastRepo: { owner: string; repo: string; branch?: string } | null;
 }
 
-export function HomePage({ hasSessionCookie }: HomePageProps) {
+export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
   const router = useRouter();
   const { loading: sessionLoading, isAuthenticated } = useSession();
   const { sessions, loading, createSession } = useSessions({
     enabled: isAuthenticated,
   });
-  const { saveLastRepo } = useLastRepo();
 
   const activeSessionCount = sessions.filter(
     (s) => s.status !== "archived",
@@ -51,14 +50,6 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
         isNewBranch: input.isNewBranch,
         sandboxType: input.sandboxType,
       });
-
-      if (input.repoOwner && input.repoName) {
-        saveLastRepo({
-          owner: input.repoOwner,
-          repo: input.repoName,
-          branch: input.branch,
-        });
-      }
 
       router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);
     } catch (error) {
@@ -116,7 +107,7 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
           What should we ship next?
         </h1>
 
-        <SessionStarter onSubmit={handleCreateSession} isLoading={isCreating} />
+        <SessionStarter onSubmit={handleCreateSession} isLoading={isCreating} lastRepo={lastRepo} />
       </main>
 
       <SessionDrawer

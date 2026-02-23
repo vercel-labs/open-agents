@@ -72,6 +72,7 @@ export async function getSessionsByUserId(userId: string) {
   });
 }
 
+
 export type SessionWithUnread = typeof sessions.$inferSelect & {
   hasUnread: boolean;
   hasStreaming: boolean;

@@ -33,7 +33,7 @@ export function HomeSkeleton() {
           What should we ship next?
         </h1>
 
-        <SessionStarter onSubmit={NOOP} isLoading />
+        <SessionStarter onSubmit={NOOP} isLoading lastRepo={null} />
       </main>
     </div>
   );
