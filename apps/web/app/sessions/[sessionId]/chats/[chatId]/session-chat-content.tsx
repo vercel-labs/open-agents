@@ -729,7 +729,8 @@ export function SessionChatContent() {
             (p) =>
               (p.type === "text" && p.text.length > 0) ||
               isToolUIPart(p) ||
-              isReasoningUIPart(p),
+              (isReasoningUIPart(p) &&
+                (p.text.length > 0 || p.state === "streaming")),
           )
         : false,
     [lastMessage],
