@@ -41,6 +41,10 @@ export function ThinkingBlock({
     };
   }, [isStreaming]);
 
+  if (!isStreaming && !text.trim()) {
+    return null;
+  }
+
   const formatLabel = () => {
     if (isStreaming) {
       return "Thinking...";
