@@ -53,7 +53,7 @@ export function ThinkingBlock({
   };
 
   return (
-    <div className="my-1 max-w-[80%]">
+    <div className="max-w-[80%]">
       {hasContent ? (
         <button
           type="button"
