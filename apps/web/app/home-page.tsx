@@ -64,7 +64,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
   };
 
   if (sessionLoading && hasSessionCookie) {
-    return <HomeSkeleton />;
+    return <HomeSkeleton lastRepo={lastRepo} />;
   }
 
   if (!isAuthenticated) {
