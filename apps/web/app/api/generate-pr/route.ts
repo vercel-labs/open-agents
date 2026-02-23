@@ -18,7 +18,7 @@ const prContentSchema = z.object({
   body: z
     .string()
     .describe(
-      "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points",
+      "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points. Use real newlines for line breaks, NEVER literal backslash-n sequences.",
     ),
 });
 
@@ -1046,6 +1046,8 @@ Respond with ONLY the commit message, nothing else.`,
         schema: prContentSchema,
       }),
       prompt: `Generate a pull request title and body for these changes.
+
+CRITICAL FORMATTING RULE: The body field must contain real newlines (actual line breaks), NOT literal backslash-n sequences. Never write \\n in the output — use actual new lines instead.
 
 The body MUST follow this exact format:
 
