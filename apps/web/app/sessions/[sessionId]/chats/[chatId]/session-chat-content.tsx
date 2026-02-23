@@ -739,14 +739,29 @@ export function SessionChatContent() {
     hasAssistantRenderableContent,
   );
   hasAssistantRenderableContentRef.current = hasAssistantRenderableContent;
+  const hasSeenAssistantRenderableContentRef = useRef(false);
+
+  useEffect(() => {
+    if (!isChatInFlight) {
+      hasSeenAssistantRenderableContentRef.current = false;
+      return;
+    }
+    if (hasAssistantRenderableContent) {
+      hasSeenAssistantRenderableContentRef.current = true;
+    }
+  }, [isChatInFlight, hasAssistantRenderableContent]);
+
+  const hasSeenAssistantRenderableContent =
+    hasAssistantRenderableContent ||
+    hasSeenAssistantRenderableContentRef.current;
   const showThinkingIndicator = useMemo(
     () =>
       shouldShowThinkingIndicator({
         status,
-        hasAssistantRenderableContent,
+        hasAssistantRenderableContent: hasSeenAssistantRenderableContent,
         lastMessageRole: lastMessage?.role,
       }),
-    [status, hasAssistantRenderableContent, lastMessage?.role],
+    [status, hasSeenAssistantRenderableContent, lastMessage?.role],
   );
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {

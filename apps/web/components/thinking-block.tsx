@@ -41,9 +41,7 @@ export function ThinkingBlock({
     };
   }, [isStreaming]);
 
-  if (!isStreaming && !text.trim()) {
-    return null;
-  }
+  const hasContent = text.trim().length > 0;
 
   const formatLabel = () => {
     if (isStreaming) {
@@ -56,21 +54,32 @@ export function ThinkingBlock({
 
   return (
     <div className="my-1 max-w-[80%]">
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span className={cn(isStreaming && "animate-pulse")}>
+      {hasContent ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <span className={cn(isStreaming && "animate-pulse")}>
+            {formatLabel()}
+          </span>
+          {isOpen ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </button>
+      ) : (
+        <span
+          className={cn(
+            "text-sm font-medium text-muted-foreground",
+            isStreaming && "animate-pulse",
+          )}
+        >
           {formatLabel()}
         </span>
-        {isOpen ? (
-          <ChevronDown className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
-        )}
-      </button>
-      {isOpen && (
+      )}
+      {isOpen && hasContent && (
         <div className="mt-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
             {text}
