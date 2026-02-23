@@ -322,7 +322,7 @@ export async function POST(req: Request) {
   }
 
   // Resolve subagent model from user preferences (if configured)
-  let subagentModel: ReturnType<typeof gateway> | undefined;
+  let subagentModel: LanguageModel | undefined;
   try {
     const preferences = await getUserPreferences(session.user.id);
     if (preferences.defaultSubagentModelId) {
