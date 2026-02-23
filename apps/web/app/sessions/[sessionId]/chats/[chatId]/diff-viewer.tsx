@@ -173,6 +173,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
   const {
     diff,
     diffLoading,
+    diffRefreshing,
     diffError,
     diffCachedAt,
     sandboxInfo,
@@ -241,12 +242,12 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => refreshDiff()}
-                disabled={diffLoading || !sandboxInfo}
+                disabled={diffRefreshing || !sandboxInfo}
                 className="h-7 px-2 text-xs"
                 title="Refresh diff"
               >
                 <RefreshCw
-                  className={cn("h-3 w-3", diffLoading && "animate-spin")}
+                  className={cn("h-3 w-3", diffRefreshing && "animate-spin")}
                 />
               </Button>
               {/* Unified / Split toggle - hidden on mobile, unified forced */}

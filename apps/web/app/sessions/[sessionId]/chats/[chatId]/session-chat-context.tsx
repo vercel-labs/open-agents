@@ -121,6 +121,8 @@ type SessionChatContextValue = {
   diff: DiffResponse | null;
   /** Whether diff is loading */
   diffLoading: boolean;
+  /** Whether a diff refresh/revalidation is in progress */
+  diffRefreshing: boolean;
   /** Diff error message */
   diffError: string | null;
   /** Whether diff data is stale (from cache) */
@@ -814,6 +816,7 @@ export function SessionChatProvider({
   const {
     diff,
     isLoading: diffLoading,
+    isValidating: diffRefreshing,
     error: diffError,
     isStale: diffIsStale,
     cachedAt: diffCachedAt,
@@ -1027,6 +1030,7 @@ export function SessionChatProvider({
       initialMessages,
       diff,
       diffLoading,
+      diffRefreshing,
       diffError,
       diffIsStale,
       diffCachedAt,
@@ -1071,6 +1075,7 @@ export function SessionChatProvider({
       initialMessages,
       diff,
       diffLoading,
+      diffRefreshing,
       diffError,
       diffIsStale,
       diffCachedAt,

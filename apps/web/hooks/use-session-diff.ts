@@ -15,6 +15,8 @@ export interface UseSessionDiffOptions {
 export interface UseSessionDiffReturn {
   diff: DiffResponse | null;
   isLoading: boolean;
+  /** Whether a revalidation (e.g. manual refresh) is in progress */
+  isValidating: boolean;
   error: string | null;
   /** Whether the data is from cache (sandbox offline) */
   isStale: boolean;
@@ -33,6 +35,7 @@ export function useSessionDiff(
     data: liveData,
     error: liveError,
     isLoading: liveLoading,
+    isValidating: liveValidating,
     mutate: mutateLive,
   } = useSWR<DiffResponse>(
     sandboxConnected ? `/api/sessions/${sessionId}/diff` : null,
@@ -59,6 +62,7 @@ export function useSessionDiff(
     return {
       diff: liveData ?? options?.initialData ?? null,
       isLoading: liveLoading,
+      isValidating: liveValidating,
       error: liveError?.message ?? null,
       isStale: false,
       cachedAt: null,
@@ -70,6 +74,7 @@ export function useSessionDiff(
     return {
       diff: cachedData.data,
       isLoading: false,
+      isValidating: false,
       error: null,
       isStale: true,
       cachedAt: new Date(cachedData.cachedAt),
@@ -81,6 +86,7 @@ export function useSessionDiff(
     return {
       diff: options.initialData,
       isLoading: true,
+      isValidating: false,
       error: null,
       isStale: true,
       cachedAt: options.initialCachedAt ?? null,
@@ -91,6 +97,7 @@ export function useSessionDiff(
   return {
     diff: options?.initialData ?? null,
     isLoading: cachedLoading,
+    isValidating: false,
     error:
       cachedError?.message ??
       (!cachedLoading && !options?.initialData
