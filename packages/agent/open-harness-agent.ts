@@ -98,6 +98,7 @@ export const openHarnessAgent = new ToolLoopAgent({
       customInstructions,
       environmentDetails: sandbox.environmentDetails,
       skills,
+      modelId: typeof callModel === "string" ? callModel : callModel.modelId,
     });
 
     return {

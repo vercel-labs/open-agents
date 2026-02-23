@@ -27,10 +27,7 @@ export type {
   SubagentUIMessage,
 } from "./subagents/types";
 export type { BuildSystemPromptOptions } from "./system-prompt";
-export {
-  buildSystemPrompt,
-  OPEN_HARNESS_SYSTEM_PROMPT,
-} from "./system-prompt";
+export { buildSystemPrompt } from "./system-prompt";
 export {
   type AskUserQuestionInput,
   type AskUserQuestionOutput,
