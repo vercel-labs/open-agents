@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 const STORAGE_KEY = "openharness-last-repo:v1";
 
@@ -37,11 +37,7 @@ function readLastRepo(): LastRepo | null {
 }
 
 export function useLastRepo() {
-  const [lastRepo, setLastRepo] = useState<LastRepo | null>(null);
-
-  useEffect(() => {
-    setLastRepo(readLastRepo());
-  }, []);
+  const [lastRepo, setLastRepo] = useState<LastRepo | null>(readLastRepo);
 
   const saveLastRepo = useCallback((repo: LastRepo) => {
     try {
