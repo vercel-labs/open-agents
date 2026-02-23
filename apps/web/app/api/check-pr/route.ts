@@ -1,0 +1,132 @@
+import { connectSandbox } from "@open-harness/sandbox";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { findPullRequestByBranch } from "@/lib/github/client";
+import { getRepoToken } from "@/lib/github/get-repo-token";
+import { isSandboxActive } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
+
+interface CheckPrRequest {
+  sessionId: string;
+}
+
+/**
+ * POST /api/check-pr
+ *
+ * Checks the current branch in the sandbox, looks for an existing PR on that
+ * branch, and persists the branch + PR info to the session record.
+ *
+ * Called automatically after each agent message completes.
+ */
+export async function POST(req: Request) {
+  const session = await getServerSession();
+  if (!session?.user) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  let body: CheckPrRequest;
+  try {
+    body = (await req.json()) as CheckPrRequest;
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { sessionId } = body;
+  if (!sessionId) {
+    return Response.json({ error: "sessionId is required" }, { status: 400 });
+  }
+
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    return Response.json({ error: "Session not found" }, { status: 404 });
+  }
+  if (sessionRecord.userId !== session.user.id) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Need an active sandbox to check branch, and repo info to check PRs
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
+    return Response.json({ error: "Sandbox not active" }, { status: 400 });
+  }
+  if (!sessionRecord.repoOwner || !sessionRecord.repoName) {
+    return Response.json({ error: "No repo info on session" }, { status: 400 });
+  }
+
+  try {
+    // 1. Get current branch from sandbox
+    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const cwd = sandbox.workingDirectory;
+    const symbolicRefResult = await sandbox.exec(
+      "git symbolic-ref --short HEAD",
+      cwd,
+      10000,
+    );
+
+    let branch: string | null = null;
+    if (symbolicRefResult.success && symbolicRefResult.stdout.trim()) {
+      branch = symbolicRefResult.stdout.trim();
+    }
+
+    // If we cannot determine the branch (detached HEAD), nothing to check
+    if (!branch) {
+      return Response.json({ branch: null, prNumber: null, prStatus: null });
+    }
+
+    // 2. Persist the branch to the session if it changed
+    const branchChanged = branch !== sessionRecord.branch;
+    if (branchChanged) {
+      await updateSession(sessionId, { branch });
+    }
+
+    // 3. If session already has a PR recorded, just return current state
+    // (the PR was created through our flow -- no need to re-check)
+    if (sessionRecord.prNumber) {
+      return Response.json({
+        branch,
+        prNumber: sessionRecord.prNumber,
+        prStatus: sessionRecord.prStatus,
+      });
+    }
+
+    // 4. Check GitHub for an existing PR on this branch
+    let token: string | undefined;
+    try {
+      const tokenResult = await getRepoToken(
+        session.user.id,
+        sessionRecord.repoOwner,
+      );
+      token = tokenResult.token;
+    } catch {
+      // No token available -- skip PR check
+      return Response.json({ branch, prNumber: null, prStatus: null });
+    }
+
+    const prResult = await findPullRequestByBranch({
+      owner: sessionRecord.repoOwner,
+      repo: sessionRecord.repoName,
+      branchName: branch,
+      token,
+    });
+
+    if (prResult.found && prResult.prNumber && prResult.prStatus) {
+      // Persist PR info to session
+      await updateSession(sessionId, {
+        prNumber: prResult.prNumber,
+        prStatus: prResult.prStatus,
+      });
+
+      return Response.json({
+        branch,
+        prNumber: prResult.prNumber,
+        prStatus: prResult.prStatus,
+      });
+    }
+
+    return Response.json({ branch, prNumber: null, prStatus: null });
+  } catch (error) {
+    console.error("Failed to check PR status:", error);
+    return Response.json(
+      { error: "Failed to check PR status" },
+      { status: 500 },
+    );
+  }
+}

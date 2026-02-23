@@ -193,6 +193,69 @@ export async function getPullRequestStatus(params: {
   }
 }
 
+/**
+ * Find an open pull request for a given branch name.
+ * Returns the first open PR whose head ref matches `branchName`.
+ */
+export async function findPullRequestByBranch(params: {
+  owner: string;
+  repo: string;
+  branchName: string;
+  token?: string;
+}): Promise<{
+  found: boolean;
+  prNumber?: number;
+  prStatus?: "open" | "closed" | "merged";
+  prUrl?: string;
+  prTitle?: string;
+  error?: string;
+}> {
+  const { owner, repo, branchName, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return { found: false, error: "GitHub account not connected" };
+    }
+
+    // Search for PRs with this head branch (any state)
+    const response = await result.octokit.rest.pulls.list({
+      owner,
+      repo,
+      head: `${owner}:${branchName}`,
+      state: "all",
+      per_page: 1,
+      sort: "updated",
+      direction: "desc",
+    });
+
+    const pr = response.data[0];
+    if (!pr) {
+      return { found: false };
+    }
+
+    let prStatus: "open" | "closed" | "merged";
+    if (pr.merged_at) {
+      prStatus = "merged";
+    } else if (pr.state === "closed") {
+      prStatus = "closed";
+    } else {
+      prStatus = "open";
+    }
+
+    return {
+      found: true,
+      prNumber: pr.number,
+      prStatus,
+      prUrl: pr.html_url,
+      prTitle: pr.title,
+    };
+  } catch {
+    return { found: false, error: "Failed to search pull requests" };
+  }
+}
+
 export async function createRepository(params: {
   name: string;
   description?: string;

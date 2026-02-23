@@ -688,6 +688,7 @@ export function SessionChatContent() {
     attemptReconnection,
     updateSessionRepo,
     updateSessionPullRequest,
+    checkBranchAndPr,
   } = useSessionChatContext();
   const {
     messages,
@@ -1274,6 +1275,8 @@ export function SessionChatContent() {
       void requestStatusSync("force");
       void requestMarkChatRead("force");
       void refreshChats();
+      // After a message completes, check branch and detect existing PRs
+      void checkBranchAndPr();
       if (
         shouldRefreshAfterReadyTransition({
           prevStatus,
@@ -1293,6 +1296,7 @@ export function SessionChatContent() {
     requestStatusSync,
     requestMarkChatRead,
     refreshChats,
+    checkBranchAndPr,
     router,
   ]);
 

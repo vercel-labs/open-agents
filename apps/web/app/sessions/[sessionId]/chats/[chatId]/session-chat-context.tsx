@@ -181,6 +181,8 @@ type SessionChatContextValue = {
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  /** Check sandbox branch and look for existing PRs, persisting to DB */
+  checkBranchAndPr: () => Promise<void>;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -701,6 +703,71 @@ export function SessionChatProvider({
     [mutate, sessionId],
   );
 
+  const checkBranchAndPr = useCallback(async () => {
+    // Only check if the session has repo info. The API will return a 400
+    // if the sandbox is not active, which we silently ignore.
+    if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
+
+    try {
+      const res = await fetch("/api/check-pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: sessionRecord.id }),
+      });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        branch: string | null;
+        prNumber: number | null;
+        prStatus: "open" | "merged" | "closed" | null;
+      };
+
+      // Update local session state with branch and PR info
+      setSessionRecord((prev) => ({
+        ...prev,
+        ...(data.branch ? { branch: data.branch } : {}),
+        ...(data.prNumber && data.prStatus
+          ? { prNumber: data.prNumber, prStatus: data.prStatus }
+          : {}),
+      }));
+
+      // Optimistically update the sessions list cache so sidebar reflects changes
+      if (data.branch || data.prNumber) {
+        void mutate<SessionsResponse>(
+          "/api/sessions",
+          (current) =>
+            current
+              ? {
+                  sessions: current.sessions.map((s) =>
+                    s.id === sessionId
+                      ? {
+                          ...s,
+                          ...(data.branch ? { branch: data.branch } : {}),
+                          ...(data.prNumber && data.prStatus
+                            ? {
+                                prNumber: data.prNumber,
+                                prStatus: data.prStatus,
+                              }
+                            : {}),
+                        }
+                      : s,
+                  ),
+                }
+              : current,
+          { revalidate: false },
+        );
+      }
+    } catch (error) {
+      console.error("Failed to check branch/PR:", error);
+    }
+  }, [
+    sessionRecord.id,
+    sessionRecord.repoOwner,
+    sessionRecord.repoName,
+    mutate,
+    sessionId,
+  ]);
+
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
       setHasSnapshotState(true);
@@ -985,6 +1052,7 @@ export function SessionChatProvider({
       attemptReconnection,
       updateSessionRepo,
       updateSessionPullRequest,
+      checkBranchAndPr,
     }),
     [
       sessionRecord,
@@ -1028,6 +1096,7 @@ export function SessionChatProvider({
       attemptReconnection,
       updateSessionRepo,
       updateSessionPullRequest,
+      checkBranchAndPr,
     ],
   );
 
