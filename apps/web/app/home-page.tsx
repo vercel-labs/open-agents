@@ -95,7 +95,6 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
             onClick={() => setDrawerOpen(true)}
             className="flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <History className="h-4 w-4" />
             {loading ? (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-transparent">
                 0
@@ -105,6 +104,7 @@ export function HomePage({ hasSessionCookie }: HomePageProps) {
                 {activeSessionCount}
               </span>
             ) : null}
+            <History className="h-4 w-4" />
             <span>Sessions</span>
           </button>
           <UserAvatarDropdown />
