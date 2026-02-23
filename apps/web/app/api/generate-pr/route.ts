@@ -1041,7 +1041,7 @@ Respond with ONLY the commit message, nothing else.`,
   let prContent: z.infer<typeof prContentSchema>;
   try {
     const { output } = await generateText({
-      model: gateway("anthropic/claude-sonnet-4.5"),
+      model: gateway("google/gemini-3-flash"),
       output: Output.object({
         schema: prContentSchema,
       }),
