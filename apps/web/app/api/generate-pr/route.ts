@@ -3,8 +3,8 @@ import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import {
-  getChatsBySessionId,
   getChatMessages,
+  getChatsBySessionId,
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
@@ -270,6 +270,8 @@ interface GeneratePRRequest {
   branchName: string;
   createBranchOnly?: boolean;
   commitOnly?: boolean;
+  commitTitle?: string;
+  commitBody?: string;
 }
 
 export async function POST(req: Request) {
@@ -294,6 +296,8 @@ export async function POST(req: Request) {
     branchName,
     createBranchOnly,
     commitOnly,
+    commitTitle,
+    commitBody,
   } = body;
 
   if (!sessionId) {
@@ -504,6 +508,7 @@ export async function POST(req: Request) {
   const gitActions: {
     committed?: boolean;
     commitMessage?: string;
+    commitSha?: string;
     pushed?: boolean;
     pushedToFork?: boolean;
   } = {};
@@ -529,9 +534,15 @@ export async function POST(req: Request) {
 
     const fallbackCommitMessage = "chore: update repository changes";
 
+    const normalizedManualTitle = commitTitle?.trim() ?? "";
+    const normalizedManualBody = commitBody?.trim() ?? "";
+    const useManualCommitMessage = normalizedManualTitle.length > 0;
+
     // 4c. Generate commit message with AI
     let commitMessage = fallbackCommitMessage;
-    if (diffForCommit.trim()) {
+    if (useManualCommitMessage) {
+      commitMessage = normalizedManualTitle.slice(0, 72);
+    } else if (diffForCommit.trim()) {
       const commitMsgResult = await generateText({
         model: gateway("anthropic/claude-haiku-4.5"),
         prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
@@ -575,11 +586,11 @@ Respond with ONLY the commit message, nothing else.`,
     }
 
     const escapedMessage = commitMessage.replace(/'/g, "'\\''");
-    const commitResult = await sandbox.exec(
-      `git commit -m '${escapedMessage}'`,
-      cwd,
-      10000,
-    );
+    const commitCommand =
+      useManualCommitMessage && normalizedManualBody.length > 0
+        ? `git commit -m '${escapedMessage}' -m '${normalizedManualBody.replace(/'/g, "'\\''")}'`
+        : `git commit -m '${escapedMessage}'`;
+    const commitResult = await sandbox.exec(commitCommand, cwd, 10000);
 
     if (!commitResult.success) {
       return Response.json(
@@ -596,6 +607,10 @@ Respond with ONLY the commit message, nothing else.`,
 
     gitActions.committed = true;
     gitActions.commitMessage = commitMessage;
+    const commitSha = postCommitHead.stdout.trim();
+    if (commitSha.length > 0) {
+      gitActions.commitSha = commitSha;
+    }
   }
 
   // 5. Check if branch needs to be pushed

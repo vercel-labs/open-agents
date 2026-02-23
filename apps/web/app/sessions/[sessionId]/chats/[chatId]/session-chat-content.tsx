@@ -11,6 +11,7 @@ import {
   Copy,
   ExternalLink,
   FolderGit2,
+  GitCommit,
   GitCompare,
   GitPullRequest,
   Link2,
@@ -89,6 +90,10 @@ const DiffViewer = dynamic(
 );
 const CreatePRDialog = dynamic(
   () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
+  { ssr: false },
+);
+const CommitDialog = dynamic(
+  () => import("@/components/commit-dialog").then((m) => m.CommitDialog),
   { ssr: false },
 );
 const CreateRepoDialog = dynamic(
@@ -583,6 +588,7 @@ export function SessionChatContent() {
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
+  const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -671,6 +677,8 @@ export function SessionChatContent() {
     hadInitialMessages,
     diff,
     refreshDiff,
+    gitStatus,
+    refreshGitStatus,
     files,
     filesLoading,
     refreshFiles,
@@ -1272,6 +1280,7 @@ export function SessionChatContent() {
       isMountedRef.current
     ) {
       void requestStatusSync("force");
+      void refreshGitStatus().catch(() => {});
       void requestMarkChatRead("force");
       void refreshChats();
       if (
@@ -1291,6 +1300,7 @@ export function SessionChatContent() {
     setChatStreaming,
     clearChatTitle,
     requestStatusSync,
+    refreshGitStatus,
     requestMarkChatRead,
     refreshChats,
     router,
@@ -1518,9 +1528,16 @@ export function SessionChatContent() {
       // Fire-and-forget with error handling - SWR updates error state internally,
       // but we catch here to prevent unhandled rejection warnings.
       refreshDiff().catch(() => {});
+      refreshGitStatus().catch(() => {});
       refreshFiles().catch(() => {});
     }
-  }, [currentToolStates, messages, refreshDiff, refreshFiles]);
+  }, [
+    currentToolStates,
+    messages,
+    refreshDiff,
+    refreshGitStatus,
+    refreshFiles,
+  ]);
 
   // Note: SWR handles automatic fetching when sandbox becomes available
   // and caching/deduplication of requests
@@ -1674,6 +1691,29 @@ export function SessionChatContent() {
     isSandboxActive,
     reconnectionStatus,
   ]);
+
+  const hasRepo = Boolean(session.cloneUrl);
+  const hasExistingPr = session.prNumber != null;
+  const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
+  const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
+  const hasBranchDiff =
+    diff != null
+      ? diff.summary.totalAdditions > 0 || diff.summary.totalDeletions > 0
+      : (session.linesAdded ?? 0) > 0 || (session.linesRemoved ?? 0) > 0;
+  const isCreatePrBranchReady = Boolean(session?.branch);
+  const canCreatePr =
+    hasRepo && !hasExistingPr && !hasUncommittedGitChanges && hasBranchDiff;
+  const createPrDisabledReason = !isCreatePrBranchReady
+    ? "Waiting for branch info to sync"
+    : hasUncommittedGitChanges
+      ? "Commit and push changes before creating a pull request"
+      : !hasBranchDiff
+        ? "No committed branch changes yet"
+        : null;
+  const showCommitAction =
+    hasRepo &&
+    (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
+  const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
 
   return (
     <>
@@ -1837,34 +1877,77 @@ export function SessionChatContent() {
                       </span>
                     </span>
                   )}
+                {hasUncommittedGitChanges && (
+                  <span
+                    className="ml-1 inline-block h-2 w-2 rounded-full bg-orange-500"
+                    aria-label="Uncommitted changes"
+                  />
+                )}
               </Button>
             )}
-            {session?.cloneUrl ? (
-              // Session has a repo - show PR buttons
-              session?.prNumber ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                    window.open(prUrl, "_blank", "noopener,noreferrer");
-                  }}
-                >
-                  <GitPullRequest className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">
-                    View PR #{session.prNumber}
-                  </span>
-                </Button>
+            {hasRepo ? (
+              hasExistingPr ? (
+                showCommitAction ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCommitDialogOpen(true)}
+                  >
+                    <GitCommit className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">
+                      {commitActionLabel}
+                    </span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
+                      window.open(prUrl, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <GitPullRequest className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">
+                      View PR #{session.prNumber}
+                    </span>
+                  </Button>
+                )
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPrDialogOpen(true)}
-                  disabled={!session?.branch}
-                >
-                  <GitPullRequest className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Create PR</span>
-                </Button>
+                <>
+                  {showCommitAction && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCommitDialogOpen(true)}
+                    >
+                      <GitCommit className="h-4 w-4 md:mr-2" />
+                      <span className="hidden md:inline">
+                        {commitActionLabel}
+                      </span>
+                    </Button>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPrDialogOpen(true)}
+                          disabled={!canCreatePr || !isCreatePrBranchReady}
+                        >
+                          <GitPullRequest className="h-4 w-4 md:mr-2" />
+                          <span className="hidden md:inline">Create PR</span>
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {createPrDisabledReason && (
+                      <TooltipContent side="bottom" sideOffset={8}>
+                        {createPrDisabledReason}
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </>
               )
             ) : !supportsRepoCreation ? null : (
               // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
@@ -2396,6 +2479,24 @@ export function SessionChatContent() {
           hasSandbox={sandboxInfo !== null}
           onPrDetected={(pr) => {
             updateSessionPullRequest(pr);
+          }}
+        />
+      )}
+
+      {/* Commit Dialog */}
+      {session && (
+        <CommitDialog
+          open={commitDialogOpen}
+          onOpenChange={setCommitDialogOpen}
+          session={session}
+          hasSandbox={sandboxInfo !== null}
+          gitStatus={gitStatus}
+          refreshGitStatus={refreshGitStatus}
+          onOpenCreatePr={() => setPrDialogOpen(true)}
+          onCommitted={() => {
+            refreshGitStatus().catch(() => {});
+            refreshDiff().catch(() => {});
+            refreshFiles().catch(() => {});
           }}
         />
       )}

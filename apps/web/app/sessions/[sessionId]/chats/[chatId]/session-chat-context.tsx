@@ -22,6 +22,10 @@ import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/rout
 import type { WebAgentUIMessage } from "@/app/types";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
+import {
+  type SessionGitStatus,
+  useSessionGitStatus,
+} from "@/hooks/use-session-git-status";
 import { useSessionSkills } from "@/hooks/use-session-skills";
 import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
@@ -129,6 +133,14 @@ type SessionChatContextValue = {
   diffCachedAt: Date | null;
   /** Trigger a diff refresh */
   refreshDiff: () => Promise<void>;
+  /** Git status for the current session workspace */
+  gitStatus: SessionGitStatus | null;
+  /** Whether git status is loading */
+  gitStatusLoading: boolean;
+  /** Git status error message */
+  gitStatusError: string | null;
+  /** Trigger a git status refresh */
+  refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   /** File suggestions from sandbox */
   files: FileSuggestion[] | null;
   /** Whether files are loading */
@@ -757,6 +769,13 @@ export function SessionChatProvider({
   });
 
   const {
+    gitStatus,
+    isLoading: gitStatusLoading,
+    error: gitStatusError,
+    refresh: refreshGitStatusSWR,
+  } = useSessionGitStatus(sessionRecord.id, sandboxConnected);
+
+  const {
     files,
     isLoading: filesLoading,
     error: filesError,
@@ -785,6 +804,10 @@ export function SessionChatProvider({
   const refreshDiff = useCallback(async () => {
     await refreshDiffSWR();
   }, [refreshDiffSWR]);
+
+  const refreshGitStatus = useCallback(async () => {
+    return refreshGitStatusSWR();
+  }, [refreshGitStatusSWR]);
 
   const refreshFiles = useCallback(async () => {
     await refreshFilesSWR();
@@ -964,6 +987,10 @@ export function SessionChatProvider({
       diffIsStale,
       diffCachedAt,
       refreshDiff,
+      gitStatus,
+      gitStatusLoading,
+      gitStatusError,
+      refreshGitStatus,
       files,
       filesLoading,
       filesError,
@@ -1007,6 +1034,10 @@ export function SessionChatProvider({
       diffIsStale,
       diffCachedAt,
       refreshDiff,
+      gitStatus,
+      gitStatusLoading,
+      gitStatusError,
+      refreshGitStatus,
       files,
       filesLoading,
       filesError,

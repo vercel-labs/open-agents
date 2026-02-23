@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertCircle,
   Check,
   ExternalLink,
   GitCommit,
@@ -48,7 +47,7 @@ interface GitActions {
   pushedToFork?: boolean;
 }
 
-type WizardStep = "create-branch" | "commit" | "generate";
+type WizardStep = "create-branch" | "generate";
 
 function buildCompareUrl(params: {
   owner: string;
@@ -103,8 +102,6 @@ export function CreatePRDialog({
   const [isDetachedHead, setIsDetachedHead] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [step, setStep] = useState<WizardStep>("generate");
-  const [isCommitting, setIsCommitting] = useState(false);
-  const [uncommittedFileCount, setUncommittedFileCount] = useState(0);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
 
@@ -121,7 +118,6 @@ export function CreatePRDialog({
       setHasUncommittedChanges(false);
       setIsDetachedHead(false);
       setStep("generate");
-      setUncommittedFileCount(0);
       setHasGenerated(false);
       setPrHeadOwner(null);
     }
@@ -141,7 +137,6 @@ export function CreatePRDialog({
         const data = await res.json();
         setHasUncommittedChanges(data.hasUncommittedChanges ?? false);
         setIsDetachedHead(data.isDetachedHead ?? false);
-        setUncommittedFileCount(data.uncommittedFiles ?? 0);
         if (data.branch && data.branch !== "HEAD") {
           setResolvedBranch(data.branch);
         }
@@ -177,13 +172,11 @@ export function CreatePRDialog({
     if (!isCheckingStatus && open) {
       if (needsNewBranch) {
         setStep("create-branch");
-      } else if (hasUncommittedChanges) {
-        setStep("commit");
       } else {
         setStep("generate");
       }
     }
-  }, [isCheckingStatus, open, needsNewBranch, hasUncommittedChanges]);
+  }, [isCheckingStatus, open, needsNewBranch]);
 
   const fetchBranches = useCallback(async () => {
     setIsLoadingBranches(true);
@@ -246,62 +239,13 @@ export function CreatePRDialog({
         setResolvedBranch(data.branchName as string);
         // Branch created successfully, no longer in detached HEAD state
         setIsDetachedHead(false);
-        // Advance to next step
-        if (hasUncommittedChanges) {
-          setStep("commit");
-        } else {
-          setStep("generate");
-        }
+        // Advance to PR generation step
+        setStep("generate");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create branch");
     } finally {
       setIsCreatingBranch(false);
-    }
-  };
-
-  const handleCommit = async () => {
-    if (!hasSandbox) {
-      setError("Sandbox not active. Please wait for sandbox to start.");
-      return;
-    }
-    setIsCommitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName: displayBranch,
-          commitOnly: true,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to commit changes");
-      }
-
-      if (data.gitActions) {
-        setGitActions(data.gitActions);
-      }
-      if (typeof data.prHeadOwner === "string" && data.prHeadOwner.length > 0) {
-        setPrHeadOwner(data.prHeadOwner);
-      }
-      if (data.branchName && data.branchName !== "HEAD") {
-        setResolvedBranch(data.branchName as string);
-      }
-      // Advance to generate step
-      setHasUncommittedChanges(false);
-      setStep("generate");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to commit changes");
-    } finally {
-      setIsCommitting(false);
     }
   };
 
@@ -416,11 +360,7 @@ export function CreatePRDialog({
   };
 
   const isDisabled =
-    isGenerating ||
-    isCreating ||
-    isCreatingBranch ||
-    isCheckingStatus ||
-    isCommitting;
+    isGenerating || isCreating || isCreatingBranch || isCheckingStatus;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -505,26 +445,15 @@ export function CreatePRDialog({
                 </>
               )}
 
-              {/* Step: Commit Changes */}
-              {step === "commit" && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-                  <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
-                  <div>
-                    <p className="font-medium text-amber-700 dark:text-amber-400">
-                      {uncommittedFileCount > 0
-                        ? `${uncommittedFileCount} uncommitted ${uncommittedFileCount === 1 ? "file" : "files"}`
-                        : "Uncommitted changes detected"}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Commit your changes before creating a pull request.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {/* Step: Generate PR */}
               {step === "generate" && (
                 <>
+                  {hasUncommittedChanges && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                      Commit your changes before creating a pull request.
+                    </div>
+                  )}
+
                   {/* Git Actions Banner */}
                   {gitActions &&
                     (gitActions.committed || gitActions.pushed) && (
@@ -617,30 +546,18 @@ export function CreatePRDialog({
                 </Button>
               )}
 
-              {/* Step: Commit - Footer */}
-              {step === "commit" && (
-                <Button
-                  onClick={handleCommit}
-                  disabled={isDisabled || !hasSandbox}
-                >
-                  {isCommitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Committing...
-                    </>
-                  ) : (
-                    "Commit changes"
-                  )}
-                </Button>
-              )}
-
               {/* Step: Generate PR - Footer */}
               {step === "generate" && (
                 <>
                   <Button
                     variant="outline"
                     onClick={handleGenerate}
-                    disabled={isDisabled || !hasSandbox || hasGenerated}
+                    disabled={
+                      isDisabled ||
+                      !hasSandbox ||
+                      hasGenerated ||
+                      hasUncommittedChanges
+                    }
                   >
                     {isGenerating ? (
                       <>
@@ -661,7 +578,9 @@ export function CreatePRDialog({
                   </Button>
                   <Button
                     onClick={handleCreate}
-                    disabled={isDisabled || !title.trim()}
+                    disabled={
+                      isDisabled || !title.trim() || hasUncommittedChanges
+                    }
                   >
                     {isCreating ? (
                       <>

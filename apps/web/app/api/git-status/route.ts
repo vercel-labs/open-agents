@@ -7,6 +7,61 @@ interface GitStatusRequest {
   sessionId: string;
 }
 
+function parsePorcelainStatus(output: string): {
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  uncommittedFiles: number;
+} {
+  const stagedFiles = new Set<string>();
+  const unstagedFiles = new Set<string>();
+  const untrackedFiles = new Set<string>();
+
+  for (const line of output.trim().split("\n")) {
+    if (!line || line.length < 3) continue;
+
+    const indexStatus = line[0];
+    const worktreeStatus = line[1];
+    const filePath = line.slice(3).trim();
+    if (!filePath) continue;
+
+    if (indexStatus === "?" && worktreeStatus === "?") {
+      untrackedFiles.add(filePath);
+      continue;
+    }
+
+    if (indexStatus !== " " && indexStatus !== "?") {
+      stagedFiles.add(filePath);
+    }
+
+    if (worktreeStatus !== " " && worktreeStatus !== "?") {
+      unstagedFiles.add(filePath);
+    }
+  }
+
+  const uncommitted = new Set<string>([
+    ...stagedFiles,
+    ...unstagedFiles,
+    ...untrackedFiles,
+  ]);
+
+  return {
+    stagedCount: stagedFiles.size,
+    unstagedCount: unstagedFiles.size,
+    untrackedCount: untrackedFiles.size,
+    uncommittedFiles: uncommitted.size,
+  };
+}
+
+function parseRemoteRef(output: string): string | null {
+  const trimmed = output.trim();
+  const match = trimmed.match(/^refs\/remotes\/(.+)$/);
+  if (!match || !match[1]) {
+    return null;
+  }
+  return match[1];
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
@@ -71,18 +126,49 @@ export async function POST(req: Request) {
       cwd,
       10000,
     );
-    const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+    const { stagedCount, unstagedCount, untrackedCount, uncommittedFiles } =
+      parsePorcelainStatus(statusResult.stdout);
+    const hasUncommittedChanges = uncommittedFiles > 0;
 
-    // Count uncommitted files
-    const uncommittedFiles = statusResult.stdout
-      .trim()
-      .split("\n")
-      .filter((line) => line.length > 0).length;
+    // Check for commits ahead of upstream or default remote branch
+    let hasUnpushedCommits = false;
+    const upstreamRefResult = await sandbox.exec(
+      "git rev-parse --abbrev-ref --symbolic-full-name @{upstream}",
+      cwd,
+      10000,
+    );
+
+    let aheadBaseRef: string | null = null;
+    if (upstreamRefResult.success && upstreamRefResult.stdout.trim()) {
+      aheadBaseRef = upstreamRefResult.stdout.trim();
+    } else {
+      const defaultRemoteRefResult = await sandbox.exec(
+        "git symbolic-ref refs/remotes/origin/HEAD",
+        cwd,
+        10000,
+      );
+      aheadBaseRef = parseRemoteRef(defaultRemoteRefResult.stdout);
+    }
+
+    if (aheadBaseRef) {
+      const aheadResult = await sandbox.exec(
+        `git rev-list ${aheadBaseRef}..HEAD`,
+        cwd,
+        10000,
+      );
+      if (aheadResult.success) {
+        hasUnpushedCommits = aheadResult.stdout.trim().length > 0;
+      }
+    }
 
     return Response.json({
       branch,
       isDetachedHead,
       hasUncommittedChanges,
+      hasUnpushedCommits,
+      stagedCount,
+      unstagedCount,
+      untrackedCount,
       uncommittedFiles: hasUncommittedChanges ? uncommittedFiles : 0,
     });
   } catch (error) {
