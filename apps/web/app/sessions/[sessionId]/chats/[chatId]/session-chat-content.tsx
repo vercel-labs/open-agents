@@ -740,28 +740,50 @@ export function SessionChatContent() {
   );
   hasAssistantRenderableContentRef.current = hasAssistantRenderableContent;
   const hasSeenAssistantRenderableContentRef = useRef(false);
+  const [hasPendingResponse, setHasPendingResponse] = useState(false);
 
   useEffect(() => {
-    if (!isChatInFlight) {
+    if (isChatInFlight && !hasPendingResponse) {
+      setHasPendingResponse(true);
+      return;
+    }
+
+    if (status === "error") {
+      if (hasPendingResponse) {
+        setHasPendingResponse(false);
+      }
+      return;
+    }
+
+    if (status === "ready" && hasAssistantRenderableContentRef.current) {
+      if (hasPendingResponse) {
+        setHasPendingResponse(false);
+      }
+    }
+  }, [isChatInFlight, status, hasPendingResponse]);
+
+  useEffect(() => {
+    if (!isChatInFlight && !hasPendingResponse) {
       hasSeenAssistantRenderableContentRef.current = false;
       return;
     }
     if (hasAssistantRenderableContent) {
       hasSeenAssistantRenderableContentRef.current = true;
     }
-  }, [isChatInFlight, hasAssistantRenderableContent]);
+  }, [isChatInFlight, hasPendingResponse, hasAssistantRenderableContent]);
 
   const hasSeenAssistantRenderableContent =
     hasAssistantRenderableContent ||
     hasSeenAssistantRenderableContentRef.current;
+  const effectiveStatus = hasPendingResponse ? "streaming" : status;
   const showThinkingIndicator = useMemo(
     () =>
       shouldShowThinkingIndicator({
-        status,
+        status: effectiveStatus,
         hasAssistantRenderableContent: hasSeenAssistantRenderableContent,
         lastMessageRole: lastMessage?.role,
       }),
-    [status, hasSeenAssistantRenderableContent, lastMessage?.role],
+    [effectiveStatus, hasSeenAssistantRenderableContent, lastMessage?.role],
   );
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {
@@ -2255,6 +2277,7 @@ export function SessionChatContent() {
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
                 }
+                setHasPendingResponse(true);
                 void setChatStreaming(chatInfo.id, true);
                 try {
                   await sendMessage({ text: messageText, files });
@@ -2266,6 +2289,7 @@ export function SessionChatContent() {
                     pendingOptimisticTitleChatIdRef.current = null;
                     hasSetOptimisticTitleRef.current = false;
                   }
+                  setHasPendingResponse(false);
                   void setChatStreaming(chatInfo.id, false);
                   console.error("Failed to send message:", err);
                 }
