@@ -1,6 +1,7 @@
 import type { SandboxState } from "@open-harness/sandbox";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -98,78 +99,86 @@ export const githubInstallations = pgTable(
   ],
 );
 
-export const sessions = pgTable("sessions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  status: text("status", {
-    enum: ["running", "completed", "failed", "archived"],
-  })
-    .notNull()
-    .default("running"),
-  // Repository info
-  repoOwner: text("repo_owner"),
-  repoName: text("repo_name"),
-  branch: text("branch"),
-  cloneUrl: text("clone_url"),
-  // Whether this session uses a new auto-generated branch
-  isNewBranch: boolean("is_new_branch").default(false).notNull(),
-  // Unified sandbox state
-  sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
-  // Lifecycle orchestration state for sandbox management
-  lifecycleState: text("lifecycle_state", {
-    enum: [
-      "provisioning",
-      "active",
-      "hibernating",
-      "hibernated",
-      "restoring",
-      "archived",
-      "failed",
-    ],
-  }),
-  lifecycleVersion: integer("lifecycle_version").notNull().default(0),
-  lastActivityAt: timestamp("last_activity_at"),
-  sandboxExpiresAt: timestamp("sandbox_expires_at"),
-  hibernateAfter: timestamp("hibernate_after"),
-  lifecycleRunId: text("lifecycle_run_id"),
-  lifecycleError: text("lifecycle_error"),
-  // Git stats (for display in session list)
-  linesAdded: integer("lines_added").default(0),
-  linesRemoved: integer("lines_removed").default(0),
-  // PR info if created
-  prNumber: integer("pr_number"),
-  prStatus: text("pr_status", {
-    enum: ["open", "merged", "closed"],
-  }),
-  // Snapshot info (for cached snapshots feature)
-  snapshotUrl: text("snapshot_url"),
-  snapshotCreatedAt: timestamp("snapshot_created_at"),
-  snapshotSizeBytes: integer("snapshot_size_bytes"),
-  // Cached diff for offline viewing
-  cachedDiff: jsonb("cached_diff"),
-  cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
-  // Sharing
-  shareId: text("share_id").unique(),
-  // Timestamps
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    status: text("status", {
+      enum: ["running", "completed", "failed", "archived"],
+    })
+      .notNull()
+      .default("running"),
+    // Repository info
+    repoOwner: text("repo_owner"),
+    repoName: text("repo_name"),
+    branch: text("branch"),
+    cloneUrl: text("clone_url"),
+    // Whether this session uses a new auto-generated branch
+    isNewBranch: boolean("is_new_branch").default(false).notNull(),
+    // Unified sandbox state
+    sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
+    // Lifecycle orchestration state for sandbox management
+    lifecycleState: text("lifecycle_state", {
+      enum: [
+        "provisioning",
+        "active",
+        "hibernating",
+        "hibernated",
+        "restoring",
+        "archived",
+        "failed",
+      ],
+    }),
+    lifecycleVersion: integer("lifecycle_version").notNull().default(0),
+    lastActivityAt: timestamp("last_activity_at"),
+    sandboxExpiresAt: timestamp("sandbox_expires_at"),
+    hibernateAfter: timestamp("hibernate_after"),
+    lifecycleRunId: text("lifecycle_run_id"),
+    lifecycleError: text("lifecycle_error"),
+    // Git stats (for display in session list)
+    linesAdded: integer("lines_added").default(0),
+    linesRemoved: integer("lines_removed").default(0),
+    // PR info if created
+    prNumber: integer("pr_number"),
+    prStatus: text("pr_status", {
+      enum: ["open", "merged", "closed"],
+    }),
+    // Snapshot info (for cached snapshots feature)
+    snapshotUrl: text("snapshot_url"),
+    snapshotCreatedAt: timestamp("snapshot_created_at"),
+    snapshotSizeBytes: integer("snapshot_size_bytes"),
+    // Cached diff for offline viewing
+    cachedDiff: jsonb("cached_diff"),
+    cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
+    // Sharing
+    shareId: text("share_id").unique(),
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("sessions_user_id_idx").on(table.userId)],
+);
 
-export const chats = pgTable("chats", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id")
-    .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
-  activeStreamId: text("active_stream_id"),
-  lastAssistantMessageAt: timestamp("last_assistant_message_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const chats = pgTable(
+  "chats",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
+    activeStreamId: text("active_stream_id"),
+    lastAssistantMessageAt: timestamp("last_assistant_message_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("chats_session_id_idx").on(table.sessionId)],
+);
 
 export const chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
@@ -197,7 +206,10 @@ export const chatReads = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.chatId] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.chatId] }),
+    index("chat_reads_chat_id_idx").on(table.chatId),
+  ],
 );
 
 export type Session = typeof sessions.$inferSelect;
