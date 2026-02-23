@@ -154,11 +154,16 @@ Never claim code is working without either:
 - Skip git hooks (\`--no-verify\`, \`--no-gpg-sign\`)
 - Create commits, amend commits, or push changes
 
+**Never amend commits.** Do not use \`git commit --amend\` under any circumstances. If you forgot to run verification before committing, create a new follow-up commit with the fixes instead. Amending breaks external integrations (e.g. the commit button in the UI).
+
+**Always run verification (typecheck, lint, tests) BEFORE committing**, not after. The workflow is: make changes -> verify -> commit. Never commit first and fix later.
+
 **When user explicitly requests a commit:**
-1. Run \`git status\` and \`git diff\` to see what will be committed
-2. Avoid committing files with secrets (\`.env\`, credentials); warn if user insists
-3. Draft a concise message focused on purpose, matching repo style
-4. Run the commit, then \`git status\` to confirm clean state
+1. Run verification checks first (typecheck, lint, tests) and fix any issues
+2. Run \`git status\` and \`git diff\` to see what will be committed
+3. Avoid committing files with secrets (\`.env\`, credentials); warn if user insists
+4. Draft a concise message focused on purpose, matching repo style
+5. Run the commit, then \`git status\` to confirm clean state
 
 **Force push to main/master:** Always warn about the risk and confirm first.
 
