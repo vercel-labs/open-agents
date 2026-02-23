@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Brain } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +43,7 @@ export function ThinkingBlock({
 
   const formatLabel = () => {
     if (isStreaming) {
-      return elapsed > 0 ? `Thought for ${elapsed}s...` : "Thinking...";
+      return "Thinking...";
     }
     return elapsed > 0
       ? `Thought for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
@@ -57,7 +57,6 @@ export function ThinkingBlock({
         onClick={() => setIsOpen((prev) => !prev)}
         className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <Brain className="h-3.5 w-3.5 shrink-0" />
         <span className={cn(isStreaming && "animate-pulse")}>
           {formatLabel()}
         </span>
