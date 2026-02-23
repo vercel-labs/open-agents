@@ -2,7 +2,7 @@
 
 ## Status
 
-- Drafted
+- Implemented
 - Scope: fast safety fix only ("fix #1")
 
 ## Assumptions
