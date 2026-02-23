@@ -8,6 +8,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - The system prompt should list all model-invocable skills (including non-user-invocable ones), and reserve user-invocable filtering for the slash-command UI.
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
 - In shell tools, avoid piping primary command output directly to `head` when exit-code handling matters; pipeline semantics can mask real failures from the primary command.
+- Verification instructions must tell the agent to consult AGENTS.md / `package.json` scripts **before** listing generic steps like "typecheck -> lint -> build"; otherwise models default to raw commands (`npx tsc`, `eslint .`) which bypass project-specific tool config (turbo pipelines, tsconfig references, biome, etc.) and produce incorrect or incomplete results.
 - Tool renderer `part.output` values may be `unknown`; when accessing fields like `files` or `matches`, add runtime narrowing/type guards first (in both TUI and web renderers) to satisfy strict typecheck.
 - AI SDK stream handles may return `PromiseLike` values (not full `Promise`), so avoid methods like `.finally()` and use `then`/`catch` patterns that work with `PromiseLike`.
 - After schema edits, review generated Drizzle migrations for unrelated schema drift changes before committing (for example defaults on untouched columns), since `drizzle-kit generate` can include those alongside intended changes.

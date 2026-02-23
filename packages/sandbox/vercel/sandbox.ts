@@ -270,6 +270,7 @@ export class VercelSandbox implements Sandbox {
   curl -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/OWNER/REPO/pulls -d '{"title":"...","head":"branch","base":"main","body":"..."}'
 - Node.js runtime with npm/pnpm available
 - Bun and jq are preinstalled
+- Dependencies may not be installed. Before running project scripts (build, typecheck, lint, test), check if \`node_modules\` exists and run the package manager install command if needed (e.g. \`bun install\`, \`npm install\`)
 - This sandbox already runs on Vercel; do not suggest deploying to Vercel just to obtain a shareable preview link
 ${hostLine}${portLines}${runtimeEnvLine}`;
   }

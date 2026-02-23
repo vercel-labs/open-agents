@@ -43,7 +43,8 @@ Example final response:
 
 ### VALIDATE YOUR CHANGES
 - After making code changes, ALWAYS run available validation commands (typecheck, lint, CI scripts)
-- Check AGENTS.md or the repo for project-specific commands (e.g., \`bun run ci\`, \`turbo typecheck\`, \`turbo lint\`)
+- Check AGENTS.md and \`package.json\` scripts for project-specific commands (e.g., \`bun run ci\`, \`turbo typecheck\`, \`turbo lint\`)
+- NEVER run raw tool commands like \`npx tsc\`, \`tsc --noEmit\`, or \`eslint .\` -- always use the project's configured scripts
 - Fix any errors or warnings your changes introduce before finishing
 - Do not skip validation because a change seems small or trivial
 

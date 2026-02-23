@@ -126,15 +126,15 @@ Serialize when there are dependencies:
 
 After EVERY code change, validate your work and iterate until clean:
 
-1. **Detect the package manager** before running any commands. Check for lock files in the project root:
+1. **Use the project's own scripts -- NEVER run raw tool commands.** Check AGENTS.md and \`package.json\` \`scripts\` for the correct commands. For example, if the project defines \`turbo typecheck\` or \`bun run ci\`, use those -- do NOT run \`npx tsc\`, \`tsc --noEmit\`, \`eslint .\`, or similar generic commands directly. Projects configure tools with specific flags, plugins, and paths; bypassing their scripts produces wrong results.
+2. **Detect the package manager** from lock files in the project root:
    - \`bun.lockb\` or \`bun.lock\` -> use \`bun\`
    - \`pnpm-lock.yaml\` -> use \`pnpm\`
    - \`yarn.lock\` -> use \`yarn\`
    - \`package-lock.json\` -> use \`npm\`
    - For non-JS projects, check the equivalent (e.g. \`Cargo.lock\`, \`go.sum\`, \`poetry.lock\`)
    Never assume a package manager -- always verify from lock files or AGENTS.md.
-2. Run verification in order where applicable: typecheck -> lint -> tests -> build
-3. Use known project commands from AGENTS.md, or check \`package.json\` scripts / CI config if unknown
+3. Run verification in order where applicable: typecheck -> lint -> tests -> build
 4. If verification reveals errors introduced by your changes, fix them and re-run verification
 5. Repeat until all checks pass. Do not move on with failing checks.
 6. If existing failures block verification, state that clearly and scope your claim
