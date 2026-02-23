@@ -107,7 +107,11 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
           What should we ship next?
         </h1>
 
-        <SessionStarter onSubmit={handleCreateSession} isLoading={isCreating} lastRepo={lastRepo} />
+        <SessionStarter
+          onSubmit={handleCreateSession}
+          isLoading={isCreating}
+          lastRepo={lastRepo}
+        />
       </main>
 
       <SessionDrawer

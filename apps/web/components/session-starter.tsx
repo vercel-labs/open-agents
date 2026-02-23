@@ -28,8 +28,11 @@ interface SessionStarterProps {
   lastRepo: { owner: string; repo: string; branch?: string } | null;
 }
 
-export function SessionStarter({ onSubmit, isLoading, lastRepo }: SessionStarterProps) {
-
+export function SessionStarter({
+  onSubmit,
+  isLoading,
+  lastRepo,
+}: SessionStarterProps) {
   const [mode, setMode] = useState<SessionMode>(() =>
     lastRepo ? "repo" : "empty",
   );
