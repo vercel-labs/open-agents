@@ -11,7 +11,7 @@ import type { SubagentUIMessage } from "../subagents/types";
 import type { ApprovalRule } from "../types";
 import {
   getApprovalContext,
-  getModel,
+  getSubagentModel,
   getSandbox,
   shouldAutoApprove,
 } from "./utils";
@@ -131,7 +131,7 @@ NOTE: The executor subagent requires user approval before running because it has
     { experimental_context, abortSignal },
   ) {
     const sandbox = getSandbox(experimental_context, "task");
-    const model = getModel(experimental_context, "task");
+    const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =

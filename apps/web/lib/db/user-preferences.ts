@@ -6,11 +6,13 @@ import type { SandboxType } from "@/components/sandbox-selector-compact";
 
 export interface UserPreferencesData {
   defaultModelId: string;
+  defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultModelId: "anthropic/claude-haiku-4.5",
+  defaultSubagentModelId: null,
   defaultSandboxType: "vercel",
 };
 
@@ -30,6 +32,7 @@ export async function getUserPreferences(
     return {
       defaultModelId:
         existing.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
+      defaultSubagentModelId: existing.defaultSubagentModelId ?? null,
       defaultSandboxType:
         (existing.defaultSandboxType as SandboxType) ??
         DEFAULT_PREFERENCES.defaultSandboxType,
@@ -65,6 +68,7 @@ export async function updateUserPreferences(
     return {
       defaultModelId:
         updated?.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
+      defaultSubagentModelId: updated?.defaultSubagentModelId ?? null,
       defaultSandboxType:
         (updated?.defaultSandboxType as SandboxType) ??
         DEFAULT_PREFERENCES.defaultSandboxType,
@@ -79,6 +83,7 @@ export async function updateUserPreferences(
       userId,
       defaultModelId:
         updates.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
+      defaultSubagentModelId: updates.defaultSubagentModelId ?? null,
       defaultSandboxType:
         updates.defaultSandboxType ?? DEFAULT_PREFERENCES.defaultSandboxType,
     })
@@ -87,6 +92,7 @@ export async function updateUserPreferences(
   return {
     defaultModelId:
       created?.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
+    defaultSubagentModelId: created?.defaultSubagentModelId ?? null,
     defaultSandboxType:
       (created?.defaultSandboxType as SandboxType) ??
       DEFAULT_PREFERENCES.defaultSandboxType,

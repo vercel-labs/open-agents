@@ -146,6 +146,27 @@ export function getModel(
 }
 
 /**
+ * Get subagent model from experimental context, falling back to the main model.
+ * Returns the dedicated subagent model if configured, otherwise the main agent model.
+ */
+export function getSubagentModel(
+  experimental_context: unknown,
+  toolName?: string,
+): LanguageModel {
+  const context = isAgentContext(experimental_context)
+    ? experimental_context
+    : undefined;
+  if (!context?.model) {
+    const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+    throw new Error(
+      `Model not initialized in context${toolInfo}. ` +
+        "Ensure the agent's prepareCall sets experimental_context: { model, ... }",
+    );
+  }
+  return context.subagentModel ?? context.model;
+}
+
+/**
  * Simple glob pattern matching for approval rules.
  * Supports patterns like "src/**", "**\/*.ts", "src/components/**".
  *

@@ -41,6 +41,7 @@ const callOptionsSchema = z.object({
   sandbox: z.custom<Sandbox>(),
   approval: approvalConfigSchema,
   model: z.custom<LanguageModel>().optional(),
+  subagentModel: z.custom<LanguageModel>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
 });
@@ -84,6 +85,7 @@ export const openHarnessAgent = new ToolLoopAgent({
     }
     const approval: ApprovalConfig = options.approval;
     const callModel = options.model ?? model;
+    const subagentModel = options.subagentModel;
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
@@ -109,7 +111,13 @@ export const openHarnessAgent = new ToolLoopAgent({
         model: callModel,
       }),
       instructions,
-      experimental_context: { sandbox, approval, skills, model: callModel },
+      experimental_context: {
+        sandbox,
+        approval,
+        skills,
+        model: callModel,
+        subagentModel,
+      },
     };
   },
 });

@@ -7,6 +7,7 @@ import type { SandboxType } from "@/components/sandbox-selector-compact";
 
 interface UpdatePreferencesRequest {
   defaultModelId?: string;
+  defaultSubagentModelId?: string | null;
   defaultSandboxType?: SandboxType;
 }
 

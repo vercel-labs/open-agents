@@ -30,6 +30,7 @@ import {
 import { recordUsage } from "@/lib/db/usage";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
@@ -320,6 +321,19 @@ export async function POST(req: Request) {
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
   }
 
+  // Resolve subagent model from user preferences (if configured)
+  let subagentModel: ReturnType<typeof gateway> | undefined;
+  try {
+    const preferences = await getUserPreferences(session.user.id);
+    if (preferences.defaultSubagentModelId) {
+      subagentModel = gateway(
+        preferences.defaultSubagentModelId as GatewayModelId,
+      );
+    }
+  } catch (error) {
+    console.error("Failed to resolve subagent model preference:", error);
+  }
+
   // Use Redis stop signals as the sole cancellation mechanism for generation.
   // We intentionally do not bind `req.signal` so a transient client disconnect
   // does not cancel work; clients can reconnect via resumable streams.
@@ -362,6 +376,7 @@ export async function POST(req: Request) {
       options: {
         sandbox,
         model,
+        subagentModel,
         // TODO: consider enabling approvals for non-cloud-sandbox environments
         approval: {
           type: "interactive",

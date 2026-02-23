@@ -100,6 +100,19 @@ export function PreferencesSection() {
     }
   };
 
+  const handleSubagentModelChange = async (value: string) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({
+        defaultSubagentModelId: value === "auto" ? null : value,
+      });
+    } catch (error) {
+      console.error("Failed to update subagent model preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSandboxChange = async (sandboxType: SandboxType) => {
     setIsSaving(true);
     try {
@@ -145,6 +158,31 @@ export function PreferencesSection() {
           </Select>
           <p className="text-xs text-muted-foreground">
             The AI model used for new chats.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="subagent-model">Subagent Model</Label>
+          <Select
+            value={preferences?.defaultSubagentModelId ?? "auto"}
+            onValueChange={handleSubagentModelChange}
+            disabled={isSaving || modelsLoading}
+          >
+            <SelectTrigger id="subagent-model" className="w-full max-w-xs">
+              <SelectValue placeholder="Select a model" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Same as main model</SelectItem>
+              {models.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {getModelDisplayName(model)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The AI model used for explorer and executor subagents. Defaults to
+            the main model if not set.
           </p>
         </div>
 

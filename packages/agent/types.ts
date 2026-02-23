@@ -37,6 +37,7 @@ export interface AgentContext {
   approval: ApprovalConfig;
   skills?: SkillMetadata[];
   model: LanguageModel;
+  subagentModel?: LanguageModel;
 }
 
 /**

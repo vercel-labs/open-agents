@@ -6,6 +6,7 @@ import type { SandboxType } from "@/components/sandbox-selector-compact";
 
 export interface UserPreferences {
   defaultModelId: string;
+  defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
 }
 
