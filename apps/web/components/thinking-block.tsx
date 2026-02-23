@@ -25,7 +25,9 @@ export function ThinkingBlock({
       }
       intervalRef.current = setInterval(() => {
         setElapsed(
-          Math.floor((Date.now() - (startTimeRef.current ?? Date.now())) / 1000)
+          Math.floor(
+            (Date.now() - (startTimeRef.current ?? Date.now())) / 1000,
+          ),
         );
       }, 1000);
     } else if (intervalRef.current) {
@@ -41,7 +43,7 @@ export function ThinkingBlock({
 
   const formatLabel = () => {
     if (isStreaming) {
-      return elapsed > 0 ? `Thinking for ${elapsed}s...` : "Thinking...";
+      return elapsed > 0 ? `Thought for ${elapsed}s...` : "Thinking...";
     }
     return elapsed > 0
       ? `Thought for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
