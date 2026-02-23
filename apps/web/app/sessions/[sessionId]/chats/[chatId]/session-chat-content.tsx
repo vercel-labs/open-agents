@@ -755,7 +755,7 @@ export function SessionChatContent() {
       return;
     }
 
-    if (status === "ready" && hasAssistantRenderableContentRef.current) {
+    if (status === "ready") {
       if (hasPendingResponse) {
         setHasPendingResponse(false);
       }
