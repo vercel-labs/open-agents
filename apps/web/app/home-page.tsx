@@ -16,12 +16,7 @@ import { useSessions } from "@/hooks/use-sessions";
 
 interface HomePageProps {
   hasSessionCookie: boolean;
-  lastRepo: {
-    owner: string;
-    repo: string;
-    branch: string | null;
-    isNewBranch: boolean;
-  } | null;
+  lastRepo: { owner: string; repo: string } | null;
 }
 
 export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {

@@ -148,12 +148,17 @@ export function RepoSelectorCompact({
     }
   }, [installations, currentOwner]);
 
-  // Sync currentOwner with selectedOwner prop
+  const lastSelectedOwnerRef = useRef(selectedOwner);
+
+  // Sync currentOwner with selectedOwner prop when the parent changes it.
   useEffect(() => {
-    if (selectedOwner && selectedOwner !== currentOwner) {
-      setCurrentOwner(selectedOwner);
+    if (selectedOwner === lastSelectedOwnerRef.current) {
+      return;
     }
-  }, [selectedOwner, currentOwner]);
+
+    lastSelectedOwnerRef.current = selectedOwner;
+    setCurrentOwner(selectedOwner);
+  }, [selectedOwner]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
