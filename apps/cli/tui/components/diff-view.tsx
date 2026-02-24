@@ -41,40 +41,50 @@ export function DiffView({
       </box>
 
       {/* Diff lines */}
-      <box flexDirection="column" marginLeft={2}>
-        {displayLines.map((line, i) => (
-          <box key={i}>
-            {/* Line number */}
-            <text fg="gray">{String(line.lineNumber).padStart(3, " ")} </text>
+      <scrollbox
+        scrollX
+        horizontalScrollbarOptions={{ visible: false }}
+        marginLeft={2}
+      >
+        <box flexDirection="column">
+          {displayLines.map((line, i) => (
+            <box key={i} flexDirection="row" flexWrap="no-wrap">
+              {/* Line number */}
+              <text fg="gray" wrapMode="none">
+                {String(line.lineNumber).padStart(3, " ")} 
+              </text>
 
-            {/* +/- indicator and content */}
-            {line.type === "addition" ? (
-              <>
-                <text fg="green" bg="brightGreen">
-                  +{" "}
-                </text>
-                <text fg="white" bg="green">
-                  {line.content}
-                </text>
-              </>
-            ) : line.type === "removal" ? (
-              <>
-                <text fg="red" bg="brightRed">
-                  -{" "}
-                </text>
-                <text fg="white" bg="red">
-                  {line.content}
-                </text>
-              </>
-            ) : (
-              <>
-                <text fg="gray"> </text>
-                <text>{line.content}</text>
-              </>
-            )}
-          </box>
-        ))}
-      </box>
+              {/* +/- indicator and content */}
+              {line.type === "addition" ? (
+                <>
+                  <text fg="green" bg="brightGreen" wrapMode="none">
+                    +{" "}
+                  </text>
+                  <text fg="white" bg="green" wrapMode="none">
+                    {line.content}
+                  </text>
+                </>
+              ) : line.type === "removal" ? (
+                <>
+                  <text fg="red" bg="brightRed" wrapMode="none">
+                    -{" "}
+                  </text>
+                  <text fg="white" bg="red" wrapMode="none">
+                    {line.content}
+                  </text>
+                </>
+              ) : (
+                <>
+                  <text fg="gray" wrapMode="none">
+                    {" "}
+                  </text>
+                  <text wrapMode="none">{line.content}</text>
+                </>
+              )}
+            </box>
+          ))}
+        </box>
+      </scrollbox>
     </box>
   );
 }
