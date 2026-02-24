@@ -966,7 +966,14 @@ export function SessionChatContent() {
       return;
     }
 
-    if (!isChatInFlight || hasAssistantRenderableContent) {
+    // Only recover when we're actively streaming but no content appears.
+    // During "submitted" the POST is still in flight — the server may be
+    // doing expensive setup (connecting sandbox, discovering skills, etc.)
+    // which can legitimately take 10+ seconds. Aborting it prematurely
+    // kills the connection and the subsequent resumeStream fails because
+    // activeStreamId hasn't been set yet (the server hasn't started
+    // streaming). The user then sees no response until a manual refresh.
+    if (status !== "streaming" || hasAssistantRenderableContent) {
       return;
     }
 
@@ -1021,8 +1028,11 @@ export function SessionChatContent() {
     };
   }, [maybeRecoverStream]);
 
+  // Schedule a stall-recovery timer only while actively streaming. During
+  // "submitted" the POST is still waiting for the server to finish setup
+  // and start producing data — aborting it would be premature.
   useEffect(() => {
-    if (!isChatInFlight || hasAssistantRenderableContent) {
+    if (status !== "streaming" || hasAssistantRenderableContent) {
       return;
     }
     if (
@@ -1040,7 +1050,7 @@ export function SessionChatContent() {
     }, waitMs);
 
     return () => clearTimeout(timeout);
-  }, [isChatInFlight, hasAssistantRenderableContent, maybeRecoverStream]);
+  }, [status, hasAssistantRenderableContent, maybeRecoverStream]);
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
