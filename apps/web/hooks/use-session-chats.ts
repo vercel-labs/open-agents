@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import type { Chat } from "@/lib/db/schema";
 import { fetcherNoStore } from "@/lib/swr";
@@ -105,6 +105,7 @@ export function useSessionChats(
   options?: UseSessionChatsOptions,
 ) {
   const [_overlayVersion, setOverlayVersion] = useState(0);
+  const lastNonEmptyChatsRef = useRef<SessionChatListItem[]>([]);
   const optimisticOverlay = useMemo(
     () => (sessionId ? getSessionOverlay(sessionId) : null),
     [sessionId],
@@ -202,7 +203,7 @@ export function useSessionChats(
     [optimisticOverlay, sessionId],
   );
 
-  const chats = (data?.chats ?? []).map((chat) => {
+  const mergedChats = (data?.chats ?? []).map((chat) => {
     const overlay = optimisticOverlay?.get(chat.id);
     if (!overlay) {
       return chat;
@@ -217,6 +218,17 @@ export function useSessionChats(
     }
     return next;
   });
+
+  useEffect(() => {
+    if (mergedChats.length > 0) {
+      lastNonEmptyChatsRef.current = mergedChats;
+    }
+  }, [mergedChats]);
+
+  const chats =
+    mergedChats.length === 0 && lastNonEmptyChatsRef.current.length > 0
+      ? lastNonEmptyChatsRef.current
+      : mergedChats;
 
   useEffect(() => {
     if (!data || !optimisticOverlay || !sessionId) {
