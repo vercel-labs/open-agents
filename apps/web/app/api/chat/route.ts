@@ -21,6 +21,7 @@ import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
+  getChatMessages,
   getSessionById,
   isFirstChatMessage,
   updateChat,
@@ -621,20 +622,28 @@ export async function POST(req: Request) {
         }
 
         // --- EXPERIMENT: auto-continue on timeout abort ---
-        if (isAborted && abortedByTimeout) {
+        if (isAborted && abortedByTimeout && chatId) {
           console.log("[timeout-experiment] Triggering self-fetch to continue");
-          const continueMessages: WebAgentUIMessage[] = [
-            ...messages,
-            responseMessage,
-            {
-              id: nanoid(),
-              role: "user" as const,
-              parts: [{ type: "text" as const, text: "Continue." }],
-            },
-          ];
           after(async () => {
             try {
-              console.log("[timeout-experiment] after() firing self-fetch");
+              console.log("[timeout-experiment] after() reading messages from DB");
+              const dbMessages = await getChatMessages(chatId);
+              const persistedMessages: WebAgentUIMessage[] = dbMessages.map(
+                (m) => ({
+                  id: m.id,
+                  role: m.role as "user" | "assistant",
+                  parts: m.parts as WebAgentUIMessage["parts"],
+                }),
+              );
+              const continueMessages: WebAgentUIMessage[] = [
+                ...persistedMessages,
+                {
+                  id: nanoid(),
+                  role: "user" as const,
+                  parts: [{ type: "text" as const, text: "Continue." }],
+                },
+              ];
+              console.log("[timeout-experiment] after() firing self-fetch with", continueMessages.length, "messages");
               const res = await fetch(requestUrl, {
                 method: "POST",
                 headers: {
