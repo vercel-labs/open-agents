@@ -148,17 +148,41 @@ type MessageRenderGroup =
       type: "part";
       part: WebAgentUIMessagePart;
       index: number;
+      renderKey: string;
     }
   | {
       type: "task-group";
       tasks: TaskToolUIPart[];
       startIndex: number;
+      renderKey: string;
     };
 
 interface GroupedRenderMessage {
   message: WebAgentUIMessage;
   groups: MessageRenderGroup[];
   isStreaming: boolean;
+}
+
+function getPartIdentity(part: WebAgentUIMessagePart): string {
+  if (isToolUIPart(part)) {
+    return part.toolCallId ? `tool:${part.toolCallId}` : `tool:${part.type}`;
+  }
+
+  if (isReasoningUIPart(part)) {
+    return "reasoning";
+  }
+
+  if (part.type === "text") {
+    return "text";
+  }
+
+  if (part.type === "file") {
+    if (part.url) return `file:${part.url}`;
+    if (part.filename) return `file:${part.filename}`;
+    return "file";
+  }
+
+  return `part:${part.type}`;
 }
 
 type CreateSandboxResponse = SandboxInfo & {
@@ -831,6 +855,38 @@ export function SessionChatContent() {
       const groups: MessageRenderGroup[] = [];
       let currentTaskGroup: TaskToolUIPart[] = [];
       let taskGroupStartIndex = 0;
+      let taskGroupOrdinal = 0;
+      const partIdentityCounts = new Map<string, number>();
+
+      const getStablePartRenderKey = (part: WebAgentUIMessagePart): string => {
+        const identity = getPartIdentity(part);
+
+        if (isToolUIPart(part) && part.toolCallId) {
+          return identity;
+        }
+
+        const count = partIdentityCounts.get(identity) ?? 0;
+        partIdentityCounts.set(identity, count + 1);
+        return `${identity}:${count}`;
+      };
+
+      const flushTaskGroup = () => {
+        if (currentTaskGroup.length === 0) return;
+
+        const firstTaskId =
+          currentTaskGroup.find((task) => task.toolCallId)?.toolCallId ?? null;
+
+        groups.push({
+          type: "task-group",
+          tasks: currentTaskGroup,
+          startIndex: taskGroupStartIndex,
+          renderKey: firstTaskId
+            ? `task-group:${firstTaskId}`
+            : `task-group:${taskGroupOrdinal}`,
+        });
+        currentTaskGroup = [];
+        taskGroupOrdinal += 1;
+      };
 
       message.parts.forEach((part, index) => {
         if (isToolUIPart(part) && part.type === "tool-task") {
@@ -841,25 +897,16 @@ export function SessionChatContent() {
           return;
         }
 
-        if (currentTaskGroup.length > 0) {
-          groups.push({
-            type: "task-group",
-            tasks: currentTaskGroup,
-            startIndex: taskGroupStartIndex,
-          });
-          currentTaskGroup = [];
-        }
-
-        groups.push({ type: "part", part, index });
+        flushTaskGroup();
+        groups.push({
+          type: "part",
+          part,
+          index,
+          renderKey: getStablePartRenderKey(part),
+        });
       });
 
-      if (currentTaskGroup.length > 0) {
-        groups.push({
-          type: "task-group",
-          tasks: currentTaskGroup,
-          startIndex: taskGroupStartIndex,
-        });
-      }
+      flushTaskGroup();
 
       return {
         message,
@@ -2106,7 +2153,7 @@ export function SessionChatContent() {
                     if (group.type === "task-group") {
                       return (
                         <div
-                          key={`${m.id}-task-group-${group.startIndex}`}
+                          key={`${m.id}-${group.renderKey}`}
                           className="max-w-full"
                         >
                           <TaskGroupView
@@ -2133,12 +2180,11 @@ export function SessionChatContent() {
                     }
 
                     const p = group.part;
-                    const i = group.index;
 
                     if (isReasoningUIPart(p)) {
                       return (
                         <div
-                          key={`${m.id}-${i}`}
+                          key={`${m.id}-${group.renderKey}`}
                           className="flex justify-start"
                         >
                           <ThinkingBlock
@@ -2154,7 +2200,7 @@ export function SessionChatContent() {
                     if (p.type === "text") {
                       return (
                         <div
-                          key={`${m.id}-${i}`}
+                          key={`${m.id}-${group.renderKey}`}
                           className={cn(
                             "flex min-w-0",
                             m.role === "user" ? "justify-end" : "justify-start",
@@ -2190,7 +2236,7 @@ export function SessionChatContent() {
 
                     if (isToolUIPart(p)) {
                       return (
-                        <div key={`${m.id}-${i}`} className="max-w-full">
+                        <div key={`${m.id}-${group.renderKey}`} className="max-w-full">
                           <ToolCall
                             part={p as WebAgentUIToolPart}
                             isStreaming={isMessageStreaming}
@@ -2215,7 +2261,7 @@ export function SessionChatContent() {
                       p.mediaType?.startsWith("image/")
                     ) {
                       return (
-                        <div key={`${m.id}-${i}`} className="flex justify-end">
+                        <div key={`${m.id}-${group.renderKey}`} className="flex justify-end">
                           <div className="max-w-[80%]">
                             {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
                             <img
