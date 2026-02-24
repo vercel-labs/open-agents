@@ -55,8 +55,8 @@ export function GlobRenderer({
           Files ({files.length})
         </div>
         <div className="max-h-64 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
-          {files.map((file, i) => (
-            <div key={i} className="text-foreground">
+          {files.map((file) => (
+            <div key={file.path} className="text-foreground">
               {file?.path}
             </div>
           ))}

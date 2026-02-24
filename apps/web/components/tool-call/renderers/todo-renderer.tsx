@@ -70,35 +70,43 @@ export function TodoRenderer({
       {/* Expanded full content */}
       {isExpanded && todos.length > 0 && (
         <div className="mt-3 space-y-1 border-t border-border pt-3">
-          {todos.map((todo, index) => {
-            if (!todo) return null;
-            return (
-              <div
-                key={`${keyPrefix}-${index}`}
-                className="flex items-center gap-2"
-              >
-                {todo.status === "completed" ? (
-                  <CheckSquare className="h-4 w-4 text-green-500" />
-                ) : todo.status === "in_progress" ? (
-                  <Circle className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                ) : (
-                  <Square className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span
-                  className={cn(
-                    "text-sm",
-                    todo.status === "completed"
-                      ? "text-muted-foreground line-through"
-                      : todo.status === "in_progress"
-                        ? "text-yellow-500"
-                        : "text-foreground",
-                  )}
+          {(() => {
+            const todoContentCounts = new Map<string, number>();
+            return todos.map((todo) => {
+              if (!todo) return null;
+
+              const contentKey = todo.content ?? "";
+              const occurrence = todoContentCounts.get(contentKey) ?? 0;
+              todoContentCounts.set(contentKey, occurrence + 1);
+
+              return (
+                <div
+                  key={`${keyPrefix}-${contentKey}-${occurrence}`}
+                  className="flex items-center gap-2"
                 >
-                  {todo.content}
-                </span>
-              </div>
-            );
-          })}
+                  {todo.status === "completed" ? (
+                    <CheckSquare className="h-4 w-4 text-green-500" />
+                  ) : todo.status === "in_progress" ? (
+                    <Circle className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                  ) : (
+                    <Square className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span
+                    className={cn(
+                      "text-sm",
+                      todo.status === "completed"
+                        ? "text-muted-foreground line-through"
+                        : todo.status === "in_progress"
+                          ? "text-yellow-500"
+                          : "text-foreground",
+                    )}
+                  >
+                    {todo.content}
+                  </span>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 

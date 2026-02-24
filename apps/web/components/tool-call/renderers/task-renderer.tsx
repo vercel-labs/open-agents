@@ -13,6 +13,40 @@ import { ApprovalButtons } from "../approval-buttons";
 
 type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
+type KeyedSubagentPart = {
+  part: SubagentMessagePart;
+  renderKey: string;
+};
+
+function getRelevantPartRenderEntries(
+  messageParts: SubagentMessagePart[],
+): KeyedSubagentPart[] {
+  const entries: KeyedSubagentPart[] = [];
+  let textOrdinal = 0;
+  let toolOrdinal = 0;
+
+  for (const part of messageParts) {
+    if (isToolUIPart(part)) {
+      entries.push({
+        part,
+        renderKey: part.toolCallId ?? `tool:${part.type}:${toolOrdinal}`,
+      });
+      toolOrdinal += 1;
+      continue;
+    }
+
+    if (isTextUIPart(part)) {
+      entries.push({
+        part,
+        renderKey: `text:${textOrdinal}`,
+      });
+      textOrdinal += 1;
+    }
+  }
+
+  return entries;
+}
+
 function getToolSummary(part: SubagentMessagePart): string {
   switch (part.type) {
     case "tool-read":
@@ -120,15 +154,14 @@ export function TaskRenderer({
   const message = hasOutput ? part.output : undefined;
 
   const messageParts = message?.parts ?? [];
-  const relevantParts = messageParts.filter(
-    (p) => isToolUIPart(p) || isTextUIPart(p),
-  );
+  const relevantPartEntries = getRelevantPartRenderEntries(messageParts);
+  const relevantParts = relevantPartEntries.map((entry) => entry.part);
   const toolParts = messageParts.filter(isToolUIPart);
   const textParts = messageParts.filter(isTextUIPart);
 
   const maxVisible = 4;
-  const hiddenCount = Math.max(0, relevantParts.length - maxVisible);
-  const visibleParts = relevantParts.slice(-maxVisible);
+  const hiddenCount = Math.max(0, relevantPartEntries.length - maxVisible);
+  const visibleParts = relevantPartEntries.slice(-maxVisible);
 
   const isComplete = hasOutput && !isPreliminary;
   const isTaskStreaming = hasOutput && isPreliminary;
@@ -254,9 +287,9 @@ export function TaskRenderer({
               ... {hiddenCount} more above
             </div>
           )}
-          {visibleParts.map((p, i) => {
+          {visibleParts.map(({ part: p, renderKey }) => {
             if (isToolUIPart(p)) {
-              return <SubagentToolCall key={p.toolCallId ?? i} part={p} />;
+              return <SubagentToolCall key={renderKey} part={p} />;
             }
             if (isTextUIPart(p)) {
               const text = p.text?.trim() ?? "";
@@ -265,7 +298,7 @@ export function TaskRenderer({
                 text.length > 80 ? text.slice(0, 80) + "..." : text;
               return (
                 <div
-                  key={`text-${i}`}
+                  key={renderKey}
                   className="border-l-2 border-border py-1 pl-3 text-sm text-muted-foreground"
                 >
                   {truncated}
@@ -309,14 +342,10 @@ export function TaskRenderer({
                 Tool Calls ({toolParts.length})
               </div>
               <div className="max-h-96 space-y-1 overflow-auto">
-                {relevantParts.map((p, i) => {
+                {relevantPartEntries.map(({ part: p, renderKey }) => {
                   if (isToolUIPart(p)) {
                     return (
-                      <SubagentToolCall
-                        key={p.toolCallId ?? i}
-                        part={p}
-                        expanded
-                      />
+                      <SubagentToolCall key={renderKey} part={p} expanded />
                     );
                   }
                   if (isTextUIPart(p)) {
@@ -324,7 +353,7 @@ export function TaskRenderer({
                     if (!text) return null;
                     return (
                       <div
-                        key={`text-${i}`}
+                        key={renderKey}
                         className="border-l-2 border-border py-1 pl-3 text-sm text-muted-foreground"
                       >
                         {text}

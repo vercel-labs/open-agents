@@ -67,8 +67,11 @@ export function GrepRenderer({
           Matches ({matches.length})
         </div>
         <div className="max-h-64 space-y-1 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
-          {matches.map((match, i) => (
-            <div key={i} className="text-foreground">
+          {matches.map((match) => (
+            <div
+              key={`${match.file}:${match.line}:${match.content ?? ""}`}
+              className="text-foreground"
+            >
               <span className="text-muted-foreground">{match.file}</span>
               <span className="text-yellow-500">:{match.line}</span>
               {match.content && (
