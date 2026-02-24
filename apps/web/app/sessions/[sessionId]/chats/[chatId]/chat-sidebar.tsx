@@ -19,9 +19,11 @@ type ChatSidebarProps = {
   updateSessionTitle: (title: string) => Promise<void>;
   chats: SessionChatListItem[];
   chatsLoading: boolean;
+  chatsErrorMessage: string | null;
   activeChatId: string;
   onChatSwitch: (chatId: string) => void;
   onCreateChat: () => void;
+  onRetryChats: () => void;
   onRenameChat: (chatId: string, title: string) => Promise<unknown>;
   onDeleteChat: (chatId: string) => Promise<unknown>;
 };
@@ -31,9 +33,11 @@ export function ChatSidebar({
   updateSessionTitle,
   chats,
   chatsLoading,
+  chatsErrorMessage,
   activeChatId,
   onChatSwitch,
   onCreateChat,
+  onRetryChats,
   onRenameChat,
   onDeleteChat,
 }: ChatSidebarProps) {
@@ -177,6 +181,28 @@ export function ChatSidebar({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         <div className="space-y-1">
+          {chatsErrorMessage ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2">
+              <p className="text-xs leading-snug text-destructive">
+                {chatsErrorMessage}
+              </p>
+              <button
+                type="button"
+                onClick={onRetryChats}
+                disabled={chatsLoading}
+                className="mt-2 text-xs font-medium text-destructive underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+
+          {!chatsLoading && chats.length === 0 && !chatsErrorMessage ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">
+              No chats yet.
+            </p>
+          ) : null}
+
           {chats.map((c) => (
             <div
               key={c.id}

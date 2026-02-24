@@ -8,22 +8,30 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { useSessionChats } from "@/hooks/use-session-chats";
+import {
+  type SessionChatListItem,
+  useSessionChats,
+} from "@/hooks/use-session-chats";
 import type { Session } from "@/lib/db/schema";
 import { ChatSidebar } from "./chats/[chatId]/chat-sidebar";
 import { SessionLayoutContext } from "./session-layout-context";
 
 type SessionLayoutShellProps = {
   session: Session;
+  initialChatsData?: {
+    defaultModelId: string | null;
+    chats: SessionChatListItem[];
+  };
   children: React.ReactNode;
 };
 
 export function SessionLayoutShell({
   session: initialSession,
+  initialChatsData,
   children,
 }: SessionLayoutShellProps) {
   const router = useRouter();
-  const params = useParams<{ sessionId: string; chatId?: string }>();
+  const params = useParams<{ chatId?: string }>();
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   const [sessionTitle, setSessionTitle] = useState(initialSession.title);
@@ -32,7 +40,7 @@ export function SessionLayoutShell({
   >(null);
   const optimisticActiveChatIdRef = useRef<string | null>(null);
 
-  const sessionId = params.sessionId;
+  const sessionId = initialSession.id;
 
   const {
     chats,
@@ -40,7 +48,20 @@ export function SessionLayoutShell({
     renameChat,
     deleteChat,
     loading: chatsLoading,
-  } = useSessionChats(sessionId);
+    error: chatsError,
+    refreshChats,
+  } = useSessionChats(sessionId, { initialData: initialChatsData });
+
+  const handleRetryChats = useCallback(() => {
+    void refreshChats();
+  }, [refreshChats]);
+
+  const chatsErrorMessage =
+    chatsError instanceof Error
+      ? chatsError.message
+      : chatsError
+        ? "Failed to load chats"
+        : null;
 
   const activeChatId = optimisticActiveChatId ?? params.chatId ?? "";
 
@@ -133,9 +154,11 @@ export function SessionLayoutShell({
       updateSessionTitle={updateSessionTitle}
       chats={chats}
       chatsLoading={chatsLoading}
+      chatsErrorMessage={chatsErrorMessage}
       activeChatId={activeChatId}
       onChatSwitch={handleChatSwitch}
       onCreateChat={handleCreateChat}
+      onRetryChats={handleRetryChats}
       onRenameChat={renameChat}
       onDeleteChat={handleDeleteChat}
     />

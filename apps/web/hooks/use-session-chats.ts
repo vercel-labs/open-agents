@@ -15,6 +15,10 @@ interface ChatsResponse {
   chats: SessionChatListItem[];
 }
 
+interface UseSessionChatsOptions {
+  initialData?: ChatsResponse;
+}
+
 type CreateChatResult = {
   chat: Chat;
   persisted: Promise<Chat>;
@@ -93,12 +97,26 @@ function overlaysEqual(
   );
 }
 
-export function useSessionChats(sessionId: string | null) {
+export function useSessionChats(
+  sessionId: string | null,
+  options?: UseSessionChatsOptions,
+) {
   const [_overlayVersion, setOverlayVersion] = useState(0);
   const optimisticOverlay = useMemo(
     () => (sessionId ? getSessionOverlay(sessionId) : null),
     [sessionId],
   );
+  const fallbackData = useMemo(() => {
+    if (!sessionId || !options?.initialData) {
+      return undefined;
+    }
+
+    const belongsToSession = options.initialData.chats.every(
+      (chat) => chat.sessionId === sessionId,
+    );
+
+    return belongsToSession ? options.initialData : undefined;
+  }, [sessionId, options?.initialData]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -115,6 +133,7 @@ export function useSessionChats(sessionId: string | null) {
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
     fetcher,
     {
+      fallbackData,
       refreshInterval: (latestData) => {
         const hasStreamingChat =
           latestData?.chats.some((chat) => chat.isStreaming) ?? false;
