@@ -765,7 +765,13 @@ export function SessionChatContent() {
       hasSeenAssistantRenderableContentRef.current = false;
       return;
     }
-    if (hasAssistantRenderableContent) {
+    // Only mark content as "seen" once we're actually in-flight — not during
+    // the optimistic pending phase where messages are still stale from the
+    // previous turn (due to experimental_throttle).  Without this guard the
+    // ref gets set to true from the *old* assistant message, which causes the
+    // thinking indicator to disappear prematurely when the new (empty)
+    // assistant message arrives.
+    if (isChatInFlight && hasAssistantRenderableContent) {
       hasSeenAssistantRenderableContentRef.current = true;
     }
   }, [isChatInFlight, hasPendingResponse, hasAssistantRenderableContent]);
@@ -775,13 +781,28 @@ export function SessionChatContent() {
     hasSeenAssistantRenderableContentRef.current;
   const effectiveStatus = hasPendingResponse ? "streaming" : status;
   const showThinkingIndicator = useMemo(
-    () =>
-      shouldShowThinkingIndicator({
+    () => {
+      // During the optimistic pending phase (user just clicked send but the
+      // AI SDK status hasn't caught up yet due to throttling), always show
+      // the thinking indicator.  The messages are stale at this point so
+      // shouldShowThinkingIndicator would make the wrong decision based on
+      // the previous turn's content.
+      if (hasPendingResponse && !isChatInFlight) {
+        return true;
+      }
+      return shouldShowThinkingIndicator({
         status: effectiveStatus,
         hasAssistantRenderableContent: hasSeenAssistantRenderableContent,
         lastMessageRole: lastMessage?.role,
-      }),
-    [effectiveStatus, hasSeenAssistantRenderableContent, lastMessage?.role],
+      });
+    },
+    [
+      effectiveStatus,
+      hasSeenAssistantRenderableContent,
+      lastMessage?.role,
+      hasPendingResponse,
+      isChatInFlight,
+    ],
   );
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {
@@ -2276,6 +2297,7 @@ export function SessionChatContent() {
                   void setChatTitle(chatInfo.id, nextTitle);
                 }
                 setHasPendingResponse(true);
+                hasSeenAssistantRenderableContentRef.current = false;
                 void setChatStreaming(chatInfo.id, true);
                 try {
                   await sendMessage({ text: messageText, files });
