@@ -743,42 +743,37 @@ export function SessionChatProvider({
         prNumber: number | null;
         prStatus: "open" | "merged" | "closed" | null;
       };
+      const nextPrFields =
+        data.prNumber && data.prStatus
+          ? { prNumber: data.prNumber, prStatus: data.prStatus }
+          : { prNumber: null, prStatus: null };
 
       // Update local session state with branch and PR info
       setSessionRecord((prev) => ({
         ...prev,
         ...(data.branch ? { branch: data.branch } : {}),
-        ...(data.prNumber && data.prStatus
-          ? { prNumber: data.prNumber, prStatus: data.prStatus }
-          : {}),
+        ...nextPrFields,
       }));
 
       // Optimistically update the sessions list cache so sidebar reflects changes
-      if (data.branch || data.prNumber) {
-        void mutate<SessionsResponse>(
-          "/api/sessions",
-          (current) =>
-            current
-              ? {
-                  sessions: current.sessions.map((s) =>
-                    s.id === sessionId
-                      ? {
-                          ...s,
-                          ...(data.branch ? { branch: data.branch } : {}),
-                          ...(data.prNumber && data.prStatus
-                            ? {
-                                prNumber: data.prNumber,
-                                prStatus: data.prStatus,
-                              }
-                            : {}),
-                        }
-                      : s,
-                  ),
-                }
-              : current,
-          { revalidate: false },
-        );
-      }
+      void mutate<SessionsResponse>(
+        "/api/sessions",
+        (current) =>
+          current
+            ? {
+                sessions: current.sessions.map((s) =>
+                  s.id === sessionId
+                    ? {
+                        ...s,
+                        ...(data.branch ? { branch: data.branch } : {}),
+                        ...nextPrFields,
+                      }
+                    : s,
+                ),
+              }
+            : current,
+        { revalidate: false },
+      );
     } catch (error) {
       console.error("Failed to check branch/PR:", error);
     }

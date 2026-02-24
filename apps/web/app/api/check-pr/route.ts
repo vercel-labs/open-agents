@@ -66,20 +66,30 @@ export async function POST(req: Request) {
       branch = symbolicRefResult.stdout.trim();
     }
 
-    // If we cannot determine the branch (detached HEAD), nothing to check
+    // If we cannot determine the branch (detached HEAD), clear any stale PR
+    // metadata because it may belong to a previously checked branch.
     if (!branch) {
+      if (sessionRecord.prNumber || sessionRecord.prStatus) {
+        await updateSession(sessionId, { prNumber: null, prStatus: null });
+      }
       return Response.json({ branch: null, prNumber: null, prStatus: null });
     }
 
-    // 2. Persist the branch to the session if it changed
+    // 2. Persist the branch to the session if it changed. If the branch changed,
+    // clear any existing PR metadata because it belongs to the previous branch.
     const branchChanged = branch !== sessionRecord.branch;
     if (branchChanged) {
-      await updateSession(sessionId, { branch });
+      await updateSession(sessionId, {
+        branch,
+        ...(sessionRecord.prNumber || sessionRecord.prStatus
+          ? { prNumber: null, prStatus: null }
+          : {}),
+      });
     }
 
-    // 3. If session already has a PR recorded, just return current state
-    // (the PR was created through our flow -- no need to re-check)
-    if (sessionRecord.prNumber) {
+    // 3. If session already has a PR recorded for the same branch, just return
+    // current state (the PR was created through our flow -- no need to re-check)
+    if (!branchChanged && sessionRecord.prNumber) {
       return Response.json({
         branch,
         prNumber: sessionRecord.prNumber,
