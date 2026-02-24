@@ -742,25 +742,23 @@ export function SessionChatContent() {
   const hasSeenAssistantRenderableContentRef = useRef(false);
   const [hasPendingResponse, setHasPendingResponse] = useState(false);
 
+  // Sync hasPendingResponse with the AI SDK status.
+  // IMPORTANT: hasPendingResponse is intentionally excluded from the dependency
+  // array. The form submit handler sets it to true optimistically (before
+  // sendMessage is called), and including it here would cause the effect to
+  // immediately clear it because status is still "ready" at that point —
+  // resulting in a visible flicker of the thinking indicator and stop button.
   useEffect(() => {
-    if (isChatInFlight && !hasPendingResponse) {
+    if (isChatInFlight) {
       setHasPendingResponse(true);
       return;
     }
 
-    if (status === "error") {
-      if (hasPendingResponse) {
-        setHasPendingResponse(false);
-      }
-      return;
+    if (status === "error" || status === "ready") {
+      setHasPendingResponse(false);
     }
-
-    if (status === "ready") {
-      if (hasPendingResponse) {
-        setHasPendingResponse(false);
-      }
-    }
-  }, [isChatInFlight, status, hasPendingResponse]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
+  }, [isChatInFlight, status]);
 
   useEffect(() => {
     if (!isChatInFlight && !hasPendingResponse) {
@@ -2454,7 +2452,7 @@ export function SessionChatContent() {
                     )}
                   </Button>
 
-                  {isChatInFlight ? (
+                  {isChatInFlight || hasPendingResponse ? (
                     <Button
                       type="button"
                       size="icon"
@@ -2463,6 +2461,7 @@ export function SessionChatContent() {
                           method: "POST",
                         }).catch(() => {});
                         stopChatStream();
+                        setHasPendingResponse(false);
                       }}
                       className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       style={{ touchAction: "manipulation" }}
