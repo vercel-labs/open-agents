@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { after } from "next/server";
 import {
   collectTaskToolUsageEvents,
   discoverSkills,
@@ -596,7 +597,7 @@ export async function POST(req: Request) {
         }
 
         const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
-        if (subagentUsageEvents.length === 0) {
+        if (subagentUsageEvents.length === 0 && !(isAborted && abortedByTimeout)) {
           return;
         }
 
@@ -631,23 +632,26 @@ export async function POST(req: Request) {
               parts: [{ type: "text" as const, text: "Continue." }],
             },
           ];
-          try {
-            const res = await fetch(requestUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                cookie: cookieHeader,
-              },
-              body: JSON.stringify({
-                messages: continueMessages,
-                sessionId,
-                chatId,
-              } satisfies ChatRequestBody),
-            });
-            console.log("[timeout-experiment] Self-fetch response:", res.status);
-          } catch (err) {
-            console.error("[timeout-experiment] Self-fetch failed:", err);
-          }
+          after(async () => {
+            try {
+              console.log("[timeout-experiment] after() firing self-fetch");
+              const res = await fetch(requestUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  cookie: cookieHeader,
+                },
+                body: JSON.stringify({
+                  messages: continueMessages,
+                  sessionId,
+                  chatId,
+                } satisfies ChatRequestBody),
+              });
+              console.log("[timeout-experiment] Self-fetch response:", res.status);
+            } catch (err) {
+              console.error("[timeout-experiment] Self-fetch failed:", err);
+            }
+          });
         }
       }
     },
