@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import type { Chat } from "@/lib/db/schema";
-import { fetcher } from "@/lib/swr";
+import { fetcherNoStore } from "@/lib/swr";
 
 export type SessionChatListItem = Chat & {
   hasUnread: boolean;
@@ -134,7 +134,7 @@ export function useSessionChats(
 
   const { data, error, isLoading, mutate } = useSWR<ChatsResponse>(
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
-    fetcher,
+    fetcherNoStore,
     {
       fallbackData,
       // We already render server-prefetched chats in the layout; avoid an

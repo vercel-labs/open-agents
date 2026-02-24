@@ -17,10 +17,11 @@ export class FetchError extends Error {
  * Parses JSON responses and extracts error messages from failed requests.
  * Throws FetchError (with HTTP status) on non-OK responses.
  */
-export const fetcher = async <T>(url: string): Promise<T> => {
-  // Let SWR own caching/deduping; browser HTTP caching can return stale API
-  // responses and overwrite fresher server-rendered state during hydration.
-  const res = await fetch(url, { cache: "no-store" });
+const fetchJson = async <T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T> => {
+  const res = await fetch(url, init);
   if (!res.ok) {
     let message = res.statusText;
     try {
@@ -33,6 +34,15 @@ export const fetcher = async <T>(url: string): Promise<T> => {
   }
   return res.json() as Promise<T>;
 };
+
+export const fetcher = async <T>(url: string): Promise<T> => fetchJson(url);
+
+/**
+ * Use only for hydration-sensitive endpoints where a stale browser HTTP cache
+ * response can overwrite fresher server-rendered state during SWR revalidation.
+ */
+export const fetcherNoStore = async <T>(url: string): Promise<T> =>
+  fetchJson(url, { cache: "no-store" });
 
 /**
  * SWR revalidateOnFocus guidelines:
