@@ -1389,7 +1389,7 @@ export function SessionChatContent() {
     if (isAtBottom) {
       scrollToBottom();
     }
-  }, [messages, isAtBottom, scrollToBottom]);
+  }, [renderMessages.length, isAtBottom, scrollToBottom]);
 
   useEffect(() => {
     if (!isChatInFlight) {
