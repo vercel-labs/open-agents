@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { after } from "next/server";
 import {
   collectTaskToolUsageEvents,
   discoverSkills,
@@ -21,7 +20,6 @@ import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
-  getChatMessages,
   getSessionById,
   isFirstChatMessage,
   updateChat,
@@ -95,12 +93,9 @@ const parseStreamTokenStartedAt = (streamToken: string | null) => {
   return startedAt;
 };
 
-export const maxDuration = 60;
+export const maxDuration = 800;
 
 export async function POST(req: Request) {
-  const requestUrl = req.url;
-  const cookieHeader = req.headers.get("cookie") ?? "";
-
   // 1. Validate session
   const session = await getServerSession();
   if (!session?.user) {
@@ -349,14 +344,13 @@ export async function POST(req: Request) {
     controller.abort();
   });
 
-  // --- EXPERIMENT: 10s timeout to test auto-continue via self-fetch ---
-  const MAX_DURATION_TIMEOUT_MS = 10_000;
-  let abortedByTimeout = false;
+  // Abort gracefully before the platform kills the function at maxDuration,
+  // so that onFinish fires and we persist the partial response.
+  const PRE_TIMEOUT_MS = 730_000;
   const timeoutHandle = setTimeout(() => {
-    console.log("[timeout-experiment] Aborting after 10s timeout");
-    abortedByTimeout = true;
+    console.warn("[chat] Aborting before maxDuration timeout");
     controller.abort();
-  }, MAX_DURATION_TIMEOUT_MS);
+  }, PRE_TIMEOUT_MS);
 
   let stopSignalClosed = false;
   const closeStopSignal = () => {
@@ -412,16 +406,10 @@ export async function POST(req: Request) {
   void result.consumeStream().then(
     () => {
       clearTimeout(timeoutHandle);
-      console.log("[timeout-experiment] consumeStream resolved (success)");
       closeStopSignal();
     },
     async (error) => {
       clearTimeout(timeoutHandle);
-      console.log(
-        "[timeout-experiment] consumeStream rejected",
-        abortedByTimeout ? "(timeout abort)" : "(other)",
-        error instanceof Error ? error.message : error,
-      );
       closeStopSignal();
       await clearOwnedStreamToken();
     },
@@ -482,12 +470,8 @@ export async function POST(req: Request) {
         console.error("Failed to save latest chat message:", error);
       }
     },
-    onFinish: async ({ responseMessage, isAborted }) => {
+    onFinish: async ({ responseMessage }) => {
       clearTimeout(timeoutHandle);
-      console.log(
-        "[timeout-experiment] onFinish fired",
-        { isAborted, abortedByTimeout, parts: responseMessage.parts.length },
-      );
       if (chatId) {
         closeStopSignal();
         const stillOwnsStream = await clearOwnedStreamToken();
@@ -598,7 +582,7 @@ export async function POST(req: Request) {
         }
 
         const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
-        if (subagentUsageEvents.length === 0 && !(isAborted && abortedByTimeout)) {
+        if (subagentUsageEvents.length === 0) {
           return;
         }
 
@@ -619,44 +603,6 @@ export async function POST(req: Request) {
 
         for (const [eventModelId, usage] of subagentUsageByModel) {
           postUsage(usage, eventModelId, "subagent");
-        }
-
-        // --- EXPERIMENT: auto-continue on timeout abort ---
-        if (isAborted && abortedByTimeout && chatId) {
-          console.log("[timeout-experiment] Triggering self-fetch to continue");
-          after(async () => {
-            try {
-              console.log("[timeout-experiment] after() reading messages from DB");
-              const dbMessages = await getChatMessages(chatId);
-              const persistedMessages: WebAgentUIMessage[] = dbMessages.map(
-                (m) => m.parts as WebAgentUIMessage,
-              );
-              const continueMessages: WebAgentUIMessage[] = [
-                ...persistedMessages,
-                {
-                  id: nanoid(),
-                  role: "user" as const,
-                  parts: [{ type: "text" as const, text: "Continue." }],
-                },
-              ];
-              console.log("[timeout-experiment] after() firing self-fetch with", continueMessages.length, "messages");
-              const res = await fetch(requestUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  cookie: cookieHeader,
-                },
-                body: JSON.stringify({
-                  messages: continueMessages,
-                  sessionId,
-                  chatId,
-                } satisfies ChatRequestBody),
-              });
-              console.log("[timeout-experiment] Self-fetch response:", res.status);
-            } catch (err) {
-              console.error("[timeout-experiment] Self-fetch failed:", err);
-            }
-          });
         }
       }
     },
