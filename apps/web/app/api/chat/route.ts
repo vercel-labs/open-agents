@@ -342,6 +342,15 @@ export async function POST(req: Request) {
     controller.abort();
   });
 
+  // --- EXPERIMENT: 20s timeout to test if onFinish fires on abort ---
+  const MAX_DURATION_TIMEOUT_MS = 20_000;
+  let abortedByTimeout = false;
+  const timeoutHandle = setTimeout(() => {
+    console.log("[timeout-experiment] Aborting after 20s timeout");
+    abortedByTimeout = true;
+    controller.abort();
+  }, MAX_DURATION_TIMEOUT_MS);
+
   let stopSignalClosed = false;
   const closeStopSignal = () => {
     if (stopSignalClosed) {
@@ -394,8 +403,18 @@ export async function POST(req: Request) {
   }
 
   void result.consumeStream().then(
-    () => closeStopSignal(),
-    async () => {
+    () => {
+      clearTimeout(timeoutHandle);
+      console.log("[timeout-experiment] consumeStream resolved (success)");
+      closeStopSignal();
+    },
+    async (error) => {
+      clearTimeout(timeoutHandle);
+      console.log(
+        "[timeout-experiment] consumeStream rejected",
+        abortedByTimeout ? "(timeout abort)" : "(other)",
+        error instanceof Error ? error.message : error,
+      );
       closeStopSignal();
       await clearOwnedStreamToken();
     },
@@ -456,7 +475,12 @@ export async function POST(req: Request) {
         console.error("Failed to save latest chat message:", error);
       }
     },
-    onFinish: async ({ responseMessage }) => {
+    onFinish: async ({ responseMessage, isAborted }) => {
+      clearTimeout(timeoutHandle);
+      console.log(
+        "[timeout-experiment] onFinish fired",
+        { isAborted, abortedByTimeout, parts: responseMessage.parts.length },
+      );
       if (chatId) {
         closeStopSignal();
         const stillOwnsStream = await clearOwnedStreamToken();
