@@ -160,9 +160,15 @@ function FileEntry({
         </div>
       </button>
 
-      {isExpanded && file.diff && (
+      {isExpanded && (
         <div className="border-t border-border">
-          <PatchDiff key={diffStyle} patch={file.diff} options={options} />
+          {file.diff ? (
+            <PatchDiff key={diffStyle} patch={file.diff} options={options} />
+          ) : (
+            <div className="px-4 py-3 text-xs text-muted-foreground">
+              No diff content available
+            </div>
+          )}
         </div>
       )}
     </div>
