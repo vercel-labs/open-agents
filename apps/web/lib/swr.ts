@@ -18,7 +18,9 @@ export class FetchError extends Error {
  * Throws FetchError (with HTTP status) on non-OK responses.
  */
 export const fetcher = async <T>(url: string): Promise<T> => {
-  const res = await fetch(url);
+  // Let SWR own caching/deduping; browser HTTP caching can return stale API
+  // responses and overwrite fresher server-rendered state during hydration.
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let message = res.statusText;
     try {

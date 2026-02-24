@@ -34,7 +34,10 @@ type ChatOptimisticOverlay = {
   streaming?: StreamingOverlay;
 };
 
-const STREAMING_RACE_GRACE_MS = 12_000;
+// Keep the optimistic streaming badge briefly to cover client/server handoff,
+// but clear quickly when the server never confirms streaming (fast turns,
+// route switches, aborts) so the sidebar indicator doesn't linger.
+const STREAMING_RACE_GRACE_MS = 4_000;
 const OVERLAY_INACTIVE_TTL_MS = 5 * 60_000;
 const STREAMING_REFRESH_INTERVAL_MS = 1_000;
 const IDLE_REFRESH_INTERVAL_MS = 8_000;
@@ -134,6 +137,10 @@ export function useSessionChats(
     fetcher,
     {
       fallbackData,
+      // We already render server-prefetched chats in the layout; avoid an
+      // immediate mount revalidation clobbering hydration with stale client
+      // cache/network responses. Focus/polling still keeps the list fresh.
+      revalidateOnMount: fallbackData ? false : undefined,
       refreshInterval: (latestData) => {
         const hasStreamingChat =
           latestData?.chats.some((chat) => chat.isStreaming) ?? false;
