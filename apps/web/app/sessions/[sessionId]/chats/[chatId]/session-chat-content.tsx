@@ -770,8 +770,9 @@ export function SessionChatContent() {
   const isChatInFlight = isChatInFlightStatus(status);
   const [isChatInFlightSettled, setIsChatInFlightSettled] =
     useState(isChatInFlight);
-  const chatInFlightSettleTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatInFlightSettleTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   useEffect(() => {
     if (chatInFlightSettleTimeoutRef.current) {
