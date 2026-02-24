@@ -93,7 +93,12 @@ const parseStreamTokenStartedAt = (streamToken: string | null) => {
   return startedAt;
 };
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
+  const requestUrl = req.url;
+  const cookieHeader = req.headers.get("cookie") ?? "";
+
   // 1. Validate session
   const session = await getServerSession();
   if (!session?.user) {
@@ -342,11 +347,11 @@ export async function POST(req: Request) {
     controller.abort();
   });
 
-  // --- EXPERIMENT: 20s timeout to test if onFinish fires on abort ---
-  const MAX_DURATION_TIMEOUT_MS = 20_000;
+  // --- EXPERIMENT: 10s timeout to test auto-continue via self-fetch ---
+  const MAX_DURATION_TIMEOUT_MS = 10_000;
   let abortedByTimeout = false;
   const timeoutHandle = setTimeout(() => {
-    console.log("[timeout-experiment] Aborting after 20s timeout");
+    console.log("[timeout-experiment] Aborting after 10s timeout");
     abortedByTimeout = true;
     controller.abort();
   }, MAX_DURATION_TIMEOUT_MS);
@@ -612,6 +617,35 @@ export async function POST(req: Request) {
 
         for (const [eventModelId, usage] of subagentUsageByModel) {
           postUsage(usage, eventModelId, "subagent");
+        }
+
+        // --- EXPERIMENT: auto-continue on timeout abort ---
+        if (isAborted && abortedByTimeout) {
+          console.log("[timeout-experiment] Triggering self-fetch to continue");
+          const continueMessages: WebAgentUIMessage[] = [
+            ...messages,
+            responseMessage,
+            {
+              id: nanoid(),
+              role: "user" as const,
+              parts: [{ type: "text" as const, text: "Continue." }],
+            },
+          ];
+          void fetch(requestUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              cookie: cookieHeader,
+            },
+            body: JSON.stringify({
+              messages: continueMessages,
+              sessionId,
+              chatId,
+            } satisfies ChatRequestBody),
+          }).then(
+            (res) => console.log("[timeout-experiment] Self-fetch response:", res.status),
+            (err) => console.error("[timeout-experiment] Self-fetch failed:", err),
+          );
         }
       }
     },
