@@ -631,21 +631,23 @@ export async function POST(req: Request) {
               parts: [{ type: "text" as const, text: "Continue." }],
             },
           ];
-          void fetch(requestUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              cookie: cookieHeader,
-            },
-            body: JSON.stringify({
-              messages: continueMessages,
-              sessionId,
-              chatId,
-            } satisfies ChatRequestBody),
-          }).then(
-            (res) => console.log("[timeout-experiment] Self-fetch response:", res.status),
-            (err) => console.error("[timeout-experiment] Self-fetch failed:", err),
-          );
+          try {
+            const res = await fetch(requestUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                cookie: cookieHeader,
+              },
+              body: JSON.stringify({
+                messages: continueMessages,
+                sessionId,
+                chatId,
+              } satisfies ChatRequestBody),
+            });
+            console.log("[timeout-experiment] Self-fetch response:", res.status);
+          } catch (err) {
+            console.error("[timeout-experiment] Self-fetch failed:", err);
+          }
         }
       }
     },
