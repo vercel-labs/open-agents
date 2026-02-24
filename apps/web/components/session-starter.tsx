@@ -25,7 +25,12 @@ interface SessionStarterProps {
     sandboxType: SandboxType;
   }) => void;
   isLoading?: boolean;
-  lastRepo: { owner: string; repo: string } | null;
+  lastRepo: {
+    owner: string;
+    repo: string;
+    branch: string | null;
+    isNewBranch: boolean;
+  } | null;
 }
 
 export function SessionStarter({
@@ -40,8 +45,12 @@ export function SessionStarter({
     () => lastRepo?.owner ?? "",
   );
   const [selectedRepo, setSelectedRepo] = useState(() => lastRepo?.repo ?? "");
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-  const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(
+    () => lastRepo?.branch ?? null,
+  );
+  const [isNewBranch, setIsNewBranch] = useState(
+    () => lastRepo?.isNewBranch ?? false,
+  );
 
   const { preferences } = useUserPreferences();
 

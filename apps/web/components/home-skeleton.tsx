@@ -6,7 +6,12 @@ import { SessionStarter } from "@/components/session-starter";
 const NOOP = () => {};
 
 interface HomeSkeletonProps {
-  lastRepo?: { owner: string; repo: string } | null;
+  lastRepo?: {
+    owner: string;
+    repo: string;
+    branch: string | null;
+    isNewBranch: boolean;
+  } | null;
 }
 
 export function HomeSkeleton({ lastRepo = null }: HomeSkeletonProps) {
