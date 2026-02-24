@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface ThinkingBlockProps {
@@ -53,32 +53,37 @@ export function ThinkingBlock({
   };
 
   return (
-    <div className="w-full">
-      {hasContent ? (
-        <button
-          type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <span className={cn(isStreaming && "animate-pulse")}>
-            {formatLabel()}
-          </span>
-          {isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
-        </button>
-      ) : (
-        <span
-          className={cn(
-            "text-sm font-medium text-muted-foreground",
-            isStreaming && "animate-pulse",
-          )}
-        >
+    <div className="w-full min-h-5">
+      <button
+        type="button"
+        onClick={() => {
+          if (!hasContent) {
+            return;
+          }
+          setIsOpen((prev) => !prev);
+        }}
+        className={cn(
+          "flex min-h-5 items-center gap-1.5 p-0 text-sm font-medium leading-5 text-muted-foreground",
+          hasContent
+            ? "transition-colors hover:text-foreground"
+            : "cursor-default",
+        )}
+      >
+        <span className={cn("leading-5", isStreaming && "animate-pulse")}>
           {formatLabel()}
         </span>
-      )}
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+          {hasContent ? (
+            isOpen ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )
+          ) : (
+            <span className="h-3.5 w-3.5" aria-hidden />
+          )}
+        </span>
+      </button>
       {isOpen && hasContent && (
         <div className="mt-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">

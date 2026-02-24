@@ -101,6 +101,11 @@ export type LifecycleTimingInfo = {
 
 export type SandboxStatusSyncResult = "active" | "no_sandbox" | "unknown";
 
+type RetryChatStreamOptions = {
+  auto?: boolean;
+  strategy?: "hard" | "soft";
+};
+
 function toMs(value: Date | null | undefined): number | null {
   return value ? value.getTime() : null;
 }
@@ -182,7 +187,7 @@ type SessionChatContextValue = {
   /** Attempt to reconnect to an existing sandbox */
   attemptReconnection: () => Promise<ReconnectionStatus>;
   /** Clear a transient chat error and attempt to resume an active stream */
-  retryChatStream: (opts?: { auto?: boolean }) => void;
+  retryChatStream: (opts?: RetryChatStreamOptions) => void;
   /** Update session repo info after creating a repo */
   updateSessionRepo: (info: {
     cloneUrl: string;
@@ -339,7 +344,8 @@ export function SessionChatProvider({
    * restarted.
    */
   const retryChatStream = useCallback(
-    (opts?: { auto?: boolean }) => {
+    (opts?: RetryChatStreamOptions) => {
+      const strategy = opts?.strategy ?? "hard";
       // If the user explicitly stopped the stream, don't auto-reconnect.
       // This prevents the "tap stop 3 times" loop on iOS where aborting the
       // transport causes a transient error that the auto-recovery immediately
@@ -351,9 +357,11 @@ export function SessionChatProvider({
       }
       // Manual retry — reset the flag so the stream can proceed.
       userStoppedRef.current = false;
-      // Tear down any stale local fetch before reconnecting.
-      void chatInstance.stop();
-      abortChatInstanceTransport(chatInfo.id);
+      if (strategy === "hard") {
+        // Tear down any stale local fetch before reconnecting.
+        void chatInstance.stop();
+        abortChatInstanceTransport(chatInfo.id);
+      }
       // Clear the error so the chat UI becomes visible again.
       chat.clearError();
       // If the server-side stream is still running, reconnect to it.
