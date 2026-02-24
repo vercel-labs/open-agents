@@ -59,6 +59,21 @@ export function gateway(
     model = wrapLanguageModel({ model, middleware });
   }
 
+  // Apply openai middleware to expose reasoning summaries
+  if (modelId.startsWith("openai/")) {
+    const middleware = defaultSettingsMiddleware({
+      settings: {
+        providerOptions: {
+          openai: {
+            reasoningEffort: "high",
+            reasoningSummary: "detailed",
+          },
+        },
+      },
+    });
+    model = wrapLanguageModel({ model, middleware });
+  }
+
   // Apply devtools middleware if requested
   if (devtools) {
     model = wrapLanguageModel({ model, middleware: devToolsMiddleware() });
