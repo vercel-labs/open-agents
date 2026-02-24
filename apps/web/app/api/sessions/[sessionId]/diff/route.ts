@@ -533,25 +533,17 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       }
     }
 
-    // Fetch individual diffs for any missing files
-    if (missingDiffPaths.length > 0) {
-      const individualDiffs = await Promise.all(
-        missingDiffPaths.map(async (filePath) => {
-          const result = await sandbox.exec(
-            `git diff ${diffRef} -- ${JSON.stringify(filePath)}`,
-            cwd,
-            30000,
-          );
-          return {
-            path: filePath,
-            diff: result.success ? result.stdout.trim() : "",
-          };
-        }),
+    // Fetch individual diffs for any missing files sequentially; some
+    // sandbox backends are not reliable with concurrent exec streams.
+    for (const filePath of missingDiffPaths) {
+      const result = await sandbox.exec(
+        `git diff ${diffRef} -- ${JSON.stringify(filePath)}`,
+        cwd,
+        30000,
       );
-      for (const { path, diff } of individualDiffs) {
-        if (diff) {
-          fileDiffs.set(path, diff);
-        }
+      const diff = result.success ? result.stdout.trim() : "";
+      if (diff) {
+        fileDiffs.set(filePath, diff);
       }
     }
 
