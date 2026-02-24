@@ -489,6 +489,37 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       return "unstaged";
     }
 
+    // Collect files whose diffs are missing from the bulk output (e.g. due
+    // to output truncation when the full diff is very large).
+    const missingDiffPaths: string[] = [];
+    for (const [path] of fileStatuses) {
+      if (!fileDiffs.has(path)) {
+        missingDiffPaths.push(path);
+      }
+    }
+
+    // Fetch individual diffs for any missing files
+    if (missingDiffPaths.length > 0) {
+      const individualDiffs = await Promise.all(
+        missingDiffPaths.map(async (filePath) => {
+          const result = await sandbox.exec(
+            `git diff ${diffRef} -- ${JSON.stringify(filePath)}`,
+            cwd,
+            30000,
+          );
+          return {
+            path: filePath,
+            diff: result.success ? result.stdout.trim() : "",
+          };
+        }),
+      );
+      for (const { path, diff } of individualDiffs) {
+        if (diff) {
+          fileDiffs.set(path, diff);
+        }
+      }
+    }
+
     // Add tracked file changes
     for (const [path, statusInfo] of fileStatuses) {
       const stats = fileStats.get(path) ?? { additions: 0, deletions: 0 };
