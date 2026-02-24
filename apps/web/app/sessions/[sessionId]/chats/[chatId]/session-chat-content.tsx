@@ -780,30 +780,27 @@ export function SessionChatContent() {
     hasAssistantRenderableContent ||
     hasSeenAssistantRenderableContentRef.current;
   const effectiveStatus = hasPendingResponse ? "streaming" : status;
-  const showThinkingIndicator = useMemo(
-    () => {
-      // During the optimistic pending phase (user just clicked send but the
-      // AI SDK status hasn't caught up yet due to throttling), always show
-      // the thinking indicator.  The messages are stale at this point so
-      // shouldShowThinkingIndicator would make the wrong decision based on
-      // the previous turn's content.
-      if (hasPendingResponse && !isChatInFlight) {
-        return true;
-      }
-      return shouldShowThinkingIndicator({
-        status: effectiveStatus,
-        hasAssistantRenderableContent: hasSeenAssistantRenderableContent,
-        lastMessageRole: lastMessage?.role,
-      });
-    },
-    [
-      effectiveStatus,
-      hasSeenAssistantRenderableContent,
-      lastMessage?.role,
-      hasPendingResponse,
-      isChatInFlight,
-    ],
-  );
+  const showThinkingIndicator = useMemo(() => {
+    // During the optimistic pending phase (user just clicked send but the
+    // AI SDK status hasn't caught up yet due to throttling), always show
+    // the thinking indicator.  The messages are stale at this point so
+    // shouldShowThinkingIndicator would make the wrong decision based on
+    // the previous turn's content.
+    if (hasPendingResponse && !isChatInFlight) {
+      return true;
+    }
+    return shouldShowThinkingIndicator({
+      status: effectiveStatus,
+      hasAssistantRenderableContent: hasSeenAssistantRenderableContent,
+      lastMessageRole: lastMessage?.role,
+    });
+  }, [
+    effectiveStatus,
+    hasSeenAssistantRenderableContent,
+    lastMessage?.role,
+    hasPendingResponse,
+    isChatInFlight,
+  ]);
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {
       const groups: MessageRenderGroup[] = [];
