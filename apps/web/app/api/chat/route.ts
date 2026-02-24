@@ -398,6 +398,7 @@ export async function POST(req: Request) {
       abortSignal: controller.signal,
     });
   } catch (error) {
+    clearTimeout(timeoutHandle);
     closeStopSignal();
     await clearOwnedStreamToken();
     throw error;
