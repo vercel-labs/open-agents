@@ -2236,7 +2236,10 @@ export function SessionChatContent() {
 
                     if (isToolUIPart(p)) {
                       return (
-                        <div key={`${m.id}-${group.renderKey}`} className="max-w-full">
+                        <div
+                          key={`${m.id}-${group.renderKey}`}
+                          className="max-w-full"
+                        >
                           <ToolCall
                             part={p as WebAgentUIToolPart}
                             isStreaming={isMessageStreaming}
@@ -2261,7 +2264,10 @@ export function SessionChatContent() {
                       p.mediaType?.startsWith("image/")
                     ) {
                       return (
-                        <div key={`${m.id}-${group.renderKey}`} className="flex justify-end">
+                        <div
+                          key={`${m.id}-${group.renderKey}`}
+                          className="flex justify-end"
+                        >
                           <div className="max-w-[80%]">
                             {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
                             <img
