@@ -408,7 +408,7 @@ export async function POST(req: Request) {
       clearTimeout(timeoutHandle);
       closeStopSignal();
     },
-    async (error) => {
+    async () => {
       clearTimeout(timeoutHandle);
       closeStopSignal();
       await clearOwnedStreamToken();
