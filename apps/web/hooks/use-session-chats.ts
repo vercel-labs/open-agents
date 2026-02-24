@@ -105,7 +105,13 @@ export function useSessionChats(
   options?: UseSessionChatsOptions,
 ) {
   const [_overlayVersion, setOverlayVersion] = useState(0);
-  const lastNonEmptyChatsRef = useRef<SessionChatListItem[]>([]);
+  const lastNonEmptyChatsRef = useRef<{
+    sessionId: string | null;
+    chats: SessionChatListItem[];
+  }>({
+    sessionId: null,
+    chats: [],
+  });
   const optimisticOverlay = useMemo(
     () => (sessionId ? getSessionOverlay(sessionId) : null),
     [sessionId],
@@ -220,14 +226,28 @@ export function useSessionChats(
   });
 
   useEffect(() => {
-    if (mergedChats.length > 0) {
-      lastNonEmptyChatsRef.current = mergedChats;
+    if (!sessionId) {
+      lastNonEmptyChatsRef.current = {
+        sessionId: null,
+        chats: [],
+      };
+      return;
     }
-  }, [mergedChats]);
+
+    if (mergedChats.length > 0) {
+      lastNonEmptyChatsRef.current = {
+        sessionId,
+        chats: mergedChats,
+      };
+    }
+  }, [sessionId, mergedChats]);
 
   const chats =
-    mergedChats.length === 0 && lastNonEmptyChatsRef.current.length > 0
-      ? lastNonEmptyChatsRef.current
+    mergedChats.length === 0 &&
+    sessionId !== null &&
+    lastNonEmptyChatsRef.current.sessionId === sessionId &&
+    lastNonEmptyChatsRef.current.chats.length > 0
+      ? lastNonEmptyChatsRef.current.chats
       : mergedChats;
 
   useEffect(() => {
