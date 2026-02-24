@@ -17,10 +17,7 @@ export class FetchError extends Error {
  * Parses JSON responses and extracts error messages from failed requests.
  * Throws FetchError (with HTTP status) on non-OK responses.
  */
-const fetchJson = async <T>(
-  url: string,
-  init?: RequestInit,
-): Promise<T> => {
+const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const res = await fetch(url, init);
   if (!res.ok) {
     let message = res.statusText;
