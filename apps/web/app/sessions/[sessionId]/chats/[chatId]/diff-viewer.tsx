@@ -135,9 +135,7 @@ function FileEntry({
         onClick={isGenerated ? undefined : onToggle}
         className={cn(
           "flex w-full items-center gap-2 px-3 py-2 text-left",
-          isGenerated
-            ? "cursor-default opacity-70"
-            : "hover:bg-muted/50",
+          isGenerated ? "cursor-default opacity-70" : "hover:bg-muted/50",
         )}
       >
         {isGenerated ? (
