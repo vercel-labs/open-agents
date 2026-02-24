@@ -126,15 +126,23 @@ function FileEntry({
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.slice(0, -fileName.length);
   const options = diffStyle === "split" ? splitDiffOptions : defaultDiffOptions;
+  const isGenerated = file.generated === true;
 
   return (
     <div className="border-b border-border last:border-b-0">
       <button
         type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50"
+        onClick={isGenerated ? undefined : onToggle}
+        className={cn(
+          "flex w-full items-center gap-2 px-3 py-2 text-left",
+          isGenerated
+            ? "cursor-default opacity-70"
+            : "hover:bg-muted/50",
+        )}
       >
-        {isExpanded ? (
+        {isGenerated ? (
+          <span className="h-4 w-4 shrink-0" />
+        ) : isExpanded ? (
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
         ) : (
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -149,6 +157,11 @@ function FileEntry({
           </span>
           <StatusBadge status={file.status} />
           <StagingBadge stagingStatus={file.stagingStatus} />
+          {isGenerated && (
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground bg-muted">
+              Generated
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
           {file.additions > 0 && (
@@ -160,7 +173,7 @@ function FileEntry({
         </div>
       </button>
 
-      {isExpanded && (
+      {isExpanded && !isGenerated && (
         <div className="border-t border-border">
           {file.diff ? (
             <PatchDiff key={diffStyle} patch={file.diff} options={options} />

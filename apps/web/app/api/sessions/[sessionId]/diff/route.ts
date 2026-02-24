@@ -18,6 +18,8 @@ export type DiffFile = {
   deletions: number;
   diff: string;
   oldPath?: string;
+  /** True for generated/lock files whose diff content is intentionally omitted. */
+  generated?: boolean;
 };
 
 export type DiffResponse = {
@@ -197,6 +199,28 @@ ${diffLines}`;
     },
     lineCount,
   };
+}
+
+/**
+ * Lock / generated files whose diff content is too noisy to display.
+ * We still list them (with stats) but skip fetching the actual patch.
+ */
+const GENERATED_FILE_PATTERNS = [
+  /(?:^|\/)bun\.lockb?$/,
+  /(?:^|\/)bun\.lock$/,
+  /(?:^|\/)package-lock\.json$/,
+  /(?:^|\/)pnpm-lock\.yaml$/,
+  /(?:^|\/)yarn\.lock$/,
+  /(?:^|\/)Cargo\.lock$/,
+  /(?:^|\/)composer\.lock$/,
+  /(?:^|\/)Gemfile\.lock$/,
+  /(?:^|\/)poetry\.lock$/,
+  /(?:^|\/)Pipfile\.lock$/,
+  /(?:^|\/)go\.sum$/,
+];
+
+function isGeneratedFile(filePath: string): boolean {
+  return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
 /** Only allow ref names that look like valid git refs (alphanumeric, slashes, dots, dashes, underscores). */
@@ -387,7 +411,18 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       cwd,
       30000,
     );
-    const diffResult = await sandbox.exec(`git diff ${diffRef}`, cwd, 60000);
+    // Parse name-status early so we can exclude generated/lock files from the
+    // full diff. This avoids huge output that can truncate and lose diffs for
+    // other files. We still get their stats from --name-status and --numstat.
+    const fileStatuses = parseNameStatus(nameStatusResult.stdout);
+    const generatedExcludes = Array.from(fileStatuses.keys())
+      .filter(isGeneratedFile)
+      .map((p) => `":(exclude)${p}"`)
+      .join(" ");
+    const diffCmd = generatedExcludes
+      ? `git diff ${diffRef} -- . ${generatedExcludes}`
+      : `git diff ${diffRef}`;
+    const diffResult = await sandbox.exec(diffCmd, cwd, 60000);
     const untrackedResult = await sandbox.exec(
       "git ls-files --others --exclude-standard",
       cwd,
@@ -463,8 +498,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       }
     }
 
-    // Parse outputs
-    const fileStatuses = parseNameStatus(nameStatusResult.stdout);
+    // Parse remaining outputs (fileStatuses already parsed above)
     const fileStats = parseStats(numstatResult.stdout);
     const fileDiffs = splitDiffByFile(diffResult.stdout);
 
@@ -491,9 +525,10 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
     // Collect files whose diffs are missing from the bulk output (e.g. due
     // to output truncation when the full diff is very large).
+    // Skip generated/lock files — we intentionally omit their diff content.
     const missingDiffPaths: string[] = [];
     for (const [path] of fileStatuses) {
-      if (!fileDiffs.has(path)) {
+      if (!fileDiffs.has(path) && !isGeneratedFile(path)) {
         missingDiffPaths.push(path);
       }
     }
@@ -523,7 +558,8 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     // Add tracked file changes
     for (const [path, statusInfo] of fileStatuses) {
       const stats = fileStats.get(path) ?? { additions: 0, deletions: 0 };
-      const diff = fileDiffs.get(path) ?? "";
+      const generated = isGeneratedFile(path);
+      const diff = generated ? "" : (fileDiffs.get(path) ?? "");
 
       totalAdditions += stats.additions;
       totalDeletions += stats.deletions;
@@ -535,6 +571,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         additions: stats.additions,
         deletions: stats.deletions,
         diff,
+        ...(generated && { generated: true }),
         ...(statusInfo.oldPath && { oldPath: statusInfo.oldPath }),
       });
     }
