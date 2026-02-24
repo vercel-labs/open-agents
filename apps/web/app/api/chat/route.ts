@@ -629,11 +629,7 @@ export async function POST(req: Request) {
               console.log("[timeout-experiment] after() reading messages from DB");
               const dbMessages = await getChatMessages(chatId);
               const persistedMessages: WebAgentUIMessage[] = dbMessages.map(
-                (m) => ({
-                  id: m.id,
-                  role: m.role as "user" | "assistant",
-                  parts: m.parts as WebAgentUIMessage["parts"],
-                }),
+                (m) => m.parts as WebAgentUIMessage,
               );
               const continueMessages: WebAgentUIMessage[] = [
                 ...persistedMessages,
