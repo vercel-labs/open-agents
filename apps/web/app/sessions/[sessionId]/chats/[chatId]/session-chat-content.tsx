@@ -108,6 +108,7 @@ const Streamdown = dynamic(
 
 const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
+const CHAT_IN_FLIGHT_SETTLE_MS = 300;
 
 const emptySubscribe = () => () => {};
 
@@ -767,6 +768,37 @@ export function SessionChatContent() {
     [hasMounted, messages, initialMessages],
   );
   const isChatInFlight = isChatInFlightStatus(status);
+  const [isChatInFlightSettled, setIsChatInFlightSettled] =
+    useState(isChatInFlight);
+  const chatInFlightSettleTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (chatInFlightSettleTimeoutRef.current) {
+      clearTimeout(chatInFlightSettleTimeoutRef.current);
+      chatInFlightSettleTimeoutRef.current = null;
+    }
+
+    if (isChatInFlight) {
+      setIsChatInFlightSettled(true);
+      return;
+    }
+
+    // Avoid visual flicker when status briefly bounces to ready between
+    // consecutive tool-loop stream steps.
+    chatInFlightSettleTimeoutRef.current = setTimeout(() => {
+      chatInFlightSettleTimeoutRef.current = null;
+      setIsChatInFlightSettled(false);
+    }, CHAT_IN_FLIGHT_SETTLE_MS);
+
+    return () => {
+      if (chatInFlightSettleTimeoutRef.current) {
+        clearTimeout(chatInFlightSettleTimeoutRef.current);
+        chatInFlightSettleTimeoutRef.current = null;
+      }
+    };
+  }, [isChatInFlight]);
+
   const lastMessage = useMemo(
     () => renderMessages[renderMessages.length - 1],
     [renderMessages],
@@ -912,10 +944,10 @@ export function SessionChatContent() {
         message,
         groups,
         isStreaming:
-          isChatInFlight && messageIndex === renderMessages.length - 1,
+          isChatInFlightSettled && messageIndex === renderMessages.length - 1,
       };
     });
-  }, [renderMessages, isChatInFlight]);
+  }, [renderMessages, isChatInFlightSettled]);
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
