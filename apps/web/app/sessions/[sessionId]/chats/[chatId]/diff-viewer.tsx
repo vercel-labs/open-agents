@@ -172,7 +172,7 @@ function FileEntry({
       </button>
 
       {isExpanded && !isGenerated && (
-        <div className="border-t border-border">
+        <div className="overflow-x-auto border-t border-border">
           {file.diff ? (
             <PatchDiff key={diffStyle} patch={file.diff} options={options} />
           ) : (
@@ -327,7 +327,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
         {/* Content */}
         <div
           className={cn(
-            "min-h-0 flex-1 overflow-y-auto",
+            "min-h-0 flex-1 overflow-y-auto overflow-x-auto",
             showStaleIndicator && "opacity-90",
           )}
         >
