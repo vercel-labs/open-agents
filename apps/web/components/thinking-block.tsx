@@ -77,7 +77,9 @@ export function ThinkingBlock({
             : "cursor-default",
         )}
       >
-        <span className={cn("leading-5", isActivelyStreaming && "animate-pulse")}>
+        <span
+          className={cn("leading-5", isActivelyStreaming && "animate-pulse")}
+        >
           {formatLabel()}
         </span>
         <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
