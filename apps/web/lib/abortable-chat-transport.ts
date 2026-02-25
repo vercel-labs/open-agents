@@ -1,15 +1,18 @@
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import type { UIMessage } from "ai";
-import { DefaultChatTransport } from "ai";
+import {
+  WorkflowChatTransport,
+  type WorkflowChatTransportOptions,
+} from "@workflow/ai";
 
 /**
  * A chat transport that allows aborting ALL active fetch connections,
  * including `reconnectToStream` requests.
  *
- * The AI SDK's `reconnectToStream` does not pass an abort signal to its
- * internal fetch call, so `chatInstance.stop()` cannot cancel resumed
- * streams. This transport wraps every fetch with a transport-level abort
- * signal so that `abort()` reliably tears down any active connection.
+ * `WorkflowChatTransport` currently does not pass an abort signal to its
+ * internal reconnect fetches, so `chatInstance.stop()` cannot reliably cancel
+ * resumed streams. This transport wraps every fetch with a transport-level
+ * abort signal so that `abort()` tears down any active connection.
  *
  * After `abort()` the transport is immediately reusable — a fresh controller
  * is created so that subsequent fetches are not affected. This makes it safe
@@ -17,12 +20,10 @@ import { DefaultChatTransport } from "ai";
  */
 export class AbortableChatTransport<
   UI_MESSAGE extends UIMessage = UIMessage,
-> extends DefaultChatTransport<UI_MESSAGE> {
+> extends WorkflowChatTransport<UI_MESSAGE> {
   private _state: { controller: AbortController };
 
-  constructor(
-    options: ConstructorParameters<typeof DefaultChatTransport<UI_MESSAGE>>[0],
-  ) {
+  constructor(options: WorkflowChatTransportOptions<UI_MESSAGE>) {
     // Mutable ref so the fetch wrapper always reads the *current* controller,
     // even after abort() swaps it out.
     const state = { controller: new AbortController() };

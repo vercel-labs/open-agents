@@ -281,12 +281,28 @@ export function SessionChatProvider({
     () =>
       new AbortableChatTransport({
         api: "/api/chat",
-        body: () => ({
-          sessionId: sessionRecord.id,
-          chatId: chatInfo.id,
+        prepareSendMessagesRequest: async ({
+          messages,
+          body,
+          headers,
+          credentials,
+        }) => ({
+          body: {
+            ...(typeof body === "object" && body ? body : {}),
+            messages,
+            sessionId: sessionRecord.id,
+            chatId: chatInfo.id,
+          },
+          headers,
+          credentials,
         }),
-        prepareReconnectToStreamRequest: ({ id }) => ({
-          api: `/api/chat/${id}/stream`,
+        prepareReconnectToStreamRequest: async ({
+          headers,
+          credentials,
+        }) => ({
+          api: `/api/chat/${chatInfo.id}/stream`,
+          headers,
+          credentials,
         }),
       }),
     [sessionRecord.id, chatInfo.id],

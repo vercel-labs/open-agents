@@ -17,7 +17,6 @@ import {
   type UIMessageChunk,
 } from "ai";
 import { after } from "next/server";
-import { nanoid } from "nanoid";
 import { start } from "workflow/api";
 import type { ChatWorkflowResult } from "@/app/workflows/chat";
 import { runDurableChatWorkflow } from "@/app/workflows/chat";
@@ -30,6 +29,7 @@ import {
   getSessionById,
   isFirstChatMessage,
   updateChat,
+  updateChatActiveStreamId,
   updateChatAssistantActivity,
   updateSession,
   upsertChatMessageScoped,
@@ -39,7 +39,6 @@ import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
-import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -53,7 +52,6 @@ interface ChatRequestBody {
   chatId?: string;
 }
 
-const STREAM_TOKEN_SEPARATOR = ":";
 const SKILLS_CACHE_TTL_MS = 60_000;
 
 type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
@@ -63,9 +61,6 @@ const discoveredSkillsCache = new Map<
   { skills: DiscoveredSkills; expiresAt: number }
 >();
 const remoteAuthFingerprintBySessionId = new Map<string, string>();
-
-const createStreamToken = (startedAtMs: number, runId: string) =>
-  `${startedAtMs}${STREAM_TOKEN_SEPARATOR}${runId}${STREAM_TOKEN_SEPARATOR}${nanoid()}`;
 
 const getRemoteAuthFingerprint = (authUrl: string) =>
   createHash("sha256").update(authUrl).digest("hex");
@@ -79,24 +74,6 @@ const pruneExpiredSkillCache = (now: number) => {
       discoveredSkillsCache.delete(key);
     }
   }
-};
-
-const parseStreamTokenStartedAt = (streamToken: string | null) => {
-  if (!streamToken) {
-    return null;
-  }
-
-  const separatorIndex = streamToken.indexOf(STREAM_TOKEN_SEPARATOR);
-  if (separatorIndex <= 0) {
-    return null;
-  }
-
-  const startedAt = Number(streamToken.slice(0, separatorIndex));
-  if (!Number.isFinite(startedAt)) {
-    return null;
-  }
-
-  return startedAt;
 };
 
 export const maxDuration = 800;
@@ -151,7 +128,6 @@ export async function POST(req: Request) {
   // a long-running AI response could cause the sandbox to appear idle and
   // get hibernated mid-request.
   const requestStartedAt = new Date();
-  const requestStartedAtMs = requestStartedAt.getTime();
   await updateSession(sessionId, {
     ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
       activityAt: requestStartedAt,
@@ -232,44 +208,7 @@ export async function POST(req: Request) {
     });
   }
 
-  let ownedStreamToken: string | null = null;
-
-  const claimStreamOwnership = async () => {
-    if (!ownedStreamToken) {
-      return false;
-    }
-
-    // Retry once if another request updates activeStreamId between our read and CAS.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const latestChat = await getChatById(chatId);
-      const activeStreamId = latestChat?.activeStreamId ?? null;
-      const activeStartedAt = parseStreamTokenStartedAt(activeStreamId);
-
-      if (
-        activeStartedAt !== null &&
-        activeStartedAt > requestStartedAtMs &&
-        activeStreamId !== ownedStreamToken
-      ) {
-        return false;
-      }
-
-      const claimed = await compareAndSetChatActiveStreamId(
-        chatId,
-        activeStreamId,
-        ownedStreamToken,
-      );
-      if (claimed) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  let pendingAssistantSnapshot: WebAgentUIMessage | null = null;
-
-  // Save the latest incoming user message immediately (incremental persistence).
-  // Assistant snapshots are persisted after stream ownership is atomically claimed.
+  // Save the latest incoming message immediately (incremental persistence).
   if (chatId && messages.length > 0) {
     const latestMessage = messages[messages.length - 1];
     if (
@@ -312,7 +251,16 @@ export async function POST(req: Request) {
             }
           }
         } else {
-          pendingAssistantSnapshot = latestMessage;
+          const upsertResult = await upsertChatMessageScoped({
+            id: latestMessage.id,
+            chatId,
+            role: "assistant",
+            parts: latestMessage,
+          });
+
+          if (upsertResult.status === "inserted") {
+            await updateChatAssistantActivity(chatId, new Date());
+          }
         }
       } catch (error) {
         console.error("Failed to save latest chat message:", error);
@@ -345,24 +293,6 @@ export async function POST(req: Request) {
     console.error("Failed to resolve subagent model preference:", error);
   }
 
-  let streamTokenCleared = false;
-  const clearOwnedStreamToken = async () => {
-    if (streamTokenCleared || !ownedStreamToken) {
-      return false;
-    }
-    streamTokenCleared = true;
-    try {
-      return await compareAndSetChatActiveStreamId(
-        chatId,
-        ownedStreamToken,
-        null,
-      );
-    } catch (error) {
-      console.error("Failed to finalize active stream token:", error);
-      return false;
-    }
-  };
-
   const agentCallOptions = {
     sandboxConfig: createSandboxConfigFromInstance(sandbox),
     modelConfig: { modelId: resolvedModelId },
@@ -377,20 +307,38 @@ export async function POST(req: Request) {
     ...(skills.length > 0 && { skills }),
   };
 
-  let run;
+  const run = await start(runDurableChatWorkflow, [
+    modelMessages,
+    {
+      ...agentCallOptions,
+      executionMode: "durable" as const,
+    },
+  ]);
+
   try {
-    run = await start(runDurableChatWorkflow, [
-      modelMessages,
-      {
-        ...agentCallOptions,
-        executionMode: "durable" as const,
-      },
-    ]);
-    ownedStreamToken = createStreamToken(requestStartedAtMs, run.runId);
+    await updateChatActiveStreamId(chatId, run.runId);
   } catch (error) {
-    await clearOwnedStreamToken();
+    void run.cancel().catch((cancelError) => {
+      console.error("Failed to cancel chat workflow run after DB error:", cancelError);
+    });
     throw error;
   }
+
+  let streamRunIdCleared = false;
+  const clearActiveRunId = async () => {
+    if (streamRunIdCleared) {
+      return false;
+    }
+
+    streamRunIdCleared = true;
+
+    try {
+      return await compareAndSetChatActiveStreamId(chatId, run.runId, null);
+    } catch (error) {
+      console.error("Failed to finalize active stream run id:", error);
+      return false;
+    }
+  };
 
   after(async () => {
     let workflowResult: ChatWorkflowResult | null = null;
@@ -419,11 +367,11 @@ export async function POST(req: Request) {
     }
 
     if (!workflowResult) {
-      await clearOwnedStreamToken();
+      await clearActiveRunId();
       return;
     }
 
-    const stillOwnsStream = await clearOwnedStreamToken();
+    const stillOwnsStream = await clearActiveRunId();
     if (!stillOwnsStream) {
       return;
     }
@@ -561,41 +509,8 @@ export async function POST(req: Request) {
 
   return createUIMessageStreamResponse({
     stream: run.getReadable<UIMessageChunk>(),
-    async consumeSseStream({ stream }) {
-      if (!ownedStreamToken) {
-        return;
-      }
-
-      await resumableStreamContext.createNewResumableStream(ownedStreamToken, () =>
-        stream,
-      );
-
-      const claimed = await claimStreamOwnership();
-      if (!claimed) {
-        return;
-      }
-
-      if (!pendingAssistantSnapshot) {
-        return;
-      }
-
-      try {
-        const upsertResult = await upsertChatMessageScoped({
-          id: pendingAssistantSnapshot.id,
-          chatId,
-          role: "assistant",
-          parts: pendingAssistantSnapshot,
-        });
-        if (upsertResult.status === "conflict") {
-          console.warn(
-            `Skipped assistant message upsert due to ID scope conflict: ${pendingAssistantSnapshot.id}`,
-          );
-        } else if (upsertResult.status === "inserted") {
-          await updateChatAssistantActivity(chatId, new Date());
-        }
-      } catch (error) {
-        console.error("Failed to save latest chat message:", error);
-      }
+    headers: {
+      "x-workflow-run-id": run.runId,
     },
   });
 }

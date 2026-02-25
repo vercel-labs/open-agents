@@ -1,6 +1,5 @@
 import { getRun } from "workflow/api";
 import { getChatById, getSessionById } from "@/lib/db/sessions";
-import { createRedisClient } from "@/lib/redis";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
@@ -26,31 +25,16 @@ export async function POST(_request: Request, context: RouteContext) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const activeStreamId = chat.activeStreamId;
-  if (!activeStreamId) {
+  const runId = chat.activeStreamId;
+  if (!runId) {
     return Response.json({ success: true });
   }
 
-  const firstSeparator = activeStreamId.indexOf(":");
-  const secondSeparator = activeStreamId.indexOf(":", firstSeparator + 1);
-  const workflowRunId =
-    firstSeparator >= 0 && secondSeparator > firstSeparator
-      ? activeStreamId.slice(firstSeparator + 1, secondSeparator)
-      : null;
-
-  if (workflowRunId) {
-    try {
-      await getRun(workflowRunId).cancel();
-      return Response.json({ success: true });
-    } catch (error) {
-      console.error("Failed to cancel workflow run, falling back to stop signal:", error);
-    }
+  try {
+    await getRun(runId).cancel();
+  } catch (error) {
+    console.error("Failed to cancel workflow run:", error);
   }
-
-  // Backward-compatible fallback for non-workflow streams.
-  const publisher = createRedisClient();
-  await publisher.publish(`stop:${chatId}`, "stop");
-  publisher.disconnect();
 
   return Response.json({ success: true });
 }

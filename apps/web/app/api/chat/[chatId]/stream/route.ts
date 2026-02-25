@@ -1,18 +1,18 @@
 import { after } from "next/server";
-import { UI_MESSAGE_STREAM_HEADERS } from "ai";
+import { createUIMessageStreamResponse, type UIMessageChunk } from "ai";
+import { getRun } from "workflow/api";
 import {
   getChatById,
   getSessionById,
   updateChatActiveStreamId,
 } from "@/lib/db/sessions";
-import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ chatId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const session = await getServerSession();
   if (!session?.user) {
     return new Response("Not authenticated", { status: 401 });
@@ -31,22 +31,26 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  if (!chat.activeStreamId) {
+  const runId = chat.activeStreamId;
+  if (!runId) {
     return new Response(null, { status: 204 });
   }
 
-  const stream = await resumableStreamContext.resumeExistingStream(
-    chat.activeStreamId,
-  );
+  const { searchParams } = new URL(request.url);
+  const startIndexParam = searchParams.get("startIndex");
+  const startIndex =
+    startIndexParam && Number.isFinite(Number(startIndexParam))
+      ? Number.parseInt(startIndexParam, 10)
+      : undefined;
 
-  if (!stream) {
-    // Stream no longer exists in Redis (expired or finished) — clear the stale
-    // activeStreamId so future page loads don't attempt another resume.
+  try {
+    const stream = getRun(runId).getReadable<UIMessageChunk>({ startIndex });
+    return createUIMessageStreamResponse({ stream });
+  } catch {
+    // Run no longer exists or stream unavailable; clear stale pointer.
     after(async () => {
       await updateChatActiveStreamId(chatId, null);
     });
     return new Response(null, { status: 204 });
   }
-
-  return new Response(stream, { headers: UI_MESSAGE_STREAM_HEADERS });
 }

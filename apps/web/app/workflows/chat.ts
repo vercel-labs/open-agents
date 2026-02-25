@@ -1,5 +1,6 @@
 import {
   readUIMessageStream,
+  type FinishReason,
   type LanguageModelUsage,
   type ModelMessage,
   type UIMessage,
@@ -29,13 +30,28 @@ export async function runDurableChatWorkflow(
   "use workflow";
 
   const writable = getWritable<UIMessageChunk>();
-  const stepResult = await runChatStep(messages, writable, options);
+  let modelMessages = messages;
+  let responseMessage: UIMessage | null = null;
+  let totalMessageUsage: LanguageModelUsage | undefined;
+
+  const maxIterations = 10;
+
+  for (let i = 0; i < maxIterations; i += 1) {
+    const result = await runChatStep(modelMessages, writable, options);
+    modelMessages = [...modelMessages, ...result.responseMessages];
+    responseMessage = result.responseMessage;
+    totalMessageUsage = result.totalMessageUsage;
+
+    if (result.finishReason !== "tool-calls") {
+      break;
+    }
+  }
 
   await closeStream(writable);
 
   return {
-    responseMessage: stepResult.responseMessage,
-    totalMessageUsage: stepResult.totalMessageUsage,
+    responseMessage,
+    totalMessageUsage,
   };
 }
 
@@ -59,7 +75,7 @@ async function runChatStep(
     } as never,
   });
 
-  const uiMessageStream = result.toUIMessageStream<UIMessage>({
+  const stream = result.toUIMessageStream<UIMessage>({
     messageMetadata: ({ part }) => {
       if (part.type === "finish-step") {
         lastStepUsage = part.usage;
@@ -75,7 +91,7 @@ async function runChatStep(
     },
   });
 
-  const [streamForWritable, streamForMessage] = uiMessageStream.tee();
+  const [streamForWritable, streamForMessage] = stream.tee();
   const reader = streamForWritable.getReader();
   const writer = writable.getWriter();
 
@@ -85,7 +101,6 @@ async function runChatStep(
       if (done) {
         break;
       }
-
       await writer.write(value);
     }
   } finally {
@@ -100,8 +115,13 @@ async function runChatStep(
     responseMessage = message;
   }
 
+  const response = await result.response;
+  const finishReason = (await result.finishReason) as FinishReason;
+
   return {
     responseMessage,
+    responseMessages: response.messages,
+    finishReason,
     totalMessageUsage,
   };
 }
