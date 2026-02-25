@@ -109,6 +109,11 @@ const Streamdown = dynamic(
 const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
 const CHAT_IN_FLIGHT_SETTLE_MS = 300;
+const STREAMDOWN_FADE_IN_ANIMATION = {
+  animation: "fadeIn",
+  duration: 250,
+  easing: "ease-out",
+} as const;
 
 const emptySubscribe = () => () => {};
 
@@ -2248,11 +2253,11 @@ export function SessionChatContent() {
                           ) : (
                             <div className="min-w-0 w-full overflow-hidden">
                               <Streamdown
-                                animated={{
-                                  animation: "fadeIn",
-                                  duration: 250,
-                                  easing: "ease-out",
-                                }}
+                                animated={
+                                  isMessageStreaming
+                                    ? STREAMDOWN_FADE_IN_ANIMATION
+                                    : undefined
+                                }
                                 mode={
                                   isMessageStreaming ? "streaming" : "static"
                                 }
