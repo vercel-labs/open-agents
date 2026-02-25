@@ -71,7 +71,6 @@ import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
 import {
   isChatInFlight as isChatInFlightStatus,
-  shouldRefreshAfterReadyTransition,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
@@ -822,10 +821,6 @@ export function SessionChatContent() {
         : false,
     [lastMessage],
   );
-  const hasAssistantRenderableContentRef = useRef(
-    hasAssistantRenderableContent,
-  );
-  hasAssistantRenderableContentRef.current = hasAssistantRenderableContent;
   const hasSeenAssistantRenderableContentRef = useRef(false);
   const [hasPendingResponse, setHasPendingResponse] = useState(false);
 
@@ -1482,16 +1477,6 @@ export function SessionChatContent() {
       void refreshChats();
       // After a message completes, check branch and detect existing PRs
       void checkBranchAndPr();
-      if (
-        shouldRefreshAfterReadyTransition({
-          prevStatus,
-          status,
-          hasAssistantRenderableContent:
-            hasAssistantRenderableContentRef.current,
-        })
-      ) {
-        router.refresh();
-      }
     }
   }, [
     status,
@@ -1503,7 +1488,6 @@ export function SessionChatContent() {
     requestMarkChatRead,
     refreshChats,
     checkBranchAndPr,
-    router,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
