@@ -2277,7 +2277,7 @@ export function SessionChatContent() {
                           )}
                         >
                           {m.role === "user" ? (
-                            <div className="group relative min-w-0 max-w-[80%]">
+                            <div className="group relative w-fit min-w-0 max-w-[80%]">
                               <div className="rounded-3xl bg-secondary px-4 py-2">
                                 <p className="whitespace-pre-wrap break-words">
                                   {p.text}
@@ -2359,7 +2359,7 @@ export function SessionChatContent() {
                           key={`${m.id}-${group.renderKey}`}
                           className="flex justify-end"
                         >
-                          <div className="group relative max-w-[80%]">
+                          <div className="group relative w-fit max-w-[80%]">
                             {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
                             <img
                               src={p.url}
