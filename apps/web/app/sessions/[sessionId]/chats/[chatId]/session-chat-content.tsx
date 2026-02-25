@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Share2,
   Square,
+  Trash2,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -751,6 +752,7 @@ export function SessionChatContent() {
     messages,
     error,
     sendMessage,
+    setMessages,
     status,
     addToolApprovalResponse,
     addToolOutput,
@@ -1245,6 +1247,74 @@ export function SessionChatContent() {
   });
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [deleteMessageError, setDeleteMessageError] = useState<string | null>(
+    null,
+  );
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(
+    null,
+  );
+
+  const handleDeleteUserMessage = useCallback(
+    async (messageId: string) => {
+      if (isChatInFlight || deletingMessageId !== null) {
+        return;
+      }
+
+      const targetMessageIndex = messages.findIndex(
+        (message) => message.id === messageId,
+      );
+      if (
+        targetMessageIndex < 0 ||
+        messages[targetMessageIndex]?.role !== "user"
+      ) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        "Delete this message and all following messages?",
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setDeleteMessageError(null);
+      setDeletingMessageId(messageId);
+
+      try {
+        const response = await fetch(
+          `/api/sessions/${session.id}/chats/${chatInfo.id}/messages/${messageId}`,
+          { method: "DELETE" },
+        );
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          success?: boolean;
+        };
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error ?? "Failed to delete message");
+        }
+
+        setMessages(messages.slice(0, targetMessageIndex));
+        await refreshChats();
+      } catch (err) {
+        console.error("Failed to delete message:", err);
+        setDeleteMessageError(
+          err instanceof Error ? err.message : "Failed to delete message",
+        );
+      } finally {
+        setDeletingMessageId(null);
+      }
+    },
+    [
+      isChatInFlight,
+      deletingMessageId,
+      messages,
+      session.id,
+      chatInfo.id,
+      setMessages,
+      refreshChats,
+    ],
+  );
 
   const waitForSandboxReady = useCallback(
     async (maxAttempts = 8): Promise<boolean> => {
@@ -2207,10 +2277,31 @@ export function SessionChatContent() {
                           )}
                         >
                           {m.role === "user" ? (
-                            <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                              <p className="whitespace-pre-wrap break-words">
-                                {p.text}
-                              </p>
+                            <div className="group relative min-w-0 max-w-[80%]">
+                              <div className="rounded-3xl bg-secondary px-4 py-2">
+                                <p className="whitespace-pre-wrap break-words">
+                                  {p.text}
+                                </p>
+                              </div>
+                              {group.index === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleDeleteUserMessage(m.id)
+                                  }
+                                  disabled={
+                                    deletingMessageId !== null || isChatInFlight
+                                  }
+                                  aria-label="Delete this message and everything after it"
+                                  className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {deletingMessageId === m.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <div className="min-w-0 w-full overflow-hidden">
@@ -2268,13 +2359,32 @@ export function SessionChatContent() {
                           key={`${m.id}-${group.renderKey}`}
                           className="flex justify-end"
                         >
-                          <div className="max-w-[80%]">
+                          <div className="group relative max-w-[80%]">
                             {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
                             <img
                               src={p.url}
                               alt={p.filename ?? "Attached image"}
                               className="max-h-64 rounded-lg"
                             />
+                            {m.role === "user" && group.index === 0 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteUserMessage(m.id)
+                                }
+                                disabled={
+                                  deletingMessageId !== null || isChatInFlight
+                                }
+                                aria-label="Delete this message and everything after it"
+                                className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {deletingMessageId === m.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -2322,6 +2432,18 @@ export function SessionChatContent() {
               <button
                 type="button"
                 onClick={() => setRestoreError(null)}
+                className="ml-2 rounded p-0.5 hover:bg-destructive/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {deleteMessageError && (
+            <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <span>{deleteMessageError}</span>
+              <button
+                type="button"
+                onClick={() => setDeleteMessageError(null)}
                 className="ml-2 rounded p-0.5 hover:bg-destructive/20"
               >
                 <X className="h-4 w-4" />

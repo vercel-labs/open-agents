@@ -1,4 +1,12 @@
-import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -363,6 +371,77 @@ export async function getChatMessages(chatId: string) {
   return db.query.chatMessages.findMany({
     where: eq(chatMessages.chatId, chatId),
     orderBy: [chatMessages.createdAt, chatMessages.id],
+  });
+}
+
+type DeleteChatMessageAndFollowingResult =
+  | { status: "not_found" }
+  | { status: "not_user_message" }
+  | { status: "deleted"; deletedMessageIds: string[] };
+
+export async function deleteChatMessageAndFollowing(
+  chatId: string,
+  messageId: string,
+): Promise<DeleteChatMessageAndFollowingResult> {
+  return db.transaction(async (tx) => {
+    const orderedMessages = await tx
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.chatId, chatId))
+      .orderBy(chatMessages.createdAt, chatMessages.id);
+
+    const startIndex = orderedMessages.findIndex(
+      (message) => message.id === messageId,
+    );
+    if (startIndex < 0) {
+      return { status: "not_found" };
+    }
+
+    const targetMessage = orderedMessages[startIndex];
+    if (!targetMessage || targetMessage.role !== "user") {
+      return { status: "not_user_message" };
+    }
+
+    const idsToDelete = orderedMessages
+      .slice(startIndex)
+      .map((message) => message.id);
+
+    await tx
+      .delete(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.chatId, chatId),
+          inArray(chatMessages.id, idsToDelete),
+        ),
+      );
+
+    const [latestAssistantMessage] = await tx
+      .select({ createdAt: chatMessages.createdAt })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.chatId, chatId),
+          eq(chatMessages.role, "assistant"),
+        ),
+      )
+      .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+      .limit(1);
+
+    await tx
+      .update(chats)
+      .set({
+        lastAssistantMessageAt: latestAssistantMessage?.createdAt ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(chats.id, chatId));
+
+    return {
+      status: "deleted",
+      deletedMessageIds: idsToDelete,
+    };
   });
 }
 
