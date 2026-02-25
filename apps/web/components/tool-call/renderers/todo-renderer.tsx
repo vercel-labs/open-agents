@@ -5,30 +5,16 @@ import React, { useState } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { cn } from "@/lib/utils";
 
-type TodoStatus = "pending" | "in_progress" | "completed";
-
-type TodoItem = {
-  id?: string;
-  content?: string;
-  status?: TodoStatus;
-};
-
-const MAX_VISIBLE_TODOS = 8;
-
 export function TodoRenderer({
   part,
   state,
 }: ToolRendererProps<"tool-todo_write">) {
   const [isExpanded, setIsExpanded] = useState(true);
   const input = part.input;
-  const todos = Array.isArray(input?.todos) ? (input.todos as TodoItem[]) : [];
+  const todos = input?.todos ?? [];
   const keyPrefix = part.toolCallId ?? "todo";
 
   const hasExpandableContent = todos.length > 0;
-
-  const visibleTodos =
-    todos.length > MAX_VISIBLE_TODOS ? todos.slice(-MAX_VISIBLE_TODOS) : todos;
-  const hiddenCount = Math.max(0, todos.length - visibleTodos.length);
 
   const dotColor = state.denied
     ? "bg-red-500"
@@ -81,54 +67,41 @@ export function TodoRenderer({
         </span>
       </div>
 
-      {isExpanded && visibleTodos.length > 0 && (
+      {/* Expanded full content */}
+      {isExpanded && todos.length > 0 && (
         <div className="mt-3 space-y-1 border-t border-border pt-3">
-          {hiddenCount > 0 && (
-            <div className="text-xs text-muted-foreground">
-              Showing latest {visibleTodos.length} items ({hiddenCount} older
-              items truncated)
-            </div>
-          )}
-
           {(() => {
             const todoContentCounts = new Map<string, number>();
-            return visibleTodos.map((todo, index) => {
+            return todos.map((todo) => {
               if (!todo) return null;
 
-              const content =
-                typeof todo.content === "string" && todo.content.length > 0
-                  ? todo.content
-                  : "(empty task)";
-              const contentKey = content;
+              const contentKey = todo.content ?? "";
               const occurrence = todoContentCounts.get(contentKey) ?? 0;
               todoContentCounts.set(contentKey, occurrence + 1);
 
-              const itemKey =
-                typeof todo.id === "string" && todo.id.length > 0
-                  ? `${keyPrefix}-${todo.id}`
-                  : `${keyPrefix}-${contentKey}-${hiddenCount + index}-${occurrence}`;
-
               return (
-                <div key={itemKey} className="flex min-w-0 items-center gap-2">
+                <div
+                  key={`${keyPrefix}-${contentKey}-${occurrence}`}
+                  className="flex items-center gap-2"
+                >
                   {todo.status === "completed" ? (
-                    <CheckSquare className="h-4 w-4 shrink-0 text-green-500" />
+                    <CheckSquare className="h-4 w-4 text-green-500" />
                   ) : todo.status === "in_progress" ? (
-                    <Circle className="h-4 w-4 shrink-0 fill-yellow-500 text-yellow-500" />
+                    <Circle className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                   ) : (
-                    <Square className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Square className="h-4 w-4 text-muted-foreground" />
                   )}
                   <span
                     className={cn(
-                      "truncate text-sm",
+                      "text-sm",
                       todo.status === "completed"
                         ? "text-muted-foreground line-through"
                         : todo.status === "in_progress"
                           ? "text-yellow-500"
                           : "text-foreground",
                     )}
-                    title={content}
                   >
-                    {content}
+                    {todo.content}
                   </span>
                 </div>
               );
