@@ -1070,7 +1070,7 @@ export function SessionChatContent() {
   }, [requestMarkChatRead]);
 
   // Keep the recovery logic in a ref so event-listener effects never
-  // churn during streaming.  The ref is updated on every render (cheap) while
+  // churn during streaming. The ref is updated on every render (cheap) while
   // the stable wrapper below keeps a constant identity for effects.
   const maybeRecoverStreamRef = useRef(() => {});
   maybeRecoverStreamRef.current = () => {
@@ -1082,55 +1082,56 @@ export function SessionChatContent() {
       return;
     }
 
-    if (status !== "error") {
-      if (!isChatInFlight || hasAssistantRenderableContent) {
-        return;
-      }
-
-      const startedAt = inFlightStartedAtRef.current;
-      if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
-        return;
-      }
-      if (streamRecoveryProbeInFlightRef.current) {
-        return;
-      }
-
-      streamRecoveryProbeInFlightRef.current = true;
+    if (status === "error") {
       lastStreamRecoveryAtRef.current = now;
-
-      void (async () => {
-        try {
-          const response = await fetch(`/api/sessions/${session.id}/chats`, {
-            cache: "no-store",
-          });
-          if (!response.ok) {
-            return;
-          }
-
-          const payload: unknown = await response.json();
-          if (!isChatStreamingProbeResponse(payload)) {
-            return;
-          }
-
-          const serverChat = payload.chats.find(
-            (chat) => chat.id === chatInfo.id,
-          );
-          if (!serverChat?.isStreaming) {
-            return;
-          }
-
-          retryChatStream({ auto: true, strategy: "soft" });
-        } catch {
-          // Ignore transient probe failures and try again on next interval.
-        } finally {
-          streamRecoveryProbeInFlightRef.current = false;
-        }
-      })();
+      retryChatStream({ auto: true });
       return;
     }
 
+    // Only run "silent stream" recovery while still in submitted state.
+    // During active streaming, reconnecting can replay recent chunks and cause
+    // visible jank even though the connection is healthy.
+    if (status !== "submitted" || hasAssistantRenderableContent) {
+      return;
+    }
+
+    const startedAt = inFlightStartedAtRef.current;
+    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
+      return;
+    }
+    if (streamRecoveryProbeInFlightRef.current) {
+      return;
+    }
+
+    streamRecoveryProbeInFlightRef.current = true;
     lastStreamRecoveryAtRef.current = now;
-    retryChatStream({ auto: true });
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/sessions/${session.id}/chats`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload: unknown = await response.json();
+        if (!isChatStreamingProbeResponse(payload)) {
+          return;
+        }
+
+        const serverChat = payload.chats.find((chat) => chat.id === chatInfo.id);
+        if (!serverChat?.isStreaming) {
+          return;
+        }
+
+        retryChatStream({ auto: true, strategy: "soft" });
+      } catch {
+        // Ignore transient probe failures and try again on next interval.
+      } finally {
+        streamRecoveryProbeInFlightRef.current = false;
+      }
+    })();
   };
 
   // Stable identity wrapper – safe to use in effect dependency arrays without
