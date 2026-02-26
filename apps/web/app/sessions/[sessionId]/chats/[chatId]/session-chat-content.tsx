@@ -1,7 +1,7 @@
 "use client";
 
 import type { AskUserQuestionInput, TaskToolUIPart } from "@open-harness/agent";
-import { isReasoningUIPart, isToolUIPart } from "ai";
+import { isReasoningUIPart, isToolUIPart, type FileUIPart } from "ai";
 import {
   Archive,
   ArchiveRestore,
@@ -19,6 +19,7 @@ import {
   Mic,
   Paperclip,
   RefreshCw,
+  RotateCcw,
   Share2,
   Square,
   Trash2,
@@ -1253,10 +1254,16 @@ export function SessionChatContent() {
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(
     null,
   );
+  const [resendingMessageId, setResendingMessageId] = useState<string | null>(
+    null,
+  );
+
+  const hasMessageActionInFlight =
+    deletingMessageId !== null || resendingMessageId !== null || isChatInFlight;
 
   const handleDeleteUserMessage = useCallback(
     async (messageId: string) => {
-      if (isChatInFlight || deletingMessageId !== null) {
+      if (hasMessageActionInFlight) {
         return;
       }
 
@@ -1306,12 +1313,107 @@ export function SessionChatContent() {
       }
     },
     [
-      isChatInFlight,
-      deletingMessageId,
+      hasMessageActionInFlight,
       messages,
       session.id,
       chatInfo.id,
       setMessages,
+      refreshChats,
+    ],
+  );
+
+  const handleResendUserMessage = useCallback(
+    async (messageId: string) => {
+      if (hasMessageActionInFlight) {
+        return;
+      }
+
+      const targetMessageIndex = messages.findIndex(
+        (message) => message.id === messageId,
+      );
+      const targetMessage = messages[targetMessageIndex];
+      if (!targetMessage || targetMessage.role !== "user") {
+        return;
+      }
+
+      const resendText = targetMessage.parts
+        .filter(
+          (part): part is { type: "text"; text: string } =>
+            part.type === "text",
+        )
+        .map((part) => part.text)
+        .join("");
+      const resendFiles = targetMessage.parts
+        .filter((part): part is FileUIPart => part.type === "file")
+        .map((part) => ({
+          type: "file" as const,
+          mediaType: part.mediaType,
+          url: part.url,
+          ...(part.filename ? { filename: part.filename } : {}),
+        }));
+
+      if (!resendText.trim() && resendFiles.length === 0) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        "Resend this message? This will delete this message and everything after it.",
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setDeleteMessageError(null);
+      setResendingMessageId(messageId);
+
+      try {
+        const response = await fetch(
+          `/api/sessions/${session.id}/chats/${chatInfo.id}/messages/${messageId}`,
+          { method: "DELETE" },
+        );
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          success?: boolean;
+        };
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error ?? "Failed to resend message");
+        }
+
+        setMessages(messages.slice(0, targetMessageIndex));
+        setHasPendingResponse(true);
+        hasSeenAssistantRenderableContentRef.current = false;
+        void setChatStreaming(chatInfo.id, true);
+
+        try {
+          await sendMessage({
+            text: resendText,
+            files: resendFiles.length > 0 ? resendFiles : undefined,
+          });
+        } catch (err) {
+          setHasPendingResponse(false);
+          void setChatStreaming(chatInfo.id, false);
+          throw err;
+        }
+
+        await refreshChats();
+      } catch (err) {
+        console.error("Failed to resend message:", err);
+        setDeleteMessageError(
+          err instanceof Error ? err.message : "Failed to resend message",
+        );
+      } finally {
+        setResendingMessageId(null);
+      }
+    },
+    [
+      hasMessageActionInFlight,
+      messages,
+      session.id,
+      chatInfo.id,
+      setMessages,
+      setChatStreaming,
+      sendMessage,
       refreshChats,
     ],
   );
@@ -2284,23 +2386,38 @@ export function SessionChatContent() {
                                 </p>
                               </div>
                               {group.index === 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleDeleteUserMessage(m.id)
-                                  }
-                                  disabled={
-                                    deletingMessageId !== null || isChatInFlight
-                                  }
-                                  aria-label="Delete this message and everything after it"
-                                  className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  {deletingMessageId === m.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </button>
+                                <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleResendUserMessage(m.id)
+                                    }
+                                    disabled={hasMessageActionInFlight}
+                                    aria-label="Resend this message and delete everything after it"
+                                    className="rounded p-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    {resendingMessageId === m.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RotateCcw className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleDeleteUserMessage(m.id)
+                                    }
+                                    disabled={hasMessageActionInFlight}
+                                    aria-label="Delete this message and everything after it"
+                                    className="rounded p-1 transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    {deletingMessageId === m.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               )}
                             </div>
                           ) : (
@@ -2372,9 +2489,7 @@ export function SessionChatContent() {
                                 onClick={() =>
                                   void handleDeleteUserMessage(m.id)
                                 }
-                                disabled={
-                                  deletingMessageId !== null || isChatInFlight
-                                }
+                                disabled={hasMessageActionInFlight}
                                 aria-label="Delete this message and everything after it"
                                 className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                               >
