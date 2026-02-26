@@ -782,6 +782,7 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const hasInitialModels = initialModels.length > 0;
   const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
     "/api/models",
     fetcher,
@@ -789,8 +790,8 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       revalidateIfStale: false,
-      revalidateOnMount: false,
-      fallbackData: { models: initialModels },
+      revalidateOnMount: !hasInitialModels,
+      fallbackData: hasInitialModels ? { models: initialModels } : undefined,
     },
   );
   const models = useMemo(

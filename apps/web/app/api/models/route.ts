@@ -69,11 +69,50 @@ async function fetchModelsDevContextMap(): Promise<Map<string, number>> {
   }
 }
 
+function resolveContextLimit(
+  modelId: string,
+  contextMap: Map<string, number>,
+): number | undefined {
+  const directMatch = contextMap.get(modelId);
+  if (typeof directMatch === "number" && directMatch > 0) {
+    return directMatch;
+  }
+
+  const normalizedModelId = modelId.toLowerCase();
+  let bestMatch: { contextLimit: number; matchLength: number } | undefined;
+
+  for (const [availableModelId, contextLimit] of contextMap.entries()) {
+    if (typeof contextLimit !== "number" || contextLimit <= 0) {
+      continue;
+    }
+
+    const normalizedAvailableId = availableModelId.toLowerCase();
+    const isRelatedMatch =
+      normalizedModelId.includes(normalizedAvailableId) ||
+      normalizedAvailableId.includes(normalizedModelId);
+
+    if (!isRelatedMatch) {
+      continue;
+    }
+
+    const matchLength = Math.min(
+      normalizedModelId.length,
+      normalizedAvailableId.length,
+    );
+
+    if (!bestMatch || matchLength > bestMatch.matchLength) {
+      bestMatch = { contextLimit, matchLength };
+    }
+  }
+
+  return bestMatch?.contextLimit;
+}
+
 function addContextWindow(
   model: GatewayModel,
   contextMap: Map<string, number>,
 ): GatewayModelWithContext {
-  const contextLimit = contextMap.get(model.id);
+  const contextLimit = resolveContextLimit(model.id, contextMap);
   if (contextLimit == null) {
     return model;
   }

@@ -111,4 +111,37 @@ describe("/api/models context window enrichment", () => {
     expect(contextById.has("openai/image-gen")).toBe(false);
     expect(requestedUrls).toContain("https://models.dev/api.json");
   });
+
+  test("uses closest related models.dev id when gateway model id has suffixes", async () => {
+    gatewayModels.push({
+      id: "openai/gpt-5.3-codex-2026-02-15",
+      modelType: "language",
+      context_window: 200_000,
+    });
+
+    modelsDevApiData = {
+      openai: {
+        models: {
+          "gpt-5": {
+            limit: { context: 272_000 },
+          },
+          "gpt-5.3-codex": {
+            limit: { context: 400_000 },
+          },
+        },
+      },
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{ id: string; context_window?: number }>;
+    };
+
+    expect(body.models).toHaveLength(1);
+    expect(body.models[0]?.context_window).toBe(400_000);
+  });
 });

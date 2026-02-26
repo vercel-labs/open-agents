@@ -28,20 +28,31 @@ export function getModelContextLimit(
   }
 
   const normalizedModelId = modelId.toLowerCase();
-  const partialMatch = models.find((model) => {
-    const normalizedAvailableModelId = model.id.toLowerCase();
-    return (
-      normalizedModelId.includes(normalizedAvailableModelId) ||
-      normalizedAvailableModelId.includes(normalizedModelId)
-    );
-  });
+  let bestMatch: { contextLimit: number; matchLength: number } | undefined;
 
-  if (
-    typeof partialMatch?.context_window === "number" &&
-    partialMatch.context_window > 0
-  ) {
-    return partialMatch.context_window;
+  for (const model of models) {
+    if (typeof model.context_window !== "number" || model.context_window <= 0) {
+      continue;
+    }
+
+    const normalizedAvailableModelId = model.id.toLowerCase();
+    const isRelatedMatch =
+      normalizedModelId.includes(normalizedAvailableModelId) ||
+      normalizedAvailableModelId.includes(normalizedModelId);
+
+    if (!isRelatedMatch) {
+      continue;
+    }
+
+    const matchLength = Math.min(
+      normalizedModelId.length,
+      normalizedAvailableModelId.length,
+    );
+
+    if (!bestMatch || matchLength > bestMatch.matchLength) {
+      bestMatch = { contextLimit: model.context_window, matchLength };
+    }
   }
 
-  return undefined;
+  return bestMatch?.contextLimit;
 }
