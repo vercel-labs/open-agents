@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
 import { DiffsProvider } from "@/components/diffs-provider";
 import { getChatById, getChatMessages } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
-import type { AvailableModel } from "@/lib/models";
+import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionChatContent } from "./session-chat-content";
 import { SessionChatProvider } from "./session-chat-context";
@@ -27,34 +26,9 @@ function isOptimisticChatId(chatId: string): boolean {
 const OPTIMISTIC_CHAT_RETRY_DELAY_MS = 100;
 const OPTIMISTIC_CHAT_RETRY_ATTEMPTS = 50;
 
-interface ModelsResponse {
-  models: AvailableModel[];
-}
-
-async function getInitialModels(): Promise<AvailableModel[]> {
+async function getInitialModels() {
   try {
-    const requestHeaders = await headers();
-    const host =
-      requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-
-    if (!host) {
-      return [];
-    }
-
-    const protocol =
-      requestHeaders.get("x-forwarded-proto") ??
-      (host.includes("localhost") ? "http" : "https");
-
-    const response = await fetch(`${protocol}://${host}/api/models`, {
-      next: { revalidate: 3600 },
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = (await response.json()) as ModelsResponse;
-    return data.models ?? [];
+    return await fetchAvailableLanguageModelsWithContext();
   } catch {
     return [];
   }
