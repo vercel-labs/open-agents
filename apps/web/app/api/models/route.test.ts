@@ -29,6 +29,8 @@ mock.module("ai", () => ({
   },
 }));
 
+mock.module("server-only", () => ({}));
+
 const routeModulePromise = import("./route");
 
 afterEach(() => {
@@ -112,7 +114,7 @@ describe("/api/models context window enrichment", () => {
     expect(requestedUrls).toContain("https://models.dev/api.json");
   });
 
-  test("uses closest related models.dev id when gateway model id has suffixes", async () => {
+  test("keeps gateway context window when models.dev only has related ids", async () => {
     gatewayModels.push({
       id: "openai/gpt-5.3-codex-2026-02-15",
       modelType: "language",
@@ -142,6 +144,6 @@ describe("/api/models context window enrichment", () => {
     };
 
     expect(body.models).toHaveLength(1);
-    expect(body.models[0]?.context_window).toBe(400_000);
+    expect(body.models[0]?.context_window).toBe(200_000);
   });
 });

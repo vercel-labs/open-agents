@@ -21,38 +21,11 @@ export function getModelContextLimit(
 ): number | undefined {
   const directMatch = models.find((model) => model.id === modelId);
   if (
-    typeof directMatch?.context_window === "number" &&
-    directMatch.context_window > 0
+    typeof directMatch?.context_window !== "number" ||
+    directMatch.context_window <= 0
   ) {
-    return directMatch.context_window;
+    return undefined;
   }
 
-  const normalizedModelId = modelId.toLowerCase();
-  let bestMatch: { contextLimit: number; matchLength: number } | undefined;
-
-  for (const model of models) {
-    if (typeof model.context_window !== "number" || model.context_window <= 0) {
-      continue;
-    }
-
-    const normalizedAvailableModelId = model.id.toLowerCase();
-    const isRelatedMatch =
-      normalizedModelId.includes(normalizedAvailableModelId) ||
-      normalizedAvailableModelId.includes(normalizedModelId);
-
-    if (!isRelatedMatch) {
-      continue;
-    }
-
-    const matchLength = Math.min(
-      normalizedModelId.length,
-      normalizedAvailableModelId.length,
-    );
-
-    if (!bestMatch || matchLength > bestMatch.matchLength) {
-      bestMatch = { contextLimit: model.context_window, matchLength };
-    }
-  }
-
-  return bestMatch?.contextLimit;
+  return directMatch.context_window;
 }
