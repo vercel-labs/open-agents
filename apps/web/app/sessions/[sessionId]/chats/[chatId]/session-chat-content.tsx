@@ -33,6 +33,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import useSWR from "swr";
 import type {
   WebAgentUIMessage,
   WebAgentUIMessagePart,
@@ -74,7 +75,13 @@ import {
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
+import {
+  type AvailableModel,
+  DEFAULT_CONTEXT_LIMIT,
+  getModelContextLimit,
+} from "@/lib/models";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import {
@@ -166,6 +173,10 @@ interface GroupedRenderMessage {
   message: WebAgentUIMessage;
   groups: MessageRenderGroup[];
   isStreaming: boolean;
+}
+
+interface ModelsResponse {
+  models: AvailableModel[];
 }
 
 function getPartIdentity(part: WebAgentUIMessagePart): string {
@@ -767,6 +778,8 @@ export function SessionChatContent() {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const { data: modelsData } = useSWR<ModelsResponse>("/api/models", fetcher);
+
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -1744,6 +1757,18 @@ export function SessionChatContent() {
     return { inputTokens: 0, outputTokens: 0 };
   }, [renderMessages]);
 
+  const contextLimit = useMemo(() => {
+    const modelId = chatInfo.modelId;
+    if (!modelId) {
+      return DEFAULT_CONTEXT_LIMIT;
+    }
+
+    return (
+      getModelContextLimit(modelId, modelsData?.models ?? []) ??
+      DEFAULT_CONTEXT_LIMIT
+    );
+  }, [chatInfo.modelId, modelsData]);
+
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
     useMemo(() => {
@@ -2572,11 +2597,10 @@ export function SessionChatContent() {
                       </span>
                     )
                   )}
-                  {/* TODO: Derive context limit from model ID instead of hardcoding */}
                   <ContextUsageIndicator
                     inputTokens={tokenUsage.inputTokens}
                     outputTokens={tokenUsage.outputTokens}
-                    contextLimit={200_000}
+                    contextLimit={contextLimit}
                   />
                 </div>
 
