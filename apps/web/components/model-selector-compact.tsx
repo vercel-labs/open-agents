@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
 import { ChevronDown, CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetcher } from "@/lib/swr";
 import {
   Popover,
   PopoverContent,
@@ -26,21 +24,18 @@ import {
 
 interface ModelSelectorCompactProps {
   value: string;
-  onChange: (modelId: string) => void;
-}
-
-interface ModelsResponse {
   models: AvailableModel[];
+  isLoading: boolean;
+  onChange: (modelId: string) => void;
 }
 
 export function ModelSelectorCompact({
   value,
+  models,
+  isLoading,
   onChange,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading } = useSWR<ModelsResponse>("/api/models", fetcher);
-
-  const models = data?.models ?? [];
 
   const handleSelect = (modelId: string) => {
     onChange(modelId);
