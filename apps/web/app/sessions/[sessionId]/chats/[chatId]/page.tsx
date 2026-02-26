@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
 import { DiffsProvider } from "@/components/diffs-provider";
 import { getChatById, getChatMessages } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
+import type { AvailableModel } from "@/lib/models";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionChatContent } from "./session-chat-content";
 import { SessionChatProvider } from "./session-chat-context";
@@ -24,6 +26,39 @@ function isOptimisticChatId(chatId: string): boolean {
 
 const OPTIMISTIC_CHAT_RETRY_DELAY_MS = 100;
 const OPTIMISTIC_CHAT_RETRY_ATTEMPTS = 50;
+
+interface ModelsResponse {
+  models: AvailableModel[];
+}
+
+async function getInitialModels(): Promise<AvailableModel[]> {
+  try {
+    const requestHeaders = await headers();
+    const host =
+      requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+
+    if (!host) {
+      return [];
+    }
+
+    const protocol =
+      requestHeaders.get("x-forwarded-proto") ??
+      (host.includes("localhost") ? "http" : "https");
+
+    const response = await fetch(`${protocol}://${host}/api/models`, {
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as ModelsResponse;
+    return data.models ?? [];
+  } catch {
+    return [];
+  }
+}
 
 async function getChatByIdWithRetry(
   chatId: string,
@@ -82,10 +117,11 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
-  // Fetch chat and messages in parallel
-  const [chat, dbMessages] = await Promise.all([
+  // Fetch chat, messages, and models in parallel
+  const [chat, dbMessages, initialModels] = await Promise.all([
     getChatByIdWithRetry(chatId, sessionId),
     getChatMessages(chatId),
+    getInitialModels(),
   ]);
   if (!chat) {
     if (isOptimisticChatId(chatId)) {
@@ -101,7 +137,7 @@ export default async function SessionChatPage({
         chat={chat}
         initialMessages={initialMessages}
       >
-        <SessionChatContent />
+        <SessionChatContent initialModels={initialModels} />
       </SessionChatProvider>
     </DiffsProvider>
   );

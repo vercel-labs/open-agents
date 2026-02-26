@@ -179,6 +179,10 @@ interface ModelsResponse {
   models: AvailableModel[];
 }
 
+interface SessionChatContentProps {
+  initialModels: AvailableModel[];
+}
+
 function getPartIdentity(part: WebAgentUIMessagePart): string {
   if (isToolUIPart(part)) {
     return part.toolCallId ? `tool:${part.toolCallId}` : `tool:${part.type}`;
@@ -647,7 +651,7 @@ function ShareDialog({
   );
 }
 
-export function SessionChatContent() {
+export function SessionChatContent({ initialModels }: SessionChatContentProps) {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
@@ -778,7 +782,21 @@ export function SessionChatContent() {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
-  const { data: modelsData } = useSWR<ModelsResponse>("/api/models", fetcher);
+  const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
+    "/api/models",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      revalidateIfStale: false,
+      revalidateOnMount: false,
+      fallbackData: { models: initialModels },
+    },
+  );
+  const models = useMemo(
+    () => modelsData?.models ?? initialModels,
+    [modelsData?.models, initialModels],
+  );
 
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
@@ -1763,11 +1781,8 @@ export function SessionChatContent() {
       return DEFAULT_CONTEXT_LIMIT;
     }
 
-    return (
-      getModelContextLimit(modelId, modelsData?.models ?? []) ??
-      DEFAULT_CONTEXT_LIMIT
-    );
-  }, [chatInfo.modelId, modelsData]);
+    return getModelContextLimit(modelId, models) ?? DEFAULT_CONTEXT_LIMIT;
+  }, [chatInfo.modelId, models]);
 
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
@@ -2585,6 +2600,8 @@ export function SessionChatContent() {
                     >
                       <ModelSelectorCompact
                         value={chatInfo.modelId}
+                        models={models}
+                        isLoading={modelsLoading}
                         onChange={(modelId) => {
                           void handleModelChange(modelId);
                         }}
