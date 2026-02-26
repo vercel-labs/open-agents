@@ -270,7 +270,9 @@ function CircularProgress({
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const normalizedPercentage = Math.min(100, Math.max(0, percentage));
+  const strokeDashoffset =
+    circumference - (normalizedPercentage / 100) * circumference;
 
   return (
     <svg width={size} height={size} className="-rotate-90">
