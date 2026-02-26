@@ -26,7 +26,7 @@
     "lint:fix": "turbo lint:fix",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "ci": "bun run format:check && bun run lint && bun run typecheck",
+    "ci": "bun run format:check && bun run lint && bun run typecheck && bun test",
     "build:installer": "bun run scripts/build-installer.ts",
     "build:release-artifacts": "bun run scripts/build-release-artifacts.ts",
     "release:local": "bun run scripts/release-local.ts",
