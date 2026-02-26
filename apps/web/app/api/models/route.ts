@@ -14,14 +14,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getContextWindow(model: GatewayModelWithContext): number | undefined {
-  const value = Reflect.get(model, "context_window");
-  if (typeof value !== "number") {
-    return undefined;
-  }
-  return value > 0 ? value : undefined;
-}
-
 function getModelsDevContextMap(data: unknown): Map<string, number> {
   const contextMap = new Map<string, number>();
   if (!isRecord(data)) {
@@ -81,12 +73,13 @@ function addContextWindow(
   model: GatewayModel,
   contextMap: Map<string, number>,
 ): GatewayModelWithContext {
-  if (getContextWindow(model) !== undefined) {
+  const contextLimit = contextMap.get(model.id);
+  if (contextLimit == null) {
     return model;
   }
 
-  const contextLimit = contextMap.get(model.id);
-  if (contextLimit == null) {
+  const existingContext = Reflect.get(model, "context_window");
+  if (existingContext === contextLimit) {
     return model;
   }
 
