@@ -246,11 +246,13 @@ function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
   return Date.now() < expiresAt;
 }
 
+const tokenFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 function formatTokens(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(1)}k`;
-  }
-  return tokens.toString();
+  return tokenFormatter.format(tokens).toLowerCase();
 }
 
 function sleep(ms: number): Promise<void> {
