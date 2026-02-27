@@ -9,6 +9,7 @@
     "catalog": {
       "ai": "^6.0.85",
       "@ai-sdk/anthropic": "^3.0.43",
+      "@ai-sdk/openai": "^3.0.0",
       "@ai-sdk/react": "^3.0.29",
       "zod": "^4.3.6"
     }
