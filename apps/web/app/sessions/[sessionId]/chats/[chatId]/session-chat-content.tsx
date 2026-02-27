@@ -985,6 +985,133 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
       };
     });
   }, [renderMessages, isChatInFlightSettled]);
+  const handleToolApprove = useCallback(
+    (id: string) => {
+      addToolApprovalResponse({ id, approved: true });
+    },
+    [addToolApprovalResponse],
+  );
+  const handleToolDeny = useCallback(
+    (id: string, reason?: string) => {
+      addToolApprovalResponse({
+        id,
+        approved: false,
+        reason,
+      });
+    },
+    [addToolApprovalResponse],
+  );
+  const renderedMessageGroups = useMemo(
+    () =>
+      groupedRenderMessages.map(
+        ({ message: m, groups, isStreaming: isMessageStreaming }) => {
+          return groups.map((group) => {
+            if (group.type === "task-group") {
+              return (
+                <div key={`${m.id}-${group.renderKey}`} className="max-w-full">
+                  <TaskGroupView
+                    taskParts={group.tasks}
+                    activeApprovalId={
+                      group.tasks.find((t) => t.state === "approval-requested")
+                        ?.approval?.id ?? null
+                    }
+                    isStreaming={isMessageStreaming}
+                    onApprove={handleToolApprove}
+                    onDeny={handleToolDeny}
+                  />
+                </div>
+              );
+            }
+
+            const p = group.part;
+
+            if (isReasoningUIPart(p)) {
+              return (
+                <div
+                  key={`${m.id}-${group.renderKey}`}
+                  className="flex justify-start"
+                >
+                  <ThinkingBlock
+                    text={p.text}
+                    isStreaming={isMessageStreaming && p.state === "streaming"}
+                  />
+                </div>
+              );
+            }
+
+            if (p.type === "text") {
+              return (
+                <div
+                  key={`${m.id}-${group.renderKey}`}
+                  className={cn(
+                    "flex min-w-0",
+                    m.role === "user" ? "justify-end" : "justify-start",
+                  )}
+                >
+                  {m.role === "user" ? (
+                    <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                      <p className="whitespace-pre-wrap break-words">
+                        {p.text}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-0 w-full overflow-hidden">
+                      <Streamdown
+                        animated={
+                          isMessageStreaming
+                            ? STREAMDOWN_FADE_IN_ANIMATION
+                            : undefined
+                        }
+                        mode={isMessageStreaming ? "streaming" : "static"}
+                        isAnimating={isMessageStreaming}
+                        plugins={streamdownPlugins}
+                      >
+                        {p.text}
+                      </Streamdown>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (isToolUIPart(p)) {
+              return (
+                <div key={`${m.id}-${group.renderKey}`} className="max-w-full">
+                  <ToolCall
+                    part={p as WebAgentUIToolPart}
+                    isStreaming={isMessageStreaming}
+                    onApprove={handleToolApprove}
+                    onDeny={handleToolDeny}
+                  />
+                </div>
+              );
+            }
+
+            // Render image attachments
+            if (p.type === "file" && p.mediaType?.startsWith("image/")) {
+              return (
+                <div
+                  key={`${m.id}-${group.renderKey}`}
+                  className="flex justify-end"
+                >
+                  <div className="max-w-[80%]">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                    <img
+                      src={p.url}
+                      alt={p.filename ?? "Attached image"}
+                      className="max-h-64 rounded-lg"
+                    />
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          });
+        },
+      ),
+    [groupedRenderMessages, handleToolApprove, handleToolDeny],
+  );
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
@@ -2217,143 +2344,7 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
         <div ref={containerRef} className="h-full overflow-y-auto">
           <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
             <div className="space-y-6">
-              {groupedRenderMessages.map(
-                ({ message: m, groups, isStreaming: isMessageStreaming }) => {
-                  return groups.map((group) => {
-                    if (group.type === "task-group") {
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="max-w-full"
-                        >
-                          <TaskGroupView
-                            taskParts={group.tasks}
-                            activeApprovalId={
-                              group.tasks.find(
-                                (t) => t.state === "approval-requested",
-                              )?.approval?.id ?? null
-                            }
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    const p = group.part;
-
-                    if (isReasoningUIPart(p)) {
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="flex justify-start"
-                        >
-                          <ThinkingBlock
-                            text={p.text}
-                            isStreaming={
-                              isMessageStreaming && p.state === "streaming"
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (p.type === "text") {
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className={cn(
-                            "flex min-w-0",
-                            m.role === "user" ? "justify-end" : "justify-start",
-                          )}
-                        >
-                          {m.role === "user" ? (
-                            <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                              <p className="whitespace-pre-wrap break-words">
-                                {p.text}
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="min-w-0 w-full overflow-hidden">
-                              <Streamdown
-                                animated={
-                                  isMessageStreaming
-                                    ? STREAMDOWN_FADE_IN_ANIMATION
-                                    : undefined
-                                }
-                                mode={
-                                  isMessageStreaming ? "streaming" : "static"
-                                }
-                                isAnimating={isMessageStreaming}
-                                plugins={streamdownPlugins}
-                              >
-                                {p.text}
-                              </Streamdown>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (isToolUIPart(p)) {
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="max-w-full"
-                        >
-                          <ToolCall
-                            part={p as WebAgentUIToolPart}
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    // Render image attachments
-                    if (
-                      p.type === "file" &&
-                      p.mediaType?.startsWith("image/")
-                    ) {
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="flex justify-end"
-                        >
-                          <div className="max-w-[80%]">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-                            <img
-                              src={p.url}
-                              alt={p.filename ?? "Attached image"}
-                              className="max-h-64 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return null;
-                  });
-                },
-              )}
+              {renderedMessageGroups}
               {showThinkingIndicator && (
                 <div className="flex justify-start">
                   <ThinkingBlock text="" isStreaming />
