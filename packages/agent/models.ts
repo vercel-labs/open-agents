@@ -69,7 +69,7 @@ export function gateway(
             reasoningEffort: "high",
             reasoningSummary: "detailed",
             store: false,
-            include: ["reasoning.encrypted_content"]
+            include: ["reasoning.encrypted_content"],
           } satisfies OpenAIResponsesProviderOptions,
         },
       },
