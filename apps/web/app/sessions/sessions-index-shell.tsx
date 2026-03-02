@@ -11,6 +11,7 @@ import {
   SidebarContent,
   SidebarInset,
   SidebarProvider,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useSessions, type SessionWithUnread } from "@/hooks/use-sessions";
 
@@ -86,6 +87,11 @@ export function SessionsIndexShell({ lastRepo }: SessionsIndexShellProps) {
         </SidebarContent>
       </Sidebar>
       <SidebarInset className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+          <div className="flex min-h-8 items-center gap-2">
+            <SidebarTrigger className="shrink-0" />
+          </div>
+        </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
           <Button
             size="lg"
