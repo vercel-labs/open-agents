@@ -2329,8 +2329,71 @@ export function SessionChatContent(_props: unknown) {
               )}
             </div>
 
-            {/* Mobile overflow menu */}
-            <div className="flex items-center md:hidden">
+            {/* Mobile: visible git action + overflow menu */}
+            <div className="flex items-center gap-1 md:hidden">
+              {hasRepo ? (
+                hasExistingPr ? (
+                  showCommitAction ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCommitDialogOpen(true)}
+                    >
+                      <GitCommit className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
+                        window.open(prUrl, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      <GitPullRequest className="h-4 w-4" />
+                    </Button>
+                  )
+                ) : showCommitAction ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCommitDialogOpen(true)}
+                  >
+                    <GitCommit className="h-4 w-4" />
+                  </Button>
+                ) : canCreatePr && isCreatePrBranchReady ? (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setPrDialogOpen(true)}
+                  >
+                    <GitPullRequest className="h-4 w-4" />
+                  </Button>
+                ) : supportsDiff ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setShowDiffPanel(!showDiffPanel)}
+                    disabled={!diff && !session.cachedDiff}
+                  >
+                    <GitCompare className="h-4 w-4" />
+                  </Button>
+                ) : null
+              ) : supportsRepoCreation ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setRepoDialogOpen(true)}
+                >
+                  <FolderGit2 className="h-4 w-4" />
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
