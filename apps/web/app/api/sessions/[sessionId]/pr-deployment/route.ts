@@ -35,7 +35,9 @@ export async function GET(req: Request, context: RouteContext) {
     parsedPrNumber !== null &&
     (Number.isNaN(parsedPrNumber) || parsedPrNumber <= 0)
   ) {
-    return Response.json({ deploymentUrl: null } satisfies PrDeploymentResponse);
+    return Response.json({
+      deploymentUrl: null,
+    } satisfies PrDeploymentResponse);
   }
 
   if (
@@ -43,7 +45,9 @@ export async function GET(req: Request, context: RouteContext) {
     sessionRecord.prNumber !== null &&
     parsedPrNumber !== sessionRecord.prNumber
   ) {
-    return Response.json({ deploymentUrl: null } satisfies PrDeploymentResponse);
+    return Response.json({
+      deploymentUrl: null,
+    } satisfies PrDeploymentResponse);
   }
 
   if (
@@ -51,15 +55,22 @@ export async function GET(req: Request, context: RouteContext) {
     !sessionRecord.repoName ||
     sessionRecord.prNumber === null
   ) {
-    return Response.json({ deploymentUrl: null } satisfies PrDeploymentResponse);
+    return Response.json({
+      deploymentUrl: null,
+    } satisfies PrDeploymentResponse);
   }
 
   let token: string;
   try {
-    const tokenResult = await getRepoToken(session.user.id, sessionRecord.repoOwner);
+    const tokenResult = await getRepoToken(
+      session.user.id,
+      sessionRecord.repoOwner,
+    );
     token = tokenResult.token;
   } catch {
-    return Response.json({ deploymentUrl: null } satisfies PrDeploymentResponse);
+    return Response.json({
+      deploymentUrl: null,
+    } satisfies PrDeploymentResponse);
   }
 
   const deploymentResult = await findLatestVercelDeploymentUrlForPullRequest({
@@ -70,7 +81,9 @@ export async function GET(req: Request, context: RouteContext) {
   });
 
   if (!deploymentResult.success) {
-    return Response.json({ deploymentUrl: null } satisfies PrDeploymentResponse);
+    return Response.json({
+      deploymentUrl: null,
+    } satisfies PrDeploymentResponse);
   }
 
   return Response.json({
