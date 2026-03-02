@@ -29,11 +29,18 @@ interface CreateSessionResponse {
   chat: Chat;
 }
 
-export function useSessions(options?: { enabled?: boolean }) {
+export function useSessions(options?: {
+  enabled?: boolean;
+  initialData?: SessionsResponse;
+}) {
   const enabled = options?.enabled ?? true;
   const { data, error, isLoading, mutate } = useSWR<SessionsResponse>(
     enabled ? "/api/sessions" : null,
     fetcher,
+    {
+      fallbackData: options?.initialData,
+      revalidateOnMount: options?.initialData ? false : undefined,
+    },
   );
   const { mutate: globalMutate } = useSWRConfig();
 

@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { getChatSummariesBySessionId } from "@/lib/db/sessions";
+import {
+  getChatSummariesBySessionId,
+  getSessionsWithUnreadByUserId,
+} from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -40,24 +43,30 @@ export default async function SessionLayout({
         defaultModelId: string | null;
       }
     | undefined;
+  let initialSessionsData:
+    | { sessions: Awaited<ReturnType<typeof getSessionsWithUnreadByUserId>> }
+    | undefined;
 
   try {
-    const [chats, preferences] = await Promise.all([
+    const [chats, preferences, sessions] = await Promise.all([
       getChatSummariesBySessionId(sessionId, session.user.id),
       getUserPreferences(session.user.id),
+      getSessionsWithUnreadByUserId(session.user.id),
     ]);
     initialChatsData = {
       chats,
       defaultModelId: preferences.defaultModelId,
     };
+    initialSessionsData = { sessions };
   } catch (error) {
-    console.error("Failed to prefetch sidebar chats:", error);
+    console.error("Failed to prefetch sidebar data:", error);
   }
 
   return (
     <SessionLayoutShell
       session={sessionRecord}
       initialChatsData={initialChatsData}
+      initialSessionsData={initialSessionsData}
     >
       {children}
     </SessionLayoutShell>

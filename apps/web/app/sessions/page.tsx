@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getLastRepoByUserId } from "@/lib/db/last-repo";
+import { getSessionsWithUnreadByUserId } from "@/lib/db/sessions";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionsIndexShell } from "./sessions-index-shell";
 
@@ -15,7 +16,15 @@ export default async function SessionsPage() {
     redirect("/");
   }
 
-  const lastRepo = await getLastRepoByUserId(session.user.id);
+  const [lastRepo, sessions] = await Promise.all([
+    getLastRepoByUserId(session.user.id),
+    getSessionsWithUnreadByUserId(session.user.id),
+  ]);
 
-  return <SessionsIndexShell lastRepo={lastRepo} />;
+  return (
+    <SessionsIndexShell
+      lastRepo={lastRepo}
+      initialSessionsData={{ sessions }}
+    />
+  );
 }

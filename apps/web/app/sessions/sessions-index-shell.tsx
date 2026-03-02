@@ -17,9 +17,15 @@ import { useSessions, type SessionWithUnread } from "@/hooks/use-sessions";
 
 type SessionsIndexShellProps = {
   lastRepo: { owner: string; repo: string } | null;
+  initialSessionsData?: {
+    sessions: SessionWithUnread[];
+  };
 };
 
-export function SessionsIndexShell({ lastRepo }: SessionsIndexShellProps) {
+export function SessionsIndexShell({
+  lastRepo,
+  initialSessionsData,
+}: SessionsIndexShellProps) {
   const router = useRouter();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
 
@@ -28,7 +34,7 @@ export function SessionsIndexShell({ lastRepo }: SessionsIndexShellProps) {
     loading: sessionsLoading,
     refreshSessions,
     createSession,
-  } = useSessions({ enabled: true });
+  } = useSessions({ enabled: true, initialData: initialSessionsData });
 
   const getSessionHref = useCallback((targetSession: SessionWithUnread) => {
     if (targetSession.latestChatId) {

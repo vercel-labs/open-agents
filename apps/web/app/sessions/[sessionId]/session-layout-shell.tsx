@@ -23,12 +23,16 @@ type SessionLayoutShellProps = {
     defaultModelId: string | null;
     chats: SessionChatListItem[];
   };
+  initialSessionsData?: {
+    sessions: SessionWithUnread[];
+  };
   children: React.ReactNode;
 };
 
 export function SessionLayoutShell({
   session: initialSession,
   initialChatsData,
+  initialSessionsData,
   children,
 }: SessionLayoutShellProps) {
   const router = useRouter();
@@ -48,6 +52,7 @@ export function SessionLayoutShell({
     createSession,
   } = useSessions({
     enabled: true,
+    initialData: initialSessionsData,
   });
 
   const lastRepo = useMemo(() => {
