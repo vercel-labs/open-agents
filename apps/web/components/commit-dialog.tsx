@@ -627,7 +627,6 @@ export function CommitDialog({
 
               {session.prNumber && prUrl && (
                 <Button
-                  variant="outline"
                   onClick={() => {
                     window.open(prUrl, "_blank", "noopener,noreferrer");
                   }}

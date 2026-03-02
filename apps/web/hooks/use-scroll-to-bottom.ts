@@ -16,8 +16,11 @@ export function useScrollToBottom<T extends HTMLElement>() {
       const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
       const threshold = 10;
       const atBottom = scrollHeight - scrollTop - clientHeight < threshold;
-      isAtBottomRef.current = atBottom;
-      setIsAtBottom(atBottom);
+
+      if (isAtBottomRef.current !== atBottom) {
+        isAtBottomRef.current = atBottom;
+        setIsAtBottom(atBottom);
+      }
     }
   }, []);
 

@@ -103,21 +103,21 @@ export function SessionStarter({
   return (
     <div
       className={cn(
-        "w-full max-w-2xl overflow-hidden rounded-xl border border-white/10 bg-neutral-900/60 p-4 sm:p-5",
+        "w-full max-w-2xl overflow-hidden rounded-xl border border-border/70 bg-card/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/75 dark:border-white/10 dark:bg-neutral-900/60 dark:shadow-none sm:p-5",
         "transition-all duration-200",
       )}
     >
       <div className="flex flex-col gap-4">
         {/* Segmented toggle */}
-        <div className="flex rounded-lg bg-white/[0.04] p-1">
+        <div className="flex rounded-lg bg-muted/70 p-1 dark:bg-white/[0.04]">
           <button
             type="button"
             onClick={() => handleModeChange("empty")}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
               mode === "empty"
-                ? "bg-white/10 text-neutral-100 shadow-sm"
-                : "text-neutral-400 hover:text-neutral-300",
+                ? "border border-border/70 bg-background text-foreground shadow-sm dark:border-transparent dark:bg-white/10 dark:text-neutral-100"
+                : "text-muted-foreground hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-300",
             )}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -129,8 +129,8 @@ export function SessionStarter({
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
               mode === "repo"
-                ? "bg-white/10 text-neutral-100 shadow-sm"
-                : "text-neutral-400 hover:text-neutral-300",
+                ? "border border-border/70 bg-background text-foreground shadow-sm dark:border-transparent dark:bg-white/10 dark:text-neutral-100"
+                : "text-muted-foreground hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-300",
             )}
           >
             <GitBranch className="h-3.5 w-3.5" />
@@ -153,7 +153,7 @@ export function SessionStarter({
                 <button
                   type="button"
                   onClick={handleRepoClear}
-                  className="flex items-center justify-center self-stretch rounded-md border border-white/10 bg-white/[0.03] px-3 text-neutral-500 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
+                  className="flex items-center justify-center self-stretch rounded-md border border-input bg-background/80 px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-500 dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-neutral-300"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -174,7 +174,7 @@ export function SessionStarter({
 
         {/* Empty mode: brief description */}
         {mode === "empty" && (
-          <p className="text-center text-sm text-neutral-500">
+          <p className="text-center text-sm text-muted-foreground dark:text-neutral-500">
             Start with a blank sandbox -- no repository required.
           </p>
         )}
@@ -186,8 +186,8 @@ export function SessionStarter({
           className={cn(
             "w-full rounded-md px-4 py-2 text-sm font-medium transition-colors",
             isSubmitDisabled
-              ? "cursor-not-allowed bg-neutral-700 text-neutral-400"
-              : "bg-neutral-200 text-neutral-900 hover:bg-neutral-300",
+              ? "cursor-not-allowed bg-muted text-muted-foreground"
+              : "bg-foreground text-background hover:bg-foreground/90",
           )}
         >
           {buttonLabel}

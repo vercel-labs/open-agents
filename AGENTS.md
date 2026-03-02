@@ -22,8 +22,8 @@ turbo dev              # Run CLI agent (from root)
 bun run cli            # Alternative: run CLI directly
 bun run web            # Run web app
 
-# Quality checks (run after making changes)
-bun run ci                                 # Run format check, lint, and typecheck
+# Quality checks (REQUIRED after making any changes)
+bun run ci                                 # Required: run format check, lint, typecheck, and tests
 turbo typecheck                            # Type check all packages
 turbo lint                                 # Lint all packages with oxlint
 turbo lint:fix                             # Lint and auto-fix all packages

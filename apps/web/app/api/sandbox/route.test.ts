@@ -20,6 +20,7 @@ const updateCalls: Array<{
   sessionId: string;
   patch: Record<string, unknown>;
 }> = [];
+const connectConfigs: unknown[] = [];
 
 let sessionRecord: TestSessionRecord;
 
@@ -58,6 +59,16 @@ mock.module("@/lib/session/get-server-session", () => ({
   }),
 }));
 
+mock.module("@/lib/db/accounts", () => ({
+  getGitHubAccount: async () => ({
+    externalUserId: "12345",
+    username: "nico-gh",
+    accessToken: "token",
+    refreshToken: null,
+    expiresAt: null,
+  }),
+}));
+
 mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => null,
 }));
@@ -85,6 +96,8 @@ mock.module("@/lib/sandbox/lifecycle-kick", () => ({
 
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (config: unknown) => {
+    connectConfigs.push(config);
+
     const nextState: {
       type: "vercel" | "hybrid";
       sandboxId: string;
@@ -122,6 +135,7 @@ describe("/api/sandbox lifecycle kicks", () => {
   beforeEach(() => {
     kickCalls.length = 0;
     updateCalls.length = 0;
+    connectConfigs.length = 0;
     sessionRecord = {
       id: "session-1",
       userId: "user-1",
@@ -169,5 +183,13 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(kickCalls[0]?.reason).toBe("sandbox-created");
     expect(kickCalls[0]?.scheduleBackgroundWork).toBeUndefined();
     expect(updateCalls.length).toBeGreaterThan(0);
+
+    const vercelConfig = connectConfigs.find(
+      (config) => isConnectConfig(config) && config.state.type === "vercel",
+    ) as { options?: { gitUser?: { email?: string } } } | undefined;
+
+    expect(vercelConfig?.options?.gitUser?.email).toBe(
+      "12345+nico-gh@users.noreply.github.com",
+    );
   });
 });

@@ -4,7 +4,7 @@ import { toRelativePath } from "@open-harness/shared/lib/tool-state";
 import { MultiFileDiff } from "@pierre/diffs/react";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
@@ -25,23 +25,26 @@ export function EditRenderer({
   const oldString = input?.oldString ?? "";
   const newString = input?.newString ?? "";
 
-  const oldLines = oldString.split("\n");
-  const newLines = newString.split("\n");
-
   // Count additions and removals using multiset comparison to handle duplicate lines
-  const oldCounts = new Map<string, number>();
-  for (const l of oldLines) oldCounts.set(l, (oldCounts.get(l) ?? 0) + 1);
-  const newCounts = new Map<string, number>();
-  for (const l of newLines) newCounts.set(l, (newCounts.get(l) ?? 0) + 1);
+  const { additions, removals } = useMemo(() => {
+    const oldLines = oldString.split("\n");
+    const newLines = newString.split("\n");
 
-  let additions = 0;
-  for (const [line, count] of newCounts) {
-    additions += Math.max(0, count - (oldCounts.get(line) ?? 0));
-  }
-  let removals = 0;
-  for (const [line, count] of oldCounts) {
-    removals += Math.max(0, count - (newCounts.get(line) ?? 0));
-  }
+    const oldCounts = new Map<string, number>();
+    for (const l of oldLines) oldCounts.set(l, (oldCounts.get(l) ?? 0) + 1);
+    const newCounts = new Map<string, number>();
+    for (const l of newLines) newCounts.set(l, (newCounts.get(l) ?? 0) + 1);
+
+    let add = 0;
+    for (const [line, count] of newCounts) {
+      add += Math.max(0, count - (oldCounts.get(line) ?? 0));
+    }
+    let rem = 0;
+    for (const [line, count] of oldCounts) {
+      rem += Math.max(0, count - (newCounts.get(line) ?? 0));
+    }
+    return { additions: add, removals: rem };
+  }, [oldString, newString]);
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
@@ -65,8 +68,8 @@ export function EditRenderer({
           ? "bg-red-500"
           : "bg-green-500";
 
-  // Has expandable content if strings are substantial
-  const hasExpandableContent = oldString.length > 200 || newString.length > 200;
+  // Keep rich diff rendering opt-in to avoid expensive inline diffs in long chats.
+  const hasExpandableContent = showDiff && !mergedState.denied;
 
   const handleClick = () => {
     if (hasExpandableContent) {
@@ -133,72 +136,28 @@ export function EditRenderer({
           </div>
         )}
 
-      {/* Collapsed preview */}
-      {!isExpanded &&
-        showDiff &&
-        !mergedState.approvalRequested &&
-        !mergedState.denied && (
-          <>
-            <div className="mt-2 pl-5 text-sm">
-              <span className="text-green-500">
-                {additions} addition{additions !== 1 ? "s" : ""}
-              </span>
-              <span> and </span>
-              <span className="text-red-500">
-                {removals} removal{removals !== 1 ? "s" : ""}
-              </span>
-            </div>
-
-            <div className="ml-5 mt-2 max-h-40 overflow-hidden">
-              <MultiFileDiff
-                oldFile={{ name: rawFilePath, contents: oldString }}
-                newFile={{ name: rawFilePath, contents: newString }}
-                options={defaultDiffOptions}
-              />
-            </div>
-          </>
-        )}
+      {/* Collapsed summary */}
+      {!isExpanded && showDiff && !mergedState.denied && (
+        <div className="mt-2 pl-5 text-sm text-muted-foreground">
+          <span className="text-green-500">+{additions}</span>
+          <span className="mx-1 text-red-500">-{removals}</span>
+        </div>
+      )}
 
       {/* Expanded full diff */}
       {isExpanded && showDiff && !mergedState.denied && (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
-          <div className="text-sm">
-            <span className="text-green-500">
-              {additions} addition{additions !== 1 ? "s" : ""}
-            </span>
-            <span> and </span>
-            <span className="text-red-500">
-              {removals} removal{removals !== 1 ? "s" : ""}
-            </span>
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="mb-2 text-sm text-muted-foreground">
+            <span className="text-green-500">+{additions}</span>
+            <span className="mx-1 text-red-500">-{removals}</span>
           </div>
 
-          {/* Full diff view */}
           <div className="max-h-96 overflow-auto">
             <MultiFileDiff
               oldFile={{ name: rawFilePath, contents: oldString }}
               newFile={{ name: rawFilePath, contents: newString }}
               options={defaultDiffOptions}
             />
-          </div>
-
-          {/* Raw old/new strings for debugging */}
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <div className="mb-1 text-xs font-medium text-muted-foreground">
-                Old String
-              </div>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-red-950/20 p-2 font-mono text-xs text-foreground">
-                {oldString || "(empty)"}
-              </pre>
-            </div>
-            <div>
-              <div className="mb-1 text-xs font-medium text-muted-foreground">
-                New String
-              </div>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-green-950/20 p-2 font-mono text-xs text-foreground">
-                {newString || "(empty)"}
-              </pre>
-            </div>
           </div>
         </div>
       )}

@@ -633,7 +633,7 @@ function ShareDialog({
   );
 }
 
-export function SessionChatContent() {
+export function SessionChatContent(_props: unknown) {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);

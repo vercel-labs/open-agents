@@ -1,5 +1,6 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText } from "ai";
+import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationByAccountLogin } from "@/lib/db/installations";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getInstallationToken } from "@/lib/github/app-auth";
@@ -185,9 +186,17 @@ export async function POST(req: Request) {
   }
 
   // 9. Configure git user (in case not already configured)
-  const userName = session.user.name ?? session.user.username;
+  const githubAccount = await getGitHubAccount(session.user.id);
+  const githubNoreplyEmail =
+    githubAccount?.externalUserId && githubAccount.username
+      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
+      : undefined;
+  const userName =
+    session.user.name ?? githubAccount?.username ?? session.user.username;
   const userEmail =
-    session.user.email ?? `${session.user.username}@users.noreply.github.com`;
+    githubNoreplyEmail ??
+    session.user.email ??
+    `${session.user.username}@users.noreply.github.com`;
 
   await sandbox.exec(
     `git config user.name ${escapeShellArg(userName)}`,

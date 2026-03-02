@@ -4,6 +4,7 @@ import {
   type SandboxState,
 } from "@open-harness/sandbox";
 import { after } from "next/server";
+import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
@@ -105,10 +106,18 @@ export async function POST(req: Request) {
     }
   }
 
+  const githubAccount = await getGitHubAccount(session.user.id);
+  const githubNoreplyEmail =
+    githubAccount?.externalUserId && githubAccount.username
+      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
+      : undefined;
+
   const gitUser = {
-    name: session.user.name ?? session.user.username,
+    name: session.user.name ?? githubAccount?.username ?? session.user.username,
     email:
-      session.user.email ?? `${session.user.username}@users.noreply.vercel.app`,
+      githubNoreplyEmail ??
+      session.user.email ??
+      `${session.user.username}@users.noreply.github.com`,
   };
 
   const env: Record<string, string> = {};

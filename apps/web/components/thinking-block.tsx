@@ -15,11 +15,13 @@ export function ThinkingBlock({
 }: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [hasCompletedStreaming, setHasCompletedStreaming] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isActivelyStreaming = isStreaming && !hasCompletedStreaming;
 
   useEffect(() => {
-    if (isStreaming) {
+    if (isActivelyStreaming) {
       if (startTimeRef.current === null) {
         startTimeRef.current = Date.now();
       }
@@ -30,21 +32,27 @@ export function ThinkingBlock({
           ),
         );
       }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    } else {
+      if (startTimeRef.current !== null && !hasCompletedStreaming) {
+        setHasCompletedStreaming(true);
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
+
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isStreaming]);
+  }, [hasCompletedStreaming, isActivelyStreaming]);
 
   const hasContent = text.trim().length > 0;
 
   const formatLabel = () => {
-    if (isStreaming) {
+    if (isActivelyStreaming) {
       return "Thinking...";
     }
     return elapsed > 0
@@ -69,7 +77,9 @@ export function ThinkingBlock({
             : "cursor-default",
         )}
       >
-        <span className={cn("leading-5", isStreaming && "animate-pulse")}>
+        <span
+          className={cn("leading-5", isActivelyStreaming && "animate-pulse")}
+        >
           {formatLabel()}
         </span>
         <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">

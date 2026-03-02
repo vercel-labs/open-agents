@@ -7,6 +7,7 @@ import {
   type LanguageModel,
 } from "ai";
 import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
+import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 
 // Models with 4.5+ support adaptive thinking with effort control.
@@ -16,7 +17,7 @@ function getAnthropicSettings(modelId: string): AnthropicLanguageModelOptions {
     return {
       effort: "medium",
       thinking: { type: "adaptive" },
-    };
+    } satisfies AnthropicLanguageModelOptions;
   }
 
   return {
@@ -67,7 +68,9 @@ export function gateway(
           openai: {
             reasoningEffort: "high",
             reasoningSummary: "detailed",
-          },
+            store: false,
+            include: ["reasoning.encrypted_content"],
+          } satisfies OpenAIResponsesProviderOptions,
         },
       },
     });

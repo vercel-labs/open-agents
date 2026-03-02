@@ -24,8 +24,7 @@ export function WriteRenderer({
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
   const content = input?.content ?? "";
 
-  const totalLines = content.split("\n").length;
-  const hiddenLines = Math.max(0, totalLines - 10);
+  const totalLines = content.length === 0 ? 0 : content.split("\n").length;
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
@@ -49,8 +48,8 @@ export function WriteRenderer({
           ? "bg-red-500"
           : "bg-green-500";
 
-  // Has expandable content if there are hidden lines or content is substantial
-  const hasExpandableContent = hiddenLines > 0 || totalLines > 10;
+  // Keep rich code rendering opt-in to avoid expensive inline diffs in long chats.
+  const hasExpandableContent = showCode && !mergedState.denied;
 
   const handleClick = () => {
     if (hasExpandableContent) {
@@ -117,29 +116,21 @@ export function WriteRenderer({
           </div>
         )}
 
-      {/* Collapsed preview */}
-      {!isExpanded &&
-        showCode &&
-        !mergedState.approvalRequested &&
-        !mergedState.denied && (
-          <>
-            <div className="mt-2 pl-5 text-sm text-muted-foreground">
-              File created
-            </div>
-
-            <div className="ml-5 mt-2 max-h-40 overflow-hidden">
-              <DiffsFile
-                file={{ name: rawFilePath, contents: content }}
-                options={defaultFileOptions}
-              />
-            </div>
-          </>
-        )}
+      {/* Collapsed summary */}
+      {!isExpanded && showCode && !mergedState.denied && (
+        <div className="mt-2 pl-5 text-sm text-muted-foreground">
+          <span className="text-green-500">+{totalLines}</span>
+          <span className="mx-1 text-red-500">-0</span>
+        </div>
+      )}
 
       {/* Expanded full content */}
       {isExpanded && showCode && !mergedState.denied && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-2 text-sm text-muted-foreground">File created</div>
+          <div className="mb-2 text-sm text-muted-foreground">
+            <span className="text-green-500">+{totalLines}</span>
+            <span className="mx-1 text-red-500">-0</span>
+          </div>
 
           <div className="max-h-96 overflow-auto">
             <DiffsFile

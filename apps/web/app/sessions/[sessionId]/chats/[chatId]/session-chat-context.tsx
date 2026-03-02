@@ -317,19 +317,20 @@ export function SessionChatProvider({
     abortChatInstanceTransport(chatInfo.id);
   }, [chatInfo.id, chatInstance]);
 
-  // Resume whenever the server reports an active stream and the local instance
-  // is either new or currently idle/error. This covers stale instances that can
-  // survive route transitions while avoiding duplicate reconnect attempts for an
-  // already-streaming instance.
-  const shouldResume =
+  // Compute resume only once on mount. If this tracks `chatInstance.status`
+  // reactively, transient ready/submitted transitions during tool loops can
+  // retrigger `resumeStream()` and replay recent chunks on top of the live
+  // stream, causing visible jank.
+  const shouldResumeOnMountRef = useRef(
     !!initialChat.activeStreamId &&
-    (!alreadyExisted ||
-      chatInstance.status === "ready" ||
-      chatInstance.status === "error");
+      (!alreadyExisted ||
+        chatInstance.status === "ready" ||
+        chatInstance.status === "error"),
+  );
 
   const chat = useChat<WebAgentUIMessage>({
     chat: chatInstance,
-    resume: shouldResume,
+    resume: shouldResumeOnMountRef.current,
     experimental_throttle: CHAT_UI_UPDATE_THROTTLE_MS,
   });
 

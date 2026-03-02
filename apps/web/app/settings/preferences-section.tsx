@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
   type SandboxType,
@@ -40,6 +41,16 @@ const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
   { id: "just-bash", name: "Just Bash" },
 ];
 
+const THEME_OPTIONS: Array<{ id: ThemePreference; name: string }> = [
+  { id: "system", name: "System" },
+  { id: "light", name: "Light" },
+  { id: "dark", name: "Dark" },
+];
+
+function isThemePreference(value: string): value is ThemePreference {
+  return THEME_OPTIONS.some((option) => option.id === value);
+}
+
 export function PreferencesSectionSkeleton() {
   return (
     <Card>
@@ -51,6 +62,18 @@ export function PreferencesSectionSkeleton() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="grid gap-2">
+          <Label htmlFor="appearance">Appearance</Label>
+          <Select disabled>
+            <SelectTrigger id="appearance" className="w-full max-w-xs">
+              <Skeleton className="h-4 w-24" />
+            </SelectTrigger>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Choose between light and dark mode.
+          </p>
+        </div>
+
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
           <Select disabled>
@@ -80,6 +103,7 @@ export function PreferencesSectionSkeleton() {
 }
 
 export function PreferencesSection() {
+  const { theme, setTheme } = useTheme();
   const { preferences, loading, updatePreferences } = useUserPreferences();
   const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
     "/api/models",
@@ -88,6 +112,12 @@ export function PreferencesSection() {
   const [isSaving, setIsSaving] = useState(false);
 
   const models = modelsData?.models ?? [];
+
+  const handleThemeChange = (nextTheme: string) => {
+    if (isThemePreference(nextTheme)) {
+      setTheme(nextTheme);
+    }
+  };
 
   const handleModelChange = async (modelId: string) => {
     setIsSaving(true);
@@ -138,6 +168,26 @@ export function PreferencesSection() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="grid gap-2">
+          <Label htmlFor="appearance">Appearance</Label>
+          <Select value={theme} onValueChange={handleThemeChange}>
+            <SelectTrigger id="appearance" className="w-full max-w-xs">
+              <SelectValue placeholder="Select an appearance" />
+            </SelectTrigger>
+            <SelectContent>
+              {THEME_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Choose between light and dark mode. This preference is saved in your
+            current browser.
+          </p>
+        </div>
+
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
           <Select

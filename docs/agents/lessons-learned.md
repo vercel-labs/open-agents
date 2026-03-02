@@ -89,6 +89,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - For resumed chat streams, `chat.stop()` alone is insufficient because reconnect fetches are not wired to the active abort signal; always pair stop with aborting the managed transport tied to that chat instance.
 - In chat UI rendering, treat both `submitted` and `streaming` as in-flight. If only `streaming` is considered active, task/tool parts can be marked interrupted too early and stale `Thinking...` indicators can linger until a full page refresh.
 - In Streamdown, `plugins.code.getThemes()` overrides the `shikiTheme` prop; configure code themes in `createCodePlugin(...)` and pass actual custom theme objects for non-bundled themes (for example `vercelLight`/`vercelDark`) or highlighting can fall back to unstyled/plain tokens.
+- Shiki dual-theme `TokensResult` can encode dark variants inside semicolon-delimited `fg`/`bg` values and token `htmlStyle` fields (for example `color` + `--shiki-dark`); normalize these into Streamdown's `color`/`bgColor` fields plus root CSS vars, or inline light colors can override dark-mode classes and keep code blocks stuck in light theme.
 
 ## GitHub App / PR Flows
 

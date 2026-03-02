@@ -188,7 +188,7 @@ export function RepoSelectorCompact({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-400 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-neutral-300"
+          className="flex w-full items-center gap-2 rounded-md border border-input bg-background/80 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-400 dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-neutral-300"
         >
           {isInitialLoading ? (
             <Loader2Icon className="h-4 w-4 shrink-0 animate-spin" />

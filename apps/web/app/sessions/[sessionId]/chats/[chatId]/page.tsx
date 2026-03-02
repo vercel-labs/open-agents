@@ -82,7 +82,7 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
-  // Fetch chat and messages in parallel
+  // Fetch chat, messages, and models in parallel
   const [chat, dbMessages] = await Promise.all([
     getChatByIdWithRetry(chatId, sessionId),
     getChatMessages(chatId),
