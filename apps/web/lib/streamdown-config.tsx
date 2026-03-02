@@ -10,6 +10,7 @@ type HighlightResult = NonNullable<ReturnType<typeof baseCodePlugin.highlight>>;
 type HighlightCallback = (result: HighlightResult) => void;
 type HighlightLine = HighlightResult["tokens"][number];
 type HighlightToken = HighlightLine[number];
+type TokenHtmlStyle = NonNullable<HighlightToken["htmlStyle"]>;
 
 type CssDeclarations = Record<string, string>;
 
@@ -46,85 +47,97 @@ function parseCssValue(value: string): {
   return { baseValue, declarations };
 }
 
-function normalizeThemeValue(
+function mergeDeclarations(
+  target: CssDeclarations,
+  source: CssDeclarations,
+): void {
+  for (const [property, propertyValue] of Object.entries(source)) {
+    target[property] = propertyValue;
+  }
+}
+
+function consumeThemeValue(
   value: string | undefined,
-  rootDeclarations: CssDeclarations,
+  declarationTarget: CssDeclarations,
 ): string | undefined {
   if (!value) {
     return value;
   }
 
   const { baseValue, declarations } = parseCssValue(value);
-  for (const [property, propertyValue] of Object.entries(declarations)) {
-    rootDeclarations[property] = propertyValue;
-  }
+  mergeDeclarations(declarationTarget, declarations);
 
   return baseValue;
 }
 
-function normalizeHighlightResult(result: HighlightResult): HighlightResult {
-  const rootDeclarations: CssDeclarations = {};
-  const fg = normalizeThemeValue(result.fg, rootDeclarations);
-  const bg = normalizeThemeValue(result.bg, rootDeclarations);
-
-  const tokens: HighlightResult["tokens"] = result.tokens.map(
-    (line: HighlightLine) =>
-      line.map((token: HighlightToken) => {
-        const htmlStyle = token.htmlStyle ? { ...token.htmlStyle } : undefined;
-        let color = token.color;
-        let bgColor = token.bgColor;
-
-        if (htmlStyle) {
-          const rawColor = htmlStyle.color;
-          if (typeof rawColor === "string") {
-            const { baseValue, declarations } = parseCssValue(rawColor);
-            if (baseValue) {
-              color = baseValue;
-            }
-            for (const [property, propertyValue] of Object.entries(
-              declarations,
-            )) {
-              htmlStyle[property] = propertyValue;
-            }
-            delete htmlStyle.color;
-          }
-
-          const rawBackgroundColor = htmlStyle["background-color"];
-          if (typeof rawBackgroundColor === "string") {
-            const { baseValue, declarations } =
-              parseCssValue(rawBackgroundColor);
-            if (baseValue) {
-              bgColor = baseValue;
-            }
-            for (const [property, propertyValue] of Object.entries(
-              declarations,
-            )) {
-              htmlStyle[property] = propertyValue;
-            }
-            delete htmlStyle["background-color"];
-          }
-        }
-
-        return {
-          ...token,
-          bgColor,
-          color,
-          htmlStyle,
-        };
-      }),
-  );
-
-  const rootStyleParts: string[] = [];
-  if (typeof result.rootStyle === "string" && result.rootStyle.length > 0) {
-    rootStyleParts.push(result.rootStyle);
+function normalizeTokenStyleProperty(
+  htmlStyle: TokenHtmlStyle,
+  property: "color" | "background-color",
+): string | undefined {
+  const value = htmlStyle[property];
+  if (typeof value !== "string") {
+    return undefined;
   }
 
-  for (const [property, propertyValue] of Object.entries(rootDeclarations)) {
+  const { baseValue, declarations } = parseCssValue(value);
+  mergeDeclarations(htmlStyle, declarations);
+  delete htmlStyle[property];
+
+  return baseValue;
+}
+
+function normalizeHighlightToken(token: HighlightToken): HighlightToken {
+  const htmlStyle = token.htmlStyle ? { ...token.htmlStyle } : undefined;
+  if (!htmlStyle) {
+    return token;
+  }
+
+  const color = normalizeTokenStyleProperty(htmlStyle, "color") ?? token.color;
+  const bgColor =
+    normalizeTokenStyleProperty(htmlStyle, "background-color") ?? token.bgColor;
+
+  return {
+    ...token,
+    bgColor,
+    color,
+    htmlStyle,
+  };
+}
+
+function mergeRootStyle(
+  rootStyle: string | undefined,
+  declarations: CssDeclarations,
+): string | undefined {
+  const declarationEntries = Object.entries(declarations);
+  if (declarationEntries.length === 0) {
+    return rootStyle;
+  }
+
+  const rootStyleParts: string[] = [];
+  if (typeof rootStyle === "string" && rootStyle.length > 0) {
+    rootStyleParts.push(rootStyle);
+  }
+
+  for (const [property, propertyValue] of declarationEntries) {
     rootStyleParts.push(`${property}:${propertyValue}`);
   }
 
-  const rootStyle =
-    rootStyleParts.length > 0 ? rootStyleParts.join(";") : result.rootStyle;
+  return rootStyleParts.join(";");
+}
+
+export function normalizeStreamdownHighlightResult(
+  result: HighlightResult,
+): HighlightResult {
+  // Shiki dual-theme output can encode dark-mode overrides in semicolon-delimited
+  // values. Streamdown expects base colors in fg/bg + token color/bgColor, with
+  // dark variants left in CSS variables on styles.
+  const rootDeclarations: CssDeclarations = {};
+  const fg = consumeThemeValue(result.fg, rootDeclarations);
+  const bg = consumeThemeValue(result.bg, rootDeclarations);
+  const tokens: HighlightResult["tokens"] = result.tokens.map(
+    (line: HighlightLine) => line.map(normalizeHighlightToken),
+  );
+  const rootStyle = mergeRootStyle(result.rootStyle, rootDeclarations);
 
   return {
     ...result,
@@ -140,12 +153,12 @@ const codePlugin = {
   highlight(options: HighlightOptions, callback?: HighlightCallback) {
     const normalizedCallback: HighlightCallback | undefined = callback
       ? (result) => {
-          callback(normalizeHighlightResult(result));
+          callback(normalizeStreamdownHighlightResult(result));
         }
       : undefined;
 
     const result = baseCodePlugin.highlight(options, normalizedCallback);
-    return result ? normalizeHighlightResult(result) : null;
+    return result ? normalizeStreamdownHighlightResult(result) : null;
   },
 };
 
