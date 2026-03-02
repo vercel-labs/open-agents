@@ -30,6 +30,7 @@ export function parseGitHubUrl(
 }
 
 const URL_PATTERN = /https?:\/\/[^\s<>()\]]+/g;
+const VERCEL_METADATA_PATTERN = /^\[vc\]:\s*#[^:]+:([A-Za-z0-9+/=_-]+)\s*$/m;
 
 function trimTrailingUrlPunctuation(url: string): string {
   return url.replace(/[),.;:!?]+$/g, "");
@@ -49,20 +50,89 @@ function isVercelDeploymentUrl(url: string): boolean {
   }
 }
 
-function extractVercelDeploymentUrl(commentBody: string): string | null {
-  const matches = commentBody.match(URL_PATTERN);
-  if (!matches) {
+function normalizeVercelDeploymentUrl(value: string): string | null {
+  const trimmed = trimTrailingUrlPunctuation(value.trim());
+  if (!trimmed) {
     return null;
   }
 
-  for (const match of matches) {
-    const url = trimTrailingUrlPunctuation(match);
-    if (isVercelDeploymentUrl(url)) {
-      return url;
+  const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  return isVercelDeploymentUrl(url) ? url : null;
+}
+
+function decodeBase64Url(value: string): string | null {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+
+  try {
+    return Buffer.from(padded, "base64").toString("utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function extractVercelDeploymentUrlFromMetadata(
+  commentBody: string,
+): string | null {
+  const metadataMatch = commentBody.match(VERCEL_METADATA_PATTERN);
+  const encodedPayload = metadataMatch?.[1];
+  if (!encodedPayload) {
+    return null;
+  }
+
+  const decodedPayload = decodeBase64Url(encodedPayload);
+  if (!decodedPayload) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decodedPayload);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  const projects = (parsed as { projects?: unknown }).projects;
+  if (!Array.isArray(projects)) {
+    return null;
+  }
+
+  for (const project of projects) {
+    if (!project || typeof project !== "object") {
+      continue;
+    }
+
+    const previewUrl = (project as { previewUrl?: unknown }).previewUrl;
+    if (typeof previewUrl !== "string") {
+      continue;
+    }
+
+    const deploymentUrl = normalizeVercelDeploymentUrl(previewUrl);
+    if (deploymentUrl) {
+      return deploymentUrl;
     }
   }
 
   return null;
+}
+
+function extractVercelDeploymentUrl(commentBody: string): string | null {
+  const matches = commentBody.match(URL_PATTERN);
+  if (matches) {
+    for (const match of matches) {
+      const deploymentUrl = normalizeVercelDeploymentUrl(match);
+      if (deploymentUrl) {
+        return deploymentUrl;
+      }
+    }
+  }
+
+  return extractVercelDeploymentUrlFromMetadata(commentBody);
 }
 
 export async function createPullRequest(params: {
