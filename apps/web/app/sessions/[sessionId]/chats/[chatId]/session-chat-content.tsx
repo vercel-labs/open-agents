@@ -9,6 +9,7 @@ import {
   ArrowUp,
   Check,
   Copy,
+  EllipsisVertical,
   ExternalLink,
   FolderGit2,
   GitCommit,
@@ -60,6 +61,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ChatSwitcherDropdown } from "@/components/chat-switcher-dropdown";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Tooltip,
@@ -486,11 +494,17 @@ function SandboxInputOverlay({
 function ShareDialog({
   sessionId,
   initialShareId,
+  externalOpen,
+  onExternalOpenChange,
 }: {
   sessionId: string;
   initialShareId: string | null;
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen ?? internalOpen;
+  const setOpen = onExternalOpenChange ?? setInternalOpen;
   const [shareId, setShareId] = useState(initialShareId);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -645,6 +659,8 @@ export function SessionChatContent(_props: unknown) {
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
+  const [mobileShareOpen, setMobileShareOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const hasMounted = useHasMounted();
@@ -2112,7 +2128,8 @@ export function SessionChatContent(_props: unknown) {
           <div className="absolute left-1/2 -translate-x-1/2">
             <ChatSwitcherDropdown />
           </div>
-          <div className="flex items-center gap-1 md:gap-2">
+          {/* Desktop action buttons */}
+          <div className="hidden items-center gap-2 md:flex">
             <ShareDialog
               sessionId={session.id}
               initialShareId={session.shareId}
@@ -2134,11 +2151,11 @@ export function SessionChatContent(_props: unknown) {
                 }}
               >
                 {isUnarchiving ? (
-                  <Loader2 className="h-4 w-4 animate-spin md:mr-2" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
-                  <ArchiveRestore className="h-4 w-4 md:mr-2" />
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
                 )}
-                <span className="hidden md:inline">
+                <span>
                   {isUnarchiving
                     ? "Unarchiving..."
                     : isArchiveSnapshotPending
@@ -2150,8 +2167,8 @@ export function SessionChatContent(_props: unknown) {
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="ghost" size="sm">
-                    <Archive className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Archive</span>
+                    <Archive className="h-4 w-4 mr-2" />
+                    <span>Archive</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent showCloseButton={false}>
@@ -2187,8 +2204,8 @@ export function SessionChatContent(_props: unknown) {
                 <TooltipTrigger asChild>
                   <span>
                     <Button variant="ghost" size="sm" disabled>
-                      <GitCompare className="h-4 w-4 md:mr-2" />
-                      <span className="hidden md:inline">Diff</span>
+                      <GitCompare className="h-4 w-4 mr-2" />
+                      <span>Diff</span>
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -2203,12 +2220,12 @@ export function SessionChatContent(_props: unknown) {
                 onClick={() => setShowDiffPanel(!showDiffPanel)}
                 disabled={!diff && !session.cachedDiff}
               >
-                <GitCompare className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Diff</span>
+                <GitCompare className="h-4 w-4 mr-2" />
+                <span>Diff</span>
                 {diff &&
                   (diff.summary.totalAdditions > 0 ||
                     diff.summary.totalDeletions > 0) && (
-                    <span className="ml-1 text-xs md:ml-2">
+                    <span className="ml-2 text-xs">
                       <span className="text-green-500">
                         +{diff.summary.totalAdditions}
                       </span>{" "}
@@ -2233,10 +2250,8 @@ export function SessionChatContent(_props: unknown) {
                     size="sm"
                     onClick={() => setCommitDialogOpen(true)}
                   >
-                    <GitCommit className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">
-                      {commitActionLabel}
-                    </span>
+                    <GitCommit className="h-4 w-4 mr-2" />
+                    <span>{commitActionLabel}</span>
                   </Button>
                 ) : (
                   <Button
@@ -2247,10 +2262,8 @@ export function SessionChatContent(_props: unknown) {
                       window.open(prUrl, "_blank", "noopener,noreferrer");
                     }}
                   >
-                    <GitPullRequest className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">
-                      View PR #{session.prNumber}
-                    </span>
+                    <GitPullRequest className="h-4 w-4 mr-2" />
+                    <span>View PR #{session.prNumber}</span>
                   </Button>
                 )
               ) : (
@@ -2261,10 +2274,8 @@ export function SessionChatContent(_props: unknown) {
                       size="sm"
                       onClick={() => setCommitDialogOpen(true)}
                     >
-                      <GitCommit className="h-4 w-4 md:mr-2" />
-                      <span className="hidden md:inline">
-                        {commitActionLabel}
-                      </span>
+                      <GitCommit className="h-4 w-4 mr-2" />
+                      <span>{commitActionLabel}</span>
                     </Button>
                   )}
                   <Tooltip>
@@ -2276,8 +2287,8 @@ export function SessionChatContent(_props: unknown) {
                           onClick={() => setPrDialogOpen(true)}
                           disabled={!canCreatePr || !isCreatePrBranchReady}
                         >
-                          <GitPullRequest className="h-4 w-4 md:mr-2" />
-                          <span className="hidden md:inline">Create PR</span>
+                          <GitPullRequest className="h-4 w-4 mr-2" />
+                          <span>Create PR</span>
                         </Button>
                       </span>
                     </TooltipTrigger>
@@ -2290,17 +2301,170 @@ export function SessionChatContent(_props: unknown) {
                 </>
               )
             ) : !supportsRepoCreation ? null : (
-              // Session has no repo - show Create Repo button (not available for in-memory sandboxes)
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setRepoDialogOpen(true)}
               >
-                <FolderGit2 className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Create Repo</span>
+                <FolderGit2 className="h-4 w-4 mr-2" />
+                <span>Create Repo</span>
               </Button>
             )}
           </div>
+
+          {/* Mobile overflow menu */}
+          <div className="flex items-center md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <EllipsisVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setMobileShareOpen(true)}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share
+                </DropdownMenuItem>
+                {isArchived ? (
+                  <DropdownMenuItem
+                    disabled={isUnarchiving || isArchiveSnapshotPending}
+                    onClick={() => {
+                      setIsUnarchiving(true);
+                      void unarchiveSession()
+                        .catch((error: unknown) => {
+                          console.error("Failed to unarchive session:", error);
+                        })
+                        .finally(() => {
+                          setIsUnarchiving(false);
+                        });
+                    }}
+                  >
+                    <ArchiveRestore className="mr-2 h-4 w-4" />
+                    {isUnarchiving
+                      ? "Unarchiving..."
+                      : isArchiveSnapshotPending
+                        ? "Snapshotting..."
+                        : "Unarchive"}
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => setMobileArchiveDialogOpen(true)}
+                  >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                {supportsDiff && (
+                  <DropdownMenuItem
+                    disabled={!diff && !session.cachedDiff}
+                    onClick={() => setShowDiffPanel(!showDiffPanel)}
+                  >
+                    <GitCompare className="mr-2 h-4 w-4" />
+                    Diff
+                    {diff &&
+                      (diff.summary.totalAdditions > 0 ||
+                        diff.summary.totalDeletions > 0) && (
+                        <span className="ml-auto text-xs">
+                          <span className="text-green-500">
+                            +{diff.summary.totalAdditions}
+                          </span>{" "}
+                          <span className="text-red-400">
+                            -{diff.summary.totalDeletions}
+                          </span>
+                        </span>
+                      )}
+                  </DropdownMenuItem>
+                )}
+                {hasRepo ? (
+                  hasExistingPr ? (
+                    showCommitAction ? (
+                      <DropdownMenuItem
+                        onClick={() => setCommitDialogOpen(true)}
+                      >
+                        <GitCommit className="mr-2 h-4 w-4" />
+                        {commitActionLabel}
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
+                          window.open(prUrl, "_blank", "noopener,noreferrer");
+                        }}
+                      >
+                        <GitPullRequest className="mr-2 h-4 w-4" />
+                        View PR #{session.prNumber}
+                      </DropdownMenuItem>
+                    )
+                  ) : (
+                    <>
+                      {showCommitAction && (
+                        <DropdownMenuItem
+                          onClick={() => setCommitDialogOpen(true)}
+                        >
+                          <GitCommit className="mr-2 h-4 w-4" />
+                          {commitActionLabel}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        disabled={!canCreatePr || !isCreatePrBranchReady}
+                        onClick={() => setPrDialogOpen(true)}
+                      >
+                        <GitPullRequest className="mr-2 h-4 w-4" />
+                        Create PR
+                      </DropdownMenuItem>
+                    </>
+                  )
+                ) : supportsRepoCreation ? (
+                  <DropdownMenuItem onClick={() => setRepoDialogOpen(true)}>
+                    <FolderGit2 className="mr-2 h-4 w-4" />
+                    Create Repo
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Mobile share dialog */}
+          <ShareDialog
+            sessionId={session.id}
+            initialShareId={session.shareId}
+            externalOpen={mobileShareOpen}
+            onExternalOpenChange={setMobileShareOpen}
+          />
+
+          {/* Mobile archive confirmation dialog */}
+          <Dialog
+            open={mobileArchiveDialogOpen}
+            onOpenChange={setMobileArchiveDialogOpen}
+          >
+            <DialogContent showCloseButton={false}>
+              <DialogHeader>
+                <DialogTitle>Archive session?</DialogTitle>
+                <DialogDescription>
+                  This will stop the sandbox and archive the session. You can
+                  still view it in the archive tab.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button
+                    onClick={() => {
+                      void archiveSession().catch((error: unknown) => {
+                        console.error("Failed to archive session:", error);
+                      });
+                      router.push("/");
+                    }}
+                  >
+                    Archive
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
