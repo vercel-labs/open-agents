@@ -2152,10 +2152,6 @@ export function SessionChatContent(_props: unknown) {
           <div className="flex items-center gap-1 md:gap-2">
             {/* Desktop action buttons */}
             <div className="hidden items-center gap-2 md:flex">
-              <ShareDialog
-                sessionId={session.id}
-                initialShareId={session.shareId}
-              />
               {isArchived ? (
                 <Button
                   variant="ghost"
@@ -2414,10 +2410,6 @@ export function SessionChatContent(_props: unknown) {
                   >
                     <MessageSquareMore className="mr-2 h-4 w-4" />
                     Switch Chat
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleMobileNewChat}>
-                    <Plus className="mr-2 h-3.5 w-3.5" />
-                    New chat
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setMobileShareOpen(true)}>
