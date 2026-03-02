@@ -923,22 +923,24 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
     hasPendingQuestionEarly,
   ]);
 
-  // Compute when the agent started working.
-  // Use the persisted createdAt of the last assistant message when available
-  // (survives navigation). Otherwise capture Date.now() when the stream starts.
+  // Track when the agent started working.
+  // Set to Date.now() at form-submit time (see onSubmit below).
+  // On remount (navigated away and back), we recover from the last user
+  // message's persisted createdAt in the DB timestamps map.
   const workingStartedAtRef = useRef<number>(0);
   useEffect(() => {
     if (!showThinkingIndicator) {
       workingStartedAtRef.current = 0;
       return;
     }
-    // Already tracking this run
+    // Already have a timestamp from this run (set at submit time)
     if (workingStartedAtRef.current !== 0) return;
 
-    // Try persisted timestamp of the last assistant message
+    // Remount case: recover from persisted user message timestamp.
+    // The last user message's createdAt is when the work started.
     for (let i = renderMessages.length - 1; i >= 0; i--) {
       const msg = renderMessages[i];
-      if (msg.role === "assistant") {
+      if (msg.role === "user") {
         const ts = messageTimestamps[msg.id];
         if (ts) {
           workingStartedAtRef.current = ts;
@@ -947,7 +949,7 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
         break;
       }
     }
-    // Fallback: capture now
+    // Last resort fallback
     workingStartedAtRef.current = Date.now();
   }, [showThinkingIndicator, renderMessages, messageTimestamps]);
 
@@ -2108,11 +2110,9 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
     <>
       {/* Header */}
       <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="relative flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 md:gap-4">
             <SidebarTrigger className="shrink-0" />
-            <ChatSwitcherDropdown activeChatId={chatInfo.id} />
-            <span className="text-muted-foreground/30">|</span>
             <div className="flex min-w-0 items-center gap-2 text-sm">
               {session.repoName ? (
                 <>
@@ -2162,6 +2162,9 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
             >
               {sandboxUiStatus.label}
             </span>
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <ChatSwitcherDropdown activeChatId={chatInfo.id} />
           </div>
           <div className="flex items-center gap-1 md:gap-2">
             <ShareDialog
@@ -2495,6 +2498,7 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
                 }
+                workingStartedAtRef.current = Date.now();
                 setHasPendingResponse(true);
                 void setChatStreaming(chatInfo.id, true);
                 try {

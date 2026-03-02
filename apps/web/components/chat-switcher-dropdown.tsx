@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Check, Plus, MessageSquare } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,9 +28,6 @@ export function ChatSwitcherDropdown({
     switchChat(chat.id);
   };
 
-  // Only show the dropdown if there are multiple chats or the user could create one
-  const showChevron = chats.length > 1 || chats.length === 1;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -39,12 +36,11 @@ export function ChatSwitcherDropdown({
           size="sm"
           className="h-7 gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          <MessageSquare className="h-3 w-3" />
-          <span className="max-w-[120px] truncate">{label}</span>
-          {showChevron && <ChevronDown className="h-3 w-3 opacity-50" />}
+          <span className="max-w-[160px] truncate">{label}</span>
+          <ChevronDown className="h-3 w-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
+      <DropdownMenuContent align="center" className="w-56">
         {chats.map((chat) => (
           <DropdownMenuItem
             key={chat.id}
