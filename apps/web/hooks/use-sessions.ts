@@ -133,7 +133,7 @@ export function useSessions(options?: {
               : session,
           ),
         }),
-        { revalidate: false },
+        { revalidate: true },
       );
     }
 
