@@ -1,6 +1,7 @@
 "use client";
 
-import { Archive, GitMerge, Pencil, Plus } from "lucide-react";
+import { Archive, ArrowLeft, GitMerge, Pencil, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   memo,
   type RefObject,
@@ -274,6 +275,7 @@ export function InboxSidebar({
   createSession,
   lastRepo,
 }: InboxSidebarProps) {
+  const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
@@ -342,8 +344,16 @@ export function InboxSidebar({
   return (
     <>
       <div className="border-b border-border p-3">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="mb-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Home
+        </button>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Inbox</h2>
+          <h2 className="text-sm font-semibold">Sessions</h2>
           <Button
             type="button"
             variant="ghost"
