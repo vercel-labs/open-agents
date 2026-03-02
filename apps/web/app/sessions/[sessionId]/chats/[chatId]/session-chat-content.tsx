@@ -17,6 +17,7 @@ import {
   GitPullRequest,
   Link2,
   Loader2,
+  MessageSquareMore,
   Mic,
   Paperclip,
   Plus,
@@ -62,6 +63,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ChatSwitcherDropdown } from "@/components/chat-switcher-dropdown";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useSessionLayout } from "@/app/sessions/[sessionId]/session-layout-context";
 import {
   DropdownMenu,
@@ -668,6 +675,7 @@ export function SessionChatContent(_props: unknown) {
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
   const [mobileShareOpen, setMobileShareOpen] = useState(false);
+  const [mobileChatDrawerOpen, setMobileChatDrawerOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const hasMounted = useHasMounted();
@@ -2400,26 +2408,13 @@ export function SessionChatContent(_props: unknown) {
                     <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {mobileChats.map((chat) => (
-                    <DropdownMenuItem
-                      key={chat.id}
-                      onClick={() => mobileSwitchChat(chat.id)}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="truncate">
-                        {chat.title || "Untitled"}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5">
-                        {chat.isStreaming && (
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                        )}
-                        {chat.id === mobileActiveChatId && (
-                          <Check className="h-3.5 w-3.5 text-foreground" />
-                        )}
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => setMobileChatDrawerOpen(true)}
+                  >
+                    <MessageSquareMore className="mr-2 h-4 w-4" />
+                    Switch Chat
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleMobileNewChat}>
                     <Plus className="mr-2 h-3.5 w-3.5" />
                     New chat
@@ -2531,6 +2526,63 @@ export function SessionChatContent(_props: unknown) {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            {/* Mobile chat switcher drawer */}
+            <Drawer
+              open={mobileChatDrawerOpen}
+              onOpenChange={setMobileChatDrawerOpen}
+            >
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Switch Chat</DrawerTitle>
+                </DrawerHeader>
+                <div className="max-h-[60vh] overflow-y-auto px-2 pb-4">
+                  <div className="space-y-0.5">
+                    {mobileChats.map((chat) => (
+                      <button
+                        key={chat.id}
+                        type="button"
+                        onClick={() => {
+                          mobileSwitchChat(chat.id);
+                          setMobileChatDrawerOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
+                          chat.id === mobileActiveChatId
+                            ? "bg-secondary"
+                            : "hover:bg-muted/50",
+                        )}
+                      >
+                        <span className="truncate text-sm font-medium">
+                          {chat.title || "Untitled"}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {chat.isStreaming && (
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                          )}
+                          {chat.id === mobileActiveChatId && (
+                            <Check className="h-3.5 w-3.5 text-foreground" />
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 border-t border-border pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleMobileNewChat();
+                        setMobileChatDrawerOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New chat
+                    </button>
+                  </div>
+                </div>
+              </DrawerContent>
+            </Drawer>
 
             {/* Mobile share dialog */}
             <ShareDialog
