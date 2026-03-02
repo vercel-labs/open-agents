@@ -396,7 +396,161 @@ function InboxItemRow({
   );
 }
 
-// -- Detail panel: email-style thread view --
+// -- Email-style thread: older messages collapsed, last exchange expanded --
+
+function ThreadView({
+  thread,
+  threadEndRef,
+}: {
+  thread: { id: string; role: string; text: string; createdAt: string }[];
+  threadEndRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Find the index where the last "exchange" starts.
+  // Walk backwards: the last assistant message and the user message before it.
+  const lastExchangeStart = (() => {
+    let lastAssistantIdx = -1;
+    for (let i = thread.length - 1; i >= 0; i--) {
+      if (thread[i]?.role === "assistant") {
+        lastAssistantIdx = i;
+        break;
+      }
+    }
+    if (lastAssistantIdx === -1) return Math.max(0, thread.length - 1);
+    // Include the user message right before it
+    if (lastAssistantIdx > 0 && thread[lastAssistantIdx - 1]?.role === "user") {
+      return lastAssistantIdx - 1;
+    }
+    return lastAssistantIdx;
+  })();
+
+  const olderMessages = thread.slice(0, lastExchangeStart);
+  const latestMessages = thread.slice(lastExchangeStart);
+
+  const toggleMessage = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Older messages — collapsed by default */}
+      {olderMessages.map((msg) => {
+        const isExpanded = expandedIds.has(msg.id);
+        const preview =
+          msg.text.length > 100 ? `${msg.text.slice(0, 100)}…` : msg.text;
+
+        return (
+          <button
+            key={msg.id}
+            type="button"
+            onClick={() => toggleMessage(msg.id)}
+            className="flex w-full items-start gap-3 rounded-lg border border-border px-4 py-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <ChevronRight
+              className={cn(
+                "mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                isExpanded && "rotate-90",
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {msg.role === "user" ? "You" : "Agent"}
+                </span>
+                <span className="text-xs text-muted-foreground/50">
+                  {new Date(msg.createdAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              {isExpanded ? (
+                <div className="mt-2 min-w-0 overflow-hidden">
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {msg.text}
+                    </p>
+                  ) : (
+                    <Streamdown
+                      mode="static"
+                      isAnimating={false}
+                      plugins={streamdownPlugins}
+                    >
+                      {msg.text}
+                    </Streamdown>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                  {preview}
+                </p>
+              )}
+            </div>
+          </button>
+        );
+      })}
+
+      {/* Separator if there are older messages */}
+      {olderMessages.length > 0 && latestMessages.length > 0 ? (
+        <div className="flex items-center gap-3 py-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground/50">Latest</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+      ) : null}
+
+      {/* Latest exchange — always expanded */}
+      {latestMessages.map((msg) => (
+        <div key={msg.id} className="py-1">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              {msg.role === "user" ? "You" : "Agent"}
+            </span>
+            <span className="text-xs text-muted-foreground/50">
+              {new Date(msg.createdAt).toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          {msg.role === "user" ? (
+            <div className="rounded-lg bg-primary/5 px-4 py-3">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {msg.text}
+              </p>
+            </div>
+          ) : (
+            <div className="min-w-0 overflow-hidden pl-0.5">
+              <Streamdown
+                mode="static"
+                isAnimating={false}
+                plugins={streamdownPlugins}
+              >
+                {msg.text}
+              </Streamdown>
+            </div>
+          )}
+        </div>
+      ))}
+      <div ref={threadEndRef} />
+    </div>
+  );
+}
+
+// -- Detail panel --
 
 function InboxItemDetail({
   item,
@@ -581,7 +735,7 @@ function InboxItemDetail({
         </div>
       </div>
 
-      {/* Thread view */}
+      {/* Thread view — older messages collapsed, last exchange expanded */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-6 py-5">
           {thread.length === 0 ? (
@@ -589,40 +743,7 @@ function InboxItemDetail({
               No messages yet
             </div>
           ) : (
-            <div className="space-y-5">
-              {thread.map((msg) => (
-                <div key={msg.id}>
-                  {msg.role === "user" ? (
-                    <div>
-                      <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                        You
-                      </div>
-                      <div className="rounded-lg bg-primary/5 px-4 py-3">
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                          {msg.text}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                        Agent
-                      </div>
-                      <div className="min-w-0 overflow-hidden pl-0.5">
-                        <Streamdown
-                          mode="static"
-                          isAnimating={false}
-                          plugins={streamdownPlugins}
-                        >
-                          {msg.text}
-                        </Streamdown>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div ref={threadEndRef} />
-            </div>
+            <ThreadView thread={thread} threadEndRef={threadEndRef} />
           )}
         </div>
       </div>
