@@ -37,6 +37,7 @@ import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
+import { after } from "next/server";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
@@ -94,6 +95,38 @@ const parseStreamTokenStartedAt = (streamToken: string | null) => {
 };
 
 export const maxDuration = 800;
+
+function refreshCachedDiffInBackground(req: Request, sessionId: string): void {
+  const cookieHeader = req.headers.get("cookie");
+  if (!cookieHeader) {
+    return;
+  }
+
+  const diffUrl = new URL(`/api/sessions/${sessionId}/diff`, req.url);
+  after(
+    fetch(diffUrl, {
+      method: "GET",
+      headers: {
+        cookie: cookieHeader,
+      },
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (response.ok) {
+          return;
+        }
+        console.warn(
+          `[chat] Failed to refresh cached diff for session ${sessionId}: ${response.status}`,
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[chat] Failed to refresh cached diff for session ${sessionId}:`,
+          error,
+        );
+      }),
+  );
+}
 
 export async function POST(req: Request) {
   // 1. Validate session
@@ -581,6 +614,9 @@ export async function POST(req: Request) {
         if (totalMessageUsage) {
           postUsage(totalMessageUsage, model, "main", [responseMessage]);
         }
+
+        // Keep offline diff cache warm even when the chat page is not open.
+        refreshCachedDiffInBackground(req, sessionId);
 
         const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
         if (subagentUsageEvents.length === 0) {

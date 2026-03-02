@@ -7,7 +7,7 @@ This document describes how sandbox lifecycle management works, including automa
 | Constant | Test | Production | Purpose |
 |---|---|---|---|
 | `DEFAULT_SANDBOX_TIMEOUT_MS` | 3 min | 5 hours | Hard VM expiry from Vercel |
-| `SANDBOX_INACTIVITY_TIMEOUT_MS` | 20 min | 20 min | Inactivity window before hibernate |
+| `SANDBOX_INACTIVITY_TIMEOUT_MS` | 30 min | 30 min | Inactivity window before hibernate |
 
 Configured in `lib/sandbox/config.ts`.
 
@@ -71,18 +71,18 @@ A workflow run does:
 
 Example 1: user keeps sending messages
 
-- T=0:00 sandbox starts, workflow sleeps until T=0:20
-- T=0:10 message, `hibernateAfter = 0:30`
-- T=0:20 workflow wakes, sees not due, sleeps until T=0:30
-- T=0:25 message, `hibernateAfter = 0:45`
-- T=0:30 workflow wakes, sees not due, sleeps until T=0:45
+- T=0:00 sandbox starts, workflow sleeps until T=0:30
+- T=0:10 message, `hibernateAfter = 0:40`
+- T=0:30 workflow wakes, sees not due, sleeps until T=0:40
+- T=0:25 message, `hibernateAfter = 0:55`
+- T=0:40 workflow wakes, sees not due, sleeps until T=0:55
 
 Example 2: user stops after a message
 
-- T=0:00 sandbox starts, workflow sleeps until T=0:20
-- T=0:10 message, `hibernateAfter = 0:30`
-- T=0:20 workflow wakes, sees not due, sleeps until T=0:30
-- T=0:30 workflow wakes, sees due, snapshots and stops
+- T=0:00 sandbox starts, workflow sleeps until T=0:30
+- T=0:10 message, `hibernateAfter = 0:40`
+- T=0:30 workflow wakes, sees not due, sleeps until T=0:40
+- T=0:40 workflow wakes, sees due, snapshots and stops
 
 ### Example timeline
 

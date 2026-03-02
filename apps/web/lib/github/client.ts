@@ -29,6 +29,112 @@ export function parseGitHubUrl(
   return null;
 }
 
+const URL_PATTERN = /https?:\/\/[^\s<>()\]]+/g;
+const VERCEL_METADATA_PATTERN = /^\[vc\]:\s*#[^:]+:([A-Za-z0-9+/=_-]+)\s*$/m;
+
+function trimTrailingUrlPunctuation(url: string): string {
+  return url.replace(/[),.;:!?]+$/g, "");
+}
+
+function isVercelDeploymentUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return (
+      hostname === "vercel.app" ||
+      hostname.endsWith(".vercel.app") ||
+      hostname === "vercel.dev" ||
+      hostname.endsWith(".vercel.dev")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function normalizeVercelDeploymentUrl(value: string): string | null {
+  const trimmed = trimTrailingUrlPunctuation(value.trim());
+  if (!trimmed) {
+    return null;
+  }
+
+  const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  return isVercelDeploymentUrl(url) ? url : null;
+}
+
+function decodeBase64Url(value: string): string | null {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+
+  try {
+    return Buffer.from(padded, "base64").toString("utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function extractVercelDeploymentUrlFromMetadata(
+  commentBody: string,
+): string | null {
+  const metadataMatch = commentBody.match(VERCEL_METADATA_PATTERN);
+  const encodedPayload = metadataMatch?.[1];
+  if (!encodedPayload) {
+    return null;
+  }
+
+  const decodedPayload = decodeBase64Url(encodedPayload);
+  if (!decodedPayload) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decodedPayload);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
+  const projects = (parsed as { projects?: unknown }).projects;
+  if (!Array.isArray(projects)) {
+    return null;
+  }
+
+  for (const project of projects) {
+    if (!project || typeof project !== "object") {
+      continue;
+    }
+
+    const previewUrl = (project as { previewUrl?: unknown }).previewUrl;
+    if (typeof previewUrl !== "string") {
+      continue;
+    }
+
+    const deploymentUrl = normalizeVercelDeploymentUrl(previewUrl);
+    if (deploymentUrl) {
+      return deploymentUrl;
+    }
+  }
+
+  return null;
+}
+
+function extractVercelDeploymentUrl(commentBody: string): string | null {
+  const matches = commentBody.match(URL_PATTERN);
+  if (matches) {
+    for (const match of matches) {
+      const deploymentUrl = normalizeVercelDeploymentUrl(match);
+      if (deploymentUrl) {
+        return deploymentUrl;
+      }
+    }
+  }
+
+  return extractVercelDeploymentUrlFromMetadata(commentBody);
+}
+
 export async function createPullRequest(params: {
   repoUrl: string;
   branchName: string;
@@ -253,6 +359,58 @@ export async function findPullRequestByBranch(params: {
     };
   } catch {
     return { found: false, error: "Failed to search pull requests" };
+  }
+}
+
+export async function findLatestVercelDeploymentUrlForPullRequest(params: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  token?: string;
+}): Promise<{
+  success: boolean;
+  deploymentUrl?: string;
+  error?: string;
+}> {
+  const { owner, repo, prNumber, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return { success: false, error: "GitHub account not connected" };
+    }
+
+    const response = await result.octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    });
+
+    // Iterate in reverse since the API returns comments in ascending
+    // chronological order and we want the latest deployment URL.
+    for (let i = response.data.length - 1; i >= 0; i--) {
+      const comment = response.data[i];
+      if (!comment.body) {
+        continue;
+      }
+
+      const deploymentUrl = extractVercelDeploymentUrl(comment.body);
+      if (deploymentUrl) {
+        return {
+          success: true,
+          deploymentUrl,
+        };
+      }
+    }
+
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Failed to find Vercel deployment URL",
+    };
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
+import { getInstallationManageUrl } from "@/lib/github/installation-url";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET() {
@@ -18,7 +19,10 @@ export async function GET() {
         accountLogin: installation.accountLogin,
         accountType: installation.accountType,
         repositorySelection: installation.repositorySelection,
-        installationUrl: installation.installationUrl,
+        installationUrl: getInstallationManageUrl(
+          installation.installationId,
+          installation.installationUrl,
+        ),
       })),
     );
   } catch (error) {
