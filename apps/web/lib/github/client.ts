@@ -316,11 +316,12 @@ export async function findLatestVercelDeploymentUrlForPullRequest(params: {
       repo,
       issue_number: prNumber,
       per_page: 100,
-      sort: "updated",
-      direction: "desc",
     });
 
-    for (const comment of response.data) {
+    // Iterate in reverse since the API returns comments in ascending
+    // chronological order and we want the latest deployment URL.
+    for (let i = response.data.length - 1; i >= 0; i--) {
+      const comment = response.data[i];
       if (!comment.body) {
         continue;
       }
