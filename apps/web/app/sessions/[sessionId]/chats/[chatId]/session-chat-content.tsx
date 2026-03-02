@@ -581,14 +581,18 @@ function ShareDialog({
     });
   }
 
+  const isExternallyControlled = externalOpen !== undefined;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <Share2 className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">Share</span>
-        </Button>
-      </DialogTrigger>
+      {!isExternallyControlled && (
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="sm">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Share session</DialogTitle>
