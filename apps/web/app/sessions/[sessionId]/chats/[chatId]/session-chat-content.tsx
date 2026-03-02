@@ -889,29 +889,66 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
   }, [isChatInFlight, status]);
 
   const effectiveStatus = hasPendingResponse ? "streaming" : status;
+
+  // Detect pending question early so we can suppress the working indicator.
+  const hasPendingQuestionEarly = useMemo(() => {
+    const lastMessage = renderMessages[renderMessages.length - 1];
+    if (lastMessage?.role === "assistant") {
+      for (const p of lastMessage.parts) {
+        if (
+          isToolUIPart(p) &&
+          p.type === "tool-ask_user_question" &&
+          p.state === "input-available"
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [renderMessages]);
+
   // In inbox mode we hide assistant text while streaming, so the working
   // indicator should stay visible for the entire duration the agent is active.
+  // But NOT when the agent is waiting for user input (ask_user_question).
   const showThinkingIndicator = useMemo(() => {
+    if (hasPendingQuestionEarly) return false;
     if (hasPendingResponse && !isChatInFlight) {
       return true;
     }
     return isChatInFlightStatus(effectiveStatus);
-  }, [effectiveStatus, hasPendingResponse, isChatInFlight]);
+  }, [
+    effectiveStatus,
+    hasPendingResponse,
+    isChatInFlight,
+    hasPendingQuestionEarly,
+  ]);
 
-  // Compute when the agent started working using persisted message timestamps.
-  // Find the last user message's createdAt — this persists across navigation.
-  // Falls back to Date.now() for optimistic / not-yet-persisted messages.
-  const workingStartedAt = useMemo(() => {
-    if (!showThinkingIndicator) return 0;
-    // Walk backwards to find the last user message
+  // Compute when the agent started working.
+  // Use the persisted createdAt of the last assistant message when available
+  // (survives navigation). Otherwise capture Date.now() when the stream starts.
+  const workingStartedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!showThinkingIndicator) {
+      workingStartedAtRef.current = 0;
+      return;
+    }
+    // Already tracking this run
+    if (workingStartedAtRef.current !== 0) return;
+
+    // Try persisted timestamp of the last assistant message
     for (let i = renderMessages.length - 1; i >= 0; i--) {
       const msg = renderMessages[i];
-      if (msg.role === "user") {
+      if (msg.role === "assistant") {
         const ts = messageTimestamps[msg.id];
-        if (ts) return ts;
+        if (ts) {
+          workingStartedAtRef.current = ts;
+          return;
+        }
+        break;
       }
     }
-    return Date.now();
+    // Fallback: capture now
+    workingStartedAtRef.current = Date.now();
   }, [showThinkingIndicator, renderMessages, messageTimestamps]);
 
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
@@ -2343,7 +2380,9 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
             <div className="space-y-6">
               {renderedMessageGroups}
               {showThinkingIndicator && (
-                <WorkingIndicator startedAt={workingStartedAt || Date.now()} />
+                <WorkingIndicator
+                  startedAt={workingStartedAtRef.current || Date.now()}
+                />
               )}
             </div>
           </div>
