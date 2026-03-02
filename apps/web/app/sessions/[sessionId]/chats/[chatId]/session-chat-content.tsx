@@ -19,6 +19,7 @@ import {
   Loader2,
   Mic,
   Paperclip,
+  Plus,
   RefreshCw,
   RotateCcw,
   Share2,
@@ -61,6 +62,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ChatSwitcherDropdown } from "@/components/chat-switcher-dropdown";
+import { useSessionLayout } from "@/app/sessions/[sessionId]/session-layout-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -651,6 +653,11 @@ function ShareDialog({
 
 export function SessionChatContent(_props: unknown) {
   const router = useRouter();
+  const {
+    chats: mobileChats,
+    createChat: mobileCreateChat,
+    switchChat: mobileSwitchChat,
+  } = useSessionLayout();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
@@ -768,6 +775,11 @@ export function SessionChatContent(_props: unknown) {
     updateSessionPullRequest,
     checkBranchAndPr,
   } = useSessionChatContext();
+  const mobileActiveChatId = chatInfo.id;
+  const handleMobileNewChat = () => {
+    const { chat: newChat } = mobileCreateChat();
+    mobileSwitchChat(newChat.id);
+  };
   const {
     messages,
     error,
@@ -2125,7 +2137,7 @@ export function SessionChatContent(_props: unknown) {
               {sandboxUiStatus.label}
             </span>
           </div>
-          <div className="absolute left-1/2 -translate-x-1/2">
+          <div className="absolute left-1/2 hidden -translate-x-1/2 md:block">
             <ChatSwitcherDropdown />
           </div>
           {/* Right-side actions */}
@@ -2325,7 +2337,31 @@ export function SessionChatContent(_props: unknown) {
                     <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56">
+                  {mobileChats.map((chat) => (
+                    <DropdownMenuItem
+                      key={chat.id}
+                      onClick={() => mobileSwitchChat(chat.id)}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">
+                        {chat.title || "Untitled"}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        {chat.isStreaming && (
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                        )}
+                        {chat.id === mobileActiveChatId && (
+                          <Check className="h-3.5 w-3.5 text-foreground" />
+                        )}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem onClick={handleMobileNewChat}>
+                    <Plus className="mr-2 h-3.5 w-3.5" />
+                    New chat
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setMobileShareOpen(true)}>
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
