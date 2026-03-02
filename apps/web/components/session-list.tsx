@@ -116,7 +116,7 @@ export function SessionList({
                 >
                   <div className="flex flex-1 min-w-0 items-center gap-2">
                     {session.hasStreaming ? (
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-white animate-pulse" />
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-600 animate-pulse dark:bg-white" />
                     ) : session.hasUnread ? (
                       <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                     ) : null}

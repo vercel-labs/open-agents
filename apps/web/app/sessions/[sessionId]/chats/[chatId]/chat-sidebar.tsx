@@ -245,7 +245,7 @@ export function ChatSidebar({
               )}
               {c.isStreaming && (
                 <span
-                  className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-white animate-pulse transition-opacity group-hover:opacity-0"
+                  className="pointer-events-none absolute top-1/2 right-3 size-2 -translate-y-1/2 rounded-full bg-zinc-600 animate-pulse transition-opacity group-hover:opacity-0 dark:bg-white"
                   aria-label="Streaming response"
                 />
               )}
