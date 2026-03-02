@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { isGitHubAppConfigured } from "@/lib/github/app-auth";
+import { getInstallationManageUrl } from "@/lib/github/installation-url";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -96,7 +97,12 @@ export async function GET() {
         type: "User",
         installStatus: personalInstallation ? "installed" : "not_installed",
         installationId: personalInstallation?.installationId ?? null,
-        installationUrl: personalInstallation?.installationUrl ?? null,
+        installationUrl: personalInstallation
+          ? getInstallationManageUrl(
+              personalInstallation.installationId,
+              personalInstallation.installationUrl,
+            )
+          : null,
         repositorySelection: personalInstallation?.repositorySelection ?? null,
       },
     ];
@@ -111,7 +117,12 @@ export async function GET() {
         type: "Organization",
         installStatus: installation ? "installed" : "not_installed",
         installationId: installation?.installationId ?? null,
-        installationUrl: installation?.installationUrl ?? null,
+        installationUrl: installation
+          ? getInstallationManageUrl(
+              installation.installationId,
+              installation.installationUrl,
+            )
+          : null,
         repositorySelection: installation?.repositorySelection ?? null,
       });
     }
