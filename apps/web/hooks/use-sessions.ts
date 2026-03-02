@@ -7,6 +7,7 @@ import { fetcher } from "@/lib/swr";
 export type SessionWithUnread = Session & {
   hasUnread: boolean;
   hasStreaming: boolean;
+  latestChatId: string | null;
 };
 
 interface CreateSessionInput {
@@ -58,9 +59,6 @@ export function useSessions(options?: { enabled?: boolean }) {
     const createdSession = responseData.session;
     const createdChat = responseData.chat;
 
-    // Pre-seed the session chats SWR cache so the sidebar shows the
-    // initial chat immediately on navigation instead of waiting for a
-    // fresh fetch.
     void globalMutate(
       `/api/sessions/${createdSession.id}/chats`,
       {
@@ -79,7 +77,12 @@ export function useSessions(options?: { enabled?: boolean }) {
     await mutate(
       {
         sessions: [
-          { ...createdSession, hasUnread: false, hasStreaming: false },
+          {
+            ...createdSession,
+            hasUnread: false,
+            hasStreaming: false,
+            latestChatId: createdChat.id,
+          },
           ...sessions,
         ],
       },
@@ -112,14 +115,15 @@ export function useSessions(options?: { enabled?: boolean }) {
       const updatedSession = responseData.session;
       await mutate(
         (current) => ({
-          sessions: (current?.sessions ?? []).map((s) =>
-            s.id === sessionId
+          sessions: (current?.sessions ?? []).map((session) =>
+            session.id === sessionId
               ? {
                   ...updatedSession,
-                  hasUnread: s.hasUnread,
-                  hasStreaming: s.hasStreaming,
+                  hasUnread: session.hasUnread,
+                  hasStreaming: session.hasStreaming,
+                  latestChatId: session.latestChatId,
                 }
-              : s,
+              : session,
           ),
         }),
         { revalidate: false },

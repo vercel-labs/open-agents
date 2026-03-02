@@ -1,7 +1,8 @@
 "use client";
 
-import { useParams, usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo } from "react";
+import { InboxSidebar } from "@/components/inbox-sidebar";
 import {
   Sidebar,
   SidebarContent,
@@ -12,8 +13,8 @@ import {
   type SessionChatListItem,
   useSessionChats,
 } from "@/hooks/use-session-chats";
+import { useSessions, type SessionWithUnread } from "@/hooks/use-sessions";
 import type { Session } from "@/lib/db/schema";
-import { ChatSidebar } from "./chats/[chatId]/chat-sidebar";
 import { SessionLayoutContext } from "./session-layout-context";
 
 type SessionLayoutShellProps = {
@@ -31,136 +32,84 @@ export function SessionLayoutShell({
   children,
 }: SessionLayoutShellProps) {
   const router = useRouter();
-  const params = useParams<{ chatId?: string }>();
-  const pathname = usePathname();
-  const pathnameRef = useRef(pathname);
-  const [sessionTitle, setSessionTitle] = useState(initialSession.title);
-  const [optimisticActiveChatId, setOptimisticActiveChatId] = useState<
-    string | null
-  >(null);
-  const optimisticActiveChatIdRef = useRef<string | null>(null);
 
   const sessionId = initialSession.id;
 
   const {
     chats,
-    createChat,
-    renameChat,
-    deleteChat,
     loading: chatsLoading,
-    error: chatsError,
-    refreshChats,
+    createChat,
   } = useSessionChats(sessionId, { initialData: initialChatsData });
 
-  const handleRetryChats = useCallback(() => {
-    void refreshChats();
-  }, [refreshChats]);
+  const {
+    sessions,
+    loading: sessionsLoading,
+    refreshSessions,
+    createSession,
+  } = useSessions({
+    enabled: true,
+  });
 
-  const chatsErrorMessage =
-    chatsError instanceof Error
-      ? chatsError.message
-      : chatsError
-        ? "Failed to load chats"
-        : null;
+  const lastRepo = useMemo(() => {
+    if (initialSession.repoOwner && initialSession.repoName) {
+      return {
+        owner: initialSession.repoOwner,
+        repo: initialSession.repoName,
+      };
+    }
+    return null;
+  }, [initialSession.repoOwner, initialSession.repoName]);
 
-  const activeChatId = optimisticActiveChatId ?? params.chatId ?? "";
+  const getSessionHref = useCallback((targetSession: SessionWithUnread) => {
+    if (targetSession.latestChatId) {
+      return `/sessions/${targetSession.id}/chats/${targetSession.latestChatId}`;
+    }
+    return `/sessions/${targetSession.id}`;
+  }, []);
 
-  useEffect(() => {
-    pathnameRef.current = pathname;
-  }, [pathname]);
+  const handleSessionClick = useCallback(
+    (targetSession: SessionWithUnread) => {
+      router.push(getSessionHref(targetSession));
+    },
+    [getSessionHref, router],
+  );
 
-  useEffect(() => {
-    optimisticActiveChatIdRef.current = optimisticActiveChatId;
-  }, [optimisticActiveChatId]);
+  const handleSessionPrefetch = useCallback(
+    (targetSession: SessionWithUnread) => {
+      router.prefetch(getSessionHref(targetSession));
+    },
+    [getSessionHref, router],
+  );
 
-  // Reset optimistic ID when the route catches up
-  useEffect(() => {
-    setOptimisticActiveChatId(null);
-  }, [params.chatId]);
-
-  const updateSessionTitle = useCallback(
-    async (title: string) => {
-      const res = await fetch(`/api/sessions/${sessionId}`, {
+  const handleRenameSession = useCallback(
+    async (targetSessionId: string, title: string) => {
+      await fetch(`/api/sessions/${targetSessionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
-
-      if (res.ok) {
-        setSessionTitle(title);
-      }
+      await refreshSessions();
     },
-    [sessionId],
+    [refreshSessions],
   );
 
-  const handleChatSwitch = useCallback(
-    (nextChatId: string) => {
-      if (nextChatId === activeChatId) return;
-      setOptimisticActiveChatId(nextChatId);
-      router.push(`/sessions/${sessionId}/chats/${nextChatId}`);
+  const switchChat = useCallback(
+    (chatId: string) => {
+      router.push(`/sessions/${sessionId}/chats/${chatId}`);
     },
-    [router, sessionId, activeChatId],
-  );
-
-  const handleCreateChat = useCallback(() => {
-    const previousChatId = params.chatId ?? "";
-    try {
-      const { chat: newChat, persisted } = createChat();
-      const optimisticPath = `/sessions/${sessionId}/chats/${newChat.id}`;
-      setOptimisticActiveChatId(newChat.id);
-      router.push(optimisticPath);
-      void persisted.catch((err) => {
-        console.error("Failed to create chat:", err);
-        if (
-          optimisticActiveChatIdRef.current === newChat.id ||
-          pathnameRef.current === optimisticPath
-        ) {
-          setOptimisticActiveChatId(previousChatId || null);
-          if (previousChatId) {
-            router.replace(`/sessions/${sessionId}/chats/${previousChatId}`);
-          }
-        }
-      });
-    } catch (err) {
-      console.error("Failed to create chat:", err);
-    }
-  }, [params.chatId, createChat, sessionId, router]);
-
-  const handleDeleteChat = useCallback(
-    async (targetChatId: string) => {
-      if (chats.length <= 1) return;
-      const targetChat = chats.find((c) => c.id === targetChatId);
-      const confirmed = window.confirm(
-        `Delete chat "${targetChat?.title ?? "Untitled"}"?`,
-      );
-      if (!confirmed) return;
-
-      const fallbackChat = chats.find((c) => c.id !== targetChatId);
-      try {
-        await deleteChat(targetChatId);
-        if (targetChatId === activeChatId && fallbackChat) {
-          router.replace(`/sessions/${sessionId}/chats/${fallbackChat.id}`);
-        }
-      } catch (err) {
-        console.error("Failed to delete chat:", err);
-      }
-    },
-    [chats, deleteChat, activeChatId, router, sessionId],
+    [router, sessionId],
   );
 
   const sidebarContent = (
-    <ChatSidebar
-      sessionTitle={sessionTitle}
-      updateSessionTitle={updateSessionTitle}
-      chats={chats}
-      chatsLoading={chatsLoading}
-      chatsErrorMessage={chatsErrorMessage}
-      activeChatId={activeChatId}
-      onChatSwitch={handleChatSwitch}
-      onCreateChat={handleCreateChat}
-      onRetryChats={handleRetryChats}
-      onRenameChat={renameChat}
-      onDeleteChat={handleDeleteChat}
+    <InboxSidebar
+      sessions={sessions}
+      sessionsLoading={sessionsLoading}
+      activeSessionId={sessionId}
+      onSessionClick={handleSessionClick}
+      onSessionPrefetch={handleSessionPrefetch}
+      onRenameSession={handleRenameSession}
+      createSession={createSession}
+      lastRepo={lastRepo}
     />
   );
 
@@ -173,8 +122,12 @@ export function SessionLayoutShell({
         cloneUrl: initialSession.cloneUrl,
         branch: initialSession.branch,
       },
+      chats,
+      chatsLoading,
+      createChat,
+      switchChat,
     }),
-    [initialSession],
+    [initialSession, chats, chatsLoading, createChat, switchChat],
   );
 
   return (
@@ -183,7 +136,7 @@ export function SessionLayoutShell({
         className="h-dvh overflow-hidden"
         style={
           {
-            "--sidebar-width": "18rem",
+            "--sidebar-width": "20rem",
           } as React.CSSProperties
         }
       >

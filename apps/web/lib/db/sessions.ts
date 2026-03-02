@@ -83,6 +83,7 @@ export async function getSessionsByUserId(userId: string) {
 export type SessionWithUnread = typeof sessions.$inferSelect & {
   hasUnread: boolean;
   hasStreaming: boolean;
+  latestChatId: string | null;
 };
 
 /**
@@ -104,6 +105,10 @@ export async function getSessionsWithUnreadByUserId(
         END
       ), false)`,
       hasStreaming: sql<boolean>`COALESCE(BOOL_OR(${chats.activeStreamId} IS NOT NULL), false)`,
+      latestChatId: sql<string | null>`(
+        ARRAY_AGG(${chats.id} ORDER BY ${chats.createdAt} DESC)
+        FILTER (WHERE ${chats.id} IS NOT NULL)
+      )[1]`,
     })
     .from(sessions)
     .leftJoin(chats, eq(chats.sessionId, sessions.id))
