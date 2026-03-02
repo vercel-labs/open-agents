@@ -66,6 +66,7 @@ import {
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
@@ -767,6 +768,25 @@ export function SessionChatContent() {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const { modelOptions } = useModelOptions();
+  const selectedModelLabel = useMemo(() => {
+    if (!chatInfo.modelId) {
+      return "";
+    }
+
+    const selectedModel = modelOptions.find(
+      (modelOption) => modelOption.id === chatInfo.modelId,
+    );
+
+    if (selectedModel) {
+      return selectedModel.label;
+    }
+
+    return chatInfo.modelId.startsWith("variant:")
+      ? `${chatInfo.modelId} (missing)`
+      : chatInfo.modelId;
+  }, [chatInfo.modelId, modelOptions]);
+
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -2568,7 +2588,7 @@ export function SessionChatContent() {
                   ) : (
                     chatInfo.modelId && (
                       <span className="text-xs text-muted-foreground/60">
-                        {chatInfo.modelId}
+                        {selectedModelLabel}
                       </span>
                     )
                   )}
