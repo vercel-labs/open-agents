@@ -2202,7 +2202,7 @@ export function SessionChatContent(_props: unknown) {
                                 error,
                               );
                             });
-                            router.push("/");
+                            router.push("/sessions");
                           }}
                         >
                           Archive
@@ -2608,7 +2608,7 @@ export function SessionChatContent(_props: unknown) {
                         void archiveSession().catch((error: unknown) => {
                           console.error("Failed to archive session:", error);
                         });
-                        router.push("/");
+                        router.push("/sessions");
                       }}
                     >
                       Archive
