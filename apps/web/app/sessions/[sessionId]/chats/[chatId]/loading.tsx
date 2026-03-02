@@ -11,9 +11,9 @@ export default function Loading() {
   return (
     <>
       {/* Header */}
-      <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+      <header className="border-b border-border px-3 py-2 lg:px-4 lg:py-3">
         <div className="flex min-h-8 items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+          <div className="flex min-w-0 items-center gap-2 lg:gap-4">
             <SidebarTrigger className="shrink-0" />
             <div className="flex min-w-0 items-center gap-2 text-sm">
               {session.repoName ? (

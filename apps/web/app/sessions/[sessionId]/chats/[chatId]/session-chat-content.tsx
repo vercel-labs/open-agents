@@ -2083,9 +2083,9 @@ export function SessionChatContent(_props: unknown) {
   return (
     <>
       {/* Header */}
-      <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+      <header className="border-b border-border px-3 py-2 lg:px-4 lg:py-3">
         <div className="relative flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 md:gap-4">
+          <div className="flex min-w-0 items-center gap-2 lg:gap-4">
             <SidebarTrigger className="shrink-0" />
             <div className="flex min-w-0 items-center gap-2 text-sm">
               {session.repoName ? (
@@ -2137,13 +2137,13 @@ export function SessionChatContent(_props: unknown) {
               {sandboxUiStatus.label}
             </span>
           </div>
-          <div className="absolute left-1/2 hidden -translate-x-1/2 md:block">
+          <div className="absolute left-1/2 hidden -translate-x-1/2 xl:block">
             <ChatSwitcherDropdown />
           </div>
           {/* Right-side actions */}
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-1 xl:gap-2">
             {/* Desktop action buttons */}
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="hidden items-center gap-2 xl:flex">
               {isArchived ? (
                 <Button
                   variant="ghost"
@@ -2326,7 +2326,7 @@ export function SessionChatContent(_props: unknown) {
             </div>
 
             {/* Mobile: visible git action + overflow menu */}
-            <div className="flex items-center gap-1 md:hidden">
+            <div className="flex items-center gap-1 xl:hidden">
               {hasRepo ? (
                 hasExistingPr ? (
                   showCommitAction ? (

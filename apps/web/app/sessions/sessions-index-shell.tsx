@@ -93,7 +93,7 @@ export function SessionsIndexShell({
         </SidebarContent>
       </Sidebar>
       <SidebarInset className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="border-b border-border px-3 py-2 md:px-4 md:py-3">
+        <header className="border-b border-border px-3 py-2 lg:px-4 lg:py-3">
           <div className="flex min-h-8 items-center gap-2">
             <SidebarTrigger className="shrink-0" />
           </div>
