@@ -296,6 +296,7 @@ export const userPreferences = pgTable("user_preferences", {
     "anthropic/claude-haiku-4.5",
   ),
   defaultSubagentModelId: text("default_subagent_model_id"),
+  modelVariants: jsonb("model_variants").default([]).notNull(),
   defaultSandboxType: text("default_sandbox_type", {
     enum: ["hybrid", "vercel", "just-bash"],
   }).default("vercel"),

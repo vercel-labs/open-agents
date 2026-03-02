@@ -31,6 +31,7 @@ import { recordUsage } from "@/lib/db/usage";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
@@ -310,14 +311,44 @@ export async function POST(req: Request) {
     }
   }
 
-  // Resolve model from chat's modelId, falling back to default if invalid
-  const modelId = chat.modelId ?? DEFAULT_MODEL_ID;
+  let preferences;
+  try {
+    preferences = await getUserPreferences(session.user.id);
+  } catch (error) {
+    console.error("Failed to load user preferences:", error);
+    preferences = {
+      defaultModelId: DEFAULT_MODEL_ID,
+      defaultSubagentModelId: null,
+      modelVariants: [],
+      defaultSandboxType: "vercel",
+    };
+  }
+
+  // Resolve model from chat's modelId, falling back to default if invalid.
+  const selectedModelId = chat.modelId ?? DEFAULT_MODEL_ID;
+  const resolvedMainModel = resolveModelSelection(
+    selectedModelId,
+    preferences.modelVariants,
+  );
+
+  if (resolvedMainModel.missingVariant) {
+    console.warn(
+      `Missing model variant "${selectedModelId}" for chat ${chat.id}. Falling back to default model.`,
+    );
+  }
+
+  const resolvedMainModelId = resolvedMainModel.missingVariant
+    ? DEFAULT_MODEL_ID
+    : resolvedMainModel.resolvedModelId;
+
   let model;
   try {
-    model = gateway(modelId as GatewayModelId);
+    model = gateway(resolvedMainModelId as GatewayModelId, {
+      providerOptionsOverrides: resolvedMainModel.providerOptionsByProvider,
+    });
   } catch (error) {
     console.error(
-      `Invalid model ID "${modelId}", falling back to default:`,
+      `Invalid model ID "${resolvedMainModelId}", falling back to default:`,
       error,
     );
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
@@ -325,15 +356,29 @@ export async function POST(req: Request) {
 
   // Resolve subagent model from user preferences (if configured)
   let subagentModel: LanguageModel | undefined;
-  try {
-    const preferences = await getUserPreferences(session.user.id);
-    if (preferences.defaultSubagentModelId) {
-      subagentModel = gateway(
-        preferences.defaultSubagentModelId as GatewayModelId,
+  if (preferences.defaultSubagentModelId) {
+    const resolvedSubagentModel = resolveModelSelection(
+      preferences.defaultSubagentModelId,
+      preferences.modelVariants,
+    );
+
+    if (resolvedSubagentModel.missingVariant) {
+      console.warn(
+        `Missing subagent model variant "${preferences.defaultSubagentModelId}" for user ${session.user.id}.`,
       );
+    } else {
+      try {
+        subagentModel = gateway(
+          resolvedSubagentModel.resolvedModelId as GatewayModelId,
+          {
+            providerOptionsOverrides:
+              resolvedSubagentModel.providerOptionsByProvider,
+          },
+        );
+      } catch (error) {
+        console.error("Failed to resolve subagent model preference:", error);
+      }
     }
-  } catch (error) {
-    console.error("Failed to resolve subagent model preference:", error);
   }
 
   // Use Redis stop signals as the sole cancellation mechanism for generation.

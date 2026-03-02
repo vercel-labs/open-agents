@@ -7,6 +7,7 @@ import {
   Link2,
   Menu,
   Settings as SettingsIcon,
+  SlidersHorizontal,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AccountsSectionSkeleton } from "./accounts-section";
+import { ModelVariantsSectionSkeleton } from "./model-variants-section";
 import { PreferencesSectionSkeleton } from "./preferences-section";
 import { ProfileSectionSkeleton } from "./profile-section";
 import { TokensSectionSkeleton } from "./tokens-section";
@@ -38,6 +40,12 @@ const sidebarItems = [
     label: "Preferences",
     href: "/settings/preferences",
     icon: SettingsIcon,
+  },
+  {
+    id: "model-variants",
+    label: "Model Variants",
+    href: "/settings/model-variants",
+    icon: SlidersHorizontal,
   },
   {
     id: "tokens",
@@ -172,6 +180,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const fallbackContent =
     activeItem?.id === "preferences" ? (
       <PreferencesSectionSkeleton />
+    ) : activeItem?.id === "model-variants" ? (
+      <ModelVariantsSectionSkeleton />
     ) : activeItem?.id === "tokens" ? (
       <TokensSectionSkeleton />
     ) : activeItem?.id === "accounts" ? (
