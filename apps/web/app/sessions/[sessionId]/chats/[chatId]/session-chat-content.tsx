@@ -2345,10 +2345,13 @@ export function SessionChatContent(_props: unknown) {
                     <Button
                       variant="outline"
                       size="icon"
-                      className="h-8 w-8"
+                      className="relative h-8 w-8"
                       onClick={() => setCommitDialogOpen(true)}
                     >
                       <GitCommit className="h-4 w-4" />
+                      {hasUncommittedGitChanges && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                      )}
                     </Button>
                   ) : (
                     <Button
@@ -2367,10 +2370,13 @@ export function SessionChatContent(_props: unknown) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8"
+                    className="relative h-8 w-8"
                     onClick={() => setCommitDialogOpen(true)}
                   >
                     <GitCommit className="h-4 w-4" />
+                    {hasUncommittedGitChanges && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                    )}
                   </Button>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
@@ -2385,11 +2391,14 @@ export function SessionChatContent(_props: unknown) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="relative h-8 w-8"
                     onClick={() => setShowDiffPanel(!showDiffPanel)}
                     disabled={!diff && !session.cachedDiff}
                   >
                     <GitCompare className="h-4 w-4" />
+                    {hasUncommittedGitChanges && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                    )}
                   </Button>
                 ) : null
               ) : supportsRepoCreation ? (
