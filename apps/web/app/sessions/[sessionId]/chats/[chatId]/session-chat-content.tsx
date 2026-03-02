@@ -2291,7 +2291,7 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
                         }}
                       >
                         <ExternalLink className="h-4 w-4 md:mr-2" />
-                        <span className="hidden md:inline">View Deployment</span>
+                        <span className="hidden md:inline">Preview</span>
                       </Button>
                     ) : null}
                     <Button
