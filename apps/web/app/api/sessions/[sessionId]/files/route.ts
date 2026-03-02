@@ -22,6 +22,15 @@ type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
 
+const MAX_FILE_SUGGESTIONS = 5000;
+
+function getPathDepth(suggestion: FileSuggestion): number {
+  const normalizedPath = suggestion.isDirectory
+    ? suggestion.value.slice(0, -1)
+    : suggestion.value;
+  return normalizedPath ? normalizedPath.split("/").length : 0;
+}
+
 /**
  * Parse git ls-files output and extract files and directories
  */
@@ -57,10 +66,10 @@ function parseGitFiles(output: string): FileSuggestion[] {
     });
   }
 
-  // Sort: directories first, then alphabetically
+  // Keep top-level paths first so files like README.md are always surfaced.
   results.sort((a, b) => {
-    if (a.isDirectory && !b.isDirectory) return -1;
-    if (!a.isDirectory && b.isDirectory) return 1;
+    const depthDiff = getPathDepth(a) - getPathDepth(b);
+    if (depthDiff !== 0) return depthDiff;
     return a.display.localeCompare(b.display);
   });
 
@@ -149,8 +158,8 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const files = parseGitFiles(combinedOutput);
 
-    // Limit to 500 files for performance
-    const limitedFiles = files.slice(0, 500);
+    // Keep a high upper bound to avoid huge payloads on very large repos.
+    const limitedFiles = files.slice(0, MAX_FILE_SUGGESTIONS);
 
     const response: FilesResponse = {
       files: limitedFiles,
