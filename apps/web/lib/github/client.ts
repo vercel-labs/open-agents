@@ -29,6 +29,42 @@ export function parseGitHubUrl(
   return null;
 }
 
+const URL_PATTERN = /https?:\/\/[^\s<>()\]]+/g;
+
+function trimTrailingUrlPunctuation(url: string): string {
+  return url.replace(/[),.;:!?]+$/g, "");
+}
+
+function isVercelDeploymentUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return (
+      hostname === "vercel.app" ||
+      hostname.endsWith(".vercel.app") ||
+      hostname === "vercel.dev" ||
+      hostname.endsWith(".vercel.dev")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function extractVercelDeploymentUrl(commentBody: string): string | null {
+  const matches = commentBody.match(URL_PATTERN);
+  if (!matches) {
+    return null;
+  }
+
+  for (const match of matches) {
+    const url = trimTrailingUrlPunctuation(match);
+    if (isVercelDeploymentUrl(url)) {
+      return url;
+    }
+  }
+
+  return null;
+}
+
 export async function createPullRequest(params: {
   repoUrl: string;
   branchName: string;
@@ -253,6 +289,57 @@ export async function findPullRequestByBranch(params: {
     };
   } catch {
     return { found: false, error: "Failed to search pull requests" };
+  }
+}
+
+export async function findLatestVercelDeploymentUrlForPullRequest(params: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  token?: string;
+}): Promise<{
+  success: boolean;
+  deploymentUrl?: string;
+  error?: string;
+}> {
+  const { owner, repo, prNumber, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return { success: false, error: "GitHub account not connected" };
+    }
+
+    const response = await result.octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+      sort: "updated",
+      direction: "desc",
+    });
+
+    for (const comment of response.data) {
+      if (!comment.body) {
+        continue;
+      }
+
+      const deploymentUrl = extractVercelDeploymentUrl(comment.body);
+      if (deploymentUrl) {
+        return {
+          success: true,
+          deploymentUrl,
+        };
+      }
+    }
+
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Failed to find Vercel deployment URL",
+    };
   }
 }
 

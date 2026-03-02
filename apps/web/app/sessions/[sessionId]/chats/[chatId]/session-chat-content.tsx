@@ -34,6 +34,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
+import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
   WebAgentUIMessage,
   WebAgentUIMessagePart,
@@ -802,6 +803,21 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
     () => modelsData?.models ?? initialModels,
     [modelsData?.models, initialModels],
   );
+
+  const hasExistingPr = session.prNumber != null;
+  const { data: prDeploymentData } = useSWR<PrDeploymentResponse>(
+    hasExistingPr
+      ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
+      : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      refreshInterval: 60_000,
+      shouldRetryOnError: false,
+    },
+  );
+  const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
 
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
@@ -2052,7 +2068,6 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
   ]);
 
   const hasRepo = Boolean(session.cloneUrl);
-  const hasExistingPr = session.prNumber != null;
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
   const hasBranchDiff =
@@ -2073,6 +2088,10 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
+  const prUrl =
+    hasExistingPr && session.repoOwner && session.repoName
+      ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
+      : null;
 
   return (
     <>
@@ -2258,18 +2277,39 @@ export function SessionChatContent({ initialModels }: SessionChatContentProps) {
                     </span>
                   </Button>
                 ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                      window.open(prUrl, "_blank", "noopener,noreferrer");
-                    }}
-                  >
-                    <GitPullRequest className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">
-                      View PR #{session.prNumber}
-                    </span>
-                  </Button>
+                  <>
+                    {prDeploymentUrl ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          window.open(
+                            prDeploymentUrl,
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline">View Deployment</span>
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!prUrl) {
+                          return;
+                        }
+                        window.open(prUrl, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={!prUrl}
+                    >
+                      <GitPullRequest className="h-4 w-4 md:mr-2" />
+                      <span className="hidden md:inline">
+                        View PR #{session.prNumber}
+                      </span>
+                    </Button>
+                  </>
                 )
               ) : (
                 <>
