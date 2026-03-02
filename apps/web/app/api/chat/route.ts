@@ -37,6 +37,7 @@ import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
+import { after } from "next/server";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
@@ -102,27 +103,29 @@ function refreshCachedDiffInBackground(req: Request, sessionId: string): void {
   }
 
   const diffUrl = new URL(`/api/sessions/${sessionId}/diff`, req.url);
-  void fetch(diffUrl, {
-    method: "GET",
-    headers: {
-      cookie: cookieHeader,
-    },
-    cache: "no-store",
-  })
-    .then((response) => {
-      if (response.ok) {
-        return;
-      }
-      console.warn(
-        `[chat] Failed to refresh cached diff for session ${sessionId}: ${response.status}`,
-      );
+  after(
+    fetch(diffUrl, {
+      method: "GET",
+      headers: {
+        cookie: cookieHeader,
+      },
+      cache: "no-store",
     })
-    .catch((error) => {
-      console.error(
-        `[chat] Failed to refresh cached diff for session ${sessionId}:`,
-        error,
-      );
-    });
+      .then((response) => {
+        if (response.ok) {
+          return;
+        }
+        console.warn(
+          `[chat] Failed to refresh cached diff for session ${sessionId}: ${response.status}`,
+        );
+      })
+      .catch((error) => {
+        console.error(
+          `[chat] Failed to refresh cached diff for session ${sessionId}:`,
+          error,
+        );
+      }),
+  );
 }
 
 export async function POST(req: Request) {
