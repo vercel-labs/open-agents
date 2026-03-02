@@ -58,7 +58,7 @@ export function NewSessionDialog({
         <DialogHeader className="sr-only">
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
-        <div className="max-w-none rounded-[28px] border border-border/60 bg-card p-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] sm:p-5">
+        <div className="max-w-none rounded-[28px] border border-border/60 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <SessionStarter
             onSubmit={handleCreateSession}
             isLoading={isCreating}
