@@ -18,6 +18,27 @@ export type AttentionState =
   | "working"
   | "idle";
 
+export interface InboxDiffFile {
+  path: string;
+  status: "added" | "modified" | "deleted" | "renamed";
+  stagingStatus?: "staged" | "unstaged" | "partial";
+  additions: number;
+  deletions: number;
+  diff: string;
+  oldPath?: string;
+  generated?: boolean;
+}
+
+export interface InboxDiff {
+  files: InboxDiffFile[];
+  summary: {
+    totalFiles: number;
+    totalAdditions: number;
+    totalDeletions: number;
+  };
+  baseRef?: string;
+}
+
 export interface InboxItem {
   sessionId: string;
   sessionTitle: string;
@@ -34,6 +55,7 @@ export interface InboxItem {
   objective: string | null; // First user message text (what was asked)
   latestTodos: TodoItem[] | null; // Most recent todo_write snapshot
   latestResponse: string | null; // Last assistant text (final answer)
+  cachedDiff: InboxDiff | null; // Cached diff for inline viewing
   hasUnread: boolean;
   isStreaming: boolean;
   updatedAt: Date;
@@ -138,13 +160,14 @@ function deriveAttentionState(opts: {
   if (opts.isStreaming) return "working";
   if (opts.hasPendingQuestion) return "needs_input";
 
-  // Agent finished with unread content
-  if (opts.hasUnread) {
-    // If there are code changes, user needs to review them
-    if (opts.hasChanges) return "needs_review";
-    // If there's text but no changes, agent is likely asking/responding — needs input
-    if (opts.latestResponse) return "needs_input";
-  }
+  // Unstaged changes and not actively streaming → needs review regardless of
+  // read state.  The user may have already read the chat but hasn't acted on
+  // the changes (commit, PR, etc.).
+  if (opts.hasChanges) return "needs_review";
+
+  // Agent finished with unread text but no code changes — likely
+  // asking/clarifying or returning a text-only response.
+  if (opts.hasUnread && opts.latestResponse) return "needs_input";
 
   return "idle";
 }
@@ -213,6 +236,7 @@ export async function GET() {
         objective: null,
         latestTodos: null,
         latestResponse: null,
+        cachedDiff: (s.cachedDiff as InboxDiff | null) ?? null,
         hasUnread: s.hasUnread,
         isStreaming: s.hasStreaming,
         updatedAt: s.updatedAt,
@@ -283,6 +307,7 @@ export async function GET() {
       objective,
       latestTodos,
       latestResponse,
+      cachedDiff: (s.cachedDiff as InboxDiff | null) ?? null,
       hasUnread: s.hasUnread,
       isStreaming: s.hasStreaming,
       updatedAt: s.updatedAt,

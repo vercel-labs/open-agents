@@ -1,15 +1,25 @@
 "use client";
 
-import type { AttentionState, InboxItem } from "@/app/api/inbox/route";
+import type {
+  AttentionState,
+  InboxDiff,
+  InboxDiffFile,
+  InboxItem,
+} from "@/app/api/inbox/route";
+import { DiffsProvider } from "@/components/diffs-provider";
 import { useInbox } from "@/hooks/use-inbox";
 import { useSession } from "@/hooks/use-session";
+import { defaultDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
+import { PatchDiff } from "@pierre/diffs/react";
 import {
   ArrowLeft,
   CheckSquare,
+  ChevronDown,
   ChevronRight,
   Circle,
   Eye,
+  FileText,
   Loader2,
   MessageSquareWarning,
   Square,
@@ -107,6 +117,210 @@ function TodoProgress({ todos }: { todos: InboxItem["latestTodos"] }) {
   );
 }
 
+// -- Inline diff file list (collapsed by default) --
+
+function DiffStatusBadge({ status }: { status: InboxDiffFile["status"] }) {
+  const styles = {
+    added: "bg-green-500/20 text-green-400",
+    modified: "bg-blue-500/20 text-blue-400",
+    deleted: "bg-red-500/20 text-red-400",
+    renamed: "bg-yellow-500/20 text-yellow-400",
+  };
+
+  const labels = {
+    added: "New",
+    modified: "Modified",
+    deleted: "Deleted",
+    renamed: "Renamed",
+  };
+
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+        styles[status],
+      )}
+    >
+      {labels[status]}
+    </span>
+  );
+}
+
+function StagingBadge({
+  stagingStatus,
+}: {
+  stagingStatus: InboxDiffFile["stagingStatus"];
+}) {
+  if (!stagingStatus || stagingStatus === "staged") return null;
+
+  const styles = {
+    unstaged: "bg-orange-500/20 text-orange-400",
+    partial: "bg-purple-500/20 text-purple-400",
+  };
+
+  const labels = {
+    unstaged: "Unstaged",
+    partial: "Partial",
+  };
+
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+        styles[stagingStatus],
+      )}
+    >
+      {labels[stagingStatus]}
+    </span>
+  );
+}
+
+function InlineDiffFileEntry({
+  file,
+  isExpanded,
+  onToggle,
+}: {
+  file: InboxDiffFile;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const fileName = file.path.split("/").pop() ?? file.path;
+  const dirPath = file.path.slice(0, -fileName.length);
+  const isGenerated = file.generated === true;
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        onClick={isGenerated ? undefined : onToggle}
+        className={cn(
+          "flex w-full items-center gap-2 px-3 py-2 text-left",
+          isGenerated ? "cursor-default opacity-70" : "hover:bg-muted/50",
+        )}
+      >
+        {isGenerated ? (
+          <span className="h-4 w-4 shrink-0" />
+        ) : isExpanded ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate text-sm">
+            {dirPath && (
+              <span className="text-muted-foreground">{dirPath}</span>
+            )}
+            <span className="font-medium text-foreground">{fileName}</span>
+          </span>
+          <DiffStatusBadge status={file.status} />
+          <StagingBadge stagingStatus={file.stagingStatus} />
+          {isGenerated && (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+              Generated
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-xs">
+          {file.additions > 0 && (
+            <span className="text-green-500">+{file.additions}</span>
+          )}
+          {file.deletions > 0 && (
+            <span className="text-red-400">-{file.deletions}</span>
+          )}
+        </div>
+      </button>
+
+      {isExpanded && !isGenerated && (
+        <div className="border-t border-border">
+          {file.diff ? (
+            <PatchDiff patch={file.diff} options={defaultDiffOptions} />
+          ) : (
+            <div className="px-4 py-3 text-xs text-muted-foreground">
+              No diff content available
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineDiffViewer({ diff }: { diff: InboxDiff }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const toggleFile = (path: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  if (diff.files.length === 0) return null;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="mb-2 flex w-full items-center gap-2 text-left"
+      >
+        {isOpen ? (
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Changes
+        </h3>
+        <span className="text-xs text-muted-foreground">
+          {diff.summary.totalFiles} file
+          {diff.summary.totalFiles !== 1 && "s"}
+        </span>
+        <div className="flex items-center gap-1.5 font-mono text-xs">
+          {diff.summary.totalAdditions > 0 && (
+            <span className="text-green-500">
+              +{diff.summary.totalAdditions}
+            </span>
+          )}
+          {diff.summary.totalDeletions > 0 && (
+            <span className="text-red-400">-{diff.summary.totalDeletions}</span>
+          )}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="rounded-lg border border-border">
+          {diff.files.map((file) => (
+            <InlineDiffFileEntry
+              key={file.path}
+              file={file}
+              isExpanded={expandedFiles.has(file.path)}
+              onToggle={() => toggleFile(file.path)}
+            />
+          ))}
+          {diff.baseRef && (
+            <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+              vs{" "}
+              <span className="font-mono text-foreground/70">
+                {diff.baseRef}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -- Inbox item components --
+
 function InboxItemRow({
   item,
   isSelected,
@@ -189,9 +403,6 @@ function InboxItemDetail({
         {item.repoName ? (
           <p className="mt-1 text-sm text-muted-foreground">
             {item.repoOwner}/{item.repoName}
-            {item.branch ? (
-              <span className="text-muted-foreground/60"> · {item.branch}</span>
-            ) : null}
           </p>
         ) : null}
       </div>
@@ -205,7 +416,7 @@ function InboxItemDetail({
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Objective
               </h3>
-              <p className="text-sm text-foreground leading-relaxed">
+              <p className="text-sm leading-relaxed text-foreground">
                 {item.objective}
               </p>
             </div>
@@ -245,42 +456,27 @@ function InboxItemDetail({
             </div>
           ) : null}
 
-          {/* Changes */}
-          {(item.linesAdded !== null && item.linesAdded > 0) ||
-          (item.linesRemoved !== null && item.linesRemoved > 0) ? (
-            <div>
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Changes
-              </h3>
-              <div className="flex items-center gap-3 font-mono text-sm">
-                {item.linesAdded !== null && item.linesAdded > 0 ? (
-                  <span className="text-green-500">
-                    +{item.linesAdded} lines
-                  </span>
-                ) : null}
-                {item.linesRemoved !== null && item.linesRemoved > 0 ? (
-                  <span className="text-red-400">
-                    -{item.linesRemoved} lines
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Agent response */}
+          {/* Agent response (shown first before diff) */}
           {item.latestResponse ? (
             <div>
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Agent response
               </h3>
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                   {item.latestResponse.length > 800
                     ? `${item.latestResponse.slice(0, 800)}…`
                     : item.latestResponse}
                 </p>
               </div>
             </div>
+          ) : null}
+
+          {/* Diff viewer (collapsed by default) */}
+          {item.cachedDiff &&
+          item.cachedDiff.files &&
+          item.cachedDiff.files.length > 0 ? (
+            <InlineDiffViewer diff={item.cachedDiff} />
           ) : null}
         </div>
       </div>
@@ -413,114 +609,116 @@ export function InboxView() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-3">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Home
-          </Link>
-          <div className="h-4 w-px bg-border" />
-          <h1 className="text-lg font-semibold">Inbox</h1>
-          {actionableCount > 0 ? (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-xs font-medium tabular-nums text-amber-500">
-              {actionableCount}
-            </span>
-          ) : null}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">
-            j
-          </kbd>
-          <kbd className="ml-0.5 rounded border border-border px-1.5 py-0.5 font-mono">
-            k
-          </kbd>{" "}
-          navigate ·{" "}
-          <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">
-            ↵
-          </kbd>{" "}
-          open
-        </div>
-      </header>
-
-      {/* Filter tabs */}
-      <div className="flex shrink-0 items-center gap-1 border-b border-border px-6 py-2">
-        {(
-          [
-            { key: "all" as const, count: items.length },
-            { key: "needs_input" as const, count: needsInputCount },
-            { key: "needs_review" as const, count: needsReviewCount },
-            { key: "working" as const, count: workingCount },
-          ] as const
-        ).map(({ key, count }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => {
-              setFilter(key);
-              setSelectedIndex(0);
-            }}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              filter === key
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {FILTER_LABELS[key]}
-            {count > 0 ? (
-              <span className="ml-1.5 tabular-nums text-muted-foreground">
-                {count}
+    <DiffsProvider>
+      <div className="flex h-dvh flex-col bg-background text-foreground">
+        {/* Header */}
+        <header className="flex shrink-0 items-center justify-between border-b border-border px-6 py-3">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Home
+            </Link>
+            <div className="h-4 w-px bg-border" />
+            <h1 className="text-lg font-semibold">Inbox</h1>
+            {actionableCount > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-xs font-medium tabular-nums text-amber-500">
+                {actionableCount}
               </span>
             ) : null}
-          </button>
-        ))}
-      </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">
+              j
+            </kbd>
+            <kbd className="ml-0.5 rounded border border-border px-1.5 py-0.5 font-mono">
+              k
+            </kbd>{" "}
+            navigate ·{" "}
+            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">
+              ↵
+            </kbd>{" "}
+            open
+          </div>
+        </header>
 
-      {/* Main content: list + detail split view */}
-      <div className="flex min-h-0 flex-1">
-        {/* List panel */}
-        <div
-          ref={listRef}
-          className="w-full min-w-0 overflow-y-auto border-r border-border md:w-[420px] md:shrink-0"
-        >
-          {loading ? (
-            <InboxSkeleton />
-          ) : filteredItems.length === 0 ? (
-            <EmptyInbox filter={filter} />
-          ) : (
-            <div className="p-2">
-              {filteredItems.map((item, index) => (
-                <InboxItemRow
-                  key={item.sessionId}
-                  item={item}
-                  isSelected={index === selectedIndex}
-                  onSelect={() => setSelectedIndex(index)}
-                  onNavigate={() => navigateToSession(item.sessionId)}
-                />
-              ))}
-            </div>
-          )}
+        {/* Filter tabs */}
+        <div className="flex shrink-0 items-center gap-1 border-b border-border px-6 py-2">
+          {(
+            [
+              { key: "all" as const, count: items.length },
+              { key: "needs_input" as const, count: needsInputCount },
+              { key: "needs_review" as const, count: needsReviewCount },
+              { key: "working" as const, count: workingCount },
+            ] as const
+          ).map(({ key, count }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setFilter(key);
+                setSelectedIndex(0);
+              }}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                filter === key
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {FILTER_LABELS[key]}
+              {count > 0 ? (
+                <span className="ml-1.5 tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              ) : null}
+            </button>
+          ))}
         </div>
 
-        {/* Detail panel (hidden on mobile) */}
-        <div className="hidden flex-1 md:block">
-          {selectedItem ? (
-            <InboxItemDetail
-              item={selectedItem}
-              onNavigate={() => navigateToSession(selectedItem.sessionId)}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Select a session to view details
-            </div>
-          )}
+        {/* Main content: list + detail split view */}
+        <div className="flex min-h-0 flex-1">
+          {/* List panel */}
+          <div
+            ref={listRef}
+            className="w-full min-w-0 overflow-y-auto border-r border-border md:w-[420px] md:shrink-0"
+          >
+            {loading ? (
+              <InboxSkeleton />
+            ) : filteredItems.length === 0 ? (
+              <EmptyInbox filter={filter} />
+            ) : (
+              <div className="p-2">
+                {filteredItems.map((item, index) => (
+                  <InboxItemRow
+                    key={item.sessionId}
+                    item={item}
+                    isSelected={index === selectedIndex}
+                    onSelect={() => setSelectedIndex(index)}
+                    onNavigate={() => navigateToSession(item.sessionId)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Detail panel (hidden on mobile) */}
+          <div className="hidden flex-1 md:block">
+            {selectedItem ? (
+              <InboxItemDetail
+                item={selectedItem}
+                onNavigate={() => navigateToSession(selectedItem.sessionId)}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Select a session to view details
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </DiffsProvider>
   );
 }
