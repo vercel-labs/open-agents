@@ -7,6 +7,7 @@ import { SharedChatContent } from "./shared-chat-content";
 
 interface SharedPageProps {
   params: Promise<{ shareId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({
@@ -21,38 +22,45 @@ export async function generateMetadata({
   };
 }
 
-export default async function SharedPage({ params }: SharedPageProps) {
+export default async function SharedPage({
+  params,
+  searchParams,
+}: SharedPageProps) {
   const { shareId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const chatIdParam = resolvedSearchParams?.chatId;
+  const requestedChatId =
+    typeof chatIdParam === "string" && chatIdParam.length > 0
+      ? chatIdParam
+      : null;
 
   const session = await getSessionByShareIdCached(shareId);
   if (!session) {
     notFound();
   }
 
-  // Get all chats for this session (newest first)
   const sessionChats = await getChatsBySessionId(session.id);
   if (sessionChats.length === 0) {
     notFound();
   }
 
-  // Load messages for all chats
-  const chatsWithMessages = await Promise.all(
-    sessionChats.map(async (chat) => {
-      const dbMessages = await getChatMessages(chat.id);
-      const messages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
-      return { chat, messages };
-    }),
-  );
+  const targetChat = requestedChatId
+    ? (sessionChats.find((chat) => chat.id === requestedChatId) ?? null)
+    : (sessionChats[0] ?? null);
 
-  // Sort chats oldest-first for reading order
-  chatsWithMessages.reverse();
+  if (!targetChat) {
+    notFound();
+  }
+
+  const dbMessages = await getChatMessages(targetChat.id);
+  const messages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
 
   const { title, repoOwner, repoName, branch, cloneUrl } = session;
 
   return (
     <SharedChatContent
       session={{ title, repoOwner, repoName, branch, cloneUrl }}
-      chats={chatsWithMessages}
+      chats={[{ chat: targetChat, messages }]}
     />
   );
 }

@@ -503,11 +503,13 @@ function SandboxInputOverlay({
 
 function ShareDialog({
   sessionId,
+  chatId,
   initialShareId,
   externalOpen,
   onExternalOpenChange,
 }: {
   sessionId: string;
+  chatId: string;
   initialShareId: string | null;
   externalOpen?: boolean;
   onExternalOpenChange?: (open: boolean) => void;
@@ -532,7 +534,10 @@ function ShareDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
-  const shareUrl = shareId && baseUrl ? `${baseUrl}/shared/${shareId}` : null;
+  const shareUrl =
+    shareId && baseUrl
+      ? `${baseUrl}/shared/${shareId}?chatId=${encodeURIComponent(chatId)}`
+      : null;
 
   async function enableSharing() {
     setIsLoading(true);
@@ -2467,6 +2472,7 @@ export function SessionChatContent(_props: unknown) {
             {/* Mobile share dialog */}
             <ShareDialog
               sessionId={session.id}
+              chatId={chatInfo.id}
               initialShareId={session.shareId}
               externalOpen={mobileShareOpen}
               onExternalOpenChange={setMobileShareOpen}
