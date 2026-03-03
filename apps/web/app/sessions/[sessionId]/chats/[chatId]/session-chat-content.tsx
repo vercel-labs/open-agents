@@ -604,21 +604,27 @@ function ShareDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {shareId ? (
           <>
-            <div className="flex w-full items-center gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted px-3 py-2 text-sm">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate">{shareUrl}</span>
+                <span className="min-w-0 flex-1 truncate">{shareUrl}</span>
               </div>
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 onClick={copyLink}
-                className="shrink-0"
+                className="w-full sm:w-auto sm:shrink-0"
               >
                 {copied ? (
-                  <Check className="h-4 w-4" />
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Copied
+                  </>
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy link
+                  </>
                 )}
               </Button>
             </div>
