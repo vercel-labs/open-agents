@@ -44,8 +44,11 @@ export function useSessions(options?: {
       fallbackData: options?.initialData,
       revalidateOnMount: options?.initialData ? false : undefined,
       refreshInterval: (latestData) => {
-        const anyStreaming = latestData?.sessions.some((s) => s.hasStreaming) ?? false;
-        return anyStreaming ? SESSIONS_STREAMING_REFRESH_MS : SESSIONS_IDLE_REFRESH_MS;
+        const anyStreaming =
+          latestData?.sessions.some((s) => s.hasStreaming) ?? false;
+        return anyStreaming
+          ? SESSIONS_STREAMING_REFRESH_MS
+          : SESSIONS_IDLE_REFRESH_MS;
       },
       revalidateOnFocus: true,
     },

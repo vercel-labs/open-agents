@@ -55,6 +55,16 @@ export function SessionLayoutShell({
     initialData: initialSessionsData,
   });
 
+  // Derive hasStreaming for the current session from the chats list, which
+  // already reflects optimistic streaming state. This makes the inbox sidebar
+  // indicator update immediately without waiting for a server round-trip.
+  const sessionsWithStreaming = useMemo(() => {
+    const anyStreaming = chats.some((c) => c.isStreaming);
+    return sessions.map((s) =>
+      s.id === sessionId ? { ...s, hasStreaming: anyStreaming } : s,
+    );
+  }, [sessions, chats, sessionId]);
+
   const lastRepo = useMemo(() => {
     if (initialSession.repoOwner && initialSession.repoName) {
       return {
@@ -107,7 +117,7 @@ export function SessionLayoutShell({
 
   const sidebarContent = (
     <InboxSidebar
-      sessions={sessions}
+      sessions={sessionsWithStreaming}
       sessionsLoading={sessionsLoading}
       activeSessionId={sessionId}
       onSessionClick={handleSessionClick}
