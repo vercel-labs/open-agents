@@ -24,9 +24,6 @@ interface SessionsResponse {
   sessions: SessionWithUnread[];
 }
 
-const SESSIONS_STREAMING_REFRESH_MS = 2_000;
-const SESSIONS_IDLE_REFRESH_MS = 15_000;
-
 interface CreateSessionResponse {
   session: Session;
   chat: Chat;
@@ -43,14 +40,6 @@ export function useSessions(options?: {
     {
       fallbackData: options?.initialData,
       revalidateOnMount: options?.initialData ? false : undefined,
-      refreshInterval: (latestData) => {
-        const anyStreaming =
-          latestData?.sessions.some((s) => s.hasStreaming) ?? false;
-        return anyStreaming
-          ? SESSIONS_STREAMING_REFRESH_MS
-          : SESSIONS_IDLE_REFRESH_MS;
-      },
-      revalidateOnFocus: true,
     },
   );
   const { mutate: globalMutate } = useSWRConfig();
