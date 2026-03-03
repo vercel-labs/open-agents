@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useSession } from "@/hooks/use-session";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
@@ -270,7 +271,7 @@ export function InboxSidebar({
   lastRepo,
 }: InboxSidebarProps) {
   const router = useRouter();
-  const { session } = useSession();
+  const { session, loading: sessionLoading } = useSession();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
@@ -447,14 +448,30 @@ export function InboxSidebar({
         )}
       </div>
 
-      {session?.user ? (
+      {sessionLoading ? (
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2 rounded-lg p-2">
+            <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+          </div>
+        </div>
+      ) : session?.user ? (
         <div className="border-t border-border p-3">
           <div className="flex items-center gap-2 rounded-lg p-2">
             <Avatar className="h-9 w-9 shrink-0">
               {session.user.avatar ? (
-                <AvatarImage src={session.user.avatar} alt={session.user.username} />
+                <AvatarImage
+                  src={session.user.avatar}
+                  alt={session.user.username}
+                />
               ) : null}
-              <AvatarFallback>{getAvatarFallback(session.user.username)}</AvatarFallback>
+              <AvatarFallback>
+                {getAvatarFallback(session.user.username)}
+              </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold leading-none text-foreground">
