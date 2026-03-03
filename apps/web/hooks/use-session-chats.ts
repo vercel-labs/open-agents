@@ -582,25 +582,32 @@ export function useSessionChats(
       const wasActivelyManaged = activelyManagedStreaming.has(chatId);
       activelyManagedStreaming.delete(chatId);
 
-      let clearedOptimisticStreaming = false;
       updateOverlay(chatId, (overlay) => {
         const next = { ...overlay };
+
         if (next.streaming) {
           delete next.streaming;
-          // Record when streaming was cleared so the merge logic can suppress
-          // stale server responses that still report isStreaming: true (the
-          // server's onFinish hasn't cleared activeStreamId yet).
-          next.streamingClearedAt = Date.now();
-          clearedOptimisticStreaming = true;
+          if (wasActivelyManaged) {
+            // Record when streaming was cleared so the merge logic can suppress
+            // stale server responses that still report isStreaming: true (the
+            // server's onFinish hasn't cleared activeStreamId yet).
+            next.streamingClearedAt = Date.now();
+          } else {
+            // This is a cleanup-only clear (e.g. route re-entry). Do not keep
+            // a suppression marker that could hide a real server-side stream.
+            delete next.streamingClearedAt;
+          }
+        } else if (!wasActivelyManaged) {
+          delete next.streamingClearedAt;
         }
+
         return next;
       });
 
-      // If this chat was not actively streaming in this tab and there was no
-      // optimistic streaming overlay to clear, avoid forcing SWR cache to
-      // isStreaming=false. That prevents route-entry cleanup from hiding a real
-      // server-side stream (e.g. another tab/client) until the next poll.
-      shouldMutateCache = wasActivelyManaged || clearedOptimisticStreaming;
+      // Only the component that actively started streaming in this tab should
+      // force the local SWR cache to `isStreaming: false`. Cleanup-only clears
+      // should let polling/server state stay authoritative.
+      shouldMutateCache = wasActivelyManaged;
     }
 
     if (!shouldMutateCache) {
