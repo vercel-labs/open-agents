@@ -20,6 +20,7 @@ import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
+  getChatsBySessionId,
   getSessionById,
   isFirstChatMessage,
   updateChat,
@@ -27,6 +28,7 @@ import {
   updateSession,
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
+import { generateSessionTitle } from "@/app/api/generate-title/route";
 import { recordUsage } from "@/lib/db/usage";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -390,6 +392,30 @@ export async function POST(req: Request) {
                   ? `${textContent.slice(0, 30)}...`
                   : textContent;
               await updateChat(chatId, { title });
+
+              // Auto-generate an AI session title on the very first message
+              // in the session. Uses after() so it doesn't block the response.
+              after(async () => {
+                try {
+                  const sessionChats =
+                    await getChatsBySessionId(sessionId);
+                  const isFirstSessionChat =
+                    sessionChats.length === 1 &&
+                    sessionChats[0]?.id === chatId;
+                  if (!isFirstSessionChat) return;
+
+                  const aiTitle =
+                    await generateSessionTitle(textContent);
+                  if (aiTitle) {
+                    await updateSession(sessionId, { title: aiTitle });
+                  }
+                } catch (err) {
+                  console.error(
+                    "[chat] Failed to auto-generate session title:",
+                    err,
+                  );
+                }
+              });
             }
           }
         } else {
