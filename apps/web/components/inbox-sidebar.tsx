@@ -451,12 +451,21 @@ export function InboxSidebar({
       {sessionLoading ? (
         <div className="border-t border-border p-3">
           <div className="flex items-center gap-2 rounded-lg p-2">
-            <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+            <Skeleton className="h-9 w-9 shrink-0 rounded-full bg-muted dark:bg-accent" />
             <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="h-3 w-32" />
+              <Skeleton className="h-3.5 w-24 bg-muted dark:bg-accent" />
+              <Skeleton className="h-3 w-32 bg-muted dark:bg-accent" />
             </div>
-            <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => router.push("/settings")}
+              aria-label="Open settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       ) : session?.user ? (
