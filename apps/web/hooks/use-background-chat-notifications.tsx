@@ -79,10 +79,13 @@ export function useBackgroundChatNotifications(
         activeSessionId,
       );
 
+      let hasCompleted = false;
+
       for (const sessionId of completedIds) {
         const session = sessions.find((s) => s.id === sessionId);
         if (!session) continue;
 
+        hasCompleted = true;
         const title = session.title || "A session";
 
         toast("Agent finished", {
@@ -94,7 +97,9 @@ export function useBackgroundChatNotifications(
             onClick: () => navigateRef.current(session),
           },
         });
+      }
 
+      if (hasCompleted) {
         playFinishedChatSound();
       }
     }
