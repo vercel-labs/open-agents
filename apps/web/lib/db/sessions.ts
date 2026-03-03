@@ -106,7 +106,7 @@ export async function getSessionsWithUnreadByUserId(
       ), false)`,
       hasStreaming: sql<boolean>`COALESCE(BOOL_OR(${chats.activeStreamId} IS NOT NULL), false)`,
       latestChatId: sql<string | null>`(
-        ARRAY_AGG(${chats.id} ORDER BY ${chats.createdAt} DESC)
+        ARRAY_AGG(${chats.id} ORDER BY ${chats.updatedAt} DESC, ${chats.createdAt} DESC)
         FILTER (WHERE ${chats.id} IS NOT NULL)
       )[1]`,
     })
@@ -168,13 +168,13 @@ export async function getChatById(chatId: string) {
 }
 
 /**
- * Get all chats for a session, ordered by newest first.
- * This ordering is intentional - UI lists show newest at the top.
+ * Get all chats for a session, ordered by most recent activity first.
+ * Activity is tracked on chats.updatedAt and updated when new messages arrive.
  */
 export async function getChatsBySessionId(sessionId: string) {
   return db.query.chats.findMany({
     where: eq(chats.sessionId, sessionId),
-    orderBy: [desc(chats.createdAt)],
+    orderBy: [desc(chats.updatedAt), desc(chats.createdAt)],
   });
 }
 
@@ -216,7 +216,7 @@ export async function getChatSummariesBySessionId(
       and(eq(chatReads.chatId, chats.id), eq(chatReads.userId, userId)),
     )
     .where(eq(chats.sessionId, sessionId))
-    .orderBy(desc(chats.createdAt));
+    .orderBy(desc(chats.updatedAt), desc(chats.createdAt));
 
   return rows;
 }
@@ -228,6 +228,15 @@ export async function updateChat(
   const [chat] = await db
     .update(chats)
     .set({ ...data, updatedAt: new Date() })
+    .where(eq(chats.id, chatId))
+    .returning();
+  return chat;
+}
+
+export async function touchChat(chatId: string, activityAt = new Date()) {
+  const [chat] = await db
+    .update(chats)
+    .set({ updatedAt: activityAt })
     .where(eq(chats.id, chatId))
     .returning();
   return chat;

@@ -22,6 +22,7 @@ import {
   getChatById,
   getSessionById,
   isFirstChatMessage,
+  touchChat,
   updateChat,
   updateChatAssistantActivity,
   updateSession,
@@ -367,6 +368,10 @@ export async function POST(req: Request) {
             role: "user",
             parts: latestMessage,
           });
+
+          if (createdUserMessage) {
+            await touchChat(chatId);
+          }
 
           // Update chat title to first 30 chars of user's first message
           const shouldSetTitle =
