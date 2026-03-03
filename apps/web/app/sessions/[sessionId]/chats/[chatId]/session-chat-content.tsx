@@ -786,8 +786,8 @@ export function SessionChatContent(_props: unknown) {
     updateSessionRepo,
     updateSessionPullRequest,
     checkBranchAndPr,
-    models,
-    modelsLoading,
+    modelOptions,
+    modelOptionsLoading,
   } = useSessionChatContext();
   const mobileActiveChatId = chatInfo.id;
   const handleMobileNewChat = () => {
@@ -1226,6 +1226,11 @@ export function SessionChatContent(_props: unknown) {
       }
     },
     [chatInfo.modelId, updateChatModel],
+  );
+
+  const selectedModelOption = useMemo(
+    () => modelOptions.find((option) => option.id === chatInfo.modelId),
+    [modelOptions, chatInfo.modelId],
   );
 
   const handleFileSelect = (
@@ -2967,15 +2972,14 @@ export function SessionChatContent(_props: unknown) {
                   {renderMessages.length === 0 && chatInfo.modelId ? (
                     <div
                       className={
-                        isChatInFlight || isUpdatingModel
+                        isChatInFlight || isUpdatingModel || modelOptionsLoading
                           ? "pointer-events-none opacity-60"
                           : undefined
                       }
                     >
                       <ModelSelectorCompact
                         value={chatInfo.modelId}
-                        models={models}
-                        isLoading={modelsLoading}
+                        modelOptions={modelOptions}
                         onChange={(modelId) => {
                           void handleModelChange(modelId);
                         }}
@@ -2984,7 +2988,7 @@ export function SessionChatContent(_props: unknown) {
                   ) : (
                     chatInfo.modelId && (
                       <span className="text-xs text-muted-foreground/60">
-                        {chatInfo.modelId}
+                        {selectedModelOption?.label ?? chatInfo.modelId}
                       </span>
                     )
                   )}
