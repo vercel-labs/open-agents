@@ -77,7 +77,7 @@ export function SharedChatContent({
             )}
           </div>
           <span className="shrink-0 text-xs text-muted-foreground">
-            Shared session
+            Shared chat
           </span>
         </div>
       </header>

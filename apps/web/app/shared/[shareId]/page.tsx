@@ -1,58 +1,49 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
-import { getChatMessages, getChatsBySessionId } from "@/lib/db/sessions";
-import { getSessionByShareIdCached } from "@/lib/db/sessions-cache";
+import { getChatById, getChatMessages } from "@/lib/db/sessions";
+import {
+  getSessionByIdCached,
+  getShareByIdCached,
+} from "@/lib/db/sessions-cache";
 import { SharedChatContent } from "./shared-chat-content";
 
 interface SharedPageProps {
   params: Promise<{ shareId: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({
   params,
 }: SharedPageProps): Promise<Metadata> {
   const { shareId } = await params;
-  const session = await getSessionByShareIdCached(shareId);
+  const share = await getShareByIdCached(shareId);
+  const sharedChat = share ? await getChatById(share.chatId) : null;
 
   return {
-    title: session?.title ?? "Shared Session",
-    description: "A shared Open Harness session.",
+    title: sharedChat?.title ?? "Shared Chat",
+    description: "A shared Open Harness chat.",
   };
 }
 
-export default async function SharedPage({
-  params,
-  searchParams,
-}: SharedPageProps) {
+export default async function SharedPage({ params }: SharedPageProps) {
   const { shareId } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const chatIdParam = resolvedSearchParams?.chatId;
-  const requestedChatId =
-    typeof chatIdParam === "string" && chatIdParam.length > 0
-      ? chatIdParam
-      : null;
 
-  const session = await getSessionByShareIdCached(shareId);
+  const share = await getShareByIdCached(shareId);
+  if (!share) {
+    notFound();
+  }
+
+  const sharedChat = await getChatById(share.chatId);
+  if (!sharedChat) {
+    notFound();
+  }
+
+  const session = await getSessionByIdCached(sharedChat.sessionId);
   if (!session) {
     notFound();
   }
 
-  const sessionChats = await getChatsBySessionId(session.id);
-  if (sessionChats.length === 0) {
-    notFound();
-  }
-
-  const targetChat = requestedChatId
-    ? (sessionChats.find((chat) => chat.id === requestedChatId) ?? null)
-    : (sessionChats[0] ?? null);
-
-  if (!targetChat) {
-    notFound();
-  }
-
-  const dbMessages = await getChatMessages(targetChat.id);
+  const dbMessages = await getChatMessages(sharedChat.id);
   const messages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
 
   const { title, repoOwner, repoName, branch, cloneUrl } = session;
@@ -60,7 +51,7 @@ export default async function SharedPage({
   return (
     <SharedChatContent
       session={{ title, repoOwner, repoName, branch, cloneUrl }}
-      chats={[{ chat: targetChat, messages }]}
+      chats={[{ chat: sharedChat, messages }]}
     />
   );
 }
