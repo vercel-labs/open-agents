@@ -19,10 +19,7 @@ function EmptyHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="empty-header"
-      className={cn(
-        "flex flex-col items-center gap-2 text-center",
-        className,
-      )}
+      className={cn("flex flex-col items-center gap-2 text-center", className)}
       {...props}
     />
   );
@@ -59,10 +56,7 @@ function EmptyTitle({ className, ...props }: React.ComponentProps<"h3">) {
   );
 }
 
-function EmptyDescription({
-  className,
-  ...props
-}: React.ComponentProps<"p">) {
+function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="empty-description"
