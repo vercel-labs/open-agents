@@ -20,7 +20,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@ai-sdk/devtools": "^0.0.2",
+    "@ai-sdk/devtools": "^0.0.15",
     "@open-harness/tsconfig": "workspace:*",
     "@types/bun": "latest",
     "@types/node": "^22",
