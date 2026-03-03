@@ -566,17 +566,16 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   }
 
   async readFile(path: string, _encoding: "utf-8"): Promise<string> {
-    const result = await this.sdk.runCommand({
-      cmd: "cat",
-      args: [path],
-      env: this.env,
-    });
+    // Use the SDK's native readFileToBuffer method which handles streaming
+    // internally, avoiding the command output size limit that can occur with
+    // large files when using `cat` via runCommand.
+    const buffer = await this.sdk.readFileToBuffer({ path });
 
-    if (result.exitCode !== 0) {
+    if (buffer === null) {
       throw new Error(`Failed to read file: ${path}`);
     }
 
-    return result.stdout();
+    return buffer.toString("utf-8");
   }
 
   async writeFile(
@@ -590,18 +589,12 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       await this.mkdir(parentDir, { recursive: true });
     }
 
-    // Use base64 encoding to safely handle special characters
-    // Use printf '%s' instead of echo to avoid interpreting backslash sequences
-    const base64Content = Buffer.from(content, "utf-8").toString("base64");
-    const result = await this.sdk.runCommand({
-      cmd: "bash",
-      args: ["-c", `printf '%s' "${base64Content}" | base64 -d > "${path}"`],
-      env: this.env,
-    });
-
-    if (result.exitCode !== 0) {
-      throw new Error(`Failed to write file: ${path}`);
-    }
+    // Use the SDK's native writeFiles method which handles streaming internally,
+    // avoiding the command argument size limit that causes "Expected a stream of
+    // command data" errors with large files when using runCommand + base64.
+    await this.sdk.writeFiles([
+      { path, content: Buffer.from(content, "utf-8") },
+    ]);
   }
 
   async stat(path: string): Promise<SandboxStats> {
