@@ -2958,6 +2958,7 @@ export function SessionChatContent(_props: unknown) {
                 const shouldSetOptimisticTitle =
                   !hadInitialMessages && !hasSetOptimisticTitleRef.current;
                 const trimmedText = messageText.trim();
+                let generatedTitlePromise: Promise<string | null> | null = null;
                 if (shouldSetOptimisticTitle && trimmedText.length > 0) {
                   const nextTitle =
                     trimmedText.length > 30
@@ -2967,27 +2968,48 @@ export function SessionChatContent(_props: unknown) {
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
 
-                  // Fire off AI title generation in parallel — don't await it
-                  void fetch("/api/generate-title", {
+                  // Generate a title in parallel, but only persist it once
+                  // the first message has been sent successfully.
+                  generatedTitlePromise = fetch("/api/generate-title", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ message: trimmedText }),
                   })
-                    .then((res) => res.json())
-                    .then((data: { title?: string }) => {
-                      if (data.title) {
-                        void updateSessionTitle(data.title);
+                    .then(async (res) => {
+                      if (!res.ok) {
+                        return null;
                       }
+
+                      const data = (await res.json().catch(() => null)) as
+                        | { title?: unknown }
+                        | null;
+                      if (typeof data?.title !== "string") {
+                        return null;
+                      }
+
+                      const title = data.title.trim();
+                      return title.length > 0 ? title : null;
                     })
-                    .catch(() => {
-                      // Silently ignore — session keeps its default city name
-                    });
+                    .catch(() => null);
                 }
                 setHasPendingResponse(true);
                 hasSeenAssistantRenderableContentRef.current = false;
                 void setChatStreaming(chatInfo.id, true);
                 try {
                   await sendMessage({ text: messageText, files });
+
+                  if (generatedTitlePromise) {
+                    void generatedTitlePromise
+                      .then((generatedTitle) => {
+                        if (!generatedTitle) {
+                          return;
+                        }
+                        return updateSessionTitle(generatedTitle);
+                      })
+                      .catch(() => {
+                        // Ignore failures and keep the existing session title.
+                      });
+                  }
                 } catch (err) {
                   if (pendingOptimisticTitleChatIdRef.current) {
                     void clearChatTitle(

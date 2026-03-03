@@ -39,21 +39,29 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { message: string };
+  let body: unknown;
   try {
-    body = (await req.json()) as { message: string };
+    body = await req.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.message || typeof body.message !== "string") {
+  const message =
+    typeof body === "object" &&
+    body !== null &&
+    "message" in body &&
+    typeof body.message === "string"
+      ? body.message
+      : null;
+
+  if (!message || message.trim().length === 0) {
     return Response.json(
       { error: "Missing required field: message" },
       { status: 400 },
     );
   }
 
-  const title = await generateSessionTitle(body.message);
+  const title = await generateSessionTitle(message);
 
   if (!title) {
     return Response.json(
