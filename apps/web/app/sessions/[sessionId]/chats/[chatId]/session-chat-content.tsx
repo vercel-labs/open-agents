@@ -749,6 +749,8 @@ export function SessionChatContent(_props: unknown) {
     updateSessionRepo,
     updateSessionPullRequest,
     checkBranchAndPr,
+    models,
+    modelsLoading,
   } = useSessionChatContext();
   const {
     messages,
@@ -2766,6 +2768,8 @@ export function SessionChatContent(_props: unknown) {
                     >
                       <ModelSelectorCompact
                         value={chatInfo.modelId}
+                        models={models}
+                        isLoading={modelsLoading}
                         onChange={(modelId) => {
                           void handleModelChange(modelId);
                         }}

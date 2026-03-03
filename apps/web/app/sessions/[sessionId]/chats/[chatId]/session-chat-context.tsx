@@ -105,6 +105,7 @@ export type SandboxStatusSyncResult = "active" | "no_sandbox" | "unknown";
 interface ModelsResponse {
   models: Array<{
     id: string;
+    name?: string;
     context_window?: number;
   }>;
 }
@@ -232,6 +233,10 @@ type SessionChatContextValue = {
   }) => void;
   /** Check sandbox branch and look for existing PRs, persisting to DB */
   checkBranchAndPr: () => Promise<void>;
+  /** Available models from the gateway */
+  models: ModelsResponse["models"];
+  /** Whether models are still loading */
+  modelsLoading: boolean;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -309,13 +314,14 @@ export function SessionChatProvider({
     !!initialSession.snapshotUrl,
   );
   const hasInitialModels = initialModels.length > 0;
-  const { data: modelsResponse } = useSWR<ModelsResponse>(
+  const { data: modelsResponse, isLoading: modelsLoading } = useSWR<ModelsResponse>(
     "/api/models",
     fetcher,
     {
       fallbackData: hasInitialModels ? { models: initialModels } : undefined,
     },
   );
+  const models = modelsResponse?.models ?? [];
   const contextLimit = useMemo(
     () =>
       resolveContextLimitForModel(
@@ -1152,6 +1158,8 @@ export function SessionChatProvider({
       updateSessionRepo,
       updateSessionPullRequest,
       checkBranchAndPr,
+      models,
+      modelsLoading,
     }),
     [
       sessionRecord,
@@ -1202,6 +1210,8 @@ export function SessionChatProvider({
       updateSessionRepo,
       updateSessionPullRequest,
       checkBranchAndPr,
+      models,
+      modelsLoading,
     ],
   );
 

@@ -16,15 +16,16 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  type AvailableModel,
-  DEFAULT_MODEL_ID,
-  getModelDisplayName,
-} from "@/lib/models";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
+
+interface ModelItem {
+  id: string;
+  name?: string;
+}
 
 interface ModelSelectorCompactProps {
   value: string;
-  models?: AvailableModel[];
+  models?: ModelItem[];
   isLoading?: boolean;
   onChange: (modelId: string) => void;
 }
@@ -46,7 +47,7 @@ export function ModelSelectorCompact({
   const displayText = isLoading
     ? "Loading..."
     : selectedModel
-      ? getModelDisplayName(selectedModel)
+      ? (selectedModel.name ?? selectedModel.id)
       : value;
 
   return (
@@ -81,7 +82,7 @@ export function ModelSelectorCompact({
                     )}
                   />
                   <div className="flex flex-col">
-                    <span>{getModelDisplayName(model)}</span>
+                    <span>{model.name ?? model.id}</span>
                     <span className="text-xs text-muted-foreground">
                       {model.id}
                     </span>
