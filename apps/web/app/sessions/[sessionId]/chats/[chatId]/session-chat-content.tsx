@@ -604,10 +604,10 @@ function ShareDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {shareId ? (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{shareUrl}</span>
+                <span className="min-w-0 truncate">{shareUrl}</span>
               </div>
               <Button
                 variant="outline"
@@ -622,7 +622,7 @@ function ShareDialog({
                 )}
               </Button>
             </div>
-            <DialogFooter className="flex-row justify-between sm:justify-between">
+            <DialogFooter className="sm:justify-between">
               <Button
                 variant="ghost"
                 size="sm"
