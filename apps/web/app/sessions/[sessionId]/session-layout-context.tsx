@@ -16,6 +16,10 @@ type SessionLayoutContextValue = {
     repoOwner: string | null;
     cloneUrl: string | null;
     branch: string | null;
+    status: string;
+    prNumber: number | null;
+    linesAdded: number | null;
+    linesRemoved: number | null;
   };
   chats: SessionChatListItem[];
   chatsLoading: boolean;
