@@ -965,7 +965,6 @@ export function SessionChatContent(_props: unknown) {
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
   const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
-  const hasSetOptimisticTitleRef = useRef(false);
   const markReadRef = useRef<{
     lastAt: number;
     lastChatId: string | null;
@@ -1645,7 +1644,6 @@ export function SessionChatContent(_props: unknown) {
     if (becameError && pendingOptimisticTitleChatIdRef.current) {
       void clearChatTitle(pendingOptimisticTitleChatIdRef.current);
       pendingOptimisticTitleChatIdRef.current = null;
-      hasSetOptimisticTitleRef.current = false;
     }
     if (becameReady) {
       pendingOptimisticTitleChatIdRef.current = null;
@@ -2963,14 +2961,13 @@ export function SessionChatContent(_props: unknown) {
                 const shouldSetOptimisticTitle =
                   isFirstChatInSession &&
                   !hadInitialMessages &&
-                  !hasSetOptimisticTitleRef.current;
+                  messages.length === 0;
                 const trimmedText = messageText.trim();
                 if (shouldSetOptimisticTitle && trimmedText.length > 0) {
                   const nextTitle =
                     trimmedText.length > 30
                       ? `${trimmedText.slice(0, 30)}...`
                       : trimmedText;
-                  hasSetOptimisticTitleRef.current = true;
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
 
@@ -3020,7 +3017,6 @@ export function SessionChatContent(_props: unknown) {
                       pendingOptimisticTitleChatIdRef.current,
                     );
                     pendingOptimisticTitleChatIdRef.current = null;
-                    hasSetOptimisticTitleRef.current = false;
                   }
                   setHasPendingResponse(false);
                   void setChatStreaming(chatInfo.id, false);
