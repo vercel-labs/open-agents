@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  applySessionSummary,
   applySessionSummaryFromChats,
   deriveSessionSummaryFromChats,
+  didSessionSummaryChange,
   type SessionChatListItem,
 } from "./use-session-chats";
 
@@ -48,7 +50,53 @@ describe("deriveSessionSummaryFromChats", () => {
   });
 });
 
-describe("applySessionSummaryFromChats", () => {
+describe("didSessionSummaryChange", () => {
+  test("returns true on first summary sync", () => {
+    expect(
+      didSessionSummaryChange(null, {
+        hasUnread: false,
+        hasStreaming: false,
+        latestChatId: "chat-1",
+      }),
+    ).toBe(true);
+  });
+
+  test("returns false when summary values are unchanged", () => {
+    expect(
+      didSessionSummaryChange(
+        {
+          hasUnread: true,
+          hasStreaming: false,
+          latestChatId: "chat-1",
+        },
+        {
+          hasUnread: true,
+          hasStreaming: false,
+          latestChatId: "chat-1",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  test("returns true when any summary field changes", () => {
+    expect(
+      didSessionSummaryChange(
+        {
+          hasUnread: false,
+          hasStreaming: true,
+          latestChatId: "chat-1",
+        },
+        {
+          hasUnread: true,
+          hasStreaming: false,
+          latestChatId: "chat-2",
+        },
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("applySessionSummary", () => {
   test("updates only the targeted session summary fields", () => {
     const current = {
       sessions: [
@@ -67,9 +115,11 @@ describe("applySessionSummaryFromChats", () => {
       ],
     };
 
-    const next = applySessionSummaryFromChats(current, "session-1", [
-      createChat("chat-new", { hasUnread: true, isStreaming: true }),
-    ]);
+    const next = applySessionSummary(current, "session-1", {
+      hasUnread: true,
+      hasStreaming: true,
+      latestChatId: "chat-new",
+    });
 
     expect(next).toEqual({
       sessions: [
@@ -101,18 +151,52 @@ describe("applySessionSummaryFromChats", () => {
       ],
     };
 
-    const next = applySessionSummaryFromChats(current, "session-1", [
-      createChat("chat-1", { hasUnread: true, isStreaming: false }),
-    ]);
+    const next = applySessionSummary(current, "session-1", {
+      hasUnread: true,
+      hasStreaming: false,
+      latestChatId: "chat-1",
+    });
 
     expect(next).toBe(current);
   });
 
   test("passes through undefined session data", () => {
     expect(
-      applySessionSummaryFromChats(undefined, "session-1", [
-        createChat("chat-1", { hasUnread: true, isStreaming: true }),
-      ]),
+      applySessionSummary(undefined, "session-1", {
+        hasUnread: true,
+        hasStreaming: true,
+        latestChatId: "chat-1",
+      }),
     ).toBeUndefined();
+  });
+});
+
+describe("applySessionSummaryFromChats", () => {
+  test("derives summary from chats before applying updates", () => {
+    const current = {
+      sessions: [
+        {
+          id: "session-1",
+          hasUnread: false,
+          hasStreaming: false,
+          latestChatId: null,
+        },
+      ],
+    };
+
+    const next = applySessionSummaryFromChats(current, "session-1", [
+      createChat("chat-new", { hasUnread: true, isStreaming: true }),
+    ]);
+
+    expect(next).toEqual({
+      sessions: [
+        {
+          id: "session-1",
+          hasUnread: true,
+          hasStreaming: true,
+          latestChatId: "chat-new",
+        },
+      ],
+    });
   });
 });

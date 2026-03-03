@@ -109,13 +109,37 @@ function overlaysEqual(
   );
 }
 
-export function deriveSessionSummaryFromChats(
-  nextChats: SessionChatListItem[],
-): {
+export type SessionSummary = {
   hasUnread: boolean;
   hasStreaming: boolean;
   latestChatId: string | null;
-} {
+};
+
+function areSessionSummariesEqual(
+  left: SessionSummary,
+  right: SessionSummary,
+): boolean {
+  return (
+    left.hasUnread === right.hasUnread &&
+    left.hasStreaming === right.hasStreaming &&
+    left.latestChatId === right.latestChatId
+  );
+}
+
+export function didSessionSummaryChange(
+  previous: SessionSummary | null,
+  next: SessionSummary,
+): boolean {
+  if (!previous) {
+    return true;
+  }
+
+  return !areSessionSummariesEqual(previous, next);
+}
+
+export function deriveSessionSummaryFromChats(
+  nextChats: SessionChatListItem[],
+): SessionSummary {
   const latestChat = nextChats.length > 0 ? nextChats[0] : null;
 
   return {
@@ -125,16 +149,14 @@ export function deriveSessionSummaryFromChats(
   };
 }
 
-export function applySessionSummaryFromChats(
+export function applySessionSummary(
   current: SessionsResponse | undefined,
   sessionId: string,
-  nextChats: SessionChatListItem[],
+  summary: SessionSummary,
 ): SessionsResponse | undefined {
   if (!current) {
     return current;
   }
-
-  const summary = deriveSessionSummaryFromChats(nextChats);
 
   let changed = false;
   const sessions = current.sessions.map((session) => {
@@ -158,6 +180,18 @@ export function applySessionSummaryFromChats(
   });
 
   return changed ? { ...current, sessions } : current;
+}
+
+export function applySessionSummaryFromChats(
+  current: SessionsResponse | undefined,
+  sessionId: string,
+  nextChats: SessionChatListItem[],
+): SessionsResponse | undefined {
+  return applySessionSummary(
+    current,
+    sessionId,
+    deriveSessionSummaryFromChats(nextChats),
+  );
 }
 
 export function useSessionChats(
@@ -310,52 +344,61 @@ export function useSessionChats(
     lastNonEmptyChatsRef.current.chats.length > 0
       ? lastNonEmptyChatsRef.current.chats
       : mergedChats;
-  const sessionStreamingStateRef = useRef<{
+  const summarySyncStateRef = useRef<{
     sessionId: string | null;
-    hasStreaming: boolean;
+    summary: SessionSummary | null;
   }>({
     sessionId: null,
-    hasStreaming: false,
+    summary: null,
   });
 
-  const syncSessionSummaryFromChats = useCallback(
-    (nextChats: SessionChatListItem[]) => {
-      if (!sessionId) {
-        return;
-      }
-
-      void mutateSessionSummaries<SessionsResponse>(
-        "/api/sessions",
-        (current) =>
-          applySessionSummaryFromChats(current, sessionId, nextChats),
-        { revalidate: false },
-      );
-    },
-    [mutateSessionSummaries, sessionId],
-  );
+  const summaryHasUnread = chats.some((chat) => chat.hasUnread);
+  const summaryHasStreaming = chats.some((chat) => chat.isStreaming);
+  const summaryLatestChatId = chats[0]?.id ?? null;
 
   useEffect(() => {
     if (!sessionId) {
       return;
     }
 
-    const summary = deriveSessionSummaryFromChats(chats);
-    const previousStreamingState = sessionStreamingStateRef.current;
-    const wasStreamingInSession =
-      previousStreamingState.sessionId === sessionId &&
-      previousStreamingState.hasStreaming;
-
-    sessionStreamingStateRef.current = {
-      sessionId,
-      hasStreaming: summary.hasStreaming,
+    const summary: SessionSummary = {
+      hasUnread: summaryHasUnread,
+      hasStreaming: summaryHasStreaming,
+      latestChatId: summaryLatestChatId,
     };
 
-    syncSessionSummaryFromChats(chats);
+    const previousSummary =
+      summarySyncStateRef.current.sessionId === sessionId
+        ? summarySyncStateRef.current.summary
+        : null;
+
+    if (!didSessionSummaryChange(previousSummary, summary)) {
+      return;
+    }
+
+    const wasStreamingInSession = previousSummary?.hasStreaming ?? false;
+
+    summarySyncStateRef.current = {
+      sessionId,
+      summary,
+    };
+
+    void mutateSessionSummaries<SessionsResponse>(
+      "/api/sessions",
+      (current) => applySessionSummary(current, sessionId, summary),
+      { revalidate: false },
+    );
 
     if (wasStreamingInSession && !summary.hasStreaming) {
       void mutateSessionSummaries("/api/sessions");
     }
-  }, [chats, mutateSessionSummaries, sessionId, syncSessionSummaryFromChats]);
+  }, [
+    sessionId,
+    summaryHasUnread,
+    summaryHasStreaming,
+    summaryLatestChatId,
+    mutateSessionSummaries,
+  ]);
 
   useEffect(() => {
     if (!data || !optimisticOverlay || !sessionId) {
