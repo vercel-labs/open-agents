@@ -1077,11 +1077,22 @@ export function SessionChatProvider({
         throw new Error(data.error ?? "Failed to update session title");
       }
 
-      if (data.session) {
-        setSessionRecord(data.session);
-      }
+      const nextSession = data.session ?? { ...sessionRecord, title };
+      setSessionRecord(nextSession);
+      await mutate<SessionsResponse>(
+        "/api/sessions",
+        (current) =>
+          current
+            ? {
+                sessions: current.sessions.map((s) =>
+                  s.id === sessionRecord.id ? { ...s, ...nextSession } : s,
+                ),
+              }
+            : current,
+        { revalidate: false },
+      );
     },
-    [sessionRecord.id],
+    [sessionRecord, mutate],
   );
 
   const updateChatModel = useCallback(
