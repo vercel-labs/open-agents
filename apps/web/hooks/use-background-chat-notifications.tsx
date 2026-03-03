@@ -6,6 +6,17 @@ import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 type StreamingItem = { id: string; streaming: boolean };
 
+const FINISHED_CHAT_SOUND_PATH = "/Submarine.aiff";
+
+function playFinishedChatSound() {
+  if (typeof window === "undefined" || typeof window.Audio === "undefined") {
+    return;
+  }
+
+  const audio = new window.Audio(FINISHED_CHAT_SOUND_PATH);
+  audio.play().catch(() => undefined);
+}
+
 /**
  * Pure detection logic: given the previous set of streaming IDs and the current
  * list of items, return the IDs that just stopped streaming and are not the
@@ -83,6 +94,8 @@ export function useBackgroundChatNotifications(
             onClick: () => navigateRef.current(session),
           },
         });
+
+        playFinishedChatSound();
       }
     }
 
