@@ -665,6 +665,7 @@ export function SessionChatContent(_props: unknown) {
   const router = useRouter();
   const {
     chats: mobileChats,
+    chatsLoading: mobileChatsLoading,
     createChat: mobileCreateChat,
     switchChat: mobileSwitchChat,
   } = useSessionLayout();
@@ -2955,8 +2956,14 @@ export function SessionChatContent(_props: unknown) {
                 setInput("");
                 clearImages();
 
+                const isFirstChatInSession =
+                  !mobileChatsLoading &&
+                  mobileChats.length === 1 &&
+                  mobileChats[0]?.id === chatInfo.id;
                 const shouldSetOptimisticTitle =
-                  !hadInitialMessages && !hasSetOptimisticTitleRef.current;
+                  isFirstChatInSession &&
+                  !hadInitialMessages &&
+                  !hasSetOptimisticTitleRef.current;
                 const trimmedText = messageText.trim();
                 let generatedTitlePromise: Promise<string | null> | null = null;
                 if (shouldSetOptimisticTitle && trimmedText.length > 0) {
