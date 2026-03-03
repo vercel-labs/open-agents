@@ -1,4 +1,5 @@
 import { gateway, generateText } from "ai";
+import { z } from "zod";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 /**
@@ -33,6 +34,10 @@ ${trimmed}`,
   }
 }
 
+const generateTitleRequestSchema = z.object({
+  message: z.string().trim().min(1),
+});
+
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
@@ -46,20 +51,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const message =
-    typeof body === "object" &&
-    body !== null &&
-    "message" in body &&
-    typeof body.message === "string"
-      ? body.message
-      : null;
+  const parsedBody = generateTitleRequestSchema.safeParse(body);
 
-  if (!message || message.trim().length === 0) {
+  if (!parsedBody.success) {
     return Response.json(
       { error: "Missing required field: message" },
       { status: 400 },
     );
   }
+
+  const { message } = parsedBody.data;
 
   const title = await generateSessionTitle(message);
 
