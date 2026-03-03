@@ -16,10 +16,12 @@ import {
 } from "@/hooks/use-session-chats";
 import { useSessions, type SessionWithUnread } from "@/hooks/use-sessions";
 import type { Session } from "@/lib/db/schema";
+import type { Session as AuthSession } from "@/lib/session/types";
 import { SessionLayoutContext } from "./session-layout-context";
 
 type SessionLayoutShellProps = {
   session: Session;
+  currentUser: AuthSession["user"];
   initialChatsData?: {
     defaultModelId: string | null;
     chats: SessionChatListItem[];
@@ -32,6 +34,7 @@ type SessionLayoutShellProps = {
 
 export function SessionLayoutShell({
   session: initialSession,
+  currentUser,
   initialChatsData,
   initialSessionsData,
   children,
@@ -133,6 +136,7 @@ export function SessionLayoutShell({
       onRenameSession={handleRenameSession}
       createSession={createSession}
       lastRepo={lastRepo}
+      initialUser={currentUser}
     />
   );
 

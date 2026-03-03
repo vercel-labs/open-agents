@@ -65,6 +65,7 @@ export default async function SessionLayout({
   return (
     <SessionLayoutShell
       session={sessionRecord}
+      currentUser={session.user}
       initialChatsData={initialChatsData}
       initialSessionsData={initialSessionsData}
     >

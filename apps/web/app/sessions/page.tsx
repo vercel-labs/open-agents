@@ -24,6 +24,7 @@ export default async function SessionsPage() {
   return (
     <SessionsIndexShell
       lastRepo={lastRepo}
+      currentUser={session.user}
       initialSessionsData={{ sessions }}
     />
   );
