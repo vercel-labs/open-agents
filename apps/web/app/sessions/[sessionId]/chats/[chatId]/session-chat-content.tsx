@@ -762,6 +762,7 @@ export function SessionChatContent(_props: unknown) {
     archiveSession,
     unarchiveSession,
     updateChatModel,
+    updateSessionTitle,
     hadInitialMessages,
     diff,
     refreshDiff,
@@ -2965,6 +2966,22 @@ export function SessionChatContent(_props: unknown) {
                   hasSetOptimisticTitleRef.current = true;
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
+
+                  // Fire off AI title generation in parallel — don't await it
+                  void fetch("/api/generate-title", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: trimmedText }),
+                  })
+                    .then((res) => res.json())
+                    .then((data: { title?: string }) => {
+                      if (data.title) {
+                        void updateSessionTitle(data.title);
+                      }
+                    })
+                    .catch(() => {
+                      // Silently ignore — session keeps its default city name
+                    });
                 }
                 setHasPendingResponse(true);
                 hasSeenAssistantRenderableContentRef.current = false;
