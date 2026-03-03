@@ -9,6 +9,7 @@ interface UpdatePreferencesRequest {
   defaultModelId?: string;
   defaultSubagentModelId?: string | null;
   defaultSandboxType?: SandboxType;
+  autoCommitPush?: boolean;
 }
 
 export async function GET() {
@@ -40,6 +41,16 @@ export async function PATCH(req: Request) {
     if (!validTypes.includes(body.defaultSandboxType)) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
     }
+  }
+
+  if (
+    body.autoCommitPush !== undefined &&
+    typeof body.autoCommitPush !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid autoCommitPush value" },
+      { status: 400 },
+    );
   }
 
   try {

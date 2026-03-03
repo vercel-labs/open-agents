@@ -299,6 +299,7 @@ export const userPreferences = pgTable("user_preferences", {
   defaultSandboxType: text("default_sandbox_type", {
     enum: ["hybrid", "vercel", "just-bash"],
   }).default("vercel"),
+  autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

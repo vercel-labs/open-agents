@@ -8,6 +8,7 @@ export interface UserPreferences {
   defaultModelId: string;
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
+  autoCommitPush: boolean;
 }
 
 interface PreferencesResponse {

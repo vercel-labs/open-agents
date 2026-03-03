@@ -87,13 +87,19 @@ import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
+import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
   isChatInFlight as isChatInFlightStatus,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
+import {
+  commitAndPushSessionChanges,
+  fetchRepoBranches,
+} from "@/lib/git-flow-client";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
@@ -810,6 +816,7 @@ export function SessionChatContent(_props: unknown) {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const { preferences } = useUserPreferences();
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -977,6 +984,8 @@ export function SessionChatContent(_props: unknown) {
   const inFlightStartedAtRef = useRef<number | null>(null);
   const lastStreamRecoveryAtRef = useRef(0);
   const streamRecoveryProbeInFlightRef = useRef(false);
+  const autoCommitInFlightRef = useRef(false);
+  const cachedDefaultBaseBranchRef = useRef<string | null>(null);
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -995,6 +1004,99 @@ export function SessionChatContent(_props: unknown) {
       }
     },
     [syncSandboxStatus],
+  );
+
+  const resolveDefaultBaseBranch = useCallback(async (): Promise<string> => {
+    if (cachedDefaultBaseBranchRef.current) {
+      return cachedDefaultBaseBranchRef.current;
+    }
+
+    if (!session.repoOwner || !session.repoName) {
+      return "main";
+    }
+
+    try {
+      const branchData = await fetchRepoBranches(
+        session.repoOwner,
+        session.repoName,
+      );
+      cachedDefaultBaseBranchRef.current = branchData.defaultBranch;
+      return branchData.defaultBranch;
+    } catch (error) {
+      console.error("Failed to resolve default base branch:", error);
+      return "main";
+    }
+  }, [session.repoName, session.repoOwner]);
+
+  const maybeAutoCommitPush = useCallback(
+    async (
+      latestStatus?: SessionGitStatus | null,
+    ): Promise<{ ran: boolean }> => {
+      if (!preferences?.autoCommitPush) {
+        return { ran: false };
+      }
+
+      if (
+        !session.cloneUrl ||
+        !session.repoOwner ||
+        !session.repoName ||
+        !sandboxInfo ||
+        autoCommitInFlightRef.current
+      ) {
+        return { ran: false };
+      }
+
+      const statusSnapshot = latestStatus ?? gitStatus;
+      const hasPendingGitWork =
+        (statusSnapshot?.hasUncommittedChanges ?? false) ||
+        (statusSnapshot?.hasUnpushedCommits ?? false);
+
+      if (!hasPendingGitWork) {
+        return { ran: false };
+      }
+
+      autoCommitInFlightRef.current = true;
+      try {
+        const baseBranch = await resolveDefaultBaseBranch();
+        const branchName =
+          statusSnapshot?.branch ?? session.branch ?? baseBranch ?? "HEAD";
+
+        await commitAndPushSessionChanges({
+          sessionId: session.id,
+          sessionTitle: session.title,
+          baseBranch,
+          branchName,
+        });
+
+        await refreshGitStatus().catch(() => undefined);
+        await refreshDiff().catch(() => undefined);
+        await refreshFiles().catch(() => undefined);
+        await checkBranchAndPr();
+
+        return { ran: true };
+      } catch (error) {
+        console.error("Failed to auto commit and push changes:", error);
+        return { ran: false };
+      } finally {
+        autoCommitInFlightRef.current = false;
+      }
+    },
+    [
+      preferences?.autoCommitPush,
+      session.cloneUrl,
+      session.repoOwner,
+      session.repoName,
+      session.branch,
+      session.id,
+      session.title,
+      sandboxInfo,
+      gitStatus,
+      resolveDefaultBaseBranch,
+      refreshGitStatus,
+      refreshDiff,
+      refreshFiles,
+      checkBranchAndPr,
+    ],
   );
 
   const requestMarkChatRead = useCallback(
@@ -1050,6 +1152,10 @@ export function SessionChatContent(_props: unknown) {
   useEffect(() => {
     hasRequestedSessionTitleGenerationRef.current = false;
   }, [session.id]);
+
+  useEffect(() => {
+    cachedDefaultBaseBranchRef.current = null;
+  }, [session.repoOwner, session.repoName]);
 
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
@@ -1657,12 +1763,19 @@ export function SessionChatContent(_props: unknown) {
       status === "ready" &&
       isMountedRef.current
     ) {
-      void requestStatusSync("force");
-      void refreshGitStatus().catch(() => {});
-      void requestMarkChatRead("force");
-      void refreshChats();
-      // After a message completes, check branch and detect existing PRs
-      void checkBranchAndPr();
+      void (async () => {
+        await requestStatusSync("force");
+        const latestGitStatus = await refreshGitStatus().catch(() => undefined);
+        const autoCommitResult = await maybeAutoCommitPush(latestGitStatus);
+
+        if (!autoCommitResult.ran) {
+          // After a message completes, check branch and detect existing PRs
+          await checkBranchAndPr();
+        }
+
+        await requestMarkChatRead("force");
+        await refreshChats();
+      })();
     }
   }, [
     status,
@@ -1674,6 +1787,7 @@ export function SessionChatContent(_props: unknown) {
     requestMarkChatRead,
     refreshChats,
     checkBranchAndPr,
+    maybeAutoCommitPush,
     router,
   ]);
 
