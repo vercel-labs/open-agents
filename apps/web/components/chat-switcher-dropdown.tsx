@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Plus } from "lucide-react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSessionLayout } from "@/app/sessions/[sessionId]/session-layout-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function ChatSwitcherDropdown() {
-  const params = useParams<{ chatId?: string }>();
+  const params = useParams<{ chatId?: string; sessionId?: string }>();
+  const router = useRouter();
   const activeChatId = params.chatId ?? "";
   const { chats, createChat, switchChat } = useSessionLayout();
 
@@ -21,8 +22,21 @@ export function ChatSwitcherDropdown() {
   const label = activeChat?.title || "Chat";
 
   const handleNewChat = () => {
-    const { chat } = createChat();
-    switchChat(chat.id);
+    const previousChatId = activeChatId;
+    try {
+      const { chat, persisted } = createChat();
+      switchChat(chat.id);
+      void persisted.catch((err) => {
+        console.error("Failed to create chat:", err);
+        if (previousChatId && params.sessionId) {
+          router.replace(
+            `/sessions/${params.sessionId}/chats/${previousChatId}`,
+          );
+        }
+      });
+    } catch (err) {
+      console.error("Failed to create chat:", err);
+    }
   };
 
   return (
