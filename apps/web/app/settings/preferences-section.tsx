@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModelCombobox } from "@/components/model-combobox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
@@ -190,22 +191,18 @@ export function PreferencesSection() {
 
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
-          <Select
+          <ModelCombobox
             value={preferences?.defaultModelId ?? DEFAULT_MODEL_ID}
-            onValueChange={handleModelChange}
+            items={models.map((model) => ({
+              id: model.id,
+              label: getModelDisplayName(model),
+            }))}
+            placeholder="Select a model"
+            searchPlaceholder="Search models..."
+            emptyText={modelsLoading ? "Loading..." : "No models found."}
             disabled={isSaving || modelsLoading}
-          >
-            <SelectTrigger id="model" className="w-full max-w-xs">
-              <SelectValue placeholder="Select a model" />
-            </SelectTrigger>
-            <SelectContent>
-              {models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {getModelDisplayName(model)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={handleModelChange}
+          />
           <p className="text-xs text-muted-foreground">
             The AI model used for new chats.
           </p>
@@ -213,23 +210,21 @@ export function PreferencesSection() {
 
         <div className="grid gap-2">
           <Label htmlFor="subagent-model">Subagent Model</Label>
-          <Select
+          <ModelCombobox
             value={preferences?.defaultSubagentModelId ?? "auto"}
-            onValueChange={handleSubagentModelChange}
+            items={[
+              { id: "auto", label: "Same as main model" },
+              ...models.map((model) => ({
+                id: model.id,
+                label: getModelDisplayName(model),
+              })),
+            ]}
+            placeholder="Select a model"
+            searchPlaceholder="Search models..."
+            emptyText={modelsLoading ? "Loading..." : "No models found."}
             disabled={isSaving || modelsLoading}
-          >
-            <SelectTrigger id="subagent-model" className="w-full max-w-xs">
-              <SelectValue placeholder="Select a model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto">Same as main model</SelectItem>
-              {models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {getModelDisplayName(model)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={handleSubagentModelChange}
+          />
           <p className="text-xs text-muted-foreground">
             The AI model used for explorer and executor subagents. Defaults to
             the main model if not set.
