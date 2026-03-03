@@ -397,15 +397,12 @@ export async function POST(req: Request) {
               // in the session. Uses after() so it doesn't block the response.
               after(async () => {
                 try {
-                  const sessionChats =
-                    await getChatsBySessionId(sessionId);
+                  const sessionChats = await getChatsBySessionId(sessionId);
                   const isFirstSessionChat =
-                    sessionChats.length === 1 &&
-                    sessionChats[0]?.id === chatId;
+                    sessionChats.length === 1 && sessionChats[0]?.id === chatId;
                   if (!isFirstSessionChat) return;
 
-                  const aiTitle =
-                    await generateSessionTitle(textContent);
+                  const aiTitle = await generateSessionTitle(textContent);
                   if (aiTitle) {
                     await updateSession(sessionId, { title: aiTitle });
                   }
