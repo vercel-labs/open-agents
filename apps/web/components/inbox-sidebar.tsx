@@ -2,7 +2,6 @@
 
 import {
   Archive,
-  ArrowLeft,
   EllipsisVertical,
   GitMerge,
   Pencil,
@@ -389,8 +388,7 @@ export function InboxSidebar({
     <>
       <div className="border-b border-border p-3">
         <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-            <ArrowLeft className="h-4 w-4" />
+          <div className="flex items-center px-2 py-1.5 text-sm text-primary">
             <span>Sessions</span>
           </div>
           <Button
