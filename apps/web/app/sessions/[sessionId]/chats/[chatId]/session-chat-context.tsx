@@ -314,13 +314,10 @@ export function SessionChatProvider({
     !!initialSession.snapshotUrl,
   );
   const hasInitialModels = initialModels.length > 0;
-  const { data: modelsResponse, isLoading: modelsLoading } = useSWR<ModelsResponse>(
-    "/api/models",
-    fetcher,
-    {
+  const { data: modelsResponse, isLoading: modelsLoading } =
+    useSWR<ModelsResponse>("/api/models", fetcher, {
       fallbackData: hasInitialModels ? { models: initialModels } : undefined,
-    },
-  );
+    });
   const models = modelsResponse?.models ?? [];
   const contextLimit = useMemo(
     () =>
