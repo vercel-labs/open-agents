@@ -1,11 +1,19 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { MessageSquarePlus, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { InboxSidebar } from "@/components/inbox-sidebar";
 import { NewSessionDialog } from "@/components/new-session-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   Sidebar,
   SidebarContent,
@@ -98,15 +106,25 @@ export function SessionsIndexShell({
             <SidebarTrigger className="shrink-0" />
           </div>
         </header>
-        <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <Button
-            size="lg"
-            onClick={() => setNewSessionOpen(true)}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Session
-          </Button>
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MessageSquarePlus />
+              </EmptyMedia>
+              <EmptyTitle>No Sessions Yet</EmptyTitle>
+              <EmptyDescription>
+                You haven&apos;t started any sessions yet. Get started by
+                creating your first session.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={() => setNewSessionOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New Session
+              </Button>
+            </EmptyContent>
+          </Empty>
         </div>
       </SidebarInset>
 
