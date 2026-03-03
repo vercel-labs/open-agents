@@ -40,6 +40,14 @@ export function useSessions(options?: {
     {
       fallbackData: options?.initialData,
       revalidateOnMount: options?.initialData ? false : undefined,
+      refreshInterval: (latestData) => {
+        const hasStreamingSession = latestData?.sessions.some(
+          (s) => s.hasStreaming,
+        );
+        // Poll quickly while any session is streaming so we detect
+        // completion promptly for background-chat notifications.
+        return hasStreamingSession ? 3_000 : 0;
+      },
     },
   );
   const { mutate: globalMutate } = useSWRConfig();
