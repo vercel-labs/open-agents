@@ -6,42 +6,14 @@ import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 type StreamingItem = { id: string; streaming: boolean };
 
-const FINISHED_CHAT_SOUND_SOURCES = [
-  { path: "/Submarine.wav", mimeType: "audio/wav" },
-  { path: "/Submarine.aiff", mimeType: "audio/aiff" },
-] as const;
-
-let supportedFinishedChatSoundPath: string | null | undefined;
-
-function getSupportedFinishedChatSoundPath(): string | null {
-  if (supportedFinishedChatSoundPath !== undefined) {
-    return supportedFinishedChatSoundPath;
-  }
-
-  if (typeof window === "undefined" || typeof window.Audio === "undefined") {
-    supportedFinishedChatSoundPath = null;
-    return supportedFinishedChatSoundPath;
-  }
-
-  const audioProbe = window.document.createElement("audio");
-  for (const source of FINISHED_CHAT_SOUND_SOURCES) {
-    if (audioProbe.canPlayType(source.mimeType) !== "") {
-      supportedFinishedChatSoundPath = source.path;
-      return supportedFinishedChatSoundPath;
-    }
-  }
-
-  supportedFinishedChatSoundPath = null;
-  return supportedFinishedChatSoundPath;
-}
+const FINISHED_CHAT_SOUND_PATH = "/Submarine.wav";
 
 function playFinishedChatSound() {
-  const soundPath = getSupportedFinishedChatSoundPath();
-  if (!soundPath || typeof window === "undefined" || typeof window.Audio === "undefined") {
+  if (typeof window === "undefined" || typeof window.Audio === "undefined") {
     return;
   }
 
-  const audio = new window.Audio(soundPath);
+  const audio = new window.Audio(FINISHED_CHAT_SOUND_PATH);
   audio.play().catch(() => undefined);
 }
 
