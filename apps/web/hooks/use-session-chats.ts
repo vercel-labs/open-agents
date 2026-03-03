@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import type { Chat } from "@/lib/db/schema";
 import { fetcherNoStore } from "@/lib/swr";
+import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 export type SessionChatListItem = Chat & {
   hasUnread: boolean;
@@ -138,6 +139,8 @@ export function useSessionChats(
       scheduleOverlayCleanup(sessionId);
     };
   }, [sessionId]);
+
+  const { mutate: globalMutate } = useSWRConfig();
 
   const { data, error, isLoading, mutate } = useSWR<ChatsResponse>(
     sessionId ? `/api/sessions/${sessionId}/chats` : null,
@@ -538,6 +541,33 @@ export function useSessionChats(
       },
       { revalidate: false },
     );
+
+    // Optimistically update the sessions list so the inbox sidebar
+    // indicator reflects the streaming state immediately.
+    if (sessionId) {
+      void globalMutate<{ sessions: SessionWithUnread[] }>(
+        "/api/sessions",
+        (current) => {
+          if (!current) return current;
+          return {
+            sessions: current.sessions.map((s) => {
+              if (s.id !== sessionId) return s;
+              // When starting, mark the session as streaming.
+              // When stopping, re-derive from the latest chat list.
+              if (isStreaming) {
+                return { ...s, hasStreaming: true };
+              }
+              // Check if any *other* chat in this session is still streaming.
+              const otherStillStreaming = (data?.chats ?? []).some(
+                (c) => c.id !== chatId && c.isStreaming,
+              );
+              return { ...s, hasStreaming: otherStillStreaming };
+            }),
+          };
+        },
+        { revalidate: false },
+      );
+    }
   };
 
   const setChatTitle = (chatId: string, title: string) => {
