@@ -4,6 +4,38 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 
+type StreamingItem = { id: string; streaming: boolean };
+
+/**
+ * Pure detection logic: given the previous set of streaming IDs and the current
+ * list of items, return the IDs that just stopped streaming and are not the
+ * active item.
+ */
+export function detectCompletedSessions(
+  prevStreamingIds: Set<string>,
+  items: StreamingItem[],
+  activeId: string | null,
+): string[] {
+  const currentlyStreaming = new Set(
+    items.filter((s) => s.streaming).map((s) => s.id),
+  );
+
+  const completed: string[] = [];
+  for (const id of prevStreamingIds) {
+    if (!currentlyStreaming.has(id) && id !== activeId) {
+      completed.push(id);
+    }
+  }
+  return completed;
+}
+
+/**
+ * Build the set of currently-streaming IDs from an items list.
+ */
+export function getStreamingIds(items: StreamingItem[]): Set<string> {
+  return new Set(items.filter((s) => s.streaming).map((s) => s.id));
+}
+
 /**
  * Watches the sessions list for streaming→complete transitions on non-active
  * sessions and fires a sonner toast so the user knows a background task finished.
@@ -24,38 +56,36 @@ export function useBackgroundChatNotifications(
   navigateRef.current = onNavigateToSession;
 
   useEffect(() => {
-    const currentlyStreaming = new Set(
-      sessions.filter((s) => s.hasStreaming).map((s) => s.id),
-    );
+    const items = sessions.map((s) => ({
+      id: s.id,
+      streaming: s.hasStreaming,
+    }));
 
     if (hasMountedRef.current) {
-      const prevStreaming = prevStreamingRef.current;
+      const completedIds = detectCompletedSessions(
+        prevStreamingRef.current,
+        items,
+        activeSessionId,
+      );
 
-      for (const sessionId of prevStreaming) {
-        // Session was streaming last tick but is no longer streaming,
-        // and it is not the session the user is currently viewing.
-        if (
-          !currentlyStreaming.has(sessionId) &&
-          sessionId !== activeSessionId
-        ) {
-          const session = sessions.find((s) => s.id === sessionId);
-          if (!session) continue;
+      for (const sessionId of completedIds) {
+        const session = sessions.find((s) => s.id === sessionId);
+        if (!session) continue;
 
-          const title = session.title || "A session";
+        const title = session.title || "A session";
 
-          toast(`Agent finished: ${title}`, {
-            position: "top-center",
-            duration: 8000,
-            action: {
-              label: "Go to chat",
-              onClick: () => navigateRef.current(session),
-            },
-          });
-        }
+        toast(`Agent finished: ${title}`, {
+          position: "top-center",
+          duration: 8000,
+          action: {
+            label: "Go to chat",
+            onClick: () => navigateRef.current(session),
+          },
+        });
       }
     }
 
     hasMountedRef.current = true;
-    prevStreamingRef.current = currentlyStreaming;
+    prevStreamingRef.current = getStreamingIds(items);
   }, [sessions, activeSessionId]);
 }
