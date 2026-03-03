@@ -62,7 +62,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ChatSwitcherDropdown } from "@/components/chat-switcher-dropdown";
 import {
   Drawer,
   DrawerContent,
@@ -2131,9 +2130,6 @@ export function SessionChatContent(_props: unknown) {
             >
               {sandboxUiStatus.label}
             </span>
-          </div>
-          <div className="absolute left-1/2 hidden -translate-x-1/2 xl:block">
-            <ChatSwitcherDropdown />
           </div>
           {/* Right-side actions */}
           <div className="flex items-center gap-1 xl:gap-2">

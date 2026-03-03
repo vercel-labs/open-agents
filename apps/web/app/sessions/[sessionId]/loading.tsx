@@ -1,9 +1,8 @@
 "use client";
 
 import {
-  Archive,
+  EllipsisVertical,
   ExternalLink,
-  GitCompare,
   GitPullRequest,
   Loader2,
 } from "lucide-react";
@@ -17,8 +16,6 @@ export default function Loading() {
 
   const hasRepo = Boolean(session.repoName);
   const hasExistingPr = Boolean(session.prNumber);
-  const hasDiffStats =
-    (session.linesAdded ?? 0) > 0 || (session.linesRemoved ?? 0) > 0;
 
   return (
     <>
@@ -66,52 +63,34 @@ export default function Loading() {
 
           {/* Right-side actions */}
           <div className="flex items-center gap-1 xl:gap-2">
-            {/* Desktop action buttons */}
-            <div className="hidden items-center gap-2 xl:flex">
-              <Button variant="ghost" size="sm" disabled>
-                <Archive className="h-4 w-4 mr-2" />
-                <span>Archive</span>
-              </Button>
-              <Button variant="ghost" size="sm" disabled>
-                <GitCompare className="h-4 w-4 mr-2" />
-                <span>Diff</span>
-                {hasDiffStats && (
-                  <span className="ml-2 text-xs">
-                    <span className="text-green-500">
-                      +{session.linesAdded}
-                    </span>{" "}
-                    <span className="text-red-400">
-                      -{session.linesRemoved}
-                    </span>
-                  </span>
-                )}
-              </Button>
+            <div className="flex items-center gap-1">
               {hasRepo &&
                 (hasExistingPr ? (
-                  <Button variant="outline" size="sm" disabled>
-                    <GitPullRequest className="h-4 w-4 mr-2" />
-                    <span>View PR #{session.prNumber}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    disabled
+                  >
+                    <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                    <span className="hidden xl:inline">
+                      View PR #{session.prNumber}
+                    </span>
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" disabled>
-                    <GitPullRequest className="h-4 w-4 mr-2" />
-                    <span>Create PR</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    disabled
+                  >
+                    <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                    <span className="hidden xl:inline">Create PR</span>
                   </Button>
                 ))}
-            </div>
-
-            {/* Mobile: show primary git action */}
-            <div className="flex items-center gap-1 xl:hidden">
-              {hasRepo && hasExistingPr && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled
-                >
-                  <GitPullRequest className="h-4 w-4" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
