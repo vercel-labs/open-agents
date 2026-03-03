@@ -965,6 +965,7 @@ export function SessionChatContent(_props: unknown) {
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
   const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
+  const hasRequestedSessionTitleGenerationRef = useRef(false);
   const markReadRef = useRef<{
     lastAt: number;
     lastChatId: string | null;
@@ -1046,6 +1047,10 @@ export function SessionChatContent(_props: unknown) {
   useEffect(() => {
     requestMarkChatReadRef.current = requestMarkChatRead;
   }, [requestMarkChatRead]);
+
+  useEffect(() => {
+    hasRequestedSessionTitleGenerationRef.current = false;
+  }, [session.id]);
 
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
@@ -2963,6 +2968,10 @@ export function SessionChatContent(_props: unknown) {
                   !hadInitialMessages &&
                   messages.length === 0;
                 const trimmedText = messageText.trim();
+                const shouldGenerateSessionTitle =
+                  shouldSetOptimisticTitle &&
+                  trimmedText.length > 0 &&
+                  !hasRequestedSessionTitleGenerationRef.current;
                 if (shouldSetOptimisticTitle && trimmedText.length > 0) {
                   const nextTitle =
                     trimmedText.length > 30
@@ -2971,40 +2980,43 @@ export function SessionChatContent(_props: unknown) {
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
 
-                  // Generate a title in parallel and persist it as soon as it
-                  // resolves, without waiting for the assistant response.
-                  const generatedTitlePromise = fetch("/api/generate-title", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message: trimmedText }),
-                  })
-                    .then(async (res) => {
-                      if (!res.ok) {
-                        return null;
-                      }
-
-                      const data = (await res.json().catch(() => null)) as {
-                        title?: unknown;
-                      } | null;
-                      if (typeof data?.title !== "string") {
-                        return null;
-                      }
-
-                      const title = data.title.trim();
-                      return title.length > 0 ? title : null;
+                  if (shouldGenerateSessionTitle) {
+                    hasRequestedSessionTitleGenerationRef.current = true;
+                    // Generate a title in parallel and persist it as soon as it
+                    // resolves, without waiting for the assistant response.
+                    const generatedTitlePromise = fetch("/api/generate-title", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ message: trimmedText }),
                     })
-                    .catch(() => null);
+                      .then(async (res) => {
+                        if (!res.ok) {
+                          return null;
+                        }
 
-                  void generatedTitlePromise
-                    .then((generatedTitle) => {
-                      if (!generatedTitle) {
-                        return;
-                      }
-                      return updateSessionTitle(generatedTitle);
-                    })
-                    .catch(() => {
-                      // Ignore failures and keep the existing session title.
-                    });
+                        const data = (await res.json().catch(() => null)) as {
+                          title?: unknown;
+                        } | null;
+                        if (typeof data?.title !== "string") {
+                          return null;
+                        }
+
+                        const title = data.title.trim();
+                        return title.length > 0 ? title : null;
+                      })
+                      .catch(() => null);
+
+                    void generatedTitlePromise
+                      .then((generatedTitle) => {
+                        if (!generatedTitle) {
+                          return;
+                        }
+                        return updateSessionTitle(generatedTitle);
+                      })
+                      .catch(() => {
+                        // Ignore failures and keep the existing session title.
+                      });
+                  }
                 }
                 setHasPendingResponse(true);
                 hasSeenAssistantRenderableContentRef.current = false;
