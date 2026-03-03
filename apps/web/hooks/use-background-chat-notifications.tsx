@@ -36,6 +36,41 @@ export function getStreamingIds(items: StreamingItem[]): Set<string> {
   return new Set(items.filter((s) => s.streaming).map((s) => s.id));
 }
 
+function CompletedSessionToast({
+  title,
+  onGoToChat,
+  onDismiss,
+}: {
+  title: string;
+  onGoToChat: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="flex w-[360px] items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-lg">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+      <p className="min-w-0 flex-1 truncate text-sm font-medium text-card-foreground">
+        {title}
+      </p>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onGoToChat}
+          className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Go to chat
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Watches the sessions list for streaming→complete transitions on non-active
  * sessions and fires a sonner toast so the user knows a background task finished.
@@ -74,14 +109,19 @@ export function useBackgroundChatNotifications(
 
         const title = session.title || "A session";
 
-        toast(`Agent finished: ${title}`, {
-          position: "top-center",
-          duration: 8000,
-          action: {
-            label: "Go to chat",
-            onClick: () => navigateRef.current(session),
-          },
-        });
+        toast.custom(
+          (id) => (
+            <CompletedSessionToast
+              title={title}
+              onGoToChat={() => {
+                toast.dismiss(id);
+                navigateRef.current(session);
+              }}
+              onDismiss={() => toast.dismiss(id)}
+            />
+          ),
+          { position: "top-center", duration: 8000 },
+        );
       }
     }
 
