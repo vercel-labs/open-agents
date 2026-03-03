@@ -2068,7 +2068,7 @@ export function SessionChatContent(_props: unknown) {
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
-  const prUrl =
+  const existingPrUrl =
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
@@ -2099,6 +2099,21 @@ export function SessionChatContent(_props: unknown) {
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
+  const openExistingPr = () => {
+    if (!existingPrUrl) {
+      return;
+    }
+
+    window.open(existingPrUrl, "_blank", "noopener,noreferrer");
+  };
+  const openPreviewOrPr = () => {
+    const targetUrl = prDeploymentUrl ?? existingPrUrl;
+    if (!targetUrl) {
+      return;
+    }
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <>
@@ -2183,14 +2198,8 @@ export function SessionChatContent(_props: unknown) {
                       variant="outline"
                       size="sm"
                       className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={() => {
-                        const targetUrl = prDeploymentUrl ?? prUrl;
-                        if (!targetUrl) {
-                          return;
-                        }
-                        window.open(targetUrl, "_blank", "noopener,noreferrer");
-                      }}
-                      disabled={!prDeploymentUrl && !prUrl}
+                      onClick={openPreviewOrPr}
+                      disabled={!prDeploymentUrl && !existingPrUrl}
                     >
                       {prDeploymentUrl ? (
                         <>
@@ -2336,47 +2345,37 @@ export function SessionChatContent(_props: unknown) {
                   )}
                   {hasRepo ? (
                     hasExistingPr ? (
-                      showCommitAction ? (
-                        <DropdownMenuItem
-                          onClick={() => setCommitDialogOpen(true)}
-                        >
-                          <GitCommit className="mr-2 h-4 w-4" />
-                          {commitActionLabel}
-                        </DropdownMenuItem>
-                      ) : (
-                        <>
-                          {prDeploymentUrl && (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                window.open(
-                                  prDeploymentUrl,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                );
-                              }}
-                            >
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              Preview
-                            </DropdownMenuItem>
-                          )}
+                      <>
+                        {prDeploymentUrl && (
                           <DropdownMenuItem
-                            disabled={!prUrl}
                             onClick={() => {
-                              if (!prUrl) {
-                                return;
-                              }
                               window.open(
-                                prUrl,
+                                prDeploymentUrl,
                                 "_blank",
                                 "noopener,noreferrer",
                               );
                             }}
                           >
-                            <GitPullRequest className="mr-2 h-4 w-4" />
-                            View PR #{session.prNumber}
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Preview
                           </DropdownMenuItem>
-                        </>
-                      )
+                        )}
+                        <DropdownMenuItem
+                          onClick={openExistingPr}
+                          disabled={!existingPrUrl}
+                        >
+                          <GitPullRequest className="mr-2 h-4 w-4" />
+                          View PR #{session.prNumber}
+                        </DropdownMenuItem>
+                        {showCommitAction && (
+                          <DropdownMenuItem
+                            onClick={() => setCommitDialogOpen(true)}
+                          >
+                            <GitCommit className="mr-2 h-4 w-4" />
+                            {commitActionLabel}
+                          </DropdownMenuItem>
+                        )}
+                      </>
                     ) : (
                       <>
                         {showCommitAction && (

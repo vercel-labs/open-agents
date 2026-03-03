@@ -123,7 +123,7 @@ beforeEach(() => {
 });
 
 describe("VercelSandbox.environmentDetails", () => {
-  test("skips preview URLs for ports that are missing routes", async () => {
+  test("skips dev server URLs for ports that are missing routes", async () => {
     portDomains.set(3000, "https://sbx-3000.vercel.run");
     missingPorts.add(5173);
 
@@ -134,7 +134,8 @@ describe("VercelSandbox.environmentDetails", () => {
 
     const details = sandbox.environmentDetails;
 
-    expect(details).toContain("Dev server preview URLs");
+    expect(details).toContain("This snapshot includes agent-browser");
+    expect(details).toContain("Dev server URLs for locally running servers");
     expect(details).toContain("Port 3000: https://sbx-3000.vercel.run");
     expect(details).not.toContain("Port 5173:");
   });
