@@ -2965,7 +2965,6 @@ export function SessionChatContent(_props: unknown) {
                   !hadInitialMessages &&
                   !hasSetOptimisticTitleRef.current;
                 const trimmedText = messageText.trim();
-                let generatedTitlePromise: Promise<string | null> | null = null;
                 if (shouldSetOptimisticTitle && trimmedText.length > 0) {
                   const nextTitle =
                     trimmedText.length > 30
@@ -2975,9 +2974,9 @@ export function SessionChatContent(_props: unknown) {
                   pendingOptimisticTitleChatIdRef.current = chatInfo.id;
                   void setChatTitle(chatInfo.id, nextTitle);
 
-                  // Generate a title in parallel, but only persist it once
-                  // the first message has been sent successfully.
-                  generatedTitlePromise = fetch("/api/generate-title", {
+                  // Generate a title in parallel and persist it as soon as it
+                  // resolves, without waiting for the assistant response.
+                  const generatedTitlePromise = fetch("/api/generate-title", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ message: trimmedText }),
@@ -2987,9 +2986,9 @@ export function SessionChatContent(_props: unknown) {
                         return null;
                       }
 
-                      const data = (await res.json().catch(() => null)) as
-                        | { title?: unknown }
-                        | null;
+                      const data = (await res.json().catch(() => null)) as {
+                        title?: unknown;
+                      } | null;
                       if (typeof data?.title !== "string") {
                         return null;
                       }
@@ -2998,25 +2997,23 @@ export function SessionChatContent(_props: unknown) {
                       return title.length > 0 ? title : null;
                     })
                     .catch(() => null);
+
+                  void generatedTitlePromise
+                    .then((generatedTitle) => {
+                      if (!generatedTitle) {
+                        return;
+                      }
+                      return updateSessionTitle(generatedTitle);
+                    })
+                    .catch(() => {
+                      // Ignore failures and keep the existing session title.
+                    });
                 }
                 setHasPendingResponse(true);
                 hasSeenAssistantRenderableContentRef.current = false;
                 void setChatStreaming(chatInfo.id, true);
                 try {
                   await sendMessage({ text: messageText, files });
-
-                  if (generatedTitlePromise) {
-                    void generatedTitlePromise
-                      .then((generatedTitle) => {
-                        if (!generatedTitle) {
-                          return;
-                        }
-                        return updateSessionTitle(generatedTitle);
-                      })
-                      .catch(() => {
-                        // Ignore failures and keep the existing session title.
-                      });
-                  }
                 } catch (err) {
                   if (pendingOptimisticTitleChatIdRef.current) {
                     void clearChatTitle(
