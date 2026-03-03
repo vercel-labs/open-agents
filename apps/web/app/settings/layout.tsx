@@ -10,7 +10,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import {
@@ -67,6 +67,7 @@ function SettingsLayout({
   pathname: string;
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const router = useRouter();
   const activeItem = sidebarItems.find((item) => item.href === pathname);
 
   const navItems = (
@@ -100,13 +101,14 @@ function SettingsLayout({
       <aside className="hidden w-64 border-r border-border md:flex">
         <div className="flex h-full w-full flex-col">
           <div className="flex items-center gap-4 px-6 py-4">
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={() => router.back()}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
-            </Link>
+            </button>
           </div>
           <nav className="flex-1 px-2 py-2">
             <div className="mb-2 px-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -124,14 +126,17 @@ function SettingsLayout({
             <SheetTitle>Settings navigation</SheetTitle>
           </SheetHeader>
           <div className="flex items-center gap-4 px-6 py-4">
-            <Link
-              href="/"
-              onClick={() => setMobileSidebarOpen(false)}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSidebarOpen(false);
+                router.back();
+              }}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
-            </Link>
+            </button>
           </div>
           <nav className="flex-1 px-2 py-2">
             <div className="mb-2 px-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
