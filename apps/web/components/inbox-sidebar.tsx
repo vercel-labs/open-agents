@@ -7,6 +7,7 @@ import {
   GitMerge,
   Pencil,
   Plus,
+  Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import {
   isRenameSaveDisabled,
 } from "@/components/inbox-sidebar-rename";
 import { NewSessionDialog } from "@/components/new-session-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useSession } from "@/hooks/use-session";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 type CreateSessionInput = {
@@ -73,6 +76,15 @@ function formatRelativeTime(date: Date): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function getAvatarFallback(username: string): string {
+  const normalized = username.trim();
+  if (!normalized) {
+    return "?";
+  }
+
+  return normalized.slice(0, 2).toUpperCase();
 }
 
 function DiffStats({
@@ -258,6 +270,7 @@ export function InboxSidebar({
   lastRepo,
 }: InboxSidebarProps) {
   const router = useRouter();
+  const { session } = useSession();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
@@ -433,6 +446,39 @@ export function InboxSidebar({
           </div>
         )}
       </div>
+
+      {session?.user ? (
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2 rounded-lg bg-background/70 p-2">
+            <Avatar className="h-9 w-9 shrink-0">
+              {session.user.avatar ? (
+                <AvatarImage src={session.user.avatar} alt={session.user.username} />
+              ) : null}
+              <AvatarFallback>{getAvatarFallback(session.user.username)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold leading-none text-foreground">
+                {session.user.username}
+              </p>
+              {session.user.email ? (
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {session.user.email}
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => router.push("/settings")}
+              aria-label="Open settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <Dialog
         open={Boolean(renameDialogSession)}
