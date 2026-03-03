@@ -2080,6 +2080,10 @@ export function SessionChatContent(_props: unknown) {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
+      // We stop polling once a deployment URL is found because Vercel preview
+      // URLs are expected to follow the PR branch and keep serving the latest
+      // deployment. If this assumption ever changes, force revalidation after
+      // commits (see onCommitted callback below).
       refreshInterval: (latestData) =>
         hasExistingPr && !latestData?.deploymentUrl ? 60_000 : 0,
       shouldRetryOnError: false,
