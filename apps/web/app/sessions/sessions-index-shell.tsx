@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquarePlus, Plus } from "lucide-react";
+import { MessageSquare, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { InboxSidebar } from "@/components/inbox-sidebar";
@@ -110,12 +110,12 @@ export function SessionsIndexShell({
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <MessageSquarePlus />
+                <MessageSquare />
               </EmptyMedia>
-              <EmptyTitle>No Sessions Yet</EmptyTitle>
+              <EmptyTitle>Select a Session</EmptyTitle>
               <EmptyDescription>
-                You haven&apos;t started any sessions yet. Get started by
-                creating your first session.
+                Choose a session from the sidebar to continue, or start a new
+                one.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
