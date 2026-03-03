@@ -449,7 +449,7 @@ export function InboxSidebar({
 
       {session?.user ? (
         <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2 rounded-lg bg-background/70 p-2">
+          <div className="flex items-center gap-2 rounded-lg p-2">
             <Avatar className="h-9 w-9 shrink-0">
               {session.user.avatar ? (
                 <AvatarImage src={session.user.avatar} alt={session.user.username} />
