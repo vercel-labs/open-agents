@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { InboxSidebar } from "@/components/inbox-sidebar";
+import { useBackgroundChatNotifications } from "@/hooks/use-background-chat-notifications";
 import {
   Sidebar,
   SidebarContent,
@@ -114,6 +115,11 @@ export function SessionLayoutShell({
     },
     [router, sessionId],
   );
+
+  // Detect when a background chat finishes streaming and show a toast.
+  const params = useParams<{ chatId?: string }>();
+  const activeChatId = params.chatId ?? null;
+  useBackgroundChatNotifications(chats, activeChatId, switchChat);
 
   const sidebarContent = (
     <InboxSidebar
