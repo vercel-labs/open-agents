@@ -17,18 +17,24 @@ let chatRecord: {
 };
 let sessionRecord: {
   id: string;
+  userId: string;
   title: string;
   repoOwner: string | null;
   repoName: string | null;
   branch: string | null;
   cloneUrl: string | null;
+  prNumber: number | null;
+  prStatus: string | null;
 } | null = {
   id: "session-1",
+  userId: "user-1",
   title: "Session Title",
   repoOwner: "acme",
   repoName: "repo",
   branch: "main",
   cloneUrl: "https://github.com/acme/repo.git",
+  prNumber: null,
+  prStatus: null,
 };
 let messageRows: Array<{ parts: unknown }> = [
   { parts: { id: "m1", role: "user", parts: [] } },
@@ -43,6 +49,20 @@ mock.module("next/navigation", () => ({
 mock.module("@/lib/db/sessions-cache", () => ({
   getShareByIdCached: async () => shareRecord,
   getSessionByIdCached: async () => sessionRecord,
+}));
+
+mock.module("@/lib/db/client", () => ({
+  db: {
+    query: {
+      users: {
+        findFirst: async () => ({
+          username: "testuser",
+          name: "Test User",
+          avatarUrl: "https://example.com/avatar.png",
+        }),
+      },
+    },
+  },
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -66,11 +86,14 @@ describe("/shared/[shareId] page", () => {
     };
     sessionRecord = {
       id: "session-1",
+      userId: "user-1",
       title: "Session Title",
       repoOwner: "acme",
       repoName: "repo",
       branch: "main",
       cloneUrl: "https://github.com/acme/repo.git",
+      prNumber: null,
+      prStatus: null,
     };
     messageRows = [{ parts: { id: "m1", role: "user", parts: [] } }];
   });

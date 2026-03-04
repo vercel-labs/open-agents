@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import type { WebAgentUIMessage } from "@/app/types";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import { getChatById, getChatMessages } from "@/lib/db/sessions";
 import {
   getSessionByIdCached,
@@ -43,15 +46,36 @@ export default async function SharedPage({ params }: SharedPageProps) {
     notFound();
   }
 
+  // Fetch the user who owns this session (public profile info only)
+  const sessionUser = await db.query.users.findFirst({
+    where: eq(users.id, session.userId),
+    columns: {
+      username: true,
+      name: true,
+      avatarUrl: true,
+    },
+  });
+
   const dbMessages = await getChatMessages(sharedChat.id);
   const messages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
 
-  const { title, repoOwner, repoName, branch, cloneUrl } = session;
+  const { title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus } =
+    session;
 
   return (
     <SharedChatContent
-      session={{ title, repoOwner, repoName, branch, cloneUrl }}
+      session={{ title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus }}
       chats={[{ chat: sharedChat, messages }]}
+      modelId={sharedChat.modelId}
+      sharedBy={
+        sessionUser
+          ? {
+              username: sessionUser.username,
+              name: sessionUser.name,
+              avatarUrl: sessionUser.avatarUrl,
+            }
+          : null
+      }
     />
   );
 }
