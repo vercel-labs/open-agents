@@ -391,6 +391,7 @@ function SharedMessage({
         const i = group.index;
 
         if (isReasoningUIPart(p)) {
+          if (!showToolCalls) return null;
           return (
             <div key={`${m.id}-${i}`} className="flex justify-start">
               <ThinkingBlock text={p.text} isStreaming={false} />
