@@ -28,3 +28,9 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+      - name: DB Check
+        run: bun run --cwd apps/web db:check
