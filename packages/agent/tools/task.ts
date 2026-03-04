@@ -1,13 +1,12 @@
 import {
-  type LanguageModelUsage,
-  readUIMessageStream,
   tool,
+  type ModelMessage,
   type UIToolInvocation,
+  type LanguageModelUsage,
 } from "ai";
 import { z } from "zod";
 import { executorSubagent } from "../subagents/executor";
 import { explorerSubagent } from "../subagents/explorer";
-import type { SubagentUIMessage } from "../subagents/types";
 import type { ApprovalRule } from "../types";
 import {
   getApprovalContext,
@@ -32,6 +31,17 @@ const taskInputSchema = z.object({
 - Constraints and patterns to follow
 - How to verify the work`,
   ),
+});
+
+const toolCall = z.object({
+  name: z.string(),
+  input: z.unknown(),
+});
+
+const taskOutputSchema = z.object({
+  pending: toolCall.optional(),
+  final: z.custom<ModelMessage[]>().optional(),
+  usage: z.custom<LanguageModelUsage>().optional(),
 });
 
 /**
@@ -126,13 +136,13 @@ IMPORTANT:
 
 NOTE: The executor subagent requires user approval before running because it has full write access.`,
   inputSchema: taskInputSchema,
+  outputSchema: taskOutputSchema,
   execute: async function* (
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
     const sandbox = getSandbox(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
-    const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =
       subagentType === "explorer" ? explorerSubagent : executorSubagent;
@@ -144,43 +154,36 @@ NOTE: The executor subagent requires user approval before running because it has
       abortSignal,
     });
 
-    // Track last step usage for message metadata
-    let lastStepUsage: LanguageModelUsage | undefined;
-
-    for await (const message of readUIMessageStream<SubagentUIMessage>({
-      stream: result.toUIMessageStream<SubagentUIMessage>({
-        messageMetadata: ({ part }) => {
-          // Track per-step usage from finish-step events
-          if (part.type === "finish-step") {
-            lastStepUsage = part.usage;
-            return {
-              lastStepUsage,
-              totalMessageUsage: undefined,
-              modelId: subagentModelId,
-            };
-          }
-          // On finish, include both the last step usage and total message usage
-          if (part.type === "finish") {
-            return {
-              lastStepUsage,
-              totalMessageUsage: part.totalUsage,
-              modelId: subagentModelId,
-            };
-          }
-        },
-      }),
-    })) {
-      yield message;
+    for await (const part of result.fullStream) {
+      if (part.type === "tool-call") {
+        yield { pending: { name: part.toolName, input: part.input } };
+      }
     }
+    const response = await result.response;
+    yield { final: response.messages, usage: await result.usage };
+
+    // Track last step usage for message metadata
   },
-  toModelOutput: ({ output: message }) => {
-    if (!message) {
+  toModelOutput: ({ output: { final: messages } }) => {
+    if (!messages) {
       return { type: "text", value: "Task completed." };
     }
 
-    const lastTextPart = message.parts.findLast((p) => p.type === "text");
+    const lastAssistantMessage = messages.findLast(
+      (p) => p.role === "assistant",
+    );
+    const content = lastAssistantMessage?.content;
 
-    if (!lastTextPart || lastTextPart.type !== "text") {
+    if (!content) {
+      return { type: "text", value: "Task completed." };
+    }
+
+    if (typeof content === "string") {
+      return { type: "text", value: content };
+    }
+
+    const lastTextPart = content.findLast((p) => p.type === "text");
+    if (!lastTextPart) {
       return { type: "text", value: "Task completed." };
     }
 
