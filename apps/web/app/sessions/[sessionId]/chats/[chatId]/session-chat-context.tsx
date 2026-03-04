@@ -20,6 +20,7 @@ import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/route";
 import type { WebAgentUIMessage } from "@/app/types";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
 import {
@@ -34,7 +35,10 @@ import {
   removeChatInstance,
 } from "@/lib/chat-instance-manager";
 import type { Chat, Session } from "@/lib/db/schema";
-import type { ModelOption } from "@/lib/model-options";
+import {
+  type ModelOption,
+  withMissingModelOption,
+} from "@/lib/model-options";
 
 const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
@@ -305,8 +309,23 @@ export function SessionChatProvider({
   const [hasSnapshotState, setHasSnapshotState] = useState<boolean>(
     !!initialSession.snapshotUrl,
   );
-  const modelOptions = initialModelOptions;
-  const modelOptionsLoading = false;
+  const {
+    modelOptions: fetchedModelOptions,
+    loading: modelOptionsLoadingFromApi,
+    error: modelOptionsError,
+  } = useModelOptions();
+  const shouldUseFetchedModelOptions =
+    fetchedModelOptions.length > 0 &&
+    (initialModelOptions.length === 0 || modelOptionsError === null);
+  const baseModelOptions = shouldUseFetchedModelOptions
+    ? fetchedModelOptions
+    : initialModelOptions;
+  const modelOptions = useMemo(
+    () => withMissingModelOption(baseModelOptions, chatInfo.modelId),
+    [baseModelOptions, chatInfo.modelId],
+  );
+  const modelOptionsLoading =
+    baseModelOptions.length === 0 && modelOptionsLoadingFromApi;
   const contextLimit = useMemo(
     () => resolveContextLimitForModel(modelOptions, chatInfo.modelId ?? null),
     [modelOptions, chatInfo.modelId],
