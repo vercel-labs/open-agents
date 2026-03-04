@@ -741,6 +741,16 @@ export function SessionChatContent(_props: unknown) {
   >(null);
   const hasMounted = useHasMounted();
   const isMobile = useIsMobile();
+  const isIosDevice = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return false;
+    }
+
+    return (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    );
+  }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMountedRef = useRef(true);
   const copyResetTimeoutRef = useRef<number | null>(null);
@@ -3120,8 +3130,8 @@ export function SessionChatContent(_props: unknown) {
                     if (handleSlashKeyDown(e)) {
                       return;
                     }
-                    // Handle form submission
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    // On iOS, Return should insert a newline (send via submit button)
+                    if (e.key === "Enter" && !e.shiftKey && !isIosDevice) {
                       e.preventDefault();
                       if (!isArchived && isSandboxActive) {
                         e.currentTarget.form?.requestSubmit();
