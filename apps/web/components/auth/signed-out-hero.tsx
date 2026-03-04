@@ -72,12 +72,6 @@ function CopyButton({ text }: { text: string }) {
 export function SignedOutHero() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#f8fafc] text-slate-900 dark:bg-[#0a0a0b] dark:text-white">
-      {/* Ambient glow effects */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[600px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/15 blur-[150px] dark:bg-emerald-500/[0.07]" />
-        <div className="absolute bottom-0 right-0 h-[400px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-sky-500/12 blur-[120px] dark:bg-blue-500/[0.05]" />
-        <div className="absolute bottom-1/3 left-0 h-[300px] w-[400px] -translate-x-1/2 rounded-full bg-violet-500/10 blur-[100px] dark:bg-violet-500/[0.04]" />
-      </div>
 
       {/* Dot grid pattern */}
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:radial-gradient(rgba(15,23,42,0.08)_1px,transparent_1px)] [background-size:24px_24px] dark:opacity-[0.4] dark:[background-image:radial-gradient(rgba(255,255,255,0.07)_1px,transparent_1px)]" />
