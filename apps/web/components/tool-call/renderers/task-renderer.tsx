@@ -3,7 +3,7 @@
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,16 @@ function getToolSummary(toolCall: PendingToolCall): string {
   }
 }
 
+function countToolCalls(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.filter(
+    (m) =>
+      typeof m === "object" &&
+      m !== null &&
+      (m as { role?: string }).role === "tool",
+  ).length;
+}
+
 function SubagentToolCall({
   toolCall,
   isRunning,
@@ -41,9 +51,7 @@ function SubagentToolCall({
 }) {
   const summary = getToolSummary(toolCall);
 
-  const dotColor = isRunning
-    ? "bg-yellow-500"
-    : "bg-green-500";
+  const dotColor = isRunning ? "bg-yellow-500" : "bg-green-500";
   const displayName =
     toolCall.name.charAt(0).toUpperCase() + toolCall.name.slice(1);
 
@@ -97,8 +105,6 @@ export function TaskRenderer({
   onDeny,
 }: ToolRendererProps<"tool-task">) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const toolCallsRef = useRef<PendingToolCall[]>([]);
-  const lastPendingKeyRef = useRef<string | null>(null);
 
   const input = part.input;
   const desc = input?.task ?? "Spawning subagent";
@@ -113,20 +119,8 @@ export function TaskRenderer({
   const isComplete = hasOutput && !isPreliminary;
   const output = hasOutput ? part.output : undefined;
 
-  // Accumulate pending tool calls across yields (each yield replaces the previous)
-  if (output?.pending) {
-    const key = JSON.stringify(output.pending);
-    if (key !== lastPendingKeyRef.current) {
-      lastPendingKeyRef.current = key;
-      toolCallsRef.current = [...toolCallsRef.current, output.pending];
-    }
-  }
-
-  const toolCalls = toolCallsRef.current;
-
-  const maxVisible = 4;
-  const hiddenCount = Math.max(0, toolCalls.length - maxVisible);
-  const visibleCalls = toolCalls.slice(-maxVisible);
+  const pendingToolCall = output?.pending ?? null;
+  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
 
   const isTaskStreaming = hasOutput && isPreliminary;
 
@@ -158,9 +152,11 @@ export function TaskRenderer({
           ? "General"
           : "Task";
 
-  // Has expandable content if there are tool calls or the prompt is long
+  // Has expandable content if there's a pending tool call or the prompt is long
   const hasExpandableContent =
-    toolCalls.length > 0 || (fullPrompt && fullPrompt.length > 80);
+    pendingToolCall !== null ||
+    (fullPrompt && fullPrompt.length > 80) ||
+    isComplete;
 
   const handleClick = () => {
     if (hasExpandableContent) {
@@ -197,7 +193,9 @@ export function TaskRenderer({
         ) : state.running || isActuallyRunning ? (
           <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
         ) : (
-          <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
+          <span
+            className={cn("inline-block h-2 w-2 rounded-full", dotColor)}
+          />
         )}
         <span
           className={cn(
@@ -241,29 +239,14 @@ export function TaskRenderer({
         </div>
       )}
 
-      {/* Collapsed view - show last 4 tool calls */}
-      {!isExpanded && hasOutput && visibleCalls.length > 0 && (
+      {/* Collapsed view - show current pending tool call */}
+      {!isExpanded && pendingToolCall && (
         <div className="mt-3 space-y-1 pl-3">
-          {hiddenCount > 0 && (
-            <div className="text-sm text-muted-foreground">
-              ... {hiddenCount} more above
-            </div>
-          )}
-          {visibleCalls.map((tc, i) => {
-            const isLast = i === visibleCalls.length - 1;
-            const isToolRunning = isLast && isPreliminary;
-            return (
-              <SubagentToolCall
-                key={`${tc.name}-${i + hiddenCount}`}
-                toolCall={tc}
-                isRunning={isToolRunning}
-              />
-            );
-          })}
+          <SubagentToolCall toolCall={pendingToolCall} isRunning={isPreliminary} />
         </div>
       )}
 
-      {/* Expanded view - show all tool calls with full details */}
+      {/* Expanded view - show prompt and current tool call details */}
       {isExpanded && (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           {/* Full prompt */}
@@ -288,26 +271,17 @@ export function TaskRenderer({
             </div>
           )}
 
-          {/* All tool calls */}
-          {toolCalls.length > 0 && (
+          {/* Current tool call */}
+          {pendingToolCall && (
             <div>
               <div className="mb-1 text-xs font-medium text-muted-foreground">
-                Tool Calls ({toolCalls.length})
+                Current Tool Call
               </div>
-              <div className="max-h-96 space-y-1 overflow-auto">
-                {toolCalls.map((tc, i) => {
-                  const isLast = i === toolCalls.length - 1;
-                  const isToolRunning = isLast && isPreliminary;
-                  return (
-                    <SubagentToolCall
-                      key={`${tc.name}-${i}`}
-                      toolCall={tc}
-                      isRunning={isToolRunning}
-                      expanded
-                    />
-                  );
-                })}
-              </div>
+              <SubagentToolCall
+                toolCall={pendingToolCall}
+                isRunning={isPreliminary}
+                expanded
+              />
             </div>
           )}
         </div>
@@ -315,7 +289,7 @@ export function TaskRenderer({
 
       {!isExpanded && isComplete && (
         <div className="mt-2 pl-5 text-sm text-muted-foreground">
-          Complete ({toolCalls.length} tool calls
+          Complete ({toolCount} tool calls
           {output?.usage?.inputTokens
             ? `, ${formatTokens(output.usage.inputTokens)} tokens`
             : ""}

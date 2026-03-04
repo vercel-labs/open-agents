@@ -1,7 +1,7 @@
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import React, { useRef } from "react";
+import React from "react";
 import { useChatContext } from "../../chat-context";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
@@ -27,6 +27,13 @@ function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
     default:
       return "";
   }
+}
+
+function countToolCalls(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.filter(
+    (m) => typeof m === "object" && m !== null && (m as { role?: string }).role === "tool",
+  ).length;
 }
 
 function SubagentToolCall({
@@ -77,9 +84,6 @@ function SubagentToolCall({
 }
 
 export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
-  const toolCallsRef = useRef<PendingToolCall[]>([]);
-  const lastPendingKeyRef = useRef<string | null>(null);
-
   const isInputReady = part.state !== "input-streaming";
   const desc = isInputReady ? (part.input?.task ?? "Spawning subagent") : "...";
   const subagentType = isInputReady ? part.input?.subagentType : undefined;
@@ -92,21 +96,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
   const isComplete = hasOutput && !isPreliminary;
   const output = hasOutput ? part.output : undefined;
 
-  // Accumulate pending tool calls across yields (each yield replaces the previous)
-  if (output?.pending) {
-    const key = JSON.stringify(output.pending);
-    if (key !== lastPendingKeyRef.current) {
-      lastPendingKeyRef.current = key;
-      toolCallsRef.current = [...toolCallsRef.current, output.pending];
-    }
-  }
-
-  const toolCalls = toolCallsRef.current;
-
-  // Show only the last few parts to avoid too much output
-  const maxVisible = 4;
-  const hiddenCount = Math.max(0, toolCalls.length - maxVisible);
-  const visibleCalls = toolCalls.slice(-maxVisible);
+  const pendingToolCall = output?.pending ?? null;
+  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
 
   const isStreaming = hasOutput && isPreliminary;
 
@@ -185,25 +176,10 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
         </box>
       )}
 
-      {/* Nested tool calls from subagent */}
-      {hasOutput && visibleCalls.length > 0 && !state.interrupted && (
+      {/* Current pending tool call from subagent */}
+      {pendingToolCall && !state.interrupted && (
         <box flexDirection="column" paddingLeft={2} marginTop={1}>
-          {hiddenCount > 0 && (
-            <box marginBottom={1} flexDirection="row">
-              <text fg="gray">... {hiddenCount} more above</text>
-            </box>
-          )}
-          {visibleCalls.map((tc, i) => {
-            const isLast = i === visibleCalls.length - 1;
-            const isToolRunning = isLast && isPreliminary;
-            return (
-              <SubagentToolCall
-                key={`${tc.name}-${i + hiddenCount}`}
-                toolCall={tc}
-                isRunning={isToolRunning}
-              />
-            );
-          })}
+          <SubagentToolCall toolCall={pendingToolCall} isRunning={isPreliminary} />
         </box>
       )}
 
@@ -212,7 +188,7 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
         <box paddingLeft={2} flexDirection="row">
           <text fg="gray">└ </text>
           <text fg="white">
-            Complete ({toolCalls.length} tool calls
+            Complete ({toolCount} tool calls
             {output?.usage?.inputTokens
               ? `, ${formatTokens(output.usage.inputTokens)} tokens`
               : ""}

@@ -35,26 +35,14 @@ function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
   return "pending";
 }
 
-/**
- * Hook to accumulate pending tool calls from the task tool's streaming output.
- * Each yield replaces the previous output, so we track seen tool calls in a ref.
- */
-function useAccumulatedToolCalls(part: TaskToolUIPart) {
-  const toolCallsRef = useRef<PendingToolCall[]>([]);
-  const lastPendingKeyRef = useRef<string | null>(null);
-
-  const hasOutput = part.state === "output-available";
-  const output = hasOutput ? part.output : undefined;
-
-  if (output?.pending) {
-    const key = JSON.stringify(output.pending);
-    if (key !== lastPendingKeyRef.current) {
-      lastPendingKeyRef.current = key;
-      toolCallsRef.current = [...toolCallsRef.current, output.pending];
-    }
-  }
-
-  return toolCallsRef.current;
+function countToolCalls(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.filter(
+    (m) =>
+      typeof m === "object" &&
+      m !== null &&
+      (m as { role?: string }).role === "tool",
+  ).length;
 }
 
 function getToolSummary(toolCall: PendingToolCall): string {
@@ -160,17 +148,15 @@ function TaskItem({
   const isRunning = status === "running" || status === "pending";
   const elapsedSeconds = useTaskTiming(isRunning);
 
-  const toolCalls = useAccumulatedToolCalls(part);
-  const toolCount = toolCalls.length;
-
   const hasOutput = part.state === "output-available";
   const isComplete = hasOutput && !part.preliminary;
   const output = hasOutput ? part.output : undefined;
+
+  const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
+  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
   const tokenCount = isComplete
     ? (output?.usage?.inputTokens ?? null)
     : null;
-
-  const lastToolCall = toolCalls[toolCalls.length - 1] ?? null;
 
   const desc = part.input?.task ?? "Task";
   const subagentType = part.input?.subagentType;
@@ -197,15 +183,13 @@ function TaskItem({
     nestedStatus = denialReason ? `Denied: ${denialReason}` : "Denied";
   } else if (approvalRequested) {
     nestedStatus = "Awaiting approval...";
-  } else if (
-    status === "pending" ||
-    (status === "running" && toolCount === 0)
-  ) {
+  } else if (status === "pending" || (status === "running" && !pendingToolCall)) {
     nestedStatus = "Initializing...";
-  } else if (lastToolCall) {
+  } else if (pendingToolCall) {
     const displayName =
-      lastToolCall.name.charAt(0).toUpperCase() + lastToolCall.name.slice(1);
-    const summary = getToolSummary(lastToolCall);
+      pendingToolCall.name.charAt(0).toUpperCase() +
+      pendingToolCall.name.slice(1);
+    const summary = getToolSummary(pendingToolCall);
     nestedStatus = summary
       ? `${displayName}(${summary})`
       : displayName;
