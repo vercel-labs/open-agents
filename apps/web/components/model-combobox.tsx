@@ -20,6 +20,8 @@ import {
 interface ModelComboboxItem {
   id: string;
   label: string;
+  description?: string;
+  isVariant?: boolean;
 }
 
 interface ModelComboboxProps {
@@ -55,11 +57,18 @@ export function ModelCombobox({
           type="button"
           disabled={disabled}
           className={cn(
-            "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 flex w-full max-w-xs items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 h-9",
+            "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 flex h-9 w-full max-w-xs items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
         >
-          <span className="truncate text-left">{displayText}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-left">{displayText}</span>
+            {selectedItem?.isVariant && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                variant
+              </span>
+            )}
+          </span>
           <ChevronDownIcon className="size-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
@@ -75,7 +84,7 @@ export function ModelCombobox({
               {items.map((item) => (
                 <CommandItem
                   key={item.id}
-                  value={item.id}
+                  value={`${item.label} ${item.id} ${item.description ?? ""}`}
                   onSelect={() => {
                     onChange(item.id);
                     setOpen(false);
@@ -87,7 +96,14 @@ export function ModelCombobox({
                       value === item.id ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <span className="truncate">{item.label}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{item.label}</span>
+                    {item.isVariant && (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        variant
+                      </span>
+                    )}
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>
