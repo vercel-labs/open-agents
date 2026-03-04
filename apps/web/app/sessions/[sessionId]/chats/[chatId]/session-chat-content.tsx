@@ -690,14 +690,21 @@ export function SessionChatContent(_props: unknown) {
   const [mobileChatDrawerOpen, setMobileChatDrawerOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
+    string | null
+  >(null);
   const hasMounted = useHasMounted();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMountedRef = useRef(true);
+  const copyResetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
     };
   }, []);
   const {
@@ -717,6 +724,36 @@ export function SessionChatContent(_props: unknown) {
       inputRef.current?.focus();
     }
   };
+
+  const handleCopyAssistantMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const trimmedText = text.trim();
+      if (trimmedText.length === 0) {
+        return;
+      }
+
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(trimmedText);
+        setCopiedAssistantMessageId(messageId);
+        if (copyResetTimeoutRef.current !== null) {
+          window.clearTimeout(copyResetTimeoutRef.current);
+        }
+        copyResetTimeoutRef.current = window.setTimeout(() => {
+          setCopiedAssistantMessageId((currentMessageId) =>
+            currentMessageId === messageId ? null : currentMessageId,
+          );
+          copyResetTimeoutRef.current = null;
+        }, 2000);
+      } catch (copyError) {
+        console.error("Failed to copy assistant message:", copyError);
+      }
+    },
+    [],
+  );
 
   // Auto-resize textarea up to 3 lines
   useEffect(() => {
@@ -2586,6 +2623,16 @@ export function SessionChatContent(_props: unknown) {
                     }
 
                     if (p.type === "text") {
+                      const isFinalAssistantTextPart =
+                        m.role === "assistant" &&
+                        !m.parts
+                          .slice(group.index + 1)
+                          .some((messagePart) => messagePart.type === "text");
+                      const canCopyAssistantMessage =
+                        isFinalAssistantTextPart &&
+                        !isMessageStreaming &&
+                        p.text.trim().length > 0;
+
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2637,7 +2684,7 @@ export function SessionChatContent(_props: unknown) {
                               )}
                             </div>
                           ) : (
-                            <div className="min-w-0 w-full overflow-hidden">
+                            <div className="group relative min-w-0 w-full overflow-hidden pr-10">
                               <Streamdown
                                 animated={
                                   isMessageStreaming
@@ -2656,6 +2703,25 @@ export function SessionChatContent(_props: unknown) {
                               >
                                 {p.text}
                               </Streamdown>
+                              {canCopyAssistantMessage && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleCopyAssistantMessage(
+                                      m.id,
+                                      p.text,
+                                    )
+                                  }
+                                  aria-label="Copy assistant response"
+                                  className="absolute right-0 top-1 rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                >
+                                  {copiedAssistantMessageId === m.id ? (
+                                    <Check className="h-4 w-4" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
