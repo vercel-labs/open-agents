@@ -72,7 +72,6 @@ function CopyButton({ text }: { text: string }) {
 export function SignedOutHero() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#f8fafc] text-slate-900 dark:bg-[#0a0a0b] dark:text-white">
-
       {/* Dot grid pattern */}
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:radial-gradient(rgba(15,23,42,0.08)_1px,transparent_1px)] [background-size:24px_24px] dark:opacity-[0.4] dark:[background-image:radial-gradient(rgba(255,255,255,0.07)_1px,transparent_1px)]" />
 
