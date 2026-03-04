@@ -154,8 +154,6 @@ export const sessions = pgTable(
     // Cached diff for offline viewing
     cachedDiff: jsonb("cached_diff"),
     cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
-    // Sharing
-    shareId: text("share_id").unique(),
     // Timestamps
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -178,6 +176,19 @@ export const chats = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [index("chats_session_id_idx").on(table.sessionId)],
+);
+
+export const shares = pgTable(
+  "shares",
+  {
+    id: text("id").primaryKey(),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("shares_chat_id_idx").on(table.chatId)],
 );
 
 export const chatMessages = pgTable("chat_messages", {
@@ -216,6 +227,8 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
+export type Share = typeof shares.$inferSelect;
+export type NewShare = typeof shares.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;
 export type ChatRead = typeof chatReads.$inferSelect;
