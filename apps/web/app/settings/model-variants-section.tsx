@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import {
-  Boxes,
-  ChevronRight,
-  Code2,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { Boxes, ChevronRight, Code2, Pencil, Plus, Trash2 } from "lucide-react";
 import { ModelCombobox } from "@/components/model-combobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -194,7 +187,6 @@ function VariantFormDialog({
               onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Claude Adaptive Thinking"
               disabled={isSaving}
-
             />
           </div>
 
@@ -214,18 +206,13 @@ function VariantFormDialog({
           </div>
 
           <div className="grid gap-1.5">
-            <Label
-              htmlFor="provider-options"
-              className="text-xs font-medium"
-            >
+            <Label htmlFor="provider-options" className="text-xs font-medium">
               Provider Options
             </Label>
             <Textarea
               id="provider-options"
               value={providerOptionsText}
-              onChange={(event) =>
-                setProviderOptionsText(event.target.value)
-              }
+              onChange={(event) => setProviderOptionsText(event.target.value)}
               className="min-h-28 resize-y rounded-md border-border bg-muted/30 font-mono text-xs leading-relaxed"
               placeholder='{"reasoningEffort": "medium"}'
               disabled={isSaving}
@@ -389,8 +376,10 @@ function VariantCard({
 }
 
 export function ModelVariantsSection() {
-  const { data: modelsData, isLoading: modelsLoading } =
-    useSWR<ModelsResponse>("/api/models", fetcher);
+  const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
+    "/api/models",
+    fetcher,
+  );
   const {
     data: variantsData,
     isLoading: variantsLoading,

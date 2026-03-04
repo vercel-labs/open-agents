@@ -35,10 +35,7 @@ import {
   removeChatInstance,
 } from "@/lib/chat-instance-manager";
 import type { Chat, Session } from "@/lib/db/schema";
-import {
-  type ModelOption,
-  withMissingModelOption,
-} from "@/lib/model-options";
+import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 
 const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
