@@ -143,27 +143,11 @@ export function SharedChatContent({
             {session.title}
           </h1>
 
-          {/* Meta pills row */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {/* Model pill */}
-            {modelId && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
-                <Bot className="h-3 w-3" />
-                <span className="font-medium text-foreground">
-                  {displayModelName(modelId)}
-                </span>
-                {displayProviderName(modelId) && (
-                  <span className="text-muted-foreground/60">
-                    · {displayProviderName(modelId)}
-                  </span>
-                )}
-              </span>
-            )}
-
-            {/* Repo + branch pill */}
-            {hasRepo && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
-                <GitBranch className="h-3 w-3" />
+          {/* Repo / branch / PR line */}
+          {hasRepo && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <div className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <GitBranch className="h-3.5 w-3.5" />
                 {repoUrl ? (
                   /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
                   <a
@@ -182,42 +166,63 @@ export function SharedChatContent({
                 {session.branch && (
                   <>
                     <span className="text-muted-foreground/40">/</span>
-                    <span>{session.branch}</span>
+                    <span className="text-muted-foreground">
+                      {session.branch}
+                    </span>
                   </>
                 )}
-              </span>
-            )}
-
-            {/* PR pill */}
-            {prUrl && session.prNumber && (
-              /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-              <a
-                href={prUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"
-              >
-                <GitPullRequest className="h-3 w-3" />
-                <span className="font-medium text-foreground">
-                  #{session.prNumber}
-                </span>
-                {session.prStatus && (
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                      session.prStatus === "open" &&
-                        "bg-green-500/10 text-green-600 dark:text-green-400",
-                      session.prStatus === "merged" &&
-                        "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-                      session.prStatus === "closed" &&
-                        "bg-red-500/10 text-red-600 dark:text-red-400",
-                    )}
+              </div>
+              {prUrl && session.prNumber && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
+                  <a
+                    href={prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    {session.prStatus}
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                    <span className="font-medium">
+                      #{session.prNumber}
+                    </span>
+                    {session.prStatus && (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                          session.prStatus === "open" &&
+                            "bg-green-500/10 text-green-600 dark:text-green-400",
+                          session.prStatus === "merged" &&
+                            "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+                          session.prStatus === "closed" &&
+                            "bg-red-500/10 text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        {session.prStatus}
+                      </span>
+                    )}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Meta pills row */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {/* Model pill */}
+            {modelId && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
+                <Bot className="h-3 w-3" />
+                <span className="font-medium text-foreground">
+                  {displayModelName(modelId)}
+                </span>
+                {displayProviderName(modelId) && (
+                  <span className="text-muted-foreground/60">
+                    · {displayProviderName(modelId)}
                   </span>
                 )}
-                <ExternalLink className="h-2.5 w-2.5" />
-              </a>
+              </span>
             )}
           </div>
 
