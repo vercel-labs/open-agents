@@ -16,7 +16,9 @@ import {
   type NewChatMessage,
   type NewChatRead,
   type NewSession,
+  type NewShare,
   sessions,
+  shares,
 } from "./schema";
 
 export async function createSession(data: NewSession) {
@@ -67,10 +69,34 @@ export async function getSessionById(sessionId: string) {
   });
 }
 
-export async function getSessionByShareId(shareId: string) {
-  return db.query.sessions.findFirst({
-    where: eq(sessions.shareId, shareId),
+export async function getShareById(shareId: string) {
+  return db.query.shares.findFirst({
+    where: eq(shares.id, shareId),
   });
+}
+
+export async function getShareByChatId(chatId: string) {
+  return db.query.shares.findFirst({
+    where: eq(shares.chatId, chatId),
+  });
+}
+
+export async function createShareIfNotExists(data: NewShare) {
+  const [share] = await db
+    .insert(shares)
+    .values(data)
+    .onConflictDoNothing({ target: shares.chatId })
+    .returning();
+
+  if (share) {
+    return share;
+  }
+
+  return getShareByChatId(data.chatId);
+}
+
+export async function deleteShareByChatId(chatId: string) {
+  await db.delete(shares).where(eq(shares.chatId, chatId));
 }
 
 export async function getSessionsByUserId(userId: string) {

@@ -503,11 +503,13 @@ function SandboxInputOverlay({
 
 function ShareDialog({
   sessionId,
+  chatId,
   initialShareId,
   externalOpen,
   onExternalOpenChange,
 }: {
   sessionId: string;
+  chatId: string;
   initialShareId: string | null;
   externalOpen?: boolean;
   onExternalOpenChange?: (open: boolean) => void;
@@ -534,13 +536,47 @@ function ShareDialog({
 
   const shareUrl = shareId && baseUrl ? `${baseUrl}/shared/${shareId}` : null;
 
+  useEffect(() => {
+    let active = true;
+    setShareId(initialShareId);
+    setCopied(false);
+    setError(null);
+
+    const loadShareId = async () => {
+      try {
+        const res = await fetch(
+          `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        );
+        if (!res.ok) {
+          return;
+        }
+        const data = (await res.json()) as { shareId: string | null };
+        if (!active) {
+          return;
+        }
+        setShareId(data.shareId);
+      } catch {
+        // Ignore silent refresh errors in dialog state; user action still works.
+      }
+    };
+
+    void loadShareId();
+
+    return () => {
+      active = false;
+    };
+  }, [sessionId, chatId, initialShareId]);
+
   async function enableSharing() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/share`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) {
         setError("Failed to enable sharing");
         return;
@@ -558,9 +594,12 @@ function ShareDialog({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/share`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        {
+          method: "DELETE",
+        },
+      );
       if (!res.ok) {
         setError("Failed to disable sharing");
         return;
@@ -596,9 +635,9 @@ function ShareDialog({
       )}
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Share session</DialogTitle>
+          <DialogTitle>Share chat</DialogTitle>
           <DialogDescription>
-            Anyone with the link can view the conversation in read-only mode.
+            Anyone with the link can view this chat in read-only mode.
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -2515,7 +2554,8 @@ export function SessionChatContent(_props: unknown) {
             {/* Mobile share dialog */}
             <ShareDialog
               sessionId={session.id}
-              initialShareId={session.shareId}
+              chatId={chatInfo.id}
+              initialShareId={null}
               externalOpen={mobileShareOpen}
               onExternalOpenChange={setMobileShareOpen}
             />
