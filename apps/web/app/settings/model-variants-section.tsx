@@ -116,7 +116,7 @@ function VariantFormDialog({
     name: string;
     baseModelId: string;
     providerOptionsText: string;
-  }) => Promise<boolean>;
+  }) => Promise<true | string>;
 }) {
   const [name, setName] = useState("");
   const [baseModelId, setBaseModelId] = useState("");
@@ -160,9 +160,11 @@ function VariantFormDialog({
     }
 
     setError(null);
-    const success = await onSubmit({ name, baseModelId, providerOptionsText });
-    if (success) {
+    const result = await onSubmit({ name, baseModelId, providerOptionsText });
+    if (result === true) {
       onOpenChange(false);
+    } else {
+      setError(result);
     }
   };
 
@@ -434,12 +436,12 @@ export function ModelVariantsSection() {
     name: string;
     baseModelId: string;
     providerOptionsText: string;
-  }): Promise<boolean> => {
+  }): Promise<true | string> => {
     const parsedProviderOptions = parseProviderOptions(
       data.providerOptionsText,
     );
     if (!parsedProviderOptions.success) {
-      return false;
+      return parsedProviderOptions.error;
     }
 
     setIsSaving(true);
@@ -477,13 +479,11 @@ export function ModelVariantsSection() {
           "error" in responseData
             ? responseData.error
             : "Failed to save model variant";
-        setError(message ?? "Failed to save model variant");
-        return false;
+        return message ?? "Failed to save model variant";
       }
 
       if (!("modelVariants" in responseData)) {
-        setError("Failed to save model variant");
-        return false;
+        return "Failed to save model variant";
       }
 
       const nextVariants = responseData.modelVariants;
@@ -491,8 +491,7 @@ export function ModelVariantsSection() {
       return true;
     } catch (submitError) {
       console.error("Failed to save model variant:", submitError);
-      setError("Failed to save model variant");
-      return false;
+      return "Failed to save model variant";
     } finally {
       setIsSaving(false);
     }
