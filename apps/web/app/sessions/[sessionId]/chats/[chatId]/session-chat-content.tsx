@@ -2684,7 +2684,7 @@ export function SessionChatContent(_props: unknown) {
                               )}
                             </div>
                           ) : (
-                            <div className="group relative min-w-0 w-full overflow-hidden pr-10">
+                            <div className="group min-w-0 w-full overflow-hidden">
                               <Streamdown
                                 animated={
                                   isMessageStreaming
@@ -2704,23 +2704,25 @@ export function SessionChatContent(_props: unknown) {
                                 {p.text}
                               </Streamdown>
                               {canCopyAssistantMessage && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleCopyAssistantMessage(
-                                      m.id,
-                                      p.text,
-                                    )
-                                  }
-                                  aria-label="Copy assistant response"
-                                  className="absolute right-0 top-1 rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                                >
-                                  {copiedAssistantMessageId === m.id ? (
-                                    <Check className="h-4 w-4" />
-                                  ) : (
-                                    <Copy className="h-4 w-4" />
-                                  )}
-                                </button>
+                                <div className="mt-1 flex justify-start">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleCopyAssistantMessage(
+                                        m.id,
+                                        p.text,
+                                      )
+                                    }
+                                    aria-label="Copy assistant response"
+                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                  >
+                                    {copiedAssistantMessageId === m.id ? (
+                                      <Check className="h-4 w-4" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               )}
                             </div>
                           )}
