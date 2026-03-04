@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import useSWR from "swr";
+import type { DateRange } from "react-day-picker";
 import { ContributionChart } from "@/components/contribution-chart";
 import {
   Card,
@@ -10,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
 
@@ -409,6 +411,7 @@ export function UsageSection() {
     "/api/usage",
     fetcher,
   );
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const {
     webTotals,
@@ -419,7 +422,20 @@ export function UsageSection() {
     mainTotals,
     subagentTotals,
   } = useMemo(() => {
-    const usage = data?.usage ?? [];
+    let usage = data?.usage ?? [];
+
+    if (dateRange?.from) {
+      const toDateStr = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      };
+      const fromStr = toDateStr(dateRange.from);
+      const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
+      usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);
+    }
+
     const web = usage.filter((r) => r.source === "web");
     const cli = usage.filter((r) => r.source === "cli");
     const main = usage.filter((r) => r.agentType === "main");
@@ -433,7 +449,7 @@ export function UsageSection() {
       mainTotals: sumRows(main),
       subagentTotals: sumRows(subagent),
     };
-  }, [data]);
+  }, [data, dateRange]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -533,10 +549,17 @@ export function UsageSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Usage</CardTitle>
-        <CardDescription>
-          Token consumption and activity over the past 39 weeks.
-        </CardDescription>
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Usage</CardTitle>
+            <CardDescription>
+              {dateRange?.from
+                ? "Showing filtered results."
+                : "Token consumption and activity over the past 39 weeks."}
+            </CardDescription>
+          </div>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary stats */}
