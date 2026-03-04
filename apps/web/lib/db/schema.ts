@@ -1,4 +1,5 @@
 import type { SandboxState } from "@open-harness/sandbox";
+import type { ModelVariant } from "@/lib/model-variants";
 import {
   boolean,
   index,
@@ -312,6 +313,10 @@ export const userPreferences = pgTable("user_preferences", {
   defaultSandboxType: text("default_sandbox_type", {
     enum: ["hybrid", "vercel", "just-bash"],
   }).default("vercel"),
+  modelVariants: jsonb("model_variants")
+    .$type<ModelVariant[]>()
+    .notNull()
+    .default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

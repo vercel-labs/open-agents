@@ -13,13 +13,14 @@ import {
   useRef,
   useState,
 } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import { useSWRConfig } from "swr";
 import type { ReconnectResponse } from "@/app/api/sandbox/reconnect/route";
 import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
 import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/route";
 import type { WebAgentUIMessage } from "@/app/types";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { useSessionDiff } from "@/hooks/use-session-diff";
 import { useSessionFiles } from "@/hooks/use-session-files";
 import {
@@ -34,7 +35,7 @@ import {
 } from "@/lib/chat-instance-manager";
 import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
 import type { Chat, Session } from "@/lib/db/schema";
-import { fetcher } from "@/lib/swr";
+import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 
 const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
@@ -102,14 +103,6 @@ export type LifecycleTimingInfo = {
 
 export type SandboxStatusSyncResult = "active" | "no_sandbox" | "unknown";
 
-interface ModelsResponse {
-  models: Array<{
-    id: string;
-    name?: string;
-    context_window?: number;
-  }>;
-}
-
 type RetryChatStreamOptions = {
   auto?: boolean;
   strategy?: "hard" | "soft";
@@ -129,15 +122,15 @@ function toPositiveInteger(value: unknown): number | null {
 }
 
 function resolveContextLimitForModel(
-  models: ModelsResponse["models"] | undefined,
+  modelOptions: ModelOption[] | undefined,
   modelId: string | null | undefined,
 ): number | null {
-  if (!models || !modelId) {
+  if (!modelOptions || !modelId) {
     return null;
   }
 
-  const selectedModel = models.find((model) => model.id === modelId);
-  return toPositiveInteger(selectedModel?.context_window);
+  const selectedModel = modelOptions.find((model) => model.id === modelId);
+  return toPositiveInteger(selectedModel?.contextWindow);
 }
 
 type SessionChatContextValue = {
@@ -233,10 +226,10 @@ type SessionChatContextValue = {
   }) => void;
   /** Check sandbox branch and look for existing PRs, persisting to DB */
   checkBranchAndPr: () => Promise<void>;
-  /** Available models from the gateway */
-  models: ModelsResponse["models"];
-  /** Whether models are still loading */
-  modelsLoading: boolean;
+  /** Available model options (base models + variants) */
+  modelOptions: ModelOption[];
+  /** Whether model options are still loading */
+  modelOptionsLoading: boolean;
 };
 
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
@@ -291,7 +284,7 @@ type SessionChatProviderProps = {
   session: Session;
   chat: Chat;
   initialMessages: WebAgentUIMessage[];
-  initialModels: ModelsResponse["models"];
+  initialModelOptions: ModelOption[];
   children: ReactNode;
 };
 
@@ -303,7 +296,7 @@ export function SessionChatProvider({
   session: initialSession,
   chat: initialChat,
   initialMessages,
-  initialModels,
+  initialModelOptions,
   children,
 }: SessionChatProviderProps) {
   const { mutate } = useSWRConfig();
@@ -313,19 +306,21 @@ export function SessionChatProvider({
   const [hasSnapshotState, setHasSnapshotState] = useState<boolean>(
     !!initialSession.snapshotUrl,
   );
-  const hasInitialModels = initialModels.length > 0;
-  const { data: modelsResponse, isLoading: modelsLoading } =
-    useSWR<ModelsResponse>("/api/models", fetcher, {
-      fallbackData: hasInitialModels ? { models: initialModels } : undefined,
-    });
-  const models = modelsResponse?.models ?? [];
+  const {
+    modelOptions: baseModelOptions,
+    loading: modelOptionsLoadingFromApi,
+  } = useModelOptions({
+    initialModelOptions,
+  });
+  const modelOptions = useMemo(
+    () => withMissingModelOption(baseModelOptions, chatInfo.modelId),
+    [baseModelOptions, chatInfo.modelId],
+  );
+  const modelOptionsLoading =
+    modelOptions.length === 0 && modelOptionsLoadingFromApi;
   const contextLimit = useMemo(
-    () =>
-      resolveContextLimitForModel(
-        modelsResponse?.models,
-        chatInfo.modelId ?? null,
-      ),
-    [modelsResponse?.models, chatInfo.modelId],
+    () => resolveContextLimitForModel(modelOptions, chatInfo.modelId ?? null),
+    [modelOptions, chatInfo.modelId],
   );
   const contextLimitRef = useRef<number | null>(contextLimit);
 
@@ -1155,8 +1150,8 @@ export function SessionChatProvider({
       updateSessionRepo,
       updateSessionPullRequest,
       checkBranchAndPr,
-      models,
-      modelsLoading,
+      modelOptions,
+      modelOptionsLoading,
     }),
     [
       sessionRecord,
@@ -1207,8 +1202,8 @@ export function SessionChatProvider({
       updateSessionRepo,
       updateSessionPullRequest,
       checkBranchAndPr,
-      models,
-      modelsLoading,
+      modelOptions,
+      modelOptionsLoading,
     ],
   );
 

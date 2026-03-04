@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useMemo, useState } from "react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
@@ -24,17 +23,12 @@ import {
 } from "@/components/ui/select";
 import { ModelCombobox } from "@/components/model-combobox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
-  type AvailableModel,
-  DEFAULT_MODEL_ID,
-  getModelDisplayName,
-} from "@/lib/models";
-import { fetcher } from "@/lib/swr";
-
-interface ModelsResponse {
-  models: AvailableModel[];
-}
+  getDefaultModelOptionId,
+  withMissingModelOption,
+} from "@/lib/model-options";
 
 const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
   { id: "hybrid", name: "Hybrid" },
@@ -106,13 +100,22 @@ export function PreferencesSectionSkeleton() {
 export function PreferencesSection() {
   const { theme, setTheme } = useTheme();
   const { preferences, loading, updatePreferences } = useUserPreferences();
-  const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
-    "/api/models",
-    fetcher,
-  );
+  const { modelOptions, loading: modelOptionsLoading } = useModelOptions();
   const [isSaving, setIsSaving] = useState(false);
 
-  const models = modelsData?.models ?? [];
+  const selectedDefaultModelId =
+    preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
+  const selectedSubagentModelId = preferences?.defaultSubagentModelId ?? "auto";
+
+  const defaultModelOptions = useMemo(
+    () => withMissingModelOption(modelOptions, selectedDefaultModelId),
+    [modelOptions, selectedDefaultModelId],
+  );
+  const subagentModelOptions = useMemo(
+    () =>
+      withMissingModelOption(modelOptions, preferences?.defaultSubagentModelId),
+    [modelOptions, preferences?.defaultSubagentModelId],
+  );
 
   const handleThemeChange = (nextTheme: string) => {
     if (isThemePreference(nextTheme)) {
@@ -192,15 +195,17 @@ export function PreferencesSection() {
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
           <ModelCombobox
-            value={preferences?.defaultModelId ?? DEFAULT_MODEL_ID}
-            items={models.map((model) => ({
-              id: model.id,
-              label: getModelDisplayName(model),
+            value={selectedDefaultModelId}
+            items={defaultModelOptions.map((option) => ({
+              id: option.id,
+              label: option.label,
+              description: option.description,
+              isVariant: option.isVariant,
             }))}
             placeholder="Select a model"
             searchPlaceholder="Search models..."
-            emptyText={modelsLoading ? "Loading..." : "No models found."}
-            disabled={isSaving || modelsLoading}
+            emptyText={modelOptionsLoading ? "Loading..." : "No models found."}
+            disabled={isSaving || modelOptionsLoading}
             onChange={handleModelChange}
           />
           <p className="text-xs text-muted-foreground">
@@ -211,18 +216,20 @@ export function PreferencesSection() {
         <div className="grid gap-2">
           <Label htmlFor="subagent-model">Subagent Model</Label>
           <ModelCombobox
-            value={preferences?.defaultSubagentModelId ?? "auto"}
+            value={selectedSubagentModelId}
             items={[
               { id: "auto", label: "Same as main model" },
-              ...models.map((model) => ({
-                id: model.id,
-                label: getModelDisplayName(model),
+              ...subagentModelOptions.map((option) => ({
+                id: option.id,
+                label: option.label,
+                description: option.description,
+                isVariant: option.isVariant,
               })),
             ]}
             placeholder="Select a model"
             searchPlaceholder="Search models..."
-            emptyText={modelsLoading ? "Loading..." : "No models found."}
-            disabled={isSaving || modelsLoading}
+            emptyText={modelOptionsLoading ? "Loading..." : "No models found."}
+            disabled={isSaving || modelOptionsLoading}
             onChange={handleSubagentModelChange}
           />
           <p className="text-xs text-muted-foreground">

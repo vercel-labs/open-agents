@@ -4,6 +4,11 @@ import type { WebAgentUIMessage } from "@/app/types";
 import { DiffsProvider } from "@/components/diffs-provider";
 import { getChatById, getChatMessages } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
+import { getUserPreferences } from "@/lib/db/user-preferences";
+import {
+  buildSessionChatModelOptions,
+  withMissingModelOption,
+} from "@/lib/model-options";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionChatContent } from "./session-chat-content";
@@ -91,26 +96,34 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
-  // Fetch chat, messages, and models in parallel
-  const [chat, dbMessages, initialModels] = await Promise.all([
+  // Fetch chat, messages, models, and preferences in parallel
+  const [chat, dbMessages, initialModels, preferences] = await Promise.all([
     getChatByIdWithRetry(chatId, sessionId),
     getChatMessages(chatId),
     getInitialModels(),
+    getUserPreferences(session.user.id),
   ]);
+
   if (!chat) {
     if (isOptimisticChatId(chatId)) {
       redirect(`/sessions/${sessionId}`);
     }
     notFound();
   }
+
   const initialMessages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
+  const initialModelOptions = withMissingModelOption(
+    buildSessionChatModelOptions(initialModels, preferences.modelVariants),
+    chat.modelId,
+  );
+
   return (
     <DiffsProvider>
       <SessionChatProvider
         session={sessionRecord}
         chat={chat}
         initialMessages={initialMessages}
-        initialModels={initialModels}
+        initialModelOptions={initialModelOptions}
       >
         <SessionChatContent />
       </SessionChatProvider>

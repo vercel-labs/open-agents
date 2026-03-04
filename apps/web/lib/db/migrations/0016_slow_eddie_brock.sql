@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "model_variants" jsonb DEFAULT '[]'::jsonb NOT NULL;

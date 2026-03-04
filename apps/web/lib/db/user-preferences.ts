@@ -1,20 +1,57 @@
-import { db } from "./client";
-import { userPreferences } from "./schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
+import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
+import { db } from "./client";
+import { userPreferences, type UserPreferences } from "./schema";
 
 export interface UserPreferencesData {
   defaultModelId: string;
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
+  modelVariants: ModelVariant[];
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultModelId: "anthropic/claude-haiku-4.5",
   defaultSubagentModelId: null,
   defaultSandboxType: "vercel",
+  modelVariants: [],
 };
+
+const VALID_SANDBOX_TYPES: SandboxType[] = ["hybrid", "vercel", "just-bash"];
+
+function normalizeSandboxType(value: unknown): SandboxType {
+  if (
+    typeof value === "string" &&
+    VALID_SANDBOX_TYPES.includes(value as SandboxType)
+  ) {
+    return value as SandboxType;
+  }
+
+  return DEFAULT_PREFERENCES.defaultSandboxType;
+}
+
+export function toUserPreferencesData(
+  row?: Pick<
+    UserPreferences,
+    | "defaultModelId"
+    | "defaultSubagentModelId"
+    | "defaultSandboxType"
+    | "modelVariants"
+  >,
+): UserPreferencesData {
+  const parsedModelVariants = modelVariantsSchema.safeParse(
+    row?.modelVariants ?? [],
+  );
+
+  return {
+    defaultModelId: row?.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
+    defaultSubagentModelId: row?.defaultSubagentModelId ?? null,
+    defaultSandboxType: normalizeSandboxType(row?.defaultSandboxType),
+    modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
+  };
+}
 
 /**
  * Get user preferences, creating default preferences if none exist
@@ -28,18 +65,7 @@ export async function getUserPreferences(
     .where(eq(userPreferences.userId, userId))
     .limit(1);
 
-  if (existing) {
-    return {
-      defaultModelId:
-        existing.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
-      defaultSubagentModelId: existing.defaultSubagentModelId ?? null,
-      defaultSandboxType:
-        (existing.defaultSandboxType as SandboxType) ??
-        DEFAULT_PREFERENCES.defaultSandboxType,
-    };
-  }
-
-  return DEFAULT_PREFERENCES;
+  return toUserPreferencesData(existing);
 }
 
 /**
@@ -65,14 +91,7 @@ export async function updateUserPreferences(
       .where(eq(userPreferences.userId, userId))
       .returning();
 
-    return {
-      defaultModelId:
-        updated?.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
-      defaultSubagentModelId: updated?.defaultSubagentModelId ?? null,
-      defaultSandboxType:
-        (updated?.defaultSandboxType as SandboxType) ??
-        DEFAULT_PREFERENCES.defaultSandboxType,
-    };
+    return toUserPreferencesData(updated);
   }
 
   // Create new preferences
@@ -86,15 +105,9 @@ export async function updateUserPreferences(
       defaultSubagentModelId: updates.defaultSubagentModelId ?? null,
       defaultSandboxType:
         updates.defaultSandboxType ?? DEFAULT_PREFERENCES.defaultSandboxType,
+      modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
     })
     .returning();
 
-  return {
-    defaultModelId:
-      created?.defaultModelId ?? DEFAULT_PREFERENCES.defaultModelId,
-    defaultSubagentModelId: created?.defaultSubagentModelId ?? null,
-    defaultSandboxType:
-      (created?.defaultSandboxType as SandboxType) ??
-      DEFAULT_PREFERENCES.defaultSandboxType,
-  };
+  return toUserPreferencesData(created);
 }

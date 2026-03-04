@@ -4,11 +4,12 @@ import {
   gateway as aiGateway,
   wrapLanguageModel,
   type GatewayModelId,
+  type JSONValue,
   type LanguageModel,
 } from "ai";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
 import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
 import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
-import { devToolsMiddleware } from "@ai-sdk/devtools";
 
 // Models with 4.5+ support adaptive thinking with effort control.
 // Older models use the legacy extended thinking API with a budget.
@@ -25,6 +26,65 @@ function getAnthropicSettings(modelId: string): AnthropicLanguageModelOptions {
   };
 }
 
+function isJsonObject(value: unknown): value is Record<string, JSONValue> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toProviderOptionsRecord(
+  options: Record<string, unknown>,
+): Record<string, JSONValue> {
+  return options as Record<string, JSONValue>;
+}
+
+function mergeRecords(
+  base: Record<string, JSONValue>,
+  override: Record<string, JSONValue>,
+): Record<string, JSONValue> {
+  const merged: Record<string, JSONValue> = { ...base };
+
+  for (const [key, value] of Object.entries(override)) {
+    const existingValue = merged[key];
+
+    if (isJsonObject(existingValue) && isJsonObject(value)) {
+      merged[key] = mergeRecords(existingValue, value);
+      continue;
+    }
+
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
+export type ProviderOptionsByProvider = Record<
+  string,
+  Record<string, JSONValue>
+>;
+
+export function mergeProviderOptions(
+  defaults: ProviderOptionsByProvider,
+  overrides?: ProviderOptionsByProvider,
+): ProviderOptionsByProvider {
+  if (!overrides || Object.keys(overrides).length === 0) {
+    return defaults;
+  }
+
+  const merged: ProviderOptionsByProvider = { ...defaults };
+
+  for (const [provider, providerOverrides] of Object.entries(overrides)) {
+    const providerDefaults = merged[provider];
+
+    if (!providerDefaults) {
+      merged[provider] = providerOverrides;
+      continue;
+    }
+
+    merged[provider] = mergeRecords(providerDefaults, providerOverrides);
+  }
+
+  return merged;
+}
+
 export interface GatewayConfig {
   baseURL: string;
   apiKey: string;
@@ -33,13 +93,14 @@ export interface GatewayConfig {
 export interface GatewayOptions {
   devtools?: boolean;
   config?: GatewayConfig;
+  providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
 export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
 ): LanguageModel {
-  const { devtools = false, config } = options;
+  const { devtools = false, config, providerOptionsOverrides } = options;
 
   // Use custom gateway config or default AI SDK gateway
   const baseGateway = config
@@ -48,33 +109,37 @@ export function gateway(
 
   let model: LanguageModel = baseGateway(modelId);
 
-  // Apply anthropic middleware for anthropic models
+  const defaultProviderOptions: ProviderOptionsByProvider = {};
+
+  // Apply anthropic defaults
   if (modelId.startsWith("anthropic/")) {
-    const middleware = defaultSettingsMiddleware({
-      settings: {
-        providerOptions: {
-          anthropic: getAnthropicSettings(modelId),
-        },
-      },
-    });
-    model = wrapLanguageModel({ model, middleware });
+    defaultProviderOptions.anthropic = toProviderOptionsRecord(
+      getAnthropicSettings(modelId),
+    );
   }
 
-  // Apply openai middleware to expose reasoning summaries
+  // Apply openai defaults to expose reasoning summaries
   if (modelId.startsWith("openai/")) {
-    const middleware = defaultSettingsMiddleware({
-      settings: {
-        providerOptions: {
-          openai: {
-            reasoningEffort: "high",
-            reasoningSummary: "detailed",
-            store: false,
-            include: ["reasoning.encrypted_content"],
-          } satisfies OpenAIResponsesProviderOptions,
-        },
-      },
+    defaultProviderOptions.openai = toProviderOptionsRecord({
+      reasoningEffort: "high",
+      reasoningSummary: "detailed",
+      store: false,
+      include: ["reasoning.encrypted_content"],
+    } satisfies OpenAIResponsesProviderOptions);
+  }
+
+  const providerOptions = mergeProviderOptions(
+    defaultProviderOptions,
+    providerOptionsOverrides,
+  );
+
+  if (Object.keys(providerOptions).length > 0) {
+    model = wrapLanguageModel({
+      model,
+      middleware: defaultSettingsMiddleware({
+        settings: { providerOptions },
+      }),
     });
-    model = wrapLanguageModel({ model, middleware });
   }
 
   // Apply devtools middleware if requested
