@@ -68,6 +68,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    // NOTE: This read-modify-write flow can drop concurrent updates (e.g. multiple tabs).
+    // It's acceptable for now, but should be hardened later with optimistic concurrency
+    // or an atomic database update.
     const preferences = await getUserPreferences(session.user.id);
     const nextVariant: ModelVariant = modelVariantSchema.parse({
       id: `${MODEL_VARIANT_ID_PREFIX}${nanoid()}`,
