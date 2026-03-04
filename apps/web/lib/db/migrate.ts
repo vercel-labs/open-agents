@@ -52,6 +52,14 @@ async function baselineIfNeeded() {
   );
   const journal = JSON.parse(readFileSync(journalPath, "utf-8"));
 
+  // Get all public tables that currently exist in the database.
+  const existingTablesResult = await client`
+		SELECT table_name FROM information_schema.tables
+		WHERE table_schema = 'public'`;
+  const existingTables = new Set(
+    existingTablesResult.map((r) => (r.table_name as string).toLowerCase()),
+  );
+
   let baselined = 0;
   for (const entry of journal.entries) {
     const sqlPath = join(import.meta.dirname, "migrations", `${entry.tag}.sql`);
@@ -60,9 +68,22 @@ async function baselineIfNeeded() {
 
     if (trackedHashes.has(hash)) continue; // already tracked
 
+    // If this migration creates a table that doesn't exist yet, this migration
+    // (and everything after it) genuinely needs to run.
+    const createdTables = [
+      ...sql.matchAll(
+        /CREATE TABLE(?: IF NOT EXISTS)?\s+(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi,
+      ),
+    ].map((m) => m[1].toLowerCase());
+
+    if (createdTables.some((table) => !existingTables.has(table))) {
+      break;
+    }
+
     await client`
 			INSERT INTO drizzle."__drizzle_migrations" (hash, created_at)
 			VALUES (${hash}, ${entry.when})`;
+    trackedHashes.add(hash);
     baselined++;
   }
 
