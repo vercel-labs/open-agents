@@ -38,10 +38,20 @@ async function baselineIfNeeded() {
 			created_at bigint
 		)`;
 
-  // Get already-tracked hashes
-  const tracked = await client`
-		SELECT hash FROM drizzle."__drizzle_migrations"`;
-  const trackedHashes = new Set(tracked.map((r) => r.hash as string));
+  // Only baseline truly untracked databases. If anything is already tracked,
+  // never insert synthetic rows; let migrate() apply pending migrations.
+  const [{ count: trackedCount }] = await client`
+		SELECT COUNT(*)::int AS count
+		FROM drizzle."__drizzle_migrations"`;
+
+  if (trackedCount > 0) {
+    console.log(
+      `Skipping baseline (${trackedCount} tracked migration(s) already present)`,
+    );
+    return;
+  }
+
+  const trackedHashes = new Set<string>();
 
   // Read the journal
   const journalPath = join(
