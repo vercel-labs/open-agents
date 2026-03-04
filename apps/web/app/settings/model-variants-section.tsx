@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Boxes,
+  ChevronRight,
+  Code2,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { ModelCombobox } from "@/components/model-combobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,10 +19,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { type AvailableModel, getModelDisplayName } from "@/lib/models";
 import {
   providerOptionsSchema,
@@ -77,57 +97,48 @@ export function ModelVariantsSectionSkeleton() {
   );
 }
 
-export function ModelVariantsSection() {
-  const { data: modelsData, isLoading: modelsLoading } = useSWR<ModelsResponse>(
-    "/api/models",
-    fetcher,
-  );
-  const {
-    data: variantsData,
-    isLoading: variantsLoading,
-    mutate,
-  } = useSWR<ModelVariantsResponse>("/api/settings/model-variants", fetcher);
-
-  const models = modelsData?.models ?? EMPTY_MODELS;
-  const modelVariants = variantsData?.modelVariants ?? EMPTY_MODEL_VARIANTS;
-
-  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+function VariantFormDialog({
+  open,
+  onOpenChange,
+  editingVariant,
+  models,
+  modelItems,
+  isSaving,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingVariant: ModelVariant | null;
+  models: AvailableModel[];
+  modelItems: Array<{ id: string; label: string }>;
+  isSaving: boolean;
+  onSubmit: (data: {
+    name: string;
+    baseModelId: string;
+    providerOptionsText: string;
+  }) => Promise<boolean>;
+}) {
   const [name, setName] = useState("");
   const [baseModelId, setBaseModelId] = useState("");
   const [providerOptionsText, setProviderOptionsText] = useState("{}");
   const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!baseModelId && models[0]?.id) {
-      setBaseModelId(models[0].id);
+    if (open) {
+      if (editingVariant) {
+        setName(editingVariant.name);
+        setBaseModelId(editingVariant.baseModelId);
+        setProviderOptionsText(
+          JSON.stringify(editingVariant.providerOptions, null, 2),
+        );
+      } else {
+        setName("");
+        setBaseModelId(models[0]?.id ?? "");
+        setProviderOptionsText("{}");
+      }
+      setError(null);
     }
-  }, [baseModelId, models]);
-
-  const modelItems = useMemo(
-    () =>
-      models.map((model) => ({
-        id: model.id,
-        label: getModelDisplayName(model),
-      })),
-    [models],
-  );
-
-  const modelNameById = useMemo(
-    () =>
-      new Map(models.map((model) => [model.id, getModelDisplayName(model)])),
-    [models],
-  );
-
-  const resetForm = () => {
-    setEditingVariantId(null);
-    setName("");
-    setProviderOptionsText("{}");
-    setError(null);
-    if (models[0]?.id) {
-      setBaseModelId(models[0].id);
-    }
-  };
+  }, [open, editingVariant, models]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -149,20 +160,303 @@ export function ModelVariantsSection() {
     }
 
     setError(null);
+    const success = await onSubmit({ name, baseModelId, providerOptionsText });
+    if (success) {
+      onOpenChange(false);
+    }
+  };
+
+  const isEditing = editingVariant !== null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {isEditing ? "Edit Variant" : "New Variant"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing
+              ? "Update the variant configuration below."
+              : "Configure a base model with custom provider options."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="variant-name" className="text-xs font-medium">
+              Name
+            </Label>
+            <Input
+              id="variant-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Claude Adaptive Thinking"
+              disabled={isSaving}
+
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="base-model" className="text-xs font-medium">
+              Base Model
+            </Label>
+            <ModelCombobox
+              value={baseModelId}
+              items={modelItems}
+              placeholder="Select a base model"
+              searchPlaceholder="Search base models..."
+              emptyText="No base models found."
+              disabled={isSaving}
+              onChange={setBaseModelId}
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label
+              htmlFor="provider-options"
+              className="text-xs font-medium"
+            >
+              Provider Options
+            </Label>
+            <Textarea
+              id="provider-options"
+              value={providerOptionsText}
+              onChange={(event) =>
+                setProviderOptionsText(event.target.value)
+              }
+              className="min-h-28 resize-y rounded-md border-border bg-muted/30 font-mono text-xs leading-relaxed"
+              placeholder='{"reasoningEffort": "medium"}'
+              disabled={isSaving}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              JSON object passed to the provider. e.g.{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                {"reasoningEffort"}
+              </code>
+              ,{" "}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                {"reasoningSummary"}
+              </code>
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+              <p className="text-xs text-destructive">{error}</p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={isSaving}>
+              {isSaving
+                ? "Saving…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Create Variant"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function VariantCard({
+  variant,
+  modelName,
+  isSaving,
+  onEdit,
+  onDelete,
+}: {
+  variant: ModelVariant;
+  modelName: string;
+  isSaving: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const optionKeys = Object.keys(variant.providerOptions);
+  const hasOptions = optionKeys.length > 0;
+
+  return (
+    <div className="group relative rounded-lg border border-border bg-card transition-colors hover:border-border/80 hover:bg-accent/30">
+      <div className="flex items-start gap-3 p-3.5">
+        {/* Icon */}
+        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/70">
+          <Boxes className="size-3.5 text-muted-foreground" />
+        </div>
+
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-medium leading-tight">
+              {variant.name}
+            </h3>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className="truncate text-xs text-muted-foreground">
+              {modelName}
+            </span>
+            {hasOptions && (
+              <>
+                <span className="text-muted-foreground/40">·</span>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Code2 className="size-3" />
+                  {optionKeys.length === 1
+                    ? "1 option"
+                    : `${optionKeys.length} options`}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Options preview */}
+          {hasOptions && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {optionKeys.slice(0, 4).map((key) => (
+                <Tooltip key={key}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex max-w-[180px] items-center truncate rounded-sm bg-muted/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {key}
+                      <ChevronRight className="ml-0.5 inline size-2.5 opacity-40" />
+                      <span className="opacity-70">
+                        {String(variant.providerOptions[key])}
+                      </span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <span className="font-mono text-xs">
+                      {key}: {JSON.stringify(variant.providerOptions[key])}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+              {optionKeys.length > 4 && (
+                <span className="inline-flex items-center rounded-sm bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  +{optionKeys.length - 4} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                onClick={onEdit}
+                disabled={isSaving}
+                className="size-7"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit variant</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                onClick={onDelete}
+                disabled={isSaving}
+                className="size-7 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete variant</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ModelVariantsSection() {
+  const { data: modelsData, isLoading: modelsLoading } =
+    useSWR<ModelsResponse>("/api/models", fetcher);
+  const {
+    data: variantsData,
+    isLoading: variantsLoading,
+    mutate,
+  } = useSWR<ModelVariantsResponse>("/api/settings/model-variants", fetcher);
+
+  const models = modelsData?.models ?? EMPTY_MODELS;
+  const modelVariants = variantsData?.modelVariants ?? EMPTY_MODEL_VARIANTS;
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingVariant, setEditingVariant] = useState<ModelVariant | null>(
+    null,
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const modelItems = useMemo(
+    () =>
+      models.map((model) => ({
+        id: model.id,
+        label: getModelDisplayName(model),
+      })),
+    [models],
+  );
+
+  const modelNameById = useMemo(
+    () =>
+      new Map(models.map((model) => [model.id, getModelDisplayName(model)])),
+    [models],
+  );
+
+  const handleOpenCreate = () => {
+    setEditingVariant(null);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (variant: ModelVariant) => {
+    setEditingVariant(variant);
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async (data: {
+    name: string;
+    baseModelId: string;
+    providerOptionsText: string;
+  }): Promise<boolean> => {
+    const parsedProviderOptions = parseProviderOptions(
+      data.providerOptionsText,
+    );
+    if (!parsedProviderOptions.success) {
+      return false;
+    }
+
     setIsSaving(true);
+    setError(null);
 
     try {
-      const method = editingVariantId ? "PATCH" : "POST";
-      const body = editingVariantId
+      const method = editingVariant ? "PATCH" : "POST";
+      const body = editingVariant
         ? {
-            id: editingVariantId,
-            name: name.trim(),
-            baseModelId,
+            id: editingVariant.id,
+            name: data.name.trim(),
+            baseModelId: data.baseModelId,
             providerOptions: parsedProviderOptions.data,
           }
         : {
-            name: name.trim(),
-            baseModelId,
+            name: data.name.trim(),
+            baseModelId: data.baseModelId,
             providerOptions: parsedProviderOptions.data,
           };
 
@@ -184,31 +478,24 @@ export function ModelVariantsSection() {
             ? responseData.error
             : "Failed to save model variant";
         setError(message ?? "Failed to save model variant");
-        return;
+        return false;
       }
 
       if (!("modelVariants" in responseData)) {
         setError("Failed to save model variant");
-        return;
+        return false;
       }
 
       const nextVariants = responseData.modelVariants;
       await mutate({ modelVariants: nextVariants }, { revalidate: false });
-      resetForm();
+      return true;
     } catch (submitError) {
       console.error("Failed to save model variant:", submitError);
       setError("Failed to save model variant");
+      return false;
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleEdit = (variant: ModelVariant) => {
-    setEditingVariantId(variant.id);
-    setName(variant.name);
-    setBaseModelId(variant.baseModelId);
-    setProviderOptionsText(JSON.stringify(variant.providerOptions, null, 2));
-    setError(null);
   };
 
   const handleDelete = async (variantId: string) => {
@@ -248,10 +535,6 @@ export function ModelVariantsSection() {
 
       const nextVariants = responseData.modelVariants;
       await mutate({ modelVariants: nextVariants }, { revalidate: false });
-
-      if (editingVariantId === variantId) {
-        resetForm();
-      }
     } catch (deleteError) {
       console.error("Failed to delete model variant:", deleteError);
       setError("Failed to delete model variant");
@@ -265,151 +548,87 @@ export function ModelVariantsSection() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
       <Card>
         <CardHeader>
-          <CardTitle>Model Variants</CardTitle>
-          <CardDescription>
-            Create named presets that wrap a base model with provider-specific
-            options JSON.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <CardTitle>Model Variants</CardTitle>
+              <CardDescription>
+                Named presets that combine a base model with custom provider
+                options. Variants appear alongside regular models in selectors
+                across the app.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleOpenCreate}
+              disabled={isSaving}
+              className="shrink-0"
+            >
+              <Plus className="size-3.5" />
+              New Variant
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-2">
-              <Label htmlFor="variant-name">Name</Label>
-              <Input
-                id="variant-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Claude Adaptive Thinking"
-                disabled={isSaving}
-              />
+          {error && (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+              <p className="text-xs text-destructive">{error}</p>
             </div>
+          )}
 
-            <div className="grid gap-2">
-              <Label htmlFor="base-model">Base Model</Label>
-              <ModelCombobox
-                value={baseModelId}
-                items={modelItems}
-                placeholder="Select a base model"
-                searchPlaceholder="Search base models..."
-                emptyText="No base models found."
-                disabled={isSaving}
-                onChange={setBaseModelId}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="provider-options">Provider Options (JSON)</Label>
-              <Textarea
-                id="provider-options"
-                value={providerOptionsText}
-                onChange={(event) => setProviderOptionsText(event.target.value)}
-                className="min-h-36 font-mono text-xs"
-                disabled={isSaving}
-              />
-              <p className="text-xs text-muted-foreground">
-                Example:{" "}
-                {'{"reasoningEffort":"medium","reasoningSummary":"auto"}'}
-              </p>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="submit" disabled={isSaving}>
-                {editingVariantId ? (
-                  <>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Save Variant
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Variant
-                  </>
-                )}
-              </Button>
-
-              {editingVariantId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetForm}
-                  disabled={isSaving}
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Cancel Edit
-                </Button>
-              )}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Saved Variants</CardTitle>
-          <CardDescription>
-            Variants appear alongside regular models in selectors across the
-            app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
           {modelVariants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No model variants yet. Create one above.
-            </p>
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-10">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                <Boxes className="size-5 text-muted-foreground" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-foreground">
+                No variants yet
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Create a variant to customize model behavior with provider
+                options.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleOpenCreate}
+                className="mt-4"
+              >
+                <Plus className="size-3.5" />
+                Create your first variant
+              </Button>
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {modelVariants.map((variant) => (
-                <div
+                <VariantCard
                   key={variant.id}
-                  className="rounded-md border border-border p-3 space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-medium">{variant.name}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Base model:{" "}
-                        {modelNameById.get(variant.baseModelId) ??
-                          variant.baseModelId}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {variant.id}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleEdit(variant)}
-                        disabled={isSaving}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDelete(variant.id)}
-                        disabled={isSaving}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <pre className="max-h-48 overflow-auto rounded bg-muted/50 p-2 text-xs">
-                    {JSON.stringify(variant.providerOptions, null, 2)}
-                  </pre>
-                </div>
+                  variant={variant}
+                  modelName={
+                    modelNameById.get(variant.baseModelId) ??
+                    variant.baseModelId
+                  }
+                  isSaving={isSaving}
+                  onEdit={() => handleOpenEdit(variant)}
+                  onDelete={() => handleDelete(variant.id)}
+                />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+
+      <VariantFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingVariant={editingVariant}
+        models={models}
+        modelItems={modelItems}
+        isSaving={isSaving}
+        onSubmit={handleSubmit}
+      />
+    </>
   );
 }
