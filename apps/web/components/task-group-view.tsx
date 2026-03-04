@@ -75,31 +75,33 @@ function formatTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function useTaskTiming(isRunning: boolean) {
-  const startTimeRef = useRef<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+function useTaskTiming(isRunning: boolean, startedAtMs?: number) {
+  const fallbackStartRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (isRunning && !startTimeRef.current) {
-      startTimeRef.current = Date.now();
-    }
-
     if (!isRunning) {
       return;
     }
 
+    if (startedAtMs == null && !fallbackStartRef.current) {
+      fallbackStartRef.current = Date.now();
+    }
+
+    setNow(Date.now());
     const interval = setInterval(() => {
-      if (startTimeRef.current) {
-        setElapsedSeconds(
-          Math.floor((Date.now() - startTimeRef.current) / 1000),
-        );
-      }
+      setNow(Date.now());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, startedAtMs]);
 
-  return elapsedSeconds;
+  const effectiveStart = startedAtMs ?? fallbackStartRef.current;
+  if (!isRunning || effectiveStart == null) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((now - effectiveStart) / 1000));
 }
 
 function TaskStatusIndicator({ status }: { status: TaskStatus }) {
@@ -144,11 +146,13 @@ function TaskItem({
 }) {
   const status = getTaskStatus(part, isStreaming);
   const isRunning = status === "running" || status === "pending";
-  const elapsedSeconds = useTaskTiming(isRunning);
 
   const hasOutput = part.state === "output-available";
   const isComplete = hasOutput && !part.preliminary;
   const output = hasOutput ? part.output : undefined;
+  const startedAt =
+    typeof output?.startedAt === "number" ? output.startedAt : undefined;
+  const elapsedSeconds = useTaskTiming(isRunning, startedAt);
 
   const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
   const toolCount =
