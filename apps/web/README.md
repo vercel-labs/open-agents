@@ -6,7 +6,7 @@ The following environment variables are required:
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_URL` | PostgreSQL connection string. Required for builds as database migrations run automatically via `drizzle-kit migrate`. |
+| `POSTGRES_URL` | PostgreSQL connection string. Required for builds — migrations run automatically during `next build` via `lib/db/migrate.ts`. Preview deployments use a Neon branch database; production uses the main database. |
 
 ## Getting Started
 

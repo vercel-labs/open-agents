@@ -877,8 +877,8 @@ export function SessionChatContent(_props: unknown) {
     updateSessionRepo,
     updateSessionPullRequest,
     checkBranchAndPr,
-    models,
-    modelsLoading,
+    modelOptions,
+    modelOptionsLoading,
   } = useSessionChatContext();
   const mobileActiveChatId = chatInfo.id;
   const handleMobileNewChat = () => {
@@ -1419,6 +1419,11 @@ export function SessionChatContent(_props: unknown) {
     [chatInfo.modelId, updateChatModel],
   );
 
+  const selectedModelOption = useMemo(
+    () => modelOptions.find((option) => option.id === chatInfo.modelId),
+    [modelOptions, chatInfo.modelId],
+  );
+
   const handleFileSelect = (
     value: string,
     mentionStart: number,
@@ -1825,14 +1830,12 @@ export function SessionChatContent(_props: unknown) {
     const becameError = status === "error" && prevStatus !== "error";
     const shouldClearStreaming = status === "error" || becameReady;
     prevStatusRef.current = status;
-    // Skip clearing the streaming overlay during unmount. When the user
-    // switches to another chat, the cleanup effect calls chatInstance.stop()
-    // which triggers an AbortError -> status "ready" transition. If that
-    // status change propagates before React finishes tearing down the
-    // component tree, this effect would clear the optimistic streaming
-    // overlay even though the server-side stream is still running. The
-    // SWR polling and overlay reconciliation will clear it once the server
-    // confirms the stream has actually ended.
+    // Skip clearing the streaming overlay during unmount. Route teardown aborts
+    // local transport connections, which can still trigger a transient status
+    // transition before React finishes unmounting. Clearing here would remove
+    // the optimistic streaming badge even though the server-side stream may
+    // still be running. SWR polling + overlay reconciliation clear it once the
+    // server confirms the stream has actually ended.
     if (shouldClearStreaming && isMountedRef.current) {
       void setChatStreaming(chatInfo.id, false);
     }
@@ -3253,15 +3256,14 @@ export function SessionChatContent(_props: unknown) {
                   {renderMessages.length === 0 && chatInfo.modelId ? (
                     <div
                       className={
-                        isChatInFlight || isUpdatingModel
+                        isChatInFlight || isUpdatingModel || modelOptionsLoading
                           ? "pointer-events-none opacity-60"
                           : undefined
                       }
                     >
                       <ModelSelectorCompact
                         value={chatInfo.modelId}
-                        models={models}
-                        isLoading={modelsLoading}
+                        modelOptions={modelOptions}
                         onChange={(modelId) => {
                           void handleModelChange(modelId);
                         }}
@@ -3270,7 +3272,7 @@ export function SessionChatContent(_props: unknown) {
                   ) : (
                     chatInfo.modelId && (
                       <span className="text-xs text-muted-foreground/60">
-                        {chatInfo.modelId}
+                        {selectedModelOption?.label ?? chatInfo.modelId}
                       </span>
                     )
                   )}

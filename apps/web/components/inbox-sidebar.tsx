@@ -156,7 +156,7 @@ const SessionRow = memo(function SessionRow({
   return (
     <div
       className={`group relative flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
-        isActive ? "bg-secondary" : "hover:bg-muted/50"
+        isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
       }`}
     >
       <div className="flex h-5 w-3 shrink-0 items-center justify-center">

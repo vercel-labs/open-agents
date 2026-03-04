@@ -10,9 +10,23 @@ This file provides guidance for AI coding agents working in this repository.
 - [Code Style & Patterns](docs/agents/code-style.md)
 - [Lessons Learned](docs/agents/lessons-learned.md)
 
-## Development Mode
+## Database & Migrations
 
-This project is in active development. Do not worry about database migrations -- the schema can be changed directly and the database reset as needed. Prioritize speed and correctness over backwards compatibility.
+Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle Kit.
+
+**After modifying `schema.ts`, always generate a migration:**
+
+```bash
+bun run --cwd apps/web db:generate   # Creates a new .sql migration file
+```
+
+Commit the generated `.sql` file alongside the schema change. **Do not use `db:push`** except for local throwaway databases.
+
+Migrations run automatically during `bun run build` (via `lib/db/migrate.ts`), so every Vercel deploy — both preview and production — applies pending migrations to its own database.
+
+### Environment isolation
+
+Neon database branching is enabled in the Vercel project settings. Every preview deployment automatically gets its own isolated database branch forked from production. This means preview deployments never read or write production data. Production deployments use the main Neon database.
 
 ## Commands
 
@@ -43,6 +57,11 @@ bun test                        # Run all tests
 bun test path/to/file.test.ts   # Run single test file
 bun test --watch                # Watch mode
 ```
+
+**CI/script execution rules:**
+
+- Run project checks through package scripts (for example `bun run ci`, `bun run --cwd apps/web db:check`).
+- Prefer `bun run <script>` over invoking tool binaries directly (`bunx`, `bun x`, `tsc`, `eslint`, etc.) so local runs match CI behavior.
 
 ## Git Commands
 

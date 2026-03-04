@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, CheckIcon } from "lucide-react";
+import { CheckIcon, ChevronDown } from "lucide-react";
+import { type ModelOption } from "@/lib/model-options";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -16,24 +18,16 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
-
-interface ModelItem {
-  id: string;
-  name?: string;
-}
 
 interface ModelSelectorCompactProps {
   value: string;
-  models?: ModelItem[];
-  isLoading?: boolean;
+  modelOptions: ModelOption[];
   onChange: (modelId: string) => void;
 }
 
 export function ModelSelectorCompact({
   value,
-  models = [],
-  isLoading = false,
+  modelOptions,
   onChange,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
@@ -43,12 +37,8 @@ export function ModelSelectorCompact({
     setOpen(false);
   };
 
-  const selectedModel = models.find((m) => m.id === value);
-  const displayText = isLoading
-    ? "Loading..."
-    : selectedModel
-      ? (selectedModel.name ?? selectedModel.id)
-      : value;
+  const selectedOption = modelOptions.find((option) => option.id === value);
+  const displayText = selectedOption?.label ?? value;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,29 +55,34 @@ export function ModelSelectorCompact({
         <Command>
           <CommandInput placeholder="Search models..." />
           <CommandList>
-            <CommandEmpty>
-              {isLoading ? "Loading..." : "No models found."}
-            </CommandEmpty>
+            <CommandEmpty>No models found.</CommandEmpty>
             <CommandGroup>
-              {models.map((model) => (
+              {modelOptions.map((option) => (
                 <CommandItem
-                  key={model.id}
-                  value={model.id}
-                  onSelect={() => handleSelect(model.id)}
+                  key={option.id}
+                  value={`${option.label} ${option.id} ${option.description ?? ""}`}
+                  onSelect={() => handleSelect(option.id)}
                 >
                   <CheckIcon
                     className={cn(
                       "mr-2 size-4",
-                      value === model.id ? "opacity-100" : "opacity-0",
+                      value === option.id ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <div className="flex flex-col">
-                    <span>{model.name ?? model.id}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {model.id}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate">{option.label}</span>
+                      {option.isVariant && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          variant
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {option.description ?? option.id}
+                    </p>
                   </div>
-                  {model.id === DEFAULT_MODEL_ID && (
+                  {option.id === DEFAULT_MODEL_ID && (
                     <span className="ml-auto text-xs text-muted-foreground">
                       default
                     </span>

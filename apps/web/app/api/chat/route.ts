@@ -32,6 +32,7 @@ import { recordUsage } from "@/lib/db/usage";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
@@ -406,14 +407,37 @@ export async function POST(req: Request) {
     }
   }
 
-  // Resolve model from chat's modelId, falling back to default if invalid
-  const modelId = chat.modelId ?? DEFAULT_MODEL_ID;
+  const preferences = await getUserPreferences(session.user.id).catch(
+    (error) => {
+      console.error("Failed to load user preferences:", error);
+      return null;
+    },
+  );
+  const modelVariants = preferences?.modelVariants ?? [];
+
+  // Resolve model from chat's modelId, supporting variant IDs.
+  const selectedModelId = chat.modelId ?? DEFAULT_MODEL_ID;
+  const mainSelection = resolveModelSelection(selectedModelId, modelVariants);
+  if (mainSelection.isMissingVariant) {
+    console.warn(
+      `Selected model variant "${selectedModelId}" was not found. Falling back to default model.`,
+    );
+  }
+
+  const mainResolvedModelId = mainSelection.isMissingVariant
+    ? DEFAULT_MODEL_ID
+    : mainSelection.resolvedModelId;
+
   let model;
   try {
-    model = gateway(modelId as GatewayModelId);
+    model = gateway(mainResolvedModelId as GatewayModelId, {
+      providerOptionsOverrides: mainSelection.isMissingVariant
+        ? undefined
+        : mainSelection.providerOptionsByProvider,
+    });
   } catch (error) {
     console.error(
-      `Invalid model ID "${modelId}", falling back to default:`,
+      `Invalid model ID "${mainResolvedModelId}", falling back to default:`,
       error,
     );
     model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
@@ -421,15 +445,31 @@ export async function POST(req: Request) {
 
   // Resolve subagent model from user preferences (if configured)
   let subagentModel: LanguageModel | undefined;
-  try {
-    const preferences = await getUserPreferences(session.user.id);
-    if (preferences.defaultSubagentModelId) {
-      subagentModel = gateway(
-        preferences.defaultSubagentModelId as GatewayModelId,
+  if (preferences?.defaultSubagentModelId) {
+    const subagentSelection = resolveModelSelection(
+      preferences.defaultSubagentModelId,
+      modelVariants,
+    );
+
+    if (subagentSelection.isMissingVariant) {
+      console.warn(
+        `Subagent model variant "${preferences.defaultSubagentModelId}" was not found. Falling back to default model.`,
       );
     }
-  } catch (error) {
-    console.error("Failed to resolve subagent model preference:", error);
+
+    const subagentResolvedModelId = subagentSelection.isMissingVariant
+      ? DEFAULT_MODEL_ID
+      : subagentSelection.resolvedModelId;
+
+    try {
+      subagentModel = gateway(subagentResolvedModelId as GatewayModelId, {
+        providerOptionsOverrides: subagentSelection.isMissingVariant
+          ? undefined
+          : subagentSelection.providerOptionsByProvider,
+      });
+    } catch (error) {
+      console.error("Failed to resolve subagent model preference:", error);
+    }
   }
 
   const requestedContextLimit = toPositiveInteger(
