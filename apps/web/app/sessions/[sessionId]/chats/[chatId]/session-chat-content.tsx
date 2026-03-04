@@ -2230,7 +2230,9 @@ export function SessionChatContent(_props: unknown) {
             }}
             className={cn(
               "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
-              chat.id === mobileActiveChatId ? "bg-secondary" : "hover:bg-muted/50",
+              chat.id === mobileActiveChatId
+                ? "bg-secondary"
+                : "hover:bg-muted/50",
             )}
           >
             <span className="truncate text-sm font-medium">
@@ -2424,9 +2426,7 @@ export function SessionChatContent(_props: unknown) {
                     <Plus className="mr-2 h-4 w-4" />
                     New Chat
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setChatSwitcherOpen(true)}
-                  >
+                  <DropdownMenuItem onClick={() => setChatSwitcherOpen(true)}>
                     <MessageSquareMore className="mr-2 h-4 w-4" />
                     Switch Chat
                   </DropdownMenuItem>
@@ -2553,7 +2553,10 @@ export function SessionChatContent(_props: unknown) {
 
             {/* Chat switcher: drawer on mobile, right sidebar on desktop */}
             {isMobile ? (
-              <Drawer open={chatSwitcherOpen} onOpenChange={setChatSwitcherOpen}>
+              <Drawer
+                open={chatSwitcherOpen}
+                onOpenChange={setChatSwitcherOpen}
+              >
                 <DrawerContent>
                   <DrawerHeader>
                     <DrawerTitle>Switch Chat</DrawerTitle>
