@@ -759,6 +759,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionId
                     ? {
@@ -812,6 +813,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionId
                     ? {
@@ -954,6 +956,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...optimisticSession, hasUnread: s.hasUnread }
@@ -979,6 +982,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionRecord.id
                     ? { ...previousSession, hasUnread: s.hasUnread }
@@ -998,6 +1002,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...nextSession, hasUnread: s.hasUnread }
@@ -1036,6 +1041,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...nextSession, hasUnread: s.hasUnread }
@@ -1068,6 +1074,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionRecord.id ? { ...s, ...nextSession } : s,
                 ),

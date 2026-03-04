@@ -29,6 +29,7 @@ type SessionsIndexShellProps = {
   currentUser: AuthSession["user"];
   initialSessionsData?: {
     sessions: SessionWithUnread[];
+    archivedCount: number;
   };
 };
 
@@ -42,11 +43,16 @@ export function SessionsIndexShell({
 
   const {
     sessions,
+    archivedCount,
     loading: sessionsLoading,
     refreshSessions,
     createSession,
     archiveSession,
-  } = useSessions({ enabled: true, initialData: initialSessionsData });
+  } = useSessions({
+    enabled: true,
+    includeArchived: false,
+    initialData: initialSessionsData,
+  });
 
   const getSessionHref = useCallback((targetSession: SessionWithUnread) => {
     if (targetSession.latestChatId) {
@@ -101,6 +107,7 @@ export function SessionsIndexShell({
         <SidebarContent className="bg-muted/20">
           <InboxSidebar
             sessions={sessions}
+            archivedCount={archivedCount}
             sessionsLoading={sessionsLoading}
             activeSessionId=""
             onSessionClick={handleSessionClick}

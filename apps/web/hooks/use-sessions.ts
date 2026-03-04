@@ -34,6 +34,7 @@ interface CreateSessionInput {
 
 interface SessionsResponse {
   sessions: SessionWithUnread[];
+  archivedCount?: number;
 }
 
 interface CreateSessionResponse {
@@ -43,12 +44,18 @@ interface CreateSessionResponse {
 
 export function useSessions(options?: {
   enabled?: boolean;
+  includeArchived?: boolean;
   initialData?: SessionsResponse;
 }) {
   const enabled = options?.enabled ?? true;
+  const includeArchived = options?.includeArchived ?? true;
+  const sessionsEndpoint = includeArchived
+    ? "/api/sessions"
+    : "/api/sessions?status=active";
+
   const { data, error, isLoading, mutate } = useSWR<SessionsResponse>(
     enabled ? "/api/sessions" : null,
-    fetcher,
+    () => fetcher<SessionsResponse>(sessionsEndpoint),
     {
       fallbackData: options?.initialData,
       revalidateOnMount: options?.initialData ? false : undefined,
@@ -65,6 +72,7 @@ export function useSessions(options?: {
   const { mutate: globalMutate } = useSWRConfig();
 
   const sessions = data?.sessions ?? [];
+  const archivedCount = data?.archivedCount ?? 0;
 
   const createSession = async (input: CreateSessionInput) => {
     const res = await fetch("/api/sessions", {
@@ -102,7 +110,7 @@ export function useSessions(options?: {
     );
 
     await mutate(
-      {
+      (current) => ({
         sessions: [
           {
             ...createdSession,
@@ -110,9 +118,10 @@ export function useSessions(options?: {
             hasStreaming: false,
             latestChatId: createdChat.id,
           },
-          ...sessions,
+          ...(current?.sessions ?? []),
         ],
-      },
+        archivedCount: current?.archivedCount,
+      }),
       { revalidate: false },
     );
 
@@ -141,18 +150,36 @@ export function useSessions(options?: {
     if (responseData.session) {
       const updatedSession = responseData.session;
       await mutate(
-        (current) => ({
-          sessions: (current?.sessions ?? []).map((session) =>
-            session.id === sessionId
-              ? {
-                  ...updatedSession,
-                  hasUnread: session.hasUnread,
-                  hasStreaming: session.hasStreaming,
-                  latestChatId: session.latestChatId,
-                }
-              : session,
-          ),
-        }),
+        (current) => {
+          if (!current) {
+            return current;
+          }
+
+          if (!includeArchived) {
+            const hadSession = current.sessions.some((s) => s.id === sessionId);
+            return {
+              ...current,
+              sessions: current.sessions.filter((s) => s.id !== sessionId),
+              archivedCount: hadSession
+                ? (current.archivedCount ?? 0) + 1
+                : current.archivedCount,
+            };
+          }
+
+          return {
+            ...current,
+            sessions: current.sessions.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...updatedSession,
+                    hasUnread: session.hasUnread,
+                    hasStreaming: session.hasStreaming,
+                    latestChatId: session.latestChatId,
+                  }
+                : session,
+            ),
+          };
+        },
         { revalidate: true },
       );
     }
@@ -162,6 +189,7 @@ export function useSessions(options?: {
 
   return {
     sessions,
+    archivedCount,
     loading: isLoading,
     error,
     createSession,

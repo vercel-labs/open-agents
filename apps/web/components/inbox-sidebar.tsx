@@ -48,6 +48,7 @@ type CreateSessionInput = {
 
 type InboxSidebarProps = {
   sessions: SessionWithUnread[];
+  archivedCount: number;
   sessionsLoading: boolean;
   activeSessionId: string;
   onSessionClick: (session: SessionWithUnread) => void;
@@ -60,6 +61,16 @@ type InboxSidebarProps = {
   }>;
   lastRepo: { owner: string; repo: string } | null;
   initialUser?: AuthSession["user"];
+};
+
+type ArchivedSessionsResponse = {
+  sessions: SessionWithUnread[];
+  archivedCount: number;
+  pagination?: {
+    hasMore: boolean;
+    nextOffset: number;
+  };
+  error?: string;
 };
 
 const ARCHIVED_SESSIONS_PAGE_SIZE = 50;
@@ -276,6 +287,7 @@ function areSessionRowsEqual(
 
 export function InboxSidebar({
   sessions,
+  archivedCount,
   sessionsLoading,
   activeSessionId,
   onSessionClick,
@@ -290,15 +302,71 @@ export function InboxSidebar({
   const { session } = useSession();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
-  const [archivedVisibleCount, setArchivedVisibleCount] = useState(
-    ARCHIVED_SESSIONS_PAGE_SIZE,
+  const [archivedSessions, setArchivedSessions] = useState<SessionWithUnread[]>(
+    [],
   );
+  const [archivedSessionsLoading, setArchivedSessionsLoading] = useState(false);
+  const [archivedSessionsError, setArchivedSessionsError] = useState<
+    string | null
+  >(null);
+  const [hasMoreArchivedSessions, setHasMoreArchivedSessions] = useState(false);
+  const archivedRequestInFlightRef = useRef(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [renameDialogSession, setRenameDialogSession] =
     useState<SessionWithUnread | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [renaming, setRenaming] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const fetchArchivedSessionsPage = useCallback(
+    async ({ offset, replace }: { offset: number; replace: boolean }) => {
+      if (archivedRequestInFlightRef.current) {
+        return;
+      }
+
+      archivedRequestInFlightRef.current = true;
+      setArchivedSessionsLoading(true);
+      setArchivedSessionsError(null);
+
+      try {
+        const query = new URLSearchParams({
+          status: "archived",
+          limit: String(ARCHIVED_SESSIONS_PAGE_SIZE),
+          offset: String(offset),
+        });
+        const res = await fetch(`/api/sessions?${query.toString()}`);
+        const data = (await res.json()) as ArchivedSessionsResponse;
+
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to load archived sessions");
+        }
+
+        setArchivedSessions((current) => {
+          if (replace) {
+            return data.sessions;
+          }
+
+          const existingIds = new Set(current.map((session) => session.id));
+          const nextSessions = data.sessions.filter(
+            (session) => !existingIds.has(session.id),
+          );
+
+          return [...current, ...nextSessions];
+        });
+        setHasMoreArchivedSessions(Boolean(data.pagination?.hasMore));
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to load archived sessions";
+        setArchivedSessionsError(message);
+      } finally {
+        archivedRequestInFlightRef.current = false;
+        setArchivedSessionsLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (renameDialogSession && renameInputRef.current) {
@@ -308,25 +376,25 @@ export function InboxSidebar({
   }, [renameDialogSession]);
 
   useEffect(() => {
-    if (showArchived) {
-      setArchivedVisibleCount(ARCHIVED_SESSIONS_PAGE_SIZE);
+    if (!showArchived) {
+      return;
     }
-  }, [showArchived]);
 
-  const activeSessions = useMemo(
-    () => sessions.filter((session) => session.status !== "archived"),
-    [sessions],
-  );
-  const archivedSessions = useMemo(
-    () => sessions.filter((session) => session.status === "archived"),
-    [sessions],
-  );
-  const displayedSessions = showArchived
-    ? archivedSessions.slice(0, archivedVisibleCount)
-    : activeSessions;
-  const hasMoreArchivedSessions =
-    showArchived && archivedSessions.length > displayedSessions.length;
-  const showLoadingSkeleton = sessionsLoading && sessions.length === 0;
+    if (archivedCount === 0) {
+      setArchivedSessions([]);
+      setHasMoreArchivedSessions(false);
+      setArchivedSessionsError(null);
+      return;
+    }
+
+    void fetchArchivedSessionsPage({ offset: 0, replace: true });
+  }, [archivedCount, fetchArchivedSessionsPage, showArchived]);
+
+  const activeSessions = sessions;
+  const displayedSessions = showArchived ? archivedSessions : activeSessions;
+  const showLoadingSkeleton =
+    (!showArchived && sessionsLoading && sessions.length === 0) ||
+    (showArchived && archivedSessionsLoading && archivedSessions.length === 0);
   const sidebarUser = session?.user ?? initialUser;
 
   const handleSessionClick = useCallback(
@@ -357,6 +425,25 @@ export function InboxSidebar({
     [onArchiveSession],
   );
 
+  const handleLoadMoreArchivedSessions = useCallback(() => {
+    if (archivedSessionsLoading) {
+      return;
+    }
+
+    void fetchArchivedSessionsPage({
+      offset: archivedSessions.length,
+      replace: false,
+    });
+  }, [
+    archivedSessions.length,
+    archivedSessionsLoading,
+    fetchArchivedSessionsPage,
+  ]);
+
+  const handleRetryArchivedSessions = useCallback(() => {
+    void fetchArchivedSessionsPage({ offset: 0, replace: true });
+  }, [fetchArchivedSessionsPage]);
+
   const closeRenameDialog = useCallback(() => {
     setRenameDialogSession(null);
     setRenameTitle("");
@@ -385,6 +472,13 @@ export function InboxSidebar({
     setRenaming(true);
     try {
       await onRenameSession(renameDialogSession.id, nextTitle);
+      setArchivedSessions((current) =>
+        current.map((session) =>
+          session.id === renameDialogSession.id
+            ? { ...session, title: nextTitle }
+            : session,
+        ),
+      );
       closeRenameDialog();
     } catch (err) {
       console.error("Failed to rename session:", err);
@@ -445,9 +539,9 @@ export function InboxSidebar({
           >
             <Archive className="h-3 w-3" />
             Archive
-            {archivedSessions.length > 0 && (
+            {archivedCount > 0 && (
               <span className="ml-1 text-muted-foreground">
-                {archivedSessions.length}
+                {archivedCount}
               </span>
             )}
           </button>
@@ -466,7 +560,21 @@ export function InboxSidebar({
           </div>
         ) : displayedSessions.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-            {showArchived ? "No archived sessions" : "No sessions yet"}
+            {showArchived
+              ? (archivedSessionsError ?? "No archived sessions")
+              : "No sessions yet"}
+            {showArchived && archivedSessionsError ? (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetryArchivedSessions}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>
@@ -483,20 +591,26 @@ export function InboxSidebar({
                 />
               ))}
             </div>
-            {hasMoreArchivedSessions ? (
+            {showArchived &&
+            (hasMoreArchivedSessions || archivedSessionsError) ? (
               <div className="px-3 pb-3">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() =>
-                    setArchivedVisibleCount(
-                      (count) => count + ARCHIVED_SESSIONS_PAGE_SIZE,
-                    )
+                  onClick={
+                    archivedSessionsError
+                      ? handleRetryArchivedSessions
+                      : handleLoadMoreArchivedSessions
                   }
+                  disabled={archivedSessionsLoading}
                 >
-                  Load more archived sessions
+                  {archivedSessionsLoading
+                    ? "Loading..."
+                    : archivedSessionsError
+                      ? "Retry loading archived sessions"
+                      : "Load more archived sessions"}
                 </Button>
               </div>
             ) : null}

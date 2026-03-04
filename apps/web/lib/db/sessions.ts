@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -118,8 +118,14 @@ export type SessionWithUnread = SessionSidebarFields & {
   latestChatId: string | null;
 };
 
+type GetSessionsWithUnreadByUserIdOptions = {
+  status?: "all" | "active" | "archived";
+  limit?: number;
+  offset?: number;
+};
+
 /**
- * Returns all sessions for a user, each annotated with a `hasUnread` flag
+ * Returns sessions for a user, each annotated with a `hasUnread` flag
  * that is true when any chat in the session has unread assistant messages.
  *
  * The sidebar only needs lightweight fields, so we intentionally avoid
@@ -127,8 +133,17 @@ export type SessionWithUnread = SessionSidebarFields & {
  */
 export async function getSessionsWithUnreadByUserId(
   userId: string,
+  options?: GetSessionsWithUnreadByUserIdOptions,
 ): Promise<SessionWithUnread[]> {
-  const rows = await db
+  const status = options?.status ?? "all";
+  const statusFilter =
+    status === "active"
+      ? ne(sessions.status, "archived")
+      : status === "archived"
+        ? eq(sessions.status, "archived")
+        : undefined;
+
+  const baseQuery = db
     .select({
       id: sessions.id,
       title: sessions.title,
@@ -160,11 +175,36 @@ export async function getSessionsWithUnreadByUserId(
       chatReads,
       and(eq(chatReads.chatId, chats.id), eq(chatReads.userId, userId)),
     )
-    .where(eq(sessions.userId, userId))
+    .where(
+      statusFilter
+        ? and(eq(sessions.userId, userId), statusFilter)
+        : eq(sessions.userId, userId),
+    )
     .groupBy(sessions.id)
     .orderBy(desc(sessions.createdAt));
 
+  const withOffset =
+    typeof options?.offset === "number" && options.offset > 0
+      ? baseQuery.offset(options.offset)
+      : baseQuery;
+
+  const rows =
+    typeof options?.limit === "number"
+      ? await withOffset.limit(options.limit)
+      : await withOffset;
+
   return rows;
+}
+
+export async function getArchivedSessionCountByUserId(
+  userId: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), eq(sessions.status, "archived")));
+
+  return result?.count ?? 0;
 }
 
 /**

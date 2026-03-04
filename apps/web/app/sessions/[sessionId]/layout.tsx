@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import {
+  getArchivedSessionCountByUserId,
   getChatSummariesBySessionId,
   getSessionsWithUnreadByUserId,
 } from "@/lib/db/sessions";
@@ -44,20 +45,24 @@ export default async function SessionLayout({
       }
     | undefined;
   let initialSessionsData:
-    | { sessions: Awaited<ReturnType<typeof getSessionsWithUnreadByUserId>> }
+    | {
+        sessions: Awaited<ReturnType<typeof getSessionsWithUnreadByUserId>>;
+        archivedCount: number;
+      }
     | undefined;
 
   try {
-    const [chats, preferences, sessions] = await Promise.all([
+    const [chats, preferences, sessions, archivedCount] = await Promise.all([
       getChatSummariesBySessionId(sessionId, session.user.id),
       getUserPreferences(session.user.id),
-      getSessionsWithUnreadByUserId(session.user.id),
+      getSessionsWithUnreadByUserId(session.user.id, { status: "active" }),
+      getArchivedSessionCountByUserId(session.user.id),
     ]);
     initialChatsData = {
       chats,
       defaultModelId: preferences.defaultModelId,
     };
-    initialSessionsData = { sessions };
+    initialSessionsData = { sessions, archivedCount };
   } catch (error) {
     console.error("Failed to prefetch sidebar data:", error);
   }

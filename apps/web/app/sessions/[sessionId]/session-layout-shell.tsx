@@ -28,6 +28,7 @@ type SessionLayoutShellProps = {
   };
   initialSessionsData?: {
     sessions: SessionWithUnread[];
+    archivedCount: number;
   };
   children: React.ReactNode;
 };
@@ -51,12 +52,14 @@ export function SessionLayoutShell({
 
   const {
     sessions,
+    archivedCount,
     loading: sessionsLoading,
     refreshSessions,
     createSession,
     archiveSession,
   } = useSessions({
     enabled: true,
+    includeArchived: false,
     initialData: initialSessionsData,
   });
 
@@ -140,6 +143,7 @@ export function SessionLayoutShell({
   const sidebarContent = (
     <InboxSidebar
       sessions={sessionsWithStreaming}
+      archivedCount={archivedCount}
       sessionsLoading={sessionsLoading}
       activeSessionId={sessionId}
       onSessionClick={handleSessionClick}
