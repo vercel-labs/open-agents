@@ -154,6 +154,8 @@ export const sessions = pgTable(
     // Cached diff for offline viewing
     cachedDiff: jsonb("cached_diff"),
     cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
+    // Sharing (temporary for legacy share link backfill)
+    shareId: text("share_id").unique(),
     // Timestamps
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
