@@ -43,6 +43,7 @@ const taskOutputSchema = z.object({
   pending: toolCall.optional(),
   toolCallCount: z.number().int().nonnegative().optional(),
   startedAt: z.number().int().nonnegative().optional(),
+  modelId: z.string().optional(),
   final: z.custom<ModelMessage[]>().optional(),
   usage: z.custom<LanguageModelUsage>().optional(),
 });
@@ -146,6 +147,7 @@ NOTE: The executor subagent requires user approval before running because it has
   ) {
     const sandbox = getSandbox(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
+    const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =
       subagentType === "explorer" ? explorerSubagent : executorSubagent;
@@ -163,19 +165,31 @@ NOTE: The executor subagent requires user approval before running because it has
     let usage: LanguageModelUsage | undefined;
 
     // Emit an initial state so UIs can show elapsed time from a stable timestamp.
-    yield { toolCallCount, startedAt };
+    yield { toolCallCount, startedAt, modelId: subagentModelId };
 
     for await (const part of result.fullStream) {
       if (part.type === "tool-call") {
         toolCallCount += 1;
         pending = { name: part.toolName, input: part.input };
-        yield { pending, toolCallCount, usage, startedAt };
+        yield {
+          pending,
+          toolCallCount,
+          usage,
+          startedAt,
+          modelId: subagentModelId,
+        };
       }
 
       if (part.type === "finish-step") {
         usage = sumLanguageModelUsage(usage, part.usage);
         pending = undefined;
-        yield { pending, toolCallCount, usage, startedAt };
+        yield {
+          pending,
+          toolCallCount,
+          usage,
+          startedAt,
+          modelId: subagentModelId,
+        };
       }
     }
 
@@ -186,6 +200,7 @@ NOTE: The executor subagent requires user approval before running because it has
       toolCallCount,
       usage: finalUsage,
       startedAt,
+      modelId: subagentModelId,
     };
   },
   toModelOutput: ({ output: { final: messages } }) => {
