@@ -107,6 +107,14 @@ function extractTaskOutputUsage(
   if (!isRecord(output)) {
     return undefined;
   }
+
+  // New output shape: { usage?: LanguageModelUsage, final?: ModelMessage[] }
+  const usage = output.usage;
+  if (isLanguageModelUsage(usage)) {
+    return { usage };
+  }
+
+  // Legacy fallback: { metadata: { totalMessageUsage?, lastStepUsage?, modelId? } }
   const metadata = output.metadata;
   if (!isRecord(metadata)) {
     return undefined;

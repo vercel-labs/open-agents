@@ -1,15 +1,14 @@
-import type { SubagentUIMessage, TaskToolUIPart } from "@open-harness/agent";
+import type { TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { getToolName, isToolUIPart } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import { useChatContext } from "../chat-context";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { truncateText } from "../lib/truncate";
 import { toRelativePath } from "./tool-renderers/shared";
 
-type SubagentMessagePart = SubagentUIMessage["parts"][number];
+type PendingToolCall = { name: string; input: unknown };
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -100,61 +99,46 @@ function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
   return "pending";
 }
 
-function countTaskTools(part: TaskToolUIPart): number {
-  if (part.state !== "output-available") return 0;
-  const message = part.output;
-  if (!message?.parts) return 0;
-  return message.parts.filter(isToolUIPart).length;
+/**
+ * Hook to accumulate pending tool calls from the task tool's streaming output.
+ * Each yield replaces the previous output, so we track seen tool calls in a ref.
+ */
+function useAccumulatedToolCalls(part: TaskToolUIPart) {
+  const toolCallsRef = useRef<PendingToolCall[]>([]);
+  const lastPendingKeyRef = useRef<string | null>(null);
+
+  const hasOutput = part.state === "output-available";
+  const output = hasOutput ? part.output : undefined;
+
+  if (output?.pending) {
+    const key = JSON.stringify(output.pending);
+    if (key !== lastPendingKeyRef.current) {
+      lastPendingKeyRef.current = key;
+      toolCallsRef.current = [...toolCallsRef.current, output.pending];
+    }
+  }
+
+  return toolCallsRef.current;
 }
 
-function getTaskTokens(part: TaskToolUIPart): number | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
-}
-
-function getToolSummary(part: SubagentMessagePart, cwd: string): string {
-  switch (part.type) {
-    case "tool-read":
-    case "tool-write":
-    case "tool-edit":
-      return part.input?.filePath
-        ? toRelativePath(part.input.filePath, cwd)
+function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
+  const input = toolCall.input as Record<string, unknown> | undefined;
+  switch (toolCall.name) {
+    case "read":
+    case "write":
+    case "edit":
+      return input?.filePath
+        ? toRelativePath(String(input.filePath), cwd)
         : "";
-    case "tool-grep":
-    case "tool-glob":
-      return part.input?.pattern ? `"${part.input.pattern}"` : "";
-    case "tool-bash": {
-      return part.input?.command ?? "";
+    case "grep":
+    case "glob":
+      return input?.pattern ? `"${input.pattern}"` : "";
+    case "bash": {
+      return input?.command ? String(input.command) : "";
     }
     default:
       return "";
   }
-}
-
-function getLastToolInfo(
-  part: TaskToolUIPart,
-  cwd: string,
-): { name: string; summary: string } | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  if (!message?.parts) return null;
-
-  const toolParts = message.parts.filter(
-    (toolPart) =>
-      isToolUIPart(toolPart) && toolPart.state !== "input-streaming",
-  );
-  if (toolParts.length === 0) return null;
-
-  const lastTool = toolParts[toolParts.length - 1];
-  // Double-check needed for TypeScript narrowing with union types
-  if (!lastTool || !isToolUIPart(lastTool)) return null;
-
-  const toolName = getToolName(lastTool);
-  const summary = getToolSummary(lastTool, cwd);
-
-  const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-  return { name: displayName, summary };
 }
 
 function TaskStatusIndicator({ status }: { status: TaskStatus }) {
@@ -190,13 +174,22 @@ function TaskItem({
   const status = getTaskStatus(part, isStreaming);
   const isRunning = status === "running" || status === "pending";
   const elapsedSeconds = useTaskTiming(isRunning);
-  const toolCount = countTaskTools(part);
-  const tokenCount = getTaskTokens(part);
   const { state: chatState } = useChatContext();
   const cwd = chatState.workingDirectory ?? process.cwd();
-  const lastTool = getLastToolInfo(part, cwd);
   const { width } = useTerminalDimensions();
   const terminalWidth = width ?? 80;
+
+  const toolCalls = useAccumulatedToolCalls(part);
+  const toolCount = toolCalls.length;
+
+  const hasOutput = part.state === "output-available";
+  const isComplete = hasOutput && !part.preliminary;
+  const output = hasOutput ? part.output : undefined;
+  const tokenCount = isComplete
+    ? (output?.usage?.inputTokens ?? null)
+    : null;
+
+  const lastToolCall = toolCalls[toolCalls.length - 1] ?? null;
 
   const desc = part.input?.task ?? "Task";
 
@@ -222,12 +215,15 @@ function TaskItem({
     nestedStatus = "Awaiting approval...";
   } else if (status === "pending") {
     nestedStatus = "Initializing...";
-  } else if (status === "running" && (!lastTool || toolCount === 0)) {
+  } else if (status === "running" && (!lastToolCall || toolCount === 0)) {
     nestedStatus = "Initializing...";
-  } else if (lastTool) {
-    nestedStatus = lastTool.summary
-      ? `${lastTool.name}(${lastTool.summary})`
-      : lastTool.name;
+  } else if (lastToolCall) {
+    const displayName =
+      lastToolCall.name.charAt(0).toUpperCase() + lastToolCall.name.slice(1);
+    const summary = getToolSummary(lastToolCall, cwd);
+    nestedStatus = summary
+      ? `${displayName}(${summary})`
+      : displayName;
   }
   const toolCountText = ` - ${toolCount} tool${toolCount !== 1 ? "s" : ""}`;
   const tokenText =

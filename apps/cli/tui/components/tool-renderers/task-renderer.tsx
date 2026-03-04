@@ -1,52 +1,52 @@
-import type { SubagentUIMessage } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { getToolName, isTextUIPart, isToolUIPart } from "ai";
-import React from "react";
+import React, { useRef } from "react";
 import { useChatContext } from "../../chat-context";
 import { PRIMARY_COLOR } from "../../lib/colors";
 import type { ToolRendererProps } from "../../lib/render-tool";
 import { truncateText } from "../../lib/truncate";
 import { ToolSpinner, toRelativePath } from "./shared";
 
-type SubagentMessagePart = SubagentUIMessage["parts"][number];
+type PendingToolCall = { name: string; input: unknown };
 
-function getToolSummary(part: SubagentMessagePart, cwd: string): string {
-  switch (part.type) {
-    case "tool-read":
-    case "tool-write":
-    case "tool-edit":
-      return part.input?.filePath
-        ? toRelativePath(part.input.filePath, cwd)
+function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
+  const input = toolCall.input as Record<string, unknown> | undefined;
+  switch (toolCall.name) {
+    case "read":
+    case "write":
+    case "edit":
+      return input?.filePath
+        ? toRelativePath(String(input.filePath), cwd)
         : "";
-    case "tool-grep":
-    case "tool-glob":
-      return part.input?.pattern ? `"${part.input.pattern}"` : "";
-    case "tool-bash":
-      return part.input?.command ?? "";
+    case "grep":
+    case "glob":
+      return input?.pattern ? `"${input.pattern}"` : "";
+    case "bash":
+      return input?.command ? String(input.command) : "";
     default:
       return "";
   }
 }
 
-function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
+function SubagentToolCall({
+  toolCall,
+  isRunning,
+}: {
+  toolCall: PendingToolCall;
+  isRunning: boolean;
+}) {
   const { state: chatState } = useChatContext();
   const cwd = chatState.workingDirectory ?? process.cwd();
   const { width } = useTerminalDimensions();
-  if (!isToolUIPart(part)) return null;
-  if (part.state === "input-streaming") return null;
-  const toolName = getToolName(part);
-  const isRunning = part.state === "input-available";
-  const hasError = part.state === "output-error";
-  const summary = getToolSummary(part, cwd);
+  const summary = getToolSummary(toolCall, cwd);
   const terminalWidth = width ?? 80;
 
-  const dotColor = isRunning ? PRIMARY_COLOR : hasError ? "red" : "green";
-  const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-  const errorSuffix = hasError ? " - error" : "";
+  const dotColor = isRunning ? PRIMARY_COLOR : "green";
+  const displayName =
+    toolCall.name.charAt(0).toUpperCase() + toolCall.name.slice(1);
   const prefixLength = 2 + 2 + displayName.length + 1;
-  const suffixLength = 1 + errorSuffix.length;
+  const suffixLength = 1;
   const maxSummaryWidth = Math.max(
     10,
     terminalWidth - prefixLength - suffixLength,
@@ -71,13 +71,15 @@ function SubagentToolCall({ part }: { part: SubagentMessagePart }) {
             <text fg="gray">)</text>
           </>
         )}
-        {hasError && <text fg="red">{errorSuffix}</text>}
       </box>
     </box>
   );
 }
 
 export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
+  const toolCallsRef = useRef<PendingToolCall[]>([]);
+  const lastPendingKeyRef = useRef<string | null>(null);
+
   const isInputReady = part.state !== "input-streaming";
   const desc = isInputReady ? (part.input?.task ?? "Spawning subagent") : "...";
   const subagentType = isInputReady ? part.input?.subagentType : undefined;
@@ -85,27 +87,27 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
   const taskDenied = part.state === "output-denied";
   const taskDenialReason = taskDenied ? part.approval?.reason : undefined;
 
-  // The output is a UIMessage with parts (text, tool-invocation, etc.)
-  // Preliminary results have preliminary: true, final result has preliminary: false/undefined
   const hasOutput = part.state === "output-available";
   const isPreliminary = hasOutput && part.preliminary === true;
-  const message = hasOutput ? part.output : undefined;
+  const isComplete = hasOutput && !isPreliminary;
+  const output = hasOutput ? part.output : undefined;
 
-  // Get all parts in order, filter to text and tool parts
-  const messageParts = message?.parts ?? [];
-  const relevantParts = messageParts.filter((p) => {
-    if (isTextUIPart(p)) return true;
-    if (!isToolUIPart(p)) return false;
-    return p.state !== "input-streaming";
-  });
-  const toolParts = messageParts.filter(isToolUIPart);
+  // Accumulate pending tool calls across yields (each yield replaces the previous)
+  if (output?.pending) {
+    const key = JSON.stringify(output.pending);
+    if (key !== lastPendingKeyRef.current) {
+      lastPendingKeyRef.current = key;
+      toolCallsRef.current = [...toolCallsRef.current, output.pending];
+    }
+  }
+
+  const toolCalls = toolCallsRef.current;
 
   // Show only the last few parts to avoid too much output
   const maxVisible = 4;
-  const hiddenCount = Math.max(0, relevantParts.length - maxVisible);
-  const visibleParts = relevantParts.slice(-maxVisible);
+  const hiddenCount = Math.max(0, toolCalls.length - maxVisible);
+  const visibleCalls = toolCalls.slice(-maxVisible);
 
-  const isComplete = hasOutput && !isPreliminary;
   const isStreaming = hasOutput && isPreliminary;
 
   const dotColor = taskDenied
@@ -141,7 +143,6 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
     taskTerminalWidth - taskPrefixLength - taskSuffixLength,
   );
   const displayDesc = truncateText(desc, maxDescWidth);
-  const maxTextWidth = Math.max(10, taskTerminalWidth - 4);
   const errorPrefix = "Error: ";
   const maxErrorWidth = Math.max(
     10,
@@ -184,33 +185,24 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
         </box>
       )}
 
-      {/* Nested parts from subagent (text and tools in order) */}
-      {hasOutput && visibleParts.length > 0 && !state.interrupted && (
+      {/* Nested tool calls from subagent */}
+      {hasOutput && visibleCalls.length > 0 && !state.interrupted && (
         <box flexDirection="column" paddingLeft={2} marginTop={1}>
           {hiddenCount > 0 && (
             <box marginBottom={1} flexDirection="row">
               <text fg="gray">... {hiddenCount} more above</text>
             </box>
           )}
-          {visibleParts.map((p, i) => {
-            if (isToolUIPart(p)) {
-              return <SubagentToolCall key={p.toolCallId} part={p} />;
-            }
-            if (isTextUIPart(p)) {
-              // Show truncated text, dimmed
-              const text = p.text.trim();
-              if (!text) return null;
-              const truncated = truncateText(text, maxTextWidth);
-              return (
-                <box key={`text-${i}`} paddingLeft={1} flexDirection="row">
-                  <text fg="gray">│ </text>
-                  <text fg="gray" attributes={TextAttributes.DIM}>
-                    {truncated}
-                  </text>
-                </box>
-              );
-            }
-            return null;
+          {visibleCalls.map((tc, i) => {
+            const isLast = i === visibleCalls.length - 1;
+            const isToolRunning = isLast && isPreliminary;
+            return (
+              <SubagentToolCall
+                key={`${tc.name}-${i + hiddenCount}`}
+                toolCall={tc}
+                isRunning={isToolRunning}
+              />
+            );
           })}
         </box>
       )}
@@ -220,9 +212,9 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
         <box paddingLeft={2} flexDirection="row">
           <text fg="gray">└ </text>
           <text fg="white">
-            Complete ({toolParts.length} tool calls
-            {message?.metadata?.lastStepUsage?.inputTokens
-              ? `, ${formatTokens(message.metadata.lastStepUsage.inputTokens)} tokens`
+            Complete ({toolCalls.length} tool calls
+            {output?.usage?.inputTokens
+              ? `, ${formatTokens(output.usage.inputTokens)} tokens`
               : ""}
             )
           </text>
