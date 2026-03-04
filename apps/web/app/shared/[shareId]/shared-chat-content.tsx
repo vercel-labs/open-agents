@@ -104,9 +104,7 @@ export function SharedChatContent({
     ? `https://github.com/${session.repoOwner}/${session.repoName}`
     : null;
   const prUrl =
-    repoUrl && session.prNumber
-      ? `${repoUrl}/pull/${session.prNumber}`
-      : null;
+    repoUrl && session.prNumber ? `${repoUrl}/pull/${session.prNumber}` : null;
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
@@ -124,9 +122,7 @@ export function SharedChatContent({
                   />
                 )}
                 <AvatarFallback>
-                  {(sharedBy.name ?? sharedBy.username)
-                    .charAt(0)
-                    .toUpperCase()}
+                  {(sharedBy.name ?? sharedBy.username).charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm text-muted-foreground">
@@ -183,9 +179,7 @@ export function SharedChatContent({
                     className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <GitPullRequest className="h-3.5 w-3.5" />
-                    <span className="font-medium">
-                      #{session.prNumber}
-                    </span>
+                    <span className="font-medium">#{session.prNumber}</span>
                     {session.prStatus && (
                       <span
                         className={cn(
@@ -364,8 +358,7 @@ function SharedMessage({
 
   // When tool calls are hidden and this assistant message has tool calls,
   // show a compact summary bar instead
-  const showSummary =
-    !showToolCalls && m.role === "assistant" && hasToolCalls;
+  const showSummary = !showToolCalls && m.role === "assistant" && hasToolCalls;
 
   return (
     <>

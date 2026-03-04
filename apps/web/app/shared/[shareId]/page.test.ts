@@ -37,7 +37,11 @@ let sessionRecord: {
   prStatus: null,
 };
 let messageRows: Array<{ parts: unknown; role: string; createdAt: Date }> = [
-  { parts: { id: "m1", role: "user", parts: [] }, role: "user", createdAt: new Date("2025-01-01T00:00:00Z") },
+  {
+    parts: { id: "m1", role: "user", parts: [] },
+    role: "user",
+    createdAt: new Date("2025-01-01T00:00:00Z"),
+  },
 ];
 
 mock.module("next/navigation", () => ({
@@ -95,7 +99,13 @@ describe("/shared/[shareId] page", () => {
       prNumber: null,
       prStatus: null,
     };
-    messageRows = [{ parts: { id: "m1", role: "user", parts: [] }, role: "user", createdAt: new Date("2025-01-01T00:00:00Z") }];
+    messageRows = [
+      {
+        parts: { id: "m1", role: "user", parts: [] },
+        role: "user",
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+      },
+    ];
   });
 
   test("generateMetadata uses shared chat title", async () => {

@@ -80,7 +80,15 @@ export default async function SharedPage({ params }: SharedPageProps) {
 
   return (
     <SharedChatContent
-      session={{ title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus }}
+      session={{
+        title,
+        repoOwner,
+        repoName,
+        branch,
+        cloneUrl,
+        prNumber,
+        prStatus,
+      }}
       chats={[{ chat: sharedChat, messagesWithTiming }]}
       modelId={sharedChat.modelId}
       sharedBy={
