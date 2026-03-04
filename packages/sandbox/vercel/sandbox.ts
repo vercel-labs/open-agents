@@ -251,13 +251,13 @@ export class VercelSandbox implements Sandbox {
         .filter((line): line is string => line !== undefined) ?? [];
 
     const portLines = portPreviewLines.length
-      ? `\n- Dev server preview URLs (start a server on one of these ports, then share the URL with the user):\n${portPreviewLines.join("\n")}`
+      ? `\n- Dev server URLs for locally running servers (start a server on one of these ports, then share the URL with the user):\n${portPreviewLines.join("\n")}`
       : "";
 
     const hostLine = host ? `\n- Sandbox host: ${host}` : "";
     const runtimeEnvLine =
       host || previewPorts.length > 0
-        ? "\n- Runtime env vars for previews are injected into commands: SANDBOX_HOST and SANDBOX_URL_<PORT> (for routable ports)"
+        ? "\n- Runtime env vars for dev server URLs are injected into commands: SANDBOX_HOST and SANDBOX_URL_<PORT> (for routable ports)"
         : "";
 
     return `- Ephemeral sandbox - all work is lost unless committed and pushed to git
@@ -271,6 +271,7 @@ export class VercelSandbox implements Sandbox {
 - Node.js runtime with npm/pnpm available
 - Bun and jq are preinstalled
 - Dependencies may not be installed. Before running project scripts (build, typecheck, lint, test), check if \`node_modules\` exists and run the package manager install command if needed (e.g. \`bun install\`, \`npm install\`)
+- This snapshot includes agent-browser; when validating UI or end-to-end behavior, start the dev server and use agent-browser against the local dev server URL
 - This sandbox already runs on Vercel; do not suggest deploying to Vercel just to obtain a shareable preview link
 ${hostLine}${portLines}${runtimeEnvLine}`;
   }

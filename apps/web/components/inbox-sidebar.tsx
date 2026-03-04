@@ -2,7 +2,6 @@
 
 import {
   Archive,
-  ArrowLeft,
   EllipsisVertical,
   GitMerge,
   Pencil,
@@ -389,14 +388,9 @@ export function InboxSidebar({
     <>
       <div className="border-b border-border p-3">
         <div className="mb-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => router.push("/sessions")}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Sessions
-          </button>
+          <div className="flex items-center px-2 py-1.5 text-sm text-primary">
+            <span>Sessions</span>
+          </div>
           <Button
             type="button"
             variant="ghost"
