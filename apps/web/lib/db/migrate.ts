@@ -60,23 +60,58 @@ async function baselineIfNeeded() {
     existingTablesResult.map((r) => (r.table_name as string).toLowerCase()),
   );
 
-  let baselined = 0;
+  const migrationSqlByTag = new Map<string, string>();
+  const droppedTablesByTag = new Map<string, Set<string>>();
+
   for (const entry of journal.entries) {
     const sqlPath = join(import.meta.dirname, "migrations", `${entry.tag}.sql`);
     const sql = readFileSync(sqlPath, "utf-8");
+    migrationSqlByTag.set(entry.tag, sql);
+
+    const droppedTables = new Set(
+      [
+        ...sql.matchAll(
+          /DROP TABLE(?: IF EXISTS)?\s+(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi,
+        ),
+      ].map((m) => m[1].toLowerCase()),
+    );
+
+    droppedTablesByTag.set(entry.tag, droppedTables);
+  }
+
+  const isDroppedByLaterMigration = (table: string, fromIndex: number) => {
+    for (let i = fromIndex + 1; i < journal.entries.length; i++) {
+      const droppedTables = droppedTablesByTag.get(journal.entries[i].tag);
+      if (droppedTables?.has(table)) return true;
+    }
+
+    return false;
+  };
+
+  let baselined = 0;
+  for (const [index, entry] of journal.entries.entries()) {
+    const sql = migrationSqlByTag.get(entry.tag);
+    if (!sql) continue;
+
     const hash = new Bun.CryptoHasher("sha256").update(sql).digest("hex");
 
     if (trackedHashes.has(hash)) continue; // already tracked
 
-    // If this migration creates a table that doesn't exist yet, this migration
-    // (and everything after it) genuinely needs to run.
+    // If this migration creates a table that doesn't exist yet (and is not
+    // removed by a later migration), this migration genuinely needs to run.
     const createdTables = [
       ...sql.matchAll(
         /CREATE TABLE(?: IF NOT EXISTS)?\s+(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi,
       ),
     ].map((m) => m[1].toLowerCase());
 
-    if (createdTables.some((table) => !existingTables.has(table))) {
+    if (
+      createdTables.some(
+        (table) =>
+          !existingTables.has(table) &&
+          !isDroppedByLaterMigration(table, index),
+      )
+    ) {
       break;
     }
 
