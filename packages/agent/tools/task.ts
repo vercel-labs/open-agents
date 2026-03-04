@@ -182,7 +182,8 @@ NOTE: The executor subagent requires user approval before running because it has
 
       if (part.type === "finish-step") {
         usage = sumLanguageModelUsage(usage, part.usage);
-        pending = undefined;
+        // Keep the last observed tool call in interim updates so task UIs don't
+        // flicker back to an initializing state between subagent steps.
         yield {
           pending,
           toolCallCount,
