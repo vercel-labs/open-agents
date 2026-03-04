@@ -10,6 +10,7 @@ import {
   getShareByIdCached,
 } from "@/lib/db/sessions-cache";
 import { SharedChatContent } from "./shared-chat-content";
+import type { MessageWithTiming } from "./shared-chat-content";
 
 interface SharedPageProps {
   params: Promise<{ shareId: string }>;
@@ -57,7 +58,22 @@ export default async function SharedPage({ params }: SharedPageProps) {
   });
 
   const dbMessages = await getChatMessages(sharedChat.id);
-  const messages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
+
+  // Build messages with timing: compute duration for each assistant message
+  // based on the gap from the preceding user message's createdAt
+  const messagesWithTiming: MessageWithTiming[] = dbMessages.map((m, idx) => {
+    const message = m.parts as WebAgentUIMessage;
+    let durationMs: number | null = null;
+
+    if (m.role === "assistant" && idx > 0) {
+      const prev = dbMessages[idx - 1];
+      if (prev && prev.role === "user") {
+        durationMs = m.createdAt.getTime() - prev.createdAt.getTime();
+      }
+    }
+
+    return { message, durationMs };
+  });
 
   const { title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus } =
     session;
@@ -65,7 +81,7 @@ export default async function SharedPage({ params }: SharedPageProps) {
   return (
     <SharedChatContent
       session={{ title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus }}
-      chats={[{ chat: sharedChat, messages }]}
+      chats={[{ chat: sharedChat, messagesWithTiming }]}
       modelId={sharedChat.modelId}
       sharedBy={
         sessionUser

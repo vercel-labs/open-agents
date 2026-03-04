@@ -9,8 +9,9 @@ import {
   EyeOff,
   GitBranch,
   GitPullRequest,
+  Wrench,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 import type {
   WebAgentUIMessage,
@@ -26,9 +27,14 @@ import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import "streamdown/styles.css";
 
+export type MessageWithTiming = {
+  message: WebAgentUIMessage;
+  durationMs: number | null;
+};
+
 type ChatWithMessages = {
   chat: Chat;
-  messages: WebAgentUIMessage[];
+  messagesWithTiming: MessageWithTiming[];
 };
 
 type SharedSession = {
@@ -56,8 +62,28 @@ function displayProviderName(modelId: string): string {
   const slashIndex = modelId.indexOf("/");
   if (slashIndex < 0) return "";
   const provider = modelId.slice(0, slashIndex);
-  // Capitalize first letter
   return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return "<1s";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (remainingSeconds === 0) return `${minutes}m`;
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
+/** Count all tool-call parts (regular + task groups) in a message */
+function countToolCalls(message: WebAgentUIMessage): number {
+  let count = 0;
+  for (const part of message.parts) {
+    if (isToolUIPart(part)) {
+      count++;
+    }
+  }
+  return count;
 }
 
 export function SharedChatContent({
@@ -71,7 +97,7 @@ export function SharedChatContent({
   modelId: string | null | undefined;
   sharedBy: SharedBy;
 }) {
-  const [showToolCalls, setShowToolCalls] = useState(true);
+  const [showToolCalls, setShowToolCalls] = useState(false);
 
   const hasRepo = session.repoOwner && session.repoName;
   const repoUrl = hasRepo
@@ -222,7 +248,7 @@ export function SharedChatContent({
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
           <div className="space-y-6">
-            {chats.map(({ chat, messages }) => (
+            {chats.map(({ chat, messagesWithTiming }) => (
               <div key={chat.id}>
                 {chats.length > 1 && (
                   <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
@@ -232,10 +258,11 @@ export function SharedChatContent({
                   </div>
                 )}
                 <div className="space-y-6">
-                  {messages.map((m) => (
+                  {messagesWithTiming.map(({ message: m, durationMs }) => (
                     <SharedMessage
                       key={m.id}
                       message={m}
+                      durationMs={durationMs}
                       showToolCalls={showToolCalls}
                     />
                   ))}
@@ -249,13 +276,44 @@ export function SharedChatContent({
   );
 }
 
+/** Summary bar shown for assistant messages when tool calls are hidden */
+function ToolCallSummary({
+  toolCallCount,
+  durationMs,
+}: {
+  toolCallCount: number;
+  durationMs: number | null;
+}) {
+  return (
+    <div className="flex justify-start">
+      <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground">
+        <Wrench className="h-3 w-3 text-muted-foreground/70" />
+        <span>
+          {toolCallCount} tool call{toolCallCount !== 1 ? "s" : ""}
+        </span>
+        {durationMs != null && durationMs > 0 && (
+          <>
+            <span className="text-muted-foreground/40">·</span>
+            <span>{formatDuration(durationMs)}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SharedMessage({
   message: m,
+  durationMs,
   showToolCalls,
 }: {
   message: WebAgentUIMessage;
+  durationMs: number | null;
   showToolCalls: boolean;
 }) {
+  const toolCallCount = useMemo(() => countToolCalls(m), [m]);
+  const hasToolCalls = toolCallCount > 0;
+
   type RenderGroup =
     | {
         type: "part";
@@ -299,86 +357,101 @@ function SharedMessage({
     });
   }
 
-  return renderGroups.map((group) => {
-    if (group.type === "task-group") {
-      if (!showToolCalls) return null;
-      return (
-        <div
-          key={`${m.id}-task-group-${group.startIndex}`}
-          className="max-w-full"
-        >
-          <TaskGroupView
-            taskParts={group.tasks}
-            activeApprovalId={null}
-            isStreaming={false}
-          />
-        </div>
-      );
-    }
+  // When tool calls are hidden and this assistant message has tool calls,
+  // show a compact summary bar instead
+  const showSummary =
+    !showToolCalls && m.role === "assistant" && hasToolCalls;
 
-    const p = group.part;
-    const i = group.index;
-
-    if (isReasoningUIPart(p)) {
-      return (
-        <div key={`${m.id}-${i}`} className="flex justify-start">
-          <ThinkingBlock text={p.text} isStreaming={false} />
-        </div>
-      );
-    }
-
-    if (p.type === "text") {
-      return (
-        <div
-          key={`${m.id}-${i}`}
-          className={cn(
-            "flex min-w-0",
-            m.role === "user" ? "justify-end" : "justify-start",
-          )}
-        >
-          {m.role === "user" ? (
-            <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-              <p className="whitespace-pre-wrap break-words">{p.text}</p>
+  return (
+    <>
+      {showSummary && (
+        <ToolCallSummary
+          toolCallCount={toolCallCount}
+          durationMs={durationMs}
+        />
+      )}
+      {renderGroups.map((group) => {
+        if (group.type === "task-group") {
+          if (!showToolCalls) return null;
+          return (
+            <div
+              key={`${m.id}-task-group-${group.startIndex}`}
+              className="max-w-full"
+            >
+              <TaskGroupView
+                taskParts={group.tasks}
+                activeApprovalId={null}
+                isStreaming={false}
+              />
             </div>
-          ) : (
-            <div className="min-w-0 w-full overflow-hidden">
-              <Streamdown
-                mode="static"
-                isAnimating={false}
-                plugins={streamdownPlugins}
-              >
-                {p.text}
-              </Streamdown>
+          );
+        }
+
+        const p = group.part;
+        const i = group.index;
+
+        if (isReasoningUIPart(p)) {
+          return (
+            <div key={`${m.id}-${i}`} className="flex justify-start">
+              <ThinkingBlock text={p.text} isStreaming={false} />
             </div>
-          )}
-        </div>
-      );
-    }
+          );
+        }
 
-    if (isToolUIPart(p)) {
-      if (!showToolCalls) return null;
-      return (
-        <div key={`${m.id}-${i}`} className="max-w-full">
-          <ToolCall part={p as WebAgentUIToolPart} isStreaming={false} />
-        </div>
-      );
-    }
+        if (p.type === "text") {
+          return (
+            <div
+              key={`${m.id}-${i}`}
+              className={cn(
+                "flex min-w-0",
+                m.role === "user" ? "justify-end" : "justify-start",
+              )}
+            >
+              {m.role === "user" ? (
+                <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                  <p className="whitespace-pre-wrap break-words">{p.text}</p>
+                </div>
+              ) : (
+                <div className="min-w-0 w-full overflow-hidden">
+                  <Streamdown
+                    mode="static"
+                    isAnimating={false}
+                    plugins={streamdownPlugins}
+                  >
+                    {p.text}
+                  </Streamdown>
+                </div>
+              )}
+            </div>
+          );
+        }
 
-    if (p.type === "file" && p.mediaType?.startsWith("image/")) {
-      return (
-        <div key={`${m.id}-${i}`} className="flex justify-end">
-          <div className="max-w-[80%]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-            <img
-              src={p.url}
-              alt={p.filename ?? "Attached image"}
-              className="max-h-64 rounded-lg"
-            />
-          </div>
-        </div>
-      );
-    }
+        if (isToolUIPart(p)) {
+          if (!showToolCalls) return null;
+          return (
+            <div key={`${m.id}-${i}`} className="max-w-full">
+              <ToolCall part={p as WebAgentUIToolPart} isStreaming={false} />
+            </div>
+          );
+        }
 
-    return null;
-  });
+        if (p.type === "file" && p.mediaType?.startsWith("image/")) {
+          return (
+            <div key={`${m.id}-${i}`} className="flex justify-end">
+              <div className="max-w-[80%]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                <img
+                  src={p.url}
+                  alt={p.filename ?? "Attached image"}
+                  className="max-h-64 rounded-lg"
+                />
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })}
+    </>
+  );
 }

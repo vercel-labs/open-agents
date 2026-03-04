@@ -36,8 +36,8 @@ let sessionRecord: {
   prNumber: null,
   prStatus: null,
 };
-let messageRows: Array<{ parts: unknown }> = [
-  { parts: { id: "m1", role: "user", parts: [] } },
+let messageRows: Array<{ parts: unknown; role: string; createdAt: Date }> = [
+  { parts: { id: "m1", role: "user", parts: [] }, role: "user", createdAt: new Date("2025-01-01T00:00:00Z") },
 ];
 
 mock.module("next/navigation", () => ({
@@ -95,7 +95,7 @@ describe("/shared/[shareId] page", () => {
       prNumber: null,
       prStatus: null,
     };
-    messageRows = [{ parts: { id: "m1", role: "user", parts: [] } }];
+    messageRows = [{ parts: { id: "m1", role: "user", parts: [] }, role: "user", createdAt: new Date("2025-01-01T00:00:00Z") }];
   });
 
   test("generateMetadata uses shared chat title", async () => {
@@ -115,13 +115,13 @@ describe("/shared/[shareId] page", () => {
       params: Promise.resolve({ shareId: "share-1" }),
     })) as {
       props: {
-        chats: Array<{ chat: { id: string }; messages: unknown[] }>;
+        chats: Array<{ chat: { id: string }; messagesWithTiming: unknown[] }>;
       };
     };
 
     expect(element.props.chats).toHaveLength(1);
     expect(element.props.chats[0]?.chat.id).toBe("chat-1");
-    expect(element.props.chats[0]?.messages).toHaveLength(1);
+    expect(element.props.chats[0]?.messagesWithTiming).toHaveLength(1);
   });
 
   test("throws notFound when share mapping does not exist", async () => {
