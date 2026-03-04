@@ -38,6 +38,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import useSWR from "swr";
+import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
   WebAgentUIMessage,
   WebAgentUIMessagePart,
@@ -101,6 +103,7 @@ import {
   fetchRepoBranches,
 } from "@/lib/git-flow-client";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
+import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import {
@@ -506,11 +509,13 @@ function SandboxInputOverlay({
 
 function ShareDialog({
   sessionId,
+  chatId,
   initialShareId,
   externalOpen,
   onExternalOpenChange,
 }: {
   sessionId: string;
+  chatId: string;
   initialShareId: string | null;
   externalOpen?: boolean;
   onExternalOpenChange?: (open: boolean) => void;
@@ -537,13 +542,47 @@ function ShareDialog({
 
   const shareUrl = shareId && baseUrl ? `${baseUrl}/shared/${shareId}` : null;
 
+  useEffect(() => {
+    let active = true;
+    setShareId(initialShareId);
+    setCopied(false);
+    setError(null);
+
+    const loadShareId = async () => {
+      try {
+        const res = await fetch(
+          `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        );
+        if (!res.ok) {
+          return;
+        }
+        const data = (await res.json()) as { shareId: string | null };
+        if (!active) {
+          return;
+        }
+        setShareId(data.shareId);
+      } catch {
+        // Ignore silent refresh errors in dialog state; user action still works.
+      }
+    };
+
+    void loadShareId();
+
+    return () => {
+      active = false;
+    };
+  }, [sessionId, chatId, initialShareId]);
+
   async function enableSharing() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/share`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) {
         setError("Failed to enable sharing");
         return;
@@ -561,9 +600,12 @@ function ShareDialog({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/share`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/sessions/${sessionId}/chats/${chatId}/share`,
+        {
+          method: "DELETE",
+        },
+      );
       if (!res.ok) {
         setError("Failed to disable sharing");
         return;
@@ -599,33 +641,39 @@ function ShareDialog({
       )}
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Share session</DialogTitle>
+          <DialogTitle>Share chat</DialogTitle>
           <DialogDescription>
-            Anyone with the link can view the conversation in read-only mode.
+            Anyone with the link can view this chat in read-only mode.
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {shareId ? (
           <>
-            <div className="flex items-center gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm">
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border bg-muted px-3 py-2 text-sm">
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{shareUrl}</span>
+                <span className="min-w-0 flex-1 truncate">{shareUrl}</span>
               </div>
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 onClick={copyLink}
-                className="shrink-0"
+                className="w-full sm:w-auto sm:shrink-0"
               >
                 {copied ? (
-                  <Check className="h-4 w-4" />
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Copied
+                  </>
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy link
+                  </>
                 )}
               </Button>
             </div>
-            <DialogFooter className="flex-row justify-between sm:justify-between">
+            <DialogFooter className="sm:justify-between">
               <Button
                 variant="ghost"
                 size="sm"
@@ -687,14 +735,21 @@ export function SessionChatContent(_props: unknown) {
   const [mobileChatDrawerOpen, setMobileChatDrawerOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
+    string | null
+  >(null);
   const hasMounted = useHasMounted();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMountedRef = useRef(true);
+  const copyResetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
     };
   }, []);
   const {
@@ -714,6 +769,36 @@ export function SessionChatContent(_props: unknown) {
       inputRef.current?.focus();
     }
   };
+
+  const handleCopyAssistantMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const trimmedText = text.trim();
+      if (trimmedText.length === 0) {
+        return;
+      }
+
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(trimmedText);
+        setCopiedAssistantMessageId(messageId);
+        if (copyResetTimeoutRef.current !== null) {
+          window.clearTimeout(copyResetTimeoutRef.current);
+        }
+        copyResetTimeoutRef.current = window.setTimeout(() => {
+          setCopiedAssistantMessageId((currentMessageId) =>
+            currentMessageId === messageId ? null : currentMessageId,
+          );
+          copyResetTimeoutRef.current = null;
+        }, 2000);
+      } catch (copyError) {
+        console.error("Failed to copy assistant message:", copyError);
+      }
+    },
+    [],
+  );
 
   // Auto-resize textarea up to 3 lines
   useEffect(() => {
@@ -2179,6 +2264,28 @@ export function SessionChatContent(_props: unknown) {
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
+  const existingPrUrl =
+    hasExistingPr && session.repoOwner && session.repoName
+      ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
+      : null;
+  const { data: prDeploymentData } = useSWR<PrDeploymentResponse>(
+    hasExistingPr
+      ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
+      : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      // We stop polling once a deployment URL is found because Vercel preview
+      // URLs are expected to follow the PR branch and keep serving the latest
+      // deployment. If this assumption ever changes, force revalidation after
+      // commits (see onCommitted callback below).
+      refreshInterval: (latestData) =>
+        hasExistingPr && !latestData?.deploymentUrl ? 60_000 : 0,
+      shouldRetryOnError: false,
+    },
+  );
+  const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
   const hasBranchDiff =
@@ -2192,6 +2299,21 @@ export function SessionChatContent(_props: unknown) {
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
+  const openExistingPr = () => {
+    if (!existingPrUrl) {
+      return;
+    }
+
+    window.open(existingPrUrl, "_blank", "noopener,noreferrer");
+  };
+  const openPreviewOrPr = () => {
+    const targetUrl = prDeploymentUrl ?? existingPrUrl;
+    if (!targetUrl) {
+      return;
+    }
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <>
@@ -2201,8 +2323,8 @@ export function SessionChatContent(_props: unknown) {
           <div className="flex min-w-0 items-center gap-2 lg:gap-4">
             <SidebarTrigger className="shrink-0" />
             <div className="flex min-w-0 items-center gap-2 text-sm">
-              {session.repoName ? (
-                <>
+              {session.repoName && (
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
                   {session.cloneUrl ? (
                     /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
                     <a
@@ -2221,20 +2343,18 @@ export function SessionChatContent(_props: unknown) {
                   )}
                   {(session.branch ?? sandboxInfo?.currentBranch) && (
                     <>
-                      <span className="hidden text-muted-foreground/40 sm:inline">
-                        /
-                      </span>
-                      <span className="hidden text-muted-foreground sm:inline">
+                      <span className="text-muted-foreground/40">/</span>
+                      <span className="truncate text-muted-foreground">
                         {session.branch ?? sandboxInfo?.currentBranch}
                       </span>
                     </>
                   )}
-                </>
-              ) : (
-                <span className="truncate text-muted-foreground">
-                  {session.title}
-                </span>
+                  <span className="text-muted-foreground/40">/</span>
+                </div>
               )}
+              <span className="truncate font-medium text-foreground sm:font-normal sm:text-muted-foreground">
+                {session.title}
+              </span>
             </div>
             <SandboxHeaderBadge
               sandboxInfo={sandboxInfo}
@@ -2276,15 +2396,22 @@ export function SessionChatContent(_props: unknown) {
                       variant="outline"
                       size="sm"
                       className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={() => {
-                        const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                        window.open(prUrl, "_blank", "noopener,noreferrer");
-                      }}
+                      onClick={openPreviewOrPr}
+                      disabled={!prDeploymentUrl && !existingPrUrl}
                     >
-                      <GitPullRequest className="h-4 w-4 xl:mr-2" />
-                      <span className="hidden xl:inline">
-                        View PR #{session.prNumber}
-                      </span>
+                      {prDeploymentUrl ? (
+                        <>
+                          <ExternalLink className="h-4 w-4 xl:mr-2" />
+                          <span className="hidden xl:inline">Preview</span>
+                        </>
+                      ) : (
+                        <>
+                          <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                          <span className="hidden xl:inline">
+                            View PR #{session.prNumber}
+                          </span>
+                        </>
+                      )}
                     </Button>
                   )
                 ) : showCommitAction ? (
@@ -2416,24 +2543,37 @@ export function SessionChatContent(_props: unknown) {
                   )}
                   {hasRepo ? (
                     hasExistingPr ? (
-                      showCommitAction ? (
+                      <>
+                        {prDeploymentUrl && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              window.open(
+                                prDeploymentUrl,
+                                "_blank",
+                                "noopener,noreferrer",
+                              );
+                            }}
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Preview
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
-                          onClick={() => setCommitDialogOpen(true)}
-                        >
-                          <GitCommit className="mr-2 h-4 w-4" />
-                          {commitActionLabel}
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
-                          onClick={() => {
-                            const prUrl = `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`;
-                            window.open(prUrl, "_blank", "noopener,noreferrer");
-                          }}
+                          onClick={openExistingPr}
+                          disabled={!existingPrUrl}
                         >
                           <GitPullRequest className="mr-2 h-4 w-4" />
                           View PR #{session.prNumber}
                         </DropdownMenuItem>
-                      )
+                        {showCommitAction && (
+                          <DropdownMenuItem
+                            onClick={() => setCommitDialogOpen(true)}
+                          >
+                            <GitCommit className="mr-2 h-4 w-4" />
+                            {commitActionLabel}
+                          </DropdownMenuItem>
+                        )}
+                      </>
                     ) : (
                       <>
                         {showCommitAction && (
@@ -2523,7 +2663,8 @@ export function SessionChatContent(_props: unknown) {
             {/* Mobile share dialog */}
             <ShareDialog
               sessionId={session.id}
-              initialShareId={session.shareId}
+              chatId={chatInfo.id}
+              initialShareId={null}
               externalOpen={mobileShareOpen}
               onExternalOpenChange={setMobileShareOpen}
             />
@@ -2636,6 +2777,16 @@ export function SessionChatContent(_props: unknown) {
                     }
 
                     if (p.type === "text") {
+                      const isFinalAssistantTextPart =
+                        m.role === "assistant" &&
+                        !m.parts
+                          .slice(group.index + 1)
+                          .some((messagePart) => messagePart.type === "text");
+                      const canCopyAssistantMessage =
+                        isFinalAssistantTextPart &&
+                        !isMessageStreaming &&
+                        p.text.trim().length > 0;
+
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2687,7 +2838,7 @@ export function SessionChatContent(_props: unknown) {
                               )}
                             </div>
                           ) : (
-                            <div className="min-w-0 w-full overflow-hidden">
+                            <div className="group min-w-0 w-full overflow-hidden">
                               <Streamdown
                                 animated={
                                   isMessageStreaming
@@ -2706,6 +2857,27 @@ export function SessionChatContent(_props: unknown) {
                               >
                                 {p.text}
                               </Streamdown>
+                              {canCopyAssistantMessage && (
+                                <div className="mt-1 flex justify-start">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleCopyAssistantMessage(
+                                        m.id,
+                                        p.text,
+                                      )
+                                    }
+                                    aria-label="Copy assistant response"
+                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                  >
+                                    {copiedAssistantMessageId === m.id ? (
+                                      <Check className="h-4 w-4" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

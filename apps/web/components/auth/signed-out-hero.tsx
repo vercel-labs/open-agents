@@ -57,11 +57,11 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-900/[0.04] hover:text-slate-700 dark:text-white/40 dark:hover:bg-white/[0.05] dark:hover:text-white/60"
       aria-label="Copy to clipboard"
     >
       {copied ? (
-        <Check className="h-4 w-4 text-emerald-400" />
+        <Check className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
       ) : (
         <Copy className="h-4 w-4" />
       )}
@@ -71,49 +71,29 @@ function CopyButton({ text }: { text: string }) {
 
 export function SignedOutHero() {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0a0a0b]">
-      {/* Ambient glow effects */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[600px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.07] blur-[150px]" />
-        <div className="absolute bottom-0 right-0 h-[400px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-blue-500/[0.05] blur-[120px]" />
-        <div className="absolute bottom-1/3 left-0 h-[300px] w-[400px] -translate-x-1/2 rounded-full bg-violet-500/[0.04] blur-[100px]" />
-      </div>
-
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#f8fafc] text-slate-900 dark:bg-[#0a0a0b] dark:text-white">
       {/* Dot grid pattern */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.4]"
-        style={{
-          backgroundImage:
-            "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      />
+      <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:radial-gradient(rgba(15,23,42,0.08)_1px,transparent_1px)] [background-size:24px_24px] dark:opacity-[0.4] dark:[background-image:radial-gradient(rgba(255,255,255,0.07)_1px,transparent_1px)]" />
 
       {/* Scanline effect */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)",
-        }}
-      />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.03] [background-image:repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(15,23,42,0.04)_2px,rgba(15,23,42,0.04)_4px)] dark:opacity-[0.02] dark:[background-image:repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-900/10 bg-white/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
             <svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              className="h-4 w-4 text-white/70"
+              className="h-4 w-4 text-slate-700 dark:text-white/70"
             >
               <polyline points="4,17 10,11 4,5" />
               <line x1="12" y1="19" x2="20" y2="19" />
             </svg>
           </div>
-          <span className="text-lg font-medium tracking-tight text-white">
+          <span className="text-lg font-medium tracking-tight text-slate-900 dark:text-white">
             Open Harness
           </span>
         </div>
@@ -122,12 +102,12 @@ export function SignedOutHero() {
             href="https://github.com/vercel-labs/open-harness"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-sm text-white/50 transition-colors hover:border-white/[0.12] hover:bg-white/[0.04] hover:text-white/70"
+            className="flex items-center gap-2 rounded-lg border border-slate-900/10 bg-white/60 px-3 py-1.5 text-sm text-slate-600 transition-colors hover:border-slate-900/20 hover:bg-white/90 hover:text-slate-900 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-white/50 dark:hover:border-white/[0.12] dark:hover:bg-white/[0.04] dark:hover:text-white/70"
           >
             <GitHubIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Open Source</span>
           </a>
-          <SignInButton className="h-9 border-0 bg-white px-4 text-sm font-medium text-black transition-colors hover:bg-white/90" />
+          <SignInButton className="h-9 border-0 bg-slate-900 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-white/90" />
         </div>
       </header>
 
@@ -136,26 +116,26 @@ export function SignedOutHero() {
         {/* Hero section */}
         <div className="mb-12 max-w-2xl text-center">
           {/* Tech badge */}
-          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-2 backdrop-blur">
+          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-900/10 bg-white/70 px-4 py-2 backdrop-blur dark:border-white/[0.06] dark:bg-white/[0.02]">
             <div className="flex items-center gap-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/60 animate-pulse" />
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/40" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/90 dark:bg-emerald-400/80" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/70 animate-pulse dark:bg-emerald-400/60" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/50 dark:bg-emerald-400/40" />
             </div>
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-slate-600 dark:text-white/40">
               Powered by AI SDK, Vercel AI Gateway, and Next.js
             </span>
           </div>
 
-          <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
             Ship code faster with
             <br />
-            <span className="bg-gradient-to-r from-white via-white/90 to-white/60 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500 bg-clip-text text-transparent dark:from-white dark:via-white/90 dark:to-white/60">
               AI that runs anywhere
             </span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-lg text-base leading-relaxed text-white/50">
+          <p className="mx-auto mt-6 max-w-lg text-base leading-relaxed text-slate-600 dark:text-white/50">
             A cloud platform and CLI that share the same AI workflows. Start in
             the browser, continue locally, or work entirely from your terminal.
           </p>
@@ -165,16 +145,16 @@ export function SignedOutHero() {
         <div className="w-full max-w-3xl">
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Web card - Terminal style */}
-            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#111113]/80 shadow-2xl shadow-black/20 backdrop-blur-xl">
+            <div className="overflow-hidden rounded-xl border border-slate-900/10 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#111113]/80 dark:shadow-2xl dark:shadow-black/20">
               {/* Window chrome */}
-              <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <div className="flex items-center gap-2 border-b border-slate-900/10 bg-slate-50/80 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <div className="flex items-center gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
                   <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
                   <div className="h-3 w-3 rounded-full bg-[#28c840]" />
                 </div>
                 <div className="ml-3 flex-1">
-                  <span className="font-mono text-xs text-white/30">
+                  <span className="font-mono text-xs text-slate-500 dark:text-white/30">
                     browser
                   </span>
                 </div>
@@ -182,41 +162,41 @@ export function SignedOutHero() {
 
               {/* Content */}
               <div className="p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-900/10 bg-slate-50/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.5"
-                    className="h-5 w-5 text-white/60"
+                    className="h-5 w-5 text-slate-600 dark:text-white/60"
                   >
                     <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
                   </svg>
                 </div>
 
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-white">
+                <h2 className="mb-2 text-lg font-medium tracking-tight text-slate-900 dark:text-white">
                   Start on the web
                 </h2>
-                <p className="mb-5 text-sm leading-relaxed text-white/40">
+                <p className="mb-5 text-sm leading-relaxed text-slate-600 dark:text-white/40">
                   Run the coding agent from anywhere - no local setup required.
                   Just sign in and start shipping.
                 </p>
 
-                <SignInButton className="h-10 w-full border-0 bg-white text-sm font-medium text-black transition-all hover:bg-white/90" />
+                <SignInButton className="h-10 w-full border-0 bg-slate-900 text-sm font-medium text-white transition-all hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-white/90" />
               </div>
             </div>
 
             {/* CLI card - Terminal style */}
-            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#111113]/80 shadow-2xl shadow-black/20 backdrop-blur-xl">
+            <div className="overflow-hidden rounded-xl border border-slate-900/10 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#111113]/80 dark:shadow-2xl dark:shadow-black/20">
               {/* Window chrome */}
-              <div className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <div className="flex items-center gap-2 border-b border-slate-900/10 bg-slate-50/80 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <div className="flex items-center gap-1.5">
                   <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
                   <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
                   <div className="h-3 w-3 rounded-full bg-[#28c840]" />
                 </div>
                 <div className="ml-3 flex-1">
-                  <span className="font-mono text-xs text-white/30">
+                  <span className="font-mono text-xs text-slate-500 dark:text-white/30">
                     terminal
                   </span>
                 </div>
@@ -224,30 +204,30 @@ export function SignedOutHero() {
 
               {/* Content */}
               <div className="p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03]">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-900/10 bg-slate-50/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="h-5 w-5 text-white/60"
+                    className="h-5 w-5 text-slate-600 dark:text-white/60"
                   >
                     <polyline points="4,17 10,11 4,5" />
                     <line x1="12" y1="19" x2="20" y2="19" />
                   </svg>
                 </div>
 
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-white">
+                <h2 className="mb-2 text-lg font-medium tracking-tight text-slate-900 dark:text-white">
                   Run it locally
                 </h2>
-                <p className="mb-5 text-sm leading-relaxed text-white/40">
+                <p className="mb-5 text-sm leading-relaxed text-slate-600 dark:text-white/40">
                   Install the CLI to run the same AI workflows directly on your
                   machine.
                 </p>
 
                 {/* Install command */}
-                <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] py-1 pl-4 pr-1 font-mono text-sm">
-                  <code className="flex-1 truncate text-white/60">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-900/10 bg-slate-50/80 py-1 pl-4 pr-1 font-mono text-sm dark:border-white/[0.08] dark:bg-white/[0.02]">
+                  <code className="flex-1 truncate text-slate-700 dark:text-white/60">
                     {installCommand}
                   </code>
                   <CopyButton text={installCommand} />
