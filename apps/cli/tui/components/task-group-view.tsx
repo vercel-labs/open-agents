@@ -1,4 +1,4 @@
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
@@ -7,8 +7,6 @@ import { useChatContext } from "../chat-context";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { truncateText } from "../lib/truncate";
 import { toRelativePath } from "./tool-renderers/shared";
-
-type PendingToolCall = { name: string; input: unknown };
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -111,7 +109,7 @@ function countToolCalls(messages: unknown): number {
   ).length;
 }
 
-function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
+function getToolSummary(toolCall: TaskPendingToolCall, cwd: string): string {
   const input = toolCall.input as Record<string, unknown> | undefined;
   switch (toolCall.name) {
     case "read":
@@ -173,7 +171,7 @@ function TaskItem({
     typeof output?.startedAt === "number" ? output.startedAt : undefined;
   const elapsedSeconds = useTaskTiming(isRunning, startedAt);
 
-  const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
+  const pendingToolCall: TaskPendingToolCall | null = output?.pending ?? null;
   const toolCount =
     output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
   const tokenCount = output?.usage?.inputTokens ?? null;

@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { cn } from "@/lib/utils";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ApprovalButtons } from "./tool-call/approval-buttons";
-
-type PendingToolCall = { name: string; input: unknown };
 
 type TaskStatus =
   | "pending"
@@ -45,7 +43,7 @@ function countToolCalls(messages: unknown): number {
   ).length;
 }
 
-function getToolSummary(toolCall: PendingToolCall): string {
+function getToolSummary(toolCall: TaskPendingToolCall): string {
   const input = toolCall.input as Record<string, unknown> | undefined;
   switch (toolCall.name) {
     case "read":
@@ -154,7 +152,7 @@ function TaskItem({
     typeof output?.startedAt === "number" ? output.startedAt : undefined;
   const elapsedSeconds = useTaskTiming(isRunning, startedAt);
 
-  const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
+  const pendingToolCall: TaskPendingToolCall | null = output?.pending ?? null;
   const toolCount =
     output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
   const tokenCount = output?.usage?.inputTokens ?? null;

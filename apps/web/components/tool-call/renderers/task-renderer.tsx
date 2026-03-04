@@ -1,5 +1,6 @@
 "use client";
 
+import type { TaskPendingToolCall } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { Loader2 } from "lucide-react";
 import type React from "react";
@@ -9,9 +10,7 @@ import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "../approval-buttons";
 
-type PendingToolCall = { name: string; input: unknown };
-
-function getToolSummary(toolCall: PendingToolCall): string {
+function getToolSummary(toolCall: TaskPendingToolCall): string {
   const input = toolCall.input as Record<string, unknown> | undefined;
   switch (toolCall.name) {
     case "read":
@@ -45,7 +44,7 @@ function SubagentToolCall({
   isRunning,
   expanded = false,
 }: {
-  toolCall: PendingToolCall;
+  toolCall: TaskPendingToolCall;
   isRunning: boolean;
   expanded?: boolean;
 }) {

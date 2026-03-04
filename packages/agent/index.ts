@@ -29,7 +29,11 @@ export {
 } from "./tools/ask-user-question";
 export type { SkillToolInput } from "./tools/skill";
 // Tool exports
-export { type TaskToolUIPart } from "./tools/task";
+export type {
+  TaskPendingToolCall,
+  TaskToolOutput,
+  TaskToolUIPart,
+} from "./tools/task";
 export type {
   ApprovalConfig,
   ApprovalRule,

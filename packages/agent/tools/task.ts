@@ -34,19 +34,23 @@ const taskInputSchema = z.object({
   ),
 });
 
-const toolCall = z.object({
+const taskPendingToolCallSchema = z.object({
   name: z.string(),
   input: z.unknown(),
 });
 
-const taskOutputSchema = z.object({
-  pending: toolCall.optional(),
+export type TaskPendingToolCall = z.infer<typeof taskPendingToolCallSchema>;
+
+export const taskOutputSchema = z.object({
+  pending: taskPendingToolCallSchema.optional(),
   toolCallCount: z.number().int().nonnegative().optional(),
   startedAt: z.number().int().nonnegative().optional(),
   modelId: z.string().optional(),
   final: z.custom<ModelMessage[]>().optional(),
   usage: z.custom<LanguageModelUsage>().optional(),
 });
+
+export type TaskToolOutput = z.infer<typeof taskOutputSchema>;
 
 /**
  * Check if a subagent type matches any approval rules.
@@ -161,7 +165,7 @@ NOTE: The executor subagent requires user approval before running because it has
 
     const startedAt = Date.now();
     let toolCallCount = 0;
-    let pending: { name: string; input: unknown } | undefined;
+    let pending: TaskPendingToolCall | undefined;
     let usage: LanguageModelUsage | undefined;
 
     // Emit an initial state so UIs can show elapsed time from a stable timestamp.

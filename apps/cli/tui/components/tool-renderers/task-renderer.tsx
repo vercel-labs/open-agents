@@ -1,3 +1,4 @@
+import type { TaskPendingToolCall } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
@@ -8,9 +9,7 @@ import type { ToolRendererProps } from "../../lib/render-tool";
 import { truncateText } from "../../lib/truncate";
 import { ToolSpinner, toRelativePath } from "./shared";
 
-type PendingToolCall = { name: string; input: unknown };
-
-function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
+function getToolSummary(toolCall: TaskPendingToolCall, cwd: string): string {
   const input = toolCall.input as Record<string, unknown> | undefined;
   switch (toolCall.name) {
     case "read":
@@ -41,7 +40,7 @@ function SubagentToolCall({
   toolCall,
   isRunning,
 }: {
-  toolCall: PendingToolCall;
+  toolCall: TaskPendingToolCall;
   isRunning: boolean;
 }) {
   const { state: chatState } = useChatContext();
