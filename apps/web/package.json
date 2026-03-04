@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "bun run db:migrate:run && next build",
-    "db:migrate:run": "bun run lib/db/migrate.ts",
+    "build": "bun run db:migrate:apply && next build",
+    "db:migrate:apply": "bun run lib/db/migrate.ts",
     "start": "next start",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
