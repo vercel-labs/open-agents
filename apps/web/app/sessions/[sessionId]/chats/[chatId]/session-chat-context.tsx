@@ -31,8 +31,8 @@ import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
   abortChatInstanceTransport,
   getOrCreateChatInstance,
-  removeChatInstance,
 } from "@/lib/chat-instance-manager";
+import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
 import type { Chat, Session } from "@/lib/db/schema";
 import { fetcher } from "@/lib/swr";
 
@@ -445,29 +445,18 @@ export function SessionChatProvider({
     }
   }, [chat.status]);
 
-  // Cleanup: always release chat instances when leaving a route.
-  // If this chat is still streaming or submitted, stop local stream processing
-  // so background chats do not consume render/CPU budget in this tab.
-  // Including "submitted" is important: when the user navigates away
-  // immediately after sending a message, the status is still "submitted"
-  // (the POST hasn't started returning data yet). Without stopping in this
-  // state, the Chat instance's internal state machine is never reset, which
-  // can leave the UI stuck showing a "Thinking..." indicator on re-entry.
-  // Also abort the instance transport fetch connections. reconnectToStream
-  // does not pass an abort signal, so chatInstance.stop() alone cannot cancel
-  // resumed streams.
+  // Cleanup: release per-route chat instances and abort local transport
+  // connections so unmounted routes do not keep consuming client resources.
+  //
+  // Important: do NOT call chatInstance.stop() during route teardown.
+  // stop() publishes a server stop signal; when users leave the page during
+  // long-running tool/subagent work that would cancel generation and drop
+  // persistence. We only stop explicitly via the UI stop action.
   useEffect(() => {
     return () => {
-      if (
-        chatInstance.status === "streaming" ||
-        chatInstance.status === "submitted"
-      ) {
-        void chatInstance.stop();
-      }
-      abortChatInstanceTransport(chatInfo.id);
-      removeChatInstance(chatInfo.id);
+      cleanupChatRouteOnUnmount(chatInfo.id);
     };
-  }, [chatInfo.id, chatInstance]);
+  }, [chatInfo.id]);
 
   const [sandboxInfo, setSandboxInfoState] = useState<SandboxInfo | null>(
     () => sandboxInfoCache.get(sessionId) ?? null,
