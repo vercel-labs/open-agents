@@ -15,6 +15,8 @@ import {
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "@/lib/sandbox/config";
+import { getUserVercelToken } from "@/lib/vercel/token";
+import { resolveVercelProject } from "@/lib/vercel/project-resolution";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
@@ -123,6 +125,36 @@ export async function POST(req: Request) {
   const env: Record<string, string> = {};
   if (githubToken) {
     env.GITHUB_TOKEN = githubToken;
+  }
+
+  // ============================================
+  // Vercel env: resolve project and inject token
+  // ============================================
+  // Best-effort: never block sandbox creation on Vercel resolution failures.
+  // Only runs for new sandbox creation (reconnect path returns early below).
+  const repoOwner = sessionRecord?.repoOwner ?? (repoUrl ? parseGitHubUrl(repoUrl)?.owner : undefined);
+  const repoName = sessionRecord?.repoName ?? (repoUrl ? parseGitHubUrl(repoUrl)?.repo : undefined);
+
+  if (!providedSandboxId && repoOwner && repoName) {
+    try {
+      const vercelToken = await getUserVercelToken(session.user.id);
+      if (vercelToken) {
+        const result = await resolveVercelProject({
+          vercelToken,
+          repoOwner,
+          repoName,
+        });
+        if (result.ok) {
+          env.VERCEL_TOKEN = vercelToken;
+          env.VERCEL_PROJECT_ID = result.project.projectId;
+          if (result.project.orgId) {
+            env.VERCEL_ORG_ID = result.project.orgId;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[Sandbox] Vercel env resolution failed (non-blocking):", error);
+    }
   }
 
   // ============================================
