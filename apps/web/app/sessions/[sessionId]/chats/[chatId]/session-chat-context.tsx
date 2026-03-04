@@ -307,22 +307,17 @@ export function SessionChatProvider({
     !!initialSession.snapshotUrl,
   );
   const {
-    modelOptions: fetchedModelOptions,
+    modelOptions: baseModelOptions,
     loading: modelOptionsLoadingFromApi,
-    error: modelOptionsError,
-  } = useModelOptions();
-  const shouldUseFetchedModelOptions =
-    fetchedModelOptions.length > 0 &&
-    (initialModelOptions.length === 0 || modelOptionsError === null);
-  const baseModelOptions = shouldUseFetchedModelOptions
-    ? fetchedModelOptions
-    : initialModelOptions;
+  } = useModelOptions({
+    initialModelOptions,
+  });
   const modelOptions = useMemo(
     () => withMissingModelOption(baseModelOptions, chatInfo.modelId),
     [baseModelOptions, chatInfo.modelId],
   );
   const modelOptionsLoading =
-    baseModelOptions.length === 0 && modelOptionsLoadingFromApi;
+    modelOptions.length === 0 && modelOptionsLoadingFromApi;
   const contextLimit = useMemo(
     () => resolveContextLimitForModel(modelOptions, chatInfo.modelId ?? null),
     [modelOptions, chatInfo.modelId],

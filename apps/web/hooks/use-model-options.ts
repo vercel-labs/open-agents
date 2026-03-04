@@ -15,10 +15,15 @@ interface ModelVariantsResponse {
   modelVariants: ModelVariant[];
 }
 
+interface UseModelOptionsConfig {
+  initialModelOptions?: ModelOption[];
+}
+
 const EMPTY_MODELS: AvailableModel[] = [];
 const EMPTY_MODEL_VARIANTS: ModelVariant[] = [];
+const EMPTY_MODEL_OPTIONS: ModelOption[] = [];
 
-export function useModelOptions() {
+export function useModelOptions(config: UseModelOptionsConfig = {}) {
   const {
     data: modelsData,
     error: modelsError,
@@ -33,17 +38,28 @@ export function useModelOptions() {
 
   const models = modelsData?.models ?? EMPTY_MODELS;
   const modelVariants = variantsData?.modelVariants ?? EMPTY_MODEL_VARIANTS;
+  const initialModelOptions = config.initialModelOptions ?? EMPTY_MODEL_OPTIONS;
+  const hasCompleteFetchedData =
+    modelsData !== undefined && variantsData !== undefined;
 
-  const modelOptions = useMemo<ModelOption[]>(
+  const fetchedModelOptions = useMemo<ModelOption[]>(
     () => buildModelOptions(models, modelVariants),
     [models, modelVariants],
   );
+
+  const modelOptions =
+    hasCompleteFetchedData || initialModelOptions.length === 0
+      ? fetchedModelOptions
+      : initialModelOptions;
 
   return {
     modelOptions,
     models,
     modelVariants,
-    loading: modelsLoading || variantsLoading,
+    loading:
+      initialModelOptions.length === 0 &&
+      !hasCompleteFetchedData &&
+      (modelsLoading || variantsLoading),
     error: modelsError?.message ?? variantsError?.message ?? null,
   };
 }
