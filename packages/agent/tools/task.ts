@@ -14,6 +14,7 @@ import {
   getSandbox,
   shouldAutoApprove,
 } from "./utils";
+import { sumLanguageModelUsage } from "../usage";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -40,6 +41,7 @@ const toolCall = z.object({
 
 const taskOutputSchema = z.object({
   pending: toolCall.optional(),
+  toolCallCount: z.number().int().nonnegative().optional(),
   final: z.custom<ModelMessage[]>().optional(),
   usage: z.custom<LanguageModelUsage>().optional(),
 });
@@ -154,15 +156,27 @@ NOTE: The executor subagent requires user approval before running because it has
       abortSignal,
     });
 
+    let toolCallCount = 0;
+    let pending: { name: string; input: unknown } | undefined;
+    let usage: LanguageModelUsage | undefined;
+
     for await (const part of result.fullStream) {
       if (part.type === "tool-call") {
-        yield { pending: { name: part.toolName, input: part.input } };
+        toolCallCount += 1;
+        pending = { name: part.toolName, input: part.input };
+        yield { pending, toolCallCount, usage };
+      }
+
+      if (part.type === "finish-step") {
+        usage = sumLanguageModelUsage(usage, part.usage);
+        pending = undefined;
+        yield { pending, toolCallCount, usage };
       }
     }
-    const response = await result.response;
-    yield { final: response.messages, usage: await result.usage };
 
-    // Track last step usage for message metadata
+    const response = await result.response;
+    const finalUsage = usage ?? (await result.usage);
+    yield { final: response.messages, toolCallCount, usage: finalUsage };
   },
   toModelOutput: ({ output: { final: messages } }) => {
     if (!messages) {

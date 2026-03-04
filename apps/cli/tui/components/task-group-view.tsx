@@ -115,9 +115,7 @@ function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
     case "read":
     case "write":
     case "edit":
-      return input?.filePath
-        ? toRelativePath(String(input.filePath), cwd)
-        : "";
+      return input?.filePath ? toRelativePath(String(input.filePath), cwd) : "";
     case "grep":
     case "glob":
       return input?.pattern ? `"${input.pattern}"` : "";
@@ -172,10 +170,9 @@ function TaskItem({
   const output = hasOutput ? part.output : undefined;
 
   const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
-  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
-  const tokenCount = isComplete
-    ? (output?.usage?.inputTokens ?? null)
-    : null;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
+  const tokenCount = output?.usage?.inputTokens ?? null;
 
   const desc = part.input?.task ?? "Task";
 

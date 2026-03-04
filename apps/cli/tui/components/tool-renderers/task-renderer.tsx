@@ -16,9 +16,7 @@ function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
     case "read":
     case "write":
     case "edit":
-      return input?.filePath
-        ? toRelativePath(String(input.filePath), cwd)
-        : "";
+      return input?.filePath ? toRelativePath(String(input.filePath), cwd) : "";
     case "grep":
     case "glob":
       return input?.pattern ? `"${input.pattern}"` : "";
@@ -32,7 +30,10 @@ function getToolSummary(toolCall: PendingToolCall, cwd: string): string {
 function countToolCalls(messages: unknown): number {
   if (!Array.isArray(messages)) return 0;
   return messages.filter(
-    (m) => typeof m === "object" && m !== null && (m as { role?: string }).role === "tool",
+    (m) =>
+      typeof m === "object" &&
+      m !== null &&
+      (m as { role?: string }).role === "tool",
   ).length;
 }
 
@@ -97,7 +98,8 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
   const output = hasOutput ? part.output : undefined;
 
   const pendingToolCall = output?.pending ?? null;
-  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
 
   const isStreaming = hasOutput && isPreliminary;
 
@@ -179,7 +181,10 @@ export function TaskRenderer({ part, state }: ToolRendererProps<"tool-task">) {
       {/* Current pending tool call from subagent */}
       {pendingToolCall && !state.interrupted && (
         <box flexDirection="column" paddingLeft={2} marginTop={1}>
-          <SubagentToolCall toolCall={pendingToolCall} isRunning={isPreliminary} />
+          <SubagentToolCall
+            toolCall={pendingToolCall}
+            isRunning={isPreliminary}
+          />
         </box>
       )}
 

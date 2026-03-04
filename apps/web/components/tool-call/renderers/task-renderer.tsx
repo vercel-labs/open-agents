@@ -120,7 +120,8 @@ export function TaskRenderer({
   const output = hasOutput ? part.output : undefined;
 
   const pendingToolCall = output?.pending ?? null;
-  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
 
   const isTaskStreaming = hasOutput && isPreliminary;
 
@@ -193,9 +194,7 @@ export function TaskRenderer({
         ) : state.running || isActuallyRunning ? (
           <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
         ) : (
-          <span
-            className={cn("inline-block h-2 w-2 rounded-full", dotColor)}
-          />
+          <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
         )}
         <span
           className={cn(
@@ -242,7 +241,10 @@ export function TaskRenderer({
       {/* Collapsed view - show current pending tool call */}
       {!isExpanded && pendingToolCall && (
         <div className="mt-3 space-y-1 pl-3">
-          <SubagentToolCall toolCall={pendingToolCall} isRunning={isPreliminary} />
+          <SubagentToolCall
+            toolCall={pendingToolCall}
+            isRunning={isPreliminary}
+          />
         </div>
       )}
 

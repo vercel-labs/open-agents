@@ -52,9 +52,7 @@ function getToolSummary(toolCall: PendingToolCall): string {
     case "write":
     case "edit": {
       const fp = input?.filePath ?? "";
-      return fp
-        ? toRelativePath(String(fp), DEFAULT_WORKING_DIRECTORY)
-        : "";
+      return fp ? toRelativePath(String(fp), DEFAULT_WORKING_DIRECTORY) : "";
     }
     case "grep":
     case "glob":
@@ -153,10 +151,9 @@ function TaskItem({
   const output = hasOutput ? part.output : undefined;
 
   const pendingToolCall: PendingToolCall | null = output?.pending ?? null;
-  const toolCount = isComplete ? countToolCalls(output?.final) : 0;
-  const tokenCount = isComplete
-    ? (output?.usage?.inputTokens ?? null)
-    : null;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
+  const tokenCount = output?.usage?.inputTokens ?? null;
 
   const desc = part.input?.task ?? "Task";
   const subagentType = part.input?.subagentType;
@@ -183,16 +180,17 @@ function TaskItem({
     nestedStatus = denialReason ? `Denied: ${denialReason}` : "Denied";
   } else if (approvalRequested) {
     nestedStatus = "Awaiting approval...";
-  } else if (status === "pending" || (status === "running" && !pendingToolCall)) {
+  } else if (
+    status === "pending" ||
+    (status === "running" && !pendingToolCall)
+  ) {
     nestedStatus = "Initializing...";
   } else if (pendingToolCall) {
     const displayName =
       pendingToolCall.name.charAt(0).toUpperCase() +
       pendingToolCall.name.slice(1);
     const summary = getToolSummary(pendingToolCall);
-    nestedStatus = summary
-      ? `${displayName}(${summary})`
-      : displayName;
+    nestedStatus = summary ? `${displayName}(${summary})` : displayName;
   }
 
   return (
