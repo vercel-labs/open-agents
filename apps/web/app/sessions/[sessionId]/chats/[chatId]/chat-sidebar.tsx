@@ -207,7 +207,7 @@ export function ChatSidebar({
             <div
               key={c.id}
               className={`group relative flex items-center rounded-md ${
-                c.id === activeChatId ? "bg-secondary" : "hover:bg-muted"
+                c.id === activeChatId ? "bg-sidebar-active" : "hover:bg-muted"
               }`}
             >
               {editingChatId === c.id ? (
