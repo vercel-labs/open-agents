@@ -116,38 +116,36 @@ async function reconcileLegacySchema(): Promise<void> {
   }) as MigrationFile[];
 
   for (const migration of migrations) {
-    await client.begin(async (tx) => {
-      for (const statement of migration.sql) {
-        const sql = statement.trim();
-        if (!sql) {
+    for (const statement of migration.sql) {
+      const sql = statement.trim();
+      if (!sql) {
+        continue;
+      }
+
+      try {
+        await client.unsafe(sql);
+      } catch (error) {
+        if (isIgnorableLegacyError(error)) {
+          console.log(
+            `Skipping already-applied statement (${getErrorCode(error)}): ${getErrorMessage(error)}`,
+          );
           continue;
         }
 
-        try {
-          await tx.unsafe(sql);
-        } catch (error) {
-          if (isIgnorableLegacyError(error)) {
-            console.log(
-              `Skipping already-applied statement (${getErrorCode(error)}): ${getErrorMessage(error)}`,
-            );
-            continue;
-          }
-
-          throw error;
-        }
+        throw error;
       }
+    }
 
-      await tx.unsafe(
-        `
-          INSERT INTO "${MIGRATIONS_SCHEMA}"."${MIGRATIONS_TABLE}" ("hash", "created_at")
-          SELECT $1, $2
-          WHERE NOT EXISTS (
-            SELECT 1 FROM "${MIGRATIONS_SCHEMA}"."${MIGRATIONS_TABLE}" WHERE created_at = $2
-          )
-        `,
-        [migration.hash, migration.folderMillis],
-      );
-    });
+    await client.unsafe(
+      `
+        INSERT INTO "${MIGRATIONS_SCHEMA}"."${MIGRATIONS_TABLE}" ("hash", "created_at")
+        SELECT $1, $2
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "${MIGRATIONS_SCHEMA}"."${MIGRATIONS_TABLE}" WHERE created_at = $2
+        )
+      `,
+      [migration.hash, migration.folderMillis],
+    );
   }
 
   console.log("Legacy migration reconciliation complete");
