@@ -62,6 +62,8 @@ type InboxSidebarProps = {
   initialUser?: AuthSession["user"];
 };
 
+const ARCHIVED_SESSIONS_PAGE_SIZE = 50;
+
 function formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -288,6 +290,9 @@ export function InboxSidebar({
   const { session } = useSession();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
+  const [archivedVisibleCount, setArchivedVisibleCount] = useState(
+    ARCHIVED_SESSIONS_PAGE_SIZE,
+  );
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [renameDialogSession, setRenameDialogSession] =
     useState<SessionWithUnread | null>(null);
@@ -302,6 +307,12 @@ export function InboxSidebar({
     }
   }, [renameDialogSession]);
 
+  useEffect(() => {
+    if (showArchived) {
+      setArchivedVisibleCount(ARCHIVED_SESSIONS_PAGE_SIZE);
+    }
+  }, [showArchived]);
+
   const activeSessions = useMemo(
     () => sessions.filter((session) => session.status !== "archived"),
     [sessions],
@@ -310,7 +321,11 @@ export function InboxSidebar({
     () => sessions.filter((session) => session.status === "archived"),
     [sessions],
   );
-  const displayedSessions = showArchived ? archivedSessions : activeSessions;
+  const displayedSessions = showArchived
+    ? archivedSessions.slice(0, archivedVisibleCount)
+    : activeSessions;
+  const hasMoreArchivedSessions =
+    showArchived && archivedSessions.length > displayedSessions.length;
   const showLoadingSkeleton = sessionsLoading && sessions.length === 0;
   const sidebarUser = session?.user ?? initialUser;
 
@@ -454,19 +469,38 @@ export function InboxSidebar({
             {showArchived ? "No archived sessions" : "No sessions yet"}
           </div>
         ) : (
-          <div className="space-y-px p-1.5">
-            {displayedSessions.map((session) => (
-              <SessionRow
-                key={session.id}
-                session={session}
-                isActive={session.id === activeSessionId}
-                onSessionClick={handleSessionClick}
-                onSessionPrefetch={handleSessionPrefetch}
-                onOpenRenameDialog={handleOpenRenameDialog}
-                onArchiveSession={handleArchiveSession}
-              />
-            ))}
-          </div>
+          <>
+            <div className="space-y-px p-1.5">
+              {displayedSessions.map((session) => (
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === activeSessionId}
+                  onSessionClick={handleSessionClick}
+                  onSessionPrefetch={handleSessionPrefetch}
+                  onOpenRenameDialog={handleOpenRenameDialog}
+                  onArchiveSession={handleArchiveSession}
+                />
+              ))}
+            </div>
+            {hasMoreArchivedSessions ? (
+              <div className="px-3 pb-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() =>
+                    setArchivedVisibleCount(
+                      (count) => count + ARCHIVED_SESSIONS_PAGE_SIZE,
+                    )
+                  }
+                >
+                  Load more archived sessions
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 

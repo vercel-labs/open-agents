@@ -1,12 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -106,7 +98,21 @@ export async function getSessionsByUserId(userId: string) {
   });
 }
 
-export type SessionWithUnread = typeof sessions.$inferSelect & {
+type SessionSidebarFields = Pick<
+  typeof sessions.$inferSelect,
+  | "id"
+  | "title"
+  | "status"
+  | "repoName"
+  | "branch"
+  | "linesAdded"
+  | "linesRemoved"
+  | "prNumber"
+  | "prStatus"
+  | "createdAt"
+>;
+
+export type SessionWithUnread = SessionSidebarFields & {
   hasUnread: boolean;
   hasStreaming: boolean;
   latestChatId: string | null;
@@ -115,13 +121,25 @@ export type SessionWithUnread = typeof sessions.$inferSelect & {
 /**
  * Returns all sessions for a user, each annotated with a `hasUnread` flag
  * that is true when any chat in the session has unread assistant messages.
+ *
+ * The sidebar only needs lightweight fields, so we intentionally avoid
+ * selecting heavyweight JSON columns like `sandboxState` and `cachedDiff`.
  */
 export async function getSessionsWithUnreadByUserId(
   userId: string,
 ): Promise<SessionWithUnread[]> {
   const rows = await db
     .select({
-      ...getTableColumns(sessions),
+      id: sessions.id,
+      title: sessions.title,
+      status: sessions.status,
+      repoName: sessions.repoName,
+      branch: sessions.branch,
+      linesAdded: sessions.linesAdded,
+      linesRemoved: sessions.linesRemoved,
+      prNumber: sessions.prNumber,
+      prStatus: sessions.prStatus,
+      createdAt: sessions.createdAt,
       hasUnread: sql<boolean>`COALESCE(BOOL_OR(
         CASE
           WHEN ${chats.lastAssistantMessageAt} IS NULL THEN false

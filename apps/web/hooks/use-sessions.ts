@@ -4,7 +4,19 @@ import useSWR, { useSWRConfig } from "swr";
 import type { Chat, Session } from "@/lib/db/schema";
 import { fetcher } from "@/lib/swr";
 
-export type SessionWithUnread = Session & {
+export type SessionWithUnread = Pick<
+  Session,
+  | "id"
+  | "title"
+  | "status"
+  | "repoName"
+  | "branch"
+  | "linesAdded"
+  | "linesRemoved"
+  | "prNumber"
+  | "prStatus"
+  | "createdAt"
+> & {
   hasUnread: boolean;
   hasStreaming: boolean;
   latestChatId: string | null;
