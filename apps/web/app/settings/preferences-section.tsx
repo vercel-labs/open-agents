@@ -46,6 +46,13 @@ function isThemePreference(value: string): value is ThemePreference {
   return THEME_OPTIONS.some((option) => option.id === value);
 }
 
+function getModelOptionLabel(option: {
+  label: string;
+  isVariant: boolean;
+}): string {
+  return option.isVariant ? `${option.label} (variant)` : option.label;
+}
+
 export function PreferencesSectionSkeleton() {
   return (
     <Card>
@@ -198,7 +205,7 @@ export function PreferencesSection() {
             value={selectedDefaultModelId}
             items={defaultModelOptions.map((option) => ({
               id: option.id,
-              label: option.label,
+              label: getModelOptionLabel(option),
             }))}
             placeholder="Select a model"
             searchPlaceholder="Search models..."
@@ -219,7 +226,7 @@ export function PreferencesSection() {
               { id: "auto", label: "Same as main model" },
               ...subagentModelOptions.map((option) => ({
                 id: option.id,
-                label: option.label,
+                label: getModelOptionLabel(option),
               })),
             ]}
             placeholder="Select a model"
