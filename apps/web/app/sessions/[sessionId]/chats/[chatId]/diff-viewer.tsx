@@ -41,12 +41,12 @@ function formatTimestamp(date: Date) {
 
 function StaleBanner({ cachedAt }: { cachedAt: Date | null }) {
   return (
-    <div className="flex items-center gap-2 border-b border-border bg-amber-950/30 px-4 py-2 text-xs text-amber-400">
+    <div className="flex items-center gap-2 border-b border-border bg-amber-100 px-4 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
       <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
       <span>
         Viewing cached changes - sandbox is offline
         {cachedAt && (
-          <span className="text-amber-400/70">
+          <span className="text-amber-700/70 dark:text-amber-400/70">
             {" "}
             (saved {formatTimestamp(cachedAt)})
           </span>
@@ -58,10 +58,10 @@ function StaleBanner({ cachedAt }: { cachedAt: Date | null }) {
 
 function StatusBadge({ status }: { status: DiffFile["status"] }) {
   const styles = {
-    added: "bg-green-500/20 text-green-400",
-    modified: "bg-blue-500/20 text-blue-400",
-    deleted: "bg-red-500/20 text-red-400",
-    renamed: "bg-yellow-500/20 text-yellow-400",
+    added: "bg-green-500/20 text-green-700 dark:text-green-400",
+    modified: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
+    deleted: "bg-red-500/20 text-red-700 dark:text-red-400",
+    renamed: "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
   };
 
   const labels = {
@@ -91,8 +91,8 @@ function StagingBadge({
   if (!stagingStatus || stagingStatus === "staged") return null;
 
   const styles = {
-    unstaged: "bg-orange-500/20 text-orange-400",
-    partial: "bg-purple-500/20 text-purple-400",
+    unstaged: "bg-orange-500/20 text-orange-700 dark:text-orange-400",
+    partial: "bg-purple-500/20 text-purple-700 dark:text-purple-400",
   };
 
   const labels = {
@@ -163,10 +163,10 @@ function FileEntry({
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
           {file.additions > 0 && (
-            <span className="text-green-500">+{file.additions}</span>
+            <span className="text-green-600 dark:text-green-500">+{file.additions}</span>
           )}
           {file.deletions > 0 && (
-            <span className="text-red-400">-{file.deletions}</span>
+            <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
           )}
         </div>
       </button>
@@ -245,10 +245,10 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
               </DialogTitle>
               {diff && diff.summary.totalFiles > 0 && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-green-500">
+                  <span className="text-green-600 dark:text-green-500">
                     +{diff.summary.totalAdditions}
                   </span>
-                  <span className="text-red-400">
+                  <span className="text-red-600 dark:text-red-400">
                     -{diff.summary.totalDeletions}
                   </span>
                 </div>
@@ -339,7 +339,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
 
           {diffError && (
             <div className="px-4 py-8 text-center">
-              <p className="text-sm text-red-400">{diffError}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{diffError}</p>
             </div>
           )}
 

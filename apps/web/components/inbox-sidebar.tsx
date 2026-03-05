@@ -113,9 +113,9 @@ function DiffStats({
 
   return (
     <span className="flex items-center gap-0.5 font-mono text-[10px]">
-      {added !== null ? <span className="text-green-500">+{added}</span> : null}
+      {added !== null ? <span className="text-green-600 dark:text-green-500">+{added}</span> : null}
       {removed !== null ? (
-        <span className="text-red-400">-{removed}</span>
+        <span className="text-red-600 dark:text-red-400">-{removed}</span>
       ) : null}
     </span>
   );
@@ -132,7 +132,7 @@ function PrBadge({
 
   if (status === "merged") {
     return (
-      <span className="flex items-center gap-0.5 text-[10px] text-purple-400">
+      <span className="flex items-center gap-0.5 text-[10px] text-purple-700 dark:text-purple-400">
         <GitMerge className="h-2.5 w-2.5" />
         <span>#{prNumber}</span>
       </span>

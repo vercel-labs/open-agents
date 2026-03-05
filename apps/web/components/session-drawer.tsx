@@ -77,9 +77,9 @@ function DiffStats({
 
   return (
     <div className="flex items-center gap-1 font-mono text-xs">
-      {added !== null ? <span className="text-green-500">+{added}</span> : null}
+      {added !== null ? <span className="text-green-600 dark:text-green-500">+{added}</span> : null}
       {removed !== null ? (
-        <span className="text-red-400">-{removed}</span>
+        <span className="text-red-600 dark:text-red-400">-{removed}</span>
       ) : null}
     </div>
   );
@@ -90,7 +90,7 @@ function PrStatus({ status }: { status: "open" | "merged" | "closed" | null }) {
 
   if (status === "merged") {
     return (
-      <div className="flex items-center gap-1 rounded-md bg-purple-500/20 px-1.5 py-0.5 text-xs text-purple-400">
+      <div className="flex items-center gap-1 rounded-md bg-purple-500/20 px-1.5 py-0.5 text-xs text-purple-700 dark:text-purple-400">
         <GitMerge className="h-3 w-3" />
         <span>Merged</span>
       </div>
