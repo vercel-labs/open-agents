@@ -1,4 +1,3 @@
-import { connectSandbox } from "@open-harness/sandbox";
 import { createHmac, timingSafeEqual } from "crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { after } from "next/server";
@@ -9,10 +8,10 @@ import {
   updateInstallationsByInstallationId,
   upsertInstallation,
 } from "@/lib/db/installations";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { updateSession } from "@/lib/db/sessions";
 import { db } from "@/lib/db/client";
 import { sessions } from "@/lib/db/schema";
-import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import { archiveSession } from "@/lib/sandbox/archive-session";
 
 const installationWebhookSchema = z.object({
   action: z.string(),
@@ -63,60 +62,6 @@ function verifySignature(
   return timingSafeEqual(expected, provided);
 }
 
-async function finalizeArchivedSessionSandbox(
-  sessionId: string,
-): Promise<void> {
-  try {
-    const archivedSession = await getSessionById(sessionId);
-    if (!archivedSession || archivedSession.status !== "archived") {
-      return;
-    }
-    if (!canOperateOnSandbox(archivedSession.sandboxState)) {
-      return;
-    }
-
-    const sandbox = await connectSandbox(archivedSession.sandboxState);
-
-    // Snapshot before stopping so the sandbox can be restored on unarchive.
-    // snapshot() automatically stops the sandbox, so no separate stop() needed.
-    let snapshotFields: {
-      snapshotUrl?: string;
-      snapshotCreatedAt?: Date;
-    } = {};
-    if (sandbox.snapshot) {
-      try {
-        const result = await sandbox.snapshot();
-        snapshotFields = {
-          snapshotUrl: result.snapshotId,
-          snapshotCreatedAt: new Date(),
-        };
-      } catch (snapshotError) {
-        console.error(
-          `[GitHub webhook] Snapshot failed for archived session ${sessionId}, falling back to stop:`,
-          snapshotError,
-        );
-        await sandbox.stop();
-      }
-    } else {
-      await sandbox.stop();
-    }
-
-    await updateSession(sessionId, {
-      ...snapshotFields,
-      sandboxState: clearSandboxState(archivedSession.sandboxState),
-      lifecycleState: "archived",
-      sandboxExpiresAt: null,
-      hibernateAfter: null,
-      lifecycleError: null,
-    });
-  } catch (error) {
-    console.error(
-      `[GitHub webhook] Failed to stop sandbox for archived session ${sessionId}:`,
-      error,
-    );
-  }
-}
-
 async function handlePullRequestWebhook(
   payload: z.infer<typeof pullRequestWebhookSchema>,
 ): Promise<Response> {
@@ -154,30 +99,34 @@ async function handlePullRequestWebhook(
     });
   }
 
-  const sessionsToFinalize: string[] = [];
   let updatedSessions = 0;
+  let archivedSessions = 0;
 
   for (const sessionRecord of linkedSessions) {
     const shouldArchive =
       action === "closed" && sessionRecord.status !== "archived";
 
-    const updatePayload: Partial<{
-      prStatus: "open" | "merged" | "closed" | null;
-      status: "running" | "completed" | "failed" | "archived";
-      lifecycleState: "archived" | null;
-      sandboxExpiresAt: null;
-      hibernateAfter: null;
-    }> = {};
+    const updatePayload: Parameters<typeof updateSession>[1] = {};
 
     if (sessionRecord.prStatus !== prStatus) {
       updatePayload.prStatus = prStatus;
     }
 
     if (shouldArchive) {
-      updatePayload.status = "archived";
-      updatePayload.lifecycleState = "archived";
-      updatePayload.sandboxExpiresAt = null;
-      updatePayload.hibernateAfter = null;
+      const archived = await archiveSession(sessionRecord.id, {
+        currentSession: sessionRecord,
+        update: updatePayload,
+        logPrefix: "[GitHub webhook]",
+        scheduleBackgroundWork: after,
+      });
+
+      if (archived.session) {
+        updatedSessions += 1;
+      }
+      if (archived.archiveTriggered) {
+        archivedSessions += 1;
+      }
+      continue;
     }
 
     if (Object.keys(updatePayload).length > 0) {
@@ -186,20 +135,6 @@ async function handlePullRequestWebhook(
         updatedSessions += 1;
       }
     }
-
-    if (shouldArchive) {
-      sessionsToFinalize.push(sessionRecord.id);
-    }
-  }
-
-  if (sessionsToFinalize.length > 0) {
-    after(async () => {
-      await Promise.all(
-        sessionsToFinalize.map((sessionId) =>
-          finalizeArchivedSessionSandbox(sessionId),
-        ),
-      );
-    });
   }
 
   return Response.json({
@@ -209,7 +144,7 @@ async function handlePullRequestWebhook(
     prStatus,
     matchedSessions: linkedSessions.length,
     updatedSessions,
-    archivedSessions: sessionsToFinalize.length,
+    archivedSessions,
   });
 }
 
