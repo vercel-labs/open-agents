@@ -27,6 +27,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 .turbo
+.swc
 
 # IntelliJ based IDEs
 .idea
