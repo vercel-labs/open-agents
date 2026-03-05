@@ -7,9 +7,10 @@ import {
   ExternalLink,
   GitMerge,
   Loader2,
+  RefreshCw,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { Session } from "@/lib/db/schema";
@@ -78,75 +79,87 @@ export function MergePrDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const readinessRequestIdRef = useRef(0);
+
+  const loadReadiness = useCallback(async () => {
+    const requestId = readinessRequestIdRef.current + 1;
+    readinessRequestIdRef.current = requestId;
+
+    setIsLoadingReadiness(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/sessions/${session.id}/merge-readiness`,
+        {
+          method: "GET",
+        },
+      );
+
+      const payload = (await response.json()) as
+        | MergeReadinessResponse
+        | { error?: string };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : "Failed to load merge readiness",
+        );
+      }
+
+      if (readinessRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const readinessPayload = payload as MergeReadinessResponse;
+      setReadiness(readinessPayload);
+      setMergeMethod(readinessPayload.defaultMethod);
+    } catch (loadError) {
+      if (readinessRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Failed to load merge readiness",
+      );
+    } finally {
+      if (readinessRequestIdRef.current === requestId) {
+        setIsLoadingReadiness(false);
+      }
+    }
+  }, [session.id]);
+
   useEffect(() => {
     if (!open) {
+      readinessRequestIdRef.current += 1;
       setError(null);
       setReadiness(null);
       setDeleteBranch(true);
       setMergeMethod("squash");
+      setIsLoadingReadiness(false);
       return;
     }
 
-    let cancelled = false;
-
-    const loadReadiness = async () => {
-      setIsLoadingReadiness(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          `/api/sessions/${session.id}/merge-readiness`,
-          {
-            method: "GET",
-          },
-        );
-
-        const payload = (await response.json()) as
-          | MergeReadinessResponse
-          | { error?: string };
-
-        if (!response.ok) {
-          throw new Error(
-            "error" in payload && payload.error
-              ? payload.error
-              : "Failed to load merge readiness",
-          );
-        }
-
-        if (cancelled) {
-          return;
-        }
-
-        setReadiness(payload as MergeReadinessResponse);
-
-        const preferredMethod = (payload as MergeReadinessResponse)
-          .defaultMethod;
-        setMergeMethod(preferredMethod);
-      } catch (loadError) {
-        if (cancelled) {
-          return;
-        }
-
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load merge readiness",
-        );
-      } finally {
-        if (!cancelled) {
-          setIsLoadingReadiness(false);
-        }
-      }
-    };
-
     void loadReadiness();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, session.id]);
+  }, [open, loadReadiness]);
 
   const canMerge = readiness?.canMerge ?? false;
+  const pullRequestUrl = readiness?.pr
+    ? `https://github.com/${readiness.pr.repo}/pull/${readiness.pr.number}`
+    : session.repoOwner && session.repoName && session.prNumber
+      ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
+      : null;
+
+  const openPullRequest = useCallback(() => {
+    if (!pullRequestUrl) {
+      return;
+    }
+
+    window.open(pullRequestUrl, "_blank", "noopener,noreferrer");
+  }, [pullRequestUrl]);
 
   const handleMerge = async () => {
     if (!readiness?.pr) {
@@ -230,6 +243,33 @@ export function MergePrDialog({
             Merge PR #{session.prNumber} and archive this session.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openPullRequest}
+            disabled={!pullRequestUrl}
+          >
+            <ExternalLink className="mr-2 h-4 w-4" />
+            View PR
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              void loadReadiness();
+            }}
+            disabled={isLoadingReadiness || isSubmitting}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isLoadingReadiness ? "animate-spin" : ""}`}
+            />
+            Refresh status
+          </Button>
+        </div>
 
         <div className="grid gap-4 py-2">
           {isLoadingReadiness ? (

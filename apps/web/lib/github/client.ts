@@ -331,7 +331,7 @@ function reasonsFromMergeableState(
   }
 
   if (mergeableState === "unstable") {
-    return ["Required checks are failing or unstable"];
+    return ["Required checks are still in progress"];
   }
 
   return [];
