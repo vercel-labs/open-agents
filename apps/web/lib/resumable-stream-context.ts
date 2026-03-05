@@ -1,7 +1,11 @@
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { createChunkedPublisherAdapter } from "./chunked-publisher-adapter";
-import { createRedisClient, isRedisConfigured } from "./redis";
+import {
+  createRedisClient,
+  isRedisConfigured,
+  warnRedisDisabled,
+} from "./redis";
 
 type RedisResumableStreamContext = Pick<
   ReturnType<typeof createResumableStreamContext>,
@@ -9,13 +13,19 @@ type RedisResumableStreamContext = Pick<
 >;
 
 const disabledResumableStreamContext: RedisResumableStreamContext = {
-  createNewResumableStream: async (_streamId, streamFactory) => streamFactory(),
-  resumeExistingStream: async () => null,
+  createNewResumableStream: async (_streamId, streamFactory) => {
+    warnRedisDisabled("Resumable stream persistence");
+    return streamFactory();
+  },
+  resumeExistingStream: async () => {
+    warnRedisDisabled("Resumable stream resume");
+    return null;
+  },
 };
 
 function createRedisResumableStreamContext(): RedisResumableStreamContext {
-  const publisher = createRedisClient();
-  const subscriber = createRedisClient();
+  const publisher = createRedisClient("resumable-stream-publisher");
+  const subscriber = createRedisClient("resumable-stream-subscriber");
 
   return createResumableStreamContext({
     waitUntil: after,

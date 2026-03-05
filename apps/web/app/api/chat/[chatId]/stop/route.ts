@@ -1,5 +1,9 @@
 import { getChatById, getSessionById } from "@/lib/db/sessions";
-import { createRedisClient } from "@/lib/redis";
+import {
+  createRedisClient,
+  isRedisConfigured,
+  warnRedisDisabled,
+} from "@/lib/redis";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
@@ -26,9 +30,32 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   // Publish stop signal via Redis pub/sub
-  const publisher = createRedisClient();
-  await publisher.publish(`stop:${chatId}`, "stop");
-  publisher.disconnect();
+  if (!isRedisConfigured()) {
+    warnRedisDisabled("Chat stop endpoint");
+    return Response.json(
+      {
+        error:
+          "Stop signaling is unavailable because REDIS_URL/KV_URL is not configured.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const publisher = createRedisClient("stop-signal-publisher");
+  try {
+    await publisher.publish(`stop:${chatId}`, "stop");
+  } catch (error) {
+    console.error(
+      `[redis] Failed to publish stop signal for chat ${chatId}:`,
+      error,
+    );
+    return Response.json(
+      { error: "Failed to publish stop signal" },
+      { status: 502 },
+    );
+  } finally {
+    publisher.disconnect();
+  }
 
   return Response.json({ success: true });
 }

@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 
-let warnedMissingRedisConfig = false;
+const warnedMissingRedisFeatures = new Set<string>();
 
 export function getRedisUrl(): string | null {
   return process.env.REDIS_URL ?? process.env.KV_URL ?? null;
@@ -10,30 +10,27 @@ export function isRedisConfigured(): boolean {
   return getRedisUrl() !== null;
 }
 
-function createNoopRedisClient(): Redis {
-  if (!warnedMissingRedisConfig) {
-    warnedMissingRedisConfig = true;
-    console.warn(
-      "[redis] REDIS_URL/KV_URL not set. Redis-backed stream resume and stop signaling are disabled.",
-    );
+export function warnRedisDisabled(feature: string): void {
+  if (warnedMissingRedisFeatures.has(feature)) {
+    return;
   }
 
-  const noopRedisClient = {
-    on: () => noopRedisClient,
-    publish: async () => 0,
-    subscribe: async () => 0,
-    unsubscribe: async () => 0,
-    disconnect: () => undefined,
-  };
-
-  return noopRedisClient as unknown as Redis;
+  warnedMissingRedisFeatures.add(feature);
+  console.error(
+    `[redis] ${feature} is disabled because REDIS_URL/KV_URL is not configured.`,
+  );
 }
 
-export function createRedisClient(): Redis {
+export function createRedisClient(clientName = "redis-client"): Redis {
   const url = getRedisUrl();
   if (!url) {
-    return createNoopRedisClient();
+    throw new Error("REDIS_URL or KV_URL environment variable is required");
   }
 
-  return new Redis(url);
+  const client = new Redis(url);
+  client.on("error", (error) => {
+    console.error(`[redis] ${clientName} error:`, error);
+  });
+
+  return client;
 }
