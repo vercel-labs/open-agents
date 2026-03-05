@@ -2394,42 +2394,27 @@ export function SessionChatContent(_props: unknown) {
                       )}
                     </Button>
                   ) : (
-                    <>
-                      {canMergeAndArchive && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                          onClick={() => setMergeDialogOpen(true)}
-                        >
-                          <GitMerge className="h-4 w-4 xl:mr-2" />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                      onClick={openPreviewOrPr}
+                      disabled={!prDeploymentUrl && !existingPrUrl}
+                    >
+                      {prDeploymentUrl ? (
+                        <>
+                          <ExternalLink className="h-4 w-4 xl:mr-2" />
+                          <span className="hidden xl:inline">Preview</span>
+                        </>
+                      ) : (
+                        <>
+                          <GitPullRequest className="h-4 w-4 xl:mr-2" />
                           <span className="hidden xl:inline">
-                            Merge & Archive
+                            View PR #{session.prNumber}
                           </span>
-                        </Button>
+                        </>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                        onClick={openPreviewOrPr}
-                        disabled={!prDeploymentUrl && !existingPrUrl}
-                      >
-                        {prDeploymentUrl ? (
-                          <>
-                            <ExternalLink className="h-4 w-4 xl:mr-2" />
-                            <span className="hidden xl:inline">Preview</span>
-                          </>
-                        ) : (
-                          <>
-                            <GitPullRequest className="h-4 w-4 xl:mr-2" />
-                            <span className="hidden xl:inline">
-                              View PR #{session.prNumber}
-                            </span>
-                          </>
-                        )}
-                      </Button>
-                    </>
+                    </Button>
                   )
                 ) : showCommitAction ? (
                   <Button
