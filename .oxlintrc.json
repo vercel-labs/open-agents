@@ -7,6 +7,14 @@
   },
   "rules": {
     "no-console": "off",
+    "max-lines": [
+      "warn",
+      {
+        "max": 500,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ],
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
     "typescript/no-explicit-any": "error"
