@@ -188,7 +188,7 @@ const SessionRow = memo(function SessionRow({
           onFocus={() => onSessionPrefetch(session)}
           className="block w-full text-left"
         >
-          <div className="flex min-w-0 items-center gap-2 pr-7">
+          <div className="flex min-w-0 items-center gap-2 pr-2">
             <p
               className={`min-w-0 flex-1 truncate text-sm ${
                 isUnread || isWorking
