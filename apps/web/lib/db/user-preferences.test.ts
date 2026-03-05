@@ -14,21 +14,24 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "anthropic/claude-haiku-4.5",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      defaultDiffMode: "unified",
       modelVariants: [],
     });
   });
 
-  test("normalizes invalid sandbox types to default", async () => {
+  test("normalizes invalid sandbox and diff mode values to defaults", async () => {
     const { toUserPreferencesData } = await userPreferencesModulePromise;
 
     const result = toUserPreferencesData({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: "openai/gpt-5-mini",
       defaultSandboxType: "invalid" as never,
+      defaultDiffMode: "invalid" as never,
       modelVariants: [],
     });
 
     expect(result.defaultSandboxType).toBe("vercel");
+    expect(result.defaultDiffMode).toBe("unified");
   });
 
   test("drops invalid modelVariants payloads", async () => {
@@ -38,6 +41,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
       modelVariants: [{ id: "bad-id" }] as never,
     });
 
@@ -51,6 +55,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "hybrid",
+      defaultDiffMode: "split",
       modelVariants: [
         {
           id: "variant:test",
@@ -65,6 +70,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "hybrid",
+      defaultDiffMode: "split",
       modelVariants: [
         {
           id: "variant:test",

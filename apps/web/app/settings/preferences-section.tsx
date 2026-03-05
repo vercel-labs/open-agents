@@ -24,7 +24,10 @@ import {
 import { ModelCombobox } from "@/components/model-combobox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useModelOptions } from "@/hooks/use-model-options";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
+import {
+  type DiffMode,
+  useUserPreferences,
+} from "@/hooks/use-user-preferences";
 import {
   getDefaultModelOptionId,
   withMissingModelOption,
@@ -40,6 +43,11 @@ const THEME_OPTIONS: Array<{ id: ThemePreference; name: string }> = [
   { id: "system", name: "System" },
   { id: "light", name: "Light" },
   { id: "dark", name: "Dark" },
+];
+
+const DIFF_MODE_OPTIONS: Array<{ id: DiffMode; name: string }> = [
+  { id: "unified", name: "Unified" },
+  { id: "split", name: "Split" },
 ];
 
 function isThemePreference(value: string): value is ThemePreference {
@@ -90,6 +98,18 @@ export function PreferencesSectionSkeleton() {
           </Select>
           <p className="text-xs text-muted-foreground">
             The execution environment for new sessions.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="diff-mode">Default Diff Mode</Label>
+          <Select disabled>
+            <SelectTrigger id="diff-mode" className="w-full max-w-xs">
+              <Skeleton className="h-4 w-24" />
+            </SelectTrigger>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The diff layout used when opening the changes viewer.
           </p>
         </div>
       </CardContent>
@@ -153,6 +173,17 @@ export function PreferencesSection() {
       await updatePreferences({ defaultSandboxType: sandboxType });
     } catch (error) {
       console.error("Failed to update sandbox preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDiffModeChange = async (diffMode: DiffMode) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({ defaultDiffMode: diffMode });
+    } catch (error) {
+      console.error("Failed to update diff mode preference:", error);
     } finally {
       setIsSaving(false);
     }
@@ -258,6 +289,29 @@ export function PreferencesSection() {
           </Select>
           <p className="text-xs text-muted-foreground">
             The execution environment for new sessions.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="diff-mode">Default Diff Mode</Label>
+          <Select
+            value={preferences?.defaultDiffMode ?? "unified"}
+            onValueChange={(value) => handleDiffModeChange(value as DiffMode)}
+            disabled={isSaving}
+          >
+            <SelectTrigger id="diff-mode" className="w-full max-w-xs">
+              <SelectValue placeholder="Select a diff mode" />
+            </SelectTrigger>
+            <SelectContent>
+              {DIFF_MODE_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The diff layout used when opening the changes viewer.
           </p>
         </div>
       </CardContent>

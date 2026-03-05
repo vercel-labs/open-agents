@@ -313,6 +313,9 @@ export const userPreferences = pgTable("user_preferences", {
   defaultSandboxType: text("default_sandbox_type", {
     enum: ["hybrid", "vercel", "just-bash"],
   }).default("vercel"),
+  defaultDiffMode: text("default_diff_mode", {
+    enum: ["unified", "split"],
+  }).default("unified"),
   modelVariants: jsonb("model_variants")
     .$type<ModelVariant[]>()
     .notNull()

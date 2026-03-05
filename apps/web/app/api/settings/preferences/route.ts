@@ -1,6 +1,7 @@
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   getUserPreferences,
+  type DiffMode,
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
@@ -9,6 +10,7 @@ interface UpdatePreferencesRequest {
   defaultModelId?: string;
   defaultSubagentModelId?: string | null;
   defaultSandboxType?: SandboxType;
+  defaultDiffMode?: DiffMode;
 }
 
 export async function GET() {
@@ -39,6 +41,14 @@ export async function PATCH(req: Request) {
     const validTypes = ["hybrid", "vercel", "just-bash"];
     if (!validTypes.includes(body.defaultSandboxType)) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
+    }
+  }
+
+  // Validate diff mode if provided
+  if (body.defaultDiffMode) {
+    const validDiffModes = ["unified", "split"];
+    if (!validDiffModes.includes(body.defaultDiffMode)) {
+      return Response.json({ error: "Invalid diff mode" }, { status: 400 });
     }
   }
 

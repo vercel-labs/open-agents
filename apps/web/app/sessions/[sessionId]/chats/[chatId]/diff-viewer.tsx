@@ -18,6 +18,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  type DiffMode,
+  useUserPreferences,
+} from "@/hooks/use-user-preferences";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultDiffOptions, splitDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
@@ -28,7 +32,7 @@ type DiffViewerProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type DiffStyle = "unified" | "split";
+type DiffStyle = DiffMode;
 
 function formatTimestamp(date: Date) {
   return date.toLocaleString("en-US", {
@@ -163,10 +167,14 @@ function FileEntry({
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
           {file.additions > 0 && (
-            <span className="text-green-600 dark:text-green-500">+{file.additions}</span>
+            <span className="text-green-600 dark:text-green-500">
+              +{file.additions}
+            </span>
           )}
           {file.deletions > 0 && (
-            <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+            <span className="text-red-600 dark:text-red-400">
+              -{file.deletions}
+            </span>
           )}
         </div>
       </button>
@@ -197,6 +205,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
     refreshDiff,
   } = useSessionChatContext();
   const isMobile = useIsMobile();
+  const { preferences } = useUserPreferences();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
 
@@ -226,10 +235,17 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
   };
 
   useEffect(() => {
-    if (isMobile && diffStyle !== "unified") {
-      setDiffStyle("unified");
+    if (!open) {
+      return;
     }
-  }, [diffStyle, isMobile]);
+
+    if (isMobile) {
+      setDiffStyle("unified");
+      return;
+    }
+
+    setDiffStyle(preferences?.defaultDiffMode ?? "unified");
+  }, [open, isMobile, preferences?.defaultDiffMode]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -339,7 +355,9 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
 
           {diffError && (
             <div className="px-4 py-8 text-center">
-              <p className="text-sm text-red-600 dark:text-red-400">{diffError}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {diffError}
+              </p>
             </div>
           )}
 

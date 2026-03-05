@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "default_diff_mode" text DEFAULT 'unified';
