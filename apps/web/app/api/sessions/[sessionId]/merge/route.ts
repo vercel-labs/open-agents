@@ -112,12 +112,18 @@ export async function POST(req: Request, context: RouteContext) {
     return Response.json({ error: "Pull request is closed" }, { status: 409 });
   }
 
-  let parsedBody: MergePullRequestRequest;
-  try {
-    const body = await req.json();
-    parsedBody = parseRequestBody(body);
-  } catch {
-    parsedBody = {};
+  let parsedBody: MergePullRequestRequest = {};
+  const rawBody = await req.text();
+
+  if (rawBody.trim().length > 0) {
+    let jsonBody: unknown;
+    try {
+      jsonBody = JSON.parse(rawBody);
+    } catch {
+      return Response.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    parsedBody = parseRequestBody(jsonBody);
   }
 
   if (
@@ -214,7 +220,10 @@ export async function POST(req: Request, context: RouteContext) {
     const normalizedRepoOwner = sessionRecord.repoOwner.toLowerCase();
     const normalizedHeadOwner = readiness.pr.headOwner?.toLowerCase() ?? null;
 
-    if (normalizedHeadOwner && normalizedHeadOwner !== normalizedRepoOwner) {
+    if (!normalizedHeadOwner) {
+      branchDeleteError =
+        "Source branch owner could not be determined; branch was not deleted";
+    } else if (normalizedHeadOwner !== normalizedRepoOwner) {
       branchDeleteError = "Source branch belongs to a fork and was not deleted";
     } else {
       const deleteResult = await deleteBranchRef({

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { PullRequestMergeReadiness } from "@/lib/github/client";
 
 type AuthSession = { user: { id: string } } | null;
 
@@ -30,12 +31,12 @@ const updateCalls: Array<{
 const mergeCalls: Array<Record<string, unknown>> = [];
 const deleteCalls: Array<Record<string, unknown>> = [];
 
-let readinessResult = {
+let readinessResult: PullRequestMergeReadiness = {
   success: true,
   canMerge: true,
-  reasons: [] as string[],
-  allowedMethods: ["squash", "merge", "rebase"] as const,
-  defaultMethod: "squash" as const,
+  reasons: [],
+  allowedMethods: ["squash", "merge", "rebase"],
+  defaultMethod: "squash",
   checks: {
     requiredTotal: 3,
     passed: 3,
@@ -44,7 +45,7 @@ let readinessResult = {
   },
   pr: {
     number: 42,
-    state: "open" as const,
+    state: "open",
     isDraft: false,
     baseBranch: "main",
     headBranch: "feature/merge-flow",
@@ -164,6 +165,26 @@ describe("/api/sessions/[sessionId]/merge", () => {
     expect(response.status).toBe(401);
   });
 
+  test("returns 400 when request body is invalid JSON", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{not-json",
+      }),
+      createContext(),
+    );
+
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid request body");
+    expect(mergeCalls).toHaveLength(0);
+    expect(updateCalls).toHaveLength(0);
+  });
+
   test("returns 409 when pull request is not mergeable", async () => {
     readinessResult = {
       ...readinessResult,
@@ -228,6 +249,62 @@ describe("/api/sessions/[sessionId]/merge", () => {
 
     expect(mergeCalls).toHaveLength(1);
     expect(deleteCalls).toHaveLength(1);
+    expect(updateCalls).toEqual([
+      {
+        sessionId: "session-1",
+        patch: { prStatus: "merged" },
+      },
+    ]);
+  });
+
+  test("does not delete source branch when head owner is unknown", async () => {
+    if (!readinessResult.pr) {
+      throw new Error("Expected pull request readiness data in test setup");
+    }
+
+    readinessResult = {
+      ...readinessResult,
+      pr: {
+        ...readinessResult.pr,
+        headOwner: null,
+      },
+    };
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mergeMethod: "squash",
+          deleteBranch: true,
+          expectedHeadSha: "abc1234",
+        }),
+      }),
+      createContext(),
+    );
+
+    const body = (await response.json()) as {
+      merged: boolean;
+      prNumber: number;
+      mergeCommitSha: string | null;
+      branchDeleted: boolean;
+      branchDeleteError: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      merged: true,
+      mergeCommitSha: "def5678",
+      branchDeleted: false,
+      branchDeleteError:
+        "Source branch owner could not be determined; branch was not deleted",
+      prNumber: 42,
+    });
+
+    expect(mergeCalls).toHaveLength(1);
+    expect(deleteCalls).toHaveLength(0);
     expect(updateCalls).toEqual([
       {
         sessionId: "session-1",
