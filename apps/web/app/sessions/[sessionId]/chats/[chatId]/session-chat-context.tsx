@@ -838,6 +838,23 @@ export function SessionChatProvider({
     sessionId,
   ]);
 
+  // When entering a session on a branch that already has a PR, hydrate PR
+  // metadata as soon as we know the sandbox is connected so the header action
+  // reflects existing PR state immediately.
+  useEffect(() => {
+    if (sessionRecord.prNumber != null) return;
+    if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
+    if (reconnectionStatus !== "connected") return;
+
+    void checkBranchAndPr();
+  }, [
+    sessionRecord.prNumber,
+    sessionRecord.repoOwner,
+    sessionRecord.repoName,
+    reconnectionStatus,
+    checkBranchAndPr,
+  ]);
+
   const updateSessionSnapshot = useCallback(
     (snapshotUrl: string, snapshotCreatedAt: Date) => {
       setHasSnapshotState(true);
