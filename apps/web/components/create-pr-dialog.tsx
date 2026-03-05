@@ -2,6 +2,7 @@
 
 import {
   Check,
+  ChevronDown,
   ExternalLink,
   GitCommit,
   Loader2,
@@ -26,7 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
 
@@ -49,6 +55,7 @@ interface GitActions {
 }
 
 type WizardStep = "create-branch" | "generate";
+type PrCreationMode = "ready" | "draft";
 
 function buildCompareUrl(params: {
   owner: string;
@@ -105,7 +112,8 @@ export function CreatePRDialog({
   const [step, setStep] = useState<WizardStep>("generate");
   const [hasGenerated, setHasGenerated] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
-  const [isDraft, setIsDraft] = useState(false);
+  const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
+  const isDraft = prCreationMode === "draft";
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -122,7 +130,7 @@ export function CreatePRDialog({
       setStep("generate");
       setHasGenerated(false);
       setPrHeadOwner(null);
-      setIsDraft(false);
+      setPrCreationMode("ready");
     }
   }, [open]);
 
@@ -506,24 +514,6 @@ export function CreatePRDialog({
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="draft-pr-toggle">
-                        Create as draft PR
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Keep the pull request in draft mode until it is ready
-                        for review.
-                      </p>
-                    </div>
-                    <Switch
-                      id="draft-pr-toggle"
-                      checked={isDraft}
-                      onCheckedChange={setIsDraft}
-                      disabled={isDisabled}
-                    />
-                  </div>
-
                   {/* Title Input */}
                   <div className="grid gap-2">
                     <Label htmlFor="pr-title">Title</Label>
@@ -613,25 +603,89 @@ export function CreatePRDialog({
                       </>
                     )}
                   </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={
-                      isDisabled || !title.trim() || hasUncommittedChanges
-                    }
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : shouldOpenCompareInsteadOfApi ? (
-                      "Open Compare Page"
-                    ) : isDraft ? (
-                      "Create Draft PR"
-                    ) : (
-                      "Create PR"
-                    )}
-                  </Button>
+                  <div className="flex">
+                    <Button
+                      onClick={handleCreate}
+                      className="rounded-r-none"
+                      disabled={
+                        isDisabled || !title.trim() || hasUncommittedChanges
+                      }
+                    >
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : shouldOpenCompareInsteadOfApi ? (
+                        isDraft ? (
+                          "Open Compare for Draft"
+                        ) : (
+                          "Open Compare Page"
+                        )
+                      ) : isDraft ? (
+                        "Create Draft PR"
+                      ) : (
+                        "Create PR"
+                      )}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="icon"
+                          className="rounded-l-none border-l border-l-primary-foreground/25"
+                          disabled={
+                            isDisabled || !title.trim() || hasUncommittedChanges
+                          }
+                          aria-label="Choose pull request type"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-72">
+                        <DropdownMenuItem
+                          className="items-start gap-3 py-2"
+                          onSelect={() => setPrCreationMode("ready")}
+                        >
+                          <Check
+                            className={
+                              prCreationMode === "ready"
+                                ? "mt-0.5 h-4 w-4"
+                                : "mt-0.5 h-4 w-4 opacity-0"
+                            }
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              Create pull request
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              Open a pull request that is ready for review
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="items-start gap-3 py-2"
+                          onSelect={() => setPrCreationMode("draft")}
+                        >
+                          <Check
+                            className={
+                              prCreationMode === "draft"
+                                ? "mt-0.5 h-4 w-4"
+                                : "mt-0.5 h-4 w-4 opacity-0"
+                            }
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              Create draft pull request
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              Cannot be merged until marked ready for review
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </>
               )}
             </DialogFooter>
