@@ -7,11 +7,21 @@ type OctokitResult =
 
 export type PullRequestMergeMethod = "merge" | "squash" | "rebase";
 
+export type PullRequestCheckState = "passed" | "pending" | "failed";
+
 type PullRequestCheckSummary = {
   requiredTotal: number;
   passed: number;
   pending: number;
   failed: number;
+};
+
+export type PullRequestCheckRun = {
+  name: string;
+  state: PullRequestCheckState;
+  status: string | null;
+  conclusion: string | null;
+  detailsUrl: string | null;
 };
 
 export type PullRequestMergeReadiness = {
@@ -21,6 +31,7 @@ export type PullRequestMergeReadiness = {
   allowedMethods: PullRequestMergeMethod[];
   defaultMethod: PullRequestMergeMethod;
   checks: PullRequestCheckSummary;
+  checkRuns?: PullRequestCheckRun[];
   pr?: {
     number: number;
     state: "open" | "closed";
@@ -182,6 +193,43 @@ const FAILED_CHECK_CONCLUSIONS = new Set([
   "timed_out",
 ]);
 
+function getCheckRunState(
+  status: string | null,
+  conclusion: string | null,
+): PullRequestCheckState {
+  if (status !== "completed") {
+    return "pending";
+  }
+
+  if (conclusion && SUCCESSFUL_CHECK_CONCLUSIONS.has(conclusion)) {
+    return "passed";
+  }
+
+  if (conclusion && FAILED_CHECK_CONCLUSIONS.has(conclusion)) {
+    return "failed";
+  }
+
+  if (conclusion === null) {
+    return "pending";
+  }
+
+  // Remaining conclusions are treated as failures to avoid merging with
+  // unknown or unstable check outcomes.
+  return "failed";
+}
+
+function getCombinedStatusState(state: string): PullRequestCheckState {
+  if (state === "success") {
+    return "passed";
+  }
+
+  if (state === "pending") {
+    return "pending";
+  }
+
+  return "failed";
+}
+
 function summarizeCheckRuns(
   runs: Array<{ status: string | null; conclusion: string | null }>,
 ): PullRequestCheckSummary {
@@ -190,31 +238,18 @@ function summarizeCheckRuns(
   let failed = 0;
 
   for (const run of runs) {
-    const status = run.status ?? "";
-    const conclusion = run.conclusion;
+    const state = getCheckRunState(run.status, run.conclusion);
 
-    if (status !== "completed") {
-      pending += 1;
-      continue;
-    }
-
-    if (conclusion && SUCCESSFUL_CHECK_CONCLUSIONS.has(conclusion)) {
+    if (state === "passed") {
       passed += 1;
       continue;
     }
 
-    if (conclusion && FAILED_CHECK_CONCLUSIONS.has(conclusion)) {
-      failed += 1;
-      continue;
-    }
-
-    if (conclusion === null) {
+    if (state === "pending") {
       pending += 1;
       continue;
     }
 
-    // Remaining conclusions are treated as failures to avoid merging with
-    // unknown or unstable check outcomes.
     failed += 1;
   }
 
@@ -234,12 +269,14 @@ function summarizeCombinedStatuses(
   let failed = 0;
 
   for (const status of statuses) {
-    if (status.state === "success") {
+    const checkState = getCombinedStatusState(status.state);
+
+    if (checkState === "passed") {
       passed += 1;
       continue;
     }
 
-    if (status.state === "pending") {
+    if (checkState === "pending") {
       pending += 1;
       continue;
     }
@@ -318,6 +355,7 @@ export async function getPullRequestMergeReadiness(params: {
         allowedMethods: ["squash"],
         defaultMethod: "squash",
         checks: { requiredTotal: 0, passed: 0, pending: 0, failed: 0 },
+        checkRuns: [],
         error: "GitHub account not connected",
       };
     }
@@ -331,6 +369,7 @@ export async function getPullRequestMergeReadiness(params: {
         allowedMethods: ["squash"],
         defaultMethod: "squash",
         checks: { requiredTotal: 0, passed: 0, pending: 0, failed: 0 },
+        checkRuns: [],
         error: "Invalid GitHub repository URL",
       };
     }
@@ -372,6 +411,7 @@ export async function getPullRequestMergeReadiness(params: {
       pending: 0,
       failed: 0,
     };
+    let checkRuns: PullRequestCheckRun[] = [];
 
     try {
       const checksResponse = await result.octokit.rest.checks.listForRef({
@@ -381,8 +421,16 @@ export async function getPullRequestMergeReadiness(params: {
         per_page: 100,
       });
 
+      checkRuns = checksResponse.data.check_runs.map((checkRun) => ({
+        name: checkRun.name,
+        state: getCheckRunState(checkRun.status, checkRun.conclusion),
+        status: checkRun.status,
+        conclusion: checkRun.conclusion,
+        detailsUrl: checkRun.details_url ?? null,
+      }));
+
       checksSummary = summarizeCheckRuns(
-        checksResponse.data.check_runs.map((checkRun) => ({
+        checkRuns.map((checkRun) => ({
           status: checkRun.status,
           conclusion: checkRun.conclusion,
         })),
@@ -403,8 +451,22 @@ export async function getPullRequestMergeReadiness(params: {
             ref: pullRequest.head.sha,
           });
 
+        const statuses = statusesResponse.data.statuses.map((status) => ({
+          state: status.state,
+          context: status.context,
+          targetUrl: status.target_url,
+        }));
+
+        checkRuns = statuses.map((status) => ({
+          name: status.context || "Status check",
+          state: getCombinedStatusState(status.state),
+          status: status.state,
+          conclusion: null,
+          detailsUrl: status.targetUrl ?? null,
+        }));
+
         checksSummary = summarizeCombinedStatuses(
-          statusesResponse.data.statuses.map((status) => ({
+          statuses.map((status) => ({
             state: status.state,
           })),
         );
@@ -460,6 +522,7 @@ export async function getPullRequestMergeReadiness(params: {
       allowedMethods,
       defaultMethod,
       checks: checksSummary,
+      checkRuns,
       pr: {
         number: pullRequest.number,
         state: pullRequest.state,
@@ -484,6 +547,7 @@ export async function getPullRequestMergeReadiness(params: {
         allowedMethods: ["squash"],
         defaultMethod: "squash",
         checks: { requiredTotal: 0, passed: 0, pending: 0, failed: 0 },
+        checkRuns: [],
         error: "Pull request not found",
       };
     }
@@ -496,6 +560,7 @@ export async function getPullRequestMergeReadiness(params: {
         allowedMethods: ["squash"],
         defaultMethod: "squash",
         checks: { requiredTotal: 0, passed: 0, pending: 0, failed: 0 },
+        checkRuns: [],
         error: "Permission denied",
       };
     }
@@ -507,6 +572,7 @@ export async function getPullRequestMergeReadiness(params: {
       allowedMethods: ["squash"],
       defaultMethod: "squash",
       checks: { requiredTotal: 0, passed: 0, pending: 0, failed: 0 },
+      checkRuns: [],
       error: "Failed to check pull request readiness",
     };
   }

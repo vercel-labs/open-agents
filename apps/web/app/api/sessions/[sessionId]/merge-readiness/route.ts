@@ -1,6 +1,7 @@
 import { getSessionById } from "@/lib/db/sessions";
 import {
   getPullRequestMergeReadiness,
+  type PullRequestCheckRun,
   type PullRequestMergeMethod,
 } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
@@ -39,6 +40,7 @@ export type MergeReadinessResponse = {
   allowedMethods: PullRequestMergeMethod[];
   defaultMethod: PullRequestMergeMethod;
   checks: MergeReadinessChecks;
+  checkRuns: PullRequestCheckRun[];
 };
 
 function buildUnavailableResponse(
@@ -62,6 +64,7 @@ function buildUnavailableResponse(
     allowedMethods: [DEFAULT_METHOD],
     defaultMethod: DEFAULT_METHOD,
     checks: DEFAULT_CHECKS,
+    checkRuns: [],
   };
 }
 
@@ -177,5 +180,6 @@ export async function GET(_req: Request, context: RouteContext) {
     allowedMethods,
     defaultMethod,
     checks: readiness.checks,
+    checkRuns: readiness.checkRuns ?? [],
   } satisfies MergeReadinessResponse);
 }
