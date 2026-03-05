@@ -180,7 +180,7 @@ const SessionRow = memo(function SessionRow({
         ) : null}
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pr-8">
         <button
           type="button"
           onClick={() => onSessionClick(session)}
@@ -188,9 +188,9 @@ const SessionRow = memo(function SessionRow({
           onFocus={() => onSessionPrefetch(session)}
           className="block w-full text-left"
         >
-          <div className="flex items-baseline justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <p
-              className={`truncate text-sm ${
+              className={`min-w-0 flex-1 truncate text-sm ${
                 isUnread || isWorking
                   ? "font-semibold text-foreground"
                   : "font-medium text-foreground"
