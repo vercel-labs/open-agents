@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
 
@@ -104,6 +105,7 @@ export function CreatePRDialog({
   const [step, setStep] = useState<WizardStep>("generate");
   const [hasGenerated, setHasGenerated] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
+  const [isDraft, setIsDraft] = useState(false);
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -120,6 +122,7 @@ export function CreatePRDialog({
       setStep("generate");
       setHasGenerated(false);
       setPrHeadOwner(null);
+      setIsDraft(false);
     }
   }, [open]);
 
@@ -329,6 +332,7 @@ export function CreatePRDialog({
           body,
           baseBranch,
           headOwner: prHeadOwner ?? undefined,
+          isDraft,
         }),
       });
 
@@ -381,8 +385,12 @@ export function CreatePRDialog({
             <div className="text-center">
               <p className="font-medium">
                 {result.requiresManualCreation
-                  ? "Open GitHub to create the pull request"
-                  : "Pull request created successfully!"}
+                  ? isDraft
+                    ? "Open GitHub to create the draft pull request"
+                    : "Open GitHub to create the pull request"
+                  : isDraft
+                    ? "Draft pull request created successfully!"
+                    : "Pull request created successfully!"}
               </p>
               {/* External link to GitHub - not internal navigation */}
               {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
@@ -484,8 +492,37 @@ export function CreatePRDialog({
                       We pushed your branch, but this repository does not allow
                       API-based PR creation for the current app token. Open
                       GitHub to create the PR from the compare page.
+                      {isDraft && (
+                        <p className="mt-2">
+                          GitHub will still open the standard compare flow.
+                          Choose
+                          <span className="font-medium">
+                            {" "}
+                            Create draft pull request
+                          </span>
+                          on GitHub to keep it in draft mode.
+                        </p>
+                      )}
                     </div>
                   )}
+
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="draft-pr-toggle">
+                        Create as draft PR
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Keep the pull request in draft mode until it is ready
+                        for review.
+                      </p>
+                    </div>
+                    <Switch
+                      id="draft-pr-toggle"
+                      checked={isDraft}
+                      onCheckedChange={setIsDraft}
+                      disabled={isDisabled}
+                    />
+                  </div>
 
                   {/* Title Input */}
                   <div className="grid gap-2">
@@ -589,6 +626,8 @@ export function CreatePRDialog({
                       </>
                     ) : shouldOpenCompareInsteadOfApi ? (
                       "Open Compare Page"
+                    ) : isDraft ? (
+                      "Create Draft PR"
                     ) : (
                       "Create PR"
                     )}
