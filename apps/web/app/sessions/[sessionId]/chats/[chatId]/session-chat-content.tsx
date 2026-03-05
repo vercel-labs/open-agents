@@ -14,6 +14,7 @@ import {
   FolderGit2,
   GitCommit,
   GitCompare,
+  GitMerge,
   GitPullRequest,
   Link2,
   Loader2,
@@ -39,6 +40,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
+import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
   WebAgentUIMessage,
@@ -119,6 +121,10 @@ const DiffViewer = dynamic(
 );
 const CreatePRDialog = dynamic(
   () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
+  { ssr: false },
+);
+const MergePrDialog = dynamic(
+  () => import("@/components/merge-pr-dialog").then((m) => m.MergePrDialog),
   { ssr: false },
 );
 const CommitDialog = dynamic(
@@ -729,6 +735,7 @@ export function SessionChatContent(_props: unknown) {
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
@@ -2205,6 +2212,8 @@ export function SessionChatContent(_props: unknown) {
   const showCommitAction =
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
+  const hasOpenPr = hasExistingPr && session.prStatus === "open";
+  const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
   const openExistingPr = () => {
     if (!existingPrUrl) {
@@ -2221,6 +2230,39 @@ export function SessionChatContent(_props: unknown) {
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
+
+  const handleMerged = useCallback(
+    async (mergeResult: MergePullRequestResponse) => {
+      updateSessionPullRequest({
+        prNumber: mergeResult.prNumber,
+        prStatus: "merged",
+      });
+
+      if (mergeResult.branchDeleteError) {
+        console.warn(
+          "PR merged but source branch was not deleted:",
+          mergeResult.branchDeleteError,
+        );
+      }
+
+      try {
+        await archiveSession();
+        router.push("/sessions");
+      } catch (archiveError) {
+        const archiveMessage =
+          archiveError instanceof Error
+            ? archiveError.message
+            : "Failed to archive session";
+        throw new Error(
+          `Pull request merged, but archiving the session failed: ${archiveMessage}`,
+          {
+            cause: archiveError,
+          },
+        );
+      }
+    },
+    [archiveSession, router, updateSessionPullRequest],
+  );
 
   const chatSwitcherContent = (
     <div
@@ -2352,27 +2394,42 @@ export function SessionChatContent(_props: unknown) {
                       )}
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={openPreviewOrPr}
-                      disabled={!prDeploymentUrl && !existingPrUrl}
-                    >
-                      {prDeploymentUrl ? (
-                        <>
-                          <ExternalLink className="h-4 w-4 xl:mr-2" />
-                          <span className="hidden xl:inline">Preview</span>
-                        </>
-                      ) : (
-                        <>
-                          <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                    <>
+                      {canMergeAndArchive && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                          onClick={() => setMergeDialogOpen(true)}
+                        >
+                          <GitMerge className="h-4 w-4 xl:mr-2" />
                           <span className="hidden xl:inline">
-                            View PR #{session.prNumber}
+                            Merge & Archive
                           </span>
-                        </>
+                        </Button>
                       )}
-                    </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                        onClick={openPreviewOrPr}
+                        disabled={!prDeploymentUrl && !existingPrUrl}
+                      >
+                        {prDeploymentUrl ? (
+                          <>
+                            <ExternalLink className="h-4 w-4 xl:mr-2" />
+                            <span className="hidden xl:inline">Preview</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                            <span className="hidden xl:inline">
+                              View PR #{session.prNumber}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    </>
                   )
                 ) : showCommitAction ? (
                   <Button
@@ -2523,6 +2580,14 @@ export function SessionChatContent(_props: unknown) {
                           <GitPullRequest className="mr-2 h-4 w-4" />
                           View PR #{session.prNumber}
                         </DropdownMenuItem>
+                        {canMergeAndArchive && (
+                          <DropdownMenuItem
+                            onClick={() => setMergeDialogOpen(true)}
+                          >
+                            <GitMerge className="mr-2 h-4 w-4" />
+                            Merge & Archive
+                          </DropdownMenuItem>
+                        )}
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
@@ -3302,6 +3367,16 @@ export function SessionChatContent(_props: unknown) {
           onPrDetected={(pr) => {
             updateSessionPullRequest(pr);
           }}
+        />
+      )}
+
+      {/* Merge PR Dialog */}
+      {session && (
+        <MergePrDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          session={session}
+          onMerged={handleMerged}
         />
       )}
 
