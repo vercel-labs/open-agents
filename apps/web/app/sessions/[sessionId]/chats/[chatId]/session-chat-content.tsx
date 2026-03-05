@@ -103,6 +103,7 @@ import {
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
+import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
@@ -137,8 +138,6 @@ const Streamdown = dynamic(
 
 const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
-const PR_DEPLOYMENT_ACTIVE_POLL_MS = 5_000;
-const PR_DEPLOYMENT_BACKGROUND_POLL_MS = 30_000;
 
 const emptySubscribe = () => () => {};
 
@@ -2188,17 +2187,13 @@ export function SessionChatContent(_props: unknown) {
         revalidateOnReconnect: true,
         // Poll while we're still waiting for the first deployment so the Preview
         // action appears quickly after opening/creating the PR.
-        refreshInterval: (latestData) => {
-          if (!hasExistingPr || latestData?.deploymentUrl) {
-            return 0;
-          }
-
-          if (typeof document !== "undefined" && !document.hasFocus()) {
-            return PR_DEPLOYMENT_BACKGROUND_POLL_MS;
-          }
-
-          return PR_DEPLOYMENT_ACTIVE_POLL_MS;
-        },
+        refreshInterval: (latestData) =>
+          getPrDeploymentRefreshInterval({
+            hasExistingPr,
+            deploymentUrl: latestData?.deploymentUrl,
+            documentHasFocus:
+              typeof document === "undefined" ? true : document.hasFocus(),
+          }),
         shouldRetryOnError: false,
       },
     );
