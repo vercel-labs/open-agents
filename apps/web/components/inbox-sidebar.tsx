@@ -161,9 +161,10 @@ const SessionRow = memo(function SessionRow({
 }: SessionRowProps) {
   const isWorking = session.hasStreaming;
   const isUnread = session.hasUnread && !isActive;
-  const createdAtLabel = useMemo(
-    () => formatRelativeTime(new Date(session.createdAt)),
-    [session.createdAt],
+  const lastActivityLabel = useMemo(
+    () =>
+      formatRelativeTime(new Date(session.lastActivityAt ?? session.createdAt)),
+    [session.createdAt, session.lastActivityAt],
   );
 
   return (
@@ -199,7 +200,7 @@ const SessionRow = memo(function SessionRow({
               {session.title}
             </p>
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {createdAtLabel}
+              {lastActivityLabel}
             </span>
           </div>
 
@@ -281,7 +282,7 @@ function areSessionRowsEqual(
     prev.session.prStatus === next.session.prStatus &&
     prev.session.linesAdded === next.session.linesAdded &&
     prev.session.linesRemoved === next.session.linesRemoved &&
-    String(prev.session.createdAt) === String(next.session.createdAt)
+    String(prev.session.lastActivityAt) === String(next.session.lastActivityAt)
   );
 }
 

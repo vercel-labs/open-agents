@@ -20,6 +20,7 @@ export type SessionWithUnread = Pick<
   hasUnread: boolean;
   hasStreaming: boolean;
   latestChatId: string | null;
+  lastActivityAt: Session["createdAt"];
 };
 
 interface CreateSessionInput {
@@ -117,6 +118,7 @@ export function useSessions(options?: {
             hasUnread: false,
             hasStreaming: false,
             latestChatId: createdChat.id,
+            lastActivityAt: createdChat.updatedAt,
           },
           ...(current?.sessions ?? []),
         ],
@@ -175,6 +177,7 @@ export function useSessions(options?: {
                     hasUnread: session.hasUnread,
                     hasStreaming: session.hasStreaming,
                     latestChatId: session.latestChatId,
+                    lastActivityAt: session.lastActivityAt,
                   }
                 : session,
             ),
