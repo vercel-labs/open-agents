@@ -77,7 +77,9 @@ function DiffStats({
 
   return (
     <div className="flex items-center gap-1 font-mono text-xs">
-      {added !== null ? <span className="text-green-600 dark:text-green-500">+{added}</span> : null}
+      {added !== null ? (
+        <span className="text-green-600 dark:text-green-500">+{added}</span>
+      ) : null}
       {removed !== null ? (
         <span className="text-red-600 dark:text-red-400">-{removed}</span>
       ) : null}

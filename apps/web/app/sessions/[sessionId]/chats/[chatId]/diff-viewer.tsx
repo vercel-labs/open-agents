@@ -163,10 +163,14 @@ function FileEntry({
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs">
           {file.additions > 0 && (
-            <span className="text-green-600 dark:text-green-500">+{file.additions}</span>
+            <span className="text-green-600 dark:text-green-500">
+              +{file.additions}
+            </span>
           )}
           {file.deletions > 0 && (
-            <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+            <span className="text-red-600 dark:text-red-400">
+              -{file.deletions}
+            </span>
           )}
         </div>
       </button>
@@ -339,7 +343,9 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
 
           {diffError && (
             <div className="px-4 py-8 text-center">
-              <p className="text-sm text-red-600 dark:text-red-400">{diffError}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {diffError}
+              </p>
             </div>
           )}
 
