@@ -2262,27 +2262,25 @@ export function SessionChatContent(_props: unknown) {
               setChatSwitcherOpen(false);
             }}
             className={cn(
-              "flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
               chat.id === mobileActiveChatId
                 ? "bg-secondary"
                 : "hover:bg-muted/50",
             )}
           >
-            <span className="min-w-0 flex-1 pr-2 text-sm font-medium whitespace-normal break-words">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
               {chat.title || "Untitled"}
             </span>
-            <span className="flex shrink-0 flex-col items-end gap-1">
+            <span className="flex shrink-0 items-center gap-1.5">
               <span className="text-[11px] text-muted-foreground">
                 {formatRelativeTime(new Date(chat.updatedAt))}
               </span>
-              <span className="flex items-center gap-1.5">
-                {chat.isStreaming && (
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                )}
-                {chat.id === mobileActiveChatId && (
-                  <Check className="h-3.5 w-3.5 text-foreground" />
-                )}
-              </span>
+              {chat.isStreaming && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              )}
+              {chat.id === mobileActiveChatId && (
+                <Check className="h-3.5 w-3.5 text-foreground" />
+              )}
             </span>
           </button>
         ))}
