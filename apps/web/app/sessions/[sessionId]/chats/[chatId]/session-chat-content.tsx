@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -237,6 +238,48 @@ type CreateSandboxResponse = SandboxInfo & {
   type: string;
 };
 
+type CreateSandboxErrorResponse = {
+  error?: string;
+  reason?: string;
+  actionUrl?: string;
+};
+
+class SandboxCreateRequestError extends Error {
+  readonly reason?: string;
+  readonly actionUrl?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      reason?: string;
+      actionUrl?: string;
+    },
+  ) {
+    super(message);
+    this.name = "SandboxCreateRequestError";
+    this.reason = options?.reason;
+    this.actionUrl = options?.actionUrl;
+  }
+}
+
+function getSandboxCreateErrorDetails(error: unknown): {
+  message: string;
+  actionUrl?: string;
+} {
+  if (error instanceof SandboxCreateRequestError) {
+    return {
+      message: error.message,
+      actionUrl: error.actionUrl,
+    };
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return { message: error.message };
+  }
+
+  return { message: "Failed to create sandbox. Please try again." };
+}
+
 async function createSandbox(
   cloneUrl: string | undefined,
   branch: string | undefined,
@@ -256,10 +299,27 @@ async function createSandbox(
     }),
   });
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Failed to create sandbox: ${response.status}${text ? ` - ${text}` : ""}`,
-    );
+    const rawBody = await response.text().catch(() => "");
+    let payload: CreateSandboxErrorResponse | null = null;
+
+    if (rawBody) {
+      try {
+        payload = JSON.parse(rawBody) as CreateSandboxErrorResponse;
+      } catch {
+        payload = null;
+      }
+    }
+
+    const message =
+      typeof payload?.error === "string" && payload.error.trim().length > 0
+        ? payload.error
+        : `Failed to create sandbox: ${response.status}${rawBody ? ` - ${rawBody}` : ""}`;
+
+    throw new SandboxCreateRequestError(message, {
+      reason: typeof payload?.reason === "string" ? payload.reason : undefined,
+      actionUrl:
+        typeof payload?.actionUrl === "string" ? payload.actionUrl : undefined,
+    });
   }
   const data = (await response.json()) as {
     mode: string;
@@ -1423,6 +1483,10 @@ export function SessionChatContent(_props: unknown) {
   });
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [sandboxCreateError, setSandboxCreateError] = useState<{
+    message: string;
+    actionUrl?: string;
+  } | null>(null);
   const [deleteMessageError, setDeleteMessageError] = useState<string | null>(
     null,
   );
@@ -1701,6 +1765,8 @@ export function SessionChatContent(_props: unknown) {
 
   const handleCreateNewSandbox = useCallback(async () => {
     setIsCreatingSandbox(true);
+    setSandboxCreateError(null);
+
     try {
       const branchExistsOnOrigin = session.prNumber != null;
       const shouldCreateNewBranch =
@@ -1714,8 +1780,11 @@ export function SessionChatContent(_props: unknown) {
       );
       setSandboxInfo(newSandbox);
       setSandboxTypeFromUnknown(newSandbox.type);
+      setSandboxCreateError(null);
       void requestStatusSync("force");
     } catch (err) {
+      const details = getSandboxCreateErrorDetails(err);
+      setSandboxCreateError(details);
       console.error("Failed to create sandbox:", err);
     } finally {
       setIsCreatingSandbox(false);
@@ -1900,8 +1969,11 @@ export function SessionChatContent(_props: unknown) {
     if (isCreatingSandbox) {
       return false;
     }
+
     try {
       setIsCreatingSandbox(true);
+      setSandboxCreateError(null);
+
       const branchExistsOnOrigin = session.prNumber != null;
       const shouldCreateNewBranch =
         session.isNewBranch && !branchExistsOnOrigin;
@@ -1914,9 +1986,12 @@ export function SessionChatContent(_props: unknown) {
       );
       setSandboxInfo(newSandbox);
       setSandboxTypeFromUnknown(newSandbox.type);
+      setSandboxCreateError(null);
       void requestStatusSync("force");
       return true;
     } catch (err) {
+      const details = getSandboxCreateErrorDetails(err);
+      setSandboxCreateError(details);
       console.error("Failed to create sandbox:", err);
       return false;
     } finally {
@@ -2937,6 +3012,28 @@ export function SessionChatContent(_props: unknown) {
       {/* Input */}
       <div className="p-4 pb-2 sm:pb-8">
         <div className="mx-auto max-w-4xl space-y-2">
+          {sandboxCreateError && (
+            <div className="flex items-start justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <span>{sandboxCreateError.message}</span>
+                {sandboxCreateError.actionUrl ? (
+                  <Link
+                    href={sandboxCreateError.actionUrl}
+                    className="font-medium underline underline-offset-4 hover:no-underline"
+                  >
+                    Reconnect GitHub
+                  </Link>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSandboxCreateError(null)}
+                className="ml-2 rounded p-0.5 hover:bg-destructive/20"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           {restoreError && (
             <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <span>{restoreError}</span>

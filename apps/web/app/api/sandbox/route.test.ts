@@ -24,6 +24,19 @@ const connectConfigs: unknown[] = [];
 
 let sessionRecord: TestSessionRecord;
 
+type MockConnectedSandbox = {
+  currentBranch: string;
+  workingDirectory: string;
+  getState: () => {
+    type: "vercel" | "hybrid";
+    sandboxId: string;
+    expiresAt: number;
+  };
+  stop: () => Promise<void>;
+};
+
+let connectSandboxImpl: (config: unknown) => Promise<MockConnectedSandbox>;
+
 function isConnectConfig(value: unknown): value is {
   state: {
     type: "vercel" | "hybrid" | "just-bash";
@@ -40,6 +53,37 @@ function isConnectConfig(value: unknown): value is {
     state.type === "hybrid" ||
     state.type === "just-bash"
   );
+}
+
+function buildMockConnectedSandbox(config: unknown): MockConnectedSandbox {
+  const nextState: {
+    type: "vercel" | "hybrid";
+    sandboxId: string;
+    expiresAt: number;
+  } = isConnectConfig(config)
+    ? config.state.type === "vercel"
+      ? {
+          type: "vercel",
+          sandboxId: "sbx-vercel-1",
+          expiresAt: Date.now() + 120_000,
+        }
+      : {
+          type: "hybrid",
+          sandboxId: config.state.sandboxId ?? "sbx-hybrid-1",
+          expiresAt: Date.now() + 120_000,
+        }
+    : {
+        type: "vercel",
+        sandboxId: "sbx-default-1",
+        expiresAt: Date.now() + 120_000,
+      };
+
+  return {
+    currentBranch: "main",
+    workingDirectory: "/vercel/sandbox",
+    getState: () => nextState,
+    stop: async () => {},
+  };
 }
 
 mock.module("next/server", () => ({
@@ -97,35 +141,7 @@ mock.module("@/lib/sandbox/lifecycle-kick", () => ({
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (config: unknown) => {
     connectConfigs.push(config);
-
-    const nextState: {
-      type: "vercel" | "hybrid";
-      sandboxId: string;
-      expiresAt: number;
-    } = isConnectConfig(config)
-      ? config.state.type === "vercel"
-        ? {
-            type: "vercel",
-            sandboxId: "sbx-vercel-1",
-            expiresAt: Date.now() + 120_000,
-          }
-        : {
-            type: "hybrid",
-            sandboxId: config.state.sandboxId ?? "sbx-hybrid-1",
-            expiresAt: Date.now() + 120_000,
-          }
-      : {
-          type: "vercel",
-          sandboxId: "sbx-default-1",
-          expiresAt: Date.now() + 120_000,
-        };
-
-    return {
-      currentBranch: "main",
-      workingDirectory: "/vercel/sandbox",
-      getState: () => nextState,
-      stop: async () => {},
-    };
+    return connectSandboxImpl(config);
   },
 }));
 
@@ -136,6 +152,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     kickCalls.length = 0;
     updateCalls.length = 0;
     connectConfigs.length = 0;
+    connectSandboxImpl = async (config) => buildMockConnectedSandbox(config);
     sessionRecord = {
       id: "session-1",
       userId: "user-1",
@@ -191,5 +208,78 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(vercelConfig?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
+  });
+
+  test("vercel clone SSO errors return actionable 403 response", async () => {
+    const { POST } = await routeModulePromise;
+
+    connectSandboxImpl = async () => {
+      throw new Error(
+        [
+          "Failed to clone repository 'https://github.com/vercel-labs/open-harness': Cloning into '.'...",
+          "remote: The 'vercel-labs' organization has enabled or enforced SAML SSO.",
+          "remote: To access this repository, you must re-authorize the GitHub App 'OpenHarness'.",
+          "fatal: unable to access 'https://github.com/vercel-labs/open-harness.git/': The requested URL returned error: 403",
+        ].join("\n"),
+      );
+    };
+
+    const request = new Request("http://localhost/api/sandbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "session-1",
+        sandboxType: "vercel",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(403);
+
+    const body = (await response.json()) as {
+      error?: string;
+      reason?: string;
+      actionUrl?: string;
+    };
+    expect(body.reason).toBe("github_sso_reauthorization_required");
+    expect(body.actionUrl).toBe("/settings/accounts");
+    expect(body.error).toContain("SSO re-authorization");
+
+    expect(kickCalls.length).toBe(0);
+    expect(updateCalls.length).toBe(0);
+  });
+
+  test("unexpected sandbox errors return generic 500 response", async () => {
+    const { POST } = await routeModulePromise;
+
+    connectSandboxImpl = async () => {
+      throw new Error("sandbox provisioning exploded");
+    };
+
+    const request = new Request("http://localhost/api/sandbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "session-1",
+        sandboxType: "vercel",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(500);
+
+    const body = (await response.json()) as {
+      error?: string;
+      reason?: string;
+      actionUrl?: string;
+    };
+    expect(body.error).toBe("Failed to create sandbox. Please try again.");
+    expect(body.reason).toBeUndefined();
+    expect(body.actionUrl).toBeUndefined();
+
+    expect(kickCalls.length).toBe(0);
+    expect(updateCalls.length).toBe(0);
   });
 });
