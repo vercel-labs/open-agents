@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -32,6 +33,18 @@ type SessionsRouteShellProps = {
   };
   lastRepo: { owner: string; repo: string } | null;
 };
+
+const RouteContentShell = memo(function RouteContentShell({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <SidebarInset className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {children}
+    </SidebarInset>
+  );
+});
 
 export function SessionsRouteShell({
   children,
@@ -167,9 +180,7 @@ export function SessionsRouteShell({
             />
           </SidebarContent>
         </Sidebar>
-        <SidebarInset className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {children}
-        </SidebarInset>
+        <RouteContentShell>{children}</RouteContentShell>
       </SidebarProvider>
 
       <NewSessionDialog

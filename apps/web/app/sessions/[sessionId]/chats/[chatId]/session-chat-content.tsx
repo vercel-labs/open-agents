@@ -740,14 +740,124 @@ function ShareDialog({
   );
 }
 
-export function SessionChatContent(_props: unknown) {
+function NewChatMenuItem() {
+  const { createChat, switchChat } = useSessionLayout();
+
+  return (
+    <DropdownMenuItem
+      onClick={() => {
+        const { chat } = createChat();
+        switchChat(chat.id);
+      }}
+    >
+      <Plus className="mr-2 h-4 w-4" />
+      New Chat
+    </DropdownMenuItem>
+  );
+}
+
+function ChatSwitcherPanel({
+  open,
+  onOpenChange,
+  activeChatId,
+  isMobile,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  activeChatId: string;
+  isMobile: boolean;
+}) {
+  const { chats, createChat, switchChat } = useSessionLayout();
+
+  const content = (
+    <div
+      className={cn(
+        "overflow-y-auto px-2",
+        isMobile ? "max-h-[60vh] pb-4" : "flex-1 py-3",
+      )}
+    >
+      <div className="space-y-0.5">
+        {chats.map((chat) => (
+          <button
+            key={chat.id}
+            type="button"
+            onClick={() => {
+              switchChat(chat.id);
+              onOpenChange(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
+              chat.id === activeChatId ? "bg-secondary" : "hover:bg-muted/50",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {chat.title || "Untitled"}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">
+                {formatRelativeTime(new Date(chat.updatedAt))}
+              </span>
+              {chat.isStreaming && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              )}
+              {chat.id === activeChatId && (
+                <Check className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            const { chat } = createChat();
+            switchChat(chat.id);
+            onOpenChange(false);
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New chat
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Switch Chat</DrawerTitle>
+          </DrawerHeader>
+          {content}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full max-w-sm flex-col gap-0 p-0"
+      >
+        <SheetHeader className="border-b border-border px-4 py-3">
+          <SheetTitle>Switch Chat</SheetTitle>
+        </SheetHeader>
+        {content}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+export function SessionChatContent({
+  initialIsOnlyChatInSession,
+}: {
+  initialIsOnlyChatInSession: boolean;
+}) {
   const router = useRouter();
-  const {
-    chats: mobileChats,
-    chatsLoading: mobileChatsLoading,
-    createChat: mobileCreateChat,
-    switchChat: mobileSwitchChat,
-  } = useSessionLayout();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
@@ -918,11 +1028,6 @@ export function SessionChatContent(_props: unknown) {
     modelOptions,
     modelOptionsLoading,
   } = useSessionChatContext();
-  const mobileActiveChatId = chatInfo.id;
-  const handleMobileNewChat = () => {
-    const { chat: newChat } = mobileCreateChat();
-    mobileSwitchChat(newChat.id);
-  };
   const {
     messages,
     error,
@@ -2287,62 +2392,6 @@ export function SessionChatContent(_props: unknown) {
     [archiveSession, router, updateSessionPullRequest],
   );
 
-  const chatSwitcherContent = (
-    <div
-      className={cn(
-        "overflow-y-auto px-2",
-        isMobile ? "max-h-[60vh] pb-4" : "flex-1 py-3",
-      )}
-    >
-      <div className="space-y-0.5">
-        {mobileChats.map((chat) => (
-          <button
-            key={chat.id}
-            type="button"
-            onClick={() => {
-              mobileSwitchChat(chat.id);
-              setChatSwitcherOpen(false);
-            }}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
-              chat.id === mobileActiveChatId
-                ? "bg-secondary"
-                : "hover:bg-muted/50",
-            )}
-          >
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
-              {chat.title || "Untitled"}
-            </span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">
-                {formatRelativeTime(new Date(chat.updatedAt))}
-              </span>
-              {chat.isStreaming && (
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-              )}
-              {chat.id === mobileActiveChatId && (
-                <Check className="h-3.5 w-3.5 text-foreground" />
-              )}
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 border-t border-border pt-2">
-        <button
-          type="button"
-          onClick={() => {
-            handleMobileNewChat();
-            setChatSwitcherOpen(false);
-          }}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New chat
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <>
       {/* Header */}
@@ -2500,10 +2549,7 @@ export function SessionChatContent(_props: unknown) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={handleMobileNewChat}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Chat
-                  </DropdownMenuItem>
+                  <NewChatMenuItem />
                   <DropdownMenuItem onClick={() => setChatSwitcherOpen(true)}>
                     <MessageSquareMore className="mr-2 h-4 w-4" />
                     Switch Chat
@@ -2637,32 +2683,12 @@ export function SessionChatContent(_props: unknown) {
               </DropdownMenu>
             </div>
 
-            {/* Chat switcher: drawer on mobile, right sidebar on desktop */}
-            {isMobile ? (
-              <Drawer
-                open={chatSwitcherOpen}
-                onOpenChange={setChatSwitcherOpen}
-              >
-                <DrawerContent>
-                  <DrawerHeader>
-                    <DrawerTitle>Switch Chat</DrawerTitle>
-                  </DrawerHeader>
-                  {chatSwitcherContent}
-                </DrawerContent>
-              </Drawer>
-            ) : (
-              <Sheet open={chatSwitcherOpen} onOpenChange={setChatSwitcherOpen}>
-                <SheetContent
-                  side="right"
-                  className="flex w-full max-w-sm flex-col gap-0 p-0"
-                >
-                  <SheetHeader className="border-b border-border px-4 py-3">
-                    <SheetTitle>Switch Chat</SheetTitle>
-                  </SheetHeader>
-                  {chatSwitcherContent}
-                </SheetContent>
-              </Sheet>
-            )}
+            <ChatSwitcherPanel
+              open={chatSwitcherOpen}
+              onOpenChange={setChatSwitcherOpen}
+              activeChatId={chatInfo.id}
+              isMobile={isMobile}
+            />
 
             {/* Mobile share dialog */}
             <ShareDialog
@@ -3071,10 +3097,7 @@ export function SessionChatContent(_props: unknown) {
                 setInput("");
                 clearImages();
 
-                const isFirstChatInSession =
-                  !mobileChatsLoading &&
-                  mobileChats.length === 1 &&
-                  mobileChats[0]?.id === chatInfo.id;
+                const isFirstChatInSession = initialIsOnlyChatInSession;
                 const shouldSetOptimisticTitle =
                   isFirstChatInSession &&
                   !hadInitialMessages &&
