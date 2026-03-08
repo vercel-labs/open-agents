@@ -7,13 +7,14 @@ import {
   getApprovalContext,
   shouldAutoApprove,
   pathNeedsApproval,
+  toDisplayPath,
 } from "./utils";
 
 const readInputSchema = z.object({
   filePath: z
     .string()
     .describe(
-      "Full absolute path to the file (e.g., /Users/username/project/file.ts)",
+      "Workspace-relative path to the file to read (e.g., src/index.ts)",
     ),
   offset: z
     .number()
@@ -78,8 +79,8 @@ export const readFileTool = () =>
     description: `Read a file from the filesystem.
 
 USAGE:
-- The path should be a FULL absolute path (e.g., /Users/username/project/file.ts), not just /file.ts
-- If a root-like path (e.g., /README.md) does not exist on disk, it may be resolved relative to the workspace root
+- Use workspace-relative paths (e.g., "src/index.ts")
+- Paths are resolved from the workspace root
 - By default reads up to 2000 lines starting from line 1
 - Use offset and limit for long files (both are line-based, 1-indexed)
 - Results include line numbers starting at 1 in "N: content" format
@@ -91,8 +92,8 @@ IMPORTANT:
 - You can call multiple reads in parallel to speculatively load several files
 
 EXAMPLES:
-- Read an entire file: filePath: "/Users/username/project/src/index.ts"
-- Read a slice of a long file: filePath: "/Users/username/project/logs/app.log", offset: 500, limit: 200`,
+- Read an entire file: filePath: "src/index.ts"
+- Read a slice of a long file: filePath: "logs/app.log", offset: 500, limit: 200`,
     inputSchema: readInputSchema,
     execute: async (
       { filePath, offset = 1, limit = 2000 },
@@ -125,7 +126,7 @@ EXAMPLES:
 
         return {
           success: true,
-          path: absolutePath,
+          path: toDisplayPath(absolutePath, workingDirectory),
           totalLines: lines.length,
           startLine: startLine + 1,
           endLine,

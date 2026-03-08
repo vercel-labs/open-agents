@@ -7,6 +7,7 @@ import {
   shouldAutoApprove,
   pathNeedsApproval,
   shellEscape,
+  toDisplayPath,
 } from "./utils";
 
 interface GrepMatch {
@@ -17,7 +18,9 @@ interface GrepMatch {
 
 const grepInputSchema = z.object({
   pattern: z.string().describe("Regex pattern to search for"),
-  path: z.string().describe("File or directory to search in (absolute path)"),
+  path: z
+    .string()
+    .describe("Workspace-relative file or directory to search in (e.g., src)"),
   glob: z
     .string()
     .optional()
@@ -62,6 +65,7 @@ USAGE:
 - Uses POSIX ERE syntax (e.g., "log.*Error", "function[[:space:]]+[a-zA-Z_]+")
 - Perl-style shorthands like \\s, \\w, \\d are NOT supported; use POSIX classes instead: [[:space:]], [[:alnum:]_], [[:digit:]]
 - Search a specific file OR an entire directory via the path parameter
+- Use workspace-relative paths for path (e.g., "src")
 - Optionally filter files with glob (e.g., "*.ts", "*.test.js")
 - Matches are SINGLE-LINE: patterns do not span across newline characters
 - Results are limited to 100 matches total, with up to 10 matches per file; each match line is truncated to 200 characters
@@ -73,8 +77,8 @@ IMPORTANT:
 - Paths outside the working directory require approval
 
 EXAMPLES:
-- Find all TODO comments in TypeScript files: pattern: "TODO", path: "/Users/username/project", glob: "*.ts"
-- Find all references to a function (case-insensitive): pattern: "handleRequest", path: "/Users/username/project/src", caseSensitive: false`,
+- Find all TODO comments in TypeScript files: pattern: "TODO", path: "src", glob: "*.ts"
+- Find all references to a function (case-insensitive): pattern: "handleRequest", path: "src", caseSensitive: false`,
     inputSchema: grepInputSchema,
     execute: async (
       { pattern, path: searchPath, glob, caseSensitive = true },
@@ -163,13 +167,14 @@ EXAMPLES:
 
           if (isNaN(lineNum)) continue;
 
-          filesSet.add(file);
-          const currentFileCount = fileMatchCounts.get(file) ?? 0;
+          const displayFile = toDisplayPath(file, workingDirectory);
+          filesSet.add(displayFile);
+          const currentFileCount = fileMatchCounts.get(displayFile) ?? 0;
           if (currentFileCount >= maxPerFile) continue;
 
-          fileMatchCounts.set(file, currentFileCount + 1);
+          fileMatchCounts.set(displayFile, currentFileCount + 1);
           matches.push({
-            file,
+            file: displayFile,
             line: lineNum,
             content: content.slice(0, 200),
           });

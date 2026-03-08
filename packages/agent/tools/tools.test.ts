@@ -77,7 +77,7 @@ describe("tools execute behavior", () => {
 
     expect(result).toEqual({
       success: true,
-      path: filePath,
+      path: "notes.txt",
       totalLines: 3,
       startLine: 2,
       endLine: 3,
@@ -114,7 +114,7 @@ describe("tools execute behavior", () => {
     expect(written).toBe("hello");
     expect(result).toEqual({
       success: true,
-      path: expectedPath,
+      path: relativePath,
       bytesWritten: 5,
     });
   });
@@ -150,7 +150,7 @@ describe("tools execute behavior", () => {
     expect(content).toBe("beta\nbeta\nomega");
     expect(result).toEqual({
       success: true,
-      path: filePath,
+      path: "src.txt",
       replacements: 2,
       startLine: 1,
     });
@@ -175,7 +175,7 @@ describe("tools execute behavior", () => {
     const result = await grepTool().execute?.(
       {
         pattern: "match",
-        path: "/repo/src",
+        path: "src",
         glob: "*.ts",
         caseSensitive: false,
       },
@@ -191,11 +191,16 @@ describe("tools execute behavior", () => {
       filesWithMatches: 2,
     });
 
+    const firstMatch =
+      result && typeof result === "object" && "matches" in result
+        ? (result.matches as Array<{ file: string; content: string }>)[0]
+        : undefined;
     const secondMatch =
       result && typeof result === "object" && "matches" in result
-        ? (result.matches as Array<{ content: string }>)[1]
+        ? (result.matches as Array<{ file: string; content: string }>)[1]
         : undefined;
 
+    expect(firstMatch?.file).toBe("src/a.ts");
     expect(secondMatch?.content.length).toBe(200);
   });
 
@@ -216,7 +221,7 @@ describe("tools execute behavior", () => {
     };
 
     const result = await globTool().execute?.(
-      { pattern: "src/**/*.ts", path: "/repo", limit: 2 },
+      { pattern: "src/**/*.ts", path: ".", limit: 2 },
       executionOptions(createContext(sandbox)),
     );
 
@@ -225,16 +230,16 @@ describe("tools execute behavior", () => {
     expect(result).toEqual({
       success: true,
       pattern: "src/**/*.ts",
-      baseDir: "/repo/src",
+      baseDir: "src",
       count: 2,
       files: [
         {
-          path: "/repo/src/a.ts",
+          path: "src/a.ts",
           size: 12,
           modifiedAt: "2023-11-14T22:13:20.000Z",
         },
         {
-          path: "/repo/src/b.ts",
+          path: "src/b.ts",
           size: 20,
           modifiedAt: "2023-07-22T04:26:40.000Z",
         },
