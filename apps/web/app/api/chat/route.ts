@@ -3,10 +3,10 @@ import {
   collectTaskToolUsageEvents,
   discoverSkills,
   gateway,
+  removeIncompleteOpenAIReasoningBlocks,
   sumLanguageModelUsage,
 } from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import {
   convertToModelMessages,
   type GatewayModelId,
@@ -14,6 +14,7 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -29,17 +30,17 @@ import {
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import { recordUsage } from "@/lib/db/usage";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { getUserPreferences } from "@/lib/db/user-preferences";
 import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
+import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
-import { after } from "next/server";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
@@ -530,8 +531,35 @@ export async function POST(req: Request) {
 
   let result;
   try {
+    const preparedModelMessages = removeIncompleteOpenAIReasoningBlocks(
+      modelMessages,
+      mainResolvedModelId,
+    );
+
+    if (preparedModelMessages !== modelMessages) {
+      console.warn(
+        `[chat] Removed incomplete GPT-5.4 reasoning blocks for chat ${chatId}`,
+      );
+    }
+
+    // Write out modelMessages to the filesystem for debugging
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const debugDir = path.join(process.cwd(), ".debug");
+    fs.mkdirSync(debugDir, { recursive: true });
+    const debugFile = path.join(
+      debugDir,
+      `model-messages-${chatId}-${Date.now()}.json`,
+    );
+    fs.writeFileSync(
+      debugFile,
+      JSON.stringify(preparedModelMessages, null, 2),
+      "utf-8",
+    );
+    console.log(`[chat] Wrote modelMessages to ${debugFile}`);
+
     result = await webAgent.stream({
-      messages: modelMessages,
+      messages: preparedModelMessages,
       options: {
         sandbox,
         model,

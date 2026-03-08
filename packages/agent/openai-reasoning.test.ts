@@ -1,0 +1,160 @@
+import { describe, expect, test } from "bun:test";
+import type { ModelMessage } from "ai";
+import { removeIncompleteOpenAIReasoningBlocks } from "./openai-reasoning";
+
+describe("removeIncompleteOpenAIReasoningBlocks", () => {
+  test("removes assistant messages made only of incomplete GPT-5.4 reasoning blocks", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "Inspecting the failure",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+          {
+            type: "reasoning",
+            text: "Drafting the next step",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+        ],
+      },
+      { role: "user", content: "Keep going" },
+    ];
+
+    expect(
+      removeIncompleteOpenAIReasoningBlocks(messages, "openai/gpt-5.4-codex"),
+    ).toEqual([
+      { role: "user", content: "Plan the fix." },
+      { role: "user", content: "Keep going" },
+    ]);
+  });
+
+  test("keeps the original array when the final GPT-5.4 reasoning part has encrypted content", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "Inspecting the failure",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+          {
+            type: "reasoning",
+            text: "Drafting the next step",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+                reasoningEncryptedContent: "encrypted",
+              },
+            },
+          },
+          {
+            type: "text",
+            text: "Here is the plan.",
+          },
+        ],
+      },
+    ];
+
+    expect(
+      removeIncompleteOpenAIReasoningBlocks(messages, "openai/gpt-5.4-codex"),
+    ).toBe(messages);
+  });
+
+  test("strips only incomplete reasoning runs and preserves surrounding assistant content", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "Started planning.",
+          },
+          {
+            type: "reasoning",
+            text: "Inspecting the failure",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+          {
+            type: "reasoning",
+            text: "Drafting the next step",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+          {
+            type: "text",
+            text: "Ready for the next step.",
+          },
+        ],
+      },
+    ];
+
+    expect(
+      removeIncompleteOpenAIReasoningBlocks(messages, "openai/gpt-5.4-codex"),
+    ).toEqual([
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "Started planning.",
+          },
+          {
+            type: "text",
+            text: "Ready for the next step.",
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("skips cleanup for non-GPT-5.4 OpenAI models", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "Inspecting the failure",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(
+      removeIncompleteOpenAIReasoningBlocks(messages, "openai/gpt-5.3-codex"),
+    ).toBe(messages);
+  });
+});
