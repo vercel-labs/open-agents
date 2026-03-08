@@ -6,7 +6,6 @@ export {
   extractTodosFromStep,
   openHarnessAgent,
 } from "./open-harness-agent";
-export { removeIncompleteOpenAIReasoningBlocks } from "./openai-reasoning";
 // Skills exports
 export { discoverSkills, parseSkillFrontmatter } from "./skills/discovery";
 export { extractSkillBody, substituteArguments } from "./skills/loader";

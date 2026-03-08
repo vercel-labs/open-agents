@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { ModelMessage } from "ai";
-import { removeIncompleteOpenAIReasoningBlocks } from "./openai-reasoning";
+import { gateway, type ModelMessage } from "ai";
+import {
+  preparePromptForOpenAIReasoning,
+  removeIncompleteOpenAIReasoningBlocks,
+} from "./openai-reasoning";
 
 describe("removeIncompleteOpenAIReasoningBlocks", () => {
   test("removes assistant messages made only of incomplete GPT-5.4 reasoning blocks", () => {
@@ -156,5 +159,45 @@ describe("removeIncompleteOpenAIReasoningBlocks", () => {
     expect(
       removeIncompleteOpenAIReasoningBlocks(messages, "openai/gpt-5.3-codex"),
     ).toBe(messages);
+  });
+
+  test("sanitizes array prompts so prepareCall can reuse the same cleanup", () => {
+    const prompt: ModelMessage[] = [
+      { role: "user", content: "Plan the fix." },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "Inspecting the failure",
+            providerOptions: {
+              openai: {
+                itemId: "rs_123",
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(
+      preparePromptForOpenAIReasoning({
+        model: gateway("openai/gpt-5.4-codex"),
+        prompt,
+      }),
+    ).toEqual({
+      prompt: [{ role: "user", content: "Plan the fix." }],
+    });
+  });
+
+  test("leaves string prompts untouched", () => {
+    expect(
+      preparePromptForOpenAIReasoning({
+        model: gateway("openai/gpt-5.4-codex"),
+        prompt: "Plan the fix.",
+      }),
+    ).toEqual({
+      prompt: "Plan the fix.",
+    });
   });
 });

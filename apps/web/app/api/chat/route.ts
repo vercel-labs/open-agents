@@ -3,7 +3,6 @@ import {
   collectTaskToolUsageEvents,
   discoverSkills,
   gateway,
-  removeIncompleteOpenAIReasoningBlocks,
   sumLanguageModelUsage,
 } from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
@@ -531,35 +530,8 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    const preparedModelMessages = removeIncompleteOpenAIReasoningBlocks(
-      modelMessages,
-      mainResolvedModelId,
-    );
-
-    if (preparedModelMessages !== modelMessages) {
-      console.warn(
-        `[chat] Removed incomplete GPT-5.4 reasoning blocks for chat ${chatId}`,
-      );
-    }
-
-    // Write out modelMessages to the filesystem for debugging
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const debugDir = path.join(process.cwd(), ".debug");
-    fs.mkdirSync(debugDir, { recursive: true });
-    const debugFile = path.join(
-      debugDir,
-      `model-messages-${chatId}-${Date.now()}.json`,
-    );
-    fs.writeFileSync(
-      debugFile,
-      JSON.stringify(preparedModelMessages, null, 2),
-      "utf-8",
-    );
-    console.log(`[chat] Wrote modelMessages to ${debugFile}`);
-
     result = await webAgent.stream({
-      messages: preparedModelMessages,
+      messages: modelMessages,
       options: {
         sandbox,
         model,

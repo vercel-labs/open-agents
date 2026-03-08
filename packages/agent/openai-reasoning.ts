@@ -1,4 +1,4 @@
-import type { AssistantModelMessage, ModelMessage } from "ai";
+import type { AssistantModelMessage, LanguageModel, ModelMessage } from "ai";
 
 const OPENAI_GPT_54_PREFIX = "openai/gpt-5.4";
 
@@ -9,6 +9,10 @@ type AssistantContentPart = Exclude<
 
 function shouldRemoveIncompleteOpenAIReasoningBlocks(modelId: string): boolean {
   return modelId.startsWith(OPENAI_GPT_54_PREFIX);
+}
+
+function getModelId(model: LanguageModel): string {
+  return typeof model === "string" ? model : model.modelId;
 }
 
 function hasEncryptedReasoningContent(part: AssistantContentPart): boolean {
@@ -128,4 +132,33 @@ export function removeIncompleteOpenAIReasoningBlocks(
   }
 
   return cleanedMessages ?? messages;
+}
+
+export function preparePromptForOpenAIReasoning({
+  model,
+  messages,
+  prompt,
+}: {
+  model: LanguageModel;
+  messages?: ModelMessage[];
+  prompt?: string | ModelMessage[];
+}): {
+  messages?: ModelMessage[];
+  prompt?: string | ModelMessage[];
+} {
+  const modelId = getModelId(model);
+
+  if (messages) {
+    return {
+      messages: removeIncompleteOpenAIReasoningBlocks(messages, modelId),
+    };
+  }
+
+  if (Array.isArray(prompt)) {
+    return {
+      prompt: removeIncompleteOpenAIReasoningBlocks(prompt, modelId),
+    };
+  }
+
+  return { prompt };
 }
