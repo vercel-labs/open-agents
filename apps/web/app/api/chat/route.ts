@@ -110,6 +110,7 @@ function extractLastInputTokensFromMessages(
 
 const STREAM_TOKEN_SEPARATOR = ":";
 const SKILLS_CACHE_TTL_MS = 60_000;
+const MAX_OPENAI_REASONING_RETRY_ATTEMPTS = 8;
 
 type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
 
@@ -555,59 +556,65 @@ export async function POST(req: Request) {
     });
 
   let result;
-  try {
-    result = await streamAgentResponse();
-  } catch (error) {
-    const retryPayload = stripInvalidOpenAIReasoningPartsForRetry(
-      requestMessages,
-      error,
-    );
+  let openAIReasoningRetryCount = 0;
 
-    if (!retryPayload) {
-      clearTimeout(timeoutHandle);
-      closeStopSignal();
-      await clearOwnedStreamToken();
-      throw error;
-    }
-
-    console.warn(
-      `[chat] Retrying stream after removing OpenAI reasoning item ${retryPayload.removedItemId}`,
-    );
-
-    const retryMessages = retryPayload.messages;
-    const sanitizationChanges = deriveAssistantMessageSanitizationChanges(
-      requestMessages,
-      retryMessages,
-    );
-
-    if (sanitizationChanges) {
-      try {
-        await persistAssistantMessageSanitization(chatId, sanitizationChanges);
-      } catch (persistError) {
-        console.error(
-          "[chat] Failed to persist sanitized assistant history before retry:",
-          persistError,
-        );
-      }
-    }
-
-    requestMessages = retryMessages;
-    modelMessages = await convertToModelMessages(requestMessages, {
-      ignoreIncompleteToolCalls: true,
-      tools: webAgent.tools,
-    });
-
-    const latestRequestMessage = requestMessages[requestMessages.length - 1];
-    pendingAssistantSnapshot =
-      latestRequestMessage?.role === "assistant" ? latestRequestMessage : null;
-
+  while (true) {
     try {
       result = await streamAgentResponse();
-    } catch (retryError) {
-      clearTimeout(timeoutHandle);
-      closeStopSignal();
-      await clearOwnedStreamToken();
-      throw retryError;
+      break;
+    } catch (error) {
+      const retryPayload = stripInvalidOpenAIReasoningPartsForRetry(
+        requestMessages,
+        error,
+      );
+
+      if (
+        !retryPayload ||
+        openAIReasoningRetryCount >= MAX_OPENAI_REASONING_RETRY_ATTEMPTS
+      ) {
+        clearTimeout(timeoutHandle);
+        closeStopSignal();
+        await clearOwnedStreamToken();
+        throw error;
+      }
+
+      openAIReasoningRetryCount += 1;
+
+      console.warn(
+        `[chat] Retrying stream (${openAIReasoningRetryCount}/${MAX_OPENAI_REASONING_RETRY_ATTEMPTS}) after removing OpenAI reasoning item ${retryPayload.removedItemId}`,
+      );
+
+      const retryMessages = retryPayload.messages;
+      const sanitizationChanges = deriveAssistantMessageSanitizationChanges(
+        requestMessages,
+        retryMessages,
+      );
+
+      if (sanitizationChanges) {
+        try {
+          await persistAssistantMessageSanitization(
+            chatId,
+            sanitizationChanges,
+          );
+        } catch (persistError) {
+          console.error(
+            "[chat] Failed to persist sanitized assistant history before retry:",
+            persistError,
+          );
+        }
+      }
+
+      requestMessages = retryMessages;
+      modelMessages = await convertToModelMessages(requestMessages, {
+        ignoreIncompleteToolCalls: true,
+        tools: webAgent.tools,
+      });
+
+      const latestRequestMessage = requestMessages[requestMessages.length - 1];
+      pendingAssistantSnapshot =
+        latestRequestMessage?.role === "assistant"
+          ? latestRequestMessage
+          : null;
     }
   }
 
