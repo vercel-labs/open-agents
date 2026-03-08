@@ -52,15 +52,11 @@ function formatMergeMethodLabel(method: PullRequestMergeMethod): string {
 }
 
 function getCheckStateLabel(state: "passed" | "pending" | "failed"): string {
-  if (state === "passed") {
-    return "Passed";
-  }
-
-  if (state === "pending") {
-    return "Pending";
-  }
-
-  return "Failing";
+  return state === "passed"
+    ? "Passed"
+    : state === "pending"
+      ? "Pending"
+      : "Failing";
 }
 
 export function MergePrDialog({
@@ -91,9 +87,6 @@ export function MergePrDialog({
     try {
       const response = await fetch(
         `/api/sessions/${session.id}/merge-readiness`,
-        {
-          method: "GET",
-        },
       );
 
       const payload = (await response.json()) as
@@ -154,11 +147,9 @@ export function MergePrDialog({
       : null;
 
   const openPullRequest = useCallback(() => {
-    if (!pullRequestUrl) {
-      return;
+    if (pullRequestUrl) {
+      window.open(pullRequestUrl, "_blank", "noopener,noreferrer");
     }
-
-    window.open(pullRequestUrl, "_blank", "noopener,noreferrer");
   }, [pullRequestUrl]);
 
   const handleMerge = async () => {
@@ -209,9 +200,7 @@ export function MergePrDialog({
         throw new Error("Failed to merge pull request");
       }
 
-      if (onMerged) {
-        await onMerged(mergeResult);
-      }
+      await onMerged?.(mergeResult);
 
       onOpenChange(false);
     } catch (mergeError) {
