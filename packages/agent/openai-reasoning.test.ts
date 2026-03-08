@@ -81,7 +81,7 @@ describe("removeIncompleteOpenAIReasoningBlocks", () => {
     ).toBe(messages);
   });
 
-  test("strips only incomplete reasoning runs and preserves surrounding assistant content", () => {
+  test("strips incomplete GPT-5.4 reasoning per itemId and preserves surrounding assistant content", () => {
     const messages: ModelMessage[] = [
       { role: "user", content: "Plan the fix." },
       {
@@ -93,19 +93,20 @@ describe("removeIncompleteOpenAIReasoningBlocks", () => {
           },
           {
             type: "reasoning",
-            text: "Inspecting the failure",
+            text: "Incomplete first item",
             providerOptions: {
               openai: {
-                itemId: "rs_123",
+                itemId: "rs_incomplete",
               },
             },
           },
           {
             type: "reasoning",
-            text: "Drafting the next step",
+            text: "Complete second item",
             providerOptions: {
               openai: {
-                itemId: "rs_123",
+                itemId: "rs_complete",
+                reasoningEncryptedContent: "encrypted",
               },
             },
           },
@@ -127,6 +128,16 @@ describe("removeIncompleteOpenAIReasoningBlocks", () => {
           {
             type: "text",
             text: "Started planning.",
+          },
+          {
+            type: "reasoning",
+            text: "Complete second item",
+            providerOptions: {
+              openai: {
+                itemId: "rs_complete",
+                reasoningEncryptedContent: "encrypted",
+              },
+            },
           },
           {
             type: "text",
