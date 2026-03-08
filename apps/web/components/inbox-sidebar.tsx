@@ -188,7 +188,7 @@ const SessionRow = memo(function SessionRow({
           onFocus={() => onSessionPrefetch(session)}
           className="block w-full text-left"
         >
-          <div className="flex min-w-0 items-center gap-2 pr-5">
+          <div className="flex min-w-0 items-center gap-2 pr-7">
             <p
               className={`min-w-0 flex-1 truncate text-sm ${
                 isUnread || isWorking
@@ -233,7 +233,7 @@ const SessionRow = memo(function SessionRow({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label={`Open menu for ${session.title}`}
           >
             <EllipsisVertical className="h-3 w-3" />
