@@ -123,7 +123,8 @@ export default async function SessionChatPage({
     chat.modelId,
   );
 
-  const initialIsOnlyChatInSession = sessionChats.length === 1;
+  const initialIsOnlyChatInSession =
+    sessionChats.length === 1 && sessionChats[0]?.id === chat.id;
 
   return (
     <DiffsProvider>

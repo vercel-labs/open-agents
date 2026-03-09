@@ -95,7 +95,7 @@ mock.module("@/lib/model-options", () => ({
       contextWindow: 200_000,
     },
   ],
-  withMissingModelOption: <T,>(options: T) => options,
+  withMissingModelOption: <T>(options: T) => options,
 }));
 
 mock.module("@/lib/models-with-context", () => ({
@@ -173,6 +173,24 @@ describe("/sessions/[sessionId]/chats/[chatId] page", () => {
 
     const pageElement = await SessionChatPage({
       params: Promise.resolve({ sessionId: "session-1", chatId: "chat-1" }),
+    });
+
+    const contentElement = getContentElement(pageElement);
+
+    expect(contentElement.props.initialIsOnlyChatInSession).toBe(false);
+  });
+
+  test("passes false when chat summaries are stale and do not include the current chat", async () => {
+    chatRecord = {
+      id: "chat-2",
+      sessionId: "session-1",
+      modelId: "model-1",
+    };
+    sessionChatSummaries = [{ id: "chat-1" }];
+    const { default: SessionChatPage } = await pageModulePromise;
+
+    const pageElement = await SessionChatPage({
+      params: Promise.resolve({ sessionId: "session-1", chatId: "chat-2" }),
     });
 
     const contentElement = getContentElement(pageElement);
