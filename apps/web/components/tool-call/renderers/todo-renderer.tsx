@@ -90,9 +90,6 @@ export function TodoRenderer({
     <ToolLayout
       name="Todo list"
       summary={summary}
-      summaryClassName={
-        activeTodoContent ? "font-mono text-foreground" : undefined
-      }
       meta={
         progressMeta ??
         (!activeTodoContent && metaParts.length > 0
