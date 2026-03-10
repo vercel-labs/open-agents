@@ -68,7 +68,7 @@ export function GlobRenderer({
     <ToolLayout
       name="Glob"
       summary={`"${pattern}"`}
-      summaryClassName="font-mono text-[13px]"
+      summaryClassName="font-mono"
       meta={files.length > 0 ? `${files.length} files` : undefined}
       state={state}
       expandedContent={expandedContent}

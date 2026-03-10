@@ -71,7 +71,7 @@ export function FetchRenderer({
     <ToolLayout
       name="Fetch"
       summary={summary}
-      summaryClassName="font-mono text-[13px]"
+      summaryClassName="font-mono"
       meta={meta}
       state={mergedState}
       expandedContent={expandedContent}

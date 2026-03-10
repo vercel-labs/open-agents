@@ -151,7 +151,7 @@ export function ToolLayout({
               <span className="shrink-0 text-muted-foreground/40">·</span>
               <span
                 className={cn(
-                  "min-w-0 flex-1 truncate text-muted-foreground",
+                  "min-w-0 flex-1 truncate text-[13px] text-muted-foreground",
                   summaryClassName,
                 )}
               >
@@ -163,7 +163,7 @@ export function ToolLayout({
           {hasMeta && (
             <>
               <span className="shrink-0 text-muted-foreground/40">·</span>
-              <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground">
                 {meta}
               </span>
             </>

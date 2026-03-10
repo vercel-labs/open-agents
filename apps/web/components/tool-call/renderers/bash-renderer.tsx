@@ -131,7 +131,7 @@ export function BashRenderer({
     <ToolLayout
       name="Bash"
       summary={command || "..."}
-      summaryClassName="font-mono text-[13px]"
+      summaryClassName="font-mono"
       meta={meta}
       state={state}
       indicator={indicator}
