@@ -1,10 +1,9 @@
-import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { gateway, stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
 import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import {
-  connectSandboxFromConfig,
+  getWorkingDirectoryFromSandboxConfig,
   sandboxConfigSchema,
 } from "../sandbox-config";
 import { bashTool } from "../tools/bash";
@@ -72,12 +71,6 @@ const callOptionsSchema = z.object({
   model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
 
-const runtimeContextSchema = z.object({
-  sandboxConfig: sandboxConfigSchema,
-  model: z.custom<LanguageModel>(),
-  sandbox: z.custom<Sandbox>().optional(),
-});
-
 export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const explorerSubagent = new ToolLoopAgent({
@@ -92,23 +85,11 @@ export const explorerSubagent = new ToolLoopAgent({
   },
   stopWhen: stepCountIs(100),
   callOptionsSchema,
-  prepareStep: async ({ experimental_context, ...settings }) => {
-    const runtimeContext = runtimeContextSchema.parse(experimental_context);
-    const sandbox =
-      runtimeContext.sandbox ??
-      (await connectSandboxFromConfig(runtimeContext.sandboxConfig));
-
-    return {
-      ...settings,
-      experimental_context: {
-        ...runtimeContext,
-        sandbox,
-        approval: { type: "delegated" as const },
-      },
-    };
-  },
   prepareCall: ({ options, ...settings }) => {
     const model = options.model ?? settings.model;
+    const workingDirectory = getWorkingDirectoryFromSandboxConfig(
+      options.sandboxConfig,
+    );
     const preparedPrompt = preparePromptForOpenAIReasoning({
       model,
       messages: settings.messages,
@@ -135,6 +116,8 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
       experimental_context: {
         sandboxConfig: options.sandboxConfig,
+        workingDirectory,
+        approval: { type: "delegated" as const },
         model,
       },
     };

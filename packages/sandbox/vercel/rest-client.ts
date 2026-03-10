@@ -38,7 +38,13 @@ export class VercelRestClient {
     endpoint: string,
     query?: Record<string, string | undefined>,
   ): string {
-    const url = new URL(endpoint, this.baseUrl);
+    const normalizedEndpoint = endpoint.startsWith("/")
+      ? endpoint.slice(1)
+      : endpoint;
+    const normalizedBaseUrl = this.baseUrl.endsWith("/")
+      ? this.baseUrl
+      : `${this.baseUrl}/`;
+    const url = new URL(normalizedEndpoint, normalizedBaseUrl);
 
     if (this.teamId) {
       url.searchParams.set("teamId", this.teamId);
@@ -67,8 +73,10 @@ export class VercelRestClient {
     },
   ): Promise<Response> {
     const url = this.buildUrl(endpoint, options?.query);
+    const method = options?.method ?? "GET";
+
     const response = await fetch(url, {
-      method: options?.method ?? "GET",
+      method,
       headers: {
         Authorization: `Bearer ${this.token}`,
         "user-agent": USER_AGENT,

@@ -1,14 +1,14 @@
-import * as path from "path";
 import { tool } from "ai";
+import * as path from "path";
 import { z } from "zod";
-import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
 import {
   extractSkillBody,
-  substituteArguments,
   injectSkillDirectory,
+  substituteArguments,
 } from "../skills/loader";
 import type { SkillMetadata } from "../skills/types";
 import type { ApprovalRule } from "../types";
+import { getApprovalContext, getSandbox, shouldAutoApprove } from "./utils";
 
 /**
  * Extended agent context that includes skills.
@@ -96,7 +96,7 @@ Important:
 - If you see a <command-name> tag in the conversation, the skill is ALREADY loaded - follow its instructions directly`,
   inputSchema: skillInputSchema,
   execute: async ({ skill, args }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context, "skill");
+    const sandbox = await getSandbox(experimental_context, "skill");
     const skills = getSkills(experimental_context);
 
     // Find the skill by name (case-insensitive to match slash command behavior)

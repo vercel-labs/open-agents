@@ -1,11 +1,11 @@
 import { tool } from "ai";
-import { z } from "zod";
 import * as path from "path";
+import { z } from "zod";
 import {
-  getSandbox,
   getApprovalContext,
-  shouldAutoApprove,
+  getSandbox,
   pathNeedsApproval,
+  shouldAutoApprove,
   toDisplayPath,
 } from "./utils";
 
@@ -85,7 +85,7 @@ EXAMPLES:
 - Replace a script after reading it: filePath: "scripts/build.sh", content: "<entire updated script>"`,
     inputSchema: writeInputSchema,
     execute: async ({ filePath, content }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context, "write");
+      const sandbox = await getSandbox(experimental_context, "write");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -166,7 +166,7 @@ EXAMPLES:
       { filePath, oldString, newString, replaceAll = false },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "edit");
+      const sandbox = await getSandbox(experimental_context, "edit");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

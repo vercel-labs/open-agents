@@ -1,12 +1,12 @@
 import { tool } from "ai";
-import { z } from "zod";
 import * as path from "path";
+import { z } from "zod";
 import {
-  getSandbox,
   getApprovalContext,
-  shouldAutoApprove,
+  getSandbox,
   pathNeedsApproval,
   shellEscape,
+  shouldAutoApprove,
   toDisplayPath,
 } from "./utils";
 
@@ -84,7 +84,7 @@ EXAMPLES:
       { pattern, path: searchPath, glob, caseSensitive = true },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "grep");
+      const sandbox = await getSandbox(experimental_context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

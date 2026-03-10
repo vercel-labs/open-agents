@@ -1,15 +1,45 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
+import {
+  connectSandboxFromConfig,
+  getWorkingDirectoryFromSandboxConfig,
+  type OpenHarnessSandboxConfig,
+  sandboxConfigSchema,
+  serializeSandboxConfig,
+} from "../sandbox-config";
 import type { AgentContext, ApprovalConfig, ApprovalRule } from "../types";
 
 function isAgentContext(value: unknown): value is AgentContext {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "sandbox" in value &&
     "approval" in value &&
-    "model" in value
+    "model" in value &&
+    ("sandbox" in value ||
+      "sandboxConfig" in value ||
+      "workingDirectory" in value)
+  );
+}
+
+function getSandboxConfigFromContext(
+  context: AgentContext,
+  toolName?: string,
+): OpenHarnessSandboxConfig | undefined {
+  if (!context.sandboxConfig) {
+    return undefined;
+  }
+
+  const parsed = sandboxConfigSchema.safeParse(context.sandboxConfig);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+  throw new Error(
+    `Sandbox config in context is invalid${toolInfo}. Ensure prepareCall sets a valid sandboxConfig.`,
   );
 }
 
@@ -69,24 +99,69 @@ export function toDisplayPath(
  * @returns The sandbox instance
  * @throws Error if sandbox is not available in context
  */
-export function getSandbox(
+export async function getSandbox(
   experimental_context: unknown,
   toolName?: string,
-): Sandbox {
+): Promise<Sandbox> {
   const context = isAgentContext(experimental_context)
     ? experimental_context
     : undefined;
-  if (!context?.sandbox) {
+
+  if (context?.sandbox) {
+    return context.sandbox;
+  }
+
+  const sandboxConfig =
+    context && getSandboxConfigFromContext(context, toolName);
+  if (!sandboxConfig) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
     const contextInfo = context
-      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
+      ? `Context exists but neither sandbox nor sandboxConfig is available. Context keys: ${Object.keys(context).join(", ")}`
       : "Context is undefined or null";
     throw new Error(
       `Sandbox not initialized in context${toolInfo}. ${contextInfo}. ` +
-        "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
+        "Ensure the agent's prepareCall sets experimental_context: { sandboxConfig, ... }",
     );
   }
-  return context.sandbox;
+
+  const sandbox = await connectSandboxFromConfig(sandboxConfig);
+  context.sandbox = sandbox;
+  if (!context.workingDirectory) {
+    context.workingDirectory = sandbox.workingDirectory;
+  }
+
+  return sandbox;
+}
+
+export function getSandboxConfig(
+  experimental_context: unknown,
+  toolName?: string,
+): OpenHarnessSandboxConfig {
+  const context = isAgentContext(experimental_context)
+    ? experimental_context
+    : undefined;
+
+  if (context) {
+    const sandboxConfig = getSandboxConfigFromContext(context, toolName);
+    if (sandboxConfig) {
+      return sandboxConfig;
+    }
+
+    if (context.sandbox) {
+      const derivedConfig = serializeSandboxConfig(context.sandbox);
+      context.sandboxConfig = derivedConfig;
+      return derivedConfig;
+    }
+  }
+
+  const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+  const contextInfo = context
+    ? `Context exists but neither sandboxConfig nor sandbox is available. Context keys: ${Object.keys(context).join(", ")}`
+    : "Context is undefined or null";
+  throw new Error(
+    `Sandbox config not initialized${toolInfo}. ${contextInfo}. ` +
+      "Ensure the agent's prepareCall sets experimental_context: { sandboxConfig, ... }",
+  );
 }
 
 /**
@@ -110,27 +185,40 @@ export function shouldAutoApprove(
  *
  * @param experimental_context - The context passed to needsApproval functions
  * @param toolName - Optional tool name for better error messages
- * @returns Object with sandbox, workingDirectory, and approval config
+ * @returns Object with workingDirectory and approval config
  */
 export function getApprovalContext(
   experimental_context: unknown,
   toolName?: string,
 ): {
-  sandbox: Sandbox;
   workingDirectory: string;
   approval: ApprovalConfig;
 } {
   const context = isAgentContext(experimental_context)
     ? experimental_context
     : undefined;
-  if (!context?.sandbox) {
+
+  if (!context) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
-    const contextInfo = context
-      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
-      : "Context is undefined or null";
     throw new Error(
-      `Approval context not initialized${toolInfo}. ${contextInfo}. ` +
-        "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
+      `Approval context not initialized${toolInfo}. Context is undefined or null. ` +
+        "Ensure the agent's prepareCall sets experimental_context.",
+    );
+  }
+
+  const sandboxConfig = getSandboxConfigFromContext(context, toolName);
+  const workingDirectory =
+    context.workingDirectory ??
+    context.sandbox?.workingDirectory ??
+    (sandboxConfig
+      ? getWorkingDirectoryFromSandboxConfig(sandboxConfig)
+      : undefined);
+
+  if (!workingDirectory) {
+    const toolInfo = toolName ? ` (tool: ${toolName})` : "";
+    throw new Error(
+      `Working directory is missing from approval context${toolInfo}. ` +
+        "Ensure prepareCall includes workingDirectory or sandboxConfig.",
     );
   }
 
@@ -142,8 +230,7 @@ export function getApprovalContext(
   };
 
   return {
-    sandbox: context.sandbox,
-    workingDirectory: context.sandbox.workingDirectory,
+    workingDirectory,
     approval: context.approval ?? defaultApproval,
   };
 }

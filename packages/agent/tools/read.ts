@@ -1,12 +1,12 @@
 import { tool } from "ai";
-import { z } from "zod";
-import * as path from "path";
 import * as fs from "fs";
+import * as path from "path";
+import { z } from "zod";
 import {
-  getSandbox,
   getApprovalContext,
-  shouldAutoApprove,
+  getSandbox,
   pathNeedsApproval,
+  shouldAutoApprove,
   toDisplayPath,
 } from "./utils";
 
@@ -99,7 +99,7 @@ EXAMPLES:
       { filePath, offset = 1, limit = 2000 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "read");
+      const sandbox = await getSandbox(experimental_context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

@@ -5,14 +5,13 @@ import {
   type UIToolInvocation,
 } from "ai";
 import { z } from "zod";
-import { serializeSandboxConfig } from "../sandbox-config";
 import { executorSubagent } from "../subagents/executor";
 import { explorerSubagent } from "../subagents/explorer";
 import type { ApprovalRule } from "../types";
 import { sumLanguageModelUsage } from "../usage";
 import {
   getApprovalContext,
-  getSandbox,
+  getSandboxConfig,
   getSubagentModel,
   shouldAutoApprove,
 } from "./utils";
@@ -150,7 +149,7 @@ NOTE: The executor subagent requires user approval before running because it has
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
-    const sandbox = getSandbox(experimental_context, "task");
+    const sandboxConfig = getSandboxConfig(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
@@ -163,7 +162,7 @@ NOTE: The executor subagent requires user approval before running because it has
       options: {
         task,
         instructions,
-        sandboxConfig: serializeSandboxConfig(sandbox),
+        sandboxConfig,
         model,
       },
       abortSignal,

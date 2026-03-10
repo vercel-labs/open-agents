@@ -1,6 +1,7 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
+import type { OpenHarnessSandboxConfig } from "./sandbox-config";
 
 export const todoStatusSchema = z.enum(["pending", "in_progress", "completed"]);
 export type TodoStatus = z.infer<typeof todoStatusSchema>;
@@ -33,7 +34,11 @@ export type ApprovalConfig =
 import type { SkillMetadata } from "./skills/types";
 
 export interface AgentContext {
-  sandbox: Sandbox;
+  sandbox?: Sandbox;
+  sandboxConfig?: OpenHarnessSandboxConfig;
+  workingDirectory?: string;
+  currentBranch?: string;
+  environmentDetails?: string;
   approval: ApprovalConfig;
   skills?: SkillMetadata[];
   model: LanguageModel;

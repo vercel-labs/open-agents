@@ -1,13 +1,13 @@
 import { tool } from "ai";
-import { z } from "zod";
 import * as path from "path";
+import { z } from "zod";
+import type { ApprovalRule } from "../types";
 import {
-  isPathWithinDirectory,
-  getSandbox,
   getApprovalContext,
+  getSandbox,
+  isPathWithinDirectory,
   shouldAutoApprove,
 } from "./utils";
-import type { ApprovalRule } from "../types";
 
 const TIMEOUT_MS = 120_000;
 
@@ -220,7 +220,7 @@ EXAMPLES:
 - Start a dev server: command: "npm run dev", detached: true`,
     inputSchema: bashInputSchema,
     execute: async ({ command, cwd, detached }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context, "bash");
+      const sandbox = await getSandbox(experimental_context, "bash");
       const workingDirectory = sandbox.workingDirectory;
 
       // Resolve the working directory

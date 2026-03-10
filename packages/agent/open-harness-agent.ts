@@ -12,7 +12,9 @@ import { addCacheControl } from "./context-management";
 import { aggressiveCompactContext } from "./context-management/aggressive-compaction";
 import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 import {
-  connectSandboxFromConfig,
+  getCurrentBranchFromSandboxConfig,
+  getEnvironmentDetailsFromSandboxConfig,
+  getWorkingDirectoryFromSandboxConfig,
   sandboxConfigSchema,
 } from "./sandbox-config";
 
@@ -67,6 +69,9 @@ export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
 const runtimeContextSchema = z.object({
   sandboxConfig: sandboxConfigSchema,
+  workingDirectory: z.string(),
+  currentBranch: z.string().optional(),
+  environmentDetails: z.string().optional(),
   approval: approvalConfigSchema,
   model: z.custom<LanguageModel>(),
   subagentModel: z.custom<LanguageModel>().optional(),
@@ -168,7 +173,7 @@ export const openHarnessAgent = new ToolLoopAgent({
   tools,
   stopWhen: stepCountIs(200),
   callOptionsSchema,
-  prepareStep: async ({ messages, model, steps, experimental_context }) => {
+  prepareStep: ({ messages, model, steps, experimental_context }) => {
     const runtimeContext = getRuntimeContext(experimental_context);
     if (!runtimeContext) {
       throw new Error(
@@ -176,11 +181,16 @@ export const openHarnessAgent = new ToolLoopAgent({
       );
     }
 
-    const sandbox =
-      runtimeContext.sandbox ??
-      (await connectSandboxFromConfig(runtimeContext.sandboxConfig));
+    const workingDirectory =
+      runtimeContext.sandbox?.workingDirectory ??
+      runtimeContext.workingDirectory;
+    const currentBranch =
+      runtimeContext.sandbox?.currentBranch ?? runtimeContext.currentBranch;
+    const environmentDetails =
+      runtimeContext.sandbox?.environmentDetails ??
+      runtimeContext.environmentDetails;
     const mode =
-      runtimeContext.approval.type === "background"
+      runtimeContext.approval.type === "background" && currentBranch
         ? "background"
         : "interactive";
     const skills = runtimeContext.skills ?? [];
@@ -202,18 +212,17 @@ export const openHarnessAgent = new ToolLoopAgent({
         model,
       }),
       instructions: buildSystemPrompt({
-        cwd: sandbox.workingDirectory,
+        cwd: workingDirectory,
         mode,
-        currentBranch: sandbox.currentBranch,
+        currentBranch,
         customInstructions: runtimeContext.customInstructions,
-        environmentDetails: sandbox.environmentDetails,
+        environmentDetails,
         skills,
         modelId: getModelId(model),
       }),
       experimental_context: {
         ...runtimeContext,
         model,
-        sandbox,
       },
     };
   },
@@ -228,6 +237,11 @@ export const openHarnessAgent = new ToolLoopAgent({
     const subagentModel = options.subagentModel;
     const customInstructions = options.customInstructions;
     const sandboxConfig = options.sandboxConfig;
+    const workingDirectory =
+      getWorkingDirectoryFromSandboxConfig(sandboxConfig);
+    const currentBranch = getCurrentBranchFromSandboxConfig(sandboxConfig);
+    const environmentDetails =
+      getEnvironmentDetailsFromSandboxConfig(sandboxConfig);
     const skills = options.skills ?? [];
     const context = options.context;
     const preparedPrompt = preparePromptForOpenAIReasoning({
@@ -246,6 +260,9 @@ export const openHarnessAgent = new ToolLoopAgent({
       }),
       experimental_context: {
         sandboxConfig,
+        workingDirectory,
+        currentBranch,
+        environmentDetails,
         approval,
         skills,
         model: callModel,
