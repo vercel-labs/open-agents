@@ -60,6 +60,7 @@ export function ReadRenderer({
     <ToolLayout
       name="Read"
       summary={filePath}
+      summaryClassName="font-mono"
       meta={lines !== undefined ? `${lines} lines` : undefined}
       state={mergedState}
       expandedContent={expandedContent}
