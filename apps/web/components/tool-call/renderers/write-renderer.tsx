@@ -62,7 +62,7 @@ export function WriteRenderer({
     <ToolLayout
       name="Create"
       summary={filePath}
-      summaryClassName="font-mono"
+      summaryClassName="font-mono text-[13px]"
       meta={meta}
       state={mergedState}
       expandedContent={expandedContent}

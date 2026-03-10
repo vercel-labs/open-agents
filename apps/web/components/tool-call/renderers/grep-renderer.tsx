@@ -89,7 +89,7 @@ export function GrepRenderer({
     <ToolLayout
       name="Grep"
       summary={`"${pattern}"`}
-      summaryClassName="font-mono"
+      summaryClassName="font-mono text-[13px]"
       meta={matches.length > 0 ? `${matches.length} matches` : undefined}
       state={state}
       expandedContent={expandedContent}

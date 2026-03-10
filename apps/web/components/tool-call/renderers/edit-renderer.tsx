@@ -90,7 +90,7 @@ export function EditRenderer({
     <ToolLayout
       name="Update"
       summary={filePath}
-      summaryClassName="font-mono"
+      summaryClassName="font-mono text-[13px]"
       meta={meta}
       state={mergedState}
       expandedContent={expandedContent}

@@ -108,7 +108,7 @@ function DefaultRenderer({
     <ToolLayout
       name={name}
       summary={summary}
-      summaryClassName="font-mono"
+      summaryClassName="font-mono text-[13px]"
       meta={meta}
       state={state}
       onApprove={onApprove}
