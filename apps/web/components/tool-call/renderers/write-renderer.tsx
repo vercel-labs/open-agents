@@ -35,18 +35,11 @@ export function WriteRenderer({
 
   const expandedContent =
     showCode && !mergedState.denied ? (
-      <div>
-        <div className="mb-2 text-sm text-muted-foreground">
-          <span className="text-green-500">+{totalLines}</span>
-          <span className="mx-1 text-red-500">-0</span>
-        </div>
-
-        <div className="max-h-96 overflow-auto">
-          <DiffsFile
-            file={{ name: rawFilePath, contents: content }}
-            options={defaultFileOptions}
-          />
-        </div>
+      <div className="max-h-96 overflow-auto">
+        <DiffsFile
+          file={{ name: rawFilePath, contents: content }}
+          options={defaultFileOptions}
+        />
       </div>
     ) : undefined;
 

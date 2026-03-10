@@ -62,19 +62,12 @@ export function EditRenderer({
 
   const expandedContent =
     showDiff && !mergedState.denied ? (
-      <div>
-        <div className="mb-2 text-sm text-muted-foreground">
-          <span className="text-green-500">+{additions}</span>
-          <span className="mx-1 text-red-500">-{removals}</span>
-        </div>
-
-        <div className="max-h-96 overflow-auto">
-          <MultiFileDiff
-            oldFile={{ name: rawFilePath, contents: oldString }}
-            newFile={{ name: rawFilePath, contents: newString }}
-            options={defaultDiffOptions}
-          />
-        </div>
+      <div className="max-h-96 overflow-auto">
+        <MultiFileDiff
+          oldFile={{ name: rawFilePath, contents: oldString }}
+          newFile={{ name: rawFilePath, contents: newString }}
+          options={defaultDiffOptions}
+        />
       </div>
     ) : undefined;
 
