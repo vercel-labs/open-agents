@@ -10,6 +10,7 @@ export type SessionWithUnread = Pick<
   | "id"
   | "title"
   | "status"
+  | "repoOwner"
   | "repoName"
   | "branch"
   | "linesAdded"
@@ -65,6 +66,7 @@ function mergeSessionWithSummary(
     id: updatedSession.id,
     title: updatedSession.title,
     status: updatedSession.status,
+    repoOwner: updatedSession.repoOwner,
     repoName: updatedSession.repoName,
     branch: updatedSession.branch,
     linesAdded: updatedSession.linesAdded,

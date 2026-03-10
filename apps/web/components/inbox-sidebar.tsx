@@ -3,6 +3,7 @@
 import {
   Archive,
   EllipsisVertical,
+  FolderGit2,
   GitMerge,
   Loader2,
   Pencil,
@@ -126,6 +127,58 @@ function PrBadge({
   return <span className="text-[10px] text-muted-foreground">#{prNumber}</span>;
 }
 
+type SessionRepoGroup = {
+  id: string;
+  label: string;
+  sessions: SessionWithUnread[];
+};
+
+function getRepoGroupId(session: SessionWithUnread): string {
+  const repoName = session.repoName?.trim();
+  const repoOwner = session.repoOwner?.trim();
+
+  if (!repoName) {
+    return "repo:unscoped";
+  }
+
+  return `repo:${repoOwner ?? ""}/${repoName}`.toLowerCase();
+}
+
+function getRepoGroupLabel(session: SessionWithUnread): string {
+  const repoName = session.repoName?.trim();
+  const repoOwner = session.repoOwner?.trim();
+
+  if (!repoName) {
+    return "No repository";
+  }
+
+  return repoOwner ? `${repoOwner}/${repoName}` : repoName;
+}
+
+function groupSessionsByRepo(
+  sessions: SessionWithUnread[],
+): SessionRepoGroup[] {
+  const groups = new Map<string, SessionRepoGroup>();
+
+  for (const session of sessions) {
+    const groupId = getRepoGroupId(session);
+    const existingGroup = groups.get(groupId);
+
+    if (existingGroup) {
+      existingGroup.sessions.push(session);
+      continue;
+    }
+
+    groups.set(groupId, {
+      id: groupId,
+      label: getRepoGroupLabel(session),
+      sessions: [session],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
 type SessionRowProps = {
   session: SessionWithUnread;
   isActive: boolean;
@@ -152,6 +205,14 @@ const SessionRow = memo(function SessionRow({
       formatRelativeTime(new Date(session.lastActivityAt ?? session.createdAt)),
     [session.createdAt, session.lastActivityAt],
   );
+  const metadataLabel =
+    session.branch ??
+    (isWorking ? "Working..." : !session.repoName ? "No repository" : null);
+  const showMetadata =
+    Boolean(metadataLabel) ||
+    session.prNumber !== null ||
+    session.linesAdded !== null ||
+    session.linesRemoved !== null;
 
   return (
     <div
@@ -193,28 +254,23 @@ const SessionRow = memo(function SessionRow({
             </span>
           </div>
 
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-            {session.repoName && (
-              <span className="truncate">
-                {session.repoName}
-                {session.branch && (
-                  <span className="text-muted-foreground/50">
-                    /{session.branch}
-                  </span>
-                )}
+          {showMetadata ? (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {metadataLabel ? (
+                <span className="truncate">{metadataLabel}</span>
+              ) : null}
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                <PrBadge
+                  prNumber={session.prNumber}
+                  status={session.prStatus}
+                />
+                <DiffStats
+                  added={session.linesAdded}
+                  removed={session.linesRemoved}
+                />
               </span>
-            )}
-            {!session.repoName && isWorking && (
-              <span className="text-muted-foreground/60">Working...</span>
-            )}
-            <span className="ml-auto flex shrink-0 items-center gap-1.5">
-              <PrBadge prNumber={session.prNumber} status={session.prStatus} />
-              <DiffStats
-                added={session.linesAdded}
-                removed={session.linesRemoved}
-              />
-            </span>
-          </div>
+            </div>
+          ) : null}
         </button>
       </div>
 
@@ -265,6 +321,7 @@ function areSessionRowsEqual(
     prev.session.title === next.session.title &&
     prev.session.hasStreaming === next.session.hasStreaming &&
     prev.session.hasUnread === next.session.hasUnread &&
+    prev.session.repoOwner === next.session.repoOwner &&
     prev.session.repoName === next.session.repoName &&
     prev.session.branch === next.session.branch &&
     prev.session.prNumber === next.session.prNumber &&
@@ -382,6 +439,10 @@ export function InboxSidebar({
     (!showArchived && sessionsLoading && sessions.length === 0) ||
     (showArchived && archivedSessionsLoading && archivedSessions.length === 0);
   const sidebarUser = session?.user ?? initialUser;
+  const groupedSessions = useMemo(
+    () => groupSessionsByRepo(displayedSessions),
+    [displayedSessions],
+  );
 
   const handleSessionClick = useCallback(
     (session: SessionWithUnread) => {
@@ -552,18 +613,33 @@ export function InboxSidebar({
           </div>
         ) : (
           <>
-            <div className="space-y-px p-1.5">
-              {displayedSessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  isActive={session.id === activeSessionId}
-                  isPending={session.id === pendingSessionId}
-                  onSessionClick={handleSessionClick}
-                  onSessionPrefetch={handleSessionPrefetch}
-                  onOpenRenameDialog={handleOpenRenameDialog}
-                  onArchiveSession={handleArchiveSession}
-                />
+            <div className="space-y-3 p-1.5">
+              {groupedSessions.map((group) => (
+                <section key={group.id} className="space-y-1.5">
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                    <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground/90">
+                      {group.label}
+                    </span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {group.sessions.length}
+                    </span>
+                  </div>
+                  <div className="space-y-px">
+                    {group.sessions.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        isActive={session.id === activeSessionId}
+                        isPending={session.id === pendingSessionId}
+                        onSessionClick={handleSessionClick}
+                        onSessionPrefetch={handleSessionPrefetch}
+                        onOpenRenameDialog={handleOpenRenameDialog}
+                        onArchiveSession={handleArchiveSession}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
             {showArchived &&
