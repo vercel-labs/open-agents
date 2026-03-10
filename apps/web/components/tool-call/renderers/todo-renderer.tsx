@@ -23,7 +23,11 @@ export function TodoRenderer({
     (todo) => todo?.status === "pending",
   ).length;
 
-  const summary = `${todos.length} item${todos.length === 1 ? "" : "s"}`;
+  const activeTodo = todos.find((todo) => todo?.status === "in_progress");
+  const activeTodoContent = activeTodo?.content?.trim();
+  const summary = activeTodoContent
+    ? `Current: ${activeTodoContent}`
+    : `${todos.length} item${todos.length === 1 ? "" : "s"}`;
   const metaParts = [
     inProgressCount > 0 ? `${inProgressCount} in progress` : null,
     pendingCount > 0 ? `${pendingCount} pending` : null,
@@ -77,7 +81,11 @@ export function TodoRenderer({
     <ToolLayout
       name="Todo list"
       summary={summary}
-      meta={metaParts.length > 0 ? metaParts.join(" • ") : undefined}
+      meta={
+        !activeTodoContent && metaParts.length > 0
+          ? metaParts.join(" • ")
+          : undefined
+      }
       state={state}
       expandedContent={expandedContent}
       defaultExpanded={false}
