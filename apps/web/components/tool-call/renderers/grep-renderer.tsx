@@ -38,7 +38,6 @@ export function GrepRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const matches = getGrepMatches(output);
 
-  // Show expanded content if there are matches
   const hasExpandedContent = matches.length > 0;
 
   const expandedContent = hasExpandedContent ? (
@@ -90,10 +89,8 @@ export function GrepRenderer({
     <ToolLayout
       name="Grep"
       summary={`"${pattern}"`}
+      meta={matches.length > 0 ? `${matches.length} matches` : undefined}
       state={state}
-      output={
-        matches.length > 0 ? `Found ${matches.length} matches` : undefined
-      }
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}

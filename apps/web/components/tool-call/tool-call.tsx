@@ -102,13 +102,14 @@ function DefaultRenderer({
   const name = toolName.charAt(0).toUpperCase() + toolName.slice(1);
   const input = part.input as Record<string, unknown> | undefined;
   const summary = input ? JSON.stringify(input).slice(0, 40) : "...";
+  const meta = part.state === "output-available" ? "Done" : undefined;
 
   return (
     <ToolLayout
       name={name}
       summary={summary}
+      meta={meta}
       state={state}
-      output={part.state === "output-available" ? "Done" : undefined}
       onApprove={onApprove}
       onDeny={onDeny}
     />
