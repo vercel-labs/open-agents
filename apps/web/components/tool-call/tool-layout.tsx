@@ -99,7 +99,7 @@ export function ToolLayout({
       className={cn(
         "my-1.5 transition-[background-color,border-color,padding] duration-150",
         isCompact
-          ? "rounded-md border border-transparent bg-transparent px-1 py-0.5"
+          ? "rounded-md border border-transparent bg-transparent py-0.5"
           : "overflow-hidden rounded-lg border border-border/60 bg-card/60 p-3",
       )}
     >
@@ -107,7 +107,7 @@ export function ToolLayout({
         className={cn(
           "flex min-w-0 items-center gap-2 rounded-md text-sm",
           hasExpandedDetails && "cursor-pointer",
-          isCompact && "px-1 py-0.5",
+          isCompact && "py-0.5 pr-1",
           isCompact &&
             hasExpandedDetails &&
             "transition-colors hover:bg-muted/50",
@@ -125,7 +125,12 @@ export function ToolLayout({
           "aria-expanded": isExpanded,
         })}
       >
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+        <span
+          className={cn(
+            "flex size-3.5 shrink-0 items-center",
+            isCompact ? "justify-start" : "justify-center",
+          )}
+        >
           {headerIndicator}
         </span>
         <span
