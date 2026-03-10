@@ -180,6 +180,10 @@ function groupSessionsByRepo(
   return Array.from(groups.values());
 }
 
+function getRepoGroupContentId(groupId: string): string {
+  return `repo-group-panel-${groupId.replace(/[^a-z0-9-]+/gi, "-")}`;
+}
+
 type SessionRowProps = {
   session: SessionWithUnread;
   isActive: boolean;
@@ -674,12 +678,14 @@ export function InboxSidebar({
                 const groupHasStreaming = group.sessions.some(
                   (session) => session.hasStreaming,
                 );
+                const groupContentId = getRepoGroupContentId(group.id);
 
                 return (
                   <section key={group.id} className="space-y-1.5">
                     <button
                       type="button"
                       onClick={() => handleToggleRepoGroup(group.id)}
+                      aria-controls={groupContentId}
                       aria-expanded={!isCollapsed}
                       className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
                         groupHasActiveSession
@@ -713,28 +719,20 @@ export function InboxSidebar({
                         }`}
                       />
                     </button>
-                    <div
-                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
-                        isCollapsed
-                          ? "grid-rows-[0fr] opacity-0"
-                          : "grid-rows-[1fr] opacity-100"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
-                          {group.sessions.map((session) => (
-                            <SessionRow
-                              key={session.id}
-                              session={session}
-                              isActive={session.id === activeSessionId}
-                              isPending={session.id === pendingSessionId}
-                              onSessionClick={handleSessionClick}
-                              onSessionPrefetch={handleSessionPrefetch}
-                              onOpenRenameDialog={handleOpenRenameDialog}
-                              onArchiveSession={handleArchiveSession}
-                            />
-                          ))}
-                        </div>
+                    <div id={groupContentId} hidden={isCollapsed}>
+                      <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
+                        {group.sessions.map((session) => (
+                          <SessionRow
+                            key={session.id}
+                            session={session}
+                            isActive={session.id === activeSessionId}
+                            isPending={session.id === pendingSessionId}
+                            onSessionClick={handleSessionClick}
+                            onSessionPrefetch={handleSessionPrefetch}
+                            onOpenRenameDialog={handleOpenRenameDialog}
+                            onArchiveSession={handleArchiveSession}
+                          />
+                        ))}
                       </div>
                     </div>
                   </section>
