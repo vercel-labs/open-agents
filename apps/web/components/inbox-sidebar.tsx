@@ -719,20 +719,31 @@ export function InboxSidebar({
                         }`}
                       />
                     </button>
-                    <div id={groupContentId} hidden={isCollapsed}>
-                      <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
-                        {group.sessions.map((session) => (
-                          <SessionRow
-                            key={session.id}
-                            session={session}
-                            isActive={session.id === activeSessionId}
-                            isPending={session.id === pendingSessionId}
-                            onSessionClick={handleSessionClick}
-                            onSessionPrefetch={handleSessionPrefetch}
-                            onOpenRenameDialog={handleOpenRenameDialog}
-                            onArchiveSession={handleArchiveSession}
-                          />
-                        ))}
+                    <div
+                      id={groupContentId}
+                      aria-hidden={isCollapsed}
+                      inert={isCollapsed}
+                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${
+                        isCollapsed
+                          ? "grid-rows-[0fr] opacity-0 pointer-events-none"
+                          : "grid-rows-[1fr] opacity-100"
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
+                          {group.sessions.map((session) => (
+                            <SessionRow
+                              key={session.id}
+                              session={session}
+                              isActive={session.id === activeSessionId}
+                              isPending={session.id === pendingSessionId}
+                              onSessionClick={handleSessionClick}
+                              onSessionPrefetch={handleSessionPrefetch}
+                              onOpenRenameDialog={handleOpenRenameDialog}
+                              onArchiveSession={handleArchiveSession}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </section>
