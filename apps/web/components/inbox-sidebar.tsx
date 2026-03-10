@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  ChevronDown,
   EllipsisVertical,
   FolderGit2,
   GitMerge,
@@ -208,6 +209,9 @@ const SessionRow = memo(function SessionRow({
   const metadataLabel =
     session.branch ??
     (isWorking ? "Working..." : !session.repoName ? "No repository" : null);
+  const metadataLabelClassName = session.branch
+    ? "truncate font-mono text-[11px]"
+    : "truncate";
   const showMetadata =
     Boolean(metadataLabel) ||
     session.prNumber !== null ||
@@ -216,8 +220,10 @@ const SessionRow = memo(function SessionRow({
 
   return (
     <div
-      className={`group relative flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-[background-color,opacity] ${
-        isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
+      className={`group relative flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow,opacity] ${
+        isActive
+          ? "border-border/70 bg-sidebar-active shadow-sm"
+          : "border-transparent hover:border-border/40 hover:bg-muted/50"
       } ${isPending ? "opacity-80" : "opacity-100"}`}
       style={sessionRowPerformanceStyle}
     >
@@ -257,7 +263,7 @@ const SessionRow = memo(function SessionRow({
           {showMetadata ? (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
               {metadataLabel ? (
-                <span className="truncate">{metadataLabel}</span>
+                <span className={metadataLabelClassName}>{metadataLabel}</span>
               ) : null}
               <span className="ml-auto flex shrink-0 items-center gap-1.5">
                 <PrBadge
@@ -279,7 +285,7 @@ const SessionRow = memo(function SessionRow({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-focus-within:opacity-100 group-hover:opacity-100"
             aria-label={`Open menu for ${session.title}`}
           >
             <EllipsisVertical className="h-3 w-3" />
@@ -443,6 +449,43 @@ export function InboxSidebar({
     () => groupSessionsByRepo(displayedSessions),
     [displayedSessions],
   );
+  const activeGroupId = useMemo(
+    () =>
+      groupedSessions.find((group) =>
+        group.sessions.some((session) => session.id === activeSessionId),
+      )?.id ?? null,
+    [activeSessionId, groupedSessions],
+  );
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    setCollapsedGroupIds((current) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+
+      for (const group of groupedSessions) {
+        const nextCollapsed =
+          group.id === activeGroupId ? false : (current[group.id] ?? false);
+
+        next[group.id] = nextCollapsed;
+
+        if (current[group.id] !== nextCollapsed) {
+          changed = true;
+        }
+      }
+
+      if (!changed) {
+        const currentIds = Object.keys(current);
+        if (currentIds.length !== groupedSessions.length) {
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [activeGroupId, groupedSessions]);
 
   const handleSessionClick = useCallback(
     (session: SessionWithUnread) => {
@@ -460,6 +503,13 @@ export function InboxSidebar({
     },
     [onSessionPrefetch],
   );
+
+  const handleToggleRepoGroup = useCallback((groupId: string) => {
+    setCollapsedGroupIds((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
+  }, []);
 
   const handleArchiveSession = useCallback(
     async (session: SessionWithUnread) => {
@@ -614,33 +664,85 @@ export function InboxSidebar({
         ) : (
           <>
             <div className="space-y-3 p-1.5">
-              {groupedSessions.map((group) => (
-                <section key={group.id} className="space-y-1.5">
-                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                    <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground/90">
-                      {group.label}
-                    </span>
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {group.sessions.length}
-                    </span>
-                  </div>
-                  <div className="space-y-px">
-                    {group.sessions.map((session) => (
-                      <SessionRow
-                        key={session.id}
-                        session={session}
-                        isActive={session.id === activeSessionId}
-                        isPending={session.id === pendingSessionId}
-                        onSessionClick={handleSessionClick}
-                        onSessionPrefetch={handleSessionPrefetch}
-                        onOpenRenameDialog={handleOpenRenameDialog}
-                        onArchiveSession={handleArchiveSession}
+              {groupedSessions.map((group) => {
+                const isCollapsed = collapsedGroupIds[group.id] ?? false;
+                const groupHasActiveSession = group.id === activeGroupId;
+                const groupHasUnread = group.sessions.some(
+                  (session) =>
+                    session.hasUnread && session.id !== activeSessionId,
+                );
+                const groupHasStreaming = group.sessions.some(
+                  (session) => session.hasStreaming,
+                );
+
+                return (
+                  <section key={group.id} className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRepoGroup(group.id)}
+                      aria-expanded={!isCollapsed}
+                      className={`flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow] ${
+                        groupHasActiveSession
+                          ? "border-border/70 bg-background/90 shadow-sm"
+                          : "border-border/60 bg-background/60 hover:bg-background/80"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
+                          groupHasStreaming
+                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : groupHasUnread
+                              ? "border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                              : "border-border/60 bg-background/80 text-muted-foreground"
+                        }`}
+                      >
+                        <FolderGit2 className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground/90">
+                        {group.label}
+                      </span>
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          groupHasActiveSession
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {group.sessions.length}
+                      </span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
+                          isCollapsed ? "-rotate-90" : "rotate-0"
+                        }`}
                       />
-                    ))}
-                  </div>
-                </section>
-              ))}
+                    </button>
+                    <div
+                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                        isCollapsed
+                          ? "grid-rows-[0fr] opacity-0"
+                          : "grid-rows-[1fr] opacity-100"
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="ml-5 space-y-1 border-l border-border/60 pl-2">
+                          {group.sessions.map((session) => (
+                            <SessionRow
+                              key={session.id}
+                              session={session}
+                              isActive={session.id === activeSessionId}
+                              isPending={session.id === pendingSessionId}
+                              onSessionClick={handleSessionClick}
+                              onSessionPrefetch={handleSessionPrefetch}
+                              onOpenRenameDialog={handleOpenRenameDialog}
+                              onArchiveSession={handleArchiveSession}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
             </div>
             {showArchived &&
             (hasMoreArchivedSessions || archivedSessionsError) ? (
