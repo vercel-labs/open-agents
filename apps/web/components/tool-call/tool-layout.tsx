@@ -10,6 +10,7 @@ import { ApprovalButtons } from "./approval-buttons";
 export type ToolLayoutProps = {
   name: string;
   summary: string;
+  summaryClassName?: string;
   meta?: ReactNode;
   state: ToolRenderState;
   output?: ReactNode;
@@ -53,6 +54,7 @@ function hasRenderableContent(value: ReactNode) {
 export function ToolLayout({
   name,
   summary,
+  summaryClassName,
   meta,
   state,
   output,
@@ -147,7 +149,12 @@ export function ToolLayout({
           {hasSummary && (
             <>
               <span className="shrink-0 text-muted-foreground/40">·</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-muted-foreground",
+                  summaryClassName,
+                )}
+              >
                 {summary}
               </span>
             </>

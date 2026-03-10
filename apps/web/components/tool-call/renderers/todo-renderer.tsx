@@ -23,16 +23,25 @@ export function TodoRenderer({
     (todo) => todo?.status === "pending",
   ).length;
 
-  const activeTodo = todos.find((todo) => todo?.status === "in_progress");
+  const activeTodoIndex = todos.findIndex(
+    (todo) => todo?.status === "in_progress",
+  );
+  const activeTodo = activeTodoIndex >= 0 ? todos[activeTodoIndex] : undefined;
   const activeTodoContent = activeTodo?.content?.trim();
   const summary = activeTodoContent
-    ? `Current: ${activeTodoContent}`
+    ? activeTodoContent
     : `${todos.length} item${todos.length === 1 ? "" : "s"}`;
   const metaParts = [
     inProgressCount > 0 ? `${inProgressCount} in progress` : null,
     pendingCount > 0 ? `${pendingCount} pending` : null,
     completedCount > 0 ? `${completedCount} done` : null,
   ].filter(Boolean);
+  const progressMeta =
+    activeTodoContent && activeTodoIndex >= 0 ? (
+      <span className="font-mono tabular-nums text-muted-foreground">
+        [{activeTodoIndex + 1}/{todos.length}]
+      </span>
+    ) : undefined;
 
   const expandedContent =
     todos.length > 0 ? (
@@ -81,10 +90,14 @@ export function TodoRenderer({
     <ToolLayout
       name="Todo list"
       summary={summary}
+      summaryClassName={
+        activeTodoContent ? "font-mono text-foreground" : undefined
+      }
       meta={
-        !activeTodoContent && metaParts.length > 0
+        progressMeta ??
+        (!activeTodoContent && metaParts.length > 0
           ? metaParts.join(" • ")
-          : undefined
+          : undefined)
       }
       state={state}
       expandedContent={expandedContent}
