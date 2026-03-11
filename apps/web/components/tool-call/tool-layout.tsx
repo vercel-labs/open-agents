@@ -51,18 +51,8 @@ function hasRenderableContent(value: ReactNode) {
   );
 }
 
-const MAX_ERROR_PREVIEW_LENGTH = 72;
-
 function trimErrorPrefix(message: string) {
   return message.replace(/^Error:\s*/i, "").trim();
-}
-
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 export function ToolLayout({
@@ -86,9 +76,6 @@ export function ToolLayout({
   );
   const errorMessage =
     state.error && !state.denied ? trimErrorPrefix(state.error) : undefined;
-  const errorPreview = errorMessage
-    ? truncateText(errorMessage, MAX_ERROR_PREVIEW_LENGTH)
-    : undefined;
   const hasErrorDetails = Boolean(errorMessage);
   const hasExpandedDetails =
     hasRenderableContent(expandedContent) || hasErrorDetails;
@@ -103,18 +90,7 @@ export function ToolLayout({
       Interrupted
     </span>
   ) : null;
-  const errorBadge = errorPreview ? (
-    <span className="inline-flex min-w-0 items-center gap-1.5 overflow-hidden">
-      <span className="inline-flex shrink-0 items-center rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium leading-none text-red-600 dark:text-red-400">
-        Failed
-      </span>
-      <span className="hidden truncate text-[12px] text-red-600/80 dark:text-red-400/90 sm:inline">
-        {errorPreview}
-      </span>
-    </span>
-  ) : null;
-  const hasTrailingMeta =
-    hasMeta || interruptedBadge !== null || errorBadge !== null;
+  const hasTrailingMeta = hasMeta || interruptedBadge !== null;
 
   const isCompact =
     !isExpanded &&
@@ -194,15 +170,9 @@ export function ToolLayout({
           )}
 
           {hasTrailingMeta && (
-            <span
-              className={cn(
-                "inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground",
-                errorBadge ? "shrink overflow-hidden" : "shrink-0",
-              )}
-            >
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground">
               {meta}
               {interruptedBadge}
-              {errorBadge}
             </span>
           )}
         </div>

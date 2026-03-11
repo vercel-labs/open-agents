@@ -31,7 +31,7 @@ describe("ToolLayout interrupted state", () => {
 });
 
 describe("ToolLayout error state", () => {
-  test("renders failed tool calls as a compact row with an inline badge", () => {
+  test("renders failed tool calls as a compact row without an inline badge", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Read"
@@ -43,9 +43,11 @@ describe("ToolLayout error state", () => {
       />,
     );
 
-    expect(html).toContain("Failed");
+    expect(html).toContain("text-red-500");
+    expect(html).toContain(">Read</span>");
     expect(html).toContain("bg-transparent py-0.5");
     expect(html).not.toContain("bg-card/60 p-3");
+    expect(html).not.toContain("Failed</span>");
     expect(html).not.toContain(
       '<div class="mt-2 pl-5 text-sm text-red-500">Error:',
     );
