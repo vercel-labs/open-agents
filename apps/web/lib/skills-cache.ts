@@ -3,7 +3,7 @@ import type { SandboxState } from "@open-harness/sandbox";
 import { createRedisClient, isRedisConfigured } from "./redis";
 
 const SKILLS_CACHE_PREFIX = "skills:v1";
-export const SKILLS_CACHE_TTL_SECONDS = 600;
+export const SKILLS_CACHE_TTL_SECONDS = 4 * 60 * 60;
 
 type SkillsCacheEntry = {
   skills: SkillMetadata[];
