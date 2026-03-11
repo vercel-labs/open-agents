@@ -90,7 +90,7 @@ export function GrepRenderer({
       name="Grep"
       summary={`"${pattern}"`}
       summaryClassName="font-mono"
-      meta={matches.length > 0 ? `${matches.length} matches` : undefined}
+      meta={output ? `${matches.length} matches` : undefined}
       state={state}
       expandedContent={expandedContent}
       onApprove={onApprove}
