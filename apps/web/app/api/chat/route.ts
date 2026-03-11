@@ -31,6 +31,7 @@ import {
 import { recordUsage } from "@/lib/db/usage";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
@@ -104,14 +105,9 @@ function extractLastInputTokensFromMessages(
 }
 
 const STREAM_TOKEN_SEPARATOR = ":";
-const SKILLS_CACHE_TTL_MS = 60_000;
 
 type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
 
-const discoveredSkillsCache = new Map<
-  string,
-  { skills: DiscoveredSkills; expiresAt: number }
->();
 const remoteAuthFingerprintBySessionId = new Map<string, string>();
 
 const createStreamToken = (startedAtMs: number) =>
@@ -119,17 +115,6 @@ const createStreamToken = (startedAtMs: number) =>
 
 const getRemoteAuthFingerprint = (authUrl: string) =>
   createHash("sha256").update(authUrl).digest("hex");
-
-const getSkillCacheKey = (sessionId: string, workingDirectory: string) =>
-  `${sessionId}:${workingDirectory}`;
-
-const pruneExpiredSkillCache = (now: number) => {
-  for (const [key, entry] of discoveredSkillsCache) {
-    if (entry.expiresAt <= now) {
-      discoveredSkillsCache.delete(key);
-    }
-  }
-};
 
 const parseStreamTokenStartedAt = (streamToken: string | null) => {
   if (!streamToken) {
@@ -303,20 +288,18 @@ export async function POST(req: Request) {
   const skillDirs = skillBaseFolders.map(
     (folder) => `${sandbox.workingDirectory}/${folder}/skills`,
   );
-  const now = Date.now();
-  pruneExpiredSkillCache(now);
-  const skillCacheKey = getSkillCacheKey(sessionId, sandbox.workingDirectory);
-  const cachedSkills = discoveredSkillsCache.get(skillCacheKey);
+
+  const cachedSkills = await getCachedSkills(
+    sessionId,
+    sessionRecord.sandboxState,
+  );
 
   let skills: DiscoveredSkills;
-  if (cachedSkills && cachedSkills.expiresAt > now) {
-    skills = cachedSkills.skills;
+  if (cachedSkills !== null) {
+    skills = cachedSkills;
   } else {
     skills = await discoverSkills(sandbox, skillDirs);
-    discoveredSkillsCache.set(skillCacheKey, {
-      skills,
-      expiresAt: now + SKILLS_CACHE_TTL_MS,
-    });
+    await setCachedSkills(sessionId, sessionRecord.sandboxState, skills);
   }
 
   let ownedStreamToken = createStreamToken(requestStartedAtMs);
