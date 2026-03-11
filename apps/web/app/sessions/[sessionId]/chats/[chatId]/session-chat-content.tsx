@@ -2493,27 +2493,41 @@ export function SessionChatContent({
                       )}
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={openPreviewOrPr}
-                      disabled={!prDeploymentUrl && !existingPrUrl}
-                    >
-                      {prDeploymentUrl ? (
-                        <>
-                          <ExternalLink className="h-4 w-4 xl:mr-2" />
-                          <span className="hidden xl:inline">Preview</span>
-                        </>
-                      ) : (
-                        <>
-                          <GitPullRequest className="h-4 w-4 xl:mr-2" />
-                          <span className="hidden xl:inline">
-                            View PR #{session.prNumber}
-                          </span>
-                        </>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                        onClick={openPreviewOrPr}
+                        disabled={!prDeploymentUrl && !existingPrUrl}
+                      >
+                        {prDeploymentUrl ? (
+                          <>
+                            <ExternalLink className="h-4 w-4 xl:mr-2" />
+                            <span className="hidden xl:inline">Preview</span>
+                          </>
+                        ) : (
+                          <>
+                            <GitPullRequest className="h-4 w-4 xl:mr-2" />
+                            <span className="hidden xl:inline">
+                              View PR #{session.prNumber}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                      {prDeploymentUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="hidden h-8 px-3 xl:inline-flex"
+                          onClick={openExistingPr}
+                          disabled={!existingPrUrl}
+                        >
+                          <GitPullRequest className="mr-2 h-4 w-4" />
+                          View PR
+                        </Button>
                       )}
-                    </Button>
+                    </>
                   )
                 ) : showCommitAction ? (
                   <Button
