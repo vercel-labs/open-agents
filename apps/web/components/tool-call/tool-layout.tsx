@@ -93,7 +93,6 @@ export function ToolLayout({
   const hasExpandedDetails =
     hasRenderableContent(expandedContent) || hasErrorDetails;
   const hasOutput = hasRenderableContent(output);
-  const hasChildren = hasRenderableContent(children);
   const hasMeta = hasRenderableContent(meta);
   const hasSummary = summary.trim().length > 0;
   const showRunningNotice =
@@ -115,13 +114,12 @@ export function ToolLayout({
   const headerIndicator = indicator ?? <StatusIndicator state={state} />;
 
   return (
-    <div
-      className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5"
-    >
+    <div className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5">
       <div
         className={cn(
           "flex min-w-0 select-none items-baseline gap-2 rounded-md py-0.5 pr-1 text-sm",
-          hasExpandedDetails && "cursor-pointer transition-colors hover:bg-muted/50",
+          hasExpandedDetails &&
+            "cursor-pointer transition-colors hover:bg-muted/50",
         )}
         {...(hasExpandedDetails && {
           onClick: handleToggle,
@@ -136,9 +134,7 @@ export function ToolLayout({
           "aria-expanded": isExpanded,
         })}
       >
-        <span
-          className="flex size-3.5 shrink-0 items-center justify-start self-center"
-        >
+        <span className="flex size-3.5 shrink-0 items-center justify-start self-center">
           {headerIndicator}
         </span>
         <span
@@ -195,9 +191,7 @@ export function ToolLayout({
       {children}
 
       {showRunningNotice && (
-        <div className="mt-2 text-sm text-muted-foreground">
-          Running...
-        </div>
+        <div className="mt-2 text-sm text-muted-foreground">Running...</div>
       )}
 
       {showApprovalButtons && (
@@ -218,9 +212,7 @@ export function ToolLayout({
         !state.approvalRequested &&
         !state.denied &&
         !state.interrupted && (
-          <div className="mt-2 text-sm text-muted-foreground">
-            {output}
-          </div>
+          <div className="mt-2 text-sm text-muted-foreground">{output}</div>
         )}
 
       {state.denied && (
