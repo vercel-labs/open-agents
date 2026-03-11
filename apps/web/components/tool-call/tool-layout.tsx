@@ -147,26 +147,20 @@ export function ToolLayout({
 
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
           {hasSummary && (
-            <>
-              <span className="shrink-0 text-muted-foreground/40">·</span>
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate text-[13px] leading-none text-muted-foreground",
-                  summaryClassName,
-                )}
-              >
-                {summary}
-              </span>
-            </>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-[13px] leading-none text-muted-foreground",
+                summaryClassName,
+              )}
+            >
+              {summary}
+            </span>
           )}
 
           {hasMeta && (
-            <>
-              <span className="shrink-0 text-muted-foreground/40">·</span>
-              <span className="inline-flex shrink-0 items-baseline gap-1.5 text-[13px] leading-none text-muted-foreground">
-                {meta}
-              </span>
-            </>
+            <span className="inline-flex shrink-0 items-baseline gap-1.5 text-[13px] leading-none text-muted-foreground">
+              {meta}
+            </span>
           )}
         </div>
 
