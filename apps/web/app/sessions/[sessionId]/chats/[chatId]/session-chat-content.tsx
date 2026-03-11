@@ -100,7 +100,9 @@ import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
 import {
+  hasRenderableAssistantPart,
   isChatInFlight as isChatInFlightStatus,
+  shouldKeepCollapsedReasoningStreaming,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
@@ -1074,13 +1076,7 @@ export function SessionChatContent({
   const hasAssistantRenderableContent = useMemo(
     () =>
       lastMessage?.role === "assistant"
-        ? lastMessage.parts.some(
-            (p) =>
-              (p.type === "text" && p.text.length > 0) ||
-              isToolUIPart(p) ||
-              (isReasoningUIPart(p) &&
-                (p.text.length > 0 || p.state === "streaming")),
-          )
+        ? lastMessage.parts.some(hasRenderableAssistantPart)
         : false,
     [lastMessage],
   );
@@ -2871,6 +2867,10 @@ export function SessionChatContent({
                     }
 
                     if (group.type === "reasoning-group") {
+                      const hasRenderableContentAfterGroup = m.parts
+                        .slice(group.startIndex + group.parts.length)
+                        .some(hasRenderableAssistantPart);
+
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2878,12 +2878,13 @@ export function SessionChatContent({
                         >
                           <ThinkingBlock
                             text={getReasoningGroupText(group.parts)}
-                            isStreaming={
-                              isMessageStreaming &&
-                              group.parts.some(
+                            isStreaming={shouldKeepCollapsedReasoningStreaming({
+                              isMessageStreaming,
+                              hasStreamingReasoningPart: group.parts.some(
                                 (part) => part.state === "streaming",
-                              )
-                            }
+                              ),
+                              hasRenderableContentAfterGroup,
+                            })}
                             partCount={group.parts.length}
                           />
                         </div>
@@ -2893,6 +2894,10 @@ export function SessionChatContent({
                     const p = group.part;
 
                     if (isReasoningUIPart(p)) {
+                      const hasRenderableContentAfterGroup = m.parts
+                        .slice(group.index + 1)
+                        .some(hasRenderableAssistantPart);
+
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2900,9 +2905,12 @@ export function SessionChatContent({
                         >
                           <ThinkingBlock
                             text={p.text}
-                            isStreaming={
-                              isMessageStreaming && p.state === "streaming"
-                            }
+                            isStreaming={shouldKeepCollapsedReasoningStreaming({
+                              isMessageStreaming,
+                              hasStreamingReasoningPart:
+                                p.state === "streaming",
+                              hasRenderableContentAfterGroup,
+                            })}
                           />
                         </div>
                       );
