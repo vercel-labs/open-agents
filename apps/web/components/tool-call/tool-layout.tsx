@@ -77,6 +77,12 @@ export function ToolLayout({
   const hasSummary = summary.trim().length > 0;
   const showRunningNotice =
     state.approvalRequested && !showApprovalButtons && !state.interrupted;
+  const interruptedBadge = state.interrupted ? (
+    <span className="inline-flex items-center rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 text-[11px] font-medium leading-none text-yellow-600 dark:text-yellow-400">
+      Interrupted
+    </span>
+  ) : null;
+  const hasTrailingMeta = hasMeta || interruptedBadge !== null;
 
   const isCompact =
     !isExpanded &&
@@ -85,7 +91,6 @@ export function ToolLayout({
     !hasOutput &&
     !state.denied &&
     !state.error &&
-    !state.interrupted &&
     !hasChildren;
 
   const handleToggle = () => {
@@ -157,9 +162,10 @@ export function ToolLayout({
             </span>
           )}
 
-          {hasMeta && (
-            <span className="inline-flex shrink-0 items-baseline gap-1.5 text-[13px] leading-none text-muted-foreground">
+          {hasTrailingMeta && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground">
               {meta}
+              {interruptedBadge}
             </span>
           )}
         </div>
@@ -216,10 +222,6 @@ export function ToolLayout({
         <div className="mt-2 pl-5 text-sm text-red-500">
           Error: {state.error.slice(0, 80)}
         </div>
-      )}
-
-      {state.interrupted && (
-        <div className="mt-2 pl-5 text-sm text-yellow-500">Interrupted</div>
       )}
 
       {isExpanded && hasExpandedDetails && (
