@@ -2,6 +2,7 @@ import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { gateway, stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
+import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
@@ -52,9 +53,9 @@ You have access to: read, grep, glob, bash (read-only commands only)
 - Use grep for searching file contents with regex
 - Use read when you know the specific file path
 - Use bash ONLY for read-only operations (ls, git status, git log, git diff, find)
-- All bash commands automatically run in the working directory — NEVER prepend \`cd /vercel/sandbox &&\` or similar to commands
+- All bash commands automatically run in the working directory — NEVER prepend \`cd <working-directory> &&\` or similar to commands
 - NEVER use bash for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, or any file creation/modification
-- Return file paths as absolute paths in your final response`;
+- Return workspace-relative file paths in your final response (e.g., "src/index.ts:42")`;
 
 const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the exploration task"),
@@ -84,12 +85,19 @@ export const explorerSubagent = new ToolLoopAgent({
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
+    const preparedPrompt = preparePromptForOpenAIReasoning({
+      model,
+      messages: settings.messages,
+      prompt: settings.prompt,
+    });
     return {
       ...settings,
+      ...preparedPrompt,
       model,
       instructions: `${EXPLORER_SYSTEM_PROMPT}
 
-Working directory: ${sandbox.workingDirectory}
+Working directory: . (workspace root)
+Use workspace-relative paths for all file operations.
 
 ## Your Task
 ${options.task}

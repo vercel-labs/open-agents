@@ -38,8 +38,7 @@ export function GrepRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const matches = getGrepMatches(output);
 
-  // Show expanded content if there are matches
-  const hasExpandedContent = matches.length > 0;
+  const hasExpandedContent = output !== undefined;
 
   const expandedContent = hasExpandedContent ? (
     <div className="space-y-3">
@@ -66,22 +65,26 @@ export function GrepRenderer({
         <div className="mb-1 text-xs font-medium text-muted-foreground">
           Matches ({matches.length})
         </div>
-        <div className="max-h-64 space-y-1 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
-          {matches.map((match) => (
-            <div
-              key={`${match.file}:${match.line}:${match.content ?? ""}`}
-              className="text-foreground"
-            >
-              <span className="text-muted-foreground">{match.file}</span>
-              <span className="text-yellow-500">:{match.line}</span>
-              {match.content && (
-                <span className="ml-2 text-foreground">
-                  {match.content.slice(0, 100)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        {matches.length > 0 ? (
+          <div className="max-h-64 space-y-1 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
+            {matches.map((match) => (
+              <div
+                key={`${match.file}:${match.line}:${match.content ?? ""}`}
+                className="text-foreground"
+              >
+                <span className="text-muted-foreground">{match.file}</span>
+                <span className="text-yellow-500">:{match.line}</span>
+                {match.content && (
+                  <span className="ml-2 text-foreground">
+                    {match.content.slice(0, 100)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">No matches</div>
+        )}
       </div>
     </div>
   ) : undefined;
@@ -90,10 +93,9 @@ export function GrepRenderer({
     <ToolLayout
       name="Grep"
       summary={`"${pattern}"`}
+      summaryClassName="font-mono"
+      meta={output ? `${matches.length} matches` : undefined}
       state={state}
-      output={
-        matches.length > 0 ? `Found ${matches.length} matches` : undefined
-      }
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}

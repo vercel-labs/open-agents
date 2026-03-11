@@ -2,6 +2,7 @@ import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { gateway, stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
+import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
@@ -52,8 +53,8 @@ Example final response:
 You have full access to file operations (read, write, edit, grep, glob) and bash commands. Use them to complete your task.
 
 ## BASH COMMANDS
-- All bash commands automatically run in the working directory — NEVER prepend \`cd /vercel/sandbox &&\` or similar to commands
-- Just run the command directly (e.g., \`npm test\`, not \`cd /vercel/sandbox && npm test\`)`;
+- All bash commands automatically run in the working directory — NEVER prepend \`cd <working-directory> &&\` or similar to commands
+- Just run the command directly (e.g., \`npm test\`)`;
 
 const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the task"),
@@ -83,12 +84,19 @@ export const executorSubagent = new ToolLoopAgent({
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
+    const preparedPrompt = preparePromptForOpenAIReasoning({
+      model,
+      messages: settings.messages,
+      prompt: settings.prompt,
+    });
     return {
       ...settings,
+      ...preparedPrompt,
       model,
       instructions: `${EXECUTOR_SYSTEM_PROMPT}
 
-Working directory: ${sandbox.workingDirectory}
+Working directory: . (workspace root)
+Use workspace-relative paths for all file operations.
 
 ## Your Task
 ${options.task}

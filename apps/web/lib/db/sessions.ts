@@ -103,6 +103,7 @@ type SessionSidebarFields = Pick<
   | "id"
   | "title"
   | "status"
+  | "repoOwner"
   | "repoName"
   | "branch"
   | "linesAdded"
@@ -116,6 +117,7 @@ export type SessionWithUnread = SessionSidebarFields & {
   hasUnread: boolean;
   hasStreaming: boolean;
   latestChatId: string | null;
+  lastActivityAt: Date;
 };
 
 type GetSessionsWithUnreadByUserIdOptions = {
@@ -148,6 +150,7 @@ export async function getSessionsWithUnreadByUserId(
       id: sessions.id,
       title: sessions.title,
       status: sessions.status,
+      repoOwner: sessions.repoOwner,
       repoName: sessions.repoName,
       branch: sessions.branch,
       linesAdded: sessions.linesAdded,
@@ -155,6 +158,7 @@ export async function getSessionsWithUnreadByUserId(
       prNumber: sessions.prNumber,
       prStatus: sessions.prStatus,
       createdAt: sessions.createdAt,
+      lastActivityAt: sql<Date>`COALESCE(MAX(${chats.updatedAt}), ${sessions.createdAt})`,
       hasUnread: sql<boolean>`COALESCE(BOOL_OR(
         CASE
           WHEN ${chats.lastAssistantMessageAt} IS NULL THEN false

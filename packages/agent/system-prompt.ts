@@ -401,7 +401,9 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const parts = [CORE_SYSTEM_PROMPT, getModelOverlay(family)];
 
   if (options.cwd) {
-    parts.push(`\n# Environment\n\nWorking directory: ${options.cwd}`);
+    parts.push(
+      "\n# Environment\n\nWorking directory: . (workspace root)\nUse workspace-relative paths for all file operations.",
+    );
     if (options.environmentDetails) {
       parts.push(`\n${options.environmentDetails}`);
     }
