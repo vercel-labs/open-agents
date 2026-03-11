@@ -79,7 +79,7 @@ describe("ToolLayout error state", () => {
     );
   });
 
-  test("renders expanded details inline with subtle motion and muted background", () => {
+  test("renders expanded details inline without muted background", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Grep"
@@ -91,7 +91,8 @@ describe("ToolLayout error state", () => {
     );
 
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("bg-muted/35");
+    expect(html).toContain("bg-transparent");
+    expect(html).not.toContain("bg-muted/35");
     expect(html).toContain("rotate-90");
     expect(html).toContain(
       "transition-[grid-template-rows,opacity,margin-top] motion-reduce:transition-none",
@@ -101,5 +102,27 @@ describe("ToolLayout error state", () => {
     );
     expect(html).not.toContain("bg-card/60 p-3");
     expect(html).not.toContain("border-t border-border pt-3");
+  });
+
+  test("keeps collapsed details mounted so opening can animate", () => {
+    const html = renderToStaticMarkup(
+      <ToolLayout
+        name="Grep"
+        summary='"Preview"'
+        state={baseState}
+        expandedContent={<div>Pattern details</div>}
+      />,
+    );
+
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain(
+      "grid-rows-[0fr] opacity-0 pointer-events-none duration-150 ease-out",
+    );
+    expect(html).toContain(
+      "transition-[grid-template-rows,opacity,margin-top] motion-reduce:transition-none",
+    );
+    expect(html).not.toContain("Pattern details");
+    expect(html).not.toContain("rotate-90");
   });
 });

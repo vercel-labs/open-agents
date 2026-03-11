@@ -106,47 +106,49 @@ export function ToolLayout({
   const hasTrailingMeta =
     hasMeta || interruptedBadge !== null || errorPreview !== undefined;
   const isExpandedPanelVisible = isExpanded && hasExpandedDetails;
-  const [shouldRenderExpanded, setShouldRenderExpanded] = useState(
-    defaultExpanded && hasExpandedDetails,
-  );
+  const [shouldRenderExpandedContent, setShouldRenderExpandedContent] =
+    useState(defaultExpanded && hasExpandedDetails);
 
   useEffect(() => {
     if (!hasExpandedDetails) {
-      setShouldRenderExpanded(false);
+      setShouldRenderExpandedContent(false);
       return;
     }
 
     if (isExpandedPanelVisible) {
-      setShouldRenderExpanded(true);
+      setShouldRenderExpandedContent(true);
       return;
     }
 
-    if (!shouldRenderExpanded) {
+    if (!shouldRenderExpandedContent) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setShouldRenderExpanded(false);
+      setShouldRenderExpandedContent(false);
     }, EXPANDED_CONTENT_TRANSITION_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [hasExpandedDetails, isExpandedPanelVisible, shouldRenderExpanded]);
+  }, [hasExpandedDetails, isExpandedPanelVisible, shouldRenderExpandedContent]);
 
   const handleToggle = () => {
-    if (hasExpandedDetails) {
-      setIsExpanded((prev) => !prev);
+    if (!hasExpandedDetails) {
+      return;
     }
+
+    const nextExpanded = !isExpanded;
+
+    if (nextExpanded) {
+      setShouldRenderExpandedContent(true);
+    }
+
+    setIsExpanded(nextExpanded);
   };
 
   const headerIndicator = indicator ?? <StatusIndicator state={state} />;
 
   return (
-    <div
-      className={cn(
-        "my-1.5 rounded-md border border-transparent py-0.5 transition-colors duration-200 ease-out motion-reduce:transition-none",
-        isExpandedPanelVisible ? "bg-muted/35" : "bg-transparent",
-      )}
-    >
+    <div className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5">
       <div
         className={cn(
           "flex min-w-0 select-none items-baseline gap-2 rounded-md py-0.5 pr-1 text-sm",
@@ -254,7 +256,7 @@ export function ToolLayout({
         </div>
       )}
 
-      {shouldRenderExpanded && (
+      {hasExpandedDetails && (
         <div
           aria-hidden={!isExpandedPanelVisible}
           inert={!isExpandedPanelVisible}
@@ -266,19 +268,21 @@ export function ToolLayout({
           )}
         >
           <div className="min-h-0">
-            <div className="space-y-2 pb-1">
-              {errorMessage && (
-                <div className="space-y-1">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
-                    Error
+            {shouldRenderExpandedContent && (
+              <div className="space-y-2 pb-1">
+                {errorMessage && (
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
+                      Error
+                    </div>
+                    <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
+                      {errorMessage}
+                    </p>
                   </div>
-                  <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
-                    {errorMessage}
-                  </p>
-                </div>
-              )}
-              {expandedContent}
-            </div>
+                )}
+                {expandedContent}
+              </div>
+            )}
           </div>
         </div>
       )}
