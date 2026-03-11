@@ -71,6 +71,19 @@ describe("/api/settings/preferences", () => {
     expect(body.preferences.defaultSandboxType).toBe("vercel");
   });
 
+  test("PATCH rejects invalid sandbox types", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { defaultSandboxType: "invalid" }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid sandbox type");
+    expect(updateCalls).toHaveLength(0);
+  });
+
   test("PATCH rejects invalid autoCommitPush values", async () => {
     const { PATCH } = await routeModulePromise;
 

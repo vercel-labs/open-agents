@@ -94,7 +94,7 @@ export async function GET(req: Request): Promise<Response> {
     } satisfies ReconnectResponse);
   }
 
-  // Connect and probe runtime sandbox state (vercel or just-bash)
+  // Connect and probe the persisted runtime sandbox state.
   try {
     const sandbox = await connectSandbox(state as SandboxState);
     const probe = await sandbox.exec("pwd", sandbox.workingDirectory, 15_000);

@@ -16,7 +16,7 @@ interface CreateSessionRequest {
   branch?: string;
   cloneUrl?: string;
   isNewBranch?: boolean;
-  sandboxType?: "vercel" | "just-bash";
+  sandboxType?: "vercel";
 }
 
 function generateBranchName(username: string, name?: string | null): string {
@@ -153,6 +153,10 @@ export async function POST(req: Request) {
     body = (await req.json()) as CreateSessionRequest;
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (body.sandboxType && body.sandboxType !== "vercel") {
+    return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
   const {

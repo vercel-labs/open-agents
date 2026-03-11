@@ -1,13 +1,8 @@
-import {
-  connectSandbox,
-  type FileEntry,
-  type SandboxState,
-} from "@open-harness/sandbox";
+import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { downloadAndExtractTarball } from "@/lib/github/tarball";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
@@ -22,28 +17,13 @@ import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
-const WORKING_DIR = "/vercel/sandbox";
-
-/**
- * Convert simple file strings to FileEntry format.
- */
-function toFileEntries(
-  files: Record<string, string>,
-): Record<string, FileEntry> {
-  const entries: Record<string, FileEntry> = {};
-  for (const [path, content] of Object.entries(files)) {
-    entries[path] = { type: "file", content };
-  }
-  return entries;
-}
-
 interface CreateSandboxRequest {
   repoUrl?: string;
   branch?: string;
   isNewBranch?: boolean;
   sessionId?: string;
   sandboxId?: string;
-  sandboxType?: "vercel" | "just-bash";
+  sandboxType?: "vercel";
 }
 
 export async function POST(req: Request) {
@@ -54,13 +34,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (body.sandboxType && body.sandboxType !== "vercel") {
+    return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
+  }
+
   const {
     repoUrl,
     branch = "main",
     isNewBranch = false,
     sessionId,
     sandboxId: providedSandboxId,
-    sandboxType = "vercel",
   } = body;
 
   // Get session for auth
@@ -158,32 +141,9 @@ export async function POST(req: Request) {
   }
 
   // ============================================
-  // NEW SANDBOX: Create based on sandboxType
+  // NEW SANDBOX: Create a Vercel sandbox
   // ============================================
   const startTime = Date.now();
-
-  // Download and extract tarball only for just-bash mode
-  let files: Record<string, FileEntry> = {};
-  if (repoUrl && sandboxType === "just-bash") {
-    let tarballResult;
-    try {
-      tarballResult = await downloadAndExtractTarball(
-        repoUrl,
-        branch,
-        githubToken ?? undefined,
-        WORKING_DIR,
-      );
-    } catch {
-      // Retry without token for public repos
-      tarballResult = await downloadAndExtractTarball(
-        repoUrl,
-        branch,
-        undefined,
-        WORKING_DIR,
-      );
-    }
-    files = toFileEntries(tarballResult.files);
-  }
 
   const source = repoUrl
     ? {
@@ -194,35 +154,19 @@ export async function POST(req: Request) {
       }
     : undefined;
 
-  let sandbox;
-
-  if (sandboxType === "just-bash") {
-    // Local-only sandbox
-    sandbox = await connectSandbox({
-      state: {
-        type: "just-bash",
-        files,
-        workingDirectory: WORKING_DIR,
-        source,
-      },
-      options: { env },
-    });
-  } else {
-    // Cloud-first sandbox
-    sandbox = await connectSandbox({
-      state: {
-        type: "vercel",
-        source,
-      },
-      options: {
-        env,
-        gitUser,
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-        ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-      },
-    });
-  }
+  const sandbox = await connectSandbox({
+    state: {
+      type: "vercel",
+      source,
+    },
+    options: {
+      env,
+      gitUser,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      ports: DEFAULT_SANDBOX_PORTS,
+      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+    },
+  });
 
   if (sessionId && sandbox.getState) {
     const nextState = sandbox.getState() as SandboxState;
@@ -244,9 +188,9 @@ export async function POST(req: Request) {
 
   return Response.json({
     createdAt: Date.now(),
-    timeout: sandboxType === "just-bash" ? null : DEFAULT_SANDBOX_TIMEOUT_MS,
+    timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
     currentBranch: repoUrl ? branch : undefined,
-    mode: sandboxType,
+    mode: "vercel",
     timing: { readyMs },
   });
 }

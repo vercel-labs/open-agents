@@ -36,8 +36,9 @@ import {
 import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
 import type { Chat, Session } from "@/lib/db/schema";
 import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
+import { hasRuntimeSandboxState as hasRuntimeSandboxStateValue } from "@/lib/sandbox/utils";
 
-const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel"] as const;
+const KNOWN_SANDBOX_TYPES = ["vercel"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
 const CHAT_UI_UPDATE_THROTTLE_MS = 75;
 
@@ -46,28 +47,6 @@ function asKnownSandboxType(value: unknown): KnownSandboxType | null {
   return KNOWN_SANDBOX_TYPES.includes(value as KnownSandboxType)
     ? (value as KnownSandboxType)
     : null;
-}
-
-function hasRuntimeSandboxData(state: unknown): boolean {
-  if (!state || typeof state !== "object") return false;
-
-  const sandboxState = state as {
-    type?: unknown;
-    sandboxId?: unknown;
-    files?: unknown;
-  };
-
-  const sandboxType = asKnownSandboxType(sandboxState.type);
-  if (!sandboxType) return false;
-
-  if (sandboxType === "vercel") {
-    return (
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0
-    );
-  }
-
-  return sandboxState.files !== undefined && sandboxState.files !== null;
 }
 
 export type SandboxInfo = {
@@ -877,9 +856,13 @@ export function SessionChatProvider({
 
   const preferredSandboxType =
     asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "vercel";
-  const supportsDiff = preferredSandboxType !== "just-bash";
-  const supportsRepoCreation = preferredSandboxType !== "just-bash";
-  const hasRuntimeSandboxState = hasRuntimeSandboxData(
+  const supportsDiff =
+    sessionRecord.sandboxState?.type === undefined ||
+    sessionRecord.sandboxState.type === "vercel";
+  const supportsRepoCreation =
+    sessionRecord.sandboxState?.type === undefined ||
+    sessionRecord.sandboxState.type === "vercel";
+  const hasRuntimeSandboxState = hasRuntimeSandboxStateValue(
     sessionRecord.sandboxState,
   );
   const hasSnapshot = hasSnapshotState || !!sessionRecord.snapshotUrl;

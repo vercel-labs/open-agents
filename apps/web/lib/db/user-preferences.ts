@@ -25,7 +25,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   modelVariants: [],
 };
 
-const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel", "just-bash"];
+const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel"];
 const VALID_DIFF_MODES: DiffMode[] = ["unified", "split"];
 
 function normalizeSandboxType(value: unknown): SandboxType {

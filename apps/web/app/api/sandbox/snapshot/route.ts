@@ -163,14 +163,13 @@ export async function PUT(req: Request) {
       { status: 400 },
     );
   }
-  // Save the type before narrowing checks (TypeScript loses track after multiple guards)
-  const sandboxType = sessionRecord.sandboxState.type;
-  if (sandboxType === "just-bash") {
+  if (sessionRecord.sandboxState.type !== "vercel") {
     return Response.json(
-      { error: "Snapshot restoration not supported for just-bash sandboxes" },
+      { error: "Snapshot restoration is only supported for Vercel sandboxes" },
       { status: 400 },
     );
   }
+  const sandboxType = sessionRecord.sandboxState.type;
   // Warn if sandbox appears to still be running (has sandboxId)
   // This shouldn't happen in normal flow since snapshot stops the sandbox
   if (canOperateOnSandbox(sessionRecord.sandboxState)) {

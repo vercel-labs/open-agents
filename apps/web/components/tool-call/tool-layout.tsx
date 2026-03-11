@@ -51,6 +51,20 @@ function hasRenderableContent(value: ReactNode) {
   );
 }
 
+const MAX_ERROR_PREVIEW_LENGTH = 72;
+
+function trimErrorPrefix(message: string) {
+  return message.replace(/^Error:\s*/i, "").trim();
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 export function ToolLayout({
   name,
   summary,
@@ -70,7 +84,14 @@ export function ToolLayout({
   const showApprovalButtons = Boolean(
     state.approvalRequested && !state.isActiveApproval && state.approvalId,
   );
-  const hasExpandedDetails = hasRenderableContent(expandedContent);
+  const errorMessage =
+    state.error && !state.denied ? trimErrorPrefix(state.error) : undefined;
+  const errorPreview = errorMessage
+    ? truncateText(errorMessage, MAX_ERROR_PREVIEW_LENGTH)
+    : undefined;
+  const hasErrorDetails = Boolean(errorMessage);
+  const hasExpandedDetails =
+    hasRenderableContent(expandedContent) || hasErrorDetails;
   const hasOutput = hasRenderableContent(output);
   const hasChildren = hasRenderableContent(children);
   const hasMeta = hasRenderableContent(meta);
@@ -82,7 +103,8 @@ export function ToolLayout({
       Interrupted
     </span>
   ) : null;
-  const hasTrailingMeta = hasMeta || interruptedBadge !== null;
+  const hasTrailingMeta =
+    hasMeta || interruptedBadge !== null || errorPreview !== undefined;
 
   const isCompact =
     !isExpanded &&
@@ -90,7 +112,6 @@ export function ToolLayout({
     !showApprovalButtons &&
     !hasOutput &&
     !state.denied &&
-    !state.error &&
     !hasChildren;
 
   const handleToggle = () => {
@@ -143,7 +164,7 @@ export function ToolLayout({
         <span
           className={cn(
             "shrink-0 font-medium leading-none",
-            state.denied ? "text-red-500" : "text-foreground",
+            state.denied || errorMessage ? "text-red-500" : "text-foreground",
             nameClassName,
           )}
         >
@@ -163,9 +184,19 @@ export function ToolLayout({
           )}
 
           {hasTrailingMeta && (
-            <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground">
+            <span
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground",
+                errorPreview ? "shrink overflow-hidden" : "shrink-0",
+              )}
+            >
               {meta}
               {interruptedBadge}
+              {errorPreview && (
+                <span className="max-w-56 truncate text-[12px] text-red-600/80 dark:text-red-400/90 sm:max-w-72">
+                  {errorPreview}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -218,14 +249,18 @@ export function ToolLayout({
         </div>
       )}
 
-      {state.error && !state.denied && (
-        <div className="mt-2 pl-5 text-sm text-red-500">
-          Error: {state.error.slice(0, 80)}
-        </div>
-      )}
-
       {isExpanded && hasExpandedDetails && (
-        <div className="mt-3 border-t border-border pt-3">
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          {errorMessage && (
+            <div className="space-y-1">
+              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
+                Error
+              </div>
+              <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
+                {errorMessage}
+              </p>
+            </div>
+          )}
           {expandedContent}
         </div>
       )}

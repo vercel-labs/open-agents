@@ -30,6 +30,7 @@ import {
 } from "@/lib/db/sessions";
 import { recordUsage } from "@/lib/db/usage";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { runAutoCommitInBackground } from "@/lib/chat-auto-commit";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -165,6 +166,34 @@ function refreshCachedDiffInBackground(req: Request, sessionId: string): void {
           error,
         );
       }),
+  );
+}
+
+function scheduleAutoCommitInBackground(
+  req: Request,
+  params: {
+    sessionId: string;
+    sessionTitle: string;
+    repoOwner: string;
+    repoName: string;
+  },
+): void {
+  const cookieHeader = req.headers.get("cookie");
+  if (!cookieHeader) {
+    return;
+  }
+
+  after(
+    runAutoCommitInBackground({
+      requestUrl: req.url,
+      cookieHeader,
+      ...params,
+    }).catch((error) => {
+      console.error(
+        `[chat] Auto commit background task failed for session ${params.sessionId}:`,
+        error,
+      );
+    }),
   );
 }
 
@@ -689,6 +718,20 @@ export async function POST(req: Request) {
 
         // Keep offline diff cache warm even when the chat page is not open.
         refreshCachedDiffInBackground(req, sessionId);
+
+        if (
+          preferences?.autoCommitPush &&
+          sessionRecord.cloneUrl &&
+          sessionRecord.repoOwner &&
+          sessionRecord.repoName
+        ) {
+          scheduleAutoCommitInBackground(req, {
+            sessionId,
+            sessionTitle: sessionRecord.title,
+            repoOwner: sessionRecord.repoOwner,
+            repoName: sessionRecord.repoName,
+          });
+        }
 
         const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
         if (subagentUsageEvents.length === 0) {
