@@ -1,9 +1,9 @@
 "use client";
 
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import type React from "react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ApprovalButtons } from "./approval-buttons";
 
@@ -52,6 +52,7 @@ function hasRenderableContent(value: ReactNode) {
 }
 
 const MAX_ERROR_PREVIEW_LENGTH = 72;
+const EXPANDED_CONTENT_TRANSITION_MS = 200;
 
 function trimErrorPrefix(message: string) {
   return message.replace(/^Error:\s*/i, "").trim();
@@ -104,6 +105,32 @@ export function ToolLayout({
   ) : null;
   const hasTrailingMeta =
     hasMeta || interruptedBadge !== null || errorPreview !== undefined;
+  const isExpandedPanelVisible = isExpanded && hasExpandedDetails;
+  const [shouldRenderExpanded, setShouldRenderExpanded] = useState(
+    defaultExpanded && hasExpandedDetails,
+  );
+
+  useEffect(() => {
+    if (!hasExpandedDetails) {
+      setShouldRenderExpanded(false);
+      return;
+    }
+
+    if (isExpandedPanelVisible) {
+      setShouldRenderExpanded(true);
+      return;
+    }
+
+    if (!shouldRenderExpanded) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldRenderExpanded(false);
+    }, EXPANDED_CONTENT_TRANSITION_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [hasExpandedDetails, isExpandedPanelVisible, shouldRenderExpanded]);
 
   const handleToggle = () => {
     if (hasExpandedDetails) {
@@ -114,7 +141,12 @@ export function ToolLayout({
   const headerIndicator = indicator ?? <StatusIndicator state={state} />;
 
   return (
-    <div className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5">
+    <div
+      className={cn(
+        "my-1.5 rounded-md border border-transparent py-0.5 transition-colors duration-200 ease-out motion-reduce:transition-none",
+        isExpandedPanelVisible ? "bg-muted/35" : "bg-transparent",
+      )}
+    >
       <div
         className={cn(
           "flex min-w-0 select-none items-baseline gap-2 rounded-md py-0.5 pr-1 text-sm",
@@ -179,11 +211,12 @@ export function ToolLayout({
 
         {hasExpandedDetails && (
           <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center self-center text-muted-foreground/70">
-            {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
-            )}
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                isExpandedPanelVisible && "rotate-90",
+              )}
+            />
           </span>
         )}
       </div>
@@ -221,19 +254,32 @@ export function ToolLayout({
         </div>
       )}
 
-      {isExpanded && hasExpandedDetails && (
-        <div className="mt-1.5 space-y-2">
-          {errorMessage && (
-            <div className="space-y-1">
-              <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
-                Error
-              </div>
-              <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
-                {errorMessage}
-              </p>
-            </div>
+      {shouldRenderExpanded && (
+        <div
+          aria-hidden={!isExpandedPanelVisible}
+          inert={!isExpandedPanelVisible}
+          className={cn(
+            "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] motion-reduce:transition-none",
+            isExpandedPanelVisible
+              ? "mt-1.5 grid-rows-[1fr] opacity-100 duration-200 ease-out"
+              : "grid-rows-[0fr] opacity-0 pointer-events-none duration-150 ease-out",
           )}
-          {expandedContent}
+        >
+          <div className="min-h-0">
+            <div className="space-y-2 pb-1">
+              {errorMessage && (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
+                    Error
+                  </div>
+                  <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
+                    {errorMessage}
+                  </p>
+                </div>
+              )}
+              {expandedContent}
+            </div>
+          </div>
         </div>
       )}
     </div>
