@@ -37,7 +37,7 @@ export async function PATCH(req: Request) {
 
   // Validate sandbox type if provided
   if (body.defaultSandboxType) {
-    const validTypes = ["vercel", "just-bash"];
+    const validTypes = ["vercel"];
     if (!validTypes.includes(body.defaultSandboxType)) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
     }

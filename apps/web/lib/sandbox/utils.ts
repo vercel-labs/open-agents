@@ -1,13 +1,21 @@
 import type { SandboxState } from "@open-harness/sandbox";
 import { SANDBOX_EXPIRES_BUFFER_MS } from "./config";
 
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function hasLocalRuntimeState(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
+
 /**
  * Type guard to check if a sandbox is active and ready to accept operations.
  *
  * "Active" means ALL of:
  * - state is a valid SandboxState (not null/undefined)
  * - sandbox has not expired (with 10s buffer for clock skew)
- * - sandbox has runtime state (sandboxId for cloud, files for local)
+ * - sandbox has runtime state (sandboxId for cloud, runtime files for local)
  *
  * Use this for operations that require an active sandbox (chat, file ops, etc.)
  * For operations on potentially expired sandboxes (snapshot, stop), use canOperateOnSandbox.
@@ -36,20 +44,12 @@ export function canOperateOnSandbox(
   state: SandboxState | null | undefined,
 ): state is SandboxState {
   if (!state) return false;
-
-  switch (state.type) {
-    case "vercel":
-      return !!state.sandboxId;
-    case "just-bash":
-      return !!state.files;
-    default:
-      return false;
-  }
+  return hasRuntimeState(state);
 }
 
 /**
  * Check if an unknown value (e.g. from DB jsonb) represents sandbox state
- * with runtime data (sandboxId for cloud, files for local).
+ * with runtime data (sandboxId for cloud, runtime files for local).
  *
  * Unlike the typed `hasRuntimeState`, this accepts `unknown` so callers
  * don't need to narrow to `SandboxState` first.
@@ -58,23 +58,14 @@ export function hasRuntimeSandboxState(state: unknown): boolean {
   if (!state || typeof state !== "object") return false;
 
   const sandboxState = state as {
-    type?: unknown;
     sandboxId?: unknown;
     files?: unknown;
   };
 
-  if (sandboxState.type === "vercel") {
-    return (
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0
-    );
-  }
-
-  if (sandboxState.type === "just-bash") {
-    return sandboxState.files !== undefined && sandboxState.files !== null;
-  }
-
-  return false;
+  return (
+    hasNonEmptyString(sandboxState.sandboxId) ||
+    hasLocalRuntimeState(sandboxState.files)
+  );
 }
 
 /**
@@ -99,14 +90,10 @@ export function isSandboxUnavailableError(message: string): boolean {
  * Used internally to determine if sandbox is currently running.
  */
 function hasRuntimeState(state: SandboxState): boolean {
-  switch (state.type) {
-    case "vercel":
-      return !!state.sandboxId;
-    case "just-bash":
-      return !!state.files;
-    default:
-      return false;
-  }
+  return (
+    ("sandboxId" in state && hasNonEmptyString(state.sandboxId)) ||
+    ("files" in state && hasLocalRuntimeState(state.files))
+  );
 }
 
 /**
@@ -118,12 +105,5 @@ export function clearSandboxState(
 ): SandboxState | null {
   if (!state) return null;
 
-  switch (state.type) {
-    case "vercel":
-      return { type: "vercel" };
-    case "just-bash":
-      return { type: "just-bash" };
-    default:
-      return null;
-  }
+  return { type: state.type } as SandboxState;
 }

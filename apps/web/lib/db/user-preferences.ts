@@ -21,7 +21,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   modelVariants: [],
 };
 
-const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel", "just-bash"];
+const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel"];
 
 function normalizeSandboxType(value: unknown): SandboxType {
   if (value === "hybrid") {

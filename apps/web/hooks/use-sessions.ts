@@ -32,7 +32,7 @@ interface CreateSessionInput {
   branch?: string;
   cloneUrl?: string;
   isNewBranch: boolean;
-  sandboxType: "vercel" | "just-bash";
+  sandboxType: "vercel";
 }
 
 interface SessionsResponse {

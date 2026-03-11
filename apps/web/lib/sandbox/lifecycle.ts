@@ -176,8 +176,8 @@ export async function evaluateSandboxLifecycle(
   if (!canOperateOnSandbox(sandboxState)) {
     return { action: "skipped", reason: "sandbox-not-operable" };
   }
-  if (sandboxState.type === "just-bash") {
-    return { action: "skipped", reason: "just-bash" };
+  if (sandboxState.type !== "vercel") {
+    return { action: "skipped", reason: "unsupported-sandbox-type" };
   }
 
   const nowMs = Date.now();

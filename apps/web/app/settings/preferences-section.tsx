@@ -33,7 +33,6 @@ import {
 
 const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
   { id: "vercel", name: "Vercel" },
-  { id: "just-bash", name: "Just Bash" },
 ];
 
 const THEME_OPTIONS: Array<{ id: ThemePreference; name: string }> = [

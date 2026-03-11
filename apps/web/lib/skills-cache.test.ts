@@ -31,7 +31,7 @@ describe("skills cache", () => {
 
     expect(
       getSkillsCacheKey("session-1", {
-        type: "just-bash",
+        type: "vercel",
       }),
     ).toBe("skills:v1:session-1:local");
   });
@@ -43,7 +43,7 @@ describe("skills cache", () => {
       now: () => nowMs,
       getRedisClient: () => null,
     });
-    const sandboxState = { type: "just-bash" as const };
+    const sandboxState = { type: "vercel" as const };
 
     await cache.set("session-1", sandboxState, []);
 

@@ -3,22 +3,12 @@ import type { SkillMetadata } from "@open-harness/agent";
 
 mock.module("server-only", () => ({}));
 
-type TestSandboxState =
-  | {
-      type: "vercel";
-      sandboxId?: string;
-      snapshotId?: string;
-    }
-  | {
-      type: "hybrid";
-      sandboxId?: string;
-      snapshotId?: string;
-      files?: Record<string, unknown>;
-    }
-  | {
-      type: "just-bash";
-      files?: Record<string, unknown>;
-    };
+interface TestSandboxState {
+  type: string;
+  sandboxId?: string;
+  snapshotId?: string;
+  files?: Record<string, unknown>;
+}
 
 interface TestSessionRecord {
   id: string;
@@ -96,21 +86,10 @@ mock.module("@/lib/sandbox/utils", () => ({
       return false;
     }
 
-    switch (state.type) {
-      case "vercel":
-        return (
-          typeof state.sandboxId === "string" && state.sandboxId.length > 0
-        );
-      case "hybrid":
-        return (
-          (typeof state.sandboxId === "string" && state.sandboxId.length > 0) ||
-          state.files !== undefined
-        );
-      case "just-bash":
-        return state.files !== undefined;
-      default:
-        return false;
-    }
+    return (
+      (typeof state.sandboxId === "string" && state.sandboxId.length > 0) ||
+      state.files !== undefined
+    );
   },
   isSandboxUnavailableError: () => false,
 }));
