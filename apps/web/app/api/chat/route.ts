@@ -30,6 +30,7 @@ import {
 } from "@/lib/db/sessions";
 import { recordUsage } from "@/lib/db/usage";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { runAutoCommitInBackground } from "@/lib/chat-auto-commit";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -183,99 +184,11 @@ function scheduleAutoCommitInBackground(
   }
 
   after(
-    (async () => {
-      const branchUrl = new URL("/api/github/branches", req.url);
-      branchUrl.searchParams.set("owner", params.repoOwner);
-      branchUrl.searchParams.set("repo", params.repoName);
-
-      let baseBranch = "main";
-      try {
-        const branchResponse = await fetch(branchUrl, {
-          method: "GET",
-          headers: {
-            cookie: cookieHeader,
-          },
-          cache: "no-store",
-        });
-
-        if (branchResponse.ok) {
-          const branchData: unknown = await branchResponse
-            .json()
-            .catch(() => null);
-          if (
-            branchData &&
-            typeof branchData === "object" &&
-            "defaultBranch" in branchData &&
-            typeof branchData.defaultBranch === "string" &&
-            branchData.defaultBranch.trim().length > 0
-          ) {
-            baseBranch = branchData.defaultBranch;
-          }
-        } else {
-          console.warn(
-            `[chat] Failed to resolve default branch for auto commit in session ${params.sessionId}: ${branchResponse.status}`,
-          );
-        }
-      } catch (error) {
-        console.error(
-          `[chat] Failed to resolve default branch for auto commit in session ${params.sessionId}:`,
-          error,
-        );
-      }
-
-      const autoCommitResponse = await fetch(
-        new URL("/api/generate-pr", req.url),
-        {
-          method: "POST",
-          headers: {
-            cookie: cookieHeader,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sessionId: params.sessionId,
-            sessionTitle: params.sessionTitle,
-            baseBranch,
-            branchName: "HEAD",
-            commitOnly: true,
-          }),
-          cache: "no-store",
-        },
-      );
-
-      if (!autoCommitResponse.ok) {
-        const responseData: unknown = await autoCommitResponse
-          .json()
-          .catch(() => null);
-        const errorMessage =
-          responseData &&
-          typeof responseData === "object" &&
-          "error" in responseData &&
-          typeof responseData.error === "string"
-            ? responseData.error
-            : autoCommitResponse.statusText;
-        console.error(
-          `[chat] Auto commit failed for session ${params.sessionId}: ${errorMessage}`,
-        );
-        return;
-      }
-
-      const diffUrl = new URL(
-        `/api/sessions/${params.sessionId}/diff`,
-        req.url,
-      );
-      const diffResponse = await fetch(diffUrl, {
-        method: "GET",
-        headers: {
-          cookie: cookieHeader,
-        },
-        cache: "no-store",
-      });
-      if (!diffResponse.ok) {
-        console.warn(
-          `[chat] Failed to refresh cached diff after auto commit for session ${params.sessionId}: ${diffResponse.status}`,
-        );
-      }
-    })().catch((error) => {
+    runAutoCommitInBackground({
+      requestUrl: req.url,
+      cookieHeader,
+      ...params,
+    }).catch((error) => {
       console.error(
         `[chat] Auto commit background task failed for session ${params.sessionId}:`,
         error,
