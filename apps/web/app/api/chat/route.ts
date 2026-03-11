@@ -501,7 +501,9 @@ export async function POST(req: Request) {
   // We intentionally do not bind `req.signal` so a transient client disconnect
   // does not cancel work; clients can reconnect via resumable streams.
   const controller = new AbortController();
+  let shouldAutoCommitOnFinish = true;
   const unsubscribeStop = await onStopSignal(chatId, () => {
+    shouldAutoCommitOnFinish = false;
     controller.abort();
   });
 
@@ -510,6 +512,7 @@ export async function POST(req: Request) {
   const PRE_TIMEOUT_MS = 730_000;
   const timeoutHandle = setTimeout(() => {
     console.warn("[chat] Aborting before maxDuration timeout");
+    shouldAutoCommitOnFinish = false;
     controller.abort();
   }, PRE_TIMEOUT_MS);
 
@@ -720,6 +723,7 @@ export async function POST(req: Request) {
         refreshCachedDiffInBackground(req, sessionId);
 
         if (
+          shouldAutoCommitOnFinish &&
           preferences?.autoCommitPush &&
           sessionRecord.cloneUrl &&
           sessionRecord.repoOwner &&
