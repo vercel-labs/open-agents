@@ -21,6 +21,7 @@ import { TaskRenderer } from "./renderers/task-renderer";
 import { TodoRenderer } from "./renderers/todo-renderer";
 import { AskUserQuestionRenderer } from "./renderers/ask-user-question-renderer";
 import { FetchRenderer } from "./renderers/fetch-renderer";
+import { SkillRenderer } from "./renderers/skill-renderer";
 
 export type ToolCallProps = {
   part: WebAgentUIToolPart;
@@ -74,6 +75,8 @@ export function ToolCall({
       return <AskUserQuestionRenderer part={part} state={state} />;
     case "tool-web_fetch":
       return <FetchRenderer part={part} state={state} {...approvalProps} />;
+    case "tool-skill":
+      return <SkillRenderer part={part} state={state} {...approvalProps} />;
     default:
       return (
         <DefaultRenderer
