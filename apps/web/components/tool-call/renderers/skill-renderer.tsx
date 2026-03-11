@@ -1,6 +1,8 @@
 "use client";
 
+import { toRelativePath } from "@open-harness/shared";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ToolLayout } from "../tool-layout";
 
 function getDisplayString(value: unknown): string | undefined {
@@ -21,10 +23,12 @@ export function SkillRenderer({
   const input = part.input;
   const skillName = getDisplayString(input?.skill);
   const rawArgs = getDisplayString(input?.args);
-  const argsPreview = rawArgs?.replace(/[\r\n]+/g, " ");
 
   const output = part.state === "output-available" ? part.output : undefined;
   const skillPath = getDisplayString(output?.skillPath);
+  const displaySkillPath = skillPath
+    ? toRelativePath(skillPath, DEFAULT_WORKING_DIRECTORY)
+    : undefined;
   const outputError =
     output?.success === false ? (output?.error ?? "Skill failed") : undefined;
 
@@ -32,14 +36,8 @@ export function SkillRenderer({
     ? { ...state, error: state.error ?? outputError }
     : state;
 
-  const meta = argsPreview ? (
-    <span className="inline-flex max-w-[280px] items-center overflow-hidden rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-      <span className="min-w-0 truncate">{argsPreview}</span>
-    </span>
-  ) : undefined;
-
   const expandedContent =
-    rawArgs || skillPath ? (
+    rawArgs || displaySkillPath ? (
       <div className="space-y-3 text-sm">
         {skillName && (
           <div>
@@ -63,13 +61,13 @@ export function SkillRenderer({
           </div>
         )}
 
-        {skillPath && (
+        {displaySkillPath && (
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Skill directory
+              Location
             </div>
             <code className="break-all text-sm text-foreground">
-              {skillPath}
+              {displaySkillPath}
             </code>
           </div>
         )}
@@ -81,7 +79,6 @@ export function SkillRenderer({
       name="Skill"
       summary={skillName ? `/${skillName}` : "..."}
       summaryClassName="font-mono text-foreground"
-      meta={meta}
       state={mergedState}
       nameClassName={mergedState.error ? "text-red-500" : undefined}
       expandedContent={expandedContent}
