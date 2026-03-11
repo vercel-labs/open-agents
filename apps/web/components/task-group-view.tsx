@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
-import { isToolUIPart, getToolName } from "ai";
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { cn } from "@/lib/utils";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
@@ -34,53 +33,35 @@ function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
   return "pending";
 }
 
-function countTaskTools(part: TaskToolUIPart): number {
-  if (part.state !== "output-available") return 0;
-  const message = part.output;
-  if (!message?.parts) return 0;
-  return message.parts.filter(isToolUIPart).length;
+function countToolCalls(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.filter(
+    (m) =>
+      typeof m === "object" &&
+      m !== null &&
+      (m as { role?: string }).role === "tool",
+  ).length;
 }
 
-function getTaskTokens(part: TaskToolUIPart): number | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  // Use totalMessageUsage when complete, lastStepUsage when still running
-  const isComplete = !part.preliminary;
-  if (isComplete) {
-    return message?.metadata?.totalMessageUsage?.inputTokens ?? null;
+function getToolSummary(toolCall: TaskPendingToolCall): string {
+  const input = toolCall.input as Record<string, unknown> | undefined;
+  switch (toolCall.name) {
+    case "read":
+    case "write":
+    case "edit": {
+      const fp = input?.filePath ?? "";
+      return fp ? toRelativePath(String(fp), DEFAULT_WORKING_DIRECTORY) : "";
+    }
+    case "grep":
+    case "glob":
+      return input?.pattern ? `"${input.pattern}"` : "";
+    case "bash": {
+      const cmd = input?.command ? String(input.command) : "";
+      return cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
+    }
+    default:
+      return "";
   }
-  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
-}
-
-function getLastToolInfo(
-  part: TaskToolUIPart,
-): { name: string; summary: string } | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  if (!message?.parts) return null;
-
-  const toolParts = message.parts.filter(isToolUIPart);
-  if (toolParts.length === 0) return null;
-
-  const lastTool = toolParts[toolParts.length - 1];
-  // Double-check needed for TypeScript narrowing with union types
-  if (!lastTool || !isToolUIPart(lastTool)) return null;
-
-  const toolName = getToolName(lastTool);
-  const input = lastTool.input as Record<string, unknown> | undefined;
-
-  let summary = "";
-  if (input?.filePath) {
-    summary = toRelativePath(String(input.filePath), DEFAULT_WORKING_DIRECTORY);
-  } else if (input?.pattern) {
-    summary = `"${input.pattern}"`;
-  } else if (input?.command) {
-    const cmd = String(input.command);
-    summary = cmd.length > 40 ? cmd.slice(0, 40) + "..." : cmd;
-  }
-
-  const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-  return { name: displayName, summary };
 }
 
 function formatTime(seconds: number): string {
@@ -92,31 +73,33 @@ function formatTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function useTaskTiming(isRunning: boolean) {
-  const startTimeRef = useRef<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+function useTaskTiming(isRunning: boolean, startedAtMs?: number) {
+  const fallbackStartRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (isRunning && !startTimeRef.current) {
-      startTimeRef.current = Date.now();
-    }
-
     if (!isRunning) {
       return;
     }
 
+    if (startedAtMs == null && !fallbackStartRef.current) {
+      fallbackStartRef.current = Date.now();
+    }
+
+    setNow(Date.now());
     const interval = setInterval(() => {
-      if (startTimeRef.current) {
-        setElapsedSeconds(
-          Math.floor((Date.now() - startTimeRef.current) / 1000),
-        );
-      }
+      setNow(Date.now());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, startedAtMs]);
 
-  return elapsedSeconds;
+  const effectiveStart = startedAtMs ?? fallbackStartRef.current;
+  if (!isRunning || effectiveStart == null) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((now - effectiveStart) / 1000));
 }
 
 function TaskStatusIndicator({ status }: { status: TaskStatus }) {
@@ -161,10 +144,18 @@ function TaskItem({
 }) {
   const status = getTaskStatus(part, isStreaming);
   const isRunning = status === "running" || status === "pending";
-  const elapsedSeconds = useTaskTiming(isRunning);
-  const toolCount = countTaskTools(part);
-  const tokenCount = getTaskTokens(part);
-  const lastTool = getLastToolInfo(part);
+
+  const hasOutput = part.state === "output-available";
+  const isComplete = hasOutput && !part.preliminary;
+  const output = hasOutput ? part.output : undefined;
+  const startedAt =
+    typeof output?.startedAt === "number" ? output.startedAt : undefined;
+  const elapsedSeconds = useTaskTiming(isRunning, startedAt);
+
+  const pendingToolCall: TaskPendingToolCall | null = output?.pending ?? null;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
+  const tokenCount = output?.usage?.inputTokens ?? null;
 
   const desc = part.input?.task ?? "Task";
   const subagentType = part.input?.subagentType;
@@ -193,13 +184,15 @@ function TaskItem({
     nestedStatus = "Awaiting approval...";
   } else if (
     status === "pending" ||
-    (status === "running" && toolCount === 0)
+    (status === "running" && !pendingToolCall)
   ) {
     nestedStatus = "Initializing...";
-  } else if (lastTool) {
-    nestedStatus = lastTool.summary
-      ? `${lastTool.name}(${lastTool.summary})`
-      : lastTool.name;
+  } else if (pendingToolCall) {
+    const displayName =
+      pendingToolCall.name.charAt(0).toUpperCase() +
+      pendingToolCall.name.slice(1);
+    const summary = getToolSummary(pendingToolCall);
+    nestedStatus = summary ? `${displayName}(${summary})` : displayName;
   }
 
   return (

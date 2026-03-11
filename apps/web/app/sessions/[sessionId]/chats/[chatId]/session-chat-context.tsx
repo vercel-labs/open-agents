@@ -759,6 +759,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionId
                     ? {
@@ -812,6 +813,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionId
                     ? {
@@ -834,6 +836,23 @@ export function SessionChatProvider({
     sessionRecord.repoName,
     mutate,
     sessionId,
+  ]);
+
+  // When entering a session on a branch that already has a PR, hydrate PR
+  // metadata as soon as we know the sandbox is connected so the header action
+  // reflects existing PR state immediately.
+  useEffect(() => {
+    if (sessionRecord.prNumber != null) return;
+    if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
+    if (reconnectionStatus !== "connected") return;
+
+    void checkBranchAndPr();
+  }, [
+    sessionRecord.prNumber,
+    sessionRecord.repoOwner,
+    sessionRecord.repoName,
+    reconnectionStatus,
+    checkBranchAndPr,
   ]);
 
   const updateSessionSnapshot = useCallback(
@@ -954,6 +973,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...optimisticSession, hasUnread: s.hasUnread }
@@ -979,6 +999,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionRecord.id
                     ? { ...previousSession, hasUnread: s.hasUnread }
@@ -998,6 +1019,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...nextSession, hasUnread: s.hasUnread }
@@ -1036,6 +1058,7 @@ export function SessionChatProvider({
       (current) =>
         current
           ? {
+              ...current,
               sessions: current.sessions.map((s) =>
                 s.id === sessionRecord.id
                   ? { ...nextSession, hasUnread: s.hasUnread }
@@ -1068,6 +1091,7 @@ export function SessionChatProvider({
         (current) =>
           current
             ? {
+                ...current,
                 sessions: current.sessions.map((s) =>
                   s.id === sessionRecord.id ? { ...s, ...nextSession } : s,
                 ),

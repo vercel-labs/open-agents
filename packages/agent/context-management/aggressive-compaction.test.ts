@@ -139,7 +139,10 @@ describe("aggressiveCompactContext", () => {
       });
 
       expect(result?.id).toBe(`call-${index}`);
-      expect(result?.output).toBe(COMPACTED_NOTICE);
+      expect(result?.output).toEqual({
+        type: "text",
+        value: COMPACTED_NOTICE,
+      });
     }
 
     for (let index = 60; index < 80; index++) {

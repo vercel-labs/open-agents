@@ -1,4 +1,8 @@
-import { createRedisClient } from "@/lib/redis";
+import {
+  createRedisClient,
+  isRedisConfigured,
+  warnRedisDisabled,
+} from "@/lib/redis";
 import type Redis from "ioredis";
 
 /**
@@ -16,7 +20,7 @@ const listeners = new Map<string, Set<StopCallback>>();
 
 function getSubscriber(): Redis {
   if (!subscriber) {
-    subscriber = createRedisClient();
+    subscriber = createRedisClient("stop-signal-subscriber");
     subscriber.on("message", (channel: string) => {
       const callbacks = listeners.get(channel);
       if (!callbacks) return;
@@ -40,6 +44,11 @@ export async function onStopSignal(
   chatId: string,
   callback: StopCallback,
 ): Promise<() => void> {
+  if (!isRedisConfigured()) {
+    warnRedisDisabled("Stop-signal subscription");
+    return () => {};
+  }
+
   const channel = channelFor(chatId);
   const sub = getSubscriber();
 

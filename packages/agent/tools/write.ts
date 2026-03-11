@@ -6,15 +6,24 @@ import {
   getApprovalContext,
   shouldAutoApprove,
   pathNeedsApproval,
+  toDisplayPath,
 } from "./utils";
 
 const writeInputSchema = z.object({
-  filePath: z.string().describe("Absolute path to the file to write"),
+  filePath: z
+    .string()
+    .describe(
+      "Workspace-relative path to the file to write (e.g., src/user.test.ts)",
+    ),
   content: z.string().describe("Content to write to the file"),
 });
 
 const editInputSchema = z.object({
-  filePath: z.string().describe("Absolute path to the file to edit"),
+  filePath: z
+    .string()
+    .describe(
+      "Workspace-relative path to the file to edit (e.g., src/auth.ts)",
+    ),
   oldString: z.string().describe("The exact text to replace"),
   newString: z
     .string()
@@ -60,7 +69,7 @@ WHEN NOT TO USE:
 - Searching (use grepTool or globTool instead)
 
 USAGE:
-- The path must be an absolute path within the workspace
+- Use workspace-relative paths (e.g., "src/user.test.ts")
 - This will OVERWRITE existing files entirely
 - Parent directories are created automatically if they do not exist
 
@@ -72,8 +81,8 @@ IMPORTANT:
 - Paths outside the working directory require approval
 
 EXAMPLES:
-- Create a new test file: filePath: "/Users/username/project/src/user.test.ts", content: "<full file contents>"
-- Replace a script after reading it: filePath: "/Users/username/project/scripts/build.sh", content: "<entire updated script>"`,
+- Create a new test file: filePath: "src/user.test.ts", content: "<full file contents>"
+- Replace a script after reading it: filePath: "scripts/build.sh", content: "<entire updated script>"`,
     inputSchema: writeInputSchema,
     execute: async ({ filePath, content }, { experimental_context }) => {
       const sandbox = getSandbox(experimental_context, "write");
@@ -92,7 +101,7 @@ EXAMPLES:
 
         return {
           success: true,
-          path: absolutePath,
+          path: toDisplayPath(absolutePath, workingDirectory),
           bytesWritten: stats.size,
         };
       } catch (error) {
@@ -136,6 +145,7 @@ WHEN NOT TO USE:
 - Multi-file refactors (use grepTool + multiple edits, or taskTool for larger jobs)
 
 USAGE:
+- Use workspace-relative file paths (e.g., "src/auth.ts")
 - You must read the file first with readFileTool in this conversation
 - Provide oldString as the EXACT text to replace, including whitespace and indentation
 - By default, oldString must be UNIQUE in the file; otherwise the edit will fail
@@ -149,8 +159,8 @@ IMPORTANT:
 - Paths outside the working directory require approval
 
 EXAMPLES:
-- Replace a single function call: filePath: "/Users/username/project/src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)", startLine: 42
-- Rename a variable throughout a file: filePath: "/Users/username/project/src/api.ts", oldString: "oldApiClient", newString: "newApiClient", replaceAll: true, startLine: 15`,
+- Replace a single function call: filePath: "src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)", startLine: 42
+- Rename a variable throughout a file: filePath: "src/api.ts", oldString: "oldApiClient", newString: "newApiClient", replaceAll: true, startLine: 15`,
     inputSchema: editInputSchema,
     execute: async (
       { filePath, oldString, newString, replaceAll = false },
@@ -201,7 +211,7 @@ EXAMPLES:
 
         return {
           success: true,
-          path: absolutePath,
+          path: toDisplayPath(absolutePath, workingDirectory),
           replacements: replaceAll ? occurrences : 1,
           startLine,
         };

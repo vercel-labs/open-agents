@@ -6,7 +6,6 @@ import {
   sumLanguageModelUsage,
 } from "@open-harness/agent";
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import {
   convertToModelMessages,
   type GatewayModelId,
@@ -14,6 +13,7 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -29,17 +29,17 @@ import {
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import { recordUsage } from "@/lib/db/usage";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { getUserPreferences } from "@/lib/db/user-preferences";
 import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
+import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { onStopSignal } from "@/lib/stop-signal";
-import { after } from "next/server";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;

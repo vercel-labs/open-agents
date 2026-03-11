@@ -107,19 +107,33 @@ function extractTaskOutputUsage(
   if (!isRecord(output)) {
     return undefined;
   }
+
+  // New output shape: {
+  //   usage?: LanguageModelUsage,
+  //   final?: ModelMessage[],
+  //   modelId?: string,
+  // }
+  const usage = output.usage;
+  const modelId =
+    typeof output.modelId === "string" ? output.modelId : undefined;
+  if (isLanguageModelUsage(usage)) {
+    return { usage, modelId };
+  }
+
+  // Legacy fallback: { metadata: { totalMessageUsage?, lastStepUsage?, modelId? } }
   const metadata = output.metadata;
   if (!isRecord(metadata)) {
     return undefined;
   }
-  const modelId =
+  const legacyModelId =
     typeof metadata.modelId === "string" ? metadata.modelId : undefined;
   const totalMessageUsage = metadata.totalMessageUsage;
   if (isLanguageModelUsage(totalMessageUsage)) {
-    return { usage: totalMessageUsage, modelId };
+    return { usage: totalMessageUsage, modelId: legacyModelId };
   }
   const lastStepUsage = metadata.lastStepUsage;
   if (isLanguageModelUsage(lastStepUsage)) {
-    return { usage: lastStepUsage, modelId };
+    return { usage: lastStepUsage, modelId: legacyModelId };
   }
   return undefined;
 }

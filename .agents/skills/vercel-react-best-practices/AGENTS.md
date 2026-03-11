@@ -36,10 +36,11 @@ Comprehensive performance optimization guide for React and Next.js applications,
    - 3.1 [Authenticate Server Actions Like API Routes](#31-authenticate-server-actions-like-api-routes)
    - 3.2 [Avoid Duplicate Serialization in RSC Props](#32-avoid-duplicate-serialization-in-rsc-props)
    - 3.3 [Cross-Request LRU Caching](#33-cross-request-lru-caching)
-   - 3.4 [Minimize Serialization at RSC Boundaries](#34-minimize-serialization-at-rsc-boundaries)
-   - 3.5 [Parallel Data Fetching with Component Composition](#35-parallel-data-fetching-with-component-composition)
-   - 3.6 [Per-Request Deduplication with React.cache()](#36-per-request-deduplication-with-reactcache)
-   - 3.7 [Use after() for Non-Blocking Operations](#37-use-after-for-non-blocking-operations)
+   - 3.4 [Hoist Static I/O to Module Level](#34-hoist-static-io-to-module-level)
+   - 3.5 [Minimize Serialization at RSC Boundaries](#35-minimize-serialization-at-rsc-boundaries)
+   - 3.6 [Parallel Data Fetching with Component Composition](#36-parallel-data-fetching-with-component-composition)
+   - 3.7 [Per-Request Deduplication with React.cache()](#37-per-request-deduplication-with-reactcache)
+   - 3.8 [Use after() for Non-Blocking Operations](#38-use-after-for-non-blocking-operations)
 4. [Client-Side Data Fetching](#4-client-side-data-fetching) — **MEDIUM-HIGH**
    - 4.1 [Deduplicate Global Event Listeners](#41-deduplicate-global-event-listeners)
    - 4.2 [Use Passive Event Listeners for Scrolling Performance](#42-use-passive-event-listeners-for-scrolling-performance)
@@ -781,7 +782,47 @@ Use when sequential user actions hit multiple endpoints needing the same data wi
 
 Reference: [https://github.com/isaacs/node-lru-cache](https://github.com/isaacs/node-lru-cache)
 
-### 3.4 Minimize Serialization at RSC Boundaries
+### 3.4 Hoist Static I/O to Module Level
+
+**Impact: HIGH (avoids repeated file/network I/O per request)**
+
+When loading static assets (fonts, logos, images, config files) in route handlers or server functions, hoist the I/O operation to module level. Module-level code runs once when the module is first imported, not on every request. This eliminates redundant file system reads or network fetches that would otherwise run on every invocation.
+
+**Incorrect: reads font file on every request**
+
+**Correct: loads once at module initialization**
+
+**Alternative: synchronous file reads with Node.js fs**
+
+**General Node.js example: loading config or templates**
+
+**When to use this pattern:**
+
+- Loading fonts for OG image generation
+
+- Loading static logos, icons, or watermarks
+
+- Reading configuration files that don't change at runtime
+
+- Loading email templates or other static templates
+
+- Any static asset that's the same across all requests
+
+**When NOT to use this pattern:**
+
+- Assets that vary per request or user
+
+- Files that may change during runtime (use caching with TTL instead)
+
+- Large files that would consume too much memory if kept loaded
+
+- Sensitive data that shouldn't persist in memory
+
+**With Vercel's [Fluid Compute](https://vercel.com/docs/fluid-compute):** Module-level caching is especially effective because multiple concurrent requests share the same function instance. The static assets stay loaded in memory across requests without cold start penalties.
+
+**In traditional serverless:** Each cold start re-executes module-level code, but subsequent warm invocations reuse the loaded assets until the instance is recycled.
+
+### 3.5 Minimize Serialization at RSC Boundaries
 
 **Impact: HIGH (reduces data transfer size)**
 
@@ -815,7 +856,7 @@ function Profile({ name }: { name: string }) {
 }
 ```
 
-### 3.5 Parallel Data Fetching with Component Composition
+### 3.6 Parallel Data Fetching with Component Composition
 
 **Impact: CRITICAL (eliminates server-side waterfalls)**
 
@@ -894,7 +935,7 @@ export default function Page() {
 }
 ```
 
-### 3.6 Per-Request Deduplication with React.cache()
+### 3.7 Per-Request Deduplication with React.cache()
 
 **Impact: MEDIUM (deduplicates within request)**
 
@@ -960,7 +1001,7 @@ Use `React.cache()` to deduplicate these operations across your component tree.
 
 Reference: [https://react.dev/reference/react/cache](https://react.dev/reference/react/cache)
 
-### 3.7 Use after() for Non-Blocking Operations
+### 3.8 Use after() for Non-Blocking Operations
 
 **Impact: MEDIUM (faster response times)**
 

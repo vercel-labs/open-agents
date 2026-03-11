@@ -34,6 +34,33 @@ export function isPathWithinDirectory(
 }
 
 /**
+ * Convert a path into a compact, model-friendly display path.
+ *
+ * Paths inside the sandbox working directory are returned relative to that
+ * directory (e.g., "src/index.ts") to avoid repeating long absolute prefixes.
+ * Paths outside the working directory remain absolute for clarity and safety.
+ */
+export function toDisplayPath(
+  filePath: string,
+  workingDirectory: string,
+): string {
+  const absolutePath = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(workingDirectory, filePath);
+
+  if (!isPathWithinDirectory(absolutePath, workingDirectory)) {
+    return absolutePath.replace(/\\/g, "/");
+  }
+
+  const relativePath = path.relative(workingDirectory, absolutePath);
+  if (relativePath === "") {
+    return ".";
+  }
+
+  return relativePath.replace(/\\/g, "/");
+}
+
+/**
  * Get sandbox from experimental context with null safety.
  * Throws a descriptive error if sandbox is not initialized.
  *

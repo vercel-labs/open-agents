@@ -1,12 +1,36 @@
 import Redis from "ioredis";
 
-function getRedisUrl(): string {
-  const url = process.env.REDIS_URL ?? process.env.KV_URL;
-  if (!url)
-    throw new Error("REDIS_URL or KV_URL environment variable is required");
-  return url;
+const warnedMissingRedisFeatures = new Set<string>();
+
+export function getRedisUrl(): string | null {
+  return process.env.REDIS_URL ?? process.env.KV_URL ?? null;
 }
 
-export function createRedisClient() {
-  return new Redis(getRedisUrl());
+export function isRedisConfigured(): boolean {
+  return getRedisUrl() !== null;
+}
+
+export function warnRedisDisabled(feature: string): void {
+  if (warnedMissingRedisFeatures.has(feature)) {
+    return;
+  }
+
+  warnedMissingRedisFeatures.add(feature);
+  console.error(
+    `[redis] ${feature} is disabled because REDIS_URL/KV_URL is not configured.`,
+  );
+}
+
+export function createRedisClient(clientName = "redis-client"): Redis {
+  const url = getRedisUrl();
+  if (!url) {
+    throw new Error("REDIS_URL or KV_URL environment variable is required");
+  }
+
+  const client = new Redis(url);
+  client.on("error", (error) => {
+    console.error(`[redis] ${clientName} error:`, error);
+  });
+
+  return client;
 }

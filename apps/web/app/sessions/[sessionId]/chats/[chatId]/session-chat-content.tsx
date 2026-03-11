@@ -14,6 +14,7 @@ import {
   FolderGit2,
   GitCommit,
   GitCompare,
+  GitMerge,
   GitPullRequest,
   Link2,
   Loader2,
@@ -39,6 +40,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
+import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
   WebAgentUIMessage,
@@ -70,6 +72,12 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useSessionLayout } from "@/app/sessions/[sessionId]/session-layout-context";
 import {
   DropdownMenu,
@@ -86,6 +94,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
@@ -102,6 +111,7 @@ import {
   commitAndPushSessionChanges,
   fetchRepoBranches,
 } from "@/lib/git-flow-client";
+import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
@@ -118,6 +128,10 @@ const DiffViewer = dynamic(
 );
 const CreatePRDialog = dynamic(
   () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
+  { ssr: false },
+);
+const MergePrDialog = dynamic(
+  () => import("@/components/merge-pr-dialog").then((m) => m.MergePrDialog),
   { ssr: false },
 );
 const CommitDialog = dynamic(
@@ -169,6 +183,24 @@ function useHasMounted() {
     () => true,
     () => false,
   );
+}
+
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+
+  if (diffMins < 1) return "now";
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 type MessageRenderGroup =
@@ -714,31 +746,153 @@ function ShareDialog({
   );
 }
 
-export function SessionChatContent(_props: unknown) {
+function NewChatMenuItem() {
+  const { createChat, switchChat } = useSessionLayout();
+
+  return (
+    <DropdownMenuItem
+      onClick={() => {
+        const { chat } = createChat();
+        switchChat(chat.id);
+      }}
+    >
+      <Plus className="mr-2 h-4 w-4" />
+      New Chat
+    </DropdownMenuItem>
+  );
+}
+
+function ChatSwitcherPanel({
+  open,
+  onOpenChange,
+  activeChatId,
+  isMobile,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  activeChatId: string;
+  isMobile: boolean;
+}) {
+  const { chats, createChat, switchChat } = useSessionLayout();
+
+  const content = (
+    <div
+      className={cn(
+        "overflow-y-auto px-2",
+        isMobile ? "max-h-[60vh] pb-4" : "flex-1 py-3",
+      )}
+    >
+      <div className="space-y-0.5">
+        {chats.map((chat) => (
+          <button
+            key={chat.id}
+            type="button"
+            onClick={() => {
+              switchChat(chat.id);
+              onOpenChange(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
+              chat.id === activeChatId ? "bg-secondary" : "hover:bg-muted/50",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {chat.title || "Untitled"}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">
+                {formatRelativeTime(new Date(chat.updatedAt))}
+              </span>
+              {chat.isStreaming && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              )}
+              {chat.id === activeChatId && (
+                <Check className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            const { chat } = createChat();
+            switchChat(chat.id);
+            onOpenChange(false);
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New chat
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Switch Chat</DrawerTitle>
+          </DrawerHeader>
+          {content}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full max-w-sm flex-col gap-0 p-0"
+      >
+        <SheetHeader className="border-b border-border px-4 py-3">
+          <SheetTitle>Switch Chat</SheetTitle>
+        </SheetHeader>
+        {content}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+export function SessionChatContent({
+  initialIsOnlyChatInSession,
+}: {
+  initialIsOnlyChatInSession: boolean;
+}) {
   const router = useRouter();
-  const {
-    chats: mobileChats,
-    chatsLoading: mobileChatsLoading,
-    createChat: mobileCreateChat,
-    switchChat: mobileSwitchChat,
-  } = useSessionLayout();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
   const [mobileShareOpen, setMobileShareOpen] = useState(false);
-  const [mobileChatDrawerOpen, setMobileChatDrawerOpen] = useState(false);
+  const [chatSwitcherOpen, setChatSwitcherOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
     string | null
   >(null);
   const hasMounted = useHasMounted();
+  const isMobile = useIsMobile();
+  const isIosDevice = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return false;
+    }
+
+    return (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    );
+  }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMountedRef = useRef(true);
   const copyResetTimeoutRef = useRef<number | null>(null);
@@ -880,11 +1034,6 @@ export function SessionChatContent(_props: unknown) {
     modelOptions,
     modelOptionsLoading,
   } = useSessionChatContext();
-  const mobileActiveChatId = chatInfo.id;
-  const handleMobileNewChat = () => {
-    const { chat: newChat } = mobileCreateChat();
-    mobileSwitchChat(newChat.id);
-  };
   const {
     messages,
     error,
@@ -2271,23 +2420,27 @@ export function SessionChatContent(_props: unknown) {
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
-  const { data: prDeploymentData } = useSWR<PrDeploymentResponse>(
-    hasExistingPr
-      ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
-      : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      // We stop polling once a deployment URL is found because Vercel preview
-      // URLs are expected to follow the PR branch and keep serving the latest
-      // deployment. If this assumption ever changes, force revalidation after
-      // commits (see onCommitted callback below).
-      refreshInterval: (latestData) =>
-        hasExistingPr && !latestData?.deploymentUrl ? 60_000 : 0,
-      shouldRetryOnError: false,
-    },
-  );
+  const { data: prDeploymentData, mutate: refreshPrDeployment } =
+    useSWR<PrDeploymentResponse>(
+      hasExistingPr
+        ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
+        : null,
+      fetcher,
+      {
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+        // Poll while we're still waiting for the first deployment so the Preview
+        // action appears quickly after opening/creating the PR.
+        refreshInterval: (latestData) =>
+          getPrDeploymentRefreshInterval({
+            hasExistingPr,
+            deploymentUrl: latestData?.deploymentUrl,
+            documentHasFocus:
+              typeof document === "undefined" ? true : document.hasFocus(),
+          }),
+        shouldRetryOnError: false,
+      },
+    );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -2301,6 +2454,8 @@ export function SessionChatContent(_props: unknown) {
   const showCommitAction =
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
+  const hasOpenPr = hasExistingPr && session.prStatus === "open";
+  const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
   const openExistingPr = () => {
     if (!existingPrUrl) {
@@ -2317,6 +2472,39 @@ export function SessionChatContent(_props: unknown) {
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
+
+  const handleMerged = useCallback(
+    async (mergeResult: MergePullRequestResponse) => {
+      updateSessionPullRequest({
+        prNumber: mergeResult.prNumber,
+        prStatus: "merged",
+      });
+
+      if (mergeResult.branchDeleteError) {
+        console.warn(
+          "PR merged but source branch was not deleted:",
+          mergeResult.branchDeleteError,
+        );
+      }
+
+      try {
+        await archiveSession();
+        router.push("/sessions");
+      } catch (archiveError) {
+        const archiveMessage =
+          archiveError instanceof Error
+            ? archiveError.message
+            : "Failed to archive session";
+        throw new Error(
+          `Pull request merged, but archiving the session failed: ${archiveMessage}`,
+          {
+            cause: archiveError,
+          },
+        );
+      }
+    },
+    [archiveSession, router, updateSessionPullRequest],
+  );
 
   return (
     <>
@@ -2475,13 +2663,8 @@ export function SessionChatContent(_props: unknown) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={handleMobileNewChat}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Chat
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setMobileChatDrawerOpen(true)}
-                  >
+                  <NewChatMenuItem />
+                  <DropdownMenuItem onClick={() => setChatSwitcherOpen(true)}>
                     <MessageSquareMore className="mr-2 h-4 w-4" />
                     Switch Chat
                   </DropdownMenuItem>
@@ -2568,6 +2751,14 @@ export function SessionChatContent(_props: unknown) {
                           <GitPullRequest className="mr-2 h-4 w-4" />
                           View PR #{session.prNumber}
                         </DropdownMenuItem>
+                        {canMergeAndArchive && (
+                          <DropdownMenuItem
+                            onClick={() => setMergeDialogOpen(true)}
+                          >
+                            <GitMerge className="mr-2 h-4 w-4" />
+                            Merge & Archive
+                          </DropdownMenuItem>
+                        )}
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
@@ -2606,62 +2797,12 @@ export function SessionChatContent(_props: unknown) {
               </DropdownMenu>
             </div>
 
-            {/* Mobile chat switcher drawer */}
-            <Drawer
-              open={mobileChatDrawerOpen}
-              onOpenChange={setMobileChatDrawerOpen}
-            >
-              <DrawerContent>
-                <DrawerHeader>
-                  <DrawerTitle>Switch Chat</DrawerTitle>
-                </DrawerHeader>
-                <div className="max-h-[60vh] overflow-y-auto px-2 pb-4">
-                  <div className="space-y-0.5">
-                    {mobileChats.map((chat) => (
-                      <button
-                        key={chat.id}
-                        type="button"
-                        onClick={() => {
-                          mobileSwitchChat(chat.id);
-                          setMobileChatDrawerOpen(false);
-                        }}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
-                          chat.id === mobileActiveChatId
-                            ? "bg-secondary"
-                            : "hover:bg-muted/50",
-                        )}
-                      >
-                        <span className="truncate text-sm font-medium">
-                          {chat.title || "Untitled"}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                          {chat.isStreaming && (
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                          )}
-                          {chat.id === mobileActiveChatId && (
-                            <Check className="h-3.5 w-3.5 text-foreground" />
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-2 border-t border-border pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleMobileNewChat();
-                        setMobileChatDrawerOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      New chat
-                    </button>
-                  </div>
-                </div>
-              </DrawerContent>
-            </Drawer>
+            <ChatSwitcherPanel
+              open={chatSwitcherOpen}
+              onOpenChange={setChatSwitcherOpen}
+              activeChatId={chatInfo.id}
+              isMobile={isMobile}
+            />
 
             {/* Mobile share dialog */}
             <ShareDialog
@@ -3061,7 +3202,14 @@ export function SessionChatContent(_props: unknown) {
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (isArchived || !isSandboxActive) return;
+                if (
+                  isArchived ||
+                  !isSandboxActive ||
+                  isChatInFlight ||
+                  hasPendingResponse
+                ) {
+                  return;
+                }
                 const hasContent = input.trim() || images.length > 0;
                 if (!hasContent) return;
 
@@ -3070,10 +3218,7 @@ export function SessionChatContent(_props: unknown) {
                 setInput("");
                 clearImages();
 
-                const isFirstChatInSession =
-                  !mobileChatsLoading &&
-                  mobileChats.length === 1 &&
-                  mobileChats[0]?.id === chatInfo.id;
+                const isFirstChatInSession = initialIsOnlyChatInSession;
                 const shouldSetOptimisticTitle =
                   isFirstChatInSession &&
                   !hadInitialMessages &&
@@ -3205,8 +3350,14 @@ export function SessionChatContent(_props: unknown) {
                     if (handleSlashKeyDown(e)) {
                       return;
                     }
-                    // Handle form submission
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    // On iOS, Return should insert a newline (send via submit button)
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !isIosDevice &&
+                      !isChatInFlight &&
+                      !hasPendingResponse
+                    ) {
                       e.preventDefault();
                       if (!isArchived && isSandboxActive) {
                         e.currentTarget.form?.requestSubmit();
@@ -3234,7 +3385,7 @@ export function SessionChatContent(_props: unknown) {
                       }
                     }
                   }}
-                  disabled={isArchived || isChatInFlight}
+                  disabled={isArchived}
                   className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
                   style={{ minHeight: "24px" }}
                 />
@@ -3376,7 +3527,18 @@ export function SessionChatContent(_props: unknown) {
           hasSandbox={sandboxInfo !== null}
           onPrDetected={(pr) => {
             updateSessionPullRequest(pr);
+            void refreshGitStatus().catch(() => {});
           }}
+        />
+      )}
+
+      {/* Merge PR Dialog */}
+      {session && (
+        <MergePrDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          session={session}
+          onMerged={handleMerged}
         />
       )}
 
@@ -3394,6 +3556,9 @@ export function SessionChatContent(_props: unknown) {
             refreshGitStatus().catch(() => {});
             refreshDiff().catch(() => {});
             refreshFiles().catch(() => {});
+            if (hasExistingPr) {
+              refreshPrDeployment().catch(() => {});
+            }
           }}
         />
       )}

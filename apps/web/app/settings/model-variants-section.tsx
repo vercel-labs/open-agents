@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Boxes, ChevronRight, Code2, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Boxes,
+  ChevronRight,
+  Code2,
+  ExternalLink,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { ModelCombobox } from "@/components/model-combobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -227,6 +235,15 @@ function VariantFormDialog({
                 {"reasoningSummary"}
               </code>
             </p>
+            <a
+              href="https://ai-sdk.dev/docs/foundations/provider-options"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              View provider options docs
+              <ExternalLink className="size-3" />
+            </a>
           </div>
 
           {error && (

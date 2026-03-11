@@ -1,20 +1,39 @@
-import { Redis } from "ioredis";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream/ioredis";
 import { createChunkedPublisherAdapter } from "./chunked-publisher-adapter";
+import {
+  createRedisClient,
+  isRedisConfigured,
+  warnRedisDisabled,
+} from "./redis";
 
-function getRedisUrl(): string {
-  const url = process.env.REDIS_URL || process.env.KV_URL;
-  if (!url) {
-    throw new Error(
-      "REDIS_URL or KV_URL environment variable is required for resumable streams",
-    );
-  }
-  return url;
+type RedisResumableStreamContext = Pick<
+  ReturnType<typeof createResumableStreamContext>,
+  "createNewResumableStream" | "resumeExistingStream"
+>;
+
+const disabledResumableStreamContext: RedisResumableStreamContext = {
+  createNewResumableStream: async (_streamId, streamFactory) => {
+    warnRedisDisabled("Resumable stream persistence");
+    return streamFactory();
+  },
+  resumeExistingStream: async () => {
+    warnRedisDisabled("Resumable stream resume");
+    return null;
+  },
+};
+
+function createRedisResumableStreamContext(): RedisResumableStreamContext {
+  const publisher = createRedisClient("resumable-stream-publisher");
+  const subscriber = createRedisClient("resumable-stream-subscriber");
+
+  return createResumableStreamContext({
+    waitUntil: after,
+    publisher: createChunkedPublisherAdapter(publisher),
+    subscriber,
+  });
 }
 
-export const resumableStreamContext = createResumableStreamContext({
-  waitUntil: after,
-  publisher: createChunkedPublisherAdapter(new Redis(getRedisUrl())),
-  subscriber: new Redis(getRedisUrl()),
-});
+export const resumableStreamContext = isRedisConfigured()
+  ? createRedisResumableStreamContext()
+  : disabledResumableStreamContext;

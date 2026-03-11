@@ -14,6 +14,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "anthropic/claude-haiku-4.5",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      autoCommitPush: false,
       modelVariants: [],
     });
   });
@@ -25,6 +26,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: "openai/gpt-5-mini",
       defaultSandboxType: "invalid" as never,
+      autoCommitPush: false,
       modelVariants: [],
     });
 
@@ -38,6 +40,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      autoCommitPush: false,
       modelVariants: [{ id: "bad-id" }] as never,
     });
 
@@ -51,6 +54,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "hybrid",
+      autoCommitPush: false,
       modelVariants: [
         {
           id: "variant:test",
@@ -65,6 +69,7 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "hybrid",
+      autoCommitPush: false,
       modelVariants: [
         {
           id: "variant:test",

@@ -36,12 +36,21 @@ const themeInitializationScript = `
 })();
 `;
 
+const isPreviewDeployment = process.env.VERCEL_ENV === "preview";
+const faviconPath = isPreviewDeployment
+  ? "/favicon-preview.svg"
+  : "/favicon.ico";
+
 export const metadata: Metadata = {
   title: {
     default: "Open Harness",
     template: "%s | Open Harness",
   },
   description: "Open Harness web app for managing AI coding sessions.",
+  icons: {
+    icon: faviconPath,
+    shortcut: faviconPath,
+  },
 };
 
 export default function RootLayout({

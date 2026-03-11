@@ -8,10 +8,53 @@
   "ignorePatterns": ["components/ui/**"],
   "rules": {
     "no-console": "off",
+    "max-lines": [
+      "error",
+      {
+        "max": 400,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ],
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
     "react/react-in-jsx-scope": "off",
     "typescript/no-explicit-any": "error",
     "import/no-unassigned-import": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "app/api/chat/route.ts",
+        "app/api/generate-pr/route.ts",
+        "app/api/sessions/*/diff/route.ts",
+        "app/cli/auth/cli-auth-page.tsx",
+        "app/settings/accounts-section.tsx",
+        "app/settings/model-variants-section.tsx",
+        "app/settings/usage-section.tsx",
+        "app/shared/*/shared-chat-content.tsx",
+        "app/sessions/*/chats/*/session-chat-content.tsx",
+        "app/sessions/*/chats/*/session-chat-context.tsx",
+        "components/commit-dialog.tsx",
+        "components/create-pr-dialog.tsx",
+        "components/inbox-sidebar.tsx",
+        "components/question-panel.tsx",
+        "hooks/use-session-chats.ts",
+        "lib/db/cli-tokens.ts",
+        "lib/db/sessions.ts",
+        "lib/github/client.ts",
+        "lib/vercel-themes.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "warn",
+          {
+            "max": 400,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    }
+  ]
 }

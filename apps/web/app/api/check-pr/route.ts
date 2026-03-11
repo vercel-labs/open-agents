@@ -15,7 +15,8 @@ interface CheckPrRequest {
  * Checks the current branch in the sandbox, looks for an existing PR on that
  * branch, and persists the branch + PR info to the session record.
  *
- * Called automatically after each agent message completes.
+ * Called automatically after each agent message completes and on session entry
+ * once sandbox connectivity is established.
  */
 export async function POST(req: Request) {
   const session = await getServerSession();

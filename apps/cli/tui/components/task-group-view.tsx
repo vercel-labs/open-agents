@@ -1,15 +1,12 @@
-import type { SubagentUIMessage, TaskToolUIPart } from "@open-harness/agent";
+import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens } from "@open-harness/shared";
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { getToolName, isToolUIPart } from "ai";
 import React, { useEffect, useRef, useState } from "react";
 import { useChatContext } from "../chat-context";
 import { PRIMARY_COLOR } from "../lib/colors";
 import { truncateText } from "../lib/truncate";
 import { toRelativePath } from "./tool-renderers/shared";
-
-type SubagentMessagePart = SubagentUIMessage["parts"][number];
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -48,31 +45,33 @@ function formatTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function useTaskTiming(isRunning: boolean) {
-  const startTimeRef = useRef<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+function useTaskTiming(isRunning: boolean, startedAtMs?: number) {
+  const fallbackStartRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (isRunning && !startTimeRef.current) {
-      startTimeRef.current = Date.now();
-    }
-
     if (!isRunning) {
       return;
     }
 
+    if (startedAtMs == null && !fallbackStartRef.current) {
+      fallbackStartRef.current = Date.now();
+    }
+
+    setNow(Date.now());
     const interval = setInterval(() => {
-      if (startTimeRef.current) {
-        setElapsedSeconds(
-          Math.floor((Date.now() - startTimeRef.current) / 1000),
-        );
-      }
+      setNow(Date.now());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, startedAtMs]);
 
-  return elapsedSeconds;
+  const effectiveStart = startedAtMs ?? fallbackStartRef.current;
+  if (!isRunning || effectiveStart == null) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((now - effectiveStart) / 1000));
 }
 
 type TaskStatus =
@@ -100,61 +99,32 @@ function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
   return "pending";
 }
 
-function countTaskTools(part: TaskToolUIPart): number {
-  if (part.state !== "output-available") return 0;
-  const message = part.output;
-  if (!message?.parts) return 0;
-  return message.parts.filter(isToolUIPart).length;
+function countToolCalls(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.filter(
+    (m) =>
+      typeof m === "object" &&
+      m !== null &&
+      (m as { role?: string }).role === "tool",
+  ).length;
 }
 
-function getTaskTokens(part: TaskToolUIPart): number | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  return message?.metadata?.lastStepUsage?.inputTokens ?? null;
-}
-
-function getToolSummary(part: SubagentMessagePart, cwd: string): string {
-  switch (part.type) {
-    case "tool-read":
-    case "tool-write":
-    case "tool-edit":
-      return part.input?.filePath
-        ? toRelativePath(part.input.filePath, cwd)
-        : "";
-    case "tool-grep":
-    case "tool-glob":
-      return part.input?.pattern ? `"${part.input.pattern}"` : "";
-    case "tool-bash": {
-      return part.input?.command ?? "";
+function getToolSummary(toolCall: TaskPendingToolCall, cwd: string): string {
+  const input = toolCall.input as Record<string, unknown> | undefined;
+  switch (toolCall.name) {
+    case "read":
+    case "write":
+    case "edit":
+      return input?.filePath ? toRelativePath(String(input.filePath), cwd) : "";
+    case "grep":
+    case "glob":
+      return input?.pattern ? `"${input.pattern}"` : "";
+    case "bash": {
+      return input?.command ? String(input.command) : "";
     }
     default:
       return "";
   }
-}
-
-function getLastToolInfo(
-  part: TaskToolUIPart,
-  cwd: string,
-): { name: string; summary: string } | null {
-  if (part.state !== "output-available") return null;
-  const message = part.output;
-  if (!message?.parts) return null;
-
-  const toolParts = message.parts.filter(
-    (toolPart) =>
-      isToolUIPart(toolPart) && toolPart.state !== "input-streaming",
-  );
-  if (toolParts.length === 0) return null;
-
-  const lastTool = toolParts[toolParts.length - 1];
-  // Double-check needed for TypeScript narrowing with union types
-  if (!lastTool || !isToolUIPart(lastTool)) return null;
-
-  const toolName = getToolName(lastTool);
-  const summary = getToolSummary(lastTool, cwd);
-
-  const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-  return { name: displayName, summary };
 }
 
 function TaskStatusIndicator({ status }: { status: TaskStatus }) {
@@ -189,14 +159,22 @@ function TaskItem({
 }) {
   const status = getTaskStatus(part, isStreaming);
   const isRunning = status === "running" || status === "pending";
-  const elapsedSeconds = useTaskTiming(isRunning);
-  const toolCount = countTaskTools(part);
-  const tokenCount = getTaskTokens(part);
   const { state: chatState } = useChatContext();
   const cwd = chatState.workingDirectory ?? process.cwd();
-  const lastTool = getLastToolInfo(part, cwd);
   const { width } = useTerminalDimensions();
   const terminalWidth = width ?? 80;
+
+  const hasOutput = part.state === "output-available";
+  const isComplete = hasOutput && !part.preliminary;
+  const output = hasOutput ? part.output : undefined;
+  const startedAt =
+    typeof output?.startedAt === "number" ? output.startedAt : undefined;
+  const elapsedSeconds = useTaskTiming(isRunning, startedAt);
+
+  const pendingToolCall: TaskPendingToolCall | null = output?.pending ?? null;
+  const toolCount =
+    output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
+  const tokenCount = output?.usage?.inputTokens ?? null;
 
   const desc = part.input?.task ?? "Task";
 
@@ -222,12 +200,14 @@ function TaskItem({
     nestedStatus = "Awaiting approval...";
   } else if (status === "pending") {
     nestedStatus = "Initializing...";
-  } else if (status === "running" && (!lastTool || toolCount === 0)) {
+  } else if (status === "running" && !pendingToolCall) {
     nestedStatus = "Initializing...";
-  } else if (lastTool) {
-    nestedStatus = lastTool.summary
-      ? `${lastTool.name}(${lastTool.summary})`
-      : lastTool.name;
+  } else if (pendingToolCall) {
+    const displayName =
+      pendingToolCall.name.charAt(0).toUpperCase() +
+      pendingToolCall.name.slice(1);
+    const summary = getToolSummary(pendingToolCall, cwd);
+    nestedStatus = summary ? `${displayName}(${summary})` : displayName;
   }
   const toolCountText = ` - ${toolCount} tool${toolCount !== 1 ? "s" : ""}`;
   const tokenText =

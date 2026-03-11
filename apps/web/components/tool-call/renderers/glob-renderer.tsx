@@ -32,7 +32,6 @@ export function GlobRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const files = getGlobFiles(output);
 
-  // Show expanded content if there are files to show
   const hasExpandedContent = files.length > 0;
 
   const expandedContent = hasExpandedContent ? (
@@ -69,8 +68,9 @@ export function GlobRenderer({
     <ToolLayout
       name="Glob"
       summary={`"${pattern}"`}
+      summaryClassName="font-mono"
+      meta={files.length > 0 ? `${files.length} files` : undefined}
       state={state}
-      output={files.length > 0 ? `Found ${files.length} files` : undefined}
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}
