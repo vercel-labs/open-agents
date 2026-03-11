@@ -17,39 +17,44 @@ export function ThinkingBlock({
 }: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [hasCompletedStreaming, setHasCompletedStreaming] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isActivelyStreaming = isStreaming && !hasCompletedStreaming;
+  const isActivelyStreaming = isStreaming;
 
   useEffect(() => {
-    if (isActivelyStreaming) {
-      if (startTimeRef.current === null) {
-        startTimeRef.current = Date.now();
-      }
-      intervalRef.current = setInterval(() => {
-        setElapsed(
-          Math.floor(
-            (Date.now() - (startTimeRef.current ?? Date.now())) / 1000,
-          ),
-        );
-      }, 1000);
-    } else {
-      if (startTimeRef.current !== null && !hasCompletedStreaming) {
-        setHasCompletedStreaming(true);
+    if (!isActivelyStreaming) {
+      if (startTimeRef.current !== null) {
+        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
     }
+
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now();
+    }
+
+    intervalRef.current = setInterval(() => {
+      setElapsed(
+        Math.floor((Date.now() - (startTimeRef.current ?? Date.now())) / 1000),
+      );
+    }, 1000);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [hasCompletedStreaming, isActivelyStreaming]);
+  }, [isActivelyStreaming]);
 
   const hasContent = text.trim().length > 0;
   const thoughtLabel =
