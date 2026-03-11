@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 interface ThinkingBlockProps {
   text: string;
   isStreaming?: boolean;
+  partCount?: number;
 }
 
 export function ThinkingBlock({
   text,
   isStreaming = false,
+  partCount = 1,
 }: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -50,14 +52,18 @@ export function ThinkingBlock({
   }, [hasCompletedStreaming, isActivelyStreaming]);
 
   const hasContent = text.trim().length > 0;
+  const thoughtLabel =
+    partCount === 1
+      ? "Thought"
+      : `${partCount} thought${partCount !== 1 ? "s" : ""}`;
 
   const formatLabel = () => {
     if (isActivelyStreaming) {
       return "Thinking...";
     }
     return elapsed > 0
-      ? `Thought for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
-      : "Thought";
+      ? `${thoughtLabel} for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
+      : thoughtLabel;
   };
 
   return (

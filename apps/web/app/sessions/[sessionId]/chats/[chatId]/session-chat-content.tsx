@@ -197,6 +197,11 @@ function formatRelativeTime(date: Date): string {
   });
 }
 
+type ReasoningMessagePart = Extract<
+  WebAgentUIMessagePart,
+  { type: "reasoning" }
+>;
+
 type MessageRenderGroup =
   | {
       type: "part";
@@ -207,6 +212,12 @@ type MessageRenderGroup =
   | {
       type: "task-group";
       tasks: TaskToolUIPart[];
+      startIndex: number;
+      renderKey: string;
+    }
+  | {
+      type: "reasoning-group";
+      parts: ReasoningMessagePart[];
       startIndex: number;
       renderKey: string;
     };
@@ -237,6 +248,13 @@ function getPartIdentity(part: WebAgentUIMessagePart): string {
   }
 
   return `part:${part.type}`;
+}
+
+function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
+  return parts
+    .map((part) => part.text)
+    .filter((text) => text.trim().length > 0)
+    .join("\n\n");
 }
 
 type CreateSandboxResponse = SandboxInfo & {
@@ -1134,6 +1152,8 @@ export function SessionChatContent({
       let currentTaskGroup: TaskToolUIPart[] = [];
       let taskGroupStartIndex = 0;
       let taskGroupOrdinal = 0;
+      let currentReasoningGroup: ReasoningMessagePart[] = [];
+      let reasoningGroupStartIndex = 0;
       const partIdentityCounts = new Map<string, number>();
 
       const getStablePartRenderKey = (part: WebAgentUIMessagePart): string => {
@@ -1166,8 +1186,21 @@ export function SessionChatContent({
         taskGroupOrdinal += 1;
       };
 
+      const flushReasoningGroup = () => {
+        if (currentReasoningGroup.length === 0) return;
+
+        groups.push({
+          type: "reasoning-group",
+          parts: currentReasoningGroup,
+          startIndex: reasoningGroupStartIndex,
+          renderKey: `reasoning-group:${getStablePartRenderKey(currentReasoningGroup[0])}`,
+        });
+        currentReasoningGroup = [];
+      };
+
       message.parts.forEach((part, index) => {
         if (isToolUIPart(part) && part.type === "tool-task") {
+          flushReasoningGroup();
           if (currentTaskGroup.length === 0) {
             taskGroupStartIndex = index;
           }
@@ -1175,7 +1208,17 @@ export function SessionChatContent({
           return;
         }
 
+        if (isReasoningUIPart(part)) {
+          flushTaskGroup();
+          if (currentReasoningGroup.length === 0) {
+            reasoningGroupStartIndex = index;
+          }
+          currentReasoningGroup.push(part);
+          return;
+        }
+
         flushTaskGroup();
+        flushReasoningGroup();
         groups.push({
           type: "part",
           part,
@@ -1185,6 +1228,7 @@ export function SessionChatContent({
       });
 
       flushTaskGroup();
+      flushReasoningGroup();
 
       return {
         message,
@@ -2821,6 +2865,26 @@ export function SessionChatContent({
                                 reason,
                               })
                             }
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (group.type === "reasoning-group") {
+                      return (
+                        <div
+                          key={`${m.id}-${group.renderKey}`}
+                          className="flex justify-start"
+                        >
+                          <ThinkingBlock
+                            text={getReasoningGroupText(group.parts)}
+                            isStreaming={
+                              isMessageStreaming &&
+                              group.parts.some(
+                                (part) => part.state === "streaming",
+                              )
+                            }
+                            partCount={group.parts.length}
                           />
                         </div>
                       );

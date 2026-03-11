@@ -53,6 +53,11 @@ type SharedBy = {
   avatarUrl: string | null;
 } | null;
 
+type ReasoningMessagePart = Extract<
+  WebAgentUIMessagePart,
+  { type: "reasoning" }
+>;
+
 function displayModelName(modelId: string): string {
   const slashIndex = modelId.indexOf("/");
   return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
@@ -73,6 +78,13 @@ function formatDuration(ms: number): string {
   const remainingSeconds = seconds % 60;
   if (remainingSeconds === 0) return `${minutes}m`;
   return `${minutes}m ${remainingSeconds}s`;
+}
+
+function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
+  return parts
+    .map((part) => part.text)
+    .filter((text) => text.trim().length > 0)
+    .join("\n\n");
 }
 
 /** Count all tool-call parts (regular + task groups) in a message */
@@ -323,38 +335,71 @@ function SharedMessage({
         type: "task-group";
         tasks: TaskToolUIPart[];
         startIndex: number;
+      }
+    | {
+        type: "reasoning-group";
+        parts: ReasoningMessagePart[];
+        startIndex: number;
       };
 
   const renderGroups: RenderGroup[] = [];
   let currentTaskGroup: TaskToolUIPart[] = [];
   let taskGroupStartIndex = 0;
+  let currentReasoningGroup: ReasoningMessagePart[] = [];
+  let reasoningGroupStartIndex = 0;
 
-  m.parts.forEach((part, index) => {
-    if (isToolUIPart(part) && part.type === "tool-task") {
-      if (currentTaskGroup.length === 0) {
-        taskGroupStartIndex = index;
-      }
-      currentTaskGroup.push(part as TaskToolUIPart);
-    } else {
-      if (currentTaskGroup.length > 0) {
-        renderGroups.push({
-          type: "task-group",
-          tasks: currentTaskGroup,
-          startIndex: taskGroupStartIndex,
-        });
-        currentTaskGroup = [];
-      }
-      renderGroups.push({ type: "part", part, index });
+  const flushTaskGroup = () => {
+    if (currentTaskGroup.length === 0) {
+      return;
     }
-  });
 
-  if (currentTaskGroup.length > 0) {
     renderGroups.push({
       type: "task-group",
       tasks: currentTaskGroup,
       startIndex: taskGroupStartIndex,
     });
-  }
+    currentTaskGroup = [];
+  };
+
+  const flushReasoningGroup = () => {
+    if (currentReasoningGroup.length === 0) {
+      return;
+    }
+
+    renderGroups.push({
+      type: "reasoning-group",
+      parts: currentReasoningGroup,
+      startIndex: reasoningGroupStartIndex,
+    });
+    currentReasoningGroup = [];
+  };
+
+  m.parts.forEach((part, index) => {
+    if (isToolUIPart(part) && part.type === "tool-task") {
+      flushReasoningGroup();
+      if (currentTaskGroup.length === 0) {
+        taskGroupStartIndex = index;
+      }
+      currentTaskGroup.push(part as TaskToolUIPart);
+      return;
+    }
+
+    if (isReasoningUIPart(part)) {
+      flushTaskGroup();
+      if (currentReasoningGroup.length === 0) {
+        reasoningGroupStartIndex = index;
+      }
+      currentReasoningGroup.push(part);
+      return;
+    }
+
+    flushTaskGroup();
+    flushReasoningGroup();
+    renderGroups.push({ type: "part", part, index });
+  });
+
+  flushTaskGroup();
+  flushReasoningGroup();
 
   // When tool calls are hidden and this assistant message has tool calls,
   // show a compact summary bar instead
@@ -380,6 +425,22 @@ function SharedMessage({
                 taskParts={group.tasks}
                 activeApprovalId={null}
                 isStreaming={false}
+              />
+            </div>
+          );
+        }
+
+        if (group.type === "reasoning-group") {
+          if (!showToolCalls) return null;
+          return (
+            <div
+              key={`${m.id}-reasoning-group-${group.startIndex}`}
+              className="flex justify-start"
+            >
+              <ThinkingBlock
+                text={getReasoningGroupText(group.parts)}
+                isStreaming={false}
+                partCount={group.parts.length}
               />
             </div>
           );
