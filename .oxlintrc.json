@@ -30,7 +30,6 @@
         "apps/cli/tui/components/tool-renderers/shared.tsx",
         "packages/agent/system-prompt.ts",
         "packages/agent/tools/tools.test.ts",
-        "packages/sandbox/hybrid/sandbox.ts",
         "packages/sandbox/just-bash/sandbox.ts",
         "packages/sandbox/vercel/sandbox.test.ts",
         "packages/sandbox/vercel/sandbox.ts"

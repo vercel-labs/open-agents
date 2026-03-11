@@ -1,10 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import {
-  getArchivedSessionCountByUserId,
-  getChatSummariesBySessionId,
-  getSessionsWithUnreadByUserId,
-} from "@/lib/db/sessions";
+import { getChatSummariesBySessionId } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -44,35 +40,24 @@ export default async function SessionLayout({
         defaultModelId: string | null;
       }
     | undefined;
-  let initialSessionsData:
-    | {
-        sessions: Awaited<ReturnType<typeof getSessionsWithUnreadByUserId>>;
-        archivedCount: number;
-      }
-    | undefined;
 
   try {
-    const [chats, preferences, sessions, archivedCount] = await Promise.all([
+    const [chats, preferences] = await Promise.all([
       getChatSummariesBySessionId(sessionId, session.user.id),
       getUserPreferences(session.user.id),
-      getSessionsWithUnreadByUserId(session.user.id, { status: "active" }),
-      getArchivedSessionCountByUserId(session.user.id),
     ]);
     initialChatsData = {
       chats,
       defaultModelId: preferences.defaultModelId,
     };
-    initialSessionsData = { sessions, archivedCount };
   } catch (error) {
-    console.error("Failed to prefetch sidebar data:", error);
+    console.error("Failed to prefetch session chat data:", error);
   }
 
   return (
     <SessionLayoutShell
       session={sessionRecord}
-      currentUser={session.user}
       initialChatsData={initialChatsData}
-      initialSessionsData={initialSessionsData}
     >
       {children}
     </SessionLayoutShell>

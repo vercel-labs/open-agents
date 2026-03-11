@@ -16,7 +16,9 @@ const bashInputSchema = z.object({
   cwd: z
     .string()
     .optional()
-    .describe("Working directory for the command (absolute path)"),
+    .describe(
+      "Workspace-relative working directory for the command (e.g., apps/web)",
+    ),
   detached: z
     .boolean()
     .optional()
@@ -193,8 +195,8 @@ WHEN NOT TO USE:
 USAGE:
 - Runs bash -c "<command>" in a non-interactive shell (no TTY/PTY)
 - Commands automatically run in the working directory by default — do NOT prepend "cd /path &&" to commands
-- NEVER prefix commands with "cd /vercel/sandbox &&" or any path — this is the most common mistake and is always wrong
-- Use the cwd parameter ONLY when you need to run in a different directory
+- NEVER prefix commands with "cd <working-directory> &&" or any path — this is the most common mistake and is always wrong
+- Use the cwd parameter ONLY with a workspace-relative subdirectory when you need to run in a different directory
 - Commands automatically timeout after ~2 minutes
 - Combined stdout/stderr output is truncated after ~50,000 characters
 
@@ -212,9 +214,9 @@ IMPORTANT:
 - Use detached: true to start dev servers or other long-running processes in the background
 
 EXAMPLES:
-- Run the test suite: command: "npm test", cwd: "/Users/username/project"
+- Run the test suite: command: "npm test"
 - Check git status: command: "git status --short"
-- List files in src: command: "ls -la", cwd: "/Users/username/project/src"
+- List files in src: command: "ls -la", cwd: "src"
 - Start a dev server: command: "npm run dev", detached: true`,
     inputSchema: bashInputSchema,
     execute: async ({ command, cwd, detached }, { experimental_context }) => {

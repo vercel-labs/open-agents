@@ -288,7 +288,10 @@ function compactToolResultPart(
 ): JsonRecord {
   return {
     ...part,
-    output: compactedToolNotice,
+    output: {
+      type: "text",
+      value: compactedToolNotice,
+    },
   };
 }
 

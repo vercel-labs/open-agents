@@ -14,6 +14,7 @@ import {
   FolderGit2,
   GitCommit,
   GitCompare,
+  GitMerge,
   GitPullRequest,
   Link2,
   Loader2,
@@ -39,6 +40,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
+import { toast } from "sonner";
+import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
   WebAgentUIMessage,
@@ -96,13 +99,19 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
+import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
   isChatInFlight as isChatInFlightStatus,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
+import {
+  commitAndPushSessionChanges,
+  fetchRepoBranches,
+} from "@/lib/git-flow-client";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
@@ -120,6 +129,10 @@ const DiffViewer = dynamic(
 );
 const CreatePRDialog = dynamic(
   () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
+  { ssr: false },
+);
+const MergePrDialog = dynamic(
+  () => import("@/components/merge-pr-dialog").then((m) => m.MergePrDialog),
   { ssr: false },
 );
 const CommitDialog = dynamic(
@@ -140,6 +153,19 @@ const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
 
 const emptySubscribe = () => () => {};
+
+type AutoCommitPushStatus =
+  | "blocked"
+  | "disabled"
+  | "failed"
+  | "not-applicable"
+  | "nothing-to-commit"
+  | "ran";
+
+type AutoCommitPushResult = {
+  status: AutoCommitPushStatus;
+  errorMessage?: string;
+};
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -171,6 +197,24 @@ function useHasMounted() {
     () => true,
     () => false,
   );
+}
+
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+
+  if (diffMins < 1) return "now";
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 type MessageRenderGroup =
@@ -234,7 +278,7 @@ async function createSandbox(
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       sessionId,
-      sandboxType: sandboxType ?? "hybrid",
+      sandboxType: sandboxType ?? "vercel",
     }),
   });
   if (!response.ok) {
@@ -716,20 +760,131 @@ function ShareDialog({
   );
 }
 
-export function SessionChatContent(_props: unknown) {
+function NewChatMenuItem() {
+  const { createChat, switchChat } = useSessionLayout();
+
+  return (
+    <DropdownMenuItem
+      onClick={() => {
+        const { chat } = createChat();
+        switchChat(chat.id);
+      }}
+    >
+      <Plus className="mr-2 h-4 w-4" />
+      New Chat
+    </DropdownMenuItem>
+  );
+}
+
+function ChatSwitcherPanel({
+  open,
+  onOpenChange,
+  activeChatId,
+  isMobile,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  activeChatId: string;
+  isMobile: boolean;
+}) {
+  const { chats, createChat, switchChat } = useSessionLayout();
+
+  const content = (
+    <div
+      className={cn(
+        "overflow-y-auto px-2",
+        isMobile ? "max-h-[60vh] pb-4" : "flex-1 py-3",
+      )}
+    >
+      <div className="space-y-0.5">
+        {chats.map((chat) => (
+          <button
+            key={chat.id}
+            type="button"
+            onClick={() => {
+              switchChat(chat.id);
+              onOpenChange(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
+              chat.id === activeChatId ? "bg-secondary" : "hover:bg-muted/50",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {chat.title || "Untitled"}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">
+                {formatRelativeTime(new Date(chat.updatedAt))}
+              </span>
+              {chat.isStreaming && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              )}
+              {chat.id === activeChatId && (
+                <Check className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 border-t border-border pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            const { chat } = createChat();
+            switchChat(chat.id);
+            onOpenChange(false);
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New chat
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Switch Chat</DrawerTitle>
+          </DrawerHeader>
+          {content}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full max-w-sm flex-col gap-0 p-0"
+      >
+        <SheetHeader className="border-b border-border px-4 py-3">
+          <SheetTitle>Switch Chat</SheetTitle>
+        </SheetHeader>
+        {content}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+export function SessionChatContent({
+  initialIsOnlyChatInSession,
+}: {
+  initialIsOnlyChatInSession: boolean;
+}) {
   const router = useRouter();
-  const {
-    chats: mobileChats,
-    chatsLoading: mobileChatsLoading,
-    createChat: mobileCreateChat,
-    switchChat: mobileSwitchChat,
-  } = useSessionLayout();
   const [input, setInput] = useState("");
   const [isCreatingSandbox, setIsCreatingSandbox] = useState(false);
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
@@ -893,11 +1048,6 @@ export function SessionChatContent(_props: unknown) {
     modelOptions,
     modelOptionsLoading,
   } = useSessionChatContext();
-  const mobileActiveChatId = chatInfo.id;
-  const handleMobileNewChat = () => {
-    const { chat: newChat } = mobileCreateChat();
-    mobileSwitchChat(newChat.id);
-  };
   const {
     messages,
     error,
@@ -914,6 +1064,7 @@ export function SessionChatContent(_props: unknown) {
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const { preferences } = useUserPreferences();
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -1081,6 +1232,10 @@ export function SessionChatContent(_props: unknown) {
   const inFlightStartedAtRef = useRef<number | null>(null);
   const lastStreamRecoveryAtRef = useRef(0);
   const streamRecoveryProbeInFlightRef = useRef(false);
+  const autoCommitInFlightRef = useRef(false);
+  const [isAutoCommitting, setIsAutoCommitting] = useState(false);
+  const [pendingAutoCommitTurn, setPendingAutoCommitTurn] = useState(0);
+  const cachedDefaultBaseBranchRef = useRef<string | null>(null);
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -1099,6 +1254,111 @@ export function SessionChatContent(_props: unknown) {
       }
     },
     [syncSandboxStatus],
+  );
+
+  const resolveDefaultBaseBranch = useCallback(async (): Promise<string> => {
+    if (cachedDefaultBaseBranchRef.current) {
+      return cachedDefaultBaseBranchRef.current;
+    }
+
+    if (!session.repoOwner || !session.repoName) {
+      return "main";
+    }
+
+    try {
+      const branchData = await fetchRepoBranches(
+        session.repoOwner,
+        session.repoName,
+      );
+      cachedDefaultBaseBranchRef.current = branchData.defaultBranch;
+      return branchData.defaultBranch;
+    } catch (error) {
+      console.error("Failed to resolve default base branch:", error);
+      return "main";
+    }
+  }, [session.repoName, session.repoOwner]);
+
+  const maybeAutoCommitPush = useCallback(
+    async (
+      latestStatus?: SessionGitStatus | null,
+    ): Promise<AutoCommitPushResult> => {
+      if (!preferences?.autoCommitPush) {
+        return { status: "disabled" };
+      }
+
+      if (!session.cloneUrl || !session.repoOwner || !session.repoName) {
+        return { status: "not-applicable" };
+      }
+
+      if (!isSandboxValid(sandboxInfo) || autoCommitInFlightRef.current) {
+        return { status: "blocked" };
+      }
+
+      const statusSnapshot = latestStatus ?? gitStatus;
+      if (!statusSnapshot) {
+        return { status: "blocked" };
+      }
+
+      const hasPendingGitWork =
+        statusSnapshot.hasUncommittedChanges ||
+        statusSnapshot.hasUnpushedCommits;
+
+      if (!hasPendingGitWork) {
+        return { status: "nothing-to-commit" };
+      }
+
+      autoCommitInFlightRef.current = true;
+      if (isMountedRef.current) {
+        setIsAutoCommitting(true);
+      }
+      try {
+        const baseBranch = await resolveDefaultBaseBranch();
+        const branchName =
+          statusSnapshot.branch ?? session.branch ?? baseBranch ?? "HEAD";
+
+        await commitAndPushSessionChanges({
+          sessionId: session.id,
+          sessionTitle: session.title,
+          baseBranch,
+          branchName,
+        });
+
+        await refreshGitStatus().catch(() => undefined);
+        await refreshDiff().catch(() => undefined);
+        await refreshFiles().catch(() => undefined);
+        await checkBranchAndPr();
+
+        return { status: "ran" };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Failed to auto commit and push changes";
+        console.error("Failed to auto commit and push changes:", error);
+        return { status: "failed", errorMessage };
+      } finally {
+        autoCommitInFlightRef.current = false;
+        if (isMountedRef.current) {
+          setIsAutoCommitting(false);
+        }
+      }
+    },
+    [
+      preferences?.autoCommitPush,
+      session.cloneUrl,
+      session.repoOwner,
+      session.repoName,
+      session.branch,
+      session.id,
+      session.title,
+      sandboxInfo,
+      gitStatus,
+      resolveDefaultBaseBranch,
+      refreshGitStatus,
+      refreshDiff,
+      refreshFiles,
+      checkBranchAndPr,
+    ],
   );
 
   const requestMarkChatRead = useCallback(
@@ -1154,6 +1414,10 @@ export function SessionChatContent(_props: unknown) {
   useEffect(() => {
     hasRequestedSessionTitleGenerationRef.current = false;
   }, [session.id]);
+
+  useEffect(() => {
+    cachedDefaultBaseBranchRef.current = null;
+  }, [session.repoOwner, session.repoName]);
 
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
@@ -1764,24 +2028,63 @@ export function SessionChatContent(_props: unknown) {
       status === "ready" &&
       isMountedRef.current
     ) {
-      void requestStatusSync("force");
-      void refreshGitStatus().catch(() => {});
+      setPendingAutoCommitTurn((currentTurn) => currentTurn + 1);
       void requestMarkChatRead("force");
       void refreshChats();
-      // After a message completes, check branch and detect existing PRs
-      void checkBranchAndPr();
     }
   }, [
     status,
     chatInfo.id,
     setChatStreaming,
     clearChatTitle,
-    requestStatusSync,
-    refreshGitStatus,
     requestMarkChatRead,
     refreshChats,
+  ]);
+
+  useEffect(() => {
+    if (pendingAutoCommitTurn === 0 || status !== "ready") {
+      return;
+    }
+
+    const currentTurn = pendingAutoCommitTurn;
+    let cancelled = false;
+
+    void (async () => {
+      await requestStatusSync("force").catch(() => undefined);
+      const latestGitStatus = await refreshGitStatus().catch(() => undefined);
+      const autoCommitResult = await maybeAutoCommitPush(latestGitStatus);
+
+      if (cancelled || autoCommitResult.status === "blocked") {
+        return;
+      }
+
+      if (autoCommitResult.status === "failed") {
+        toast.error("Auto commit failed", {
+          description: autoCommitResult.errorMessage,
+        });
+      }
+
+      if (autoCommitResult.status !== "ran") {
+        await checkBranchAndPr().catch(() => undefined);
+      }
+
+      if (!cancelled) {
+        setPendingAutoCommitTurn((latestTurn) =>
+          latestTurn === currentTurn ? 0 : latestTurn,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pendingAutoCommitTurn,
+    status,
+    requestStatusSync,
+    refreshGitStatus,
+    maybeAutoCommitPush,
     checkBranchAndPr,
-    router,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
@@ -2210,7 +2513,16 @@ export function SessionChatContent(_props: unknown) {
   const showCommitAction =
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
+  const hasOpenPr = hasExistingPr && session.prStatus === "open";
+  const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
+  const isAutoCommitActionLocked = showCommitAction && isAutoCommitting;
+  const visibleCommitActionLabel = isAutoCommitActionLocked
+    ? "Committing automatically"
+    : commitActionLabel;
+  const commitActionTitle = isAutoCommitActionLocked
+    ? "Auto-commit is enabled. Changes are being committed and pushed automatically."
+    : undefined;
   const openExistingPr = () => {
     if (!existingPrUrl) {
       return;
@@ -2227,57 +2539,37 @@ export function SessionChatContent(_props: unknown) {
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 
-  const chatSwitcherContent = (
-    <div
-      className={cn(
-        "overflow-y-auto px-2",
-        isMobile ? "max-h-[60vh] pb-4" : "flex-1 py-3",
-      )}
-    >
-      <div className="space-y-0.5">
-        {mobileChats.map((chat) => (
-          <button
-            key={chat.id}
-            type="button"
-            onClick={() => {
-              mobileSwitchChat(chat.id);
-              setChatSwitcherOpen(false);
-            }}
-            className={cn(
-              "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors",
-              chat.id === mobileActiveChatId
-                ? "bg-secondary"
-                : "hover:bg-muted/50",
-            )}
-          >
-            <span className="min-w-0 flex-1 pr-2 text-sm font-medium whitespace-normal break-words">
-              {chat.title || "Untitled"}
-            </span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              {chat.isStreaming && (
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-              )}
-              {chat.id === mobileActiveChatId && (
-                <Check className="h-3.5 w-3.5 text-foreground" />
-              )}
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 border-t border-border pt-2">
-        <button
-          type="button"
-          onClick={() => {
-            handleMobileNewChat();
-            setChatSwitcherOpen(false);
-          }}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New chat
-        </button>
-      </div>
-    </div>
+  const handleMerged = useCallback(
+    async (mergeResult: MergePullRequestResponse) => {
+      updateSessionPullRequest({
+        prNumber: mergeResult.prNumber,
+        prStatus: "merged",
+      });
+
+      if (mergeResult.branchDeleteError) {
+        console.warn(
+          "PR merged but source branch was not deleted:",
+          mergeResult.branchDeleteError,
+        );
+      }
+
+      try {
+        await archiveSession();
+        router.push("/sessions");
+      } catch (archiveError) {
+        const archiveMessage =
+          archiveError instanceof Error
+            ? archiveError.message
+            : "Failed to archive session";
+        throw new Error(
+          `Pull request merged, but archiving the session failed: ${archiveMessage}`,
+          {
+            cause: archiveError,
+          },
+        );
+      }
+    },
+    [archiveSession, router, updateSessionPullRequest],
   );
 
   return (
@@ -2342,20 +2634,34 @@ export function SessionChatContent(_props: unknown) {
               {hasRepo ? (
                 hasExistingPr ? (
                   showCommitAction ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={() => setCommitDialogOpen(true)}
-                    >
-                      <GitCommit className="h-4 w-4 xl:mr-2" />
-                      <span className="hidden xl:inline">
-                        {commitActionLabel}
-                      </span>
-                      {hasUncommittedGitChanges && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                      )}
-                    </Button>
+                    <span className="inline-flex" title={commitActionTitle}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                        onClick={() => setCommitDialogOpen(true)}
+                        disabled={isAutoCommitActionLocked}
+                      >
+                        {isAutoCommitActionLocked ? (
+                          <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                        ) : (
+                          <GitCommit className="h-4 w-4 xl:mr-2" />
+                        )}
+                        <span
+                          className={cn(
+                            "hidden",
+                            isAutoCommitActionLocked
+                              ? "lg:inline"
+                              : "xl:inline",
+                          )}
+                        >
+                          {visibleCommitActionLabel}
+                        </span>
+                        {hasUncommittedGitChanges && (
+                          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                        )}
+                      </Button>
+                    </span>
                   ) : (
                     <Button
                       variant="outline"
@@ -2380,20 +2686,32 @@ export function SessionChatContent(_props: unknown) {
                     </Button>
                   )
                 ) : showCommitAction ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                    onClick={() => setCommitDialogOpen(true)}
-                  >
-                    <GitCommit className="h-4 w-4 xl:mr-2" />
-                    <span className="hidden xl:inline">
-                      {commitActionLabel}
-                    </span>
-                    {hasUncommittedGitChanges && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                    )}
-                  </Button>
+                  <span className="inline-flex" title={commitActionTitle}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                      onClick={() => setCommitDialogOpen(true)}
+                      disabled={isAutoCommitActionLocked}
+                    >
+                      {isAutoCommitActionLocked ? (
+                        <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                      ) : (
+                        <GitCommit className="h-4 w-4 xl:mr-2" />
+                      )}
+                      <span
+                        className={cn(
+                          "hidden",
+                          isAutoCommitActionLocked ? "lg:inline" : "xl:inline",
+                        )}
+                      >
+                        {visibleCommitActionLabel}
+                      </span>
+                      {hasUncommittedGitChanges && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                      )}
+                    </Button>
+                  </span>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
                     variant="outline"
@@ -2437,10 +2755,7 @@ export function SessionChatContent(_props: unknown) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={handleMobileNewChat}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Chat
-                  </DropdownMenuItem>
+                  <NewChatMenuItem />
                   <DropdownMenuItem onClick={() => setChatSwitcherOpen(true)}>
                     <MessageSquareMore className="mr-2 h-4 w-4" />
                     Switch Chat
@@ -2528,12 +2843,25 @@ export function SessionChatContent(_props: unknown) {
                           <GitPullRequest className="mr-2 h-4 w-4" />
                           View PR #{session.prNumber}
                         </DropdownMenuItem>
+                        {canMergeAndArchive && (
+                          <DropdownMenuItem
+                            onClick={() => setMergeDialogOpen(true)}
+                          >
+                            <GitMerge className="mr-2 h-4 w-4" />
+                            Merge & Archive
+                          </DropdownMenuItem>
+                        )}
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
+                            disabled={isAutoCommitActionLocked}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitActionLocked ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {visibleCommitActionLabel}
                           </DropdownMenuItem>
                         )}
                       </>
@@ -2542,9 +2870,14 @@ export function SessionChatContent(_props: unknown) {
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
+                            disabled={isAutoCommitActionLocked}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitActionLocked ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {visibleCommitActionLabel}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
@@ -2566,32 +2899,12 @@ export function SessionChatContent(_props: unknown) {
               </DropdownMenu>
             </div>
 
-            {/* Chat switcher: drawer on mobile, right sidebar on desktop */}
-            {isMobile ? (
-              <Drawer
-                open={chatSwitcherOpen}
-                onOpenChange={setChatSwitcherOpen}
-              >
-                <DrawerContent>
-                  <DrawerHeader>
-                    <DrawerTitle>Switch Chat</DrawerTitle>
-                  </DrawerHeader>
-                  {chatSwitcherContent}
-                </DrawerContent>
-              </Drawer>
-            ) : (
-              <Sheet open={chatSwitcherOpen} onOpenChange={setChatSwitcherOpen}>
-                <SheetContent
-                  side="right"
-                  className="flex w-full max-w-sm flex-col gap-0 p-0"
-                >
-                  <SheetHeader className="border-b border-border px-4 py-3">
-                    <SheetTitle>Switch Chat</SheetTitle>
-                  </SheetHeader>
-                  {chatSwitcherContent}
-                </SheetContent>
-              </Sheet>
-            )}
+            <ChatSwitcherPanel
+              open={chatSwitcherOpen}
+              onOpenChange={setChatSwitcherOpen}
+              activeChatId={chatInfo.id}
+              isMobile={isMobile}
+            />
 
             {/* Mobile share dialog */}
             <ShareDialog
@@ -2991,7 +3304,14 @@ export function SessionChatContent(_props: unknown) {
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (isArchived || !isSandboxActive) return;
+                if (
+                  isArchived ||
+                  !isSandboxActive ||
+                  isChatInFlight ||
+                  hasPendingResponse
+                ) {
+                  return;
+                }
                 const hasContent = input.trim() || images.length > 0;
                 if (!hasContent) return;
 
@@ -3000,10 +3320,7 @@ export function SessionChatContent(_props: unknown) {
                 setInput("");
                 clearImages();
 
-                const isFirstChatInSession =
-                  !mobileChatsLoading &&
-                  mobileChats.length === 1 &&
-                  mobileChats[0]?.id === chatInfo.id;
+                const isFirstChatInSession = initialIsOnlyChatInSession;
                 const shouldSetOptimisticTitle =
                   isFirstChatInSession &&
                   !hadInitialMessages &&
@@ -3136,7 +3453,13 @@ export function SessionChatContent(_props: unknown) {
                       return;
                     }
                     // On iOS, Return should insert a newline (send via submit button)
-                    if (e.key === "Enter" && !e.shiftKey && !isIosDevice) {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !isIosDevice &&
+                      !isChatInFlight &&
+                      !hasPendingResponse
+                    ) {
                       e.preventDefault();
                       if (!isArchived && isSandboxActive) {
                         e.currentTarget.form?.requestSubmit();
@@ -3164,7 +3487,7 @@ export function SessionChatContent(_props: unknown) {
                       }
                     }
                   }}
-                  disabled={isArchived || isChatInFlight}
+                  disabled={isArchived}
                   className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
                   style={{ minHeight: "24px" }}
                 />
@@ -3308,6 +3631,16 @@ export function SessionChatContent(_props: unknown) {
             updateSessionPullRequest(pr);
             void refreshGitStatus().catch(() => {});
           }}
+        />
+      )}
+
+      {/* Merge PR Dialog */}
+      {session && (
+        <MergePrDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          session={session}
+          onMerged={handleMerged}
         />
       )}
 

@@ -1,6 +1,7 @@
 import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
   clearSandboxState,
@@ -22,27 +23,18 @@ type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
 
-type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
+function toSkillSuggestions(
+  skills: Awaited<ReturnType<typeof discoverSkills>>,
+): SkillSuggestion[] {
+  return skills
+    .filter((skill) => skill.options.userInvocable !== false)
+    .map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+    }));
+}
 
-const SKILLS_CACHE_TTL_MS = 60_000;
-
-const discoveredSkillsCache = new Map<
-  string,
-  { skills: DiscoveredSkills; expiresAt: number }
->();
-
-const getSkillCacheKey = (sessionId: string, workingDirectory: string) =>
-  `${sessionId}:${workingDirectory}`;
-
-const pruneExpiredSkillCache = (now: number) => {
-  for (const [key, entry] of discoveredSkillsCache) {
-    if (entry.expiresAt <= now) {
-      discoveredSkillsCache.delete(key);
-    }
-  }
-};
-
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -50,7 +42,6 @@ export async function GET(_req: Request, context: RouteContext) {
 
   const { sessionId } = await context.params;
 
-  // Verify session ownership
   const sessionRecord = await getSessionById(sessionId);
   if (!sessionRecord) {
     return Response.json({ error: "Session not found" }, { status: 404 });
@@ -58,11 +49,22 @@ export async function GET(_req: Request, context: RouteContext) {
   if (sessionRecord.userId !== session.user.id) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {
-    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
-  }
+
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
+    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
+  }
+
+  const refresh = new URL(req.url).searchParams.get("refresh") === "1";
+
+  if (!refresh) {
+    const cachedSkills = await getCachedSkills(sessionId, sandboxState);
+    if (cachedSkills !== null) {
+      return Response.json({ skills: toSkillSuggestions(cachedSkills) });
+    }
+  }
+
+  if (!hasRuntimeSandboxState(sandboxState)) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
@@ -73,31 +75,10 @@ export async function GET(_req: Request, context: RouteContext) {
       (folder) => `${sandbox.workingDirectory}/${folder}/skills`,
     );
 
-    const now = Date.now();
-    pruneExpiredSkillCache(now);
-    const skillCacheKey = getSkillCacheKey(sessionId, sandbox.workingDirectory);
-    const cachedSkills = discoveredSkillsCache.get(skillCacheKey);
+    const skills = await discoverSkills(sandbox, skillDirs);
+    await setCachedSkills(sessionId, sandboxState, skills);
 
-    let skills: DiscoveredSkills;
-    if (cachedSkills && cachedSkills.expiresAt > now) {
-      skills = cachedSkills.skills;
-    } else {
-      skills = await discoverSkills(sandbox, skillDirs);
-      discoveredSkillsCache.set(skillCacheKey, {
-        skills,
-        expiresAt: now + SKILLS_CACHE_TTL_MS,
-      });
-    }
-
-    // Return only user-invocable skills with minimal metadata
-    const suggestions: SkillSuggestion[] = skills
-      .filter((skill) => skill.options.userInvocable !== false)
-      .map((skill) => ({
-        name: skill.name,
-        description: skill.description,
-      }));
-
-    const response: SkillsResponse = { skills: suggestions };
+    const response: SkillsResponse = { skills: toSkillSuggestions(skills) };
     return Response.json(response);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

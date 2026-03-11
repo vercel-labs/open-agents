@@ -12,6 +12,7 @@ export interface UserPreferences {
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
   defaultDiffMode: DiffMode;
+  autoCommitPush: boolean;
   modelVariants: ModelVariant[];
 }
 

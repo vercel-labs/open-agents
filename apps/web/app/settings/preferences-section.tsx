@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -34,7 +35,6 @@ import {
 } from "@/lib/model-options";
 
 const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
-  { id: "hybrid", name: "Hybrid" },
   { id: "vercel", name: "Vercel" },
   { id: "just-bash", name: "Just Bash" },
 ];
@@ -189,6 +189,17 @@ export function PreferencesSection() {
     }
   };
 
+  const handleAutoCommitPushChange = async (enabled: boolean) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({ autoCommitPush: enabled });
+    } catch (error) {
+      console.error("Failed to update auto-commit preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return <PreferencesSectionSkeleton />;
   }
@@ -313,6 +324,24 @@ export function PreferencesSection() {
           <p className="text-xs text-muted-foreground">
             The diff layout used when opening the changes viewer.
           </p>
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="auto-commit-push">Auto commit and push</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically commit and push git changes when an agent turn
+                finishes.
+              </p>
+            </div>
+            <Switch
+              id="auto-commit-push"
+              checked={preferences?.autoCommitPush ?? false}
+              onCheckedChange={handleAutoCommitPushChange}
+              disabled={isSaving}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -311,11 +311,12 @@ export const userPreferences = pgTable("user_preferences", {
   ),
   defaultSubagentModelId: text("default_subagent_model_id"),
   defaultSandboxType: text("default_sandbox_type", {
-    enum: ["hybrid", "vercel", "just-bash"],
+    enum: ["vercel", "just-bash"],
   }).default("vercel"),
   defaultDiffMode: text("default_diff_mode", {
     enum: ["unified", "split"],
   }).default("unified"),
+  autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   modelVariants: jsonb("model_variants")
     .$type<ModelVariant[]>()
     .notNull()

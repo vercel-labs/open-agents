@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "auto_commit_push" boolean DEFAULT false NOT NULL;

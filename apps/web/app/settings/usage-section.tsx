@@ -65,6 +65,13 @@ function formatTokens(n: number) {
   return String(n);
 }
 
+function toDateStr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function sumRows(rows: DailyUsageRow[]) {
   return rows.reduce(
     (acc, d) => ({
@@ -425,12 +432,6 @@ export function UsageSection() {
     let usage = data?.usage ?? [];
 
     if (dateRange?.from) {
-      const toDateStr = (d: Date) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
-      };
       const fromStr = toDateStr(dateRange.from);
       const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
       usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);

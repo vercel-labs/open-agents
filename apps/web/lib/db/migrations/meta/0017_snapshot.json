@@ -1,5 +1,5 @@
 {
-  "id": "f94f9ab2-786c-4bbb-a2d7-535fa2f191d3",
+  "id": "93113ff3-12a8-473c-8aea-6b2dc64e069e",
   "prevId": "9d261560-2184-4980-9315-1791e3dcc062",
   "version": "7",
   "dialect": "postgresql",
@@ -1125,12 +1125,12 @@
           "notNull": false,
           "default": "'vercel'"
         },
-        "default_diff_mode": {
-          "name": "default_diff_mode",
-          "type": "text",
+        "auto_commit_push": {
+          "name": "auto_commit_push",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'unified'"
+          "notNull": true,
+          "default": false
         },
         "model_variants": {
           "name": "model_variants",

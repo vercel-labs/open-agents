@@ -96,6 +96,10 @@ export interface GatewayOptions {
   providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
+export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
+  return modelId.startsWith("openai/gpt-5");
+}
+
 export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
@@ -118,8 +122,10 @@ export function gateway(
     );
   }
 
-  // Apply openai defaults to expose reasoning summaries
-  if (modelId.startsWith("openai/")) {
+  // Apply OpenAI defaults for all GPT-5 variants to expose encrypted reasoning content.
+  // This avoids Responses API failures when `store: false`, e.g.:
+  // "Item with id 'rs_...' not found. Items are not persisted when `store` is set to false."
+  if (shouldApplyOpenAIReasoningDefaults(modelId)) {
     defaultProviderOptions.openai = toProviderOptionsRecord({
       reasoningEffort: "high",
       reasoningSummary: "detailed",

@@ -5,9 +5,8 @@ import type { Dirent } from "fs";
  * - "local": Local filesystem sandbox using Node.js fs/child_process
  * - "in-memory": In-memory sandbox using just-bash (no real filesystem)
  * - "cloud": Remote cloud sandbox (e.g., Vercel Sandbox)
- * - "hybrid": Hybrid sandbox that starts with in-memory and can upgrade to cloud
  */
-export type SandboxType = "local" | "in-memory" | "cloud" | "hybrid";
+export type SandboxType = "local" | "in-memory" | "cloud";
 
 /**
  * Result of a successful snapshot operation.

@@ -7,6 +7,7 @@ import {
   shouldAutoApprove,
   pathNeedsApproval,
   shellEscape,
+  toDisplayPath,
 } from "./utils";
 
 interface FileInfo {
@@ -20,7 +21,7 @@ const globInputSchema = z.object({
   path: z
     .string()
     .optional()
-    .describe("Base directory to search from (absolute path)"),
+    .describe("Workspace-relative base directory to search from (e.g., src)"),
   limit: z
     .number()
     .optional()
@@ -67,6 +68,7 @@ USAGE:
 - Returns FILES (not directories) sorted by modification time (newest first)
 - Skips hidden files (names starting with ".") and node_modules
 - If path is omitted, the current working directory is used as the base
+- Use workspace-relative paths when setting path
 - Results are limited by the limit parameter (default: 100)
 
 IMPORTANT:
@@ -77,7 +79,7 @@ IMPORTANT:
 EXAMPLES:
 - All TypeScript files in the project: pattern: "**/*.ts"
 - All Jest tests under src: pattern: "src/**/*.test.ts"
-- Recent JSON config files: pattern: "*.json", path: "/Users/username/project/config", limit: 20`,
+- Recent JSON config files: pattern: "*.json", path: "config", limit: 20`,
     inputSchema: globInputSchema,
     execute: async (
       { pattern, path: basePath, limit = 100 },
@@ -191,7 +193,7 @@ EXAMPLES:
           if (isNaN(mtimeSeconds) || isNaN(size) || !filePath) continue;
 
           files.push({
-            path: filePath,
+            path: toDisplayPath(filePath, workingDirectory),
             size,
             modifiedAt: mtimeSeconds * 1000,
           });
@@ -200,7 +202,7 @@ EXAMPLES:
         const response: Record<string, unknown> = {
           success: true,
           pattern,
-          baseDir: searchDir,
+          baseDir: toDisplayPath(searchDir, workingDirectory),
           count: files.length,
           files: files.map((f) => ({
             path: f.path,

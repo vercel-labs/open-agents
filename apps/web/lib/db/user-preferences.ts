@@ -12,6 +12,7 @@ export interface UserPreferencesData {
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
   defaultDiffMode: DiffMode;
+  autoCommitPush: boolean;
   modelVariants: ModelVariant[];
 }
 
@@ -20,13 +21,18 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultSubagentModelId: null,
   defaultSandboxType: "vercel",
   defaultDiffMode: "unified",
+  autoCommitPush: false,
   modelVariants: [],
 };
 
-const VALID_SANDBOX_TYPES: SandboxType[] = ["hybrid", "vercel", "just-bash"];
+const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel", "just-bash"];
 const VALID_DIFF_MODES: DiffMode[] = ["unified", "split"];
 
 function normalizeSandboxType(value: unknown): SandboxType {
+  if (value === "hybrid") {
+    return "vercel";
+  }
+
   if (
     typeof value === "string" &&
     VALID_SANDBOX_TYPES.includes(value as SandboxType)
@@ -55,6 +61,7 @@ export function toUserPreferencesData(
     | "defaultSubagentModelId"
     | "defaultSandboxType"
     | "defaultDiffMode"
+    | "autoCommitPush"
     | "modelVariants"
   >,
 ): UserPreferencesData {
@@ -67,6 +74,7 @@ export function toUserPreferencesData(
     defaultSubagentModelId: row?.defaultSubagentModelId ?? null,
     defaultSandboxType: normalizeSandboxType(row?.defaultSandboxType),
     defaultDiffMode: normalizeDiffMode(row?.defaultDiffMode),
+    autoCommitPush: row?.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
   };
 }
@@ -125,6 +133,8 @@ export async function updateUserPreferences(
         updates.defaultSandboxType ?? DEFAULT_PREFERENCES.defaultSandboxType,
       defaultDiffMode:
         updates.defaultDiffMode ?? DEFAULT_PREFERENCES.defaultDiffMode,
+      autoCommitPush:
+        updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
     })
     .returning();

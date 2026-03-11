@@ -27,7 +27,6 @@ export function ReadRenderer({
     ? { ...state, error: state.error ?? outputError }
     : state;
 
-  // Show expanded content if there are additional parameters
   const hasExpandedContent = offset !== undefined || limit !== undefined;
 
   const expandedContent = hasExpandedContent ? (
@@ -61,8 +60,9 @@ export function ReadRenderer({
     <ToolLayout
       name="Read"
       summary={filePath}
+      summaryClassName="font-mono"
+      meta={lines !== undefined ? `${lines} lines` : undefined}
       state={mergedState}
-      output={outputError}
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}

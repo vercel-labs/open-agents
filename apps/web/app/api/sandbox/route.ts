@@ -3,7 +3,6 @@ import {
   type FileEntry,
   type SandboxState,
 } from "@open-harness/sandbox";
-import { after } from "next/server";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
@@ -44,7 +43,7 @@ interface CreateSandboxRequest {
   isNewBranch?: boolean;
   sessionId?: string;
   sandboxId?: string;
-  sandboxType?: "hybrid" | "vercel" | "just-bash";
+  sandboxType?: "vercel" | "just-bash";
 }
 
 export async function POST(req: Request) {
@@ -61,7 +60,7 @@ export async function POST(req: Request) {
     isNewBranch = false,
     sessionId,
     sandboxId: providedSandboxId,
-    sandboxType = "hybrid",
+    sandboxType = "vercel",
   } = body;
 
   // Get session for auth
@@ -130,7 +129,7 @@ export async function POST(req: Request) {
   // ============================================
   if (providedSandboxId) {
     const sandbox = await connectSandbox({
-      state: { type: "hybrid", sandboxId: providedSandboxId },
+      state: { type: "vercel", sandboxId: providedSandboxId },
       options: { env, ports: DEFAULT_SANDBOX_PORTS },
     });
 
@@ -154,7 +153,7 @@ export async function POST(req: Request) {
       createdAt: Date.now(),
       timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       currentBranch: sandbox.currentBranch,
-      mode: "hybrid",
+      mode: "vercel",
     });
   }
 
@@ -163,9 +162,9 @@ export async function POST(req: Request) {
   // ============================================
   const startTime = Date.now();
 
-  // Download and extract tarball if repo provided (needed for hybrid and just-bash)
+  // Download and extract tarball only for just-bash mode
   let files: Record<string, FileEntry> = {};
-  if (repoUrl && (sandboxType === "hybrid" || sandboxType === "just-bash")) {
+  if (repoUrl && sandboxType === "just-bash") {
     let tarballResult;
     try {
       tarballResult = await downloadAndExtractTarball(
@@ -208,7 +207,7 @@ export async function POST(req: Request) {
       },
       options: { env },
     });
-  } else if (sandboxType === "vercel") {
+  } else {
     // Cloud-first sandbox
     sandbox = await connectSandbox({
       state: {
@@ -221,59 +220,6 @@ export async function POST(req: Request) {
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         ports: DEFAULT_SANDBOX_PORTS,
         baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-      },
-    });
-  } else {
-    // Default: hybrid sandbox (local first, then cloud)
-    sandbox = await connectSandbox({
-      state: {
-        type: "hybrid",
-        files,
-        workingDirectory: WORKING_DIR,
-        source,
-      },
-      options: {
-        env,
-        gitUser,
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-        ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-        scheduleBackgroundWork: (cb) => after(cb),
-        hooks: sessionId
-          ? {
-              onCloudSandboxReady: async (sandboxId) => {
-                const currentSession = await getSessionById(sessionId);
-                if (currentSession?.sandboxState?.type === "hybrid") {
-                  const nextState: SandboxState = { type: "hybrid", sandboxId };
-                  await updateSession(sessionId, {
-                    sandboxState: nextState,
-                    lifecycleVersion: getNextLifecycleVersion(
-                      currentSession.lifecycleVersion,
-                    ),
-                    ...buildActiveLifecycleUpdate(nextState),
-                  });
-                  console.log(
-                    `[Sandbox] Cloud sandbox ready for session ${sessionId}: ${sandboxId}`,
-                  );
-
-                  kickSandboxLifecycleWorkflow({
-                    sessionId,
-                    reason: "cloud-ready",
-                  });
-                }
-              },
-              onCloudSandboxFailed: async (error) => {
-                await updateSession(sessionId, {
-                  lifecycleState: "failed",
-                  lifecycleError: error.message,
-                });
-                console.error(
-                  `[Sandbox] Cloud sandbox failed for session ${sessionId}:`,
-                  error.message,
-                );
-              },
-            }
-          : undefined,
       },
     });
   }

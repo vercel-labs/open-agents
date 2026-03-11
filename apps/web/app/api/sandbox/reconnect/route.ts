@@ -94,26 +94,7 @@ export async function GET(req: Request): Promise<Response> {
     } satisfies ReconnectResponse);
   }
 
-  // Pre-handoff hybrid (has files) - always available since JustBash is in-memory
-  // No expiresAt for pre-handoff since JustBash doesn't timeout
-  if (state.type === "hybrid" && state.files && !state.sandboxId) {
-    // Ensure local hybrid state does not carry stale cloud timeout metadata.
-    const nextState: SandboxState = { type: "hybrid", files: state.files };
-    const updatedSession = await updateSession(sessionId, {
-      sandboxState: nextState,
-    });
-
-    console.log(
-      `[Reconnect] session=${sessionId} status=connected hasSnapshot=${!!sessionRecord.snapshotUrl} mode=hybrid-local`,
-    );
-    return Response.json({
-      status: "connected",
-      hasSnapshot: !!sessionRecord.snapshotUrl,
-      lifecycle: buildLifecyclePayload(updatedSession ?? sessionRecord),
-    } satisfies ReconnectResponse);
-  }
-
-  // Post-handoff hybrid or Vercel - has sandboxId, try to connect
+  // Connect and probe runtime sandbox state (vercel or just-bash)
   try {
     const sandbox = await connectSandbox(state as SandboxState);
     const probe = await sandbox.exec("pwd", sandbox.workingDirectory, 15_000);
