@@ -127,6 +127,13 @@
       "when": 1773227614101,
       "tag": "0017_cynical_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1773229000000,
+      "tag": "0018_remove_hybrid_sandbox",
+      "breakpoints": true
     }
   ]
 }
