@@ -107,7 +107,7 @@ export function ToolLayout({
     >
       <div
         className={cn(
-          "flex min-w-0 items-baseline gap-2 rounded-md text-sm",
+          "flex min-w-0 select-none items-baseline gap-2 rounded-md text-sm",
           hasExpandedDetails && "cursor-pointer",
           isCompact && "py-0.5 pr-1",
           isCompact &&
