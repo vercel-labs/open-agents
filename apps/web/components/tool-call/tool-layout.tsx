@@ -51,8 +51,18 @@ function hasRenderableContent(value: ReactNode) {
   );
 }
 
+const MAX_ERROR_PREVIEW_LENGTH = 72;
+
 function trimErrorPrefix(message: string) {
   return message.replace(/^Error:\s*/i, "").trim();
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 export function ToolLayout({
@@ -76,6 +86,9 @@ export function ToolLayout({
   );
   const errorMessage =
     state.error && !state.denied ? trimErrorPrefix(state.error) : undefined;
+  const errorPreview = errorMessage
+    ? truncateText(errorMessage, MAX_ERROR_PREVIEW_LENGTH)
+    : undefined;
   const hasErrorDetails = Boolean(errorMessage);
   const hasExpandedDetails =
     hasRenderableContent(expandedContent) || hasErrorDetails;
@@ -90,7 +103,8 @@ export function ToolLayout({
       Interrupted
     </span>
   ) : null;
-  const hasTrailingMeta = hasMeta || interruptedBadge !== null;
+  const hasTrailingMeta =
+    hasMeta || interruptedBadge !== null || errorPreview !== undefined;
 
   const isCompact =
     !isExpanded &&
@@ -170,9 +184,19 @@ export function ToolLayout({
           )}
 
           {hasTrailingMeta && (
-            <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground">
+            <span
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground",
+                errorPreview ? "shrink overflow-hidden" : "shrink-0",
+              )}
+            >
               {meta}
               {interruptedBadge}
+              {errorPreview && (
+                <span className="max-w-56 truncate text-[12px] text-red-600/80 dark:text-red-400/90 sm:max-w-72">
+                  {errorPreview}
+                </span>
+              )}
             </span>
           )}
         </div>
