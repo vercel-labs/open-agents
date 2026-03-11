@@ -2524,7 +2524,7 @@ export function SessionChatContent({
                           disabled={!existingPrUrl}
                         >
                           <GitPullRequest className="mr-2 h-4 w-4" />
-                          View PR
+                          View PR #{session.prNumber}
                         </Button>
                       )}
                     </>
