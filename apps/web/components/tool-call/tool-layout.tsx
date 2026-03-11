@@ -107,7 +107,7 @@ export function ToolLayout({
     >
       <div
         className={cn(
-          "flex min-w-0 items-center gap-2 rounded-md text-sm",
+          "flex min-w-0 items-baseline gap-2 rounded-md text-sm",
           hasExpandedDetails && "cursor-pointer",
           isCompact && "py-0.5 pr-1",
           isCompact &&
@@ -129,7 +129,7 @@ export function ToolLayout({
       >
         <span
           className={cn(
-            "flex size-3.5 shrink-0 items-center",
+            "flex size-3.5 shrink-0 items-center self-center",
             isCompact ? "justify-start" : "justify-center",
           )}
         >
@@ -137,7 +137,7 @@ export function ToolLayout({
         </span>
         <span
           className={cn(
-            "shrink-0 font-medium",
+            "shrink-0 font-medium leading-none",
             state.denied ? "text-red-500" : "text-foreground",
             nameClassName,
           )}
@@ -145,13 +145,13 @@ export function ToolLayout({
           {name}
         </span>
 
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+        <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
           {hasSummary && (
             <>
               <span className="shrink-0 text-muted-foreground/40">·</span>
               <span
                 className={cn(
-                  "min-w-0 flex-1 truncate text-[13px] text-muted-foreground",
+                  "min-w-0 flex-1 truncate text-[13px] leading-none text-muted-foreground",
                   summaryClassName,
                 )}
               >
@@ -163,7 +163,7 @@ export function ToolLayout({
           {hasMeta && (
             <>
               <span className="shrink-0 text-muted-foreground/40">·</span>
-              <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+              <span className="inline-flex shrink-0 items-baseline gap-1.5 text-[13px] leading-none text-muted-foreground">
                 {meta}
               </span>
             </>
@@ -171,7 +171,7 @@ export function ToolLayout({
         </div>
 
         {hasExpandedDetails && (
-          <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/70">
+          <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center self-center text-muted-foreground/70">
             {isExpanded ? (
               <ChevronDown className="h-3.5 w-3.5" />
             ) : (
