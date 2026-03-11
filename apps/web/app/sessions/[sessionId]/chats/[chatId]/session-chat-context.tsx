@@ -37,7 +37,7 @@ import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
 import type { Chat, Session } from "@/lib/db/schema";
 import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 
-const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel", "hybrid"] as const;
+const KNOWN_SANDBOX_TYPES = ["just-bash", "vercel"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
 const CHAT_UI_UPDATE_THROTTLE_MS = 75;
 
@@ -65,15 +65,6 @@ function hasRuntimeSandboxData(state: unknown): boolean {
       typeof sandboxState.sandboxId === "string" &&
       sandboxState.sandboxId.length > 0
     );
-  }
-
-  if (sandboxType === "hybrid") {
-    const hasSandboxId =
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0;
-    const hasFiles =
-      sandboxState.files !== undefined && sandboxState.files !== null;
-    return hasSandboxId || hasFiles;
   }
 
   return sandboxState.files !== undefined && sandboxState.files !== null;
@@ -885,7 +876,7 @@ export function SessionChatProvider({
   }, []);
 
   const preferredSandboxType =
-    asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "hybrid";
+    asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "vercel";
   const supportsDiff = preferredSandboxType !== "just-bash";
   const supportsRepoCreation = preferredSandboxType !== "just-bash";
   const hasRuntimeSandboxState = hasRuntimeSandboxData(

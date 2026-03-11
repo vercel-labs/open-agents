@@ -10,7 +10,7 @@ let isAuthenticated = true;
 interface MockPreferences {
   defaultModelId: string;
   defaultSubagentModelId: string | null;
-  defaultSandboxType: "hybrid" | "vercel" | "just-bash";
+  defaultSandboxType: "vercel" | "just-bash";
   modelVariants: ModelVariant[];
 }
 

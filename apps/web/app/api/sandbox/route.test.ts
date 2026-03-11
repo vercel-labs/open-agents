@@ -6,13 +6,12 @@ interface TestSessionRecord {
   id: string;
   userId: string;
   lifecycleVersion: number;
-  sandboxState: { type: "vercel" | "hybrid" | "just-bash" };
+  sandboxState: { type: "vercel" | "just-bash" };
 }
 
 interface KickCall {
   sessionId: string;
   reason: string;
-  scheduleBackgroundWork?: (callback: () => Promise<void>) => void;
 }
 
 const kickCalls: KickCall[] = [];
@@ -26,7 +25,7 @@ let sessionRecord: TestSessionRecord;
 
 function isConnectConfig(value: unknown): value is {
   state: {
-    type: "vercel" | "hybrid" | "just-bash";
+    type: "vercel" | "just-bash";
     sandboxId?: string;
   };
 } {
@@ -35,18 +34,8 @@ function isConnectConfig(value: unknown): value is {
   const state = value.state;
   if (!state || typeof state !== "object") return false;
   if (!("type" in state)) return false;
-  return (
-    state.type === "vercel" ||
-    state.type === "hybrid" ||
-    state.type === "just-bash"
-  );
+  return state.type === "vercel" || state.type === "just-bash";
 }
-
-mock.module("next/server", () => ({
-  after: (callback: () => void | Promise<void>) => {
-    void callback();
-  },
-}));
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => ({
@@ -98,24 +87,20 @@ mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (config: unknown) => {
     connectConfigs.push(config);
 
-    const nextState: {
-      type: "vercel" | "hybrid";
-      sandboxId: string;
-      expiresAt: number;
-    } = isConnectConfig(config)
-      ? config.state.type === "vercel"
+    const nextState = isConnectConfig(config)
+      ? config.state.type === "just-bash"
         ? {
-            type: "vercel",
-            sandboxId: "sbx-vercel-1",
-            expiresAt: Date.now() + 120_000,
+            type: "just-bash" as const,
+            files: {},
+            workingDirectory: "/vercel/sandbox",
           }
         : {
-            type: "hybrid",
-            sandboxId: config.state.sandboxId ?? "sbx-hybrid-1",
+            type: "vercel" as const,
+            sandboxId: config.state.sandboxId ?? "sbx-vercel-1",
             expiresAt: Date.now() + 120_000,
           }
       : {
-          type: "vercel",
+          type: "vercel" as const,
           sandboxId: "sbx-default-1",
           expiresAt: Date.now() + 120_000,
         };
@@ -144,7 +129,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     };
   });
 
-  test("reconnect branch kicks lifecycle immediately", async () => {
+  test("reconnect branch uses vercel sandbox and kicks lifecycle immediately", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -161,7 +146,14 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(kickCalls.length).toBe(1);
     expect(kickCalls[0]?.sessionId).toBe("session-1");
     expect(kickCalls[0]?.reason).toBe("sandbox-created");
-    expect(kickCalls[0]?.scheduleBackgroundWork).toBeUndefined();
+
+    const reconnectConfig = connectConfigs[0] as
+      | {
+          state?: { type?: string; sandboxId?: string };
+        }
+      | undefined;
+    expect(reconnectConfig?.state?.type).toBe("vercel");
+    expect(reconnectConfig?.state?.sandboxId).toBe("sbx-existing-1");
   });
 
   test("new vercel sandbox kicks lifecycle immediately", async () => {
@@ -181,7 +173,6 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(kickCalls.length).toBe(1);
     expect(kickCalls[0]?.sessionId).toBe("session-1");
     expect(kickCalls[0]?.reason).toBe("sandbox-created");
-    expect(kickCalls[0]?.scheduleBackgroundWork).toBeUndefined();
     expect(updateCalls.length).toBeGreaterThan(0);
 
     const vercelConfig = connectConfigs.find(
@@ -191,5 +182,28 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(vercelConfig?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
+  });
+
+  test("new just-bash sandbox returns no timeout", async () => {
+    const { POST } = await routeModulePromise;
+
+    const request = new Request("http://localhost/api/sandbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "session-1",
+        sandboxType: "just-bash",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.ok).toBe(true);
+
+    const payload = (await response.json()) as {
+      timeout: number | null;
+      mode: string;
+    };
+    expect(payload.timeout).toBeNull();
+    expect(payload.mode).toBe("just-bash");
   });
 });

@@ -311,7 +311,7 @@ export const userPreferences = pgTable("user_preferences", {
   ),
   defaultSubagentModelId: text("default_subagent_model_id"),
   defaultSandboxType: text("default_sandbox_type", {
-    enum: ["hybrid", "vercel", "just-bash"],
+    enum: ["vercel", "just-bash"],
   }).default("vercel"),
   autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   modelVariants: jsonb("model_variants")

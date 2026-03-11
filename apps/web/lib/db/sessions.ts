@@ -1,3 +1,4 @@
+import type { SandboxState } from "@open-harness/sandbox";
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
@@ -13,12 +14,39 @@ import {
   shares,
 } from "./schema";
 
+export function normalizeLegacySandboxState(
+  sandboxState: unknown,
+): SandboxState | null | undefined {
+  if (!sandboxState || typeof sandboxState !== "object") {
+    return sandboxState as null | undefined;
+  }
+
+  const state = sandboxState as Record<string, unknown>;
+  if (state.type !== "hybrid") {
+    return sandboxState as SandboxState;
+  }
+
+  return {
+    ...state,
+    type: "vercel",
+  } as SandboxState;
+}
+
+function normalizeSessionRecord<T extends { sandboxState: unknown }>(
+  session: T,
+): T {
+  return {
+    ...session,
+    sandboxState: normalizeLegacySandboxState(session.sandboxState) ?? null,
+  };
+}
+
 export async function createSession(data: NewSession) {
   const [session] = await db.insert(sessions).values(data).returning();
   if (!session) {
     throw new Error("Failed to create session");
   }
-  return session;
+  return normalizeSessionRecord(session);
 }
 
 interface CreateSessionWithInitialChatInput {
@@ -51,14 +79,16 @@ export async function createSessionWithInitialChat(
       throw new Error("Failed to create chat");
     }
 
-    return { session, chat };
+    return { session: normalizeSessionRecord(session), chat };
   });
 }
 
 export async function getSessionById(sessionId: string) {
-  return db.query.sessions.findFirst({
+  const session = await db.query.sessions.findFirst({
     where: eq(sessions.id, sessionId),
   });
+
+  return session ? normalizeSessionRecord(session) : session;
 }
 
 export async function getShareById(shareId: string) {
@@ -92,10 +122,12 @@ export async function deleteShareByChatId(chatId: string) {
 }
 
 export async function getSessionsByUserId(userId: string) {
-  return db.query.sessions.findMany({
+  const records = await db.query.sessions.findMany({
     where: eq(sessions.userId, userId),
     orderBy: [desc(sessions.createdAt)],
   });
+
+  return records.map((session) => normalizeSessionRecord(session));
 }
 
 type SessionSidebarFields = Pick<
@@ -234,7 +266,8 @@ export async function updateSession(
     .set({ ...data, updatedAt: new Date() })
     .where(eq(sessions.id, sessionId))
     .returning();
-  return session;
+
+  return session ? normalizeSessionRecord(session) : session;
 }
 
 export async function deleteSession(sessionId: string) {

@@ -29,13 +29,6 @@ export interface FileEntry {
 }
 
 /**
- * Operation pending replay during hybrid sandbox handoff.
- */
-export type PendingOperation =
-  | { type: "writeFile"; path: string; content: string }
-  | { type: "mkdir"; path: string; recursive: boolean };
-
-/**
  * Status of a sandbox throughout its lifecycle.
  * Used for UI feedback and state management.
  */

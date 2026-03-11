@@ -31,10 +31,6 @@ export function isSandboxActive(
  * Check if we can perform operations on a sandbox (snapshot, stop, etc.).
  * Unlike isSandboxActive, this does NOT check expiration - we should still
  * be able to snapshot/stop an expired sandbox.
- *
- * For hybrid sandboxes, this only returns true if there's a cloud sandbox
- * (sandboxId present). Pre-handoff hybrid sandboxes (files only) cannot be
- * snapshotted since they're not cloud-based.
  */
 export function canOperateOnSandbox(
   state: SandboxState | null | undefined,
@@ -43,10 +39,6 @@ export function canOperateOnSandbox(
 
   switch (state.type) {
     case "vercel":
-      return !!state.sandboxId;
-    case "hybrid":
-      // Only cloud-based hybrid sandboxes can be operated on (snapshot/stop)
-      // Pre-handoff hybrid (files only) has no cloud VM to snapshot
       return !!state.sandboxId;
     case "just-bash":
       return !!state.files;
@@ -76,15 +68,6 @@ export function hasRuntimeSandboxState(state: unknown): boolean {
       typeof sandboxState.sandboxId === "string" &&
       sandboxState.sandboxId.length > 0
     );
-  }
-
-  if (sandboxState.type === "hybrid") {
-    const hasSandboxId =
-      typeof sandboxState.sandboxId === "string" &&
-      sandboxState.sandboxId.length > 0;
-    const hasFiles =
-      sandboxState.files !== undefined && sandboxState.files !== null;
-    return hasSandboxId || hasFiles;
   }
 
   if (sandboxState.type === "just-bash") {
@@ -119,9 +102,6 @@ function hasRuntimeState(state: SandboxState): boolean {
   switch (state.type) {
     case "vercel":
       return !!state.sandboxId;
-    case "hybrid":
-      // Hybrid is active if it has cloud sandbox OR local files (pre-handoff)
-      return !!state.sandboxId || !!state.files;
     case "just-bash":
       return !!state.files;
     default:
@@ -138,13 +118,9 @@ export function clearSandboxState(
 ): SandboxState | null {
   if (!state) return null;
 
-  // Create minimal state preserving only the type
-  // All SandboxState variants have optional fields, so { type } is valid
   switch (state.type) {
     case "vercel":
       return { type: "vercel" };
-    case "hybrid":
-      return { type: "hybrid" };
     case "just-bash":
       return { type: "just-bash" };
     default:

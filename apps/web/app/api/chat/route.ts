@@ -653,41 +653,13 @@ export async function POST(req: Request) {
         }
 
         // Persist sandbox state
-        // For hybrid sandboxes, we need to be careful not to overwrite the sandboxId
-        // that may have been set by background work (the onCloudSandboxReady hook)
         if (sandbox.getState) {
           try {
-            const currentState = sandbox.getState() as SandboxState;
-            let sandboxStateToPersist = currentState;
-
-            // For hybrid sandboxes in pre-handoff state (has files, no sandboxId),
-            // check if background work has already set a sandboxId we should preserve
-            if (
-              currentState.type === "hybrid" &&
-              "files" in currentState &&
-              !currentState.sandboxId
-            ) {
-              const currentSession = await getSessionById(sessionId);
-              if (
-                currentSession?.sandboxState?.type === "hybrid" &&
-                currentSession.sandboxState.sandboxId
-              ) {
-                // Background work has completed - use the sandboxId from DB
-                // but also include pending operations from this session
-                sandboxStateToPersist = {
-                  type: "hybrid",
-                  sandboxId: currentSession.sandboxState.sandboxId,
-                  pendingOperations:
-                    "pendingOperations" in currentState
-                      ? currentState.pendingOperations
-                      : undefined,
-                };
-              }
-            }
+            const sandboxState = sandbox.getState() as SandboxState;
 
             await updateSession(sessionId, {
-              sandboxState: sandboxStateToPersist,
-              ...buildActiveLifecycleUpdate(sandboxStateToPersist, {
+              sandboxState,
+              ...buildActiveLifecycleUpdate(sandboxState, {
                 activityAt,
               }),
             });

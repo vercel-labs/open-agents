@@ -297,9 +297,6 @@ function deserializeFilesystemSnapshot(files) {
 - `packages/sandbox/just-bash/sandbox.ts` - Baseline management, serialization
 - `packages/sandbox/just-bash/state.ts` - State schema with `initialFiles`
 - `packages/sandbox/just-bash/snapshot.ts` - Snapshot schema with `initialFiles`
-- `packages/sandbox/hybrid/state.ts` - Hybrid state schema (passes through)
-- `packages/sandbox/hybrid/sandbox.ts` - Hybrid serialization (passes through)
-- `packages/sandbox/hybrid/connect.ts` - Hybrid connection (passes through)
 
 ## Open Questions
 

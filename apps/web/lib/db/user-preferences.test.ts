@@ -33,6 +33,20 @@ describe("toUserPreferencesData", () => {
     expect(result.defaultSandboxType).toBe("vercel");
   });
 
+  test("normalizes legacy hybrid sandbox types to vercel", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultModelId: "openai/gpt-5",
+      defaultSubagentModelId: null,
+      defaultSandboxType: "hybrid" as never,
+      autoCommitPush: false,
+      modelVariants: [],
+    });
+
+    expect(result.defaultSandboxType).toBe("vercel");
+  });
+
   test("drops invalid modelVariants payloads", async () => {
     const { toUserPreferencesData } = await userPreferencesModulePromise;
 
@@ -53,7 +67,7 @@ describe("toUserPreferencesData", () => {
     const result = toUserPreferencesData({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
-      defaultSandboxType: "hybrid",
+      defaultSandboxType: "vercel",
       autoCommitPush: false,
       modelVariants: [
         {
@@ -68,7 +82,7 @@ describe("toUserPreferencesData", () => {
     expect(result).toEqual({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
-      defaultSandboxType: "hybrid",
+      defaultSandboxType: "vercel",
       autoCommitPush: false,
       modelVariants: [
         {

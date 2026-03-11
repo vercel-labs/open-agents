@@ -23,7 +23,6 @@ export type SandboxLifecycleState =
 
 export type SandboxLifecycleReason =
   | "sandbox-created"
-  | "cloud-ready"
   | "timeout-extended"
   | "snapshot-restored"
   | "reconnect"

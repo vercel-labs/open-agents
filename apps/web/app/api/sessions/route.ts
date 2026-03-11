@@ -16,7 +16,7 @@ interface CreateSessionRequest {
   branch?: string;
   cloneUrl?: string;
   isNewBranch?: boolean;
-  sandboxType?: "hybrid" | "vercel" | "just-bash";
+  sandboxType?: "vercel" | "just-bash";
 }
 
 function generateBranchName(username: string, name?: string | null): string {
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
     branch,
     cloneUrl,
     isNewBranch,
-    sandboxType = "hybrid",
+    sandboxType = "vercel",
   } = body;
 
   let finalBranch = branch;

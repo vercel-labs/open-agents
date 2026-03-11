@@ -264,7 +264,7 @@ async function createSandbox(
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       sessionId,
-      sandboxType: sandboxType ?? "hybrid",
+      sandboxType: sandboxType ?? "vercel",
     }),
   });
   if (!response.ok) {
