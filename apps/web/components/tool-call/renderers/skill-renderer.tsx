@@ -78,7 +78,7 @@ export function SkillRenderer({
     <ToolLayout
       name="Skill"
       summary={skillName ? `/${skillName}` : "..."}
-      summaryClassName="font-mono text-foreground"
+      summaryClassName="font-mono"
       state={mergedState}
       nameClassName={mergedState.error ? "text-red-500" : undefined}
       expandedContent={expandedContent}
