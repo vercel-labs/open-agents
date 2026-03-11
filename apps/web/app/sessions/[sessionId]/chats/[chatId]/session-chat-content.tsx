@@ -1219,6 +1219,7 @@ export function SessionChatContent({
   const lastStreamRecoveryAtRef = useRef(0);
   const streamRecoveryProbeInFlightRef = useRef(false);
   const autoCommitInFlightRef = useRef(false);
+  const [isAutoCommitting, setIsAutoCommitting] = useState(false);
   const cachedDefaultBaseBranchRef = useRef<string | null>(null);
 
   const requestStatusSync = useCallback(
@@ -1290,6 +1291,9 @@ export function SessionChatContent({
       }
 
       autoCommitInFlightRef.current = true;
+      if (isMountedRef.current) {
+        setIsAutoCommitting(true);
+      }
       try {
         const baseBranch = await resolveDefaultBaseBranch();
         const branchName =
@@ -1313,6 +1317,9 @@ export function SessionChatContent({
         return { ran: false };
       } finally {
         autoCommitInFlightRef.current = false;
+        if (isMountedRef.current) {
+          setIsAutoCommitting(false);
+        }
       }
     },
     [
@@ -2457,6 +2464,13 @@ export function SessionChatContent({
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
+  const isAutoCommitActionLocked = showCommitAction && isAutoCommitting;
+  const visibleCommitActionLabel = isAutoCommitActionLocked
+    ? "Committing automatically"
+    : commitActionLabel;
+  const commitActionTitle = isAutoCommitActionLocked
+    ? "Auto-commit is enabled. Changes are being committed and pushed automatically."
+    : undefined;
   const openExistingPr = () => {
     if (!existingPrUrl) {
       return;
@@ -2568,20 +2582,34 @@ export function SessionChatContent({
               {hasRepo ? (
                 hasExistingPr ? (
                   showCommitAction ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={() => setCommitDialogOpen(true)}
-                    >
-                      <GitCommit className="h-4 w-4 xl:mr-2" />
-                      <span className="hidden xl:inline">
-                        {commitActionLabel}
-                      </span>
-                      {hasUncommittedGitChanges && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                      )}
-                    </Button>
+                    <span className="inline-flex" title={commitActionTitle}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                        onClick={() => setCommitDialogOpen(true)}
+                        disabled={isAutoCommitActionLocked}
+                      >
+                        {isAutoCommitActionLocked ? (
+                          <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                        ) : (
+                          <GitCommit className="h-4 w-4 xl:mr-2" />
+                        )}
+                        <span
+                          className={cn(
+                            "hidden",
+                            isAutoCommitActionLocked
+                              ? "lg:inline"
+                              : "xl:inline",
+                          )}
+                        >
+                          {visibleCommitActionLabel}
+                        </span>
+                        {hasUncommittedGitChanges && (
+                          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                        )}
+                      </Button>
+                    </span>
                   ) : (
                     <Button
                       variant="outline"
@@ -2606,20 +2634,32 @@ export function SessionChatContent({
                     </Button>
                   )
                 ) : showCommitAction ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                    onClick={() => setCommitDialogOpen(true)}
-                  >
-                    <GitCommit className="h-4 w-4 xl:mr-2" />
-                    <span className="hidden xl:inline">
-                      {commitActionLabel}
-                    </span>
-                    {hasUncommittedGitChanges && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                    )}
-                  </Button>
+                  <span className="inline-flex" title={commitActionTitle}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                      onClick={() => setCommitDialogOpen(true)}
+                      disabled={isAutoCommitActionLocked}
+                    >
+                      {isAutoCommitActionLocked ? (
+                        <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                      ) : (
+                        <GitCommit className="h-4 w-4 xl:mr-2" />
+                      )}
+                      <span
+                        className={cn(
+                          "hidden",
+                          isAutoCommitActionLocked ? "lg:inline" : "xl:inline",
+                        )}
+                      >
+                        {visibleCommitActionLabel}
+                      </span>
+                      {hasUncommittedGitChanges && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                      )}
+                    </Button>
+                  </span>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
                     variant="outline"
@@ -2762,9 +2802,14 @@ export function SessionChatContent({
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
+                            disabled={isAutoCommitActionLocked}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitActionLocked ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {visibleCommitActionLabel}
                           </DropdownMenuItem>
                         )}
                       </>
@@ -2773,9 +2818,14 @@ export function SessionChatContent({
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
+                            disabled={isAutoCommitActionLocked}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitActionLocked ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {visibleCommitActionLabel}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
