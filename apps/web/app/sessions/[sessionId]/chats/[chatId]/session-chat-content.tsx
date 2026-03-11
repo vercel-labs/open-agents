@@ -40,7 +40,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
-import { toast } from "sonner";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
@@ -99,19 +98,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
-import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
   isChatInFlight as isChatInFlightStatus,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
-import {
-  commitAndPushSessionChanges,
-  fetchRepoBranches,
-} from "@/lib/git-flow-client";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
@@ -153,19 +146,6 @@ const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
 
 const emptySubscribe = () => () => {};
-
-type AutoCommitPushStatus =
-  | "blocked"
-  | "disabled"
-  | "failed"
-  | "not-applicable"
-  | "nothing-to-commit"
-  | "ran";
-
-type AutoCommitPushResult = {
-  status: AutoCommitPushStatus;
-  errorMessage?: string;
-};
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -1064,7 +1044,6 @@ export function SessionChatContent({
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
-  const { preferences } = useUserPreferences();
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -1232,10 +1211,6 @@ export function SessionChatContent({
   const inFlightStartedAtRef = useRef<number | null>(null);
   const lastStreamRecoveryAtRef = useRef(0);
   const streamRecoveryProbeInFlightRef = useRef(false);
-  const autoCommitInFlightRef = useRef(false);
-  const [isAutoCommitting, setIsAutoCommitting] = useState(false);
-  const [pendingAutoCommitTurn, setPendingAutoCommitTurn] = useState(0);
-  const cachedDefaultBaseBranchRef = useRef<string | null>(null);
 
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
@@ -1254,111 +1229,6 @@ export function SessionChatContent({
       }
     },
     [syncSandboxStatus],
-  );
-
-  const resolveDefaultBaseBranch = useCallback(async (): Promise<string> => {
-    if (cachedDefaultBaseBranchRef.current) {
-      return cachedDefaultBaseBranchRef.current;
-    }
-
-    if (!session.repoOwner || !session.repoName) {
-      return "main";
-    }
-
-    try {
-      const branchData = await fetchRepoBranches(
-        session.repoOwner,
-        session.repoName,
-      );
-      cachedDefaultBaseBranchRef.current = branchData.defaultBranch;
-      return branchData.defaultBranch;
-    } catch (error) {
-      console.error("Failed to resolve default base branch:", error);
-      return "main";
-    }
-  }, [session.repoName, session.repoOwner]);
-
-  const maybeAutoCommitPush = useCallback(
-    async (
-      latestStatus?: SessionGitStatus | null,
-    ): Promise<AutoCommitPushResult> => {
-      if (!preferences?.autoCommitPush) {
-        return { status: "disabled" };
-      }
-
-      if (!session.cloneUrl || !session.repoOwner || !session.repoName) {
-        return { status: "not-applicable" };
-      }
-
-      if (!isSandboxValid(sandboxInfo) || autoCommitInFlightRef.current) {
-        return { status: "blocked" };
-      }
-
-      const statusSnapshot = latestStatus ?? gitStatus;
-      if (!statusSnapshot) {
-        return { status: "blocked" };
-      }
-
-      const hasPendingGitWork =
-        statusSnapshot.hasUncommittedChanges ||
-        statusSnapshot.hasUnpushedCommits;
-
-      if (!hasPendingGitWork) {
-        return { status: "nothing-to-commit" };
-      }
-
-      autoCommitInFlightRef.current = true;
-      if (isMountedRef.current) {
-        setIsAutoCommitting(true);
-      }
-      try {
-        const baseBranch = await resolveDefaultBaseBranch();
-        const branchName =
-          statusSnapshot.branch ?? session.branch ?? baseBranch ?? "HEAD";
-
-        await commitAndPushSessionChanges({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName,
-        });
-
-        await refreshGitStatus().catch(() => undefined);
-        await refreshDiff().catch(() => undefined);
-        await refreshFiles().catch(() => undefined);
-        await checkBranchAndPr();
-
-        return { status: "ran" };
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to auto commit and push changes";
-        console.error("Failed to auto commit and push changes:", error);
-        return { status: "failed", errorMessage };
-      } finally {
-        autoCommitInFlightRef.current = false;
-        if (isMountedRef.current) {
-          setIsAutoCommitting(false);
-        }
-      }
-    },
-    [
-      preferences?.autoCommitPush,
-      session.cloneUrl,
-      session.repoOwner,
-      session.repoName,
-      session.branch,
-      session.id,
-      session.title,
-      sandboxInfo,
-      gitStatus,
-      resolveDefaultBaseBranch,
-      refreshGitStatus,
-      refreshDiff,
-      refreshFiles,
-      checkBranchAndPr,
-    ],
   );
 
   const requestMarkChatRead = useCallback(
@@ -1414,10 +1284,6 @@ export function SessionChatContent({
   useEffect(() => {
     hasRequestedSessionTitleGenerationRef.current = false;
   }, [session.id]);
-
-  useEffect(() => {
-    cachedDefaultBaseBranchRef.current = null;
-  }, [session.repoOwner, session.repoName]);
 
   // Refresh chats list when the first message completes to pick up the auto-generated title
   useEffect(() => {
@@ -1990,14 +1856,14 @@ export function SessionChatContent({
     }
   }, [isChatInFlight]);
 
-  // After a chat turn completes, immediately sync status from the server.
-  // If the sandbox was hibernated during the turn (tool calls failed), this
-  // updates the UI right away instead of waiting for the next 15s poll.
+  // After a chat turn completes, immediately sync state from the server.
+  // Auto-commit itself runs server-side so it still happens when this page is
+  // not open; the client just reconciles git, diff, and PR state.
   // Initialize to null (not `status`) so the first render always reconciles.
   // When navigating back to a chat whose stream finished in the background,
   // status is already "ready" but the optimistic streaming overlay may still
-  // be set.  Starting from null makes `becameReady` true on mount, which
-  // clears the stale overlay immediately.
+  // be set. Starting from null makes `becameReady` true on mount, which clears
+  // the stale overlay immediately.
   const prevStatusRef = useRef<string | null>(null);
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
@@ -2007,6 +1873,7 @@ export function SessionChatContent({
     const becameError = status === "error" && prevStatus !== "error";
     const shouldClearStreaming = status === "error" || becameReady;
     prevStatusRef.current = status;
+
     // Skip clearing the streaming overlay during unmount. Route teardown aborts
     // local transport connections, which can still trigger a transient status
     // transition before React finishes unmounting. Clearing here would remove
@@ -2023,68 +1890,52 @@ export function SessionChatContent({
     if (becameReady) {
       pendingOptimisticTitleChatIdRef.current = null;
     }
+
+    let followUpTimeout: ReturnType<typeof setTimeout> | null = null;
     if (
       (wasStreaming || wasSubmitted) &&
       status === "ready" &&
       isMountedRef.current
     ) {
-      setPendingAutoCommitTurn((currentTurn) => currentTurn + 1);
+      const refreshCompletedTurnState = async () => {
+        await requestStatusSync("force").catch(() => undefined);
+        await refreshGitStatus().catch(() => undefined);
+        await refreshDiff().catch(() => undefined);
+        await refreshFiles().catch(() => undefined);
+        await checkBranchAndPr().catch(() => undefined);
+      };
+
+      void refreshCompletedTurnState();
       void requestMarkChatRead("force");
       void refreshChats();
+
+      if (session.cloneUrl && session.repoOwner && session.repoName) {
+        followUpTimeout = setTimeout(() => {
+          void refreshCompletedTurnState();
+        }, 3000);
+      }
     }
+
+    return () => {
+      if (followUpTimeout !== null) {
+        clearTimeout(followUpTimeout);
+      }
+    };
   }, [
     status,
     chatInfo.id,
     setChatStreaming,
     clearChatTitle,
-    requestMarkChatRead,
-    refreshChats,
-  ]);
-
-  useEffect(() => {
-    if (pendingAutoCommitTurn === 0 || status !== "ready") {
-      return;
-    }
-
-    const currentTurn = pendingAutoCommitTurn;
-    let cancelled = false;
-
-    void (async () => {
-      await requestStatusSync("force").catch(() => undefined);
-      const latestGitStatus = await refreshGitStatus().catch(() => undefined);
-      const autoCommitResult = await maybeAutoCommitPush(latestGitStatus);
-
-      if (cancelled || autoCommitResult.status === "blocked") {
-        return;
-      }
-
-      if (autoCommitResult.status === "failed") {
-        toast.error("Auto commit failed", {
-          description: autoCommitResult.errorMessage,
-        });
-      }
-
-      if (autoCommitResult.status !== "ran") {
-        await checkBranchAndPr().catch(() => undefined);
-      }
-
-      if (!cancelled) {
-        setPendingAutoCommitTurn((latestTurn) =>
-          latestTurn === currentTurn ? 0 : latestTurn,
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    pendingAutoCommitTurn,
-    status,
     requestStatusSync,
     refreshGitStatus,
-    maybeAutoCommitPush,
+    refreshDiff,
+    refreshFiles,
     checkBranchAndPr,
+    requestMarkChatRead,
+    refreshChats,
+    session.cloneUrl,
+    session.repoOwner,
+    session.repoName,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
@@ -2516,13 +2367,6 @@ export function SessionChatContent({
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
-  const isAutoCommitActionLocked = showCommitAction && isAutoCommitting;
-  const visibleCommitActionLabel = isAutoCommitActionLocked
-    ? "Committing automatically"
-    : commitActionLabel;
-  const commitActionTitle = isAutoCommitActionLocked
-    ? "Auto-commit is enabled. Changes are being committed and pushed automatically."
-    : undefined;
   const openExistingPr = () => {
     if (!existingPrUrl) {
       return;
@@ -2634,34 +2478,20 @@ export function SessionChatContent({
               {hasRepo ? (
                 hasExistingPr ? (
                   showCommitAction ? (
-                    <span className="inline-flex" title={commitActionTitle}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                        onClick={() => setCommitDialogOpen(true)}
-                        disabled={isAutoCommitActionLocked}
-                      >
-                        {isAutoCommitActionLocked ? (
-                          <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
-                        ) : (
-                          <GitCommit className="h-4 w-4 xl:mr-2" />
-                        )}
-                        <span
-                          className={cn(
-                            "hidden",
-                            isAutoCommitActionLocked
-                              ? "lg:inline"
-                              : "xl:inline",
-                          )}
-                        >
-                          {visibleCommitActionLabel}
-                        </span>
-                        {hasUncommittedGitChanges && (
-                          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                        )}
-                      </Button>
-                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                      onClick={() => setCommitDialogOpen(true)}
+                    >
+                      <GitCommit className="h-4 w-4 xl:mr-2" />
+                      <span className="hidden xl:inline">
+                        {commitActionLabel}
+                      </span>
+                      {hasUncommittedGitChanges && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                      )}
+                    </Button>
                   ) : (
                     <Button
                       variant="outline"
@@ -2686,32 +2516,20 @@ export function SessionChatContent({
                     </Button>
                   )
                 ) : showCommitAction ? (
-                  <span className="inline-flex" title={commitActionTitle}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-                      onClick={() => setCommitDialogOpen(true)}
-                      disabled={isAutoCommitActionLocked}
-                    >
-                      {isAutoCommitActionLocked ? (
-                        <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
-                      ) : (
-                        <GitCommit className="h-4 w-4 xl:mr-2" />
-                      )}
-                      <span
-                        className={cn(
-                          "hidden",
-                          isAutoCommitActionLocked ? "lg:inline" : "xl:inline",
-                        )}
-                      >
-                        {visibleCommitActionLabel}
-                      </span>
-                      {hasUncommittedGitChanges && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
-                      )}
-                    </Button>
-                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    onClick={() => setCommitDialogOpen(true)}
+                  >
+                    <GitCommit className="h-4 w-4 xl:mr-2" />
+                    <span className="hidden xl:inline">
+                      {commitActionLabel}
+                    </span>
+                    {hasUncommittedGitChanges && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
+                    )}
+                  </Button>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
                     variant="outline"
@@ -2854,14 +2672,9 @@ export function SessionChatContent({
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
-                            disabled={isAutoCommitActionLocked}
                           >
-                            {isAutoCommitActionLocked ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <GitCommit className="mr-2 h-4 w-4" />
-                            )}
-                            {visibleCommitActionLabel}
+                            <GitCommit className="mr-2 h-4 w-4" />
+                            {commitActionLabel}
                           </DropdownMenuItem>
                         )}
                       </>
@@ -2870,14 +2683,9 @@ export function SessionChatContent({
                         {showCommitAction && (
                           <DropdownMenuItem
                             onClick={() => setCommitDialogOpen(true)}
-                            disabled={isAutoCommitActionLocked}
                           >
-                            {isAutoCommitActionLocked ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <GitCommit className="mr-2 h-4 w-4" />
-                            )}
-                            {visibleCommitActionLabel}
+                            <GitCommit className="mr-2 h-4 w-4" />
+                            {commitActionLabel}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
