@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 
 mock.module("server-only", () => ({}));
 
@@ -166,7 +167,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       timeout: number;
       mode: string;
     };
-    expect(payload.timeout).toBe(300_000);
+    expect(payload.timeout).toBe(DEFAULT_SANDBOX_TIMEOUT_MS);
     expect(payload.mode).toBe("vercel");
   });
 
