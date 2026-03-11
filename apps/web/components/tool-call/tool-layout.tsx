@@ -106,14 +106,6 @@ export function ToolLayout({
   const hasTrailingMeta =
     hasMeta || interruptedBadge !== null || errorPreview !== undefined;
 
-  const isCompact =
-    !isExpanded &&
-    !showRunningNotice &&
-    !showApprovalButtons &&
-    !hasOutput &&
-    !state.denied &&
-    !hasChildren;
-
   const handleToggle = () => {
     if (hasExpandedDetails) {
       setIsExpanded((prev) => !prev);
@@ -124,21 +116,12 @@ export function ToolLayout({
 
   return (
     <div
-      className={cn(
-        "my-1.5 transition-[background-color,border-color,padding] duration-150",
-        isCompact
-          ? "rounded-md border border-transparent bg-transparent py-0.5"
-          : "overflow-hidden rounded-lg border border-border/60 bg-card/60 p-3",
-      )}
+      className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5"
     >
       <div
         className={cn(
-          "flex min-w-0 select-none items-baseline gap-2 rounded-md text-sm",
-          hasExpandedDetails && "cursor-pointer",
-          isCompact && "py-0.5 pr-1",
-          isCompact &&
-            hasExpandedDetails &&
-            "transition-colors hover:bg-muted/50",
+          "flex min-w-0 select-none items-baseline gap-2 rounded-md py-0.5 pr-1 text-sm",
+          hasExpandedDetails && "cursor-pointer transition-colors hover:bg-muted/50",
         )}
         {...(hasExpandedDetails && {
           onClick: handleToggle,
@@ -154,10 +137,7 @@ export function ToolLayout({
         })}
       >
         <span
-          className={cn(
-            "flex size-3.5 shrink-0 items-center self-center",
-            isCompact ? "justify-start" : "justify-center",
-          )}
+          className="flex size-3.5 shrink-0 items-center justify-start self-center"
         >
           {headerIndicator}
         </span>
@@ -215,7 +195,7 @@ export function ToolLayout({
       {children}
 
       {showRunningNotice && (
-        <div className="mt-2 pl-5 text-sm text-muted-foreground">
+        <div className="mt-2 text-sm text-muted-foreground">
           Running...
         </div>
       )}
@@ -238,19 +218,19 @@ export function ToolLayout({
         !state.approvalRequested &&
         !state.denied &&
         !state.interrupted && (
-          <div className="mt-2 pl-5 text-sm text-muted-foreground">
+          <div className="mt-2 text-sm text-muted-foreground">
             {output}
           </div>
         )}
 
       {state.denied && (
-        <div className="mt-2 pl-5 text-sm text-red-500">
+        <div className="mt-2 text-sm text-red-500">
           Denied{state.denialReason ? `: ${state.denialReason}` : ""}
         </div>
       )}
 
       {isExpanded && hasExpandedDetails && (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
+        <div className="mt-1.5 space-y-2">
           {errorMessage && (
             <div className="space-y-1">
               <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">

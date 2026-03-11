@@ -76,4 +76,22 @@ describe("ToolLayout error state", () => {
       "Failed to read file: ENOENT: no such file or directory, stat &#x27;/vercel/sandbox/nope&#x27;",
     );
   });
+
+  test("renders expanded details inline without card chrome or inset styling", () => {
+    const html = renderToStaticMarkup(
+      <ToolLayout
+        name="Grep"
+        summary='"Preview"'
+        state={baseState}
+        expandedContent={<div>Pattern details</div>}
+        defaultExpanded
+      />,
+    );
+
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("bg-transparent py-0.5");
+    expect(html).toContain("mt-1.5 space-y-2");
+    expect(html).not.toContain("bg-card/60 p-3");
+    expect(html).not.toContain("border-t border-border pt-3");
+  });
 });
