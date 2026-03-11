@@ -260,8 +260,7 @@ export class VercelSandbox implements Sandbox {
         ? "\n- Runtime env vars for dev server URLs are injected into commands: SANDBOX_HOST and SANDBOX_URL_<PORT> (for routable ports)"
         : "";
 
-    return `- Ephemeral sandbox - all work is lost unless committed and pushed to git
-- Default workflow: create a new branch, commit changes, push, and open a PR (since the sandbox is ephemeral, this ensures work is preserved)
+    return `- Sandbox VMs are temporary, but the sandbox can be hibernated and later restored from a snapshot when it is spun down
 - All bash commands already run in the working directory by default — never prepend \`cd <working-directory> &&\`; just run the command directly
 - Do NOT prefix any bash command with a \`cd\` to the working directory — commands like \`cd <working-directory> && npm test\` are WRONG; just use \`npm test\`
 - Use workspace-relative paths for read/write/search/edit operations
