@@ -1,12 +1,22 @@
-Summary: Investigate adding browser notifications alongside the web app’s existing notification UI.
+Summary: Add browser Notification API support for the existing background chat completion flow so users get a desktop/browser notification when a non-active session finishes, while keeping the current in-app toast and sound behavior.
 
 Context:
-- The only user-facing toast-style notification flow currently in the web app is the background session completion hook in `apps/web/hooks/use-background-chat-notifications.tsx`, which shows a Sonner toast and plays a sound when a non-active session finishes streaming.
-- That hook is wired from `apps/web/app/sessions/sessions-route-shell.tsx`, so background chat completion is the current place where “web app notifications” are emitted automatically.
-- Global app-level client state lives in `apps/web/app/providers.tsx`; it already manages one browser-local preference (theme) with `localStorage`, which is a good fit for notification settings that are browser/device specific.
-- The settings UI lives in `apps/web/app/settings/preferences-section.tsx` and already contains browser-specific preferences plus per-user backend-backed preferences.
-- There is no existing `Notification` API usage, service worker, web app manifest, or push subscription plumbing in `apps/web`, so true push notifications while the app/browser is closed would be a substantially larger feature.
+- `apps/web/hooks/use-background-chat-notifications.tsx` is the current automatic notification path in the web app. It detects background sessions that finished streaming, shows a Sonner toast, and plays `Submarine.wav`.
+- `apps/web/app/sessions/sessions-route-shell.tsx` mounts that hook for the sessions experience, so this is the right integration point for background chat completion notifications.
+- `apps/web/app/providers.tsx` already owns browser-local UI state (theme via `localStorage`) and is a natural place to expose browser-notification capability/state to the rest of the app.
+- `apps/web/app/settings/preferences-section.tsx` is where browser- and user-level preferences are configured today, so it should surface an enable/request-permission control for browser notifications.
+- There is no existing service worker, manifest, or push subscription plumbing in `apps/web`, so the chosen approach is page-open desktop notifications only, not full push notifications.
 
-Open questions:
-- Should browser notifications mirror only the existing background chat completion notifications, or every toast/notification in the app?
-- Is page-open desktop notification support enough (using the browser `Notification` API), or do you want full web push support that can notify even when the app/browser is closed?
+Approach: Introduce a small browser-notification preference/context stored per browser, request notification permission from settings, and reuse the existing background chat completion hook to fire a browser notification alongside the current toast when permission is granted. Keep the implementation local to the existing background notification feature rather than introducing a broader app-wide notification abstraction.
+
+Changes:
+- `apps/web/app/providers.tsx` - add browser notification state/helpers (support detection, permission status, enabled flag, permission request, localStorage persistence) and expose them through a hook/context similar to theme.
+- `apps/web/app/settings/preferences-section.tsx` - add a browser notification preference row that lets the user enable desktop notifications for background chat completions and request permission in the current browser.
+- `apps/web/hooks/use-background-chat-notifications.tsx` - extend the existing completion flow to emit a browser notification when enabled/allowed, preserve the current Sonner toast + sound, and wire notification click behavior to focus/navigate into the finished chat.
+- `apps/web/hooks/use-background-chat-notifications.test.ts` - add/adjust unit coverage for the notification decision logic extracted from the hook.
+
+Verification:
+- Run `bun run ci` from the repo root.
+- Manually open the web app, enable browser notifications in Settings → Preferences, grant permission, start a background session, and confirm that when it finishes you get both the existing in-app toast and a browser notification.
+- Click the browser notification and confirm it focuses/navigates to the finished session.
+- Edge cases: permission denied, notifications disabled in settings, active session finishes (should still avoid background completion notifications), unsupported browser/API.
