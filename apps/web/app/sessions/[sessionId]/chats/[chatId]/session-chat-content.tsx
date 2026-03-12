@@ -148,6 +148,7 @@ const Streamdown = dynamic(
 const STREAM_RECOVERY_STALL_MS = 4_000;
 const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
 const COMPLETED_TURN_FULL_REFRESH_DELAY_MS = 3_000;
+const AUTO_COMMIT_POST_TURN_POLL_DELAYS_MS = [5_000, 10_000, 15_000] as const;
 
 const emptySubscribe = () => () => {};
 
@@ -1934,7 +1935,7 @@ export function SessionChatContent({
       pendingOptimisticTitleChatIdRef.current = null;
     }
 
-    let followUpTimeout: ReturnType<typeof setTimeout> | null = null;
+    const followUpTimeouts: ReturnType<typeof setTimeout>[] = [];
     if (
       (wasStreaming || wasSubmitted) &&
       status === "ready" &&
@@ -1948,20 +1949,32 @@ export function SessionChatContent({
         await checkBranchAndPr().catch(() => undefined);
       };
 
+      const scheduleFollowUpRefresh = (delayMs: number) => {
+        followUpTimeouts.push(
+          setTimeout(() => {
+            void refreshCompletedTurnState();
+          }, delayMs),
+        );
+      };
+
       void refreshCompletedTurnState();
       void requestMarkChatRead("force");
       void refreshChats();
 
       if (session.cloneUrl && session.repoOwner && session.repoName) {
-        followUpTimeout = setTimeout(() => {
-          void refreshCompletedTurnState();
-        }, COMPLETED_TURN_FULL_REFRESH_DELAY_MS);
+        scheduleFollowUpRefresh(COMPLETED_TURN_FULL_REFRESH_DELAY_MS);
+
+        if (preferences?.autoCommitPush === true) {
+          for (const delayMs of AUTO_COMMIT_POST_TURN_POLL_DELAYS_MS) {
+            scheduleFollowUpRefresh(delayMs);
+          }
+        }
       }
     }
 
     return () => {
-      if (followUpTimeout !== null) {
-        clearTimeout(followUpTimeout);
+      for (const timeout of followUpTimeouts) {
+        clearTimeout(timeout);
       }
     };
   }, [
@@ -1979,6 +1992,7 @@ export function SessionChatContent({
     session.cloneUrl,
     session.repoOwner,
     session.repoName,
+    preferences?.autoCommitPush,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
