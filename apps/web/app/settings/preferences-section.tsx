@@ -1,11 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  type ThemePreference,
-  useBrowserNotifications,
-  useTheme,
-} from "@/app/providers";
+import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
   type SandboxType,
@@ -33,6 +29,10 @@ import {
   type DiffMode,
   useUserPreferences,
 } from "@/hooks/use-user-preferences";
+import {
+  BrowserNotificationsPreference,
+  BrowserNotificationsPreferenceSkeleton,
+} from "./browser-notifications-preference";
 import {
   getDefaultModelOptionId,
   withMissingModelOption,
@@ -80,19 +80,7 @@ export function PreferencesSectionSkeleton() {
           </p>
         </div>
 
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="browser-notifications">
-                Browser notifications
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Get a browser notification when a background chat finishes.
-              </p>
-            </div>
-            <Switch id="browser-notifications" checked={false} disabled />
-          </div>
-        </div>
+        <BrowserNotificationsPreferenceSkeleton />
 
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
@@ -136,18 +124,9 @@ export function PreferencesSectionSkeleton() {
 
 export function PreferencesSection() {
   const { theme, setTheme } = useTheme();
-  const {
-    enabled: browserNotificationsEnabled,
-    isSupported: browserNotificationsSupported,
-    permission: browserNotificationPermission,
-    requestPermission: requestBrowserNotificationPermission,
-    setEnabled: setBrowserNotificationsEnabled,
-  } = useBrowserNotifications();
   const { preferences, loading, updatePreferences } = useUserPreferences();
   const { modelOptions, loading: modelOptionsLoading } = useModelOptions();
   const [isSaving, setIsSaving] = useState(false);
-  const [isUpdatingBrowserNotifications, setIsUpdatingBrowserNotifications] =
-    useState(false);
 
   const selectedDefaultModelId =
     preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
@@ -166,29 +145,6 @@ export function PreferencesSection() {
   const handleThemeChange = (nextTheme: string) => {
     if (isThemePreference(nextTheme)) {
       setTheme(nextTheme);
-    }
-  };
-
-  const handleBrowserNotificationsChange = async (nextEnabled: boolean) => {
-    if (!browserNotificationsSupported) {
-      return;
-    }
-
-    if (!nextEnabled) {
-      setBrowserNotificationsEnabled(false);
-      return;
-    }
-
-    setIsUpdatingBrowserNotifications(true);
-    try {
-      const nextPermission =
-        browserNotificationPermission === "granted"
-          ? "granted"
-          : await requestBrowserNotificationPermission();
-
-      setBrowserNotificationsEnabled(nextPermission === "granted");
-    } finally {
-      setIsUpdatingBrowserNotifications(false);
     }
   };
 
@@ -249,14 +205,6 @@ export function PreferencesSection() {
     }
   };
 
-  const browserNotificationDescription = !browserNotificationsSupported
-    ? "Desktop notifications are not supported in this browser."
-    : browserNotificationPermission === "denied"
-      ? "Desktop notifications are blocked for this site. Update your browser site settings to enable them."
-      : browserNotificationsEnabled
-        ? "You'll get a browser notification when a background chat finishes."
-        : "Get a browser notification when a background chat finishes. The browser will ask for permission the first time you enable it.";
-
   if (loading) {
     return <PreferencesSectionSkeleton />;
   }
@@ -291,29 +239,7 @@ export function PreferencesSection() {
           </p>
         </div>
 
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="browser-notifications">
-                Browser notifications
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {browserNotificationDescription}
-              </p>
-            </div>
-            <Switch
-              id="browser-notifications"
-              checked={
-                browserNotificationsEnabled &&
-                browserNotificationPermission === "granted"
-              }
-              onCheckedChange={handleBrowserNotificationsChange}
-              disabled={
-                isUpdatingBrowserNotifications || !browserNotificationsSupported
-              }
-            />
-          </div>
-        </div>
+        <BrowserNotificationsPreference />
 
         <div className="grid gap-2">
           <Label htmlFor="model">Default Model</Label>
