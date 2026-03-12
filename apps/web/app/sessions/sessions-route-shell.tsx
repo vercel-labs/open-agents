@@ -144,15 +144,15 @@ export function SessionsRouteShell({
   }, [optimisticActiveSessionId, routeSessionId]);
 
   const handleBrowserNotification = useCallback(
-    (targetSession: SessionWithUnread, onClick: () => void) => {
+    (targetSession: SessionWithUnread) => {
       showNotification({
         title: "Agent finished",
         body: targetSession.title || "A session",
-        tag: `background-session-complete-${targetSession.id}`,
-        onClick,
+        tag: `background-session-complete-${targetSession.id}-${targetSession.latestChatId ?? "latest"}`,
+        url: getSessionHref(targetSession),
       });
     },
-    [showNotification],
+    [getSessionHref, showNotification],
   );
 
   const activeSessionId = optimisticActiveSessionId ?? routeSessionId ?? "";

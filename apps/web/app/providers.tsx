@@ -19,6 +19,7 @@ const BROWSER_NOTIFICATIONS_ENABLED_STORAGE_KEY =
   "open-harness-browser-notifications-enabled";
 const DARK_MODE_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const APP_NOTIFICATION_ICON_PATH = "/favicon.ico";
+const BROWSER_NOTIFICATION_SERVICE_WORKER_PATH = "/browser-notifications-sw.js";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -32,6 +33,13 @@ interface ThemeContextValue {
   setTheme: (theme: ThemePreference) => void;
 }
 
+interface BrowserNotificationOptions {
+  title: string;
+  body?: string;
+  tag?: string;
+  url?: string;
+}
+
 interface BrowserNotificationContextValue {
   enabled: boolean;
   isSupported: boolean;
@@ -39,12 +47,7 @@ interface BrowserNotificationContextValue {
   canSendNotifications: boolean;
   setEnabled: (enabled: boolean) => void;
   requestPermission: () => Promise<BrowserNotificationPermission>;
-  showNotification: (options: {
-    title: string;
-    body?: string;
-    tag?: string;
-    onClick?: () => void;
-  }) => Notification | null;
+  showNotification: (options: BrowserNotificationOptions) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -78,6 +81,16 @@ function getBrowserNotificationPermission(): BrowserNotificationPermission {
   return window.Notification.permission;
 }
 
+function focusWindowAndNavigate(url: string) {
+  try {
+    window.focus();
+  } catch {
+    // Ignore focus failures and still attempt navigation.
+  }
+
+  window.location.href = url;
+}
+
 /**
  * Global providers for the app. Wraps children in SWRConfig with a
  * global error handler that detects 401 responses and signs the user out.
@@ -85,6 +98,9 @@ function getBrowserNotificationPermission(): BrowserNotificationPermission {
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const signingOut = useRef(false);
+  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(
+    null,
+  );
   const [theme, setThemeState] = useState<ThemePreference>("system");
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("dark");
   const [browserNotificationsEnabled, setBrowserNotificationsEnabledState] =
@@ -145,6 +161,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      typeof window.Notification === "undefined"
+    ) {
+      return;
+    }
+
+    navigator.serviceWorker
+      .register(BROWSER_NOTIFICATION_SERVICE_WORKER_PATH)
+      .then((registration) => {
+        serviceWorkerRegistrationRef.current = registration;
+      })
+      .catch(() => undefined);
+  }, []);
+
   const setTheme = useCallback(
     (nextTheme: ThemePreference) => {
       setThemeState(nextTheme);
@@ -183,44 +216,60 @@ export function Providers({ children }: { children: React.ReactNode }) {
     browserNotificationsEnabled && browserNotificationPermission === "granted";
 
   const showBrowserNotification = useCallback(
-    ({
-      title,
-      body,
-      tag,
-      onClick,
-    }: {
-      title: string;
-      body?: string;
-      tag?: string;
-      onClick?: () => void;
-    }) => {
+    ({ title, body, tag, url }: BrowserNotificationOptions) => {
       if (!canSendBrowserNotifications || typeof window === "undefined") {
-        return null;
+        return;
       }
 
-      try {
-        const notification = new window.Notification(title, {
-          body,
-          icon: APP_NOTIFICATION_ICON_PATH,
-          tag,
-        });
+      const notificationOptions = {
+        body,
+        data: url ? { url } : undefined,
+        icon: APP_NOTIFICATION_ICON_PATH,
+        renotify: Boolean(tag),
+        tag,
+      };
 
-        if (onClick) {
-          notification.addEventListener("click", () => {
-            notification.close();
-            try {
-              window.focus();
-            } catch {
-              // Ignore focus failures and still navigate within the app.
-            }
-            onClick();
-          });
+      const showFallbackNotification = () => {
+        try {
+          const notification = new window.Notification(
+            title,
+            notificationOptions,
+          );
+
+          if (url) {
+            notification.addEventListener("click", () => {
+              notification.close();
+              focusWindowAndNavigate(url);
+            });
+          }
+        } catch {
+          // Ignore notification failures.
         }
+      };
 
-        return notification;
-      } catch {
-        return null;
+      const serviceWorkerRegistration = serviceWorkerRegistrationRef.current;
+      if (serviceWorkerRegistration) {
+        void serviceWorkerRegistration
+          .showNotification(title, notificationOptions)
+          .catch(() => {
+            showFallbackNotification();
+          });
+        return;
       }
+
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker.ready
+          .then((registration) => {
+            serviceWorkerRegistrationRef.current = registration;
+            return registration.showNotification(title, notificationOptions);
+          })
+          .catch(() => {
+            showFallbackNotification();
+          });
+        return;
+      }
+
+      showFallbackNotification();
     },
     [canSendBrowserNotifications],
   );

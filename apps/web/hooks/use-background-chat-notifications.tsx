@@ -5,12 +5,10 @@ import { toast } from "sonner";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 
 type StreamingItem = { id: string; streaming: boolean };
-type BrowserNotificationHandler = (
-  session: SessionWithUnread,
-  onClick: () => void,
-) => void;
+type BrowserNotificationHandler = (session: SessionWithUnread) => void;
 
 const FINISHED_CHAT_SOUND_PATH = "/Submarine.wav";
+const RECENTLY_FOREGROUNDED_WINDOW_MS = 5_000;
 
 function playFinishedChatSound() {
   if (typeof window === "undefined" || typeof window.Audio === "undefined") {
@@ -51,6 +49,26 @@ export function getStreamingIds(items: StreamingItem[]): Set<string> {
   return new Set(items.filter((s) => s.streaming).map((s) => s.id));
 }
 
+export function wasPageRecentlyForegrounded(
+  lastBackgroundedAt: number,
+  lastForegroundedAt: number,
+  now: number,
+): boolean {
+  return (
+    lastBackgroundedAt > 0 &&
+    lastForegroundedAt >= lastBackgroundedAt &&
+    now - lastForegroundedAt <= RECENTLY_FOREGROUNDED_WINDOW_MS
+  );
+}
+
+function isPageBackgrounded(): boolean {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  return document.visibilityState !== "visible" || !document.hasFocus();
+}
+
 export function shouldSendBrowserNotification(
   canSendBrowserNotifications: boolean,
   onBrowserNotification?: BrowserNotificationHandler,
@@ -76,6 +94,8 @@ export function useBackgroundChatNotifications(
   // Skip the very first render so we don't toast for sessions that were
   // already done before the component mounted.
   const hasMountedRef = useRef(false);
+  const lastBackgroundedAtRef = useRef(0);
+  const lastForegroundedAtRef = useRef(0);
   // Keep stable refs to callbacks/options so the effect closure doesn't re-run
   // when callback identities or browser-notification state change.
   const navigateRef = useRef(onNavigateToSession);
@@ -84,6 +104,42 @@ export function useBackgroundChatNotifications(
   navigateRef.current = onNavigateToSession;
   browserNotificationRef.current = onBrowserNotification;
   canSendBrowserNotificationsRef.current = canSendBrowserNotifications;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const markBackgrounded = () => {
+      if (isPageBackgrounded()) {
+        lastBackgroundedAtRef.current = Date.now();
+      }
+    };
+
+    const markForegrounded = () => {
+      if (!isPageBackgrounded()) {
+        lastForegroundedAtRef.current = Date.now();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markForegrounded();
+        return;
+      }
+
+      markBackgrounded();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", markBackgrounded);
+    window.addEventListener("focus", markForegrounded);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", markBackgrounded);
+      window.removeEventListener("focus", markForegrounded);
+    };
+  }, []);
 
   useEffect(() => {
     const items = sessions.map((s) => ({
@@ -97,6 +153,13 @@ export function useBackgroundChatNotifications(
         items,
         activeSessionId,
       );
+      const shouldSurfaceBrowserNotifications =
+        isPageBackgrounded() ||
+        wasPageRecentlyForegrounded(
+          lastBackgroundedAtRef.current,
+          lastForegroundedAtRef.current,
+          Date.now(),
+        );
 
       let hasCompleted = false;
 
@@ -118,14 +181,17 @@ export function useBackgroundChatNotifications(
           },
         });
 
-        const browserNotification = browserNotificationRef.current;
+        const browserNotification =
+          shouldSurfaceBrowserNotifications && browserNotificationRef.current
+            ? browserNotificationRef.current
+            : undefined;
         if (
           shouldSendBrowserNotification(
             canSendBrowserNotificationsRef.current,
             browserNotification,
           )
         ) {
-          browserNotification(session, navigateToSession);
+          browserNotification(session);
         }
       }
 
