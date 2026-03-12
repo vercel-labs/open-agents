@@ -11,6 +11,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { useBrowserNotifications } from "@/app/providers";
 import { InboxSidebar } from "@/components/inbox-sidebar";
 import { NewSessionDialog } from "@/components/new-session-dialog";
 import {
@@ -56,6 +57,7 @@ export function SessionsRouteShell({
   const params = useParams<{ sessionId?: string }>();
   const routeSessionId =
     typeof params.sessionId === "string" ? params.sessionId : null;
+  const { canSendNotifications, showNotification } = useBrowserNotifications();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [optimisticActiveSessionId, setOptimisticActiveSessionId] = useState<
     string | null
@@ -141,10 +143,28 @@ export function SessionsRouteShell({
     }
   }, [optimisticActiveSessionId, routeSessionId]);
 
+  const handleBrowserNotification = useCallback(
+    (targetSession: SessionWithUnread, onClick: () => void) => {
+      showNotification({
+        title: "Agent finished",
+        body: targetSession.title || "A session",
+        tag: `background-session-complete-${targetSession.id}`,
+        onClick,
+      });
+    },
+    [showNotification],
+  );
+
   const activeSessionId = optimisticActiveSessionId ?? routeSessionId ?? "";
   const pendingSessionId = isNavigating ? optimisticActiveSessionId : null;
 
-  useBackgroundChatNotifications(sessions, routeSessionId, handleSessionClick);
+  useBackgroundChatNotifications(
+    sessions,
+    routeSessionId,
+    handleSessionClick,
+    canSendNotifications,
+    handleBrowserNotification,
+  );
 
   const shellContextValue = useMemo(
     () => ({

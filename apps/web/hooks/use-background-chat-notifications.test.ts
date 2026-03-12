@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   detectCompletedSessions,
   getStreamingIds,
+  shouldSendBrowserNotification,
 } from "./use-background-chat-notifications";
+
+const notify = () => undefined;
 
 describe("getStreamingIds", () => {
   test("returns empty set when no items are streaming", () => {
@@ -24,6 +27,20 @@ describe("getStreamingIds", () => {
 
   test("handles empty list", () => {
     expect(getStreamingIds([])).toEqual(new Set());
+  });
+});
+
+describe("shouldSendBrowserNotification", () => {
+  test("returns true when browser notifications are enabled and a handler exists", () => {
+    expect(shouldSendBrowserNotification(true, notify)).toBe(true);
+  });
+
+  test("returns false when browser notifications are disabled", () => {
+    expect(shouldSendBrowserNotification(false, notify)).toBe(false);
+  });
+
+  test("returns false when no browser notification handler is provided", () => {
+    expect(shouldSendBrowserNotification(true)).toBe(false);
   });
 });
 
