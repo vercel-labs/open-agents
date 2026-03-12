@@ -18,6 +18,7 @@
     "./just-bash/snapshot.js": "./just-bash/snapshot.ts"
   },
   "scripts": {
+    "snapshot:bootstrap": "bun run ./scripts/bootstrap-snapshot.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"
