@@ -46,63 +46,10 @@ import { onStopSignal } from "@/lib/stop-signal";
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
 
-const DEFAULT_CONTEXT_LIMIT = 200_000;
-
-interface ChatCompactionContextPayload {
-  contextLimit?: number;
-  lastInputTokens?: number;
-}
-
 interface ChatRequestBody {
   messages: WebAgentUIMessage[];
   sessionId?: string;
   chatId?: string;
-  context?: ChatCompactionContextPayload;
-}
-
-function toPositiveInteger(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return undefined;
-  }
-
-  const normalized = Math.floor(value);
-  return normalized > 0 ? normalized : undefined;
-}
-
-function toPositiveInputTokens(value: unknown): number | undefined {
-  const normalized = toPositiveInteger(value);
-  return normalized && normalized > 0 ? normalized : undefined;
-}
-
-function extractLastInputTokensFromMessages(
-  messages: WebAgentUIMessage[],
-): number | undefined {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index];
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-
-    const metadata = (message as { metadata?: unknown }).metadata;
-    if (!metadata || typeof metadata !== "object") {
-      continue;
-    }
-
-    const lastStepUsage = (metadata as { lastStepUsage?: unknown })
-      .lastStepUsage;
-    if (!lastStepUsage || typeof lastStepUsage !== "object") {
-      continue;
-    }
-
-    const inputTokens = (lastStepUsage as { inputTokens?: unknown })
-      .inputTokens;
-    const normalizedTokens = toPositiveInputTokens(inputTokens);
-    if (normalizedTokens) {
-      return normalizedTokens;
-    }
-  }
-
-  return undefined;
 }
 
 const STREAM_TOKEN_SEPARATOR = ":";
@@ -211,12 +158,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const {
-    messages,
-    sessionId,
-    chatId,
-    context: requestedCompactionContext,
-  } = body;
+  const { messages, sessionId, chatId } = body;
 
   // 2. Require sessionId and chatId to ensure sandbox ownership verification
   if (!sessionId || !chatId) {
@@ -484,19 +426,6 @@ export async function POST(req: Request) {
     }
   }
 
-  const requestedContextLimit = toPositiveInteger(
-    requestedCompactionContext?.contextLimit,
-  );
-  const requestedLastInputTokens = toPositiveInputTokens(
-    requestedCompactionContext?.lastInputTokens,
-  );
-  const inferredLastInputTokens = extractLastInputTokensFromMessages(messages);
-
-  const compactionContext = {
-    contextLimit: requestedContextLimit ?? DEFAULT_CONTEXT_LIMIT,
-    lastInputTokens: requestedLastInputTokens ?? inferredLastInputTokens,
-  };
-
   // Use Redis stop signals as the sole cancellation mechanism for generation.
   // We intentionally do not bind `req.signal` so a transient client disconnect
   // does not cancel work; clients can reconnect via resumable streams.
@@ -551,7 +480,6 @@ export async function POST(req: Request) {
         sandbox,
         model,
         subagentModel,
-        context: compactionContext,
         ...(skills.length > 0 && { skills }),
       },
       abortSignal: controller.signal,
