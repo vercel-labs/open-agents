@@ -2,7 +2,6 @@ import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { gateway, stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
-import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
@@ -85,14 +84,8 @@ export const explorerSubagent = new ToolLoopAgent({
   prepareCall: ({ options, ...settings }) => {
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
     return {
       ...settings,
-      ...preparedPrompt,
       model,
       instructions: `${EXPLORER_SYSTEM_PROMPT}
 

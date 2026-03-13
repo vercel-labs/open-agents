@@ -10,7 +10,6 @@ import {
 import { z } from "zod";
 import { addCacheControl } from "./context-management";
 import { aggressiveCompactContext } from "./context-management/aggressive-compaction";
-import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
@@ -187,11 +186,6 @@ export const openHarnessAgent = new ToolLoopAgent({
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
     const context = options.context;
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model: callModel,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
 
     // Derive mode for system prompt (interactive vs background)
     const mode = approval.type === "background" ? "background" : "interactive";
@@ -208,7 +202,6 @@ export const openHarnessAgent = new ToolLoopAgent({
 
     return {
       ...settings,
-      ...preparedPrompt,
       model: callModel,
       tools: addCacheControl({
         tools: settings.tools ?? tools,
