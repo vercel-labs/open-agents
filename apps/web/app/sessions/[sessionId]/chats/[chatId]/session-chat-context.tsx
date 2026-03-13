@@ -37,6 +37,14 @@ import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
 import type { Chat, Session } from "@/lib/db/schema";
 import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 import { hasRuntimeSandboxState as hasRuntimeSandboxStateValue } from "@/lib/sandbox/utils";
+import {
+  canAttemptAutoRecovery,
+  CHAT_STREAM_RECOVERY_COOLDOWN_MS,
+  resolveRetryStrategy,
+  shouldResetAutoRecoveryWindow,
+  type ChatStreamRetryStrategy,
+  type ChatStreamStatus,
+} from "./chat-stream-recovery-policy";
 
 const KNOWN_SANDBOX_TYPES = ["vercel"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
@@ -75,7 +83,7 @@ export type SandboxStatusSyncResult = "active" | "no_sandbox" | "unknown";
 
 type RetryChatStreamOptions = {
   auto?: boolean;
-  strategy?: "hard" | "soft";
+  strategy?: ChatStreamRetryStrategy;
 };
 
 function toMs(value: Date | null | undefined): number | null {
@@ -365,49 +373,100 @@ export function SessionChatProvider({
     experimental_throttle: CHAT_UI_UPDATE_THROTTLE_MS,
   });
 
+  const retryInFlightRef = useRef(false);
+  const lastAutoRetryAtRef = useRef(0);
+  const previousChatStatusRef = useRef<ChatStreamStatus | null>(null);
+
   /**
    * Clear a transient chat error (e.g. iOS "Load failed") and attempt to
    * resume the server-side stream if one is still active.
    *
-   * When called from a manual "Retry" button we always want to reconnect, so
-   * the stopped flag is reset.  When called from the automatic
-   * visibility-change / online recovery handler, the flag is checked first so
-   * that a user-initiated stop is respected and the stream is not silently
-   * restarted.
+   * Manual retries stay aggressive (hard reconnect). Automatic retries are
+   * conservative (soft reconnect), cooldown-gated, and single-flight so
+   * visibility/network effects can't spam reconnect attempts.
    */
   const retryChatStream = useCallback(
     (opts?: RetryChatStreamOptions) => {
-      const strategy = opts?.strategy ?? "hard";
-      // If the user explicitly stopped the stream, don't auto-reconnect.
-      // This prevents the "tap stop 3 times" loop on iOS where aborting the
-      // transport causes a transient error that the auto-recovery immediately
-      // reconnects.
-      if (opts?.auto && userStoppedRef.current) {
-        // Still clear the error so the UI doesn't show a stale error banner.
-        chat.clearError();
+      const mode = opts?.auto ? "auto" : "manual";
+      const now = Date.now();
+
+      if (mode === "auto") {
+        // If the user explicitly stopped the stream, don't auto-reconnect.
+        // This prevents the "tap stop 3 times" loop on iOS where aborting the
+        // transport causes a transient error that auto-recovery immediately
+        // reconnects.
+        if (userStoppedRef.current) {
+          // Still clear the error so the UI doesn't show a stale error banner.
+          chat.clearError();
+          return;
+        }
+
+        if (
+          !canAttemptAutoRecovery({
+            nowMs: now,
+            lastAttemptAtMs: lastAutoRetryAtRef.current,
+            cooldownMs: CHAT_STREAM_RECOVERY_COOLDOWN_MS,
+            isAttemptInFlight: retryInFlightRef.current,
+          })
+        ) {
+          return;
+        }
+
+        lastAutoRetryAtRef.current = now;
+      } else if (retryInFlightRef.current) {
         return;
       }
-      // Manual retry — reset the flag so the stream can proceed.
+
       userStoppedRef.current = false;
-      if (strategy === "hard") {
-        // Tear down any stale local fetch before reconnecting.
-        void chatInstance.stop();
-        abortChatInstanceTransport(chatInfo.id);
-      }
-      // Clear the error so the chat UI becomes visible again.
-      chat.clearError();
-      // If the server-side stream is still running, reconnect to it.
-      void chat.resumeStream();
+      const strategy = resolveRetryStrategy({
+        mode,
+        requestedStrategy: opts?.strategy,
+      });
+
+      retryInFlightRef.current = true;
+      void (async () => {
+        try {
+          if (strategy === "hard") {
+            // Tear down any stale local fetch before reconnecting.
+            try {
+              await chatInstance.stop();
+            } catch {
+              // Ignore stale local stop failures and still attempt reconnect.
+            }
+            abortChatInstanceTransport(chatInfo.id);
+          }
+
+          // Clear the error so the chat UI becomes visible again.
+          chat.clearError();
+          // If the server-side stream is still running, reconnect to it.
+          await chat.resumeStream();
+        } finally {
+          retryInFlightRef.current = false;
+        }
+      })();
     },
     [chat, chatInfo.id, chatInstance],
   );
 
-  // Reset the user-stopped flag when a new message is sent so that
-  // auto-recovery works normally for the new stream.
   useEffect(() => {
-    if (chat.status === "submitted") {
+    const nextStatus: ChatStreamStatus = chat.status;
+    if (
+      shouldResetAutoRecoveryWindow({
+        previousStatus: previousChatStatusRef.current,
+        nextStatus,
+      })
+    ) {
+      lastAutoRetryAtRef.current = 0;
+      retryInFlightRef.current = false;
+    }
+
+    // Reset the user-stopped flag when a new message is sent so auto-recovery
+    // works normally for the new stream.
+    if (nextStatus === "submitted") {
       userStoppedRef.current = false;
     }
+
+    previousChatStatusRef.current = nextStatus;
   }, [chat.status]);
 
   // Cleanup: release per-route chat instances and abort local transport

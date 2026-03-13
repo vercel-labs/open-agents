@@ -116,6 +116,8 @@ import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
+import { useChatStreamRecovery } from "./use-chat-stream-recovery";
+import { useSandboxLifecycleOrchestration } from "./use-sandbox-lifecycle-orchestration";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -144,34 +146,7 @@ const Streamdown = dynamic(
   { ssr: false },
 );
 
-const STREAM_RECOVERY_STALL_MS = 4_000;
-const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
-
 const emptySubscribe = () => () => {};
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isChatStreamingProbeResponse(value: unknown): value is {
-  chats: { id: string; isStreaming: boolean }[];
-} {
-  if (!isObjectRecord(value)) {
-    return false;
-  }
-
-  const chats = value["chats"];
-  if (!Array.isArray(chats)) {
-    return false;
-  }
-
-  return chats.every(
-    (chat) =>
-      isObjectRecord(chat) &&
-      typeof chat["id"] === "string" &&
-      typeof chat["isStreaming"] === "boolean",
-  );
-}
 
 function useHasMounted() {
   return useSyncExternalStore(
@@ -1248,10 +1223,6 @@ export function SessionChatContent({
     lastChatId: null,
     inFlight: false,
   });
-  const inFlightStartedAtRef = useRef<number | null>(null);
-  const lastStreamRecoveryAtRef = useRef(0);
-  const streamRecoveryProbeInFlightRef = useRef(false);
-
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
       const now = Date.now();
@@ -1358,134 +1329,14 @@ export function SessionChatContent({
     };
   }, [requestMarkChatRead]);
 
-  // Keep the recovery logic in a ref so event-listener effects never
-  // churn during streaming.  The ref is updated on every render (cheap) while
-  // the stable wrapper below keeps a constant identity for effects.
-  const maybeRecoverStreamRef = useRef(() => {});
-  maybeRecoverStreamRef.current = () => {
-    const now = Date.now();
-    if (
-      now - lastStreamRecoveryAtRef.current <
-      STREAM_RECOVERY_MIN_INTERVAL_MS
-    ) {
-      return;
-    }
-
-    if (status === "error") {
-      lastStreamRecoveryAtRef.current = now;
-      retryChatStream({ auto: true });
-      return;
-    }
-
-    // Only run "silent stream" recovery while still in submitted state.
-    // During active streaming, reconnecting can replay recent chunks and cause
-    // visible jank even when the connection is healthy.
-    if (status !== "submitted" || hasAssistantRenderableContent) {
-      return;
-    }
-
-    const startedAt = inFlightStartedAtRef.current;
-    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
-      return;
-    }
-    if (streamRecoveryProbeInFlightRef.current) {
-      return;
-    }
-
-    streamRecoveryProbeInFlightRef.current = true;
-    lastStreamRecoveryAtRef.current = now;
-
-    void (async () => {
-      try {
-        const response = await fetch(`/api/sessions/${session.id}/chats`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-
-        const payload: unknown = await response.json();
-        if (!isChatStreamingProbeResponse(payload)) {
-          return;
-        }
-
-        const serverChat = payload.chats.find(
-          (chat) => chat.id === chatInfo.id,
-        );
-        if (!serverChat?.isStreaming) {
-          return;
-        }
-
-        retryChatStream({ auto: true, strategy: "soft" });
-      } catch {
-        // Ignore transient probe failures and try again on next interval.
-      } finally {
-        streamRecoveryProbeInFlightRef.current = false;
-      }
-    })();
-  };
-
-  // Stable identity wrapper – safe to use in effect dependency arrays without
-  // causing teardown/re-register cycles.
-  const maybeRecoverStream = useCallback(() => {
-    maybeRecoverStreamRef.current();
-  }, []);
-
-  useEffect(() => {
-    if (isChatInFlight) {
-      if (inFlightStartedAtRef.current === null) {
-        inFlightStartedAtRef.current = Date.now();
-      }
-      return;
-    }
-
-    inFlightStartedAtRef.current = null;
-  }, [isChatInFlight, chatInfo.id]);
-
-  // Recover from transient connection drops when the tab regains visibility
-  // or the network comes back. The listeners are registered once because
-  // maybeRecoverStream has a stable identity (delegates to a ref internally).
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        maybeRecoverStream();
-      }
-    };
-
-    const onFocus = () => {
-      maybeRecoverStream();
-    };
-
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("online", maybeRecoverStream);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("online", maybeRecoverStream);
-    };
-  }, [maybeRecoverStream]);
-
-  useEffect(() => {
-    if (!isChatInFlight || hasAssistantRenderableContent) {
-      return;
-    }
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState !== "visible"
-    ) {
-      return;
-    }
-
-    const startedAt = inFlightStartedAtRef.current;
-    const elapsed = startedAt === null ? 0 : Date.now() - startedAt;
-    const waitMs = Math.max(0, STREAM_RECOVERY_STALL_MS - elapsed);
-    const timeout = setTimeout(() => {
-      maybeRecoverStream();
-    }, waitMs);
-
-    return () => clearTimeout(timeout);
-  }, [isChatInFlight, hasAssistantRenderableContent, maybeRecoverStream]);
+  useChatStreamRecovery({
+    sessionId: session.id,
+    chatId: chatInfo.id,
+    status,
+    isChatInFlight,
+    hasAssistantRenderableContent,
+    retryChatStream,
+  });
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -1978,96 +1829,7 @@ export function SessionChatContent({
     session.repoName,
   ]);
 
-  // Track whether we've auto-attempted sandbox startup for this page load.
-  const hasAutoStartedSandboxRef = useRef(false);
-  const hasAutoRestoredSnapshotRef = useRef(false);
-  const shouldAutoResumeOnEntryRef = useRef(true);
-
   const isArchived = session.status === "archived";
-
-  // Attempt a single reconnect probe on entry to pick up authoritative server state
-  // (connected sandbox, no sandbox, and snapshot availability).
-  // Skip for archived sessions -- they should never spin up a sandbox.
-  useEffect(() => {
-    if (isArchived) return;
-    if (
-      !sandboxInfo &&
-      !isCreatingSandbox &&
-      !isRestoringSnapshot &&
-      reconnectionStatus === "idle"
-    ) {
-      void attemptReconnection();
-    }
-  }, [
-    isArchived,
-    sandboxInfo,
-    isCreatingSandbox,
-    isRestoringSnapshot,
-    reconnectionStatus,
-    attemptReconnection,
-  ]);
-
-  // Auto-resume is only for entering an already-paused session.
-  // Once this tab has had an active connection, do not auto-resume again.
-  useEffect(() => {
-    if (sandboxInfo || reconnectionStatus === "connected") {
-      shouldAutoResumeOnEntryRef.current = false;
-    }
-  }, [sandboxInfo, reconnectionStatus]);
-
-  // Auto-resume paused sessions on entry once we know there is no active runtime sandbox.
-  // Skip for archived sessions.
-  useEffect(() => {
-    if (isArchived) return;
-    if (!hasSnapshot) {
-      hasAutoRestoredSnapshotRef.current = false;
-      return;
-    }
-    if (!shouldAutoResumeOnEntryRef.current) return;
-    if (sandboxInfo || isCreatingSandbox || isRestoringSnapshot) return;
-    if (reconnectionStatus === "checking") return;
-    if (hasRuntimeSandboxState && reconnectionStatus !== "no_sandbox") return;
-    if (hasAutoRestoredSnapshotRef.current) return;
-
-    hasAutoRestoredSnapshotRef.current = true;
-    shouldAutoResumeOnEntryRef.current = false;
-    void handleRestoreSnapshot();
-  }, [
-    isArchived,
-    session.id,
-    hasSnapshot,
-    sandboxInfo,
-    isCreatingSandbox,
-    isRestoringSnapshot,
-    hasRuntimeSandboxState,
-    reconnectionStatus,
-    handleRestoreSnapshot,
-  ]);
-
-  // Server-authoritative lifecycle state: lightweight status poll every 15s.
-  useEffect(() => {
-    if (isCreatingSandbox || isRestoringSnapshot) return;
-
-    const poll = () => {
-      if (reconnectionStatus === "checking") return;
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState !== "visible"
-      ) {
-        return;
-      }
-      void requestStatusSync("normal");
-    };
-
-    poll();
-    const interval = setInterval(poll, 15_000);
-    return () => clearInterval(interval);
-  }, [
-    isCreatingSandbox,
-    isRestoringSnapshot,
-    reconnectionStatus,
-    requestStatusSync,
-  ]);
 
   const ensureSandboxReady = useCallback(async () => {
     if (isSandboxValid(sandboxInfo)) {
@@ -2112,39 +1874,20 @@ export function SessionChatContent({
     requestStatusSync,
   ]);
 
-  // Auto-create sandbox right away for new sessions/chats.
-  // Skip for archived sessions.
-  useEffect(() => {
-    if (isArchived) return;
-    if (sandboxInfo || isCreatingSandbox || isRestoringSnapshot) return;
-
-    // If we have stored sandbox state, wait for reconnect attempt first.
-    if (session.sandboxState && reconnectionStatus === "idle") return;
-    if (session.sandboxState && reconnectionStatus === "checking") return;
-    if (session.sandboxState && reconnectionStatus === "connected") {
-      hasAutoStartedSandboxRef.current = true;
-      return;
-    }
-
-    // Snapshotted sessions are resumed by the auto-restore-on-entry effect.
-    if (hasSnapshot) {
-      return;
-    }
-
-    if (hasAutoStartedSandboxRef.current) return;
-    hasAutoStartedSandboxRef.current = true;
-
-    void ensureSandboxReady();
-  }, [
+  useSandboxLifecycleOrchestration({
     isArchived,
-    session.sandboxState,
     hasSnapshot,
-    reconnectionStatus,
+    hasRuntimeSandboxState,
+    hasSessionSandboxState: Boolean(session.sandboxState),
     sandboxInfo,
     isCreatingSandbox,
     isRestoringSnapshot,
+    reconnectionStatus,
+    attemptReconnection,
+    handleRestoreSnapshot,
     ensureSandboxReady,
-  ]);
+    requestStatusSync,
+  });
 
   // Track tool completions to trigger diff refresh
   const prevToolStatesRef = useRef<Map<string, string>>(new Map());
