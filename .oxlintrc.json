@@ -22,12 +22,6 @@
   "overrides": [
     {
       "files": [
-        "apps/cli/tui/app.tsx",
-        "apps/cli/tui/chat-context.tsx",
-        "apps/cli/tui/components/input-box.tsx",
-        "apps/cli/tui/components/question-panel.tsx",
-        "apps/cli/tui/components/text-input.tsx",
-        "apps/cli/tui/components/tool-renderers/shared.tsx",
         "packages/agent/system-prompt.ts",
         "packages/agent/tools/tools.test.ts",
         "packages/sandbox/just-bash/sandbox.ts",

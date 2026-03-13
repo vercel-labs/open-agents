@@ -1,6 +1,10 @@
 export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
 export type { OpenHarnessAgentCallOptions } from "./open-harness-agent";
-export { defaultModel, defaultModelLabel, openHarnessAgent } from "./open-harness-agent";
+export {
+  defaultModel,
+  defaultModelLabel,
+  openHarnessAgent,
+} from "./open-harness-agent";
 // Skills exports
 export { discoverSkills, parseSkillFrontmatter } from "./skills/discovery";
 export { extractSkillBody, substituteArguments } from "./skills/loader";
