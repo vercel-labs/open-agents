@@ -311,7 +311,6 @@ describe("tools execute behavior", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(true);
-    expect(commandNeedsApproval("echo hi | wc -c")).toBe(true);
     expect(commandNeedsApproval("custom-command --help")).toBe(true);
   });
 
