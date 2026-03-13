@@ -15,25 +15,11 @@ export const todoItemSchema = z.object({
 });
 export type TodoItem = z.infer<typeof todoItemSchema>;
 
-/**
- * Minimal approval configuration retained only for bash command safety.
- */
-export type ApprovalConfig = {
-  bashRules?: Array<{
-    type: "command-prefix";
-    tool: "bash";
-    prefix: string;
-  }>;
-  allowAllBash?: boolean;
-};
-
 export interface AgentContext {
   sandbox: Sandbox;
   skills?: SkillMetadata[];
   model: LanguageModel;
   subagentModel?: LanguageModel;
-  allowAllBash?: boolean;
-  bashRules?: ApprovalConfig["bashRules"];
 }
 
 export const EVICTION_THRESHOLD_BYTES = 80 * 1024;

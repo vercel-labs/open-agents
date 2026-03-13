@@ -109,7 +109,6 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
       experimental_context: {
         sandbox,
-        allowAllBash: true,
         model,
       },
     };

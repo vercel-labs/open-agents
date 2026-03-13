@@ -1,7 +1,7 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
-import type { AgentContext, ApprovalConfig } from "../types";
+import type { AgentContext } from "../types";
 
 function isAgentContext(value: unknown): value is AgentContext {
   return (
@@ -89,37 +89,17 @@ export function getSandbox(
 }
 
 /**
- * Check if the approval config implies full trust for tool execution.
- *
- * @param approval - The approval configuration
- * @returns true if the context implies full trust
- */
-export function shouldAutoApprove(
-  options:
-    | ApprovalConfig
-    | {
-        allowAllBash?: boolean;
-      }
-    | undefined,
-): boolean {
-  return options?.allowAllBash === true;
-}
-
-/**
- * Get the full approval context from experimental_context.
- * Used by needsApproval functions to access approval configuration.
+ * Get sandbox + working directory from experimental_context for approval checks.
  *
  * @param experimental_context - The context passed to needsApproval functions
  * @param toolName - Optional tool name for better error messages
- * @returns Object with sandbox, workingDirectory, and approval config
  */
-export function getApprovalContext(
+export function getSandboxContext(
   experimental_context: unknown,
   toolName?: string,
 ): {
   sandbox: Sandbox;
   workingDirectory: string;
-  approval: ApprovalConfig;
 } {
   const context = isAgentContext(experimental_context)
     ? experimental_context
@@ -130,21 +110,14 @@ export function getApprovalContext(
       ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
       : "Context is undefined or null";
     throw new Error(
-      `Approval context not initialized${toolInfo}. ${contextInfo}. ` +
+      `Sandbox context not initialized${toolInfo}. ${contextInfo}. ` +
         "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
   }
 
-  const defaultApproval: ApprovalConfig = {};
-
   return {
     sandbox: context.sandbox,
     workingDirectory: context.sandbox.workingDirectory,
-    approval: {
-      allowAllBash: context.allowAllBash,
-      bashRules: context.bashRules,
-      ...defaultApproval,
-    },
   };
 }
 

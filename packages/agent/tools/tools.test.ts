@@ -308,7 +308,7 @@ describe("tools execute behavior", () => {
     expect(commandNeedsApproval("custom-command --help")).toBe(true);
   });
 
-  test("bashTool needsApproval respects bash-only approval config", async () => {
+  test("bashTool needsApproval blocks dangerous commands by default", async () => {
     const baseContext = {
       sandbox: { workingDirectory: "/repo" },
       model: "test-model",
@@ -332,31 +332,14 @@ describe("tools execute behavior", () => {
     );
     expect(dangerousCommand).toBe(true);
 
-    const approvedByRule = await getNeedsApprovalResult(
+    const allowedBuildCommand = await getNeedsApprovalResult(
       bashTool().needsApproval,
       { command: "bun run ci" },
       {
         ...baseContext,
-        bashRules: [
-          {
-            type: "command-prefix",
-            tool: "bash",
-            prefix: "bun run",
-          },
-        ],
       },
     );
-    expect(approvedByRule).toBe(false);
-
-    const autoApproved = await getNeedsApprovalResult(
-      bashTool().needsApproval,
-      { command: "rm -rf tmp" },
-      {
-        ...baseContext,
-        allowAllBash: true,
-      },
-    );
-    expect(autoApproved).toBe(false);
+    expect(allowedBuildCommand).toBe(true);
   });
 
   const originalFetch = globalThis.fetch;

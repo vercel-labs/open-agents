@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
-  getApprovalContext,
+  getSandboxContext,
   isPathWithinDirectory,
   shellEscape,
-  shouldAutoApprove,
   toDisplayPath,
 } from "./utils";
 
@@ -23,38 +22,14 @@ describe("tools/utils", () => {
     expect(toDisplayPath("/outside/file.ts", "/repo")).toBe("/outside/file.ts");
   });
 
-  test("shouldAutoApprove only when allowAllBash is enabled", () => {
-    expect(shouldAutoApprove({ allowAllBash: true })).toBe(true);
-    expect(shouldAutoApprove({ allowAllBash: false })).toBe(false);
-    expect(shouldAutoApprove({})).toBe(false);
-    expect(shouldAutoApprove(undefined)).toBe(false);
-  });
-
-  test("getApprovalContext derives bash approval fields from context", () => {
-    const context = getApprovalContext({
+  test("getSandboxContext returns sandbox and working directory", () => {
+    const context = getSandboxContext({
       sandbox: { workingDirectory: "/repo" },
-      allowAllBash: true,
-      bashRules: [
-        {
-          type: "command-prefix",
-          tool: "bash",
-          prefix: "bun run",
-        },
-      ],
       model: "test-model",
     });
 
     expect(context.workingDirectory).toBe("/repo");
-    expect(context.approval).toEqual({
-      allowAllBash: true,
-      bashRules: [
-        {
-          type: "command-prefix",
-          tool: "bash",
-          prefix: "bun run",
-        },
-      ],
-    });
+    expect(context.sandbox.workingDirectory).toBe("/repo");
   });
 
   test("shellEscape safely escapes single quotes", () => {

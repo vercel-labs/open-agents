@@ -1,12 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  isPathWithinDirectory,
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-} from "./utils";
+import { isPathWithinDirectory, getSandbox, getSandboxContext } from "./utils";
 
 const TIMEOUT_MS = 120_000;
 
@@ -48,22 +43,6 @@ function cwdIsOutsideWorkingDirectory(
     ? cwd
     : path.resolve(workingDirectory, cwd);
   return !isPathWithinDirectory(absoluteCwd, workingDirectory);
-}
-
-/**
- * Check if a command matches any command-prefix approval rules.
- */
-function commandMatchesApprovalRule(
-  command: string,
-  prefixes: string[] | undefined,
-): boolean {
-  const trimmedCommand = command.trim();
-  for (const prefix of prefixes ?? []) {
-    if (trimmedCommand.startsWith(prefix)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Read-only commands that are safe to run without approval
@@ -140,36 +119,19 @@ export function commandNeedsApproval(command: string): boolean {
 export const bashTool = (options?: ToolOptions) =>
   tool({
     needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "bash");
-      const { approval } = ctx;
-
-      if (shouldAutoApprove(approval) || approval.allowAllBash) {
-        return false;
-      }
-
-      if (
-        commandMatchesApprovalRule(
-          args.command,
-          approval.bashRules?.map((rule) => rule.prefix),
-        )
-      ) {
-        return false;
-      }
+      const ctx = getSandboxContext(experimental_context, "bash");
 
       if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
         return true;
       }
 
-      // Check command safety
       if (commandNeedsApproval(args.command)) {
-        // If command is dangerous, check user's approval setting
         if (typeof options?.needsApproval === "function") {
           return options.needsApproval(args);
         }
         return options?.needsApproval ?? true;
       }
 
-      // Command is safe - no approval needed
       return false;
     },
     description: `Execute a bash command in the user's shell (non-interactive).

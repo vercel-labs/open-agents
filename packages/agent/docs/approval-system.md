@@ -1,96 +1,72 @@
 # Tool Approval System
 
-This document explains the current, simplified approval model used in `packages/agent`.
+This document explains the current bash safety model used in `packages/agent`.
 
 ## Overview
 
-The agent no longer differentiates between multiple runtime approval modes. The product now effectively runs in the cloud, so `packages/agent` keeps only the minimum approval state needed for bash safety.
+The agent no longer has multiple runtime modes or configurable approval policies. Instead, bash safety is enforced directly by the bash tool with a simple default rule:
 
-## Bash Approval Context
+- safe read-only commands can run without approval
+- dangerous or unknown commands require approval
+- commands that escape the sandbox working directory require approval
 
-The agent context now carries only the minimum bash approval inputs:
+This is the only behavior needed to prevent obviously dangerous operations such as `rm -rf`.
 
-```typescript
-interface AgentContext {
-  sandbox: Sandbox;
-  model: LanguageModel;
-  allowAllBash?: boolean;
-  bashRules?: Array<{
-    type: "command-prefix";
-    tool: "bash";
-    prefix: string;
-  }>;
-}
-```
+## Bash Approval Flow
 
-### `bashRules`
-
-Command-prefix rules that auto-approve matching bash commands. Example:
-
-```typescript
-{ type: "command-prefix", tool: "bash", prefix: "bun run" }
-```
-
-### `allowAllBash`
-
-When `true`, all bash commands are auto-approved for the current execution context. This is primarily used by subagents.
-
-## Approval Flow
-
-Only bash uses approval checks today:
-
-```
+```text
 Bash tool called
     ↓
-Is allowAllBash enabled? ── Yes ──→ Auto-approve
-    ↓ No
-Matches a bashRules prefix? ── Yes ──→ Auto-approve
-    ↓ No
 Is cwd outside working directory? ── Yes ──→ Needs approval
     ↓ No
-Does the command match a dangerous pattern? ── Yes ──→ Needs approval
+Does the command match a dangerous or unknown pattern? ── Yes ──→ Needs approval
     ↓ No
 Auto-approve
 ```
 
-## Bash Tool Logic
+## Safe Commands
 
-The bash tool applies approval in this order:
+The bash tool auto-approves a small set of read-only command prefixes such as:
 
-1. Auto-approve if `allowAllBash` is enabled
-2. Auto-approve if the command matches a configured prefix rule
-3. Require approval if `cwd` escapes the sandbox working directory
-4. Require approval for dangerous commands and unknown commands
-5. Auto-approve known safe read-only commands
+- `ls`
+- `find`
+- `grep`
+- `rg`
+- `git status`
+- `git diff`
+- `git log`
+- `pwd`
+- `echo`
 
-See `packages/agent/tools/bash.ts` for the concrete implementation.
+See `packages/agent/tools/bash.ts` for the full list.
+
+## Dangerous Commands
+
+The bash tool requires approval for dangerous patterns including commands like:
+
+- `rm`
+- `mv`
+- `cp`
+- `mkdir`
+- `touch`
+- `chmod`
+- `chown`
+- `sudo`
+- destructive git commands
+- package installation commands
+- shell redirects, pipes, and command chaining
+
+Unknown commands also require approval by default.
 
 ## Subagents
 
-Subagents run with:
-
-```typescript
-allowAllBash: true
-```
-
-This lets them execute bash autonomously inside the sandbox without carrying any separate mode concept.
-
-## Helper Functions
-
-### `shouldAutoApprove(options): boolean`
-
-Returns `true` when `allowAllBash` is enabled.
-
-### `getApprovalContext(experimental_context, toolName?)`
-
-Extracts sandbox, working directory, and approval config from the AI SDK context.
+Subagents follow the exact same bash safety policy as the main agent. They no longer bypass dangerous-command approval.
 
 ## Key Files
 
 | File | Purpose |
 | --- | --- |
-| `packages/agent/types.ts` | `ApprovalConfig` type |
-| `packages/agent/tools/utils.ts` | Approval helpers |
-| `packages/agent/tools/bash.ts` | Bash approval logic |
-| `packages/agent/subagents/executor.ts` | Subagent bash auto-approval |
-| `packages/agent/subagents/explorer.ts` | Subagent bash auto-approval |
+| `packages/agent/tools/bash.ts` | Hardcoded bash safety policy |
+| `packages/agent/tools/utils.ts` | Sandbox context helpers |
+| `packages/agent/subagents/executor.ts` | Executor subagent context |
+| `packages/agent/subagents/explorer.ts` | Explorer subagent context |
