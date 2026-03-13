@@ -4,12 +4,21 @@ import {
   type StepResult,
   type ToolSet,
 } from "ai";
+import {
+  compactToolData,
+  estimateCompactionSavings,
+  findPendingCompactionCandidates,
+  getPendingCompactionUnits,
+  indexToolCalls,
+} from "./aggressive-compaction-helpers";
 
 const DEFAULT_COMPACTED_NOTICE =
   "This tool payload was compacted to save context. Please run the tool again if needed.";
 
 const DEFAULT_TRIGGER_PERCENT = 0.4;
+const DEFAULT_FORCE_COMPACTION_PERCENT = 0.8;
 const DEFAULT_MIN_SAVINGS_PERCENT = 0.2;
+const DEFAULT_CHECKPOINT_TOOL_CALLS = 24;
 
 export interface AggressiveCompactionOptions<T extends ToolSet> {
   messages: ModelMessage[];
@@ -17,25 +26,23 @@ export interface AggressiveCompactionOptions<T extends ToolSet> {
   contextLimit: number;
   lastInputTokens?: number;
   triggerPercent?: number;
+  forceCompactionPercent?: number;
   minSavingsPercent?: number;
   retainRecentToolCalls?: number;
+  checkpointToolCalls?: number;
   compactedToolNotice?: string;
 }
-
-type ToolCallIndex = {
-  byLocation: Map<number, Map<number, string>>;
-  orderedKeys: string[];
-};
-
-type JsonRecord = Record<string, unknown>;
 
 /**
  * Aggressive single-strategy compaction.
  *
- * If input tokens exceed triggerPercent of the context window and estimated
- * savings from compacting older tool content are at least minSavingsPercent
- * of the context window, older tool calls/results are compacted while
- * retaining the most recent tool calls.
+ * Compaction starts when input tokens exceed triggerPercent of the context
+ * window. To avoid per-turn cache churn, only newly eligible tool calls are
+ * compacted in checkpoints once at least checkpointToolCalls are pending.
+ *
+ * If input tokens exceed forceCompactionPercent, pending tool calls/results
+ * are compacted immediately regardless of checkpoint size or savings threshold
+ * to protect against context overflow.
  */
 export function aggressiveCompactContext<T extends ToolSet>({
   messages,
@@ -43,18 +50,31 @@ export function aggressiveCompactContext<T extends ToolSet>({
   contextLimit,
   lastInputTokens,
   triggerPercent = DEFAULT_TRIGGER_PERCENT,
+  forceCompactionPercent = DEFAULT_FORCE_COMPACTION_PERCENT,
   minSavingsPercent = DEFAULT_MIN_SAVINGS_PERCENT,
   retainRecentToolCalls = 20,
+  checkpointToolCalls = DEFAULT_CHECKPOINT_TOOL_CALLS,
   compactedToolNotice = DEFAULT_COMPACTED_NOTICE,
 }: AggressiveCompactionOptions<T>): ModelMessage[] {
   if (messages.length === 0) return messages;
 
   const normalizedContextLimit = Math.max(1, contextLimit);
   const normalizedTriggerPercent = clampPercentage(triggerPercent);
+  const normalizedForcePercent = Math.max(
+    normalizedTriggerPercent,
+    clampPercentage(forceCompactionPercent),
+  );
   const normalizedSavingsPercent = clampPercentage(minSavingsPercent);
+  const normalizedCheckpointToolCalls = Math.max(
+    1,
+    Math.floor(checkpointToolCalls),
+  );
 
   const tokenThreshold = Math.ceil(
     normalizedContextLimit * normalizedTriggerPercent,
+  );
+  const forceCompactionThreshold = Math.ceil(
+    normalizedContextLimit * normalizedForcePercent,
   );
   const minTrimSavings = Math.ceil(
     normalizedContextLimit * normalizedSavingsPercent,
@@ -65,9 +85,12 @@ export function aggressiveCompactContext<T extends ToolSet>({
     steps,
     lastInputTokens,
   });
+
   if (currentTokens <= tokenThreshold) {
     return messages;
   }
+
+  const shouldForceCompaction = currentTokens >= forceCompactionThreshold;
 
   const normalizedRetainCount = Math.max(0, retainRecentToolCalls);
   const toolCallIndex = indexToolCalls(messages);
@@ -75,21 +98,44 @@ export function aggressiveCompactContext<T extends ToolSet>({
     toolCallIndex.orderedKeys.slice(-normalizedRetainCount),
   );
 
-  const removableToolTokens = estimateCompactionSavings({
+  const pendingCandidates = findPendingCompactionCandidates({
     messages,
     toolCallIndex,
     recentToolCallKeys,
     compactedToolNotice,
   });
 
-  if (removableToolTokens < minTrimSavings) {
+  const pendingCompactionUnits = getPendingCompactionUnits(pendingCandidates);
+  if (pendingCompactionUnits === 0) {
+    return messages;
+  }
+
+  if (
+    !shouldForceCompaction &&
+    pendingCompactionUnits < normalizedCheckpointToolCalls
+  ) {
+    return messages;
+  }
+
+  const removableToolTokens = estimateCompactionSavings({
+    messages,
+    toolCallIndex,
+    pendingCandidates,
+    compactedToolNotice,
+  });
+
+  if (removableToolTokens <= 0) {
+    return messages;
+  }
+
+  if (!shouldForceCompaction && removableToolTokens < minTrimSavings) {
     return messages;
   }
 
   const compactedMessages = compactToolData({
     messages,
     toolCallIndex,
-    recentToolCallKeys,
+    pendingCandidates,
     compactedToolNotice,
   });
 
@@ -128,183 +174,4 @@ function getCurrentTokenUsage<T extends ToolSet>({
 
 function estimateMessageTokens(messages: ModelMessage[]): number {
   return Math.ceil(JSON.stringify(messages).length / 4);
-}
-
-function indexToolCalls(messages: ModelMessage[]): ToolCallIndex {
-  const byLocation = new Map<number, Map<number, string>>();
-  const orderedKeys: string[] = [];
-  let anonymousCallIndex = 0;
-
-  for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
-    const message = messages[messageIndex];
-    if (!message || !Array.isArray(message.content)) continue;
-
-    for (let partIndex = 0; partIndex < message.content.length; partIndex++) {
-      const part = message.content[partIndex];
-      if (!isToolCallPart(part)) continue;
-
-      const key =
-        typeof part.toolCallId === "string"
-          ? `id:${part.toolCallId}`
-          : `anon:${anonymousCallIndex++}`;
-
-      const indexedParts =
-        byLocation.get(messageIndex) ?? new Map<number, string>();
-      indexedParts.set(partIndex, key);
-      byLocation.set(messageIndex, indexedParts);
-      orderedKeys.push(key);
-    }
-  }
-
-  return { byLocation, orderedKeys };
-}
-
-function estimateCompactionSavings({
-  messages,
-  toolCallIndex,
-  recentToolCallKeys,
-  compactedToolNotice,
-}: {
-  messages: ModelMessage[];
-  toolCallIndex: ToolCallIndex;
-  recentToolCallKeys: Set<string>;
-  compactedToolNotice: string;
-}): number {
-  let savingsChars = 0;
-
-  for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
-    const message = messages[messageIndex];
-    if (!message || !Array.isArray(message.content)) continue;
-
-    const partKeys = toolCallIndex.byLocation.get(messageIndex);
-
-    for (let partIndex = 0; partIndex < message.content.length; partIndex++) {
-      const part = message.content[partIndex];
-      if (!part) continue;
-
-      const oldLength = JSON.stringify(part).length;
-      let compactedPart: JsonRecord | null = null;
-
-      if (isToolCallPart(part)) {
-        const key = partKeys?.get(partIndex);
-        if (key && !recentToolCallKeys.has(key)) {
-          compactedPart = compactToolCallPart(part, compactedToolNotice);
-        }
-      } else if (isToolResultPart(part)) {
-        const key =
-          typeof part.toolCallId === "string" ? `id:${part.toolCallId}` : null;
-        if (!key || !recentToolCallKeys.has(key)) {
-          compactedPart = compactToolResultPart(part, compactedToolNotice);
-        }
-      }
-
-      if (!compactedPart) {
-        continue;
-      }
-
-      const newLength = JSON.stringify(compactedPart).length;
-      const delta = oldLength - newLength;
-      if (delta > 0) {
-        savingsChars += delta;
-      }
-    }
-  }
-
-  return Math.ceil(savingsChars / 4);
-}
-
-function compactToolData({
-  messages,
-  toolCallIndex,
-  recentToolCallKeys,
-  compactedToolNotice,
-}: {
-  messages: ModelMessage[];
-  toolCallIndex: ToolCallIndex;
-  recentToolCallKeys: Set<string>;
-  compactedToolNotice: string;
-}): ModelMessage[] {
-  return messages.map((message, messageIndex) => {
-    if (!message || !Array.isArray(message.content)) {
-      return message;
-    }
-
-    const partKeys = toolCallIndex.byLocation.get(messageIndex);
-    let changed = false;
-
-    const compactedContent = message.content.map((part, partIndex) => {
-      if (!part) return part;
-
-      if (isToolCallPart(part)) {
-        const key = partKeys?.get(partIndex);
-        if (key && !recentToolCallKeys.has(key)) {
-          changed = true;
-          return compactToolCallPart(part, compactedToolNotice) as typeof part;
-        }
-      }
-
-      if (isToolResultPart(part)) {
-        const key =
-          typeof part.toolCallId === "string" ? `id:${part.toolCallId}` : null;
-        if (!key || !recentToolCallKeys.has(key)) {
-          changed = true;
-          return compactToolResultPart(
-            part,
-            compactedToolNotice,
-          ) as typeof part;
-        }
-      }
-
-      return part;
-    });
-
-    if (!changed) {
-      return message;
-    }
-
-    return {
-      ...message,
-      content: compactedContent,
-    } as ModelMessage;
-  });
-}
-
-function compactToolCallPart(
-  part: JsonRecord,
-  compactedToolNotice: string,
-): JsonRecord {
-  return {
-    ...part,
-    input: {
-      compacted: true,
-      message: compactedToolNotice,
-    },
-  };
-}
-
-function compactToolResultPart(
-  part: JsonRecord,
-  compactedToolNotice: string,
-): JsonRecord {
-  return {
-    ...part,
-    output: {
-      type: "text",
-      value: compactedToolNotice,
-    },
-  };
-}
-
-function isToolCallPart(
-  part: unknown,
-): part is JsonRecord & { toolCallId?: unknown } {
-  if (!part || typeof part !== "object") return false;
-  return (part as { type?: unknown }).type === "tool-call";
-}
-
-function isToolResultPart(
-  part: unknown,
-): part is JsonRecord & { toolCallId?: unknown } {
-  if (!part || typeof part !== "object") return false;
-  return (part as { type?: unknown }).type === "tool-result";
 }

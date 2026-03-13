@@ -60,6 +60,50 @@ function createConversation(
   };
 }
 
+function appendToolExchange(
+  messages: ModelMessage[],
+  callId: number,
+  payload: string,
+): ModelMessage[] {
+  return messages.map((message) => {
+    if (!Array.isArray(message.content)) {
+      return message;
+    }
+
+    if (message.role === "assistant") {
+      return {
+        ...message,
+        content: [
+          ...message.content,
+          {
+            type: "tool-call",
+            toolCallId: `call-${callId}`,
+            toolName: "read",
+            input: { filePath: `/tmp/file-${callId}.txt`, payload },
+          },
+        ],
+      } as ModelMessage;
+    }
+
+    if (message.role === "tool") {
+      return {
+        ...message,
+        content: [
+          ...message.content,
+          {
+            type: "tool-result",
+            toolCallId: `call-${callId}`,
+            toolName: "read",
+            output: { value: payload },
+          },
+        ],
+      } as ModelMessage;
+    }
+
+    return message;
+  });
+}
+
 function getToolCalls(messages: ModelMessage[]): ToolCallSnapshot[] {
   const calls: ToolCallSnapshot[] = [];
 
@@ -230,5 +274,75 @@ describe("aggressiveCompactContext", () => {
     });
 
     expect(compacted).toBe(messages);
+  });
+
+  test("waits for a checkpoint batch before compacting newly eligible tool calls", () => {
+    const { messages, payload } = createConversation(60, 1200);
+
+    const initialCompacted = aggressiveCompactContext({
+      messages,
+      steps: createSteps(70_000),
+      contextLimit: 100_000,
+      retainRecentToolCalls: 20,
+      checkpointToolCalls: 1,
+      forceCompactionPercent: 0.95,
+    });
+
+    const withNewToolCall = appendToolExchange(initialCompacted, 60, payload);
+
+    const deferred = aggressiveCompactContext({
+      messages: withNewToolCall,
+      steps: createSteps(70_000),
+      contextLimit: 100_000,
+      retainRecentToolCalls: 20,
+      checkpointToolCalls: 8,
+      forceCompactionPercent: 0.95,
+    });
+
+    expect(deferred).toBe(withNewToolCall);
+
+    const newlyEligibleCall = getToolCalls(deferred).find(
+      (call) => call.id === "call-40",
+    );
+
+    expect(newlyEligibleCall?.input).toEqual({
+      filePath: "/tmp/file-40.txt",
+      payload,
+    });
+  });
+
+  test("forces compaction near the context limit even below checkpoint size", () => {
+    const { messages, payload } = createConversation(60, 1200);
+
+    const initialCompacted = aggressiveCompactContext({
+      messages,
+      steps: createSteps(70_000),
+      contextLimit: 100_000,
+      retainRecentToolCalls: 20,
+      checkpointToolCalls: 1,
+      forceCompactionPercent: 0.95,
+    });
+
+    const withNewToolCall = appendToolExchange(initialCompacted, 60, payload);
+
+    const forced = aggressiveCompactContext({
+      messages: withNewToolCall,
+      steps: createSteps(82_000),
+      contextLimit: 100_000,
+      retainRecentToolCalls: 20,
+      checkpointToolCalls: 8,
+      forceCompactionPercent: 0.8,
+    });
+
+    expect(forced).not.toBe(withNewToolCall);
+
+    const newlyEligibleCall = getToolCalls(forced).find(
+      (call) => call.id === "call-40",
+    );
+
+    expect(newlyEligibleCall?.input).toEqual({
+      compacted: true,
+      message: COMPACTED_NOTICE,
+    });
   });
 });

@@ -75,14 +75,18 @@ const DEFAULT_CONTEXT_LIMIT = 200_000;
 
 interface CompactionTuning {
   triggerPercent: number;
+  forceCompactionPercent: number;
   minSavingsPercent: number;
   retainRecentToolCalls: number;
+  checkpointToolCalls: number;
 }
 
 const DEFAULT_COMPACTION_TUNING: CompactionTuning = {
   triggerPercent: 0.58,
+  forceCompactionPercent: 0.8,
   minSavingsPercent: 0.03,
   retainRecentToolCalls: 32,
+  checkpointToolCalls: 24,
 };
 
 /**
@@ -161,8 +165,10 @@ export const openHarnessAgent = new ToolLoopAgent({
           contextLimit: callContext?.contextLimit ?? DEFAULT_CONTEXT_LIMIT,
           lastInputTokens: callContext?.lastInputTokens,
           triggerPercent: compactionTuning.triggerPercent,
+          forceCompactionPercent: compactionTuning.forceCompactionPercent,
           minSavingsPercent: compactionTuning.minSavingsPercent,
           retainRecentToolCalls: compactionTuning.retainRecentToolCalls,
+          checkpointToolCalls: compactionTuning.checkpointToolCalls,
         }),
         model,
       }),
