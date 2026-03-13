@@ -10,12 +10,12 @@ Web -> Agent (packages/agent) -> Sandbox (packages/sandbox)
 
 1. **Web** handles authentication, session management, and the primary user interface
 2. **Agent** (`deepAgent`) is a `ToolLoopAgent` with tools for file ops, bash, and task delegation
-3. **Sandbox** abstracts file system and shell operations (local/remote execution backends)
+3. **Sandbox** abstracts file system and shell operations for cloud execution backends
 
 ## Key Packages
 
 - **packages/agent/** - Core agent implementation with tools, subagents, and context management
-- **packages/sandbox/** - Execution environment abstraction (local/remote)
+- **packages/sandbox/** - Execution environment abstraction for cloud sandboxes
 - **packages/shared/** - Shared utilities across packages
 
 ## Subagent Pattern

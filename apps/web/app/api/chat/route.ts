@@ -253,7 +253,7 @@ export async function POST(req: Request) {
   }
 
   // Discover skills from the sandbox's working directory
-  // Only project-level skills (no user home directory in remote sandboxes)
+  // Only project-level skills (no user home directory in cloud sandboxes)
   // TODO: Optimize if this becomes a bottleneck (~20ms no skills, ~130ms with 5 skills)
   const skillBaseFolders = [".claude", ".agents"];
   const skillDirs = skillBaseFolders.map(

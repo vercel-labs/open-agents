@@ -14,7 +14,7 @@ interface ConnectOptions {
 }
 
 /**
- * Connect to a Vercel sandbox based on the provided state.
+ * Connect to the Vercel-backed cloud sandbox based on the provided state.
  *
  * - If `sandboxId` is present, reconnects to an existing running VM
  * - If `snapshotId` is present (without sandboxId), restores from native snapshot

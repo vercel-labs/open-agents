@@ -20,9 +20,6 @@ export {
   type SandboxConnectConfig,
 } from "./factory";
 
-// local
-export { LocalSandbox, createLocalSandbox } from "./local";
-
 // vercel
 export {
   connectVercelSandbox,
@@ -31,12 +28,3 @@ export {
   type VercelSandboxConnectConfig,
   type VercelState,
 } from "./vercel";
-
-// just-bash
-export {
-  JustBashSandbox,
-  createJustBashSandbox,
-  type JustBashSandboxConfig,
-  type JustBashSnapshot,
-  type JustBashState,
-} from "./just-bash";

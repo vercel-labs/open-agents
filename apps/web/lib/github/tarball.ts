@@ -1,8 +1,10 @@
 /**
  * GitHub Tarball Download and Extraction Utilities
  *
- * Downloads and extracts GitHub repository tarballs into an in-memory file map
- * for use with JustBash sandbox.
+ * Downloads and extracts GitHub repository tarballs into a file map.
+ *
+ * This utility is provider-agnostic and can be used to prepare repository content
+ * for sandbox bootstrapping flows.
  */
 
 import { gunzipSync } from "zlib";

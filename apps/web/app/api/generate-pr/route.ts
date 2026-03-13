@@ -675,7 +675,7 @@ Respond with ONLY the commit message, nothing else.`,
       let errorMessage = "Failed to push branch.";
       let isPermissionError = isPermissionPushError(pushOutput);
 
-      // Vercel sandboxes can return empty output on push failure even when
+      // Cloud sandboxes backed by Vercel can return empty output on push failure even when
       // the actual error is a permission denial (exitCode 128 with no stderr).
       // Treat empty-output failures as potential permission errors so fallback
       // paths (user token, fork) are still attempted.

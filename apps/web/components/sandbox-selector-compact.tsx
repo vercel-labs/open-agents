@@ -28,7 +28,7 @@ export const SANDBOX_OPTIONS: SandboxOption[] = [
   {
     id: "vercel",
     name: "Vercel",
-    description: "Full cloud sandbox",
+    description: "Cloud sandbox",
   },
 ];
 

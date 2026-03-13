@@ -71,7 +71,7 @@ mock.module("./client", () => ({
 const sessionsModulePromise = import("./sessions");
 
 describe("normalizeLegacySandboxState", () => {
-  test("rewrites leftover hybrid state to vercel while preserving fields", async () => {
+  test("rewrites leftover legacy hybrid state to vercel while preserving fields", async () => {
     const { normalizeLegacySandboxState } = await sessionsModulePromise;
 
     const result = normalizeLegacySandboxState({
