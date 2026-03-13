@@ -171,6 +171,7 @@ mock.module("@/lib/model-variants", () => ({
 
 mock.module("@/lib/models", () => ({
   DEFAULT_MODEL_ID: "mock-model",
+  DEFAULT_CONTEXT_LIMIT: 200_000,
 }));
 
 mock.module("@/lib/resumable-stream-context", () => ({
