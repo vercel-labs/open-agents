@@ -32,8 +32,10 @@ const autoCommitCalls: Array<Record<string, unknown>> = [];
 const backgroundTasks: Promise<void>[] = [];
 const fetchCalls: string[] = [];
 
-let sessionRecord: TestSessionRecord;
-let chatRecord: TestChatRecord;
+let sessionRecord: TestSessionRecord | null;
+let chatRecord: TestChatRecord | null;
+let currentAuthSession: { user: { id: string } } | null;
+let isSandboxActive = true;
 let shouldTriggerStopBeforeFinish = false;
 let stopCallback: (() => void) | null = null;
 
@@ -120,14 +122,10 @@ mock.module("@/lib/db/sessions", () => ({
   isFirstChatMessage: async () => false,
   touchChat: async () => {},
   updateChat: async () => {},
+  updateChatActiveStreamId: async () => {},
   updateChatAssistantActivity: async () => {},
-  updateSession: async (
-    _sessionId: string,
-    patch: Record<string, unknown>,
-  ) => ({
-    ...sessionRecord,
-    ...patch,
-  }),
+  updateSession: async (_sessionId: string, patch: Record<string, unknown>) =>
+    patch,
   upsertChatMessageScoped: async () => ({ status: "inserted" as const }),
 }));
 
@@ -188,15 +186,11 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
 }));
 
 mock.module("@/lib/sandbox/utils", () => ({
-  isSandboxActive: () => true,
+  isSandboxActive: () => isSandboxActive,
 }));
 
 mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () => ({
-    user: {
-      id: "user-1",
-    },
-  }),
+  getServerSession: async () => currentAuthSession,
 }));
 
 mock.module("@/lib/stop-signal", () => ({
@@ -214,13 +208,46 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("/api/chat auto commit", () => {
+function createRequest(body: string) {
+  return new Request("http://localhost/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: "session=abc",
+    },
+    body,
+  });
+}
+
+function createValidRequest() {
+  return createRequest(
+    JSON.stringify({
+      sessionId: "session-1",
+      chatId: "chat-1",
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "Fix the bug" }],
+        },
+      ],
+    }),
+  );
+}
+
+describe("/api/chat route", () => {
   beforeEach(() => {
     autoCommitCalls.length = 0;
     backgroundTasks.length = 0;
     fetchCalls.length = 0;
     shouldTriggerStopBeforeFinish = false;
     stopCallback = null;
+    currentAuthSession = {
+      user: {
+        id: "user-1",
+      },
+    };
+    isSandboxActive = true;
 
     sessionRecord = {
       id: "session-1",
@@ -244,26 +271,7 @@ describe("/api/chat auto commit", () => {
   test("runs auto commit after a natural finish", async () => {
     const { POST } = await routeModulePromise;
 
-    const response = await POST(
-      new Request("http://localhost/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          cookie: "session=abc",
-        },
-        body: JSON.stringify({
-          sessionId: "session-1",
-          chatId: "chat-1",
-          messages: [
-            {
-              id: "user-1",
-              role: "user",
-              parts: [{ type: "text", text: "Fix the bug" }],
-            },
-          ],
-        }),
-      }),
-    );
+    const response = await POST(createValidRequest());
 
     await Promise.all(backgroundTasks);
 
@@ -284,26 +292,7 @@ describe("/api/chat auto commit", () => {
     shouldTriggerStopBeforeFinish = true;
     const { POST } = await routeModulePromise;
 
-    const response = await POST(
-      new Request("http://localhost/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          cookie: "session=abc",
-        },
-        body: JSON.stringify({
-          sessionId: "session-1",
-          chatId: "chat-1",
-          messages: [
-            {
-              id: "user-1",
-              role: "user",
-              parts: [{ type: "text", text: "Fix the bug" }],
-            },
-          ],
-        }),
-      }),
-    );
+    const response = await POST(createValidRequest());
 
     await Promise.all(backgroundTasks);
 
@@ -312,5 +301,91 @@ describe("/api/chat auto commit", () => {
     expect(fetchCalls).toEqual([
       "http://localhost/api/sessions/session-1/diff",
     ]);
+  });
+
+  test("returns 401 when not authenticated", async () => {
+    currentAuthSession = null;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Not authenticated",
+    });
+  });
+
+  test("returns 400 for invalid JSON body", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createRequest("{"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid JSON body",
+    });
+  });
+
+  test("returns 400 when sessionId and chatId are missing", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createRequest(
+        JSON.stringify({
+          messages: [
+            {
+              id: "user-1",
+              role: "user",
+              parts: [{ type: "text", text: "Fix the bug" }],
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "sessionId and chatId are required",
+    });
+  });
+
+  test("returns 404 when session does not exist", async () => {
+    sessionRecord = null;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Session not found",
+    });
+  });
+
+  test("returns 403 when session is not owned by user", async () => {
+    if (!sessionRecord) {
+      throw new Error("sessionRecord must be set");
+    }
+    sessionRecord.userId = "user-2";
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Unauthorized",
+    });
+  });
+
+  test("returns 400 when sandbox is not active", async () => {
+    isSandboxActive = false;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Sandbox not initialized",
+    });
   });
 });
