@@ -96,6 +96,8 @@ export interface GatewayOptions {
   providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
+export type { GatewayModelId, LanguageModel, JSONValue };
+
 export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5");
 }

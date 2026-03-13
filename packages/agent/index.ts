@@ -1,5 +1,9 @@
 export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
-export type { OpenHarnessAgentConfig } from "./open-harness-agent";
+export type {
+  AgentModelSelection,
+  OpenHarnessAgentConfig,
+  OpenHarnessAgentModelInput,
+} from "./open-harness-agent";
 export {
   createOpenHarnessAgent,
   defaultModel,

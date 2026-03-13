@@ -10,7 +10,6 @@ import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
 import {
   convertToModelMessages,
   type GatewayModelId,
-  type LanguageModel,
   type LanguageModelUsage,
 } from "ai";
 import { nanoid } from "nanoid";
@@ -383,23 +382,30 @@ export async function POST(req: Request) {
     ? DEFAULT_MODEL_ID
     : mainSelection.resolvedModelId;
 
-  let model;
+  let model: GatewayModelId;
+  let modelProviderOptions: typeof mainSelection.providerOptionsByProvider;
   try {
-    model = gateway(mainResolvedModelId as GatewayModelId, {
-      providerOptionsOverrides: mainSelection.isMissingVariant
-        ? undefined
-        : mainSelection.providerOptionsByProvider,
+    model = mainResolvedModelId as GatewayModelId;
+    modelProviderOptions = mainSelection.isMissingVariant
+      ? undefined
+      : mainSelection.providerOptionsByProvider;
+    gateway(model, {
+      providerOptionsOverrides: modelProviderOptions,
     });
   } catch (error) {
     console.error(
       `Invalid model ID "${mainResolvedModelId}", falling back to default:`,
       error,
     );
-    model = gateway(DEFAULT_MODEL_ID as GatewayModelId);
+    model = DEFAULT_MODEL_ID as GatewayModelId;
+    modelProviderOptions = undefined;
   }
 
   // Resolve subagent model from user preferences (if configured)
-  let subagentModel: LanguageModel | undefined;
+  let subagentModel: GatewayModelId | undefined;
+  let subagentModelProviderOptions:
+    | ReturnType<typeof resolveModelSelection>["providerOptionsByProvider"]
+    | undefined;
   if (preferences?.defaultSubagentModelId) {
     const subagentSelection = resolveModelSelection(
       preferences.defaultSubagentModelId,
@@ -417,10 +423,12 @@ export async function POST(req: Request) {
       : subagentSelection.resolvedModelId;
 
     try {
-      subagentModel = gateway(subagentResolvedModelId as GatewayModelId, {
-        providerOptionsOverrides: subagentSelection.isMissingVariant
-          ? undefined
-          : subagentSelection.providerOptionsByProvider,
+      subagentModel = subagentResolvedModelId as GatewayModelId;
+      subagentModelProviderOptions = subagentSelection.isMissingVariant
+        ? undefined
+        : subagentSelection.providerOptionsByProvider;
+      gateway(subagentModel, {
+        providerOptionsOverrides: subagentModelProviderOptions,
       });
     } catch (error) {
       console.error("Failed to resolve subagent model preference:", error);
@@ -477,8 +485,18 @@ export async function POST(req: Request) {
   try {
     result = await createOpenHarnessAgent({
       sandbox,
-      model,
-      subagentModel,
+      model: {
+        id: model,
+        providerOptionsOverrides: modelProviderOptions,
+      },
+      ...(subagentModel
+        ? {
+            subagentModel: {
+              id: subagentModel,
+              providerOptionsOverrides: subagentModelProviderOptions,
+            },
+          }
+        : {}),
       ...(skills.length > 0 && { skills }),
     }).stream({
       messages: modelMessages,
@@ -620,7 +638,7 @@ export async function POST(req: Request) {
 
         const postUsage = (
           usage: LanguageModelUsage,
-          usageModel: LanguageModel | string,
+          usageModel: string,
           agentType: "main" | "subagent",
           messages: WebAgentUIMessage[] = [],
         ) => {
@@ -664,8 +682,7 @@ export async function POST(req: Request) {
           return;
         }
 
-        const defaultModelId =
-          typeof model === "string" ? model : model.modelId;
+        const defaultModelId = model;
         const subagentUsageByModel = new Map<string, LanguageModelUsage>();
         for (const event of subagentUsageEvents) {
           const eventModelId = event.modelId ?? defaultModelId;
