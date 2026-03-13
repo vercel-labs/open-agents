@@ -484,7 +484,12 @@ export async function POST(req: Request) {
   let result;
   try {
     result = await createOpenHarnessAgent({
-      sandbox,
+      sandbox: {
+        state: sessionRecord.sandboxState,
+        workingDirectory: sandbox.workingDirectory,
+        currentBranch: sandbox.currentBranch,
+        environmentDetails: sandbox.environmentDetails,
+      },
       model: {
         id: model,
         providerOptionsOverrides: modelProviderOptions,

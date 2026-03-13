@@ -1,4 +1,4 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-harness/sandbox";
 import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
 import {
   gateway,
@@ -30,8 +30,15 @@ export interface AgentModelSelection {
 
 export type OpenHarnessAgentModelInput = GatewayModelId | AgentModelSelection;
 
+export interface AgentSandboxContext {
+  state: SandboxState;
+  workingDirectory: string;
+  currentBranch?: string;
+  environmentDetails?: string;
+}
+
 export type OpenHarnessAgentConfig = {
-  sandbox: Sandbox;
+  sandbox: AgentSandboxContext;
   model?: OpenHarnessAgentModelInput;
   subagentModel?: OpenHarnessAgentModelInput;
   customInstructions?: string;

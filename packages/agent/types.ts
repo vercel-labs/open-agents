@@ -1,6 +1,7 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox, SandboxState } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
+import type { AgentSandboxContext } from "./open-harness-agent";
 import type { SkillMetadata } from "./skills/types";
 
 export const todoStatusSchema = z.enum(["pending", "in_progress", "completed"]);
@@ -16,10 +17,25 @@ export const todoItemSchema = z.object({
 export type TodoItem = z.infer<typeof todoItemSchema>;
 
 export interface AgentContext {
-  sandbox: Sandbox;
+  sandbox: AgentSandboxContext;
+  liveSandbox?: Sandbox;
   skills?: SkillMetadata[];
   model: LanguageModel;
   subagentModel?: LanguageModel;
+}
+
+export interface SandboxExecutionContext {
+  sandbox: AgentSandboxContext;
+  liveSandbox?: Sandbox;
+}
+
+export function isSandboxState(value: unknown): value is SandboxState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "vercel"
+  );
 }
 
 export const EVICTION_THRESHOLD_BYTES = 80 * 1024;

@@ -76,7 +76,7 @@ EXAMPLES:
       { filePath, offset = 1, limit = 2000 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "read");
+      const sandbox = await getSandbox(experimental_context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

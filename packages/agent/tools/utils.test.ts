@@ -1,10 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import {
+  getSandbox,
   getSandboxContext,
   isPathWithinDirectory,
   shellEscape,
   toDisplayPath,
 } from "./utils";
+
+mock.module("@open-harness/sandbox", () => ({
+  connectSandbox: async () => ({
+    workingDirectory: "/repo",
+  }),
+}));
 
 describe("tools/utils", () => {
   test("isPathWithinDirectory handles nested and sibling paths", () => {
@@ -22,14 +29,32 @@ describe("tools/utils", () => {
     expect(toDisplayPath("/outside/file.ts", "/repo")).toBe("/outside/file.ts");
   });
 
-  test("getSandboxContext returns sandbox and working directory", () => {
+  test("getSandboxContext returns serializable sandbox context and working directory", () => {
     const context = getSandboxContext({
-      sandbox: { workingDirectory: "/repo" },
+      sandbox: {
+        state: { type: "vercel" },
+        workingDirectory: "/repo",
+      },
       model: "test-model",
     });
 
     expect(context.workingDirectory).toBe("/repo");
     expect(context.sandbox.workingDirectory).toBe("/repo");
+  });
+
+  test("getSandbox lazily connects from sandbox state", async () => {
+    const sandbox = await getSandbox(
+      {
+        sandbox: {
+          state: { type: "vercel" },
+          workingDirectory: "/repo",
+        },
+        model: "test-model",
+      },
+      "read",
+    );
+
+    expect(sandbox.workingDirectory).toBe("/repo");
   });
 
   test("shellEscape safely escapes single quotes", () => {

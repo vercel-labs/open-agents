@@ -1,4 +1,4 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import { connectSandbox, type Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
 import type { AgentContext } from "../types";
@@ -68,10 +68,10 @@ export function toDisplayPath(
  * @returns The sandbox instance
  * @throws Error if sandbox is not available in context
  */
-export function getSandbox(
+export async function getSandbox(
   experimental_context: unknown,
   toolName?: string,
-): Sandbox {
+): Promise<Sandbox> {
   const context = isAgentContext(experimental_context)
     ? experimental_context
     : undefined;
@@ -85,7 +85,12 @@ export function getSandbox(
         "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
   }
-  return context.sandbox;
+
+  if (context.liveSandbox) {
+    return context.liveSandbox;
+  }
+
+  return connectSandbox(context.sandbox.state);
 }
 
 /**
@@ -98,7 +103,7 @@ export function getSandboxContext(
   experimental_context: unknown,
   toolName?: string,
 ): {
-  sandbox: Sandbox;
+  sandbox: AgentContext["sandbox"];
   workingDirectory: string;
 } {
   const context = isAgentContext(experimental_context)

@@ -166,7 +166,7 @@ EXAMPLES:
 - Start a dev server: command: "npm run dev", detached: true`,
     inputSchema: bashInputSchema,
     execute: async ({ command, cwd, detached }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context, "bash");
+      const sandbox = await getSandbox(experimental_context, "bash");
       const workingDirectory = sandbox.workingDirectory;
 
       // Resolve the working directory

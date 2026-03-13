@@ -101,7 +101,7 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
-    const sandbox = getSandbox(experimental_context, "task");
+    const sandbox = await getSandbox(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 

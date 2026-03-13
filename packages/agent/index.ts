@@ -1,6 +1,7 @@
 export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
 export type {
   AgentModelSelection,
+  AgentSandboxContext,
   OpenHarnessAgentConfig,
   OpenHarnessAgentModelInput,
 } from "./open-harness-agent";

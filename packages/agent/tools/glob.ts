@@ -56,7 +56,7 @@ EXAMPLES:
       { pattern, path: basePath, limit = 100 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "glob");
+      const sandbox = await getSandbox(experimental_context, "glob");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

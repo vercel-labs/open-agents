@@ -16,7 +16,14 @@ import type { ToolNeedsApprovalFunction } from "./utils";
 
 function createContext(sandbox: Record<string, unknown>) {
   return {
-    sandbox,
+    sandbox: {
+      state: { type: "vercel" as const },
+      workingDirectory:
+        typeof sandbox.workingDirectory === "string"
+          ? sandbox.workingDirectory
+          : "/repo",
+    },
+    liveSandbox: sandbox,
     approval: {},
     model: "test-model",
   };

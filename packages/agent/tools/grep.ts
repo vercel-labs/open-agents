@@ -60,7 +60,7 @@ EXAMPLES:
       { pattern, path: searchPath, glob, caseSensitive = true },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "grep");
+      const sandbox = await getSandbox(experimental_context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
