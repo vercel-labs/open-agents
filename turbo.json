@@ -5,7 +5,6 @@
       "dependsOn": ["^build"],
       "env": [
         "BLOB_READ_WRITE_TOKEN",
-        "CLI_TOKEN_ENCRYPTION_KEY",
         "ENCRYPTION_KEY",
         "GITHUB_CLIENT_SECRET",
         "JWE_SECRET",
@@ -22,21 +21,9 @@
       ],
       "outputs": ["dist/**"]
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "typecheck": {
-      "dependsOn": ["^typecheck"],
-      "outputs": []
-    },
-    "lint": {
-      "dependsOn": ["^lint"],
-      "outputs": []
-    },
-    "lint:fix": {
-      "dependsOn": ["^lint:fix"],
-      "outputs": []
-    }
+    "dev": { "cache": false, "persistent": true },
+    "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },
+    "lint": { "dependsOn": ["^lint"], "outputs": [] },
+    "lint:fix": { "dependsOn": ["^lint:fix"], "outputs": [] }
   }
 }

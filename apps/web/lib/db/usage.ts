@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { db } from "./client";
 import { usageEvents } from "./schema";
 
-export type UsageSource = "web" | "cli";
+export type UsageSource = "web";
 export type UsageAgentType = "main" | "subagent";
 
 export async function recordUsage(

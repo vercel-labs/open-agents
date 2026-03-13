@@ -1,7 +1,6 @@
 "use client";
 
 import { History } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SignedOutHero } from "@/components/auth/signed-out-hero";
@@ -10,7 +9,6 @@ import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { SessionDrawer } from "@/components/session-drawer";
 import { SessionStarter } from "@/components/session-starter";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
-import { useCliTokens } from "@/hooks/use-cli-tokens";
 import { useSession } from "@/hooks/use-session";
 import { useSessions } from "@/hooks/use-sessions";
 
@@ -73,12 +71,9 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between px-6 py-4 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+      <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2 sm:justify-self-start">
           <span className="text-lg font-semibold">Open Harness</span>
-        </div>
-        <div className="hidden sm:flex sm:justify-self-center">
-          <CliConnectBanner />
         </div>
         <div className="flex items-center gap-2 sm:justify-self-end">
           <button
@@ -121,28 +116,6 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
         loading={loading}
         onSessionClick={handleSessionClick}
       />
-    </div>
-  );
-}
-
-function CliConnectBanner() {
-  const { tokens, loading } = useCliTokens();
-
-  if (loading || tokens.length > 0) {
-    return null;
-  }
-
-  return (
-    <div className="inline-flex items-center gap-3 rounded-full border border-border/60 bg-muted/70 px-4 py-1.5 text-sm text-muted-foreground">
-      <span className="text-foreground">
-        Run sessions locally with the CLI.
-      </span>
-      <Link
-        href="/settings/tokens"
-        className="text-foreground underline decoration-foreground/40 underline-offset-4 transition hover:decoration-foreground"
-      >
-        Set up CLI
-      </Link>
     </div>
   );
 }

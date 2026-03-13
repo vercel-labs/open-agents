@@ -32,8 +32,6 @@ Neon database branching is enabled in the Vercel project settings. Every preview
 
 ```bash
 # Development
-turbo dev              # Run CLI agent (from root)
-bun run cli            # Alternative: run CLI directly
 bun run web            # Run web app
 
 # Quality checks (REQUIRED after making any changes)
@@ -43,10 +41,8 @@ turbo lint                                 # Lint all packages with oxlint
 turbo lint:fix                             # Lint and auto-fix all packages
 
 # Filter by package (use --filter)
-turbo typecheck --filter=web               # Type check web app only
-turbo typecheck --filter=@open-harness/cli # Type check CLI only
-turbo lint:fix --filter=web                # Lint web app only
-turbo lint:fix --filter=@open-harness/cli  # Lint CLI only
+turbo typecheck --filter=web # Type check web app only
+turbo lint:fix --filter=web  # Lint web app only
 
 # Formatting (Biome - run from root)
 bun run format                             # Format all files
@@ -79,7 +75,7 @@ git add "apps/web/app/tasks/[id]/page.tsx"
 ## Architecture (Summary)
 
 ```
-CLI (apps/cli) -> TUI (packages/tui) -> Agent (packages/agent) -> Sandbox (packages/sandbox)
+Web -> Agent (packages/agent) -> Sandbox (packages/sandbox)
 ```
 
 See [Architecture & Workspace Structure](docs/agents/architecture.md) for details.

@@ -3,7 +3,6 @@
 import {
   ArrowLeft,
   BarChart3,
-  Key,
   Link2,
   Menu,
   Settings as SettingsIcon,
@@ -25,7 +24,6 @@ import { AccountsSectionSkeleton } from "./accounts-section";
 import { ModelVariantsSectionSkeleton } from "./model-variants-section";
 import { PreferencesSectionSkeleton } from "./preferences-section";
 import { ProfileSectionSkeleton } from "./profile-section";
-import { TokensSectionSkeleton } from "./tokens-section";
 import { UsageSectionSkeleton } from "./usage-section";
 
 const sidebarItems = [
@@ -46,12 +44,6 @@ const sidebarItems = [
     label: "Model Variants",
     href: "/settings/model-variants",
     icon: SlidersHorizontal,
-  },
-  {
-    id: "tokens",
-    label: "Connected Clients",
-    href: "/settings/tokens",
-    icon: Key,
   },
   {
     id: "accounts",
@@ -104,7 +96,6 @@ function SettingsLayout({
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      {/* Desktop sidebar */}
       <aside className="hidden w-64 border-r border-border md:flex">
         <div className="flex h-full w-full flex-col">
           <div className="flex items-center gap-4 px-6 py-4">
@@ -125,7 +116,6 @@ function SettingsLayout({
         </div>
       </aside>
 
-      {/* Mobile sidebar Sheet */}
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
         <SheetContent side="left" className="flex w-64 flex-col p-0">
           <SheetHeader className="sr-only">
@@ -150,9 +140,7 @@ function SettingsLayout({
         </SheetContent>
       </Sheet>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        {/* Mobile top bar */}
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
           <button
             type="button"
@@ -182,8 +170,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <PreferencesSectionSkeleton />
     ) : activeItem?.id === "model-variants" ? (
       <ModelVariantsSectionSkeleton />
-    ) : activeItem?.id === "tokens" ? (
-      <TokensSectionSkeleton />
     ) : activeItem?.id === "accounts" ? (
       <AccountsSectionSkeleton />
     ) : activeItem?.id === "usage" ? (

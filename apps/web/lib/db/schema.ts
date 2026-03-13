@@ -266,39 +266,6 @@ export const linkedAccounts = pgTable(
 export type LinkedAccount = typeof linkedAccounts.$inferSelect;
 export type NewLinkedAccount = typeof linkedAccounts.$inferInsert;
 
-// CLI tokens for device flow authentication
-export const cliTokens = pgTable(
-  "cli_tokens",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-    tokenHash: text("token_hash").notNull(),
-    // Encrypted access token - only populated during device flow, cleared after first retrieval
-    encryptedAccessToken: text("encrypted_access_token"),
-    deviceName: text("device_name"),
-    lastUsedAt: timestamp("last_used_at"),
-    expiresAt: timestamp("expires_at"),
-    // Device flow fields
-    deviceCode: text("device_code"),
-    userCode: text("user_code"),
-    deviceCodeExpiresAt: timestamp("device_code_expires_at"),
-    status: text("status", {
-      enum: ["pending", "active", "revoked"],
-    })
-      .notNull()
-      .default("pending"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("cli_tokens_token_hash_idx").on(table.tokenHash),
-    uniqueIndex("cli_tokens_device_code_idx").on(table.deviceCode),
-    uniqueIndex("cli_tokens_user_code_idx").on(table.userCode),
-  ],
-);
-
-export type CliToken = typeof cliTokens.$inferSelect;
-export type NewCliToken = typeof cliTokens.$inferInsert;
-
 // User preferences for settings
 export const userPreferences = pgTable("user_preferences", {
   id: text("id").primaryKey(),
@@ -334,7 +301,7 @@ export const usageEvents = pgTable("usage_events", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  source: text("source", { enum: ["web", "cli"] })
+  source: text("source", { enum: ["web"] })
     .notNull()
     .default("web"),
   agentType: text("agent_type", { enum: ["main", "subagent"] })

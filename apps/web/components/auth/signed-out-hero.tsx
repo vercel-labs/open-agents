@@ -1,12 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { SignInButton } from "@/components/auth/sign-in-button";
-import installerConfig from "../../../../installer.config.json";
-
-const installUrl = `https://${installerConfig.installDomain}${installerConfig.installPath}`;
-const installCommand = `curl -fsSL ${installUrl} | bash`;
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -21,64 +15,12 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      timeoutRef.current = setTimeout(() => {
-        setCopied(false);
-      }, 1800);
-    } catch (error) {
-      console.error(
-        "Failed to copy:",
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }, [text]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-900/[0.04] hover:text-slate-700 dark:text-white/40 dark:hover:bg-white/[0.05] dark:hover:text-white/60"
-      aria-label="Copy to clipboard"
-    >
-      {copied ? (
-        <Check className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-      ) : (
-        <Copy className="h-4 w-4" />
-      )}
-    </button>
-  );
-}
-
 export function SignedOutHero() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#f8fafc] text-slate-900 dark:bg-[#0a0a0b] dark:text-white">
-      {/* Dot grid pattern */}
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:radial-gradient(rgba(15,23,42,0.08)_1px,transparent_1px)] [background-size:24px_24px] dark:opacity-[0.4] dark:[background-image:radial-gradient(rgba(255,255,255,0.07)_1px,transparent_1px)]" />
-
-      {/* Scanline effect */}
       <div className="pointer-events-none absolute inset-0 opacity-[0.03] [background-image:repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(15,23,42,0.04)_2px,rgba(15,23,42,0.04)_4px)] dark:opacity-[0.02] dark:[background-image:repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
 
-      {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-8">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-900/10 bg-white/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
@@ -111,15 +53,12 @@ export function SignedOutHero() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16">
-        {/* Hero section */}
         <div className="mb-12 max-w-2xl text-center">
-          {/* Tech badge */}
           <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-slate-900/10 bg-white/70 px-4 py-2 backdrop-blur dark:border-white/[0.06] dark:bg-white/[0.02]">
             <div className="flex items-center gap-1">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/90 dark:bg-emerald-400/80" />
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/70 animate-pulse dark:bg-emerald-400/60" />
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500/70 dark:bg-emerald-400/60" />
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/50 dark:bg-emerald-400/40" />
             </div>
             <span className="text-xs text-slate-600 dark:text-white/40">
@@ -131,108 +70,53 @@ export function SignedOutHero() {
             Ship code faster with
             <br />
             <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500 bg-clip-text text-transparent dark:from-white dark:via-white/90 dark:to-white/60">
-              AI that runs anywhere
+              AI in the browser
             </span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-lg text-base leading-relaxed text-slate-600 dark:text-white/50">
-            A cloud platform and CLI that share the same AI workflows. Start in
-            the browser, continue locally, or work entirely from your terminal.
+            Start a coding session in the browser, connect your repositories,
+            and ship faster with Open Harness.
           </p>
         </div>
 
-        {/* Cards section */}
-        <div className="w-full max-w-3xl">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Web card - Terminal style */}
-            <div className="overflow-hidden rounded-xl border border-slate-900/10 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#111113]/80 dark:shadow-2xl dark:shadow-black/20">
-              {/* Window chrome */}
-              <div className="flex items-center gap-2 border-b border-slate-900/10 bg-slate-50/80 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
-                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
-                </div>
-                <div className="ml-3 flex-1">
-                  <span className="font-mono text-xs text-slate-500 dark:text-white/30">
-                    browser
-                  </span>
-                </div>
+        <div className="w-full max-w-xl">
+          <div className="overflow-hidden rounded-xl border border-slate-900/10 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#111113]/80 dark:shadow-2xl dark:shadow-black/20">
+            <div className="flex items-center gap-2 border-b border-slate-900/10 bg-slate-50/80 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <div className="flex items-center gap-1.5">
+                <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                <div className="h-3 w-3 rounded-full bg-[#28c840]" />
               </div>
-
-              {/* Content */}
-              <div className="p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-900/10 bg-slate-50/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="h-5 w-5 text-slate-600 dark:text-white/60"
-                  >
-                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-                  </svg>
-                </div>
-
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-slate-900 dark:text-white">
-                  Start on the web
-                </h2>
-                <p className="mb-5 text-sm leading-relaxed text-slate-600 dark:text-white/40">
-                  Run the coding agent from anywhere - no local setup required.
-                  Just sign in and start shipping.
-                </p>
-
-                <SignInButton className="h-10 w-full border-0 bg-slate-900 text-sm font-medium text-white transition-all hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-white/90" />
+              <div className="ml-3 flex-1">
+                <span className="font-mono text-xs text-slate-500 dark:text-white/30">
+                  browser
+                </span>
               </div>
             </div>
 
-            {/* CLI card - Terminal style */}
-            <div className="overflow-hidden rounded-xl border border-slate-900/10 bg-white/80 shadow-xl shadow-slate-900/5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#111113]/80 dark:shadow-2xl dark:shadow-black/20">
-              {/* Window chrome */}
-              <div className="flex items-center gap-2 border-b border-slate-900/10 bg-slate-50/80 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-                  <div className="h-3 w-3 rounded-full bg-[#febc2e]" />
-                  <div className="h-3 w-3 rounded-full bg-[#28c840]" />
-                </div>
-                <div className="ml-3 flex-1">
-                  <span className="font-mono text-xs text-slate-500 dark:text-white/30">
-                    terminal
-                  </span>
-                </div>
+            <div className="p-5">
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-900/10 bg-slate-50/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="h-5 w-5 text-slate-600 dark:text-white/60"
+                >
+                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                </svg>
               </div>
 
-              {/* Content */}
-              <div className="p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-900/10 bg-slate-50/70 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="h-5 w-5 text-slate-600 dark:text-white/60"
-                  >
-                    <polyline points="4,17 10,11 4,5" />
-                    <line x1="12" y1="19" x2="20" y2="19" />
-                  </svg>
-                </div>
+              <h2 className="mb-2 text-lg font-medium tracking-tight text-slate-900 dark:text-white">
+                Start on the web
+              </h2>
+              <p className="mb-5 text-sm leading-relaxed text-slate-600 dark:text-white/40">
+                Run the coding agent from anywhere with no local setup required.
+                Just sign in and start shipping.
+              </p>
 
-                <h2 className="mb-2 text-lg font-medium tracking-tight text-slate-900 dark:text-white">
-                  Run it locally
-                </h2>
-                <p className="mb-5 text-sm leading-relaxed text-slate-600 dark:text-white/40">
-                  Install the CLI to run the same AI workflows directly on your
-                  machine.
-                </p>
-
-                {/* Install command */}
-                <div className="flex items-center gap-2 rounded-lg border border-slate-900/10 bg-slate-50/80 py-1 pl-4 pr-1 font-mono text-sm dark:border-white/[0.08] dark:bg-white/[0.02]">
-                  <code className="flex-1 truncate text-slate-700 dark:text-white/60">
-                    {installCommand}
-                  </code>
-                  <CopyButton text={installCommand} />
-                </div>
-              </div>
+              <SignInButton className="h-10 w-full border-0 bg-slate-900 text-sm font-medium text-white transition-all hover:bg-slate-800 dark:bg-white dark:text-black dark:hover:bg-white/90" />
             </div>
           </div>
         </div>
