@@ -339,7 +339,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       source,
       gitUser,
       env,
-      vcpus = 2,
+      vcpus = 4,
       timeout = 300_000,
       runtime = "node22",
       ports,
