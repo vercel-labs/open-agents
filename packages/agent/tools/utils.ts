@@ -8,7 +8,6 @@ function isAgentContext(value: unknown): value is AgentContext {
     typeof value === "object" &&
     value !== null &&
     "sandbox" in value &&
-    "approval" in value &&
     "model" in value
   );
 }
@@ -90,18 +89,20 @@ export function getSandbox(
 }
 
 /**
- * Check if the approval config implies full trust (auto-approve everything within sandbox).
- * Returns true for background and delegated modes.
- *
- * This is a type guard - after checking, TypeScript narrows the type.
+ * Check if the approval config implies full trust for tool execution.
  *
  * @param approval - The approval configuration
  * @returns true if the context implies full trust
  */
 export function shouldAutoApprove(
-  approval: ApprovalConfig | undefined,
+  options:
+    | ApprovalConfig
+    | {
+        allowAllBash?: boolean;
+      }
+    | undefined,
 ): boolean {
-  return approval?.mode === "background";
+  return options?.allowAllBash === true;
 }
 
 /**
@@ -139,7 +140,11 @@ export function getApprovalContext(
   return {
     sandbox: context.sandbox,
     workingDirectory: context.sandbox.workingDirectory,
-    approval: context.approval ?? defaultApproval,
+    approval: {
+      allowAllBash: context.allowAllBash,
+      bashRules: context.bashRules,
+      ...defaultApproval,
+    },
   };
 }
 

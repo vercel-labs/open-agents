@@ -552,10 +552,6 @@ export async function POST(req: Request) {
         model,
         subagentModel,
         context: compactionContext,
-        // Keep bash safety checks, but otherwise rely on sandbox isolation.
-        approval: {
-          allowAllBash: false,
-        },
         ...(skills.length > 0 && { skills }),
       },
       abortSignal: controller.signal,

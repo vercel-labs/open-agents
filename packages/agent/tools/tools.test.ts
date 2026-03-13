@@ -319,7 +319,6 @@ describe("tools execute behavior", () => {
       { command: "ls -la" },
       {
         ...baseContext,
-        approval: {},
       },
     );
     expect(safeCommand).toBe(false);
@@ -329,7 +328,6 @@ describe("tools execute behavior", () => {
       { command: "rm -rf tmp" },
       {
         ...baseContext,
-        approval: {},
       },
     );
     expect(dangerousCommand).toBe(true);
@@ -339,28 +337,26 @@ describe("tools execute behavior", () => {
       { command: "bun run ci" },
       {
         ...baseContext,
-        approval: {
-          bashRules: [
-            {
-              type: "command-prefix",
-              tool: "bash",
-              prefix: "bun run",
-            },
-          ],
-        },
+        bashRules: [
+          {
+            type: "command-prefix",
+            tool: "bash",
+            prefix: "bun run",
+          },
+        ],
       },
     );
     expect(approvedByRule).toBe(false);
 
-    const backgroundApproval = await getNeedsApprovalResult(
+    const autoApproved = await getNeedsApprovalResult(
       bashTool().needsApproval,
       { command: "rm -rf tmp" },
       {
         ...baseContext,
-        approval: { mode: "background" },
+        allowAllBash: true,
       },
     );
-    expect(backgroundApproval).toBe(false);
+    expect(autoApproved).toBe(false);
   });
 
   const originalFetch = globalThis.fetch;

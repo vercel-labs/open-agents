@@ -23,22 +23,38 @@ describe("tools/utils", () => {
     expect(toDisplayPath("/outside/file.ts", "/repo")).toBe("/outside/file.ts");
   });
 
-  test("shouldAutoApprove only for background mode", () => {
-    expect(shouldAutoApprove({ mode: "background" })).toBe(true);
-    expect(shouldAutoApprove({ mode: "interactive" })).toBe(false);
+  test("shouldAutoApprove only when allowAllBash is enabled", () => {
+    expect(shouldAutoApprove({ allowAllBash: true })).toBe(true);
+    expect(shouldAutoApprove({ allowAllBash: false })).toBe(false);
     expect(shouldAutoApprove({})).toBe(false);
     expect(shouldAutoApprove(undefined)).toBe(false);
   });
 
-  test("getApprovalContext defaults to empty approval when missing", () => {
+  test("getApprovalContext derives bash approval fields from context", () => {
     const context = getApprovalContext({
       sandbox: { workingDirectory: "/repo" },
-      approval: undefined,
+      allowAllBash: true,
+      bashRules: [
+        {
+          type: "command-prefix",
+          tool: "bash",
+          prefix: "bun run",
+        },
+      ],
       model: "test-model",
     });
 
     expect(context.workingDirectory).toBe("/repo");
-    expect(context.approval).toEqual({});
+    expect(context.approval).toEqual({
+      allowAllBash: true,
+      bashRules: [
+        {
+          type: "command-prefix",
+          tool: "bash",
+          prefix: "bun run",
+        },
+      ],
+    });
   });
 
   test("shellEscape safely escapes single quotes", () => {

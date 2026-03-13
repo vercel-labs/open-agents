@@ -27,23 +27,7 @@ import {
   webFetchTool,
   writeFileTool,
 } from "./tools";
-import type { ApprovalConfig, TodoItem } from "./types";
-
-const approvalConfigSchema = z
-  .object({
-    mode: z.enum(["interactive", "background"]).optional(),
-    bashRules: z
-      .array(
-        z.object({
-          type: z.literal("command-prefix"),
-          tool: z.literal("bash"),
-          prefix: z.string().min(1, "Prefix cannot be empty"),
-        }),
-      )
-      .optional(),
-    allowAllBash: z.boolean().optional(),
-  })
-  .optional();
+import type { TodoItem } from "./types";
 
 const compactionContextSchema = z.object({
   contextLimit: z.number().int().positive().optional(),
@@ -52,7 +36,6 @@ const compactionContextSchema = z.object({
 
 const callOptionsSchema = z.object({
   sandbox: z.custom<Sandbox>(),
-  approval: approvalConfigSchema,
   model: z.custom<LanguageModel>().optional(),
   subagentModel: z.custom<LanguageModel>().optional(),
   customInstructions: z.string().optional(),
@@ -177,7 +160,6 @@ export const openHarnessAgent = new ToolLoopAgent({
     if (!options) {
       throw new Error("Open Harness agent requires call options with sandbox.");
     }
-    const approval: ApprovalConfig = options.approval ?? {};
     const callModel = options.model ?? model;
     const subagentModel = options.subagentModel;
     const customInstructions = options.customInstructions;
@@ -190,11 +172,8 @@ export const openHarnessAgent = new ToolLoopAgent({
       prompt: settings.prompt,
     });
 
-    const mode = approval.mode === "background" ? "background" : "interactive";
-
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
-      mode,
       currentBranch: sandbox.currentBranch,
       customInstructions,
       environmentDetails: sandbox.environmentDetails,
@@ -213,7 +192,6 @@ export const openHarnessAgent = new ToolLoopAgent({
       instructions,
       experimental_context: {
         sandbox,
-        approval,
         skills,
         model: callModel,
         subagentModel,

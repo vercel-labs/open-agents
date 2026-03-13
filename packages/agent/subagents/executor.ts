@@ -71,7 +71,6 @@ export const executorSubagent = new ToolLoopAgent({
   model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXECUTOR_SYSTEM_PROMPT,
   tools: {
-    // All tools auto-approve in delegated mode (set via prepareCall)
     read: readFileTool(),
     write: writeFileTool(),
     edit: editFileTool(),
@@ -110,7 +109,7 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
       experimental_context: {
         sandbox,
-        approval: { mode: "background", allowAllBash: true },
+        allowAllBash: true,
         model,
       },
     };
