@@ -71,24 +71,15 @@ const SAFE_COMMAND_PREFIXES = [
 
 // Commands that should always require approval
 const DANGEROUS_COMMAND_PATTERNS = [
-  /\brm\b/,
-  /\bmv\b/,
-  /\bcp\b/,
-  /\bmkdir\b/,
-  /\btouch\b/,
-  /\bchmod\b/,
-  /\bchown\b/,
+  /\brm\s+-rf\b/,
+  /\brm\s+-fr\b/,
   /\bsudo\b/,
-  /\bgit\s+(push|commit|add|reset|checkout|merge|rebase|stash)/,
+  /\bgit\s+(push|commit|reset|checkout|merge|rebase|stash)/,
   /\bnpm\s+(install|uninstall|publish)/,
   /\bpnpm\s+(install|uninstall|publish)/,
   /\byarn\s+(add|remove|publish)/,
   /\bbun\s+(add|remove|install)/,
   /\bpip\s+install/,
-  />/, // redirects
-  /\|/, // pipes (could be dangerous)
-  /&&/, // command chaining
-  /;/, // command chaining
 ];
 
 /**
