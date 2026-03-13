@@ -7,7 +7,6 @@ import {
   type ToolSet,
 } from "ai";
 import { addCacheControl } from "./context-management";
-import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
@@ -69,38 +68,23 @@ export const createOpenHarnessAgent = ({
   return new ToolLoopAgent({
     model,
     instructions,
-    tools,
+    tools: addCacheControl({
+      tools,
+      model,
+    }),
     stopWhen: stepCountIs(200),
+    experimental_context: {
+      sandbox,
+      skills,
+      model,
+      subagentModel,
+    },
     prepareStep: ({ messages, model, steps: _steps }) => {
       return {
         messages: addCacheControl({
           messages,
           model,
         }),
-      };
-    },
-    prepareCall: ({ model, ...settings }) => {
-      const preparedPrompt = preparePromptForOpenAIReasoning({
-        model,
-        messages: settings.messages,
-        prompt: settings.prompt,
-      });
-
-      return {
-        ...settings,
-        ...preparedPrompt,
-        model,
-        tools: addCacheControl({
-          tools: settings.tools ?? tools,
-          model,
-        }),
-        instructions,
-        experimental_context: {
-          sandbox,
-          skills,
-          model,
-          subagentModel,
-        },
       };
     },
   });

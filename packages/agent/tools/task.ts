@@ -110,9 +110,8 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
         ? createExplorerSubagent({ task, instructions, sandbox, model })
         : createExecutorSubagent({ task, instructions, sandbox, model });
 
-    const result = await subagent.stream({
-      prompt:
-        "Complete this task and provide a summary of what you accomplished.",
+    const result = await subagent.agent.stream({
+      prompt: subagent.input,
       abortSignal,
     });
 

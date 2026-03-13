@@ -1,7 +1,6 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
-import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
@@ -63,53 +62,53 @@ export type ExplorerSubagentConfig = {
   model: LanguageModel;
 };
 
+export function buildExplorerSubagentInput({
+  task,
+  instructions,
+}: Pick<ExplorerSubagentConfig, "task" | "instructions">): string {
+  return `Complete this task and provide a summary of what you accomplished.
+
+## Your Task
+${task}
+
+## Detailed Instructions
+${instructions}`;
+}
+
 export const createExplorerSubagent = ({
   task,
   instructions,
   sandbox,
   model,
 }: ExplorerSubagentConfig) => {
-  return new ToolLoopAgent({
-    model,
-    instructions: `${EXPLORER_SYSTEM_PROMPT}
+  const input = buildExplorerSubagentInput({ task, instructions });
+
+  return {
+    input,
+    agent: new ToolLoopAgent({
+      model,
+      instructions: `${EXPLORER_SYSTEM_PROMPT}
 
 Working directory: . (workspace root)
 Use workspace-relative paths for all file operations.
-
-## Your Task
-${task}
-
-## Detailed Instructions
-${instructions}
 
 ## REMINDER
 - You CANNOT ask questions - no one will respond
 - This is READ-ONLY - do NOT create, modify, or delete any files
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
-    tools: {
-      read: readFileTool(),
-      grep: grepTool(),
-      glob: globTool(),
-      bash: bashTool(),
-    },
-    stopWhen: stepCountIs(100),
-    prepareCall: ({ model, ...settings }) => {
-      const preparedPrompt = preparePromptForOpenAIReasoning({
+      tools: {
+        read: readFileTool(),
+        grep: grepTool(),
+        glob: globTool(),
+        bash: bashTool(),
+      },
+      stopWhen: stepCountIs(100),
+      experimental_context: {
+        sandbox,
         model,
-        messages: settings.messages,
-        prompt: settings.prompt,
-      });
-      return {
-        ...settings,
-        ...preparedPrompt,
-        model,
-        experimental_context: {
-          sandbox,
-          model,
-        },
-      };
-    },
-  });
+      },
+    }),
+  };
 };
 
 export type ExplorerSubagent = ReturnType<typeof createExplorerSubagent>;

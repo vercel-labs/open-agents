@@ -1,7 +1,6 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
-import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
@@ -62,55 +61,55 @@ export type ExecutorSubagentConfig = {
   model: LanguageModel;
 };
 
+export function buildExecutorSubagentInput({
+  task,
+  instructions,
+}: Pick<ExecutorSubagentConfig, "task" | "instructions">): string {
+  return `Complete this task and provide a summary of what you accomplished.
+
+## Your Task
+${task}
+
+## Detailed Instructions
+${instructions}`;
+}
+
 export const createExecutorSubagent = ({
   task,
   instructions,
   sandbox,
   model,
 }: ExecutorSubagentConfig) => {
-  return new ToolLoopAgent({
-    model,
-    instructions: `${EXECUTOR_SYSTEM_PROMPT}
+  const input = buildExecutorSubagentInput({ task, instructions });
+
+  return {
+    input,
+    agent: new ToolLoopAgent({
+      model,
+      instructions: `${EXECUTOR_SYSTEM_PROMPT}
 
 Working directory: . (workspace root)
 Use workspace-relative paths for all file operations.
-
-## Your Task
-${task}
-
-## Detailed Instructions
-${instructions}
 
 ## REMINDER
 - You CANNOT ask questions - no one will respond
 - Complete the task fully before returning
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
-    tools: {
-      read: readFileTool(),
-      write: writeFileTool(),
-      edit: editFileTool(),
-      grep: grepTool(),
-      glob: globTool(),
-      bash: bashTool(),
-    },
-    stopWhen: stepCountIs(100),
-    prepareCall: ({ model, ...settings }) => {
-      const preparedPrompt = preparePromptForOpenAIReasoning({
+      tools: {
+        read: readFileTool(),
+        write: writeFileTool(),
+        edit: editFileTool(),
+        grep: grepTool(),
+        glob: globTool(),
+        bash: bashTool(),
+      },
+      stopWhen: stepCountIs(100),
+      experimental_context: {
+        sandbox,
         model,
-        messages: settings.messages,
-        prompt: settings.prompt,
-      });
-      return {
-        ...settings,
-        ...preparedPrompt,
-        model,
-        experimental_context: {
-          sandbox,
-          model,
-        },
-      };
-    },
-  });
+      },
+    }),
+  };
 };
 
 export type ExecutorSubagent = ReturnType<typeof createExecutorSubagent>;
