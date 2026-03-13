@@ -552,11 +552,9 @@ export async function POST(req: Request) {
         model,
         subagentModel,
         context: compactionContext,
-        // TODO: consider enabling approvals for non-cloud-sandbox environments
+        // Keep bash safety checks, but otherwise rely on sandbox isolation.
         approval: {
-          type: "interactive",
-          autoApprove: "all",
-          sessionRules: [],
+          allowAllBash: false,
         },
         ...(skills.length > 0 && { skills }),
       },

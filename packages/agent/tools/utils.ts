@@ -1,7 +1,7 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
-import type { AgentContext, ApprovalConfig, ApprovalRule } from "../types";
+import type { AgentContext, ApprovalConfig } from "../types";
 
 function isAgentContext(value: unknown): value is AgentContext {
   return (
@@ -99,9 +99,9 @@ export function getSandbox(
  * @returns true if the context implies full trust
  */
 export function shouldAutoApprove(
-  approval: ApprovalConfig,
-): approval is { type: "background" } | { type: "delegated" } {
-  return approval.type === "background" || approval.type === "delegated";
+  approval: ApprovalConfig | undefined,
+): boolean {
+  return approval?.mode === "background";
 }
 
 /**
@@ -134,12 +134,7 @@ export function getApprovalContext(
     );
   }
 
-  // Default to interactive mode with no auto-approve if approval config is missing
-  const defaultApproval: ApprovalConfig = {
-    type: "interactive",
-    autoApprove: "off",
-    sessionRules: [],
-  };
+  const defaultApproval: ApprovalConfig = {};
 
   return {
     sandbox: context.sandbox,
@@ -191,190 +186,6 @@ export function getSubagentModel(
     );
   }
   return context.subagentModel ?? context.model;
-}
-
-/**
- * Simple glob pattern matching for approval rules.
- * Supports patterns like "src/**", "**\/*.ts", "src/components/**".
- *
- * @param filePath - The absolute file path to check
- * @param glob - The glob pattern to match against
- * @param baseDir - The base directory for relative glob patterns
- * @param options - Optional settings
- * @param options.allowOutsideBase - If true, allow matching paths outside baseDir (for read approval rules)
- * @returns true if the file path matches the glob pattern
- */
-export function pathMatchesGlob(
-  filePath: string,
-  glob: string,
-  baseDir: string,
-  options?: { allowOutsideBase?: boolean },
-): boolean {
-  const resolvedPath = path.resolve(filePath);
-  const resolvedBase = path.resolve(baseDir);
-
-  // By default, ensure the path is within the base directory
-  // This can be skipped for read approval rules which apply to paths outside the working directory
-  if (!options?.allowOutsideBase) {
-    if (!isPathWithinDirectory(resolvedPath, resolvedBase)) {
-      return false;
-    }
-  }
-
-  // Get the relative path from the base directory
-  // Normalize to POSIX separators for consistent matching
-  const relativePath = path
-    .relative(resolvedBase, resolvedPath)
-    .replace(/\\/g, "/");
-
-  // Convert glob pattern to regex
-  // First escape regex metacharacters (except * which we handle specially)
-  // Then handle ** (match any directory depth), * (match any chars except /)
-  try {
-    const globRegex = glob
-      .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // Escape regex metacharacters
-      .replace(/\*\*/g, "<<<GLOBSTAR>>>") // Temporary placeholder
-      .replace(/\*/g, "[^/]*") // * matches anything except /
-      .replace(/<<<GLOBSTAR>>>/g, ".*") // ** matches anything including /
-      .replace(/\//g, "\\/"); // Escape path separators
-
-    const regex = new RegExp(`^${globRegex}`);
-    if (regex.test(relativePath)) {
-      return true;
-    }
-    // If glob ends with /** and path doesn't end with /, try adding trailing /
-    // This allows directory paths to match their own glob (e.g., "apps" matches "apps/**")
-    if (glob.endsWith("/**") && !relativePath.endsWith("/")) {
-      return regex.test(relativePath + "/");
-    }
-    return false;
-  } catch {
-    // If regex construction fails (malformed pattern), treat as no match
-    return false;
-  }
-}
-
-/**
- * Tools that can have path-glob approval rules.
- */
-export type PathToolName = "read" | "write" | "edit" | "grep" | "glob";
-
-/**
- * Check if a file path matches any path-glob approval rules for a specific tool.
- * Rules can apply to paths outside the working directory, so we allow matching outside the base.
- */
-export function pathMatchesApprovalRule(
-  filePath: string,
-  tool: PathToolName,
-  workingDirectory: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workingDirectory, filePath);
-
-  for (const rule of approvalRules) {
-    if (rule.type === "path-glob" && rule.tool === tool) {
-      if (
-        pathMatchesGlob(absolutePath, rule.glob, workingDirectory, {
-          allowOutsideBase: true,
-        })
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Options for checking if a path-based operation needs approval.
- */
-type PathApprovalOptions = {
-  /** The file path to check */
-  path: string;
-  /** The tool making the request */
-  tool: PathToolName;
-  /** The approval config (must be interactive - use shouldAutoApprove first) */
-  approval: {
-    type: "interactive";
-    autoApprove: "off" | "edits" | "all";
-    sessionRules: ApprovalRule[];
-  };
-  /** The working directory for path resolution */
-  workingDirectory: string;
-};
-
-/**
- * Determines if a path-based operation needs approval.
- *
- * Call shouldAutoApprove() first - this function assumes interactive mode.
- *
- * Logic:
- * - Read-only tools (read, grep, glob): auto-approve inside working dir, check session rules outside
- * - Write tools (write, edit): check session rules first, then working dir + autoApprove setting
- *
- * @returns true if approval is needed, false if auto-approved
- */
-export function pathNeedsApproval(options: PathApprovalOptions): boolean {
-  const { path: filePath, tool, approval, workingDirectory } = options;
-
-  const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workingDirectory, filePath);
-
-  const isInsideWorkingDir = isPathWithinDirectory(
-    absolutePath,
-    workingDirectory,
-  );
-  const isWriteTool = tool === "write" || tool === "edit";
-
-  if (isWriteTool) {
-    // Write tools: session rules can auto-approve any path (inside or outside)
-    if (
-      pathMatchesApprovalRule(
-        filePath,
-        tool,
-        workingDirectory,
-        approval.sessionRules,
-      )
-    ) {
-      return false;
-    }
-
-    // Outside working directory without matching rule = needs approval
-    if (!isInsideWorkingDir) {
-      return true;
-    }
-
-    // Inside working directory: check autoApprove setting
-    if (approval.autoApprove === "edits" || approval.autoApprove === "all") {
-      return false;
-    }
-
-    // Inside working directory but autoApprove doesn't cover edits
-    return true;
-  } else {
-    // Read-only tools: inside working directory = auto-approve
-    if (isInsideWorkingDir) {
-      return false;
-    }
-
-    // Outside working directory: check session rules
-    if (
-      pathMatchesApprovalRule(
-        filePath,
-        tool,
-        workingDirectory,
-        approval.sessionRules,
-      )
-    ) {
-      return false;
-    }
-
-    // Outside working directory without matching rule = needs approval
-    return true;
-  }
 }
 
 /**

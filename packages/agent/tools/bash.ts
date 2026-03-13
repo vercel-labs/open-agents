@@ -7,7 +7,6 @@ import {
   getApprovalContext,
   shouldAutoApprove,
 } from "./utils";
-import type { ApprovalRule } from "../types";
 
 const TIMEOUT_MS = 120_000;
 
@@ -56,14 +55,12 @@ function cwdIsOutsideWorkingDirectory(
  */
 function commandMatchesApprovalRule(
   command: string,
-  approvalRules: ApprovalRule[],
+  prefixes: string[] | undefined,
 ): boolean {
   const trimmedCommand = command.trim();
-  for (const rule of approvalRules) {
-    if (rule.type === "command-prefix" && rule.tool === "bash") {
-      if (trimmedCommand.startsWith(rule.prefix)) {
-        return true;
-      }
+  for (const prefix of prefixes ?? []) {
+    if (trimmedCommand.startsWith(prefix)) {
+      return true;
     }
   }
   return false;
@@ -146,25 +143,21 @@ export const bashTool = (options?: ToolOptions) =>
       const ctx = getApprovalContext(experimental_context, "bash");
       const { approval } = ctx;
 
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
+      if (shouldAutoApprove(approval) || approval.allowAllBash) {
         return false;
       }
 
-      // Type guard narrowed approval to interactive mode
-      // Check if command matches any saved session rules
-      if (commandMatchesApprovalRule(args.command, approval.sessionRules)) {
+      if (
+        commandMatchesApprovalRule(
+          args.command,
+          approval.bashRules?.map((rule) => rule.prefix),
+        )
+      ) {
         return false;
       }
 
-      // Need approval if cwd is outside working directory
       if (cwdIsOutsideWorkingDirectory(args.cwd, ctx.workingDirectory)) {
         return true;
-      }
-
-      // Auto-approve all bash commands when autoApprove is "all"
-      if (approval.autoApprove === "all") {
-        return false;
       }
 
       // Check command safety

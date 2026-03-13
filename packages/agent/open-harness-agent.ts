@@ -28,17 +28,22 @@ import {
   writeFileTool,
 } from "./tools";
 import type { ApprovalConfig, TodoItem } from "./types";
-import { approvalRuleSchema } from "./types";
 
-const approvalConfigSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("interactive"),
-    autoApprove: z.enum(["off", "edits", "all"]).default("off"),
-    sessionRules: z.array(approvalRuleSchema).default([]),
-  }),
-  z.object({ type: z.literal("background") }),
-  z.object({ type: z.literal("delegated") }),
-]);
+const approvalConfigSchema = z
+  .object({
+    mode: z.enum(["interactive", "background"]).optional(),
+    bashRules: z
+      .array(
+        z.object({
+          type: z.literal("command-prefix"),
+          tool: z.literal("bash"),
+          prefix: z.string().min(1, "Prefix cannot be empty"),
+        }),
+      )
+      .optional(),
+    allowAllBash: z.boolean().optional(),
+  })
+  .optional();
 
 const compactionContextSchema = z.object({
   contextLimit: z.number().int().positive().optional(),
@@ -170,11 +175,9 @@ export const openHarnessAgent = new ToolLoopAgent({
   },
   prepareCall: ({ options, model, ...settings }) => {
     if (!options) {
-      throw new Error(
-        "Open Harness agent requires call options with sandbox and approval config.",
-      );
+      throw new Error("Open Harness agent requires call options with sandbox.");
     }
-    const approval: ApprovalConfig = options.approval;
+    const approval: ApprovalConfig = options.approval ?? {};
     const callModel = options.model ?? model;
     const subagentModel = options.subagentModel;
     const customInstructions = options.customInstructions;
@@ -187,8 +190,7 @@ export const openHarnessAgent = new ToolLoopAgent({
       prompt: settings.prompt,
     });
 
-    // Derive mode for system prompt (interactive vs background)
-    const mode = approval.type === "background" ? "background" : "interactive";
+    const mode = approval.mode === "background" ? "background" : "interactive";
 
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,

@@ -34,12 +34,7 @@ export type {
   TaskToolOutput,
   TaskToolUIPart,
 } from "./tools/task";
-export type {
-  ApprovalConfig,
-  ApprovalRule,
-  TodoItem,
-  TodoStatus,
-} from "./types";
+export type { ApprovalConfig, TodoItem, TodoStatus } from "./types";
 export {
   addLanguageModelUsage,
   collectTaskToolUsage,
