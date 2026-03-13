@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   collectTaskToolUsageEvents,
+  createOpenHarnessAgent,
   discoverSkills,
   gateway,
   sumLanguageModelUsage,
@@ -474,14 +475,13 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = await webAgent.stream({
+    result = await createOpenHarnessAgent({
+      sandbox,
+      model,
+      subagentModel,
+      ...(skills.length > 0 && { skills }),
+    }).stream({
       messages: modelMessages,
-      options: {
-        sandbox,
-        model,
-        subagentModel,
-        ...(skills.length > 0 && { skills }),
-      },
       abortSignal: controller.signal,
     });
   } catch (error) {

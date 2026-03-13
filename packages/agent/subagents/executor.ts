@@ -1,7 +1,6 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
-import { z } from "zod";
+import { stepCountIs, ToolLoopAgent } from "ai";
 import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
@@ -56,61 +55,62 @@ You have full access to file operations (read, write, edit, grep, glob) and bash
 - All bash commands automatically run in the working directory — NEVER prepend \`cd <working-directory> &&\` or similar to commands
 - Just run the command directly (e.g., \`npm test\`)`;
 
-const callOptionsSchema = z.object({
-  task: z.string().describe("Short description of the task"),
-  instructions: z.string().describe("Detailed instructions for the task"),
-  sandbox: z
-    .custom<Sandbox>()
-    .describe("Sandbox for file system and shell operations"),
-  model: z.custom<LanguageModel>().describe("Language model for this subagent"),
-});
+export type ExecutorSubagentConfig = {
+  task: string;
+  instructions: string;
+  sandbox: Sandbox;
+  model: LanguageModel;
+};
 
-export type ExecutorCallOptions = z.infer<typeof callOptionsSchema>;
-
-export const executorSubagent = new ToolLoopAgent({
-  model: gateway("anthropic/claude-haiku-4.5"),
-  instructions: EXECUTOR_SYSTEM_PROMPT,
-  tools: {
-    read: readFileTool(),
-    write: writeFileTool(),
-    edit: editFileTool(),
-    grep: grepTool(),
-    glob: globTool(),
-    bash: bashTool(),
-  },
-  stopWhen: stepCountIs(100),
-  callOptionsSchema,
-  prepareCall: ({ options, ...settings }) => {
-    const sandbox = options.sandbox;
-    const model = options.model ?? settings.model;
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
-    return {
-      ...settings,
-      ...preparedPrompt,
-      model,
-      instructions: `${EXECUTOR_SYSTEM_PROMPT}
+export const createExecutorSubagent = ({
+  task,
+  instructions,
+  sandbox,
+  model,
+}: ExecutorSubagentConfig) => {
+  return new ToolLoopAgent({
+    model,
+    instructions: `${EXECUTOR_SYSTEM_PROMPT}
 
 Working directory: . (workspace root)
 Use workspace-relative paths for all file operations.
 
 ## Your Task
-${options.task}
+${task}
 
 ## Detailed Instructions
-${options.instructions}
+${instructions}
 
 ## REMINDER
 - You CANNOT ask questions - no one will respond
 - Complete the task fully before returning
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
-      experimental_context: {
-        sandbox,
+    tools: {
+      read: readFileTool(),
+      write: writeFileTool(),
+      edit: editFileTool(),
+      grep: grepTool(),
+      glob: globTool(),
+      bash: bashTool(),
+    },
+    stopWhen: stepCountIs(100),
+    prepareCall: ({ model, ...settings }) => {
+      const preparedPrompt = preparePromptForOpenAIReasoning({
         model,
-      },
-    };
-  },
-});
+        messages: settings.messages,
+        prompt: settings.prompt,
+      });
+      return {
+        ...settings,
+        ...preparedPrompt,
+        model,
+        experimental_context: {
+          sandbox,
+          model,
+        },
+      };
+    },
+  });
+};
+
+export type ExecutorSubagent = ReturnType<typeof createExecutorSubagent>;

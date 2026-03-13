@@ -5,12 +5,11 @@ import type {
   LanguageModelUsage,
   ToolUIPart,
 } from "ai";
+import type { OpenHarnessAgentConfig } from "@open-harness/agent";
 import type { webAgent } from "./config";
 
 export type WebAgent = typeof webAgent;
-export type WebAgentCallOptions = Parameters<
-  WebAgent["generate"]
->["0"]["options"];
+export type WebAgentCallOptions = OpenHarnessAgentConfig;
 
 export type WebAgentMessageMetadata = {
   lastStepUsage?: LanguageModelUsage;

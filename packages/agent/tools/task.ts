@@ -5,8 +5,8 @@ import {
   type LanguageModelUsage,
 } from "ai";
 import { z } from "zod";
-import { executorSubagent } from "../subagents/executor";
-import { explorerSubagent } from "../subagents/explorer";
+import { createExecutorSubagent } from "../subagents/executor";
+import { createExplorerSubagent } from "../subagents/explorer";
 import { getSubagentModel, getSandbox } from "./utils";
 import { sumLanguageModelUsage } from "../usage";
 
@@ -106,12 +106,13 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =
-      subagentType === "explorer" ? explorerSubagent : executorSubagent;
+      subagentType === "explorer"
+        ? createExplorerSubagent({ task, instructions, sandbox, model })
+        : createExecutorSubagent({ task, instructions, sandbox, model });
 
     const result = await subagent.stream({
       prompt:
         "Complete this task and provide a summary of what you accomplished.",
-      options: { task, instructions, sandbox, model },
       abortSignal,
     });
 

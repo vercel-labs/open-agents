@@ -6,7 +6,6 @@ import {
   ToolLoopAgent,
   type ToolSet,
 } from "ai";
-import { z } from "zod";
 import { addCacheControl } from "./context-management";
 import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 
@@ -26,15 +25,13 @@ import {
   writeFileTool,
 } from "./tools";
 
-const callOptionsSchema = z.object({
-  sandbox: z.custom<Sandbox>(),
-  model: z.custom<LanguageModel>().optional(),
-  subagentModel: z.custom<LanguageModel>().optional(),
-  customInstructions: z.string().optional(),
-  skills: z.custom<SkillMetadata[]>().optional(),
-});
-
-export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
+export type OpenHarnessAgentConfig = {
+  sandbox: Sandbox;
+  model?: LanguageModel;
+  subagentModel?: LanguageModel;
+  customInstructions?: string;
+  skills?: SkillMetadata[];
+};
 
 export const defaultModel = gateway("anthropic/claude-haiku-4.5");
 export const defaultModelLabel = defaultModel.modelId;
@@ -53,61 +50,60 @@ const tools = {
   web_fetch: webFetchTool,
 } satisfies ToolSet;
 
-export const openHarnessAgent = new ToolLoopAgent({
-  model: defaultModel,
-  instructions: buildSystemPrompt({}),
-  tools,
-  stopWhen: stepCountIs(200),
-  callOptionsSchema,
-  prepareStep: ({ messages, model, steps: _steps }) => {
-    return {
-      messages: addCacheControl({
-        messages,
+export const createOpenHarnessAgent = ({
+  sandbox,
+  model = defaultModel,
+  subagentModel,
+  customInstructions,
+  skills = [],
+}: OpenHarnessAgentConfig) => {
+  const instructions = buildSystemPrompt({
+    cwd: sandbox.workingDirectory,
+    currentBranch: sandbox.currentBranch,
+    customInstructions,
+    environmentDetails: sandbox.environmentDetails,
+    skills,
+    modelId: typeof model === "string" ? model : model.modelId,
+  });
+
+  return new ToolLoopAgent({
+    model,
+    instructions,
+    tools,
+    stopWhen: stepCountIs(200),
+    prepareStep: ({ messages, model, steps: _steps }) => {
+      return {
+        messages: addCacheControl({
+          messages,
+          model,
+        }),
+      };
+    },
+    prepareCall: ({ model, ...settings }) => {
+      const preparedPrompt = preparePromptForOpenAIReasoning({
         model,
-      }),
-    };
-  },
-  prepareCall: ({ options, model, ...settings }) => {
-    if (!options) {
-      throw new Error("Open Harness agent requires call options with sandbox.");
-    }
-    const callModel = options.model ?? model;
-    const subagentModel = options.subagentModel;
-    const customInstructions = options.customInstructions;
-    const sandbox = options.sandbox;
-    const skills = options.skills ?? [];
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model: callModel,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
+        messages: settings.messages,
+        prompt: settings.prompt,
+      });
 
-    const instructions = buildSystemPrompt({
-      cwd: sandbox.workingDirectory,
-      currentBranch: sandbox.currentBranch,
-      customInstructions,
-      environmentDetails: sandbox.environmentDetails,
-      skills,
-      modelId: typeof callModel === "string" ? callModel : callModel.modelId,
-    });
+      return {
+        ...settings,
+        ...preparedPrompt,
+        model,
+        tools: addCacheControl({
+          tools: settings.tools ?? tools,
+          model,
+        }),
+        instructions,
+        experimental_context: {
+          sandbox,
+          skills,
+          model,
+          subagentModel,
+        },
+      };
+    },
+  });
+};
 
-    return {
-      ...settings,
-      ...preparedPrompt,
-      model: callModel,
-      tools: addCacheControl({
-        tools: settings.tools ?? tools,
-        model: callModel,
-      }),
-      instructions,
-      experimental_context: {
-        sandbox,
-        skills,
-        model: callModel,
-        subagentModel,
-      },
-    };
-  },
-});
-
-export type OpenHarnessAgent = typeof openHarnessAgent;
+export type OpenHarnessAgent = ReturnType<typeof createOpenHarnessAgent>;

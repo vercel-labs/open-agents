@@ -1,6 +1,6 @@
 import type { InferAgentUIMessage, LanguageModelUsage } from "ai";
-import type { executorSubagent } from "./executor";
-import type { explorerSubagent } from "./explorer";
+import type { createExecutorSubagent } from "./executor";
+import type { createExplorerSubagent } from "./explorer";
 
 export type SubagentMessageMetadata = {
   lastStepUsage?: LanguageModelUsage;
@@ -8,7 +8,12 @@ export type SubagentMessageMetadata = {
   modelId?: string;
 };
 
-// Union of both subagent types to support all tool types at runtime
 export type SubagentUIMessage =
-  | InferAgentUIMessage<typeof explorerSubagent, SubagentMessageMetadata>
-  | InferAgentUIMessage<typeof executorSubagent, SubagentMessageMetadata>;
+  | InferAgentUIMessage<
+      ReturnType<typeof createExplorerSubagent>,
+      SubagentMessageMetadata
+    >
+  | InferAgentUIMessage<
+      ReturnType<typeof createExecutorSubagent>,
+      SubagentMessageMetadata
+    >;

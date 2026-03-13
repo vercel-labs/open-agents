@@ -1,7 +1,6 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
-import { z } from "zod";
+import { stepCountIs, ToolLoopAgent } from "ai";
 import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
@@ -57,61 +56,60 @@ You have access to: read, grep, glob, bash (read-only commands only)
 - NEVER use bash for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, or any file creation/modification
 - Return workspace-relative file paths in your final response (e.g., "src/index.ts:42")`;
 
-const callOptionsSchema = z.object({
-  task: z.string().describe("Short description of the exploration task"),
-  instructions: z
-    .string()
-    .describe("Detailed instructions for the exploration"),
-  sandbox: z
-    .custom<Sandbox>()
-    .describe("Sandbox for file system and shell operations"),
-  model: z.custom<LanguageModel>().describe("Language model for this subagent"),
-});
+export type ExplorerSubagentConfig = {
+  task: string;
+  instructions: string;
+  sandbox: Sandbox;
+  model: LanguageModel;
+};
 
-export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
-
-export const explorerSubagent = new ToolLoopAgent({
-  model: gateway("anthropic/claude-haiku-4.5"),
-  instructions: EXPLORER_SYSTEM_PROMPT,
-  tools: {
-    read: readFileTool(),
-    grep: grepTool(),
-    glob: globTool(),
-    bash: bashTool(),
-  },
-  stopWhen: stepCountIs(100),
-  callOptionsSchema,
-  prepareCall: ({ options, ...settings }) => {
-    const sandbox = options.sandbox;
-    const model = options.model ?? settings.model;
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
-    return {
-      ...settings,
-      ...preparedPrompt,
-      model,
-      instructions: `${EXPLORER_SYSTEM_PROMPT}
+export const createExplorerSubagent = ({
+  task,
+  instructions,
+  sandbox,
+  model,
+}: ExplorerSubagentConfig) => {
+  return new ToolLoopAgent({
+    model,
+    instructions: `${EXPLORER_SYSTEM_PROMPT}
 
 Working directory: . (workspace root)
 Use workspace-relative paths for all file operations.
 
 ## Your Task
-${options.task}
+${task}
 
 ## Detailed Instructions
-${options.instructions}
+${instructions}
 
 ## REMINDER
 - You CANNOT ask questions - no one will respond
 - This is READ-ONLY - do NOT create, modify, or delete any files
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
-      experimental_context: {
-        sandbox,
+    tools: {
+      read: readFileTool(),
+      grep: grepTool(),
+      glob: globTool(),
+      bash: bashTool(),
+    },
+    stopWhen: stepCountIs(100),
+    prepareCall: ({ model, ...settings }) => {
+      const preparedPrompt = preparePromptForOpenAIReasoning({
         model,
-      },
-    };
-  },
-});
+        messages: settings.messages,
+        prompt: settings.prompt,
+      });
+      return {
+        ...settings,
+        ...preparedPrompt,
+        model,
+        experimental_context: {
+          sandbox,
+          model,
+        },
+      };
+    },
+  });
+};
+
+export type ExplorerSubagent = ReturnType<typeof createExplorerSubagent>;
