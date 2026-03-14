@@ -116,6 +116,12 @@ import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
+import {
+  getStreamRecoveryDecision,
+  getStreamRecoveryDelayMs,
+  isChatStreamingProbeResponse,
+  shouldScheduleStallRecovery,
+} from "./stream-recovery-policy";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -144,34 +150,7 @@ const Streamdown = dynamic(
   { ssr: false },
 );
 
-const STREAM_RECOVERY_STALL_MS = 4_000;
-const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
-
 const emptySubscribe = () => () => {};
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isChatStreamingProbeResponse(value: unknown): value is {
-  chats: { id: string; isStreaming: boolean }[];
-} {
-  if (!isObjectRecord(value)) {
-    return false;
-  }
-
-  const chats = value["chats"];
-  if (!Array.isArray(chats)) {
-    return false;
-  }
-
-  return chats.every(
-    (chat) =>
-      isObjectRecord(chat) &&
-      typeof chat["id"] === "string" &&
-      typeof chat["isStreaming"] === "boolean",
-  );
-}
 
 function useHasMounted() {
   return useSyncExternalStore(
@@ -1364,36 +1343,27 @@ export function SessionChatContent({
   const maybeRecoverStreamRef = useRef(() => {});
   maybeRecoverStreamRef.current = () => {
     const now = Date.now();
-    if (
-      now - lastStreamRecoveryAtRef.current <
-      STREAM_RECOVERY_MIN_INTERVAL_MS
-    ) {
+    const recoveryDecision = getStreamRecoveryDecision({
+      now,
+      lastRecoveryAt: lastStreamRecoveryAtRef.current,
+      status,
+      hasAssistantRenderableContent,
+      inFlightStartedAt: inFlightStartedAtRef.current,
+      isProbeInFlight: streamRecoveryProbeInFlightRef.current,
+    });
+
+    if (recoveryDecision === "none") {
       return;
     }
 
-    if (status === "error") {
-      lastStreamRecoveryAtRef.current = now;
+    lastStreamRecoveryAtRef.current = now;
+
+    if (recoveryDecision === "retry-error") {
       retryChatStream({ auto: true });
       return;
     }
 
-    // Only run "silent stream" recovery while still in submitted state.
-    // During active streaming, reconnecting can replay recent chunks and cause
-    // visible jank even when the connection is healthy.
-    if (status !== "submitted" || hasAssistantRenderableContent) {
-      return;
-    }
-
-    const startedAt = inFlightStartedAtRef.current;
-    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
-      return;
-    }
-    if (streamRecoveryProbeInFlightRef.current) {
-      return;
-    }
-
     streamRecoveryProbeInFlightRef.current = true;
-    lastStreamRecoveryAtRef.current = now;
 
     void (async () => {
       try {
@@ -1467,19 +1437,23 @@ export function SessionChatContent({
   }, [maybeRecoverStream]);
 
   useEffect(() => {
-    if (!isChatInFlight || hasAssistantRenderableContent) {
-      return;
-    }
+    const isDocumentVisible =
+      typeof document === "undefined" || document.visibilityState === "visible";
+
     if (
-      typeof document !== "undefined" &&
-      document.visibilityState !== "visible"
+      !shouldScheduleStallRecovery({
+        isChatInFlight,
+        hasAssistantRenderableContent,
+        isDocumentVisible,
+      })
     ) {
       return;
     }
 
-    const startedAt = inFlightStartedAtRef.current;
-    const elapsed = startedAt === null ? 0 : Date.now() - startedAt;
-    const waitMs = Math.max(0, STREAM_RECOVERY_STALL_MS - elapsed);
+    const waitMs = getStreamRecoveryDelayMs({
+      now: Date.now(),
+      inFlightStartedAt: inFlightStartedAtRef.current,
+    });
     const timeout = setTimeout(() => {
       maybeRecoverStream();
     }, waitMs);
