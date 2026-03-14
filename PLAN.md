@@ -9,7 +9,7 @@ Context:
   - user-initiated stop suppresses auto-reconnect
   - resume-on-mount is computed once
   - route cleanup aborts local transport without force-stopping server generation
-- We completed the safest first slice (policy extraction + tests) and validated it.
+- We completed PR A (policy extraction + tests) and PR B (runtime hook extraction) and validated both.
 
 Approach: Use a phased, behavior-preserving extraction plan with one concern per PR. Keep public context API stable until the final optional optimization phase.
 
@@ -37,8 +37,8 @@ Changes:
   - Removed duplicated in-file recovery constants/type-guard logic.
   - Kept existing behavior and event wiring intact.
 
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-session-chat-runtime.ts` (PLANNED: next PR)
-  - Extract from `session-chat-context.tsx`:
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-session-chat-runtime.ts` (COMPLETED)
+  - Extracted from `session-chat-context.tsx`:
     - transport creation
     - chat instance lifecycle/reuse
     - `stopChatStream`
@@ -46,7 +46,7 @@ Changes:
     - user-stop suppression logic
     - mount-only resume gate
     - route cleanup integration
-  - Provider should remain API-compatible: `useSessionChatContext()` shape unchanged.
+  - Provider remains API-compatible: `useSessionChatContext()` shape unchanged.
 
 - `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-stream-recovery.ts` (PLANNED: following PR)
   - Extract from `session-chat-content.tsx`:
@@ -63,6 +63,7 @@ Verification:
 - Per PR automated checks:
   - `bun run ci`
   - `bun run build`
+  - Latest PR B run: both checks passed.
 - Manual end-to-end checks after each phase:
   - send message → stream starts/updates normally
   - manual stop does not auto-resume unexpectedly
@@ -77,7 +78,7 @@ Verification:
 
 PR Strategy:
 1. PR A (done): recovery policy extraction + tests.
-2. PR B: `use-session-chat-runtime` extraction only.
+2. PR B (done): `use-session-chat-runtime` extraction only.
 3. PR C: `use-stream-recovery` extraction only.
 4. PR D (optional): context split for render-scope optimization.
 
