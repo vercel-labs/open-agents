@@ -102,6 +102,18 @@ mock.module("@open-harness/agent", () => ({
   sumLanguageModelUsage: (_existing: unknown, usage: unknown) => usage,
 }));
 
+mock.module("@open-harness/sandbox", () => ({
+  connectSandbox: async () => ({
+    workingDirectory: "/vercel/sandbox",
+    exec: async () => ({ success: true, stdout: "", stderr: "" }),
+    getState: () => ({
+      type: "vercel",
+      sandboxId: "sandbox-1",
+      expiresAt: Date.now() + 60_000,
+    }),
+  }),
+}));
+
 mock.module("@/lib/db/sessions", () => ({
   compareAndSetChatActiveStreamId: async () => true,
   createChatMessageIfNotExists: async () => undefined,

@@ -18,7 +18,6 @@
     "zod": "^4.3.6"
   },
   "scripts": {
-    "cli": "AI_SDK_LOG_WARNINGS=true NODE_ENV=development OPEN_HARNESS_URL=http://localhost:3000 bun run apps/cli/index.ts",
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
     "build": "turbo build",
@@ -29,24 +28,12 @@
     "format:check": "biome format .",
     "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test:isolated && bun run --cwd apps/web db:check",
     "test:isolated": "bun run scripts/test-isolated.ts",
-    "test:verbose": "bun test --reporter=junit --reporter-outfile /dev/stdout",
-    "build:installer": "bun run scripts/build-installer.ts",
-    "build:release-artifacts": "bun run scripts/build-release-artifacts.ts",
-    "release:local": "bun run scripts/release-local.ts",
-    "upload:release": "bun run scripts/upload-release-to-blob.ts"
+    "test:verbose": "bun test --reporter=junit --reporter-outfile /dev/stdout"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
-    "@vercel/blob": "^0.27.0",
     "turbo": "^2.5.4",
     "typescript": "^5"
-  },
-  "optionalDependencies": {
-    "@opentui/core-darwin-arm64": "^0.1.75",
-    "@opentui/core-darwin-x64": "^0.1.75",
-    "@opentui/core-linux-arm64": "^0.1.75",
-    "@opentui/core-linux-x64": "^0.1.75",
-    "@opentui/core-win32-x64": "^0.1.75"
   },
   "packageManager": "bun@1.2.14"
 }

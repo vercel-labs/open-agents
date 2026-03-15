@@ -73,6 +73,10 @@ export async function POST(req: Request) {
   }
 
   const { sessionRecord, chat } = chatContext;
+  const activeSandboxState = sessionRecord.sandboxState;
+  if (!activeSandboxState) {
+    throw new Error("Sandbox not initialized");
+  }
 
   // Refresh lifecycle activity timestamps immediately so that any running
   // lifecycle workflow sees that the sandbox is in active use. Without this,
@@ -244,7 +248,7 @@ export async function POST(req: Request) {
       messages: modelMessages,
       options: {
         sandbox: {
-          state: sessionRecord.sandboxState,
+          state: activeSandboxState,
           workingDirectory: sandbox.workingDirectory,
           currentBranch: sandbox.currentBranch,
           environmentDetails: sandbox.environmentDetails,

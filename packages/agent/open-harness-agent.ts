@@ -7,7 +7,6 @@ import {
   gateway,
   type ProviderOptionsByProvider,
 } from "./models";
-import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
@@ -120,12 +119,6 @@ export const openHarnessAgent = new ToolLoopAgent({
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
 
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model: callModel,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
-
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
       currentBranch: sandbox.currentBranch,
@@ -137,7 +130,6 @@ export const openHarnessAgent = new ToolLoopAgent({
 
     return {
       ...settings,
-      ...preparedPrompt,
       model: callModel,
       tools: addCacheControl({
         tools: settings.tools ?? tools,
