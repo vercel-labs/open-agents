@@ -1,10 +1,12 @@
-import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
-import { stepCountIs, ToolLoopAgent } from "ai";
+import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import { z } from "zod";
+import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
+import type { SandboxExecutionContext } from "../types";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 
@@ -55,60 +57,68 @@ You have access to: read, grep, glob, bash (read-only commands only)
 - NEVER use bash for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, or any file creation/modification
 - Return workspace-relative file paths in your final response (e.g., "src/index.ts:42")`;
 
-export type ExplorerSubagentConfig = {
-  task: string;
-  instructions: string;
-  sandbox: Sandbox;
-  model: LanguageModel;
-};
+const callOptionsSchema = z.object({
+  task: z.string().describe("Short description of the exploration task"),
+  instructions: z
+    .string()
+    .describe("Detailed instructions for the exploration"),
+  sandbox: z
+    .custom<SandboxExecutionContext>()
+    .describe("Sandbox context for file system and shell operations"),
+  model: z.custom<LanguageModel>().describe("Language model for this subagent"),
+});
 
-export function buildExplorerSubagentInput({
-  task,
-  instructions,
-}: Pick<ExplorerSubagentConfig, "task" | "instructions">): string {
-  return `Complete this task and provide a summary of what you accomplished.
+export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
 
-## Your Task
-${task}
+export const explorerSubagent = new ToolLoopAgent({
+  model: gateway("anthropic/claude-haiku-4.5"),
+  instructions: EXPLORER_SYSTEM_PROMPT,
+  tools: {
+    read: readFileTool(),
+    grep: grepTool(),
+    glob: globTool(),
+    bash: bashTool(),
+  },
+  stopWhen: stepCountIs(100),
+  callOptionsSchema,
+  prepareCall: ({ options, ...settings }) => {
+    if (!options) {
+      throw new Error("Explorer subagent requires task call options.");
+    }
 
-## Detailed Instructions
-${instructions}`;
-}
-
-export const createExplorerSubagent = ({
-  task,
-  instructions,
-  sandbox,
-  model,
-}: ExplorerSubagentConfig) => {
-  const input = buildExplorerSubagentInput({ task, instructions });
-
-  return {
-    input,
-    agent: new ToolLoopAgent({
+    const sandboxContext = options.sandbox;
+    const model = options.model ?? settings.model;
+    const preparedPrompt = preparePromptForOpenAIReasoning({
+      model,
+      messages: settings.messages,
+      prompt: settings.prompt,
+    });
+    return {
+      ...settings,
+      ...preparedPrompt,
       model,
       instructions: `${EXPLORER_SYSTEM_PROMPT}
 
 Working directory: . (workspace root)
 Use workspace-relative paths for all file operations.
 
+## Your Task
+${options.task}
+
+## Detailed Instructions
+${options.instructions}
+
 ## REMINDER
 - You CANNOT ask questions - no one will respond
 - This is READ-ONLY - do NOT create, modify, or delete any files
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
-      tools: {
-        read: readFileTool(),
-        grep: grepTool(),
-        glob: globTool(),
-        bash: bashTool(),
-      },
-      stopWhen: stepCountIs(100),
       experimental_context: {
-        sandbox,
+        sandbox: sandboxContext.sandbox,
+        ...(sandboxContext.liveSandbox
+          ? { liveSandbox: sandboxContext.liveSandbox }
+          : {}),
         model,
       },
-    }),
-  };
-};
-
-export type ExplorerSubagent = ReturnType<typeof createExplorerSubagent>;
+    };
+  },
+});

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   collectTaskToolUsageEvents,
-  createOpenHarnessAgent,
   discoverSkills,
   gateway,
   sumLanguageModelUsage,
@@ -16,6 +15,7 @@ import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { webAgent } from "@/app/config";
 import type { WebAgentUIMessage } from "@/app/types";
+import { runAutoCommitInBackground } from "@/lib/chat-auto-commit";
 import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
@@ -30,9 +30,7 @@ import {
 } from "@/lib/db/sessions";
 import { recordUsage } from "@/lib/db/usage";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { runAutoCommitInBackground } from "@/lib/chat-auto-commit";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
@@ -41,6 +39,7 @@ import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { onStopSignal } from "@/lib/stop-signal";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
@@ -483,28 +482,30 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = await createOpenHarnessAgent({
-      sandbox: {
-        state: sessionRecord.sandboxState,
-        workingDirectory: sandbox.workingDirectory,
-        currentBranch: sandbox.currentBranch,
-        environmentDetails: sandbox.environmentDetails,
-      },
-      model: {
-        id: model,
-        providerOptionsOverrides: modelProviderOptions,
-      },
-      ...(subagentModel
-        ? {
-            subagentModel: {
-              id: subagentModel,
-              providerOptionsOverrides: subagentModelProviderOptions,
-            },
-          }
-        : {}),
-      ...(skills.length > 0 && { skills }),
-    }).stream({
+    result = await webAgent.stream({
       messages: modelMessages,
+      options: {
+        sandbox: {
+          state: sessionRecord.sandboxState,
+          workingDirectory: sandbox.workingDirectory,
+          currentBranch: sandbox.currentBranch,
+          environmentDetails: sandbox.environmentDetails,
+        },
+        liveSandbox: sandbox,
+        model: {
+          id: model,
+          providerOptionsOverrides: modelProviderOptions,
+        },
+        ...(subagentModel
+          ? {
+              subagentModel: {
+                id: subagentModel,
+                providerOptionsOverrides: subagentModelProviderOptions,
+              },
+            }
+          : {}),
+        ...(skills.length > 0 && { skills }),
+      },
       abortSignal: controller.signal,
     });
   } catch (error) {

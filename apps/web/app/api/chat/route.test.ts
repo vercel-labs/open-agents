@@ -94,48 +94,6 @@ mock.module("@/app/config", () => ({
 }));
 
 mock.module("@open-harness/agent", () => ({
-  createOpenHarnessAgent: () => ({
-    tools: {},
-    experimental_context: {
-      sandbox: {
-        workingDirectory: "/vercel/sandbox",
-        exec: async () => ({ success: true, stdout: "", stderr: "" }),
-        getState: () => ({
-          type: "vercel" as const,
-          sandboxId: "sandbox-1",
-          expiresAt: Date.now() + 60_000,
-        }),
-      },
-    },
-    stream: async () => {
-      let resolveConsumeStream: (() => void) | null = null;
-
-      return {
-        consumeStream: () =>
-          new Promise<void>((resolve) => {
-            resolveConsumeStream = resolve;
-          }),
-        toUIMessageStreamResponse: async ({
-          onFinish,
-        }: StreamResponseOptions) => {
-          if (shouldTriggerStopBeforeFinish) {
-            stopCallback?.();
-          }
-
-          await onFinish({
-            responseMessage: {
-              id: "assistant-1",
-              role: "assistant",
-              parts: [],
-            },
-          });
-
-          resolveConsumeStream?.();
-          return new Response("ok", { status: 200 });
-        },
-      };
-    },
-  }),
   collectTaskToolUsageEvents: () => [],
   discoverSkills: async () => [],
   gateway: () => "mock-model",

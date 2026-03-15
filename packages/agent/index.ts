@@ -2,13 +2,13 @@ export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
 export type {
   AgentModelSelection,
   AgentSandboxContext,
-  OpenHarnessAgentConfig,
+  OpenHarnessAgentCallOptions,
   OpenHarnessAgentModelInput,
 } from "./open-harness-agent";
 export {
-  createOpenHarnessAgent,
   defaultModel,
   defaultModelLabel,
+  openHarnessAgent,
 } from "./open-harness-agent";
 // Skills exports
 export { discoverSkills, parseSkillFrontmatter } from "./skills/discovery";

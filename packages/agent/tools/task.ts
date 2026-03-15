@@ -1,14 +1,14 @@
 import {
-  tool,
-  type ModelMessage,
-  type UIToolInvocation,
   type LanguageModelUsage,
+  type ModelMessage,
+  tool,
+  type UIToolInvocation,
 } from "ai";
 import { z } from "zod";
-import { createExecutorSubagent } from "../subagents/executor";
-import { createExplorerSubagent } from "../subagents/explorer";
-import { getSubagentModel, getSandbox } from "./utils";
+import { executorSubagent } from "../subagents/executor";
+import { explorerSubagent } from "../subagents/explorer";
 import { sumLanguageModelUsage } from "../usage";
+import { getSandbox, getSandboxContext, getSubagentModel } from "./utils";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -101,17 +101,26 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
+    const sandboxContext = getSandboxContext(experimental_context, "task");
     const sandbox = await getSandbox(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent =
-      subagentType === "explorer"
-        ? createExplorerSubagent({ task, instructions, sandbox, model })
-        : createExecutorSubagent({ task, instructions, sandbox, model });
+      subagentType === "explorer" ? explorerSubagent : executorSubagent;
 
-    const result = await subagent.agent.stream({
-      prompt: subagent.input,
+    const result = await subagent.stream({
+      prompt:
+        "Complete this task and provide a summary of what you accomplished.",
+      options: {
+        task,
+        instructions,
+        sandbox: {
+          sandbox: sandboxContext.sandbox,
+          liveSandbox: sandbox,
+        },
+        model,
+      },
       abortSignal,
     });
 

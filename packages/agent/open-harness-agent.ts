@@ -1,11 +1,13 @@
-import type { SandboxState } from "@open-harness/sandbox";
+import type { Sandbox, SandboxState } from "@open-harness/sandbox";
 import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
+import { z } from "zod";
+import { addCacheControl } from "./context-management";
 import {
-  gateway,
   type GatewayModelId,
+  gateway,
   type ProviderOptionsByProvider,
 } from "./models";
-import { addCacheControl } from "./context-management";
+import { preparePromptForOpenAIReasoning } from "./openai-reasoning";
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
@@ -37,13 +39,16 @@ export interface AgentSandboxContext {
   environmentDetails?: string;
 }
 
-export type OpenHarnessAgentConfig = {
-  sandbox: AgentSandboxContext;
-  model?: OpenHarnessAgentModelInput;
-  subagentModel?: OpenHarnessAgentModelInput;
-  customInstructions?: string;
-  skills?: SkillMetadata[];
-};
+const callOptionsSchema = z.object({
+  sandbox: z.custom<AgentSandboxContext>(),
+  liveSandbox: z.custom<Sandbox>().optional(),
+  model: z.custom<OpenHarnessAgentModelInput>().optional(),
+  subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
+  customInstructions: z.string().optional(),
+  skills: z.custom<SkillMetadata[]>().optional(),
+});
+
+export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const defaultModelLabel = "anthropic/claude-haiku-4.5" as const;
 export const defaultModel = gateway(defaultModelLabel);
@@ -77,59 +82,79 @@ const tools = {
   web_fetch: webFetchTool,
 } satisfies ToolSet;
 
-export const createOpenHarnessAgent = ({
-  sandbox,
-  model = defaultModelLabel,
-  subagentModel,
-  customInstructions,
-  skills = [],
-}: OpenHarnessAgentConfig) => {
-  const mainSelection = resolveAgentModelSelection(model, defaultModelLabel);
-  const subagentSelection = subagentModel
-    ? resolveAgentModelSelection(subagentModel, defaultModelLabel)
-    : undefined;
+export const openHarnessAgent = new ToolLoopAgent({
+  model: defaultModel,
+  instructions: buildSystemPrompt({}),
+  tools,
+  stopWhen: stepCountIs(200),
+  callOptionsSchema,
+  prepareStep: ({ messages, model, steps: _steps }) => {
+    return {
+      messages: addCacheControl({
+        messages,
+        model,
+      }),
+    };
+  },
+  prepareCall: ({ options, ...settings }) => {
+    if (!options) {
+      throw new Error("Open Harness agent requires call options with sandbox.");
+    }
 
-  const mainModel = gateway(mainSelection.id, {
-    providerOptionsOverrides: mainSelection.providerOptionsOverrides,
-  });
-  const resolvedSubagentModel = subagentSelection
-    ? gateway(subagentSelection.id, {
-        providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
-      })
-    : undefined;
+    const mainSelection = resolveAgentModelSelection(
+      options.model,
+      defaultModelLabel,
+    );
+    const subagentSelection = options.subagentModel
+      ? resolveAgentModelSelection(options.subagentModel, defaultModelLabel)
+      : undefined;
 
-  const instructions = buildSystemPrompt({
-    cwd: sandbox.workingDirectory,
-    currentBranch: sandbox.currentBranch,
-    customInstructions,
-    environmentDetails: sandbox.environmentDetails,
-    skills,
-    modelId: mainSelection.id,
-  });
+    const callModel = gateway(mainSelection.id, {
+      providerOptionsOverrides: mainSelection.providerOptionsOverrides,
+    });
+    const subagentModel = subagentSelection
+      ? gateway(subagentSelection.id, {
+          providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
+        })
+      : undefined;
+    const customInstructions = options.customInstructions;
+    const sandbox = options.sandbox;
+    const liveSandbox = options.liveSandbox;
+    const skills = options.skills ?? [];
 
-  return new ToolLoopAgent({
-    model: mainModel,
-    instructions,
-    tools: addCacheControl({
-      tools,
-      model: mainModel,
-    }),
-    stopWhen: stepCountIs(200),
-    experimental_context: {
-      sandbox,
+    const preparedPrompt = preparePromptForOpenAIReasoning({
+      model: callModel,
+      messages: settings.messages,
+      prompt: settings.prompt,
+    });
+
+    const instructions = buildSystemPrompt({
+      cwd: sandbox.workingDirectory,
+      currentBranch: sandbox.currentBranch,
+      customInstructions,
+      environmentDetails: sandbox.environmentDetails,
       skills,
-      model: mainModel,
-      subagentModel: resolvedSubagentModel,
-    },
-    prepareStep: ({ messages, model, steps: _steps }) => {
-      return {
-        messages: addCacheControl({
-          messages,
-          model,
-        }),
-      };
-    },
-  });
-};
+      modelId: mainSelection.id,
+    });
 
-export type OpenHarnessAgent = ReturnType<typeof createOpenHarnessAgent>;
+    return {
+      ...settings,
+      ...preparedPrompt,
+      model: callModel,
+      tools: addCacheControl({
+        tools: settings.tools ?? tools,
+        model: callModel,
+      }),
+      instructions,
+      experimental_context: {
+        sandbox,
+        ...(liveSandbox ? { liveSandbox } : {}),
+        skills,
+        model: callModel,
+        subagentModel,
+      },
+    };
+  },
+});
+
+export type OpenHarnessAgent = typeof openHarnessAgent;
