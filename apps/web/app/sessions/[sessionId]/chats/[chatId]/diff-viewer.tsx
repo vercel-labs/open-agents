@@ -25,7 +25,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultDiffOptions, splitDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
-import { useSessionChatContext } from "./session-chat-context";
+import { useSessionChatWorkspaceContext } from "./session-chat-context";
 
 type DiffViewerProps = {
   open: boolean;
@@ -203,7 +203,7 @@ export function DiffViewer({ open, onOpenChange }: DiffViewerProps) {
     diffCachedAt,
     sandboxInfo,
     refreshDiff,
-  } = useSessionChatContext();
+  } = useSessionChatWorkspaceContext();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());

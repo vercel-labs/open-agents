@@ -1,34 +1,31 @@
-import { getServerSession } from "@/lib/session/get-server-session";
 import {
-  deleteChatMessageAndFollowing,
-  getChatById,
-  getSessionById,
-} from "@/lib/db/sessions";
+  requireAuthenticatedUser,
+  requireOwnedSessionChat,
+} from "@/app/api/sessions/_lib/session-context";
+import { deleteChatMessageAndFollowing } from "@/lib/db/sessions";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string; messageId: string }>;
 };
 
 export async function DELETE(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId, chatId, messageId } = await context.params;
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
+    sessionId,
+    chatId,
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
-  const chat = await getChatById(chatId);
-  if (!chat || chat.sessionId !== sessionId) {
-    return Response.json({ error: "Chat not found" }, { status: 404 });
-  }
+  const { chat } = chatContext;
 
   if (chat.activeStreamId) {
     return Response.json(

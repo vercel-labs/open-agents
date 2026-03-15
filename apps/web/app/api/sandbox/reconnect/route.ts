@@ -1,5 +1,10 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+  type SessionRecord,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import {
   buildHibernatedLifecycleUpdate,
   getSandboxExpiresAtDate,
@@ -9,7 +14,6 @@ import {
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
 } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 export type ReconnectStatus =
   | "connected"
@@ -32,7 +36,7 @@ export type ReconnectResponse = {
 };
 
 function buildLifecyclePayload(
-  sessionRecord: Awaited<ReturnType<typeof getSessionById>>,
+  sessionRecord: SessionRecord | null | undefined,
 ) {
   return {
     serverTime: Date.now(),
@@ -50,9 +54,9 @@ function getStateExpiresAt(state: unknown): number | undefined {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const url = new URL(req.url);
@@ -62,13 +66,15 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+
+  const { sessionRecord } = sessionContext;
 
   // No runtime sandbox state in DB
   if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {

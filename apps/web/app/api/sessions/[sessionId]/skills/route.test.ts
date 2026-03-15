@@ -34,83 +34,124 @@ let cachedSkills: SkillMetadata[] | null;
 let discoveredSkills: SkillMetadata[];
 let isAuthenticated = true;
 
-mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () =>
-    isAuthenticated
-      ? {
-          user: {
-            id: "user-1",
-            username: "alice",
-            email: "alice@example.com",
+function registerRouteMocks() {
+  mock.module("@/app/api/sessions/_lib/session-context", () => ({
+    requireAuthenticatedUser: async () =>
+      isAuthenticated
+        ? {
+            ok: true as const,
+            userId: "user-1",
+          }
+        : {
+            ok: false as const,
+            response: Response.json(
+              { error: "Not authenticated" },
+              { status: 401 },
+            ),
           },
-        }
-      : null,
-}));
+    requireOwnedSession: async ({
+      userId,
+      sessionId,
+    }: {
+      userId: string;
+      sessionId: string;
+    }) => {
+      if (!sessionRecord || sessionRecord.id !== sessionId) {
+        return {
+          ok: false as const,
+          response: Response.json(
+            { error: "Session not found" },
+            { status: 404 },
+          ),
+        };
+      }
 
-mock.module("@/lib/db/sessions", () => ({
-  getSessionById: async () => sessionRecord,
-  updateSession: async (_sessionId: string, patch: Record<string, unknown>) => {
-    updateCalls.push(patch);
-    return {
-      ...sessionRecord,
-      ...patch,
-    };
-  },
-}));
+      if (sessionRecord.userId !== userId) {
+        return {
+          ok: false as const,
+          response: Response.json({ error: "Forbidden" }, { status: 403 }),
+        };
+      }
 
-mock.module("@/lib/skills-cache", () => ({
-  getCachedSkills: async (
-    sessionId: string,
-    sandboxState: TestSandboxState | null,
-  ) => {
-    cacheReadCalls.push({ sessionId, sandboxState });
-    return cachedSkills;
-  },
-  setCachedSkills: async (
-    sessionId: string,
-    sandboxState: TestSandboxState | null,
-    skills: SkillMetadata[],
-  ) => {
-    cacheWriteCalls.push({ sessionId, sandboxState, skills });
-  },
-}));
+      return {
+        ok: true as const,
+        sessionRecord,
+      };
+    },
+  }));
 
-mock.module("@/lib/sandbox/lifecycle", () => ({
-  buildHibernatedLifecycleUpdate: () => ({ lifecycleState: "hibernated" }),
-}));
+  mock.module("@/lib/db/sessions", () => ({
+    updateSession: async (
+      _sessionId: string,
+      patch: Record<string, unknown>,
+    ) => {
+      updateCalls.push(patch);
+      return {
+        ...sessionRecord,
+        ...patch,
+      };
+    },
+  }));
 
-mock.module("@/lib/sandbox/utils", () => ({
-  clearSandboxState: () => null,
-  hasRuntimeSandboxState: (state: TestSandboxState | null) => {
-    if (!state) {
-      return false;
-    }
+  mock.module("@/lib/skills-cache", () => ({
+    getCachedSkills: async (
+      sessionId: string,
+      sandboxState: TestSandboxState | null,
+    ) => {
+      cacheReadCalls.push({ sessionId, sandboxState });
+      return cachedSkills;
+    },
+    setCachedSkills: async (
+      sessionId: string,
+      sandboxState: TestSandboxState | null,
+      skills: SkillMetadata[],
+    ) => {
+      cacheWriteCalls.push({ sessionId, sandboxState, skills });
+    },
+  }));
 
-    return (
-      (typeof state.sandboxId === "string" && state.sandboxId.length > 0) ||
-      state.files !== undefined
-    );
-  },
-  isSandboxUnavailableError: () => false,
-}));
+  mock.module("@/lib/sandbox/lifecycle", () => ({
+    buildHibernatedLifecycleUpdate: () => ({ lifecycleState: "hibernated" }),
+  }));
 
-mock.module("@open-harness/sandbox", () => ({
-  connectSandbox: async (sandboxState: TestSandboxState) => {
-    connectCalls.push(sandboxState);
-    return {
-      workingDirectory: "/workspace",
-    };
-  },
-}));
+  mock.module("@/lib/sandbox/utils", () => ({
+    clearSandboxState: () => null,
+    hasRuntimeSandboxState: (state: TestSandboxState | null) => {
+      if (!state) {
+        return false;
+      }
 
-mock.module("@open-harness/agent", () => ({
-  discoverSkills: async (_sandbox: unknown, skillDirs: string[]) => {
-    discoverCalls.push({ skillDirs });
-    return discoveredSkills;
-  },
-}));
+      return (
+        (typeof state.sandboxId === "string" && state.sandboxId.length > 0) ||
+        state.files !== undefined
+      );
+    },
+    isSandboxUnavailableError: () => false,
+  }));
 
-const routeModulePromise = import("./route");
+  mock.module("@open-harness/sandbox", () => ({
+    connectSandbox: async (sandboxState: TestSandboxState) => {
+      connectCalls.push(sandboxState);
+      return {
+        workingDirectory: "/workspace",
+      };
+    },
+  }));
+
+  mock.module("@open-harness/agent", () => ({
+    discoverSkills: async (_sandbox: unknown, skillDirs: string[]) => {
+      discoverCalls.push({ skillDirs });
+      return discoveredSkills;
+    },
+  }));
+}
+
+let routeImportVersion = 0;
+
+async function loadRouteModule() {
+  routeImportVersion += 1;
+  return import(`./route?test=${routeImportVersion}`);
+}
 
 describe("/api/sessions/[sessionId]/skills", () => {
   beforeEach(() => {
@@ -130,6 +171,7 @@ describe("/api/sessions/[sessionId]/skills", () => {
     };
     cachedSkills = null;
     discoveredSkills = [];
+    registerRouteMocks();
   });
 
   test("returns cached suggestions without connecting to the sandbox", async () => {
@@ -156,7 +198,7 @@ describe("/api/sessions/[sessionId]/skills", () => {
       },
     ];
 
-    const { GET } = await routeModulePromise;
+    const { GET } = await loadRouteModule();
     const response = await GET(
       new Request("http://localhost/api/sessions/session-1/skills"),
       {
@@ -207,7 +249,7 @@ describe("/api/sessions/[sessionId]/skills", () => {
       },
     ];
 
-    const { GET } = await routeModulePromise;
+    const { GET } = await loadRouteModule();
     const response = await GET(
       new Request("http://localhost/api/sessions/session-1/skills?refresh=1"),
       {

@@ -116,6 +116,7 @@ import {
   type SandboxInfo,
   useSessionChatContext,
 } from "./session-chat-context";
+import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -144,34 +145,7 @@ const Streamdown = dynamic(
   { ssr: false },
 );
 
-const STREAM_RECOVERY_STALL_MS = 4_000;
-const STREAM_RECOVERY_MIN_INTERVAL_MS = 8_000;
-
 const emptySubscribe = () => () => {};
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isChatStreamingProbeResponse(value: unknown): value is {
-  chats: { id: string; isStreaming: boolean }[];
-} {
-  if (!isObjectRecord(value)) {
-    return false;
-  }
-
-  const chats = value["chats"];
-  if (!Array.isArray(chats)) {
-    return false;
-  }
-
-  return chats.every(
-    (chat) =>
-      isObjectRecord(chat) &&
-      typeof chat["id"] === "string" &&
-      typeof chat["isStreaming"] === "boolean",
-  );
-}
 
 function useHasMounted() {
   return useSyncExternalStore(
@@ -1248,10 +1222,6 @@ export function SessionChatContent({
     lastChatId: null,
     inFlight: false,
   });
-  const inFlightStartedAtRef = useRef<number | null>(null);
-  const lastStreamRecoveryAtRef = useRef(0);
-  const streamRecoveryProbeInFlightRef = useRef(false);
-
   const requestStatusSync = useCallback(
     async (mode: "normal" | "force" = "normal"): Promise<void> => {
       const now = Date.now();
@@ -1358,134 +1328,14 @@ export function SessionChatContent({
     };
   }, [requestMarkChatRead]);
 
-  // Keep the recovery logic in a ref so event-listener effects never
-  // churn during streaming.  The ref is updated on every render (cheap) while
-  // the stable wrapper below keeps a constant identity for effects.
-  const maybeRecoverStreamRef = useRef(() => {});
-  maybeRecoverStreamRef.current = () => {
-    const now = Date.now();
-    if (
-      now - lastStreamRecoveryAtRef.current <
-      STREAM_RECOVERY_MIN_INTERVAL_MS
-    ) {
-      return;
-    }
-
-    if (status === "error") {
-      lastStreamRecoveryAtRef.current = now;
-      retryChatStream({ auto: true });
-      return;
-    }
-
-    // Only run "silent stream" recovery while still in submitted state.
-    // During active streaming, reconnecting can replay recent chunks and cause
-    // visible jank even when the connection is healthy.
-    if (status !== "submitted" || hasAssistantRenderableContent) {
-      return;
-    }
-
-    const startedAt = inFlightStartedAtRef.current;
-    if (startedAt === null || now - startedAt < STREAM_RECOVERY_STALL_MS) {
-      return;
-    }
-    if (streamRecoveryProbeInFlightRef.current) {
-      return;
-    }
-
-    streamRecoveryProbeInFlightRef.current = true;
-    lastStreamRecoveryAtRef.current = now;
-
-    void (async () => {
-      try {
-        const response = await fetch(`/api/sessions/${session.id}/chats`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-
-        const payload: unknown = await response.json();
-        if (!isChatStreamingProbeResponse(payload)) {
-          return;
-        }
-
-        const serverChat = payload.chats.find(
-          (chat) => chat.id === chatInfo.id,
-        );
-        if (!serverChat?.isStreaming) {
-          return;
-        }
-
-        retryChatStream({ auto: true, strategy: "soft" });
-      } catch {
-        // Ignore transient probe failures and try again on next interval.
-      } finally {
-        streamRecoveryProbeInFlightRef.current = false;
-      }
-    })();
-  };
-
-  // Stable identity wrapper – safe to use in effect dependency arrays without
-  // causing teardown/re-register cycles.
-  const maybeRecoverStream = useCallback(() => {
-    maybeRecoverStreamRef.current();
-  }, []);
-
-  useEffect(() => {
-    if (isChatInFlight) {
-      if (inFlightStartedAtRef.current === null) {
-        inFlightStartedAtRef.current = Date.now();
-      }
-      return;
-    }
-
-    inFlightStartedAtRef.current = null;
-  }, [isChatInFlight, chatInfo.id]);
-
-  // Recover from transient connection drops when the tab regains visibility
-  // or the network comes back. The listeners are registered once because
-  // maybeRecoverStream has a stable identity (delegates to a ref internally).
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        maybeRecoverStream();
-      }
-    };
-
-    const onFocus = () => {
-      maybeRecoverStream();
-    };
-
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("online", maybeRecoverStream);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("online", maybeRecoverStream);
-    };
-  }, [maybeRecoverStream]);
-
-  useEffect(() => {
-    if (!isChatInFlight || hasAssistantRenderableContent) {
-      return;
-    }
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState !== "visible"
-    ) {
-      return;
-    }
-
-    const startedAt = inFlightStartedAtRef.current;
-    const elapsed = startedAt === null ? 0 : Date.now() - startedAt;
-    const waitMs = Math.max(0, STREAM_RECOVERY_STALL_MS - elapsed);
-    const timeout = setTimeout(() => {
-      maybeRecoverStream();
-    }, waitMs);
-
-    return () => clearTimeout(timeout);
-  }, [isChatInFlight, hasAssistantRenderableContent, maybeRecoverStream]);
+  useStreamRecovery({
+    sessionId: session.id,
+    chatId: chatInfo.id,
+    status,
+    isChatInFlight,
+    hasAssistantRenderableContent,
+    retryChatStream,
+  });
 
   const handleModelChange = useCallback(
     async (modelId: string) => {

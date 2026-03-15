@@ -1,5 +1,10 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+  requireOwnedSessionWithSandboxGuard,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import {
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
@@ -15,7 +20,6 @@ import {
   clearSandboxState,
   hasRuntimeSandboxState,
 } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CreateSnapshotRequest {
   sessionId: string;
@@ -30,9 +34,9 @@ interface RestoreSnapshotRequest {
  * IMPORTANT: This automatically stops the sandbox after snapshot creation.
  */
 export async function POST(req: Request) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   let body: CreateSnapshotRequest;
@@ -48,20 +52,24 @@ export async function POST(req: Request) {
     return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify session ownership
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSessionWithSandboxGuard({
+    userId: authResult.userId,
+    sessionId,
+    sandboxGuard: canOperateOnSandbox,
+    sandboxErrorMessage: "Sandbox not initialized",
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!canOperateOnSandbox(sessionRecord.sandboxState)) {
+
+  const { sessionRecord } = sessionContext;
+  const sandboxState = sessionRecord.sandboxState;
+  if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const sandbox = await connectSandbox(sandboxState);
 
     if (!sandbox.snapshot) {
       return Response.json(
@@ -102,9 +110,9 @@ export async function POST(req: Request) {
  * PUT - Restore a snapshot by creating a new sandbox from it.
  */
 export async function PUT(req: Request) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   let body: RestoreSnapshotRequest;
@@ -120,14 +128,16 @@ export async function PUT(req: Request) {
     return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify session ownership and get snapshot URL
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+
+  const { sessionRecord } = sessionContext;
+
   // TODO: If the background after() callback in the archive flow crashes before
   // reaching updateSession (e.g. connectSandbox or sandbox.snapshot() throws),
   // sandboxState retains runtime data and snapshotUrl stays null. This leaves

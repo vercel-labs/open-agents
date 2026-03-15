@@ -1,11 +1,13 @@
-import { getSessionById } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
 import {
   getPullRequestMergeReadiness,
   type PullRequestCheckRun,
   type PullRequestMergeMethod,
 } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -69,21 +71,21 @@ function buildUnavailableResponse(
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const sessionRecord = await getSessionById(sessionId);
-
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { sessionRecord } = sessionContext;
 
   const repoIdentifier =
     sessionRecord.repoOwner && sessionRecord.repoName
@@ -135,7 +137,7 @@ export async function GET(_req: Request, context: RouteContext) {
 
   let token: string;
   try {
-    const tokenResult = await getRepoToken(session.user.id, repoOwner);
+    const tokenResult = await getRepoToken(authResult.userId, repoOwner);
     token = tokenResult.token;
   } catch {
     return Response.json(

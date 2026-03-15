@@ -49,9 +49,11 @@ bun run format                             # Format all files
 bun run format:check                       # Check formatting without writing
 
 # Testing
-bun test                        # Run all tests
-bun test path/to/file.test.ts   # Run single test file
-bun test --watch                # Watch mode
+bun test                                              # Run all tests
+bun test path/to/file.test.ts                         # Run single test file
+bun test --watch                                      # Watch mode
+bun run test:verbose                                  # Run tests with JUnit reporter streamed to stdout (useful in non-interactive shells)
+bun run test:verbose path/to/file.test.ts             # Same verbose output for a single test file
 ```
 
 **CI/script execution rules:**

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getProviderOptionsForModel,
   mergeProviderOptions,
   type ProviderOptionsByProvider,
   shouldApplyOpenAIReasoningDefaults,
@@ -23,6 +24,52 @@ describe("shouldApplyOpenAIReasoningDefaults", () => {
 
   test("returns false for non-GPT-5 OpenAI models", () => {
     expect(shouldApplyOpenAIReasoningDefaults("openai/gpt-4o")).toBe(false);
+  });
+});
+
+describe("getProviderOptionsForModel", () => {
+  test("merges OpenAI defaults with custom variant options", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5", {
+      openai: {
+        reasoningEffort: "medium",
+      },
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningEffort: "medium",
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+        store: false,
+      },
+    });
+  });
+
+  test("enforces store false for OpenAI models even when variant overrides it", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5", {
+      openai: {
+        store: true,
+      },
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningEffort: "high",
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+        store: false,
+      },
+    });
+  });
+
+  test("applies store false to non-GPT-5 OpenAI models", () => {
+    const result = getProviderOptionsForModel("openai/gpt-4o");
+
+    expect(result).toEqual({
+      openai: {
+        store: false,
+      },
+    });
   });
 });
 
