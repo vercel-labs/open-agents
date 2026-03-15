@@ -86,10 +86,6 @@ export async function getSandbox(
     );
   }
 
-  if (context.liveSandbox) {
-    return context.liveSandbox;
-  }
-
   return connectSandbox(context.sandbox.state);
 }
 

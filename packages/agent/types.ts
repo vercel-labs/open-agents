@@ -1,4 +1,4 @@
-import type { Sandbox, SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
 import type { AgentSandboxContext } from "./open-harness-agent";
@@ -18,7 +18,6 @@ export type TodoItem = z.infer<typeof todoItemSchema>;
 
 export interface AgentContext {
   sandbox: AgentSandboxContext;
-  liveSandbox?: Sandbox;
   skills?: SkillMetadata[];
   model: LanguageModel;
   subagentModel?: LanguageModel;
@@ -26,7 +25,6 @@ export interface AgentContext {
 
 export interface SandboxExecutionContext {
   sandbox: AgentSandboxContext;
-  liveSandbox?: Sandbox;
 }
 
 export function isSandboxState(value: unknown): value is SandboxState {

@@ -1,29 +1,49 @@
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
-import { askUserQuestionTool } from "./ask-user-question";
-import { bashTool, commandNeedsApproval } from "./bash";
-import { webFetchTool } from "./fetch";
-import { globTool } from "./glob";
-import { grepTool } from "./grep";
-import { readFileTool } from "./read";
-import { skillTool } from "./skill";
-import { taskTool } from "./task";
-import { todoWriteTool } from "./todo";
-import { editFileTool, writeFileTool } from "./write";
 import type { ToolNeedsApprovalFunction } from "./utils";
 
+const sandboxRegistry = new Map<string, Record<string, unknown>>();
+
+mock.module("@open-harness/sandbox", () => ({
+  connectSandbox: async (state: { sandboxId?: string }) => {
+    if (!state.sandboxId) {
+      throw new Error("Missing sandboxId in test sandbox state.");
+    }
+
+    const sandbox = sandboxRegistry.get(state.sandboxId);
+    if (!sandbox) {
+      throw new Error(`Unknown test sandbox: ${state.sandboxId}`);
+    }
+
+    return sandbox;
+  },
+}));
+
+const { askUserQuestionTool } = await import("./ask-user-question");
+const { bashTool, commandNeedsApproval } = await import("./bash");
+const { webFetchTool } = await import("./fetch");
+const { globTool } = await import("./glob");
+const { grepTool } = await import("./grep");
+const { readFileTool } = await import("./read");
+const { skillTool } = await import("./skill");
+const { taskTool } = await import("./task");
+const { todoWriteTool } = await import("./todo");
+const { editFileTool, writeFileTool } = await import("./write");
+
 function createContext(sandbox: Record<string, unknown>) {
+  const sandboxId = `sandbox-${sandboxRegistry.size + 1}`;
+  sandboxRegistry.set(sandboxId, sandbox);
+
   return {
     sandbox: {
-      state: { type: "vercel" as const },
+      state: { type: "vercel" as const, sandboxId },
       workingDirectory:
         typeof sandbox.workingDirectory === "string"
           ? sandbox.workingDirectory
           : "/repo",
     },
-    liveSandbox: sandbox,
     approval: {},
     model: "test-model",
   };
@@ -351,6 +371,7 @@ describe("tools execute behavior", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    sandboxRegistry.clear();
   });
 
   test("webFetchTool truncates oversized response bodies", async () => {
