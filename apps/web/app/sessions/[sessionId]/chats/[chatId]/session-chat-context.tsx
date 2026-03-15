@@ -193,9 +193,83 @@ type SessionChatContextValue = {
   modelOptionsLoading: boolean;
 };
 
+type SessionChatRuntimeContextValue = Pick<
+  SessionChatContextValue,
+  | "chat"
+  | "contextLimit"
+  | "stopChatStream"
+  | "retryChatStream"
+  | "hadInitialMessages"
+  | "initialMessages"
+>;
+
+type SessionChatWorkspaceContextValue = Pick<
+  SessionChatContextValue,
+  | "sandboxInfo"
+  | "diff"
+  | "diffLoading"
+  | "diffRefreshing"
+  | "diffError"
+  | "diffIsStale"
+  | "diffCachedAt"
+  | "refreshDiff"
+  | "gitStatus"
+  | "gitStatusLoading"
+  | "gitStatusError"
+  | "refreshGitStatus"
+  | "files"
+  | "filesLoading"
+  | "filesError"
+  | "refreshFiles"
+  | "skills"
+  | "skillsLoading"
+  | "skillsError"
+  | "refreshSkills"
+>;
+
+type SessionChatMetadataContextValue = Pick<
+  SessionChatContextValue,
+  | "session"
+  | "chatInfo"
+  | "setSandboxInfo"
+  | "clearSandboxInfo"
+  | "archiveSession"
+  | "unarchiveSession"
+  | "updateSessionTitle"
+  | "updateChatModel"
+  | "updateSessionSnapshot"
+  | "preferredSandboxType"
+  | "supportsDiff"
+  | "supportsRepoCreation"
+  | "hasRuntimeSandboxState"
+  | "hasSnapshot"
+  | "setSandboxTypeFromUnknown"
+  | "reconnectionStatus"
+  | "lifecycleTiming"
+  | "syncSandboxStatus"
+  | "attemptReconnection"
+  | "updateSessionRepo"
+  | "updateSessionPullRequest"
+  | "checkBranchAndPr"
+  | "modelOptions"
+  | "modelOptionsLoading"
+>;
+
 const SessionChatContext = createContext<SessionChatContextValue | undefined>(
   undefined,
 );
+
+const SessionChatRuntimeContext = createContext<
+  SessionChatRuntimeContextValue | undefined
+>(undefined);
+
+const SessionChatWorkspaceContext = createContext<
+  SessionChatWorkspaceContextValue | undefined
+>(undefined);
+
+const SessionChatMetadataContext = createContext<
+  SessionChatMetadataContextValue | undefined
+>(undefined);
 
 // Keep sandbox connection state across chat route transitions in the same session.
 // This avoids flicker/loading indicators when switching chats that share one sandbox.
@@ -927,23 +1001,28 @@ export function SessionChatProvider({
     [sessionRecord.id, chatInfo.id],
   );
 
-  const contextValue = useMemo(
+  const runtimeContextValue = useMemo<SessionChatRuntimeContextValue>(
     () => ({
-      session: sessionRecord,
-      chatInfo,
       chat,
       contextLimit,
       stopChatStream,
       retryChatStream,
-      sandboxInfo,
-      setSandboxInfo,
-      clearSandboxInfo,
-      archiveSession,
-      unarchiveSession,
-      updateSessionTitle,
-      updateChatModel,
       hadInitialMessages,
       initialMessages,
+    }),
+    [
+      chat,
+      contextLimit,
+      stopChatStream,
+      retryChatStream,
+      hadInitialMessages,
+      initialMessages,
+    ],
+  );
+
+  const workspaceContextValue = useMemo<SessionChatWorkspaceContextValue>(
+    () => ({
+      sandboxInfo,
       diff,
       diffLoading,
       diffRefreshing,
@@ -963,6 +1042,41 @@ export function SessionChatProvider({
       skillsLoading,
       skillsError,
       refreshSkills,
+    }),
+    [
+      sandboxInfo,
+      diff,
+      diffLoading,
+      diffRefreshing,
+      diffError,
+      diffIsStale,
+      diffCachedAt,
+      refreshDiff,
+      gitStatus,
+      gitStatusLoading,
+      gitStatusError,
+      refreshGitStatus,
+      files,
+      filesLoading,
+      filesError,
+      refreshFiles,
+      skills,
+      skillsLoading,
+      skillsError,
+      refreshSkills,
+    ],
+  );
+
+  const metadataContextValue = useMemo<SessionChatMetadataContextValue>(
+    () => ({
+      session: sessionRecord,
+      chatInfo,
+      setSandboxInfo,
+      clearSandboxInfo,
+      archiveSession,
+      unarchiveSession,
+      updateSessionTitle,
+      updateChatModel,
       updateSessionSnapshot,
       preferredSandboxType,
       supportsDiff,
@@ -983,38 +1097,12 @@ export function SessionChatProvider({
     [
       sessionRecord,
       chatInfo,
-      chat,
-      contextLimit,
-      stopChatStream,
-      retryChatStream,
-      sandboxInfo,
       setSandboxInfo,
       clearSandboxInfo,
       archiveSession,
       unarchiveSession,
       updateSessionTitle,
       updateChatModel,
-      hadInitialMessages,
-      initialMessages,
-      diff,
-      diffLoading,
-      diffRefreshing,
-      diffError,
-      diffIsStale,
-      diffCachedAt,
-      refreshDiff,
-      gitStatus,
-      gitStatusLoading,
-      gitStatusError,
-      refreshGitStatus,
-      files,
-      filesLoading,
-      filesError,
-      refreshFiles,
-      skills,
-      skillsLoading,
-      skillsError,
-      refreshSkills,
       updateSessionSnapshot,
       preferredSandboxType,
       supportsDiff,
@@ -1034,11 +1122,56 @@ export function SessionChatProvider({
     ],
   );
 
-  return (
-    <SessionChatContext.Provider value={contextValue}>
-      {children}
-    </SessionChatContext.Provider>
+  const contextValue = useMemo<SessionChatContextValue>(
+    () => ({
+      ...metadataContextValue,
+      ...runtimeContextValue,
+      ...workspaceContextValue,
+    }),
+    [metadataContextValue, runtimeContextValue, workspaceContextValue],
   );
+
+  return (
+    <SessionChatRuntimeContext.Provider value={runtimeContextValue}>
+      <SessionChatWorkspaceContext.Provider value={workspaceContextValue}>
+        <SessionChatMetadataContext.Provider value={metadataContextValue}>
+          <SessionChatContext.Provider value={contextValue}>
+            {children}
+          </SessionChatContext.Provider>
+        </SessionChatMetadataContext.Provider>
+      </SessionChatWorkspaceContext.Provider>
+    </SessionChatRuntimeContext.Provider>
+  );
+}
+
+export function useSessionChatRuntimeContext() {
+  const context = useContext(SessionChatRuntimeContext);
+  if (!context) {
+    throw new Error(
+      "useSessionChatRuntimeContext must be used within a SessionChatProvider",
+    );
+  }
+  return context;
+}
+
+export function useSessionChatWorkspaceContext() {
+  const context = useContext(SessionChatWorkspaceContext);
+  if (!context) {
+    throw new Error(
+      "useSessionChatWorkspaceContext must be used within a SessionChatProvider",
+    );
+  }
+  return context;
+}
+
+export function useSessionChatMetadataContext() {
+  const context = useContext(SessionChatMetadataContext);
+  if (!context) {
+    throw new Error(
+      "useSessionChatMetadataContext must be used within a SessionChatProvider",
+    );
+  }
+  return context;
 }
 
 export function useSessionChatContext() {
