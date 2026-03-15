@@ -126,6 +126,7 @@ export function useSessionChatRuntime({
   // reconnect to the still-running server stream (the main cause of the
   // "need to tap stop 3 times on iOS" bug).
   const userStoppedRef = useRef(false);
+  const retryInFlightRef = useRef(false);
 
   const stopChatStream = useCallback(() => {
     userStoppedRef.current = true;
@@ -162,7 +163,7 @@ export function useSessionChatRuntime({
    */
   const retryChatStream = useCallback(
     (opts?: RetryChatStreamOptions) => {
-      const strategy = opts?.strategy ?? "hard";
+      const strategy = opts?.strategy ?? (opts?.auto ? "soft" : "hard");
       // If the user explicitly stopped the stream, don't auto-reconnect.
       // This prevents the "tap stop 3 times" loop on iOS where aborting the
       // transport causes a transient error that the auto-recovery immediately
@@ -172,17 +173,33 @@ export function useSessionChatRuntime({
         chat.clearError();
         return;
       }
+      if (retryInFlightRef.current) {
+        return;
+      }
       // Manual retry — reset the flag so the stream can proceed.
       userStoppedRef.current = false;
-      if (strategy === "hard") {
-        // Tear down any stale local fetch before reconnecting.
-        void chatInstance.stop();
-        abortChatInstanceTransport(chatId);
-      }
-      // Clear the error so the chat UI becomes visible again.
-      chat.clearError();
-      // If the server-side stream is still running, reconnect to it.
-      void chat.resumeStream();
+      retryInFlightRef.current = true;
+
+      void (async () => {
+        try {
+          if (strategy === "hard") {
+            // Tear down any stale local fetch before reconnecting.
+            try {
+              await chatInstance.stop();
+            } catch {
+              // Ignore stale local stop failures and still attempt reconnect.
+            }
+            abortChatInstanceTransport(chatId);
+          }
+
+          // Clear the error so the chat UI becomes visible again.
+          chat.clearError();
+          // If the server-side stream is still running, reconnect to it.
+          await chat.resumeStream();
+        } finally {
+          retryInFlightRef.current = false;
+        }
+      })();
     },
     [chat, chatId, chatInstance],
   );
