@@ -1,4 +1,4 @@
-import type { Sandbox, SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-harness/sandbox";
 import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
 import { z } from "zod";
 import { addCacheControl } from "./context-management";
@@ -41,7 +41,6 @@ export interface AgentSandboxContext {
 
 const callOptionsSchema = z.object({
   sandbox: z.custom<AgentSandboxContext>(),
-  liveSandbox: z.custom<Sandbox>().optional(),
   model: z.custom<OpenHarnessAgentModelInput>().optional(),
   subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
@@ -119,7 +118,6 @@ export const openHarnessAgent = new ToolLoopAgent({
       : undefined;
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
-    const liveSandbox = options.liveSandbox;
     const skills = options.skills ?? [];
 
     const preparedPrompt = preparePromptForOpenAIReasoning({
@@ -148,7 +146,6 @@ export const openHarnessAgent = new ToolLoopAgent({
       instructions,
       experimental_context: {
         sandbox,
-        ...(liveSandbox ? { liveSandbox } : {}),
         skills,
         model: callModel,
         subagentModel,

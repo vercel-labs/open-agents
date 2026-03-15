@@ -63,8 +63,8 @@ const callOptionsSchema = z.object({
     .string()
     .describe("Detailed instructions for the exploration"),
   sandbox: z
-    .custom<SandboxExecutionContext>()
-    .describe("Sandbox context for file system and shell operations"),
+    .custom<SandboxExecutionContext["sandbox"]>()
+    .describe("Sandbox for file system and shell operations"),
   model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
 
@@ -86,7 +86,7 @@ export const explorerSubagent = new ToolLoopAgent({
       throw new Error("Explorer subagent requires task call options.");
     }
 
-    const sandboxContext = options.sandbox;
+    const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
     const preparedPrompt = preparePromptForOpenAIReasoning({
       model,
@@ -113,10 +113,7 @@ ${options.instructions}
 - This is READ-ONLY - do NOT create, modify, or delete any files
 - Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
       experimental_context: {
-        sandbox: sandboxContext.sandbox,
-        ...(sandboxContext.liveSandbox
-          ? { liveSandbox: sandboxContext.liveSandbox }
-          : {}),
+        sandbox,
         model,
       },
     };

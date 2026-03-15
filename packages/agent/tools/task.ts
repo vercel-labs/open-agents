@@ -8,7 +8,7 @@ import { z } from "zod";
 import { executorSubagent } from "../subagents/executor";
 import { explorerSubagent } from "../subagents/explorer";
 import { sumLanguageModelUsage } from "../usage";
-import { getSandbox, getSandboxContext, getSubagentModel } from "./utils";
+import { getSandboxContext, getSubagentModel } from "./utils";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -102,7 +102,6 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
     { experimental_context, abortSignal },
   ) {
     const sandboxContext = getSandboxContext(experimental_context, "task");
-    const sandbox = await getSandbox(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
@@ -115,10 +114,7 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
       options: {
         task,
         instructions,
-        sandbox: {
-          sandbox: sandboxContext.sandbox,
-          liveSandbox: sandbox,
-        },
+        sandbox: sandboxContext.sandbox,
         model,
       },
       abortSignal,

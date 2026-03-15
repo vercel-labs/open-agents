@@ -491,7 +491,6 @@ export async function POST(req: Request) {
           currentBranch: sandbox.currentBranch,
           environmentDetails: sandbox.environmentDetails,
         },
-        liveSandbox: sandbox,
         model: {
           id: model,
           providerOptionsOverrides: modelProviderOptions,

@@ -60,8 +60,8 @@ const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the task"),
   instructions: z.string().describe("Detailed instructions for the task"),
   sandbox: z
-    .custom<SandboxExecutionContext>()
-    .describe("Sandbox context for file system and shell operations"),
+    .custom<SandboxExecutionContext["sandbox"]>()
+    .describe("Sandbox for file system and shell operations"),
   model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
 
@@ -85,7 +85,7 @@ export const executorSubagent = new ToolLoopAgent({
       throw new Error("Executor subagent requires task call options.");
     }
 
-    const sandboxContext = options.sandbox;
+    const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
     const preparedPrompt = preparePromptForOpenAIReasoning({
       model,
@@ -112,10 +112,7 @@ ${options.instructions}
 - Complete the task fully before returning
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
       experimental_context: {
-        sandbox: sandboxContext.sandbox,
-        ...(sandboxContext.liveSandbox
-          ? { liveSandbox: sandboxContext.liveSandbox }
-          : {}),
+        sandbox,
         model,
       },
     };
