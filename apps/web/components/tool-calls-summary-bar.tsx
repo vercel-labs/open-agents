@@ -100,7 +100,7 @@ export function ToolCallsSummaryBar({
   }
 
   return (
-    <div className="flex justify-start">
+    <div className="my-1.5 border border-transparent py-0.5">
       <button
         type="button"
         onClick={onToggle}
