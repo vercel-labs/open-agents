@@ -2,7 +2,7 @@
 
 import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
@@ -49,12 +49,6 @@ export function SessionStarter({
 
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const [autoCommitPush, setAutoCommitPush] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (autoCommitPush === null) {
-      setAutoCommitPush(defaultAutoCommitPush);
-    }
-  }, [autoCommitPush, defaultAutoCommitPush]);
 
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
