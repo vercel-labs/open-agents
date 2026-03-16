@@ -1063,6 +1063,9 @@ export function SessionChatContent({
   );
   const hasSeenAssistantRenderableContentRef = useRef(false);
   const [hasPendingResponse, setHasPendingResponse] = useState(false);
+  /** Captures Date.now() when the user sends a message, so the streaming
+   *  summary bar can show an accurate live timer from the actual send time. */
+  const lastSendTimestampRef = useRef<number | null>(null);
 
   // Sync hasPendingResponse with the AI SDK status.
   // IMPORTANT: hasPendingResponse is intentionally excluded from the dependency
@@ -1566,6 +1569,7 @@ export function SessionChatContent({
 
         setMessages(messages.slice(0, targetMessageIndex));
         setHasPendingResponse(true);
+        lastSendTimestampRef.current = Date.now();
         hasSeenAssistantRenderableContentRef.current = false;
         void setChatStreaming(chatInfo.id, true);
 
@@ -2975,7 +2979,14 @@ export function SessionChatContent({
                         message={m}
                         isStreaming={isMessageStreaming}
                         durationMs={messageDurationMap[m.id] ?? null}
-                        startedAt={messageStartedAtMap[m.id] ?? null}
+                        startedAt={
+                          messageStartedAtMap[m.id] ??
+                          (isMessageStreaming && lastSendTimestampRef.current
+                            ? new Date(
+                                lastSendTimestampRef.current,
+                              ).toISOString()
+                            : null)
+                        }
                       >
                         {renderGroups}
                       </AssistantMessageGroups>
@@ -3165,6 +3176,7 @@ export function SessionChatContent({
                   }
                 }
                 setHasPendingResponse(true);
+                lastSendTimestampRef.current = Date.now();
                 hasSeenAssistantRenderableContentRef.current = false;
                 void setChatStreaming(chatInfo.id, true);
                 try {

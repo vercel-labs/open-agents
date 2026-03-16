@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface TodoInfo {
@@ -42,17 +42,10 @@ export function ToolCallsSummaryBar({
   // Elapsed time logic
   //
   // Completed messages  → use the pre-computed durationMs (accurate, static).
-  // Streaming messages  → tick a live counter from startedAt (or a client-side
-  //                        fallback for brand-new messages not yet persisted).
+  // Streaming messages  → tick a live counter from startedAt (the moment the
+  //                        user sent their message).
   // ---------------------------------------------------------------------------
-  const fallbackStartRef = useRef<number | null>(null);
-  if (isStreaming && fallbackStartRef.current === null && startedAt === null) {
-    fallbackStartRef.current = Date.now();
-  }
-
-  const startMs = startedAt
-    ? new Date(startedAt).getTime()
-    : fallbackStartRef.current;
+  const startMs = startedAt ? new Date(startedAt).getTime() : null;
 
   const computeLiveElapsed = () =>
     startMs != null
