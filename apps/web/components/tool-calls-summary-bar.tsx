@@ -52,7 +52,7 @@ export function ToolCallsSummaryBar({
       ? Math.max(0, Math.floor((Date.now() - startMs) / 1000))
       : 0;
 
-  const [liveElapsed, setLiveElapsed] = useState(0);
+  const [liveElapsed, setLiveElapsed] = useState(computeLiveElapsed);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -80,9 +80,7 @@ export function ToolCallsSummaryBar({
   // Build the summary segments
   const segments: string[] = [];
 
-  const showsElapsedSegment = isStreaming || elapsedSeconds > 0;
-
-  if (showsElapsedSegment) {
+  if (elapsedSeconds > 0) {
     segments.push(formatElapsedTime(elapsedSeconds));
   }
 
@@ -106,7 +104,7 @@ export function ToolCallsSummaryBar({
       <button
         type="button"
         onClick={onToggle}
-        className="group inline-flex items-center gap-2 rounded-md py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+        className="group inline-flex appearance-none items-center gap-2 rounded-md border-0 bg-transparent px-0 py-0.5 text-left text-[13px] text-muted-foreground transition-colors hover:text-foreground"
       >
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           <span
@@ -118,26 +116,16 @@ export function ToolCallsSummaryBar({
             )}
           />
         </span>
-        <span className="leading-none tabular-nums">
+        <span className="leading-none">
           {isStreaming ? "Working…" : "Worked"}
           {segments.length > 0 && (
             <>
-              {segments.map((segment, i) => {
-                const isElapsedSegment = showsElapsedSegment && i === 0;
-
-                return (
-                  <span key={i}>
-                    <span className="text-muted-foreground/40"> · </span>
-                    <span
-                      className={cn(
-                        isElapsedSegment && "inline-flex min-w-[5ch] justify-end",
-                      )}
-                    >
-                      {segment}
-                    </span>
-                  </span>
-                );
-              })}
+              {segments.map((segment, i) => (
+                <span key={i}>
+                  <span className="text-muted-foreground/40"> · </span>
+                  {segment}
+                </span>
+              ))}
             </>
           )}
         </span>
