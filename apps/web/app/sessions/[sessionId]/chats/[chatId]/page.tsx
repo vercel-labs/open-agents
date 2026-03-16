@@ -119,6 +119,10 @@ export default async function SessionChatPage({
   }
 
   const initialMessages = dbMessages.map((m) => m.parts as WebAgentUIMessage);
+  const messageCreatedAtMap: Record<string, string> = {};
+  for (const m of dbMessages) {
+    messageCreatedAtMap[m.id] = m.createdAt.toISOString();
+  }
   const initialModelOptions = withMissingModelOption(
     buildSessionChatModelOptions(initialModels, preferences.modelVariants),
     chat.modelId,
@@ -139,6 +143,7 @@ export default async function SessionChatPage({
       >
         <SessionChatContent
           initialIsOnlyChatInSession={initialIsOnlyChatInSession}
+          messageCreatedAtMap={messageCreatedAtMap}
         />
       </SessionChatProvider>
     </DiffsProvider>

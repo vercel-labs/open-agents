@@ -24,36 +24,45 @@ export function ToolCallsSummaryBar({
   isStreaming,
   toolCallCount,
   todoInfo,
+  createdAt,
 }: {
   isExpanded: boolean;
   onToggle: () => void;
   isStreaming: boolean;
   toolCallCount: number;
   todoInfo: TodoInfo | null;
+  /** ISO timestamp for when this message was created (from DB), or null for brand-new streaming messages */
+  createdAt: string | null;
 }) {
-  const [elapsed, setElapsed] = useState(0);
-  const startTimeRef = useRef<number | null>(null);
+  // Resolve the start time: prefer the server-side createdAt, fall back to
+  // a client-side timestamp captured when the component first mounts while
+  // streaming (covers brand-new messages not yet persisted).
+  const fallbackStartRef = useRef<number | null>(null);
+  if (isStreaming && fallbackStartRef.current === null && createdAt === null) {
+    fallbackStartRef.current = Date.now();
+  }
+  const startMs = createdAt
+    ? new Date(createdAt).getTime()
+    : fallbackStartRef.current;
+
+  const computeElapsed = () =>
+    startMs != null ? Math.max(0, Math.floor((Date.now() - startMs) / 1000)) : 0;
+
+  const [elapsed, setElapsed] = useState(computeElapsed);
 
   useEffect(() => {
-    if (!isStreaming) {
-      if (startTimeRef.current !== null) {
-        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }
-      return;
-    }
+    // Always recompute once on mount / when deps change
+    setElapsed(computeElapsed());
 
-    if (startTimeRef.current === null) {
-      startTimeRef.current = Date.now();
-    }
+    if (!isStreaming) return;
 
     const interval = setInterval(() => {
-      setElapsed(
-        Math.floor((Date.now() - (startTimeRef.current ?? Date.now())) / 1000),
-      );
+      setElapsed(computeElapsed());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isStreaming]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- computeElapsed is stable per startMs
+  }, [isStreaming, startMs]);
 
   // Build the summary segments
   const segments: string[] = [];

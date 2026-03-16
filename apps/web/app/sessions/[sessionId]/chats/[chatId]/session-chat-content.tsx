@@ -849,8 +849,10 @@ function ChatSwitcherPanel({
 
 export function SessionChatContent({
   initialIsOnlyChatInSession,
+  messageCreatedAtMap,
 }: {
   initialIsOnlyChatInSession: boolean;
+  messageCreatedAtMap: Record<string, string>;
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -2968,6 +2970,7 @@ export function SessionChatContent({
                         key={m.id}
                         message={m}
                         isStreaming={isMessageStreaming}
+                        createdAt={messageCreatedAtMap[m.id] ?? null}
                       >
                         {renderGroups}
                       </AssistantMessageGroups>
