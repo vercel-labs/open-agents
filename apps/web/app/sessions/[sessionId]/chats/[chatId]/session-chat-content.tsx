@@ -52,6 +52,7 @@ import { ImageAttachmentsPreview } from "@/components/image-attachments-preview"
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
+import { AssistantMessageGroups } from "@/components/assistant-message-groups";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
@@ -2686,8 +2687,12 @@ export function SessionChatContent({
             <div className="space-y-6">
               {groupedRenderMessages.map(
                 ({ message: m, groups, isStreaming: isMessageStreaming }) => {
-                  return groups.map((group) => {
+                  const renderGroups = (
+                    isToolCallsExpanded: boolean,
+                  ) =>
+                    groups.map((group) => {
                     if (group.type === "task-group") {
+                      if (!isToolCallsExpanded) return null;
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2717,6 +2722,7 @@ export function SessionChatContent({
                     }
 
                     if (group.type === "reasoning-group") {
+                      if (!isToolCallsExpanded) return null;
                       const hasRenderableContentAfterGroup = m.parts
                         .slice(group.startIndex + group.parts.length)
                         .some(hasRenderableAssistantPart);
@@ -2744,6 +2750,7 @@ export function SessionChatContent({
                     const p = group.part;
 
                     if (isReasoningUIPart(p)) {
+                      if (!isToolCallsExpanded) return null;
                       const hasRenderableContentAfterGroup = m.parts
                         .slice(group.index + 1)
                         .some(hasRenderableAssistantPart);
@@ -2875,6 +2882,7 @@ export function SessionChatContent({
                     }
 
                     if (isToolUIPart(p)) {
+                      if (!isToolCallsExpanded) return null;
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
@@ -2939,6 +2947,20 @@ export function SessionChatContent({
 
                     return null;
                   });
+
+                  if (m.role === "assistant") {
+                    return (
+                      <AssistantMessageGroups
+                        key={m.id}
+                        message={m}
+                        isStreaming={isMessageStreaming}
+                      >
+                        {renderGroups}
+                      </AssistantMessageGroups>
+                    );
+                  }
+
+                  return renderGroups(true);
                 },
               )}
               {showThinkingIndicator && (
