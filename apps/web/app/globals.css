@@ -124,6 +124,28 @@
   --sidebar-active-foreground: oklch(0.985 0 0);
 }
 
+@layer utilities {
+  @keyframes tool-calls-summary-bar-pulse {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+
+  .animate-tool-calls-summary-bar-pulse {
+    animation: tool-calls-summary-bar-pulse 1.8s
+      cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    transform-origin: center;
+    will-change: opacity, transform;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

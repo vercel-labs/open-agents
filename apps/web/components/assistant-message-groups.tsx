@@ -21,24 +21,43 @@ function countToolCalls(message: WebAgentUIMessage): number {
   return count;
 }
 
+function buildTodoInfo(todos: Array<{ status?: string }>): TodoInfo {
+  return {
+    total: todos.length,
+    completed: todos.filter((todo) => todo?.status === "completed").length,
+    inProgress: todos.filter((todo) => todo?.status === "in_progress").length,
+  };
+}
+
 function getLatestTodoInfo(message: WebAgentUIMessage): TodoInfo | null {
-  let latestTodo: TodoInfo | null = null;
+  let latestStableTodo: TodoInfo | null = null;
+  let latestStreamingTodo: TodoInfo | null = null;
+
   for (const part of message.parts) {
-    if (isToolUIPart(part) && part.type === "tool-todo_write") {
-      const input = part.input as
-        | { todos?: Array<{ status?: string }> }
-        | undefined;
-      const todos = input?.todos;
-      if (Array.isArray(todos)) {
-        latestTodo = {
-          total: todos.length,
-          completed: todos.filter((t) => t?.status === "completed").length,
-          inProgress: todos.filter((t) => t?.status === "in_progress").length,
-        };
-      }
+    if (!isToolUIPart(part) || part.type !== "tool-todo_write") {
+      continue;
     }
+
+    const input = part.input as
+      | { todos?: Array<{ status?: string }> }
+      | undefined;
+    const todos = input?.todos;
+
+    if (!Array.isArray(todos)) {
+      continue;
+    }
+
+    const nextTodoInfo = buildTodoInfo(todos);
+
+    if (part.state === "input-streaming") {
+      latestStreamingTodo = nextTodoInfo;
+      continue;
+    }
+
+    latestStableTodo = nextTodoInfo;
   }
-  return latestTodo;
+
+  return latestStableTodo ?? latestStreamingTodo;
 }
 
 /**

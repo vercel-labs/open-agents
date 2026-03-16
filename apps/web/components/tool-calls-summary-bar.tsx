@@ -104,9 +104,18 @@ export function ToolCallsSummaryBar({
       <button
         type="button"
         onClick={onToggle}
-        className="group inline-flex items-center gap-2 rounded-md py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          "group relative inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground",
+          isStreaming && "text-foreground/90",
+        )}
       >
-        <span className="flex size-3.5 shrink-0 items-center justify-center">
+        {isStreaming && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-md bg-muted/70 opacity-0 animate-tool-calls-summary-bar-pulse motion-reduce:animate-none"
+          />
+        )}
+        <span className="relative z-10 flex size-3.5 shrink-0 items-center justify-center">
           <span
             className={cn(
               "inline-block h-2 w-2 rounded-full",
@@ -116,7 +125,7 @@ export function ToolCallsSummaryBar({
             )}
           />
         </span>
-        <span className="leading-none">
+        <span className="relative z-10 leading-none">
           {isStreaming ? "Working…" : "Worked"}
           {segments.length > 0 && (
             <>
@@ -131,7 +140,7 @@ export function ToolCallsSummaryBar({
         </span>
         <ChevronRight
           className={cn(
-            "h-3 w-3 text-muted-foreground/50 transition-transform duration-200 ease-out motion-reduce:transition-none",
+            "relative z-10 h-3 w-3 text-muted-foreground/50 transition-transform duration-200 ease-out motion-reduce:transition-none",
             isExpanded && "rotate-90",
           )}
         />
