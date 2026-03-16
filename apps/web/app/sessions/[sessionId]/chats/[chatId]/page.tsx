@@ -137,6 +137,15 @@ export default async function SessionChatPage({
       }
     }
   }
+
+  // Fallback for refresh-during-stream: the streaming assistant message may
+  // not be in the maps above (not yet persisted or different ID). Use the
+  // last user message's createdAt so the timer still starts from the right
+  // moment.
+  const lastUserMessage = [...dbMessages].reverse().find((m) => m.role === "user");
+  const lastUserMessageSentAt = lastUserMessage
+    ? lastUserMessage.createdAt.toISOString()
+    : null;
   const initialModelOptions = withMissingModelOption(
     buildSessionChatModelOptions(initialModels, preferences.modelVariants),
     chat.modelId,
@@ -159,6 +168,7 @@ export default async function SessionChatPage({
           initialIsOnlyChatInSession={initialIsOnlyChatInSession}
           messageDurationMap={messageDurationMap}
           messageStartedAtMap={messageStartedAtMap}
+          lastUserMessageSentAt={lastUserMessageSentAt}
         />
       </SessionChatProvider>
     </DiffsProvider>

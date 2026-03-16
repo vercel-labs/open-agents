@@ -851,12 +851,15 @@ export function SessionChatContent({
   initialIsOnlyChatInSession,
   messageDurationMap,
   messageStartedAtMap,
+  lastUserMessageSentAt,
 }: {
   initialIsOnlyChatInSession: boolean;
   /** Pre-computed generation duration (ms) per assistant message ID */
   messageDurationMap: Record<string, number>;
   /** ISO timestamp of the preceding user message's createdAt, for live timers */
   messageStartedAtMap: Record<string, string>;
+  /** Fallback: last user message's createdAt, for refresh-during-stream */
+  lastUserMessageSentAt: string | null;
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -2981,10 +2984,12 @@ export function SessionChatContent({
                         durationMs={messageDurationMap[m.id] ?? null}
                         startedAt={
                           messageStartedAtMap[m.id] ??
-                          (isMessageStreaming && lastSendTimestampRef.current
-                            ? new Date(
-                                lastSendTimestampRef.current,
-                              ).toISOString()
+                          (isMessageStreaming
+                            ? (lastSendTimestampRef.current
+                                ? new Date(
+                                    lastSendTimestampRef.current,
+                                  ).toISOString()
+                                : lastUserMessageSentAt)
                             : null)
                         }
                       >
