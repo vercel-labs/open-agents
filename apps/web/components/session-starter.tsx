@@ -45,7 +45,7 @@ export function SessionStarter({
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
 
-  const { preferences } = useUserPreferences();
+  const { preferences, loading: preferencesLoading } = useUserPreferences();
 
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const [autoCommitPush, setAutoCommitPush] = useState<boolean | null>(null);
@@ -82,7 +82,8 @@ export function SessionStarter({
 
   const isRepoSelectionComplete =
     mode !== "repo" || (selectedOwner && selectedRepo);
-  const isSubmitDisabled = isLoading || !isRepoSelectionComplete;
+  const controlsDisabled = isLoading || preferencesLoading;
+  const isSubmitDisabled = controlsDisabled || !isRepoSelectionComplete;
   const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
 
   const handleSubmit = () => {
@@ -196,7 +197,7 @@ export function SessionStarter({
           <Switch
             checked={effectiveAutoCommitPush}
             onCheckedChange={setAutoCommitPush}
-            disabled={isLoading}
+            disabled={controlsDisabled}
           />
         </div>
 
