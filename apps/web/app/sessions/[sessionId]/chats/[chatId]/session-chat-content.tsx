@@ -3027,7 +3027,7 @@ export function SessionChatContent({
                     <span className="flex size-3.5 shrink-0 items-center justify-center">
                       <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground" />
                     </span>
-                    <span className="leading-none">Working…</span>
+                    <span className="leading-none">Thinking…</span>
                   </div>
                 </div>
               )}
