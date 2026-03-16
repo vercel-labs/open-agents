@@ -2779,6 +2779,17 @@ export function SessionChatContent({
                         !m.parts
                           .slice(group.index + 1)
                           .some((messagePart) => messagePart.type === "text");
+
+                      // When collapsed, only show the final text part once
+                      // streaming is complete (the finished response).
+                      if (
+                        !isToolCallsExpanded &&
+                        m.role === "assistant" &&
+                        (!isFinalAssistantTextPart || isMessageStreaming)
+                      ) {
+                        return null;
+                      }
+
                       const canCopyAssistantMessage =
                         isFinalAssistantTextPart &&
                         !isMessageStreaming &&
@@ -2911,6 +2922,9 @@ export function SessionChatContent({
                       p.type === "file" &&
                       p.mediaType?.startsWith("image/")
                     ) {
+                      if (!isToolCallsExpanded && m.role === "assistant") {
+                        return null;
+                      }
                       return (
                         <div
                           key={`${m.id}-${group.renderKey}`}
