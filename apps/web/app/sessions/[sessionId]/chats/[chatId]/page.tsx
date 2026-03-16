@@ -142,7 +142,9 @@ export default async function SessionChatPage({
   // not be in the maps above (not yet persisted or different ID). Use the
   // last user message's createdAt so the timer still starts from the right
   // moment.
-  const lastUserMessage = [...dbMessages].reverse().find((m) => m.role === "user");
+  const lastUserMessage = dbMessages
+    .toReversed()
+    .find((m) => m.role === "user");
   const lastUserMessageSentAt = lastUserMessage
     ? lastUserMessage.createdAt.toISOString()
     : null;

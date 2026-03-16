@@ -2700,280 +2700,284 @@ export function SessionChatContent({
             <div className="space-y-6">
               {groupedRenderMessages.map(
                 ({ message: m, groups, isStreaming: isMessageStreaming }) => {
-                  const renderGroups = (
-                    isToolCallsExpanded: boolean,
-                  ) =>
+                  const renderGroups = (isToolCallsExpanded: boolean) =>
                     groups.map((group) => {
-                    if (group.type === "task-group") {
-                      if (!isToolCallsExpanded) return null;
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="max-w-full"
-                        >
-                          <TaskGroupView
-                            taskParts={group.tasks}
-                            activeApprovalId={
-                              group.tasks.find(
-                                (t) => t.state === "approval-requested",
-                              )?.approval?.id ?? null
-                            }
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (group.type === "reasoning-group") {
-                      if (!isToolCallsExpanded) return null;
-                      const hasRenderableContentAfterGroup = m.parts
-                        .slice(group.startIndex + group.parts.length)
-                        .some(hasRenderableAssistantPart);
-
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="flex justify-start"
-                        >
-                          <ThinkingBlock
-                            text={getReasoningGroupText(group.parts)}
-                            isStreaming={shouldKeepCollapsedReasoningStreaming({
-                              isMessageStreaming,
-                              hasStreamingReasoningPart: group.parts.some(
-                                (part) => part.state === "streaming",
-                              ),
-                              hasRenderableContentAfterGroup,
-                            })}
-                            partCount={group.parts.length}
-                          />
-                        </div>
-                      );
-                    }
-
-                    const p = group.part;
-
-                    if (isReasoningUIPart(p)) {
-                      if (!isToolCallsExpanded) return null;
-                      const hasRenderableContentAfterGroup = m.parts
-                        .slice(group.index + 1)
-                        .some(hasRenderableAssistantPart);
-
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="flex justify-start"
-                        >
-                          <ThinkingBlock
-                            text={p.text}
-                            isStreaming={shouldKeepCollapsedReasoningStreaming({
-                              isMessageStreaming,
-                              hasStreamingReasoningPart:
-                                p.state === "streaming",
-                              hasRenderableContentAfterGroup,
-                            })}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (p.type === "text") {
-                      const isFinalAssistantTextPart =
-                        m.role === "assistant" &&
-                        !m.parts
-                          .slice(group.index + 1)
-                          .some((messagePart) => messagePart.type === "text");
-
-                      // When collapsed, only show the final text part once
-                      // streaming is complete (the finished response).
-                      if (
-                        !isToolCallsExpanded &&
-                        m.role === "assistant" &&
-                        (!isFinalAssistantTextPart || isMessageStreaming)
-                      ) {
-                        return null;
-                      }
-
-                      const canCopyAssistantMessage =
-                        isFinalAssistantTextPart &&
-                        !isMessageStreaming &&
-                        p.text.trim().length > 0;
-
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className={cn(
-                            "flex min-w-0",
-                            m.role === "user" ? "justify-end" : "justify-start",
-                          )}
-                        >
-                          {m.role === "user" ? (
-                            <div className="group relative w-fit min-w-0 max-w-[80%]">
-                              <div className="rounded-3xl bg-secondary px-4 py-2">
-                                <p className="whitespace-pre-wrap break-words">
-                                  {p.text}
-                                </p>
-                              </div>
-                              {group.index === 0 && (
-                                <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleResendUserMessage(m.id)
-                                    }
-                                    disabled={hasMessageActionInFlight}
-                                    aria-label="Resend this message and delete everything after it"
-                                    className="rounded p-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    {resendingMessageId === m.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <RotateCcw className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleDeleteUserMessage(m.id)
-                                    }
-                                    disabled={hasMessageActionInFlight}
-                                    aria-label="Delete this message and everything after it"
-                                    className="rounded p-1 transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    {deletingMessageId === m.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="group min-w-0 w-full overflow-hidden">
-                              <Streamdown
-                                animated={
-                                  isMessageStreaming
-                                    ? {
-                                        animation: "fadeIn",
-                                        duration: 250,
-                                        easing: "ease-out",
-                                      }
-                                    : undefined
-                                }
-                                mode={
-                                  isMessageStreaming ? "streaming" : "static"
-                                }
-                                isAnimating={isMessageStreaming}
-                                plugins={streamdownPlugins}
-                              >
-                                {p.text}
-                              </Streamdown>
-                              {canCopyAssistantMessage && (
-                                <div className="mt-1 flex justify-start">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleCopyAssistantMessage(
-                                        m.id,
-                                        p.text,
-                                      )
-                                    }
-                                    aria-label="Copy assistant response"
-                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                                  >
-                                    {copiedAssistantMessageId === m.id ? (
-                                      <Check className="h-4 w-4" />
-                                    ) : (
-                                      <Copy className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (isToolUIPart(p)) {
-                      if (!isToolCallsExpanded) return null;
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="max-w-full"
-                        >
-                          <ToolCall
-                            part={p as WebAgentUIToolPart}
-                            isStreaming={isMessageStreaming}
-                            onApprove={(id) =>
-                              addToolApprovalResponse({ id, approved: true })
-                            }
-                            onDeny={(id, reason) =>
-                              addToolApprovalResponse({
-                                id,
-                                approved: false,
-                                reason,
-                              })
-                            }
-                          />
-                        </div>
-                      );
-                    }
-
-                    // Render image attachments
-                    if (
-                      p.type === "file" &&
-                      p.mediaType?.startsWith("image/")
-                    ) {
-                      if (!isToolCallsExpanded && m.role === "assistant") {
-                        return null;
-                      }
-                      return (
-                        <div
-                          key={`${m.id}-${group.renderKey}`}
-                          className="flex justify-end"
-                        >
-                          <div className="group relative w-fit max-w-[80%]">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-                            <img
-                              src={p.url}
-                              alt={p.filename ?? "Attached image"}
-                              className="max-h-64 rounded-lg"
+                      if (group.type === "task-group") {
+                        if (!isToolCallsExpanded) return null;
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className="max-w-full"
+                          >
+                            <TaskGroupView
+                              taskParts={group.tasks}
+                              activeApprovalId={
+                                group.tasks.find(
+                                  (t) => t.state === "approval-requested",
+                                )?.approval?.id ?? null
+                              }
+                              isStreaming={isMessageStreaming}
+                              onApprove={(id) =>
+                                addToolApprovalResponse({ id, approved: true })
+                              }
+                              onDeny={(id, reason) =>
+                                addToolApprovalResponse({
+                                  id,
+                                  approved: false,
+                                  reason,
+                                })
+                              }
                             />
-                            {m.role === "user" && group.index === 0 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDeleteUserMessage(m.id)
-                                }
-                                disabled={hasMessageActionInFlight}
-                                aria-label="Delete this message and everything after it"
-                                className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                {deletingMessageId === m.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
+                          </div>
+                        );
+                      }
+
+                      if (group.type === "reasoning-group") {
+                        if (!isToolCallsExpanded) return null;
+                        const hasRenderableContentAfterGroup = m.parts
+                          .slice(group.startIndex + group.parts.length)
+                          .some(hasRenderableAssistantPart);
+
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className="flex justify-start"
+                          >
+                            <ThinkingBlock
+                              text={getReasoningGroupText(group.parts)}
+                              isStreaming={shouldKeepCollapsedReasoningStreaming(
+                                {
+                                  isMessageStreaming,
+                                  hasStreamingReasoningPart: group.parts.some(
+                                    (part) => part.state === "streaming",
+                                  ),
+                                  hasRenderableContentAfterGroup,
+                                },
+                              )}
+                              partCount={group.parts.length}
+                            />
+                          </div>
+                        );
+                      }
+
+                      const p = group.part;
+
+                      if (isReasoningUIPart(p)) {
+                        if (!isToolCallsExpanded) return null;
+                        const hasRenderableContentAfterGroup = m.parts
+                          .slice(group.index + 1)
+                          .some(hasRenderableAssistantPart);
+
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className="flex justify-start"
+                          >
+                            <ThinkingBlock
+                              text={p.text}
+                              isStreaming={shouldKeepCollapsedReasoningStreaming(
+                                {
+                                  isMessageStreaming,
+                                  hasStreamingReasoningPart:
+                                    p.state === "streaming",
+                                  hasRenderableContentAfterGroup,
+                                },
+                              )}
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (p.type === "text") {
+                        const isFinalAssistantTextPart =
+                          m.role === "assistant" &&
+                          !m.parts
+                            .slice(group.index + 1)
+                            .some((messagePart) => messagePart.type === "text");
+
+                        // When collapsed, only show the final text part once
+                        // streaming is complete (the finished response).
+                        if (
+                          !isToolCallsExpanded &&
+                          m.role === "assistant" &&
+                          (!isFinalAssistantTextPart || isMessageStreaming)
+                        ) {
+                          return null;
+                        }
+
+                        const canCopyAssistantMessage =
+                          isFinalAssistantTextPart &&
+                          !isMessageStreaming &&
+                          p.text.trim().length > 0;
+
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className={cn(
+                              "flex min-w-0",
+                              m.role === "user"
+                                ? "justify-end"
+                                : "justify-start",
+                            )}
+                          >
+                            {m.role === "user" ? (
+                              <div className="group relative w-fit min-w-0 max-w-[80%]">
+                                <div className="rounded-3xl bg-secondary px-4 py-2">
+                                  <p className="whitespace-pre-wrap break-words">
+                                    {p.text}
+                                  </p>
+                                </div>
+                                {group.index === 0 && (
+                                  <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleResendUserMessage(m.id)
+                                      }
+                                      disabled={hasMessageActionInFlight}
+                                      aria-label="Resend this message and delete everything after it"
+                                      className="rounded p-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      {resendingMessageId === m.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <RotateCcw className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleDeleteUserMessage(m.id)
+                                      }
+                                      disabled={hasMessageActionInFlight}
+                                      aria-label="Delete this message and everything after it"
+                                      className="rounded p-1 transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      {deletingMessageId === m.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </div>
                                 )}
-                              </button>
+                              </div>
+                            ) : (
+                              <div className="group min-w-0 w-full overflow-hidden">
+                                <Streamdown
+                                  animated={
+                                    isMessageStreaming
+                                      ? {
+                                          animation: "fadeIn",
+                                          duration: 250,
+                                          easing: "ease-out",
+                                        }
+                                      : undefined
+                                  }
+                                  mode={
+                                    isMessageStreaming ? "streaming" : "static"
+                                  }
+                                  isAnimating={isMessageStreaming}
+                                  plugins={streamdownPlugins}
+                                >
+                                  {p.text}
+                                </Streamdown>
+                                {canCopyAssistantMessage && (
+                                  <div className="mt-1 flex justify-start">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void handleCopyAssistantMessage(
+                                          m.id,
+                                          p.text,
+                                        )
+                                      }
+                                      aria-label="Copy assistant response"
+                                      className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                    >
+                                      {copiedAssistantMessageId === m.id ? (
+                                        <Check className="h-4 w-4" />
+                                      ) : (
+                                        <Copy className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
-                        </div>
-                      );
-                    }
+                        );
+                      }
 
-                    return null;
-                  });
+                      if (isToolUIPart(p)) {
+                        if (!isToolCallsExpanded) return null;
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className="max-w-full"
+                          >
+                            <ToolCall
+                              part={p as WebAgentUIToolPart}
+                              isStreaming={isMessageStreaming}
+                              onApprove={(id) =>
+                                addToolApprovalResponse({ id, approved: true })
+                              }
+                              onDeny={(id, reason) =>
+                                addToolApprovalResponse({
+                                  id,
+                                  approved: false,
+                                  reason,
+                                })
+                              }
+                            />
+                          </div>
+                        );
+                      }
+
+                      // Render image attachments
+                      if (
+                        p.type === "file" &&
+                        p.mediaType?.startsWith("image/")
+                      ) {
+                        if (!isToolCallsExpanded && m.role === "assistant") {
+                          return null;
+                        }
+                        return (
+                          <div
+                            key={`${m.id}-${group.renderKey}`}
+                            className="flex justify-end"
+                          >
+                            <div className="group relative w-fit max-w-[80%]">
+                              {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+                              <img
+                                src={p.url}
+                                alt={p.filename ?? "Attached image"}
+                                className="max-h-64 rounded-lg"
+                              />
+                              {m.role === "user" && group.index === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleDeleteUserMessage(m.id)
+                                  }
+                                  disabled={hasMessageActionInFlight}
+                                  aria-label="Delete this message and everything after it"
+                                  className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {deletingMessageId === m.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    });
 
                   if (m.role === "assistant") {
                     return (
@@ -2985,11 +2989,11 @@ export function SessionChatContent({
                         startedAt={
                           messageStartedAtMap[m.id] ??
                           (isMessageStreaming
-                            ? (lastSendTimestampRef.current
-                                ? new Date(
-                                    lastSendTimestampRef.current,
-                                  ).toISOString()
-                                : lastUserMessageSentAt)
+                            ? lastSendTimestampRef.current
+                              ? new Date(
+                                  lastSendTimestampRef.current,
+                                ).toISOString()
+                              : lastUserMessageSentAt
                             : null)
                         }
                       >
