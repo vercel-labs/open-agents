@@ -105,7 +105,7 @@ export function ToolCallsSummaryBar({
         type="button"
         onClick={onToggle}
         className={cn(
-          "group inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground",
+          "group inline-flex items-center gap-2 rounded-md py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground",
           isStreaming && "text-foreground/90",
         )}
       >
