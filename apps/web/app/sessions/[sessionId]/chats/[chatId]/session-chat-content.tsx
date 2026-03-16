@@ -2801,6 +2801,10 @@ export function SessionChatContent({
                       }
 
                       if (p.type === "text") {
+                        if (p.text.length === 0) {
+                          return null;
+                        }
+
                         const isFinalAssistantTextPart =
                           m.role === "assistant" &&
                           !m.parts
