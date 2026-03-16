@@ -97,6 +97,7 @@ export default async function RepoPage({ params }: RepoPageProps) {
       branch: repoInfo.default_branch,
       cloneUrl,
       isNewBranch: false,
+      autoCommitPushOverride: preferences.autoCommitPush,
       sandboxState: { type: preferences.defaultSandboxType },
       lifecycleState: "provisioning",
       lifecycleVersion: 0,

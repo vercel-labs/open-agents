@@ -17,6 +17,7 @@ interface CreateSessionRequest {
   cloneUrl?: string;
   isNewBranch?: boolean;
   sandboxType?: "vercel";
+  autoCommitPush?: boolean;
 }
 
 function generateBranchName(username: string, name?: string | null): string {
@@ -159,6 +160,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
+  if (
+    body.autoCommitPush !== undefined &&
+    typeof body.autoCommitPush !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid autoCommitPush value" },
+      { status: 400 },
+    );
+  }
+
   const {
     repoOwner,
     repoName,
@@ -166,6 +177,7 @@ export async function POST(req: Request) {
     cloneUrl,
     isNewBranch,
     sandboxType = "vercel",
+    autoCommitPush,
   } = body;
 
   let finalBranch = branch;
@@ -187,6 +199,7 @@ export async function POST(req: Request) {
         branch: finalBranch,
         cloneUrl,
         isNewBranch: isNewBranch ?? false,
+        autoCommitPushOverride: autoCommitPush ?? preferences.autoCommitPush,
         sandboxState: { type: sandboxType },
         lifecycleState: "provisioning",
         lifecycleVersion: 0,

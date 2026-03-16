@@ -37,6 +37,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     cloneUrl?: string;
     isNewBranch: boolean;
     sandboxType: SandboxType;
+    autoCommitPush: boolean;
   }) => {
     setIsCreating(true);
     try {
@@ -47,6 +48,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
         cloneUrl: input.cloneUrl,
         isNewBranch: input.isNewBranch,
         sandboxType: input.sandboxType,
+        autoCommitPush: input.autoCommitPush,
       });
 
       router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);

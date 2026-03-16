@@ -7,6 +7,7 @@ interface TestSessionRecord {
   cloneUrl: string;
   repoOwner: string;
   repoName: string;
+  autoCommitPushOverride?: boolean | null;
   sandboxState: {
     type: "vercel";
   };
@@ -38,6 +39,7 @@ let currentAuthSession: { user: { id: string } } | null;
 let isSandboxActive = true;
 let shouldTriggerStopBeforeFinish = false;
 let stopCallback: (() => void) | null = null;
+let preferencesAutoCommitPush = true;
 
 const originalFetch = globalThis.fetch;
 
@@ -135,7 +137,7 @@ mock.module("@/lib/db/usage", () => ({
 
 mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => ({
-    autoCommitPush: true,
+    autoCommitPush: preferencesAutoCommitPush,
     modelVariants: [],
   }),
 }));
@@ -242,6 +244,7 @@ describe("/api/chat route", () => {
     fetchCalls.length = 0;
     shouldTriggerStopBeforeFinish = false;
     stopCallback = null;
+    preferencesAutoCommitPush = true;
     currentAuthSession = {
       user: {
         id: "user-1",
@@ -256,6 +259,7 @@ describe("/api/chat route", () => {
       cloneUrl: "https://github.com/acme/repo.git",
       repoOwner: "acme",
       repoName: "repo",
+      autoCommitPushOverride: null,
       sandboxState: {
         type: "vercel",
       },
@@ -286,6 +290,40 @@ describe("/api/chat route", () => {
     expect(fetchCalls).toEqual([
       "http://localhost/api/sessions/session-1/diff",
     ]);
+  });
+
+  test("skips auto commit when the session override is disabled", async () => {
+    if (!sessionRecord) {
+      throw new Error("sessionRecord must be set");
+    }
+    sessionRecord.autoCommitPushOverride = false;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    await Promise.all(backgroundTasks);
+
+    expect(response.ok).toBe(true);
+    expect(autoCommitCalls).toHaveLength(0);
+    expect(fetchCalls).toEqual([
+      "http://localhost/api/sessions/session-1/diff",
+    ]);
+  });
+
+  test("uses session override even when user preference is disabled", async () => {
+    preferencesAutoCommitPush = false;
+    if (!sessionRecord) {
+      throw new Error("sessionRecord must be set");
+    }
+    sessionRecord.autoCommitPushOverride = true;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    await Promise.all(backgroundTasks);
+
+    expect(response.ok).toBe(true);
+    expect(autoCommitCalls).toHaveLength(1);
   });
 
   test("skips auto commit when the chat is stopped", async () => {

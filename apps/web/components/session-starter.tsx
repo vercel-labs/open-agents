@@ -2,7 +2,7 @@
 
 import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
@@ -12,6 +12,7 @@ import {
   SANDBOX_OPTIONS,
   type SandboxType,
 } from "./sandbox-selector-compact";
+import { Switch } from "./ui/switch";
 
 type SessionMode = "empty" | "repo";
 
@@ -23,6 +24,7 @@ interface SessionStarterProps {
     cloneUrl?: string;
     isNewBranch: boolean;
     sandboxType: SandboxType;
+    autoCommitPush: boolean;
   }) => void;
   isLoading?: boolean;
   lastRepo: { owner: string; repo: string } | null;
@@ -44,6 +46,15 @@ export function SessionStarter({
   const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
 
   const { preferences } = useUserPreferences();
+
+  const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
+  const [autoCommitPush, setAutoCommitPush] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (autoCommitPush === null) {
+      setAutoCommitPush(defaultAutoCommitPush);
+    }
+  }, [autoCommitPush, defaultAutoCommitPush]);
 
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
@@ -78,6 +89,7 @@ export function SessionStarter({
   const isRepoSelectionComplete =
     mode !== "repo" || (selectedOwner && selectedRepo);
   const isSubmitDisabled = isLoading || !isRepoSelectionComplete;
+  const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
 
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
@@ -92,6 +104,7 @@ export function SessionStarter({
           : undefined,
       isNewBranch: mode === "repo" ? isNewBranch : false,
       sandboxType,
+      autoCommitPush: effectiveAutoCommitPush,
     });
   };
 
@@ -178,6 +191,21 @@ export function SessionStarter({
             Start with a blank sandbox -- no repository required.
           </p>
         )}
+
+        <div className="flex items-center justify-between gap-4 rounded-md border border-border/70 bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Auto commit and push</p>
+            <p className="text-xs text-muted-foreground">
+              Defaults to your preference for this session, but you can override
+              it here.
+            </p>
+          </div>
+          <Switch
+            checked={effectiveAutoCommitPush}
+            onCheckedChange={setAutoCommitPush}
+            disabled={isLoading}
+          />
+        </div>
 
         <button
           type="button"

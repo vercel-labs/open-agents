@@ -148,6 +148,13 @@
       "when": 1773410965743,
       "tag": "0020_true_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1773686928144,
+      "tag": "0021_normal_human_torch",
+      "breakpoints": true
     }
   ]
 }

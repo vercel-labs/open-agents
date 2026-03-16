@@ -194,9 +194,14 @@ export async function handleChatStreamFinish(
   // Keep offline diff cache warm even when the chat page is not open.
   refreshCachedDiffInBackground(req, sessionId);
 
+  const shouldAutoCommitPush =
+    sessionRecord.autoCommitPushOverride ??
+    preferences?.autoCommitPush ??
+    false;
+
   if (
     shouldAutoCommitOnFinish &&
-    preferences?.autoCommitPush &&
+    shouldAutoCommitPush &&
     sessionRecord.cloneUrl &&
     sessionRecord.repoOwner &&
     sessionRecord.repoName

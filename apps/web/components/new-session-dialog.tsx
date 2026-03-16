@@ -18,6 +18,7 @@ type CreateSessionInput = {
   cloneUrl?: string;
   isNewBranch: boolean;
   sandboxType: SandboxType;
+  autoCommitPush: boolean;
 };
 
 interface NewSessionDialogProps {

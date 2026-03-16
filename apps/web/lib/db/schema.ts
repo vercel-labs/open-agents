@@ -120,6 +120,9 @@ export const sessions = pgTable(
     cloneUrl: text("clone_url"),
     // Whether this session uses a new auto-generated branch
     isNewBranch: boolean("is_new_branch").default(false).notNull(),
+    // Optional per-session override for auto commit + push behavior.
+    // null means "use the user's default preference".
+    autoCommitPushOverride: boolean("auto_commit_push_override"),
     // Unified sandbox state
     sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
     // Lifecycle orchestration state for sandbox management
