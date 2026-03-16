@@ -115,7 +115,9 @@ import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import {
   type SandboxInfo,
-  useSessionChatContext,
+  useSessionChatMetadataContext,
+  useSessionChatRuntimeContext,
+  useSessionChatWorkspaceContext,
 } from "./session-chat-context";
 import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import "streamdown/styles.css";
@@ -995,27 +997,11 @@ export function SessionChatContent({
   const {
     session,
     chatInfo,
-    chat,
-    contextLimit,
-    stopChatStream,
-    retryChatStream,
-    initialMessages,
-    sandboxInfo,
     setSandboxInfo,
     archiveSession,
     unarchiveSession,
     updateChatModel,
     updateSessionTitle,
-    hadInitialMessages,
-    diff,
-    refreshDiff,
-    gitStatus,
-    refreshGitStatus,
-    files,
-    filesLoading,
-    refreshFiles,
-    skills,
-    skillsLoading,
     preferredSandboxType,
     supportsDiff,
     supportsRepoCreation,
@@ -1031,7 +1017,27 @@ export function SessionChatContent({
     checkBranchAndPr,
     modelOptions,
     modelOptionsLoading,
-  } = useSessionChatContext();
+  } = useSessionChatMetadataContext();
+  const {
+    chat,
+    contextLimit,
+    stopChatStream,
+    retryChatStream,
+    hadInitialMessages,
+    initialMessages,
+  } = useSessionChatRuntimeContext();
+  const {
+    sandboxInfo,
+    diff,
+    refreshDiff,
+    gitStatus,
+    refreshGitStatus,
+    files,
+    filesLoading,
+    refreshFiles,
+    skills,
+    skillsLoading,
+  } = useSessionChatWorkspaceContext();
   const {
     messages,
     error,

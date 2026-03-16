@@ -255,10 +255,6 @@ type SessionChatMetadataContextValue = Pick<
   | "modelOptionsLoading"
 >;
 
-const SessionChatContext = createContext<SessionChatContextValue | undefined>(
-  undefined,
-);
-
 const SessionChatRuntimeContext = createContext<
   SessionChatRuntimeContextValue | undefined
 >(undefined);
@@ -1122,22 +1118,11 @@ export function SessionChatProvider({
     ],
   );
 
-  const contextValue = useMemo<SessionChatContextValue>(
-    () => ({
-      ...metadataContextValue,
-      ...runtimeContextValue,
-      ...workspaceContextValue,
-    }),
-    [metadataContextValue, runtimeContextValue, workspaceContextValue],
-  );
-
   return (
     <SessionChatRuntimeContext.Provider value={runtimeContextValue}>
       <SessionChatWorkspaceContext.Provider value={workspaceContextValue}>
         <SessionChatMetadataContext.Provider value={metadataContextValue}>
-          <SessionChatContext.Provider value={contextValue}>
-            {children}
-          </SessionChatContext.Provider>
+          {children}
         </SessionChatMetadataContext.Provider>
       </SessionChatWorkspaceContext.Provider>
     </SessionChatRuntimeContext.Provider>
@@ -1169,16 +1154,6 @@ export function useSessionChatMetadataContext() {
   if (!context) {
     throw new Error(
       "useSessionChatMetadataContext must be used within a SessionChatProvider",
-    );
-  }
-  return context;
-}
-
-export function useSessionChatContext() {
-  const context = useContext(SessionChatContext);
-  if (!context) {
-    throw new Error(
-      "useSessionChatContext must be used within a SessionChatProvider",
     );
   }
   return context;
