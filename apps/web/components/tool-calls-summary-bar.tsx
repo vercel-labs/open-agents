@@ -18,6 +18,13 @@ function formatElapsedTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${(tokens / 1000).toFixed(1)}k`;
+  }
+  return tokens.toString();
+}
+
 export function ToolCallsSummaryBar({
   isExpanded,
   onToggle,
@@ -26,6 +33,7 @@ export function ToolCallsSummaryBar({
   todoInfo,
   durationMs,
   startedAt,
+  totalTokens,
 }: {
   isExpanded: boolean;
   onToggle: () => void;
@@ -37,6 +45,8 @@ export function ToolCallsSummaryBar({
   /** ISO timestamp of when generation started — i.e. the preceding user
    *  message's createdAt — used for a live counter while streaming. */
   startedAt: string | null;
+  /** Total token count for the message (input + output). */
+  totalTokens: number | null;
 }) {
   // ---------------------------------------------------------------------------
   // Elapsed time logic
@@ -88,6 +98,10 @@ export function ToolCallsSummaryBar({
     segments.push(
       `${toolCallCount} tool call${toolCallCount !== 1 ? "s" : ""}`,
     );
+  }
+
+  if (totalTokens != null && totalTokens > 0) {
+    segments.push(`${formatTokenCount(totalTokens)} tokens`);
   }
 
   if (todoInfo && todoInfo.total > 0) {

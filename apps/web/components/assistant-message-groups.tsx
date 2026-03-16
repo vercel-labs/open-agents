@@ -54,6 +54,28 @@ function messageHasActiveApproval(message: WebAgentUIMessage): boolean {
   );
 }
 
+/**
+ * Extracts the total token count from message metadata.
+ * Prefers totalMessageUsage (final aggregate) and falls back to
+ * lastStepUsage (available during streaming).
+ */
+function getMessageTokens(message: WebAgentUIMessage): number | null {
+  const meta = message.metadata;
+  if (!meta) return null;
+
+  const usage = meta.totalMessageUsage ?? meta.lastStepUsage;
+  if (!usage) return null;
+
+  if (usage.totalTokens != null && usage.totalTokens > 0) {
+    return usage.totalTokens;
+  }
+
+  const input = usage.inputTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  const sum = input + output;
+  return sum > 0 ? sum : null;
+}
+
 export type AssistantMessageGroupsProps = {
   message: WebAgentUIMessage;
   isStreaming: boolean;
@@ -103,6 +125,11 @@ export function AssistantMessageGroups({
     [message],
   );
 
+  const totalTokens = useMemo(
+    () => getMessageTokens(message),
+    [message],
+  );
+
   // Force expand when there's an active approval the user needs to respond to
   const effectiveExpanded = isExpanded || hasActiveApproval;
 
@@ -121,6 +148,7 @@ export function AssistantMessageGroups({
         todoInfo={todoInfo}
         durationMs={durationMs}
         startedAt={startedAt}
+        totalTokens={totalTokens}
       />
       {children(effectiveExpanded)}
     </>
