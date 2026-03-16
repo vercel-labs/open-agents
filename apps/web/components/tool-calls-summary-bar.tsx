@@ -52,7 +52,7 @@ export function ToolCallsSummaryBar({
       ? Math.max(0, Math.floor((Date.now() - startMs) / 1000))
       : 0;
 
-  const [liveElapsed, setLiveElapsed] = useState(computeLiveElapsed);
+  const [liveElapsed, setLiveElapsed] = useState(0);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -80,7 +80,9 @@ export function ToolCallsSummaryBar({
   // Build the summary segments
   const segments: string[] = [];
 
-  if (elapsedSeconds > 0) {
+  const showsElapsedSegment = isStreaming || elapsedSeconds > 0;
+
+  if (showsElapsedSegment) {
     segments.push(formatElapsedTime(elapsedSeconds));
   }
 
@@ -116,16 +118,26 @@ export function ToolCallsSummaryBar({
             )}
           />
         </span>
-        <span className="leading-none">
+        <span className="leading-none tabular-nums">
           {isStreaming ? "Working…" : "Worked"}
           {segments.length > 0 && (
             <>
-              {segments.map((segment, i) => (
-                <span key={i}>
-                  <span className="text-muted-foreground/40"> · </span>
-                  {segment}
-                </span>
-              ))}
+              {segments.map((segment, i) => {
+                const isElapsedSegment = showsElapsedSegment && i === 0;
+
+                return (
+                  <span key={i}>
+                    <span className="text-muted-foreground/40"> · </span>
+                    <span
+                      className={cn(
+                        isElapsedSegment && "inline-flex min-w-[5ch] justify-end",
+                      )}
+                    >
+                      {segment}
+                    </span>
+                  </span>
+                );
+              })}
             </>
           )}
         </span>
