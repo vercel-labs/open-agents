@@ -3006,8 +3006,13 @@ export function SessionChatContent({
                 },
               )}
               {showThinkingIndicator && (
-                <div className="flex justify-start">
-                  <ThinkingBlock text="" isStreaming />
+                <div className="my-1.5 border border-transparent py-0.5">
+                  <div className="inline-flex items-center gap-2 rounded-md py-0.5 text-[13px] text-muted-foreground">
+                    <span className="flex size-3.5 shrink-0 items-center justify-center">
+                      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground" />
+                    </span>
+                    <span className="leading-none">Working…</span>
+                  </div>
                 </div>
               )}
             </div>
