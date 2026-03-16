@@ -317,22 +317,6 @@ export function SignedOutHero() {
             href="https://github.com/vercel-labs/open-harness"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[13px] text-black/35 transition-colors hover:text-black/70 dark:text-white/40 dark:hover:text-white/70"
-          >
-            Docs
-          </a>
-          <a
-            href="https://github.com/vercel-labs/open-harness"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[13px] text-black/35 transition-colors hover:text-black/70 dark:text-white/40 dark:hover:text-white/70"
-          >
-            Story
-          </a>
-          <a
-            href="https://github.com/vercel-labs/open-harness"
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-black/35 transition-colors hover:text-black/70 dark:text-white/40 dark:hover:text-white/70"
           >
             <GitHubIcon className="h-4 w-4" />
@@ -444,8 +428,8 @@ export function SignedOutHero() {
 
       {/* Footer */}
       <footer className="border-t border-black/[0.06] px-6 py-14 sm:px-10 sm:py-20 dark:border-white/[0.06]">
-        <div className="grid grid-cols-2 gap-10 sm:grid-cols-4 lg:gap-20">
-          <div className="col-span-2 sm:col-span-1">
+        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:gap-20">
+          <div>
             <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-black/25 dark:text-white/25">
               Open Harness
             </h4>
@@ -460,14 +444,6 @@ export function SignedOutHero() {
               Product
             </h4>
             <ul className="space-y-2">
-              <li>
-                <a
-                  href="https://github.com/vercel-labs/open-harness"
-                  className="text-[13px] text-black/35 transition-colors hover:text-black/60 dark:text-white/40 dark:hover:text-white/70"
-                >
-                  Documentation
-                </a>
-              </li>
               <li>
                 <a
                   href="https://github.com/vercel-labs/open-harness"
@@ -509,41 +485,10 @@ export function SignedOutHero() {
               </li>
               <li>
                 <a
-                  href="https://github.com/vercel-labs/open-harness/releases"
-                  className="text-[13px] text-black/35 transition-colors hover:text-black/60 dark:text-white/40 dark:hover:text-white/70"
-                >
-                  Releases
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://www.npmjs.com/package/open-harness"
-                  className="text-[13px] text-black/35 transition-colors hover:text-black/60 dark:text-white/40 dark:hover:text-white/70"
-                >
-                  NPM
-                </a>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-black/25 dark:text-white/25">
-              Company
-            </h4>
-            <ul className="space-y-2">
-              <li>
-                <a
                   href="https://vercel.com"
                   className="text-[13px] text-black/35 transition-colors hover:text-black/60 dark:text-white/40 dark:hover:text-white/70"
                 >
                   Vercel
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/vercel-labs/open-harness"
-                  className="text-[13px] text-black/35 transition-colors hover:text-black/60 dark:text-white/40 dark:hover:text-white/70"
-                >
-                  Story
                 </a>
               </li>
             </ul>
