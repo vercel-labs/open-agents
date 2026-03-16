@@ -110,19 +110,9 @@ export async function createChatRuntime(params: {
     ports: DEFAULT_SANDBOX_PORTS,
   });
 
-  const skills = await loadSessionSkills(sessionId, sandboxState, sandbox);
+  await refreshGitRemoteAuth(sandbox, sessionId, sessionRecord, githubToken);
 
-  void refreshGitRemoteAuth(
-    sandbox,
-    sessionId,
-    sessionRecord,
-    githubToken,
-  ).catch((error) => {
-    console.warn(
-      `Failed to refresh git remote auth for session ${sessionId}:`,
-      error,
-    );
-  });
+  const skills = await loadSessionSkills(sessionId, sandboxState, sandbox);
 
   return {
     sandbox,

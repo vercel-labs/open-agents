@@ -91,13 +91,11 @@ export async function POST(req: Request) {
   );
 
   // Refresh lifecycle activity so long-running responses don't look idle.
-  // This can run in the background and doesn't need to delay TTFT.
-  void updateSession(sessionId, {
+  // Keep this synchronous so lifecycle workers see activity before generation starts.
+  await updateSession(sessionId, {
     ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
       activityAt: requestStartedAt,
     }),
-  }).catch((error) => {
-    console.error("Failed to refresh session lifecycle activity:", error);
   });
 
   const modelMessagesPromise = convertToModelMessages(messages, {
