@@ -159,18 +159,6 @@ mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
-mock.module("@/lib/model-variants", () => ({
-  resolveModelSelection: (modelId: string) => ({
-    isMissingVariant: false,
-    resolvedModelId: modelId,
-    providerOptionsByProvider: undefined,
-  }),
-}));
-
-mock.module("@/lib/models", () => ({
-  DEFAULT_MODEL_ID: "mock-model",
-}));
-
 mock.module("@/lib/resumable-stream-context", () => ({
   resumableStreamContext: {
     createNewResumableStream: async () => {},
