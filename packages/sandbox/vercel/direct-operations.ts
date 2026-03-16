@@ -108,6 +108,18 @@ export async function writeFileDirect(params: {
   path: string;
   content: string;
 }): Promise<void> {
+  // Ensure parent directory exists (matches VercelSandbox.writeFile behavior)
+  const parentDir = params.path.substring(0, params.path.lastIndexOf("/"));
+  if (parentDir) {
+    await mkdirDirect({
+      client: params.client,
+      sandboxId: params.sandboxId,
+      workingDirectory: params.workingDirectory,
+      path: parentDir,
+      options: { recursive: true },
+    });
+  }
+
   await params.client.writeFiles({
     sandboxId: params.sandboxId,
     cwd: params.workingDirectory,

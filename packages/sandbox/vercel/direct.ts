@@ -24,7 +24,11 @@ const NON_RECONNECTABLE_ERROR_PREFIXES = [
   "Detached execution is not supported by this sandbox",
 ] as const;
 
+/** Re-fetch credentials after this interval to handle token rotation. */
+const API_CLIENT_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 let sharedApiClientPromise: Promise<APIClient | null> | null = null;
+let sharedApiClientCreatedAt = 0;
 
 function isDirectSandboxConnectionDisabled(): boolean {
   return process.env.OPEN_HARNESS_SANDBOX_REST === "0";
@@ -35,7 +39,15 @@ async function getSharedApiClient(): Promise<APIClient | null> {
     return null;
   }
 
+  if (
+    sharedApiClientPromise &&
+    Date.now() - sharedApiClientCreatedAt > API_CLIENT_TTL_MS
+  ) {
+    sharedApiClientPromise = null;
+  }
+
   if (!sharedApiClientPromise) {
+    sharedApiClientCreatedAt = Date.now();
     sharedApiClientPromise = (async () => {
       try {
         const credentials = await getCredentials();
@@ -90,6 +102,11 @@ function shouldReconnectAfterExecResult(result: ExecResult): boolean {
   return isSandboxUnavailableMessage(combinedOutput);
 }
 
+interface SandboxRoute {
+  url: string;
+  port: number;
+}
+
 class VercelDirectSandbox implements Sandbox {
   readonly type = "cloud" as const;
   readonly currentBranch = undefined;
@@ -106,6 +123,9 @@ class VercelDirectSandbox implements Sandbox {
   private fallbackSandbox: Sandbox | null = null;
   private fallbackSandboxPromise: Promise<Sandbox> | null = null;
 
+  /** Routes discovered via background getSandbox call. */
+  private routes: SandboxRoute[] | null = null;
+
   constructor(params: {
     client: APIClient;
     sandboxId: string;
@@ -120,6 +140,55 @@ class VercelDirectSandbox implements Sandbox {
     this.env = params.env;
     this.reconnect = params.reconnect;
     this.persistedExpiresAt = params.expiresAt;
+
+    // Fire-and-forget: fetch sandbox metadata to discover routes for env var
+    // injection (SANDBOX_HOST, SANDBOX_URL_<PORT>). This runs in the
+    // background so it doesn't block the optimistic fast path.
+    this.client
+      .getSandbox({ sandboxId: this.sandboxId })
+      .then((info) => {
+        if (!this.fallbackSandbox && info.json.routes.length > 0) {
+          this.routes = info.json.routes.map((r) => ({
+            url: r.url,
+            port: r.port,
+          }));
+        }
+      })
+      .catch(() => {
+        // Ignore — route env vars will be unavailable on the direct path.
+        // The full SDK reconnect path provides them as a fallback.
+      });
+  }
+
+  /**
+   * Build command env vars by merging caller-provided env with runtime preview
+   * env vars discovered from sandbox routes.
+   */
+  private getCommandEnv(): Record<string, string> | undefined {
+    const runtimeEnv: Record<string, string> = {};
+
+    if (this.routes) {
+      for (const route of this.routes) {
+        try {
+          const host = new URL(route.url).host;
+          if (host && !runtimeEnv.SANDBOX_HOST) {
+            runtimeEnv.SANDBOX_HOST = host;
+          }
+          runtimeEnv[`SANDBOX_URL_${route.port}`] = route.url;
+        } catch {
+          // Skip malformed URLs
+        }
+      }
+    }
+
+    if (!this.env && Object.keys(runtimeEnv).length === 0) {
+      return undefined;
+    }
+
+    return {
+      ...this.env,
+      ...runtimeEnv,
+    };
   }
 
   get environmentDetails(): string | undefined {
@@ -127,7 +196,18 @@ class VercelDirectSandbox implements Sandbox {
   }
 
   get host(): string | undefined {
-    return this.fallbackSandbox?.host;
+    if (this.fallbackSandbox?.host) {
+      return this.fallbackSandbox.host;
+    }
+    const firstRoute = this.routes?.[0];
+    if (firstRoute) {
+      try {
+        return new URL(firstRoute.url).host;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   get expiresAt(): number | undefined {
@@ -284,7 +364,7 @@ class VercelDirectSandbox implements Sandbox {
       command,
       cwd,
       timeoutMs,
-      env: this.env,
+      env: this.getCommandEnv(),
     });
 
     if (!this.reconnect || !shouldReconnectAfterExecResult(result)) {
@@ -306,7 +386,7 @@ class VercelDirectSandbox implements Sandbox {
           sandboxId: this.sandboxId,
           command,
           cwd,
-          env: this.env,
+          env: this.getCommandEnv(),
         }),
       runFallback: async (sandbox) => {
         if (!sandbox.execDetached) {
@@ -352,10 +432,11 @@ class VercelDirectSandbox implements Sandbox {
       }
     }
 
+    const expiresAt = this.expiresAt;
     return {
       type: "vercel",
       sandboxId: this.sandboxId,
-      ...(this.expiresAt !== undefined ? { expiresAt: this.expiresAt } : {}),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
     };
   }
 }
