@@ -1,9 +1,5 @@
-import { gateway } from "@open-harness/agent";
-import {
-  convertToModelMessages,
-  type GatewayModelId,
-  type LanguageModelUsage,
-} from "ai";
+import type { AgentModelSelection } from "@open-harness/agent";
+import { convertToModelMessages, type LanguageModelUsage } from "ai";
 import { nanoid } from "nanoid";
 import { webAgent } from "@/app/config";
 import {
@@ -32,6 +28,35 @@ import {
 } from "./_lib/stream-lifecycle";
 
 export const maxDuration = 800;
+
+function resolveChatModelSelection({
+  selectedModelId,
+  modelVariants,
+  missingVariantLabel,
+}: {
+  selectedModelId: string | null | undefined;
+  modelVariants: Parameters<typeof resolveModelSelection>[1];
+  missingVariantLabel: string;
+}): AgentModelSelection {
+  const requestedModelId = selectedModelId ?? DEFAULT_MODEL_ID;
+  const selection = resolveModelSelection(requestedModelId, modelVariants);
+
+  if (selection.isMissingVariant) {
+    console.warn(
+      `${missingVariantLabel} "${requestedModelId}" was not found. Falling back to default model.`,
+    );
+    return { id: DEFAULT_MODEL_ID as AgentModelSelection["id"] };
+  }
+
+  return {
+    id: selection.resolvedModelId as AgentModelSelection["id"],
+    ...(selection.providerOptionsByProvider
+      ? {
+          providerOptionsOverrides: selection.providerOptionsByProvider,
+        }
+      : {}),
+  };
+}
 
 export async function POST(req: Request) {
   // 1. Validate session
@@ -119,72 +144,18 @@ export async function POST(req: Request) {
   ]);
 
   const modelVariants = preferences?.modelVariants ?? [];
-
-  // Resolve model from chat's modelId, supporting variant IDs.
-  const selectedModelId = chat.modelId ?? DEFAULT_MODEL_ID;
-  const mainSelection = resolveModelSelection(selectedModelId, modelVariants);
-  if (mainSelection.isMissingVariant) {
-    console.warn(
-      `Selected model variant "${selectedModelId}" was not found. Falling back to default model.`,
-    );
-  }
-
-  const mainResolvedModelId = mainSelection.isMissingVariant
-    ? DEFAULT_MODEL_ID
-    : mainSelection.resolvedModelId;
-
-  let model: GatewayModelId;
-  let modelProviderOptions: typeof mainSelection.providerOptionsByProvider;
-  try {
-    model = mainResolvedModelId as GatewayModelId;
-    modelProviderOptions = mainSelection.isMissingVariant
-      ? undefined
-      : mainSelection.providerOptionsByProvider;
-    gateway(model, {
-      providerOptionsOverrides: modelProviderOptions,
-    });
-  } catch (error) {
-    console.error(
-      `Invalid model ID "${mainResolvedModelId}", falling back to default:`,
-      error,
-    );
-    model = DEFAULT_MODEL_ID as GatewayModelId;
-    modelProviderOptions = undefined;
-  }
-
-  // Resolve subagent model from user preferences (if configured)
-  let subagentModel: GatewayModelId | undefined;
-  let subagentModelProviderOptions:
-    | ReturnType<typeof resolveModelSelection>["providerOptionsByProvider"]
-    | undefined;
-  if (preferences?.defaultSubagentModelId) {
-    const subagentSelection = resolveModelSelection(
-      preferences.defaultSubagentModelId,
-      modelVariants,
-    );
-
-    if (subagentSelection.isMissingVariant) {
-      console.warn(
-        `Subagent model variant "${preferences.defaultSubagentModelId}" was not found. Falling back to default model.`,
-      );
-    }
-
-    const subagentResolvedModelId = subagentSelection.isMissingVariant
-      ? DEFAULT_MODEL_ID
-      : subagentSelection.resolvedModelId;
-
-    try {
-      subagentModel = subagentResolvedModelId as GatewayModelId;
-      subagentModelProviderOptions = subagentSelection.isMissingVariant
-        ? undefined
-        : subagentSelection.providerOptionsByProvider;
-      gateway(subagentModel, {
-        providerOptionsOverrides: subagentModelProviderOptions,
-      });
-    } catch (error) {
-      console.error("Failed to resolve subagent model preference:", error);
-    }
-  }
+  const mainModelSelection = resolveChatModelSelection({
+    selectedModelId: chat.modelId,
+    modelVariants,
+    missingVariantLabel: "Selected model variant",
+  });
+  const subagentModelSelection = preferences?.defaultSubagentModelId
+    ? resolveChatModelSelection({
+        selectedModelId: preferences.defaultSubagentModelId,
+        modelVariants,
+        missingVariantLabel: "Subagent model variant",
+      })
+    : undefined;
 
   // Use Redis stop signals as the sole cancellation mechanism for generation.
   // We intentionally do not bind `req.signal` so a transient client disconnect
@@ -202,16 +173,10 @@ export async function POST(req: Request) {
           currentBranch: sandbox.currentBranch,
           environmentDetails: sandbox.environmentDetails,
         },
-        model: {
-          id: model,
-          providerOptionsOverrides: modelProviderOptions,
-        },
-        ...(subagentModel
+        model: mainModelSelection,
+        ...(subagentModelSelection
           ? {
-              subagentModel: {
-                id: subagentModel,
-                providerOptionsOverrides: subagentModelProviderOptions,
-              },
+              subagentModel: subagentModelSelection,
             }
           : {}),
         ...(skills.length > 0 && { skills }),
@@ -302,7 +267,7 @@ export async function POST(req: Request) {
         chatId,
         sessionRecord,
         sandbox,
-        model,
+        model: mainModelSelection.id,
         totalMessageUsage,
         shouldAutoCommitOnFinish: abortLifecycle.shouldAutoCommitOnFinish(),
         preferences,

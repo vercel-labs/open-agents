@@ -51,7 +51,7 @@ export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 export const defaultModelLabel = "anthropic/claude-haiku-4.5" as const;
 export const defaultModel = gateway(defaultModelLabel);
 
-function resolveAgentModelSelection(
+function normalizeAgentModelSelection(
   selection: OpenHarnessAgentModelInput | undefined,
   fallbackId: GatewayModelId,
 ): AgentModelSelection {
@@ -59,11 +59,7 @@ function resolveAgentModelSelection(
     return { id: fallbackId };
   }
 
-  if (typeof selection === "string") {
-    return { id: selection };
-  }
-
-  return selection;
+  return typeof selection === "string" ? { id: selection } : selection;
 }
 
 const tools = {
@@ -99,12 +95,12 @@ export const openHarnessAgent = new ToolLoopAgent({
       throw new Error("Open Harness agent requires call options with sandbox.");
     }
 
-    const mainSelection = resolveAgentModelSelection(
+    const mainSelection = normalizeAgentModelSelection(
       options.model,
       defaultModelLabel,
     );
     const subagentSelection = options.subagentModel
-      ? resolveAgentModelSelection(options.subagentModel, defaultModelLabel)
+      ? normalizeAgentModelSelection(options.subagentModel, defaultModelLabel)
       : undefined;
 
     const callModel = gateway(mainSelection.id, {
