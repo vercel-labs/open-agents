@@ -1,4 +1,3 @@
-import type { AgentModelSelection } from "@open-harness/agent";
 import { convertToModelMessages, type LanguageModelUsage } from "ai";
 import { nanoid } from "nanoid";
 import { webAgent } from "@/app/config";
@@ -8,8 +7,6 @@ import {
   upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { resolveModelSelection } from "@/lib/model-variants";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resumableStreamContext } from "@/lib/resumable-stream-context";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
@@ -17,6 +14,7 @@ import {
   requireOwnedSessionChat,
 } from "./_lib/chat-context";
 import { scheduleLatestMessagePersistence } from "./_lib/message-persistence";
+import { resolveChatModelSelection } from "./_lib/model-selection";
 import { handleChatStreamFinish } from "./_lib/post-finish";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { createChatRuntime } from "./_lib/runtime";
@@ -28,35 +26,6 @@ import {
 } from "./_lib/stream-lifecycle";
 
 export const maxDuration = 800;
-
-function resolveChatModelSelection({
-  selectedModelId,
-  modelVariants,
-  missingVariantLabel,
-}: {
-  selectedModelId: string | null | undefined;
-  modelVariants: Parameters<typeof resolveModelSelection>[1];
-  missingVariantLabel: string;
-}): AgentModelSelection {
-  const requestedModelId = selectedModelId ?? DEFAULT_MODEL_ID;
-  const selection = resolveModelSelection(requestedModelId, modelVariants);
-
-  if (selection.isMissingVariant) {
-    console.warn(
-      `${missingVariantLabel} "${requestedModelId}" was not found. Falling back to default model.`,
-    );
-    return { id: DEFAULT_MODEL_ID as AgentModelSelection["id"] };
-  }
-
-  return {
-    id: selection.resolvedModelId as AgentModelSelection["id"],
-    ...(selection.providerOptionsByProvider
-      ? {
-          providerOptionsOverrides: selection.providerOptionsByProvider,
-        }
-      : {}),
-  };
-}
 
 export async function POST(req: Request) {
   // 1. Validate session
