@@ -1,21 +1,15 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const connectSandboxCalls: unknown[][] = [];
-const tryConnectDirectCalls: unknown[][] = [];
 
 let connectSandboxResult: unknown = {
   workingDirectory: "/repo",
 };
-let tryConnectDirectResult: unknown = null;
 
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (...args: unknown[]) => {
     connectSandboxCalls.push(args);
     return connectSandboxResult;
-  },
-  tryConnectVercelSandboxDirect: async (...args: unknown[]) => {
-    tryConnectDirectCalls.push(args);
-    return tryConnectDirectResult;
   },
 }));
 
@@ -29,11 +23,9 @@ const {
 
 beforeEach(() => {
   connectSandboxCalls.length = 0;
-  tryConnectDirectCalls.length = 0;
   connectSandboxResult = {
     workingDirectory: "/repo",
   };
-  tryConnectDirectResult = null;
 });
 
 describe("tools/utils", () => {
@@ -65,39 +57,7 @@ describe("tools/utils", () => {
     expect(context.sandbox.workingDirectory).toBe("/repo");
   });
 
-  test("getSandbox prefers direct connector for vercel sandbox IDs", async () => {
-    tryConnectDirectResult = {
-      workingDirectory: "/repo",
-      exec: async () => ({
-        success: true,
-        exitCode: 0,
-        stdout: "",
-        stderr: "",
-        truncated: false,
-      }),
-    };
-
-    const sandbox = await getSandbox(
-      {
-        sandbox: {
-          state: { type: "vercel", sandboxId: "sbx-123" },
-          workingDirectory: "/repo",
-        },
-        model: "test-model",
-      },
-      "read",
-    );
-
-    expect(sandbox.workingDirectory).toBe("/repo");
-    expect(tryConnectDirectCalls).toEqual([
-      [{ sandboxId: "sbx-123", workingDirectory: "/repo" }],
-    ]);
-    expect(connectSandboxCalls.length).toBe(0);
-  });
-
-  test("getSandbox falls back to connectSandbox when direct connector is unavailable", async () => {
-    tryConnectDirectResult = null;
-
+  test("getSandbox connects using the sandbox state from context", async () => {
     const sandbox = await getSandbox(
       {
         sandbox: {
@@ -110,9 +70,6 @@ describe("tools/utils", () => {
     );
 
     expect(sandbox.workingDirectory).toBe("/repo");
-    expect(tryConnectDirectCalls).toEqual([
-      [{ sandboxId: "sbx-456", workingDirectory: "/repo" }],
-    ]);
     expect(connectSandboxCalls).toEqual([
       [{ type: "vercel", sandboxId: "sbx-456" }],
     ]);

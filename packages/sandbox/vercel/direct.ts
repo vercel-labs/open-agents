@@ -1,14 +1,28 @@
 import { APIClient } from "@vercel/sandbox/dist/api-client";
 import { getCredentials } from "@vercel/sandbox/dist/utils/get-credentials";
 import type { Dirent } from "fs";
-import { buffer as streamToBuffer } from "node:stream/consumers";
 import type { ExecResult, Sandbox, SandboxStats } from "../interface";
+import {
+  accessDirect,
+  execDetachedDirect,
+  execDirect,
+  mkdirDirect,
+  readFileDirect,
+  readdirDirect,
+  statDirect,
+  writeFileDirect,
+} from "./direct-operations";
 import type { VercelState } from "./state";
 
 const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
-const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
-const MAX_OUTPUT_LENGTH = 50_000;
-const DETACHED_QUICK_FAILURE_WINDOW_MS = 2_000;
+
+const NON_RECONNECTABLE_ERROR_PREFIXES = [
+  "ENOENT:",
+  "Failed to create directory:",
+  "Failed to read file:",
+  "Background command exited with code",
+  "Detached execution is not supported by this sandbox",
+] as const;
 
 let sharedApiClientPromise: Promise<APIClient | null> | null = null;
 
@@ -38,323 +52,310 @@ async function getSharedApiClient(): Promise<APIClient | null> {
   return sharedApiClientPromise;
 }
 
-function isAbortLikeError(error: unknown): boolean {
+function isSandboxUnavailableMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
   return (
-    error instanceof Error &&
-    (error.name === "AbortError" || error.name === "TimeoutError")
+    normalized.includes("expected a stream of command data") ||
+    (normalized.includes("sandbox") && normalized.includes("not found")) ||
+    (normalized.includes("sandbox") && normalized.includes("stopped"))
   );
 }
 
-interface CommandLogs {
-  stdout: string;
-  stderr: string;
-  combined: string;
+function shouldReconnectAfterDirectError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return true;
+  }
+
+  if (
+    NON_RECONNECTABLE_ERROR_PREFIXES.some((prefix) =>
+      error.message.startsWith(prefix),
+    )
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
-interface FinishedCommandResult {
-  exitCode: number;
-  logs: CommandLogs;
+function shouldReconnectAfterExecResult(result: ExecResult): boolean {
+  if (result.success) {
+    return false;
+  }
+
+  const combinedOutput = `${result.stderr}\n${result.stdout}`.trim();
+  if (!combinedOutput) {
+    return false;
+  }
+
+  return isSandboxUnavailableMessage(combinedOutput);
 }
 
 class VercelDirectSandbox implements Sandbox {
   readonly type = "cloud" as const;
   readonly currentBranch = undefined;
   readonly hooks = undefined;
-  readonly environmentDetails = undefined;
-  readonly host = undefined;
-  readonly expiresAt = undefined;
-  readonly timeout = undefined;
 
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
 
   private readonly client: APIClient;
   private readonly sandboxId: string;
+  private readonly reconnect?: () => Promise<Sandbox>;
+  private readonly persistedExpiresAt?: number;
+
+  private fallbackSandbox: Sandbox | null = null;
+  private fallbackSandboxPromise: Promise<Sandbox> | null = null;
 
   constructor(params: {
     client: APIClient;
     sandboxId: string;
     workingDirectory: string;
     env?: Record<string, string>;
+    reconnect?: () => Promise<Sandbox>;
+    expiresAt?: number;
   }) {
     this.client = params.client;
     this.sandboxId = params.sandboxId;
     this.workingDirectory = params.workingDirectory;
     this.env = params.env;
+    this.reconnect = params.reconnect;
+    this.persistedExpiresAt = params.expiresAt;
   }
 
-  private async collectLogs(
-    commandId: string,
-    signal?: AbortSignal,
-  ): Promise<CommandLogs> {
-    let stdout = "";
-    let stderr = "";
-    let combined = "";
+  get environmentDetails(): string | undefined {
+    return this.fallbackSandbox?.environmentDetails;
+  }
 
-    for await (const chunk of this.client.getLogs({
-      sandboxId: this.sandboxId,
-      cmdId: commandId,
-      signal,
-    })) {
-      combined += chunk.data;
-      if (chunk.stream === "stdout") {
-        stdout += chunk.data;
-      } else {
-        stderr += chunk.data;
+  get host(): string | undefined {
+    return this.fallbackSandbox?.host;
+  }
+
+  get expiresAt(): number | undefined {
+    return this.fallbackSandbox?.expiresAt ?? this.persistedExpiresAt;
+  }
+
+  get timeout(): number | undefined {
+    return this.fallbackSandbox?.timeout;
+  }
+
+  private async reconnectToManagedSandbox(): Promise<Sandbox> {
+    if (this.fallbackSandbox) {
+      return this.fallbackSandbox;
+    }
+
+    const reconnect = this.reconnect;
+    if (!reconnect) {
+      throw new Error("Reconnect is not configured for this sandbox instance");
+    }
+
+    if (!this.fallbackSandboxPromise) {
+      this.fallbackSandboxPromise = (async () => {
+        const sandbox = await reconnect();
+        this.fallbackSandbox = sandbox;
+        return sandbox;
+      })();
+    }
+
+    try {
+      return await this.fallbackSandboxPromise;
+    } catch (error) {
+      this.fallbackSandboxPromise = null;
+      throw error;
+    }
+  }
+
+  private async runWithReconnect<T>(params: {
+    runDirect: () => Promise<T>;
+    runFallback: (sandbox: Sandbox) => Promise<T>;
+  }): Promise<T> {
+    if (this.fallbackSandbox) {
+      return params.runFallback(this.fallbackSandbox);
+    }
+
+    try {
+      return await params.runDirect();
+    } catch (error) {
+      if (!this.reconnect || !shouldReconnectAfterDirectError(error)) {
+        throw error;
       }
+
+      const sandbox = await this.reconnectToManagedSandbox();
+      return params.runFallback(sandbox);
     }
-
-    return { stdout, stderr, combined };
   }
 
-  private async runCommandAndWait(params: {
-    command: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    sudo?: boolean;
-    signal?: AbortSignal;
-  }): Promise<FinishedCommandResult> {
-    const commandStream = await this.client.runCommand({
-      sandboxId: this.sandboxId,
-      command: params.command,
-      args: params.args ?? [],
-      cwd: params.cwd,
-      env: params.env ?? this.env ?? {},
-      sudo: params.sudo ?? false,
-      wait: true,
-      signal: params.signal,
+  async readFile(path: string, encoding: "utf-8"): Promise<string> {
+    return this.runWithReconnect({
+      runDirect: () => readFileDirect(this.client, this.sandboxId, path),
+      runFallback: (sandbox) => sandbox.readFile(path, encoding),
     });
-
-    const logsPromise = this.collectLogs(commandStream.command.id, params.signal);
-    const finishedCommand = await commandStream.finished;
-    const logs = await logsPromise;
-
-    return {
-      exitCode: finishedCommand.exitCode ?? 0,
-      logs,
-    };
   }
 
-  async readFile(path: string, _encoding: "utf-8"): Promise<string> {
-    const stream = await this.client.readFile({
-      sandboxId: this.sandboxId,
-      path,
-    });
-
-    if (stream === null) {
-      throw new Error(`Failed to read file: ${path}`);
-    }
-
-    const fileBuffer = await streamToBuffer(stream);
-    return fileBuffer.toString("utf-8");
-  }
-
-  async writeFile(path: string, content: string, _encoding: "utf-8"): Promise<void> {
-    await this.client.writeFiles({
-      sandboxId: this.sandboxId,
-      cwd: this.workingDirectory,
-      extractDir: "/",
-      files: [{ path, content: Buffer.from(content, "utf-8") }],
+  async writeFile(
+    path: string,
+    content: string,
+    encoding: "utf-8",
+  ): Promise<void> {
+    await this.runWithReconnect({
+      runDirect: () =>
+        writeFileDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          workingDirectory: this.workingDirectory,
+          path,
+          content,
+        }),
+      runFallback: (sandbox) => sandbox.writeFile(path, content, encoding),
     });
   }
 
   async stat(path: string): Promise<SandboxStats> {
-    const result = await this.runCommandAndWait({
-      command: "stat",
-      args: ["-c", "%F\t%s\t%Y", path],
-      cwd: this.workingDirectory,
-      signal: AbortSignal.timeout(DEFAULT_COMMAND_TIMEOUT_MS),
+    return this.runWithReconnect({
+      runDirect: () =>
+        statDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          workingDirectory: this.workingDirectory,
+          env: this.env,
+          path,
+        }),
+      runFallback: (sandbox) => sandbox.stat(path),
     });
-
-    if (result.exitCode !== 0) {
-      throw new Error(`ENOENT: no such file or directory, stat '${path}'`);
-    }
-
-    const output = result.logs.combined.trim();
-    const [fileType, sizeStr, mtimeStr] = output.split("\t");
-
-    const isDir = fileType === "directory";
-    const size = Number.parseInt(sizeStr ?? "0", 10);
-    const mtimeMs = Number.parseInt(mtimeStr ?? "0", 10) * 1000;
-
-    return {
-      isDirectory: () => isDir,
-      isFile: () => !isDir,
-      size,
-      mtimeMs,
-    };
   }
 
   async access(path: string): Promise<void> {
-    const result = await this.runCommandAndWait({
-      command: "test",
-      args: ["-e", path],
-      cwd: this.workingDirectory,
-      signal: AbortSignal.timeout(DEFAULT_COMMAND_TIMEOUT_MS),
+    await this.runWithReconnect({
+      runDirect: () =>
+        accessDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          workingDirectory: this.workingDirectory,
+          env: this.env,
+          path,
+        }),
+      runFallback: (sandbox) => sandbox.access(path),
     });
-
-    if (result.exitCode !== 0) {
-      throw new Error(`ENOENT: no such file or directory, access '${path}'`);
-    }
   }
 
   async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
-    const args = options?.recursive ? ["-p", path] : [path];
-    const result = await this.runCommandAndWait({
-      command: "mkdir",
-      args,
-      cwd: this.workingDirectory,
-      signal: AbortSignal.timeout(DEFAULT_COMMAND_TIMEOUT_MS),
-    });
-
-    if (result.exitCode !== 0) {
-      const errorOutput = result.logs.combined;
-      if (!errorOutput.includes("File exists") || !options?.recursive) {
-        throw new Error(`Failed to create directory: ${path}`);
-      }
-    }
-  }
-
-  async readdir(path: string, _options: { withFileTypes: true }): Promise<Dirent[]> {
-    const result = await this.runCommandAndWait({
-      command: "find",
-      args: [path, "-maxdepth", "1", "-mindepth", "1", "-printf", "%y %f\\n"],
-      cwd: this.workingDirectory,
-      signal: AbortSignal.timeout(DEFAULT_COMMAND_TIMEOUT_MS),
-    });
-
-    if (result.exitCode !== 0) {
-      throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
-    }
-
-    const output = result.logs.combined.trim();
-    if (!output) {
-      return [];
-    }
-
-    return output.split("\n").map((line) => {
-      const [type, ...nameParts] = line.split(" ");
-      const name = nameParts.join(" ");
-      const isDir = type === "d";
-      const isFile = type === "f";
-      const isSymlink = type === "l";
-
-      return {
-        name,
-        parentPath: path,
-        path,
-        isDirectory: () => isDir,
-        isFile: () => isFile,
-        isSymbolicLink: () => isSymlink,
-        isBlockDevice: () => false,
-        isCharacterDevice: () => false,
-        isFIFO: () => false,
-        isSocket: () => false,
-      } as Dirent;
+    await this.runWithReconnect({
+      runDirect: () =>
+        mkdirDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          workingDirectory: this.workingDirectory,
+          env: this.env,
+          path,
+          options,
+        }),
+      runFallback: (sandbox) => sandbox.mkdir(path, options),
     });
   }
 
-  async exec(command: string, cwd: string, timeoutMs: number): Promise<ExecResult> {
-    const signal = AbortSignal.timeout(timeoutMs);
-
-    try {
-      const result = await this.runCommandAndWait({
-        command: "bash",
-        args: ["-c", command],
-        cwd,
-        signal,
-      });
-
-      let stdout = result.logs.combined;
-      let truncated = false;
-
-      if (stdout.length > MAX_OUTPUT_LENGTH) {
-        stdout = stdout.slice(0, MAX_OUTPUT_LENGTH);
-        truncated = true;
-      }
-
-      return {
-        success: result.exitCode === 0,
-        exitCode: result.exitCode,
-        stdout,
-        stderr: "",
-        truncated,
-      };
-    } catch (error) {
-      if (isAbortLikeError(error)) {
-        return {
-          success: false,
-          exitCode: null,
-          stdout: "",
-          stderr: `Command timed out after ${timeoutMs}ms`,
-          truncated: false,
-        };
-      }
-
-      return {
-        success: false,
-        exitCode: null,
-        stdout: "",
-        stderr: error instanceof Error ? error.message : String(error),
-        truncated: false,
-      };
-    }
+  async readdir(
+    path: string,
+    options: { withFileTypes: true },
+  ): Promise<Dirent[]> {
+    return this.runWithReconnect({
+      runDirect: () =>
+        readdirDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          workingDirectory: this.workingDirectory,
+          env: this.env,
+          path,
+        }),
+      runFallback: (sandbox) => sandbox.readdir(path, options),
+    });
   }
 
-  async execDetached(command: string, cwd: string): Promise<{ commandId: string }> {
-    const commandResponse = await this.client.runCommand({
+  async exec(
+    command: string,
+    cwd: string,
+    timeoutMs: number,
+  ): Promise<ExecResult> {
+    if (this.fallbackSandbox) {
+      return this.fallbackSandbox.exec(command, cwd, timeoutMs);
+    }
+
+    const result = await execDirect({
+      client: this.client,
       sandboxId: this.sandboxId,
-      command: "bash",
-      args: ["-c", command],
+      command,
       cwd,
-      env: this.env ?? {},
-      sudo: false,
+      timeoutMs,
+      env: this.env,
     });
 
-    const commandId = commandResponse.json.command.id;
-    const quickProbeSignal = AbortSignal.timeout(
-      DETACHED_QUICK_FAILURE_WINDOW_MS,
-    );
-
-    try {
-      const finished = await this.client.getCommand({
-        sandboxId: this.sandboxId,
-        cmdId: commandId,
-        wait: true,
-        signal: quickProbeSignal,
-      });
-
-      const exitCode = finished.json.command.exitCode;
-      if (exitCode !== 0) {
-        const logs = await this.collectLogs(commandId);
-        const trimmedStderr = logs.stderr.trim();
-        const stderrSnippet = (
-          trimmedStderr || logs.combined.trim() || "<no stderr>"
-        ).slice(0, MAX_OUTPUT_LENGTH);
-
-        throw new Error(
-          `Background command exited with code ${exitCode}. stderr:\n${stderrSnippet}`,
-        );
-      }
-    } catch (error) {
-      if (isAbortLikeError(error)) {
-        return { commandId };
-      }
-      throw error;
+    if (!this.reconnect || !shouldReconnectAfterExecResult(result)) {
+      return result;
     }
 
-    return { commandId };
+    const sandbox = await this.reconnectToManagedSandbox();
+    return sandbox.exec(command, cwd, timeoutMs);
+  }
+
+  async execDetached(
+    command: string,
+    cwd: string,
+  ): Promise<{ commandId: string }> {
+    return this.runWithReconnect({
+      runDirect: () =>
+        execDetachedDirect({
+          client: this.client,
+          sandboxId: this.sandboxId,
+          command,
+          cwd,
+          env: this.env,
+        }),
+      runFallback: async (sandbox) => {
+        if (!sandbox.execDetached) {
+          throw new Error(
+            "Detached execution is not supported by this sandbox",
+          );
+        }
+        return sandbox.execDetached(command, cwd);
+      },
+    });
   }
 
   async stop(): Promise<void> {
+    if (this.fallbackSandbox) {
+      await this.fallbackSandbox.stop();
+      return;
+    }
+
     await this.client.stopSandbox({ sandboxId: this.sandboxId });
   }
 
+  async extendTimeout(additionalMs: number): Promise<{ expiresAt: number }> {
+    const sandbox = await this.reconnectToManagedSandbox();
+    if (!sandbox.extendTimeout) {
+      throw new Error("Extend timeout is not supported by this sandbox");
+    }
+    return sandbox.extendTimeout(additionalMs);
+  }
+
+  async snapshot(): Promise<{ snapshotId: string }> {
+    const sandbox = await this.reconnectToManagedSandbox();
+    if (!sandbox.snapshot) {
+      throw new Error("Snapshot is not supported by this sandbox");
+    }
+    return sandbox.snapshot();
+  }
+
   getState(): { type: "vercel" } & VercelState {
+    if (this.fallbackSandbox?.getState) {
+      const fallbackState = this.fallbackSandbox.getState();
+      if (fallbackState && typeof fallbackState === "object") {
+        return fallbackState as { type: "vercel" } & VercelState;
+      }
+    }
+
     return {
       type: "vercel",
       sandboxId: this.sandboxId,
+      ...(this.expiresAt !== undefined ? { expiresAt: this.expiresAt } : {}),
     };
   }
 }
@@ -363,14 +364,16 @@ interface DirectConnectOptions {
   sandboxId: string;
   workingDirectory?: string;
   env?: Record<string, string>;
+  reconnect?: () => Promise<Sandbox>;
+  expiresAt?: number;
 }
 
 /**
- * Attempt to create a direct sandbox adapter backed by the Vercel REST API.
+ * Attempt to create an optimistic sandbox adapter backed by the Vercel REST API.
  *
- * This skips the initial sandbox reconnect handshake and assumes the sandbox
- * is already running. Returns null when credentials are not available so
- * callers can fall back to standard connect logic.
+ * This skips the initial SDK reconnect handshake and assumes the sandbox is
+ * already running. Returns null when credentials are not available so callers
+ * can fall back to standard connect logic.
  */
 export async function tryConnectVercelSandboxDirect(
   options: DirectConnectOptions,
@@ -385,5 +388,7 @@ export async function tryConnectVercelSandboxDirect(
     sandboxId: options.sandboxId,
     workingDirectory: options.workingDirectory ?? DEFAULT_WORKING_DIRECTORY,
     env: options.env,
+    reconnect: options.reconnect,
+    expiresAt: options.expiresAt,
   });
 }
