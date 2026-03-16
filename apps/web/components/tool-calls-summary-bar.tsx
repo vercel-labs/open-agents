@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -110,13 +110,14 @@ export function ToolCallsSummaryBar({
         )}
       >
         <span className="flex size-3.5 shrink-0 items-center justify-center">
-          <span
+          <Play
             className={cn(
-              "inline-block h-2 w-2 rounded-full",
+              "h-3 w-3 fill-current stroke-current",
               isStreaming
-                ? "animate-pulse bg-muted-foreground"
-                : "bg-muted-foreground/50",
+                ? "text-muted-foreground"
+                : "text-muted-foreground/50",
             )}
+            strokeWidth={1.5}
           />
         </span>
         <span
