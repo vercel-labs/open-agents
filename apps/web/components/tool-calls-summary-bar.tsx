@@ -66,12 +66,16 @@ export function ToolCallsSummaryBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable per startMs
   }, [isStreaming, startMs]);
 
-  // Pick the right elapsed value
+  // Pick the right elapsed value.
+  // When streaming ends for messages created during this session, durationMs
+  // will be null (it's only computed server-side for initial DB messages).
+  // Fall back to liveElapsed so the timer freezes at the last ticked value
+  // instead of dropping to 0.
   const elapsedSeconds = isStreaming
     ? liveElapsed
     : durationMs != null
       ? Math.max(0, Math.round(durationMs / 1000))
-      : 0;
+      : liveElapsed;
 
   // Build the summary segments
   const segments: string[] = [];
