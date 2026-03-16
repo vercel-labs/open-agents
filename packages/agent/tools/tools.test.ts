@@ -327,11 +327,15 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags dangerous and unknown commands", () => {
+  test("commandNeedsApproval flags only rm -rf commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
-    expect(commandNeedsApproval("npm install")).toBe(true);
-    expect(commandNeedsApproval("custom-command --help")).toBe(true);
+    expect(commandNeedsApproval("npm install")).toBe(false);
+    expect(commandNeedsApproval("bun install")).toBe(false);
+    expect(commandNeedsApproval("custom-command --help")).toBe(false);
+    expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
+    expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
+    expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
   });
 
   test("bashTool needsApproval blocks dangerous commands by default", async () => {
@@ -365,7 +369,7 @@ describe("tools execute behavior", () => {
         ...baseContext,
       },
     );
-    expect(allowedBuildCommand).toBe(true);
+    expect(allowedBuildCommand).toBe(false);
   });
 
   const originalFetch = globalThis.fetch;
