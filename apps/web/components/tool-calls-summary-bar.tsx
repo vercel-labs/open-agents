@@ -51,6 +51,15 @@ function formatElapsedTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
+function renderSegments(segments: string[]) {
+  return segments.map((segment, i) => (
+    <span key={i}>
+      <span className="text-muted-foreground/40"> · </span>
+      {segment}
+    </span>
+  ));
+}
+
 export function ToolCallsSummaryBar({
   isExpanded,
   onToggle,
@@ -114,43 +123,57 @@ export function ToolCallsSummaryBar({
       : liveElapsed;
 
   const statusWordPair = getStatusWordPair(statusWordSeed);
+  const statusLabel = isStreaming
+    ? `${statusWordPair.present}…`
+    : statusWordPair.past;
+  const toolCallLabel =
+    toolCallCount > 0
+      ? `${toolCallCount} tool call${toolCallCount !== 1 ? "s" : ""}`
+      : null;
 
-  // Build the summary segments
-  const segments: string[] = [];
+  const desktopSegments: string[] = [];
+  const mobileSegments: string[] = [];
 
   if (elapsedSeconds > 0) {
-    segments.push(formatElapsedTime(elapsedSeconds));
+    const elapsedLabel = formatElapsedTime(elapsedSeconds);
+    desktopSegments.push(elapsedLabel);
+    mobileSegments.push(elapsedLabel);
   }
 
-  if (toolCallCount > 0) {
-    segments.push(
-      `${toolCallCount} tool call${toolCallCount !== 1 ? "s" : ""}`,
-    );
+  if (toolCallLabel) {
+    desktopSegments.push(toolCallLabel);
   }
 
   if (todoInfo && todoInfo.total > 0) {
     const todoLabel = `Todo ${todoInfo.completed}/${todoInfo.total}`;
-    if (todoInfo.inProgress > 0) {
-      segments.push(`${todoLabel} (${todoInfo.inProgress} active)`);
-    } else {
-      segments.push(todoLabel);
-    }
+    desktopSegments.push(
+      todoInfo.inProgress > 0
+        ? `${todoLabel} (${todoInfo.inProgress} active)`
+        : todoLabel,
+    );
+    mobileSegments.push(todoLabel);
+  } else if (toolCallLabel) {
+    mobileSegments.push(toolCallLabel);
   }
+
+  const fullSummary = [statusLabel, ...desktopSegments].join(" · ");
 
   return (
     <div className="my-1.5 border border-transparent py-0.5">
       <button
         type="button"
         onClick={onToggle}
+        aria-label={fullSummary}
+        title={fullSummary}
         className={cn(
-          "group inline-flex items-center gap-2 rounded-md py-px text-sm text-muted-foreground transition-colors hover:text-foreground",
+          "group flex w-full max-w-full items-center gap-2 rounded-md py-px text-left text-sm text-muted-foreground tabular-nums transition-colors hover:text-foreground sm:inline-flex sm:w-auto",
           isStreaming && "text-foreground/90",
         )}
       >
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           <span
             className={cn(
-              "inline-block h-2 w-2 rounded-full",
+              "inline-block size-2 rounded-full",
               isStreaming
                 ? "animate-pulse bg-muted-foreground"
                 : "bg-muted-foreground/50",
@@ -159,25 +182,25 @@ export function ToolCallsSummaryBar({
         </span>
         <span
           className={cn(
-            "leading-none",
+            "min-w-0 flex-1 overflow-hidden whitespace-nowrap leading-none sm:flex-none sm:overflow-visible sm:whitespace-normal",
             isStreaming && "animate-pulse motion-reduce:animate-none",
           )}
         >
-          {isStreaming ? `${statusWordPair.present}…` : statusWordPair.past}
-          {segments.length > 0 && (
-            <>
-              {segments.map((segment, i) => (
-                <span key={i}>
-                  <span className="text-muted-foreground/40"> · </span>
-                  {segment}
-                </span>
-              ))}
-            </>
+          {statusLabel}
+          {mobileSegments.length > 0 && (
+            <span className="inline-block max-w-full truncate align-bottom sm:hidden">
+              {renderSegments(mobileSegments)}
+            </span>
+          )}
+          {desktopSegments.length > 0 && (
+            <span className="hidden sm:inline">
+              {renderSegments(desktopSegments)}
+            </span>
           )}
         </span>
         <ChevronRight
           className={cn(
-            "h-3 w-3 text-muted-foreground/50 transition-transform duration-200 ease-out motion-reduce:transition-none",
+            "size-3 shrink-0 text-muted-foreground/50 transition-transform duration-200 ease-out motion-reduce:transition-none",
             isExpanded && "rotate-90",
           )}
         />
