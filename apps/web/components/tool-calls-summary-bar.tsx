@@ -24,51 +24,67 @@ export function ToolCallsSummaryBar({
   isStreaming,
   toolCallCount,
   todoInfo,
-  createdAt,
+  durationMs,
+  startedAt,
 }: {
   isExpanded: boolean;
   onToggle: () => void;
   isStreaming: boolean;
   toolCallCount: number;
   todoInfo: TodoInfo | null;
-  /** ISO timestamp for when this message was created (from DB), or null for brand-new streaming messages */
-  createdAt: string | null;
+  /** Final generation duration in ms (for completed messages). */
+  durationMs: number | null;
+  /** ISO timestamp of when generation started — i.e. the preceding user
+   *  message's createdAt — used for a live counter while streaming. */
+  startedAt: string | null;
 }) {
-  // Resolve the start time: prefer the server-side createdAt, fall back to
-  // a client-side timestamp captured when the component first mounts while
-  // streaming (covers brand-new messages not yet persisted).
+  // ---------------------------------------------------------------------------
+  // Elapsed time logic
+  //
+  // Completed messages  → use the pre-computed durationMs (accurate, static).
+  // Streaming messages  → tick a live counter from startedAt (or a client-side
+  //                        fallback for brand-new messages not yet persisted).
+  // ---------------------------------------------------------------------------
   const fallbackStartRef = useRef<number | null>(null);
-  if (isStreaming && fallbackStartRef.current === null && createdAt === null) {
+  if (isStreaming && fallbackStartRef.current === null && startedAt === null) {
     fallbackStartRef.current = Date.now();
   }
-  const startMs = createdAt
-    ? new Date(createdAt).getTime()
+
+  const startMs = startedAt
+    ? new Date(startedAt).getTime()
     : fallbackStartRef.current;
 
-  const computeElapsed = () =>
-    startMs != null ? Math.max(0, Math.floor((Date.now() - startMs) / 1000)) : 0;
+  const computeLiveElapsed = () =>
+    startMs != null
+      ? Math.max(0, Math.floor((Date.now() - startMs) / 1000))
+      : 0;
 
-  const [elapsed, setElapsed] = useState(computeElapsed);
+  const [liveElapsed, setLiveElapsed] = useState(computeLiveElapsed);
 
   useEffect(() => {
-    // Always recompute once on mount / when deps change
-    setElapsed(computeElapsed());
-
     if (!isStreaming) return;
 
+    setLiveElapsed(computeLiveElapsed());
     const interval = setInterval(() => {
-      setElapsed(computeElapsed());
+      setLiveElapsed(computeLiveElapsed());
     }, 1000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- computeElapsed is stable per startMs
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable per startMs
   }, [isStreaming, startMs]);
+
+  // Pick the right elapsed value
+  const elapsedSeconds = isStreaming
+    ? liveElapsed
+    : durationMs != null
+      ? Math.max(0, Math.round(durationMs / 1000))
+      : 0;
 
   // Build the summary segments
   const segments: string[] = [];
 
-  if (elapsed > 0) {
-    segments.push(formatElapsedTime(elapsed));
+  if (elapsedSeconds > 0) {
+    segments.push(formatElapsedTime(elapsedSeconds));
   }
 
   if (toolCallCount > 0) {

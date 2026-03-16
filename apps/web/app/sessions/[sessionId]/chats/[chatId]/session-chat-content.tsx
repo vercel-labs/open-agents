@@ -849,10 +849,14 @@ function ChatSwitcherPanel({
 
 export function SessionChatContent({
   initialIsOnlyChatInSession,
-  messageCreatedAtMap,
+  messageDurationMap,
+  messageStartedAtMap,
 }: {
   initialIsOnlyChatInSession: boolean;
-  messageCreatedAtMap: Record<string, string>;
+  /** Pre-computed generation duration (ms) per assistant message ID */
+  messageDurationMap: Record<string, number>;
+  /** ISO timestamp of the preceding user message's createdAt, for live timers */
+  messageStartedAtMap: Record<string, string>;
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -2970,7 +2974,8 @@ export function SessionChatContent({
                         key={m.id}
                         message={m}
                         isStreaming={isMessageStreaming}
-                        createdAt={messageCreatedAtMap[m.id] ?? null}
+                        durationMs={messageDurationMap[m.id] ?? null}
+                        startedAt={messageStartedAtMap[m.id] ?? null}
                       >
                         {renderGroups}
                       </AssistantMessageGroups>

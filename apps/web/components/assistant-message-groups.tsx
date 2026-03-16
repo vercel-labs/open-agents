@@ -57,8 +57,10 @@ function messageHasActiveApproval(message: WebAgentUIMessage): boolean {
 export type AssistantMessageGroupsProps = {
   message: WebAgentUIMessage;
   isStreaming: boolean;
-  /** ISO timestamp of when this message was created (from DB), or null for new streaming messages */
-  createdAt: string | null;
+  /** Pre-computed generation duration in ms (for completed messages) */
+  durationMs: number | null;
+  /** ISO timestamp of the preceding user message's createdAt (for live timer while streaming) */
+  startedAt: string | null;
   /**
    * Render function that produces the list of group elements.
    * Called with `isExpanded` so the caller can conditionally
@@ -75,7 +77,8 @@ export type AssistantMessageGroupsProps = {
 export function AssistantMessageGroups({
   message,
   isStreaming,
-  createdAt,
+  durationMs,
+  startedAt,
   children,
 }: AssistantMessageGroupsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -116,7 +119,8 @@ export function AssistantMessageGroups({
         isStreaming={isStreaming}
         toolCallCount={toolCallCount}
         todoInfo={todoInfo}
-        createdAt={createdAt}
+        durationMs={durationMs}
+        startedAt={startedAt}
       />
       {children(effectiveExpanded)}
     </>
