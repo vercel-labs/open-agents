@@ -104,7 +104,7 @@ export function ToolCallsSummaryBar({
       <button
         type="button"
         onClick={onToggle}
-        className="group inline-flex appearance-none items-center gap-2 rounded-md border-0 bg-transparent px-0 py-0.5 text-left text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+        className="group inline-flex items-center gap-2 rounded-md py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
       >
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           <span
