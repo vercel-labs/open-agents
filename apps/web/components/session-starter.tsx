@@ -196,8 +196,8 @@ export function SessionStarter({
           <div className="space-y-1">
             <p className="text-sm font-medium">Auto commit and push</p>
             <p className="text-xs text-muted-foreground">
-              Defaults to your preference for this session, but you can override
-              it here.
+              Automatically commit and push git changes after each completed
+              agent turn.
             </p>
           </div>
           <Switch
