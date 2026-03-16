@@ -3378,9 +3378,6 @@ export function SessionChatContent({
                       type="button"
                       size="icon"
                       onClick={() => {
-                        fetch(`/api/chat/${chatInfo.id}/stop`, {
-                          method: "POST",
-                        }).catch(() => {});
                         stopChatStream();
                         setHasPendingResponse(false);
                       }}

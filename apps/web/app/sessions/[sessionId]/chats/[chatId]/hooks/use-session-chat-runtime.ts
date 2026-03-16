@@ -130,6 +130,13 @@ export function useSessionChatRuntime({
 
   const stopChatStream = useCallback(() => {
     userStoppedRef.current = true;
+
+    // Publish a server-side stop signal, then tear down local transport state.
+    // We intentionally do not await this request so UI stop stays instant.
+    void fetch(`/api/chat/${chatId}/stop`, {
+      method: "POST",
+    }).catch(() => {});
+
     void chatInstance.stop();
     abortChatInstanceTransport(chatId);
   }, [chatId, chatInstance]);
