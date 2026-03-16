@@ -1,4 +1,5 @@
 export { VercelSandbox, connectVercelSandbox } from "./sandbox";
+export { tryConnectVercelSandboxDirect } from "./direct";
 export type {
   VercelSandboxConfig,
   VercelSandboxConnectConfig,

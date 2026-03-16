@@ -19,6 +19,7 @@ mock.module("@open-harness/sandbox", () => ({
 
     return sandbox;
   },
+  tryConnectVercelSandboxDirect: async () => null,
 }));
 
 const { askUserQuestionTool } = await import("./ask-user-question");

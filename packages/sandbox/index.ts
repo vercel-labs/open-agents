@@ -23,6 +23,7 @@ export {
 // vercel
 export {
   connectVercelSandbox,
+  tryConnectVercelSandboxDirect,
   VercelSandbox,
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,

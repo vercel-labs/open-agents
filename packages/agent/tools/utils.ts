@@ -1,4 +1,8 @@
-import { connectSandbox, type Sandbox } from "@open-harness/sandbox";
+import {
+  connectSandbox,
+  type Sandbox,
+  tryConnectVercelSandboxDirect,
+} from "@open-harness/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
 import type { AgentContext } from "../types";
@@ -84,6 +88,21 @@ export async function getSandbox(
       `Sandbox not initialized in context${toolInfo}. ${contextInfo}. ` +
         "Ensure the agent's prepareCall sets experimental_context: { sandbox, ... }",
     );
+  }
+
+  if (
+    context.sandbox.state.type === "vercel" &&
+    typeof context.sandbox.state.sandboxId === "string" &&
+    context.sandbox.state.sandboxId.length > 0
+  ) {
+    const sandbox = await tryConnectVercelSandboxDirect({
+      sandboxId: context.sandbox.state.sandboxId,
+      workingDirectory: context.sandbox.workingDirectory,
+    });
+
+    if (sandbox) {
+      return sandbox;
+    }
   }
 
   return connectSandbox(context.sandbox.state);
