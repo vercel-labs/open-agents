@@ -131,6 +131,7 @@ export function AssistantMessageGroups({
         todoInfo={todoInfo}
         durationMs={durationMs}
         startedAt={startedAt}
+        statusWordSeed={message.id}
       />
       {children(effectiveExpanded)}
     </>
