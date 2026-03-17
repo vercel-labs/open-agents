@@ -55,7 +55,7 @@ export function NewSessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(96vw,86rem)] max-w-none gap-0 border-none bg-transparent p-0 shadow-none [&>button]:hidden">
+      <DialogContent className="w-[min(calc(100vw-2rem),86rem)] max-w-none gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none [&>button]:hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>

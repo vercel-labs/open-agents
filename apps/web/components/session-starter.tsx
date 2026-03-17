@@ -190,7 +190,7 @@ export function SessionStarter({
         <div className="flex items-center justify-between gap-4 rounded-md border border-border/70 bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
           <div className="space-y-1">
             <p className="text-sm font-medium">Auto commit and push</p>
-            <p className="text-xs text-muted-foreground whitespace-nowrap">
+            <p className="text-xs text-muted-foreground">
               Automatically commit and push after each agent turn.
             </p>
           </div>
