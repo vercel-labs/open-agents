@@ -1080,6 +1080,12 @@ export function SessionChatContent({
    *  summary bar can show an accurate live timer from the actual send time. */
   const lastSendTimestampRef = useRef<number | null>(null);
 
+  // Ensure a stop action from one chat does not suppress the in-flight state
+  // after switching to a different chat.
+  useEffect(() => {
+    setUserStopped(false);
+  }, [chatInfo.id]);
+
   // Sync hasPendingResponse with the AI SDK status.
   // IMPORTANT: hasPendingResponse is intentionally excluded from the dependency
   // array. The form submit handler sets it to true optimistically (before
