@@ -303,6 +303,9 @@ async function persistAssistantMessagesWithToolResults(
       parts: latestMessage,
     });
   } catch (error) {
-    console.error("Failed to persist assistant message with tool results:", error);
+    console.error(
+      "Failed to persist assistant message with tool results:",
+      error,
+    );
   }
 }
