@@ -1,4 +1,8 @@
-import { createUIMessageStreamResponse, type InferUIMessageChunk } from "ai";
+import {
+  createUIMessageStreamResponse,
+  isToolUIPart,
+  type InferUIMessageChunk,
+} from "ai";
 import { start } from "workflow/api";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -8,6 +12,7 @@ import {
   touchChat,
   updateChat,
   updateSession,
+  upsertChatMessage,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
@@ -101,6 +106,12 @@ export async function POST(req: Request) {
   // in the DB before the workflow starts. This ensures a page refresh
   // during workflow queue time still shows the message.
   void persistLatestUserMessage(chatId, messages);
+
+  // Also persist any assistant messages that contain client-side tool results
+  // (e.g. ask_user_question responses). Without this, tool results are only
+  // persisted when the workflow finishes, so switching devices mid-stream
+  // would lose the tool result.
+  void persistAssistantMessagesWithToolResults(chatId, messages);
 
   const runtimePromise = createChatRuntime({
     userId,
@@ -249,5 +260,49 @@ async function persistLatestUserMessage(
     }
   } catch (error) {
     console.error("Failed to persist user message:", error);
+  }
+}
+
+/**
+ * Persist assistant messages that contain client-side tool results
+ * (e.g. ask_user_question responses, approval responses).
+ *
+ * When the client auto-submits after a tool result, the latest message is an
+ * assistant message with tool parts in terminal state. Without eagerly
+ * persisting this, the tool result only lands in the DB after the workflow
+ * finishes — so switching devices mid-stream loses the tool result.
+ */
+async function persistAssistantMessagesWithToolResults(
+  chatId: string,
+  messages: WebAgentUIMessage[],
+): Promise<void> {
+  const latestMessage = messages[messages.length - 1];
+  if (!latestMessage || latestMessage.role !== "assistant") {
+    return;
+  }
+
+  // Only persist if this assistant message actually has tool parts with
+  // client-provided results (terminal states from client-side tools).
+  const hasToolResults = latestMessage.parts.some(
+    (part) =>
+      isToolUIPart(part) &&
+      (part.state === "output-available" ||
+        part.state === "output-error" ||
+        part.state === "approval-responded"),
+  );
+
+  if (!hasToolResults) {
+    return;
+  }
+
+  try {
+    await upsertChatMessage({
+      id: latestMessage.id,
+      chatId,
+      role: "assistant",
+      parts: latestMessage,
+    });
+  } catch (error) {
+    console.error("Failed to persist assistant message with tool results:", error);
   }
 }
