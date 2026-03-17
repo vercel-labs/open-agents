@@ -155,11 +155,7 @@ export function ToolCallsSummaryBar({
 
   if (todoInfo && todoInfo.total > 0) {
     const todoLabel = `Todo ${todoInfo.completed}/${todoInfo.total}`;
-    desktopSegments.push(
-      todoInfo.inProgress > 0
-        ? `${todoLabel} (${todoInfo.inProgress} active)`
-        : todoLabel,
-    );
+    desktopSegments.push(todoLabel);
     mobileSegments.push(todoLabel);
   } else if (toolCallLabel) {
     mobileSegments.push(toolCallLabel);
