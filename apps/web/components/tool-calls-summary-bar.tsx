@@ -150,7 +150,6 @@ export function ToolCallsSummaryBar({
   if (changedFiles.length > 0) {
     const filesLabel = `${changedFiles.length} file${changedFiles.length !== 1 ? "s" : ""} changed`;
     desktopSegments.push(filesLabel);
-    mobileSegments.push(filesLabel);
   }
 
   if (todoInfo && todoInfo.total > 0) {
