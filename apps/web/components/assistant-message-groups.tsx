@@ -21,6 +21,22 @@ function countToolCalls(message: WebAgentUIMessage): number {
   return count;
 }
 
+const FILE_MODIFYING_TOOLS = new Set(["tool-write", "tool-edit"]);
+
+function getChangedFiles(message: WebAgentUIMessage): string[] {
+  const files = new Set<string>();
+  for (const part of message.parts) {
+    if (
+      isToolUIPart(part) &&
+      FILE_MODIFYING_TOOLS.has(part.type) &&
+      (part.input as { filePath?: string } | undefined)?.filePath
+    ) {
+      files.add((part.input as { filePath: string }).filePath);
+    }
+  }
+  return Array.from(files);
+}
+
 function buildTodoInfo(todos: Array<{ status?: string }>): TodoInfo {
   return {
     total: todos.length,
@@ -106,6 +122,8 @@ export function AssistantMessageGroups({
 
   const toolCallCount = useMemo(() => countToolCalls(message), [message]);
 
+  const changedFiles = useMemo(() => getChangedFiles(message), [message]);
+
   const todoInfo = useMemo(() => getLatestTodoInfo(message), [message]);
 
   const hasActiveApproval = useMemo(
@@ -128,6 +146,7 @@ export function AssistantMessageGroups({
         onToggle={() => setIsExpanded((v) => !v)}
         isStreaming={isStreaming}
         toolCallCount={toolCallCount}
+        changedFiles={changedFiles}
         todoInfo={todoInfo}
         durationMs={durationMs}
         startedAt={startedAt}
