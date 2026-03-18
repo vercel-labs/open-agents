@@ -38,7 +38,11 @@ type SignInButtonProps = {
   callbackUrl?: string;
 } & Omit<ComponentProps<typeof Button>, "onClick">;
 
-export function SignInButton({ callbackUrl, disabled, ...props }: SignInButtonProps) {
+export function SignInButton({
+  callbackUrl,
+  disabled,
+  ...props
+}: SignInButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   function handleSignIn() {
