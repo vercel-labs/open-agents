@@ -25,6 +25,11 @@ let currentAuthSession: { user: { id: string } } | null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let compareAndSetResult = true;
+let upsertChatMessageScopedResult: {
+  status: "inserted" | "updated" | "conflict";
+} = {
+  status: "inserted",
+};
 
 const originalFetch = globalThis.fetch;
 
@@ -102,7 +107,9 @@ mock.module("@open-harness/sandbox", () => ({
   }),
 }));
 
-const upsertChatMessageSpy = mock(() => Promise.resolve(undefined));
+const upsertChatMessageScopedSpy = mock(() =>
+  Promise.resolve(upsertChatMessageScopedResult),
+);
 
 mock.module("@/lib/db/sessions", () => ({
   compareAndSetChatActiveStreamId: async () => compareAndSetResult,
@@ -116,8 +123,7 @@ mock.module("@/lib/db/sessions", () => ({
   updateChatAssistantActivity: async () => {},
   updateSession: async (_sessionId: string, patch: Record<string, unknown>) =>
     patch,
-  upsertChatMessage: upsertChatMessageSpy,
-  upsertChatMessageScoped: async () => ({ status: "inserted" as const }),
+  upsertChatMessageScoped: upsertChatMessageScopedSpy,
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
@@ -194,7 +200,8 @@ describe("/api/chat route", () => {
     isSandboxActive = true;
     existingRunStatus = "completed";
     compareAndSetResult = true;
-    upsertChatMessageSpy.mockClear();
+    upsertChatMessageScopedResult = { status: "inserted" };
+    upsertChatMessageScopedSpy.mockClear();
     currentAuthSession = {
       user: {
         id: "user-1",
@@ -402,8 +409,8 @@ describe("/api/chat route", () => {
     // Wait for the fire-and-forget persistence to settle
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(upsertChatMessageSpy).toHaveBeenCalledTimes(1);
-    const calls = upsertChatMessageSpy.mock.calls as unknown[][];
+    expect(upsertChatMessageScopedSpy).toHaveBeenCalledTimes(1);
+    const calls = upsertChatMessageScopedSpy.mock.calls as unknown[][];
     expect(calls[0]![0]).toMatchObject({
       id: "assistant-1",
       chatId: "chat-1",
@@ -420,6 +427,6 @@ describe("/api/chat route", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(upsertChatMessageSpy).not.toHaveBeenCalled();
+    expect(upsertChatMessageScopedSpy).not.toHaveBeenCalled();
   });
 });

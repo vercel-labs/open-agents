@@ -12,7 +12,7 @@ import {
   touchChat,
   updateChat,
   updateSession,
-  upsertChatMessage,
+  upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
@@ -296,12 +296,18 @@ async function persistAssistantMessagesWithToolResults(
   }
 
   try {
-    await upsertChatMessage({
+    const result = await upsertChatMessageScoped({
       id: latestMessage.id,
       chatId,
       role: "assistant",
       parts: latestMessage,
     });
+
+    if (result.status === "conflict") {
+      console.warn(
+        `Skipped assistant tool-result upsert due to ID scope conflict: ${latestMessage.id}`,
+      );
+    }
   } catch (error) {
     console.error(
       "Failed to persist assistant message with tool results:",
