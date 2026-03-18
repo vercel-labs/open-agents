@@ -129,7 +129,6 @@ export function getProviderOptionsForModel(
     defaultProviderOptions.openai = mergeRecords(
       defaultProviderOptions.openai ?? {},
       toProviderOptionsRecord({
-        reasoningEffort: "high",
         reasoningSummary: "detailed",
         include: ["reasoning.encrypted_content"],
       } satisfies OpenAIResponsesProviderOptions),
