@@ -123,30 +123,7 @@ mock.module("ai", () => ({
   isToolUIPart: (part: { type: string }) => part.type === "tool-invocation",
 }));
 
-const mockAddLanguageModelUsage = (
-  a: { inputTokens: number; outputTokens: number },
-  b: { inputTokens: number; outputTokens: number },
-) => ({
-  inputTokens: (a?.inputTokens ?? 0) + (b?.inputTokens ?? 0),
-  outputTokens: (a?.outputTokens ?? 0) + (b?.outputTokens ?? 0),
-  totalTokens:
-    (a?.inputTokens ?? 0) +
-    (b?.inputTokens ?? 0) +
-    (a?.outputTokens ?? 0) +
-    (b?.outputTokens ?? 0),
-});
-
-mock.module("@open-harness/agent", () => ({
-  addLanguageModelUsage: mockAddLanguageModelUsage,
-  sumLanguageModelUsage: (
-    a: { inputTokens: number; outputTokens: number } | undefined,
-    b: { inputTokens: number; outputTokens: number } | undefined,
-  ) => {
-    if (!a) return b;
-    if (!b) return a;
-    return mockAddLanguageModelUsage(a, b);
-  },
-}));
+mock.module("@open-harness/agent", () => ({}));
 
 const { runAgentWorkflow } = await import("./chat");
 
