@@ -13,6 +13,7 @@ import {
   buildSessionChatModelOptions,
   withMissingModelOption,
 } from "@/lib/model-options";
+import { getAllVariants } from "@/lib/model-variants";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getInitialIsOnlyChatInSession } from "./only-chat-in-session";
@@ -149,7 +150,10 @@ export default async function SessionChatPage({
     ? lastUserMessage.createdAt.toISOString()
     : null;
   const initialModelOptions = withMissingModelOption(
-    buildSessionChatModelOptions(initialModels, preferences.modelVariants),
+    buildSessionChatModelOptions(
+      initialModels,
+      getAllVariants(preferences.modelVariants),
+    ),
     chat.modelId,
   );
 

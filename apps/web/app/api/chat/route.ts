@@ -10,6 +10,7 @@ import {
   updateSession,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { getAllVariants } from "@/lib/model-variants";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
     preferencesPromise,
   ]);
 
-  const modelVariants = preferences?.modelVariants ?? [];
+  const modelVariants = getAllVariants(preferences?.modelVariants ?? []);
   const mainModelSelection = resolveChatModelSelection({
     selectedModelId: chat.modelId,
     modelVariants,
