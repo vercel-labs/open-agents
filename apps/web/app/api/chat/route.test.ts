@@ -25,11 +25,6 @@ let currentAuthSession: { user: { id: string } } | null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let compareAndSetResult = true;
-let upsertChatMessageScopedResult: {
-  status: "inserted" | "updated" | "conflict";
-} = {
-  status: "inserted",
-};
 
 const originalFetch = globalThis.fetch;
 
@@ -56,8 +51,6 @@ mock.module("ai", () => ({
     stream: ReadableStream;
     headers?: Record<string, string>;
   }) => new Response(stream, { status: 200, headers }),
-  isToolUIPart: (part: { type: string }) =>
-    part.type.startsWith("tool-") || part.type === "dynamic-tool",
 }));
 
 mock.module("workflow/api", () => ({
@@ -107,10 +100,6 @@ mock.module("@open-harness/sandbox", () => ({
   }),
 }));
 
-const upsertChatMessageScopedSpy = mock(() =>
-  Promise.resolve(upsertChatMessageScopedResult),
-);
-
 mock.module("@/lib/db/sessions", () => ({
   compareAndSetChatActiveStreamId: async () => compareAndSetResult,
   createChatMessageIfNotExists: async () => undefined,
@@ -123,7 +112,7 @@ mock.module("@/lib/db/sessions", () => ({
   updateChatAssistantActivity: async () => {},
   updateSession: async (_sessionId: string, patch: Record<string, unknown>) =>
     patch,
-  upsertChatMessageScoped: upsertChatMessageScopedSpy,
+  upsertChatMessageScoped: async () => ({ status: "inserted" as const }),
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
@@ -200,8 +189,6 @@ describe("/api/chat route", () => {
     isSandboxActive = true;
     existingRunStatus = "completed";
     compareAndSetResult = true;
-    upsertChatMessageScopedResult = { status: "inserted" };
-    upsertChatMessageScopedSpy.mockClear();
     currentAuthSession = {
       user: {
         id: "user-1",
@@ -369,64 +356,5 @@ describe("/api/chat route", () => {
 
     expect(response.ok).toBe(true);
     expect(response.headers.get("x-workflow-run-id")).toBe("wrun_test-123");
-  });
-
-  test("persists assistant message with tool results on auto-submit", async () => {
-    const { POST } = await routeModulePromise;
-
-    const request = createRequest(
-      JSON.stringify({
-        sessionId: "session-1",
-        chatId: "chat-1",
-        messages: [
-          {
-            id: "user-1",
-            role: "user",
-            parts: [{ type: "text", text: "Help me" }],
-          },
-          {
-            id: "assistant-1",
-            role: "assistant",
-            parts: [
-              { type: "text", text: "Let me ask you a question." },
-              {
-                type: "tool-ask_user_question",
-                toolCallId: "call-1",
-                toolName: "ask_user_question",
-                state: "output-available",
-                args: { questions: [] },
-                output: { answers: ["Yes"] },
-              },
-            ],
-          },
-        ],
-      }),
-    );
-
-    const response = await POST(request);
-    expect(response.ok).toBe(true);
-
-    // Wait for the fire-and-forget persistence to settle
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(upsertChatMessageScopedSpy).toHaveBeenCalledTimes(1);
-    const calls = upsertChatMessageScopedSpy.mock.calls as unknown[][];
-    expect(calls[0]![0]).toMatchObject({
-      id: "assistant-1",
-      chatId: "chat-1",
-      role: "assistant",
-    });
-  });
-
-  test("does not persist assistant message without tool results", async () => {
-    const { POST } = await routeModulePromise;
-
-    // Standard user-message submit — no assistant message with tool results
-    const response = await POST(createValidRequest());
-    expect(response.ok).toBe(true);
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(upsertChatMessageScopedSpy).not.toHaveBeenCalled();
   });
 });

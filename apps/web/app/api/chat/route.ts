@@ -21,7 +21,6 @@ import { resolveChatModelSelection } from "./_lib/model-selection";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { createChatRuntime } from "./_lib/runtime";
 import { runAgentWorkflow } from "@/app/workflows/chat";
-import { persistAssistantMessagesWithToolResults } from "@/app/workflows/chat-post-finish";
 
 export const maxDuration = 800;
 
@@ -103,12 +102,6 @@ export async function POST(req: Request) {
   // in the DB before the workflow starts. This ensures a page refresh
   // during workflow queue time still shows the message.
   void persistLatestUserMessage(chatId, messages);
-
-  // Also persist any assistant messages that contain client-side tool results
-  // (e.g. ask_user_question responses). Without this, tool results are only
-  // persisted when the workflow finishes, so switching devices mid-stream
-  // would lose the tool result.
-  void persistAssistantMessagesWithToolResults(chatId, messages);
 
   const runtimePromise = createChatRuntime({
     userId,

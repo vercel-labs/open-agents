@@ -1,4 +1,4 @@
-import { isToolUIPart, type LanguageModelUsage } from "ai";
+import type { LanguageModelUsage } from "ai";
 import type { SandboxState, Sandbox } from "@open-harness/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -89,59 +89,6 @@ export async function persistAssistantMessage(
     }
   } catch (error) {
     console.error("[workflow] Failed to persist assistant message:", error);
-  }
-}
-
-/**
- * Persist assistant messages that contain client-side tool results
- * (e.g. ask_user_question responses, approval responses).
- *
- * When the client auto-submits after a tool result, the latest message is an
- * assistant message with tool parts in terminal state. Without eagerly
- * persisting this, the tool result only lands in the DB after the workflow
- * finishes — so switching devices mid-stream loses the tool result.
- */
-export async function persistAssistantMessagesWithToolResults(
-  chatId: string,
-  messages: WebAgentUIMessage[],
-): Promise<void> {
-  const latestMessage = messages[messages.length - 1];
-  if (!latestMessage || latestMessage.role !== "assistant") {
-    return;
-  }
-
-  // Only persist if this assistant message actually has tool parts with
-  // client-provided results (terminal states from client-side tools).
-  const hasToolResults = latestMessage.parts.some(
-    (part) =>
-      isToolUIPart(part) &&
-      (part.state === "output-available" ||
-        part.state === "output-error" ||
-        part.state === "approval-responded"),
-  );
-
-  if (!hasToolResults) {
-    return;
-  }
-
-  try {
-    const result = await upsertChatMessageScoped({
-      id: latestMessage.id,
-      chatId,
-      role: "assistant",
-      parts: latestMessage,
-    });
-
-    if (result.status === "conflict") {
-      console.warn(
-        `Skipped assistant tool-result upsert due to ID scope conflict: ${latestMessage.id}`,
-      );
-    }
-  } catch (error) {
-    console.error(
-      "Failed to persist assistant message with tool results:",
-      error,
-    );
   }
 }
 
