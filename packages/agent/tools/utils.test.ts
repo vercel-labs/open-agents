@@ -1,14 +1,32 @@
-import { describe, expect, test } from "bun:test";
-import type { ApprovalRule } from "../types";
-import {
-  getApprovalContext,
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+const connectSandboxCalls: unknown[][] = [];
+
+let connectSandboxResult: unknown = {
+  workingDirectory: "/repo",
+};
+
+mock.module("@open-harness/sandbox", () => ({
+  connectSandbox: async (...args: unknown[]) => {
+    connectSandboxCalls.push(args);
+    return connectSandboxResult;
+  },
+}));
+
+const {
+  getSandbox,
+  getSandboxContext,
   isPathWithinDirectory,
-  pathMatchesApprovalRule,
-  pathMatchesGlob,
-  pathNeedsApproval,
   shellEscape,
-  shouldAutoApprove,
-} from "./utils";
+  toDisplayPath,
+} = await import("./utils");
+
+beforeEach(() => {
+  connectSandboxCalls.length = 0;
+  connectSandboxResult = {
+    workingDirectory: "/repo",
+  };
+});
 
 describe("tools/utils", () => {
   test("isPathWithinDirectory handles nested and sibling paths", () => {
@@ -19,146 +37,42 @@ describe("tools/utils", () => {
     );
   });
 
-  test("shouldAutoApprove only for background and delegated modes", () => {
-    expect(shouldAutoApprove({ type: "background" })).toBe(true);
-    expect(shouldAutoApprove({ type: "delegated" })).toBe(true);
-    expect(
-      shouldAutoApprove({
-        type: "interactive",
-        autoApprove: "all",
-        sessionRules: [],
-      }),
-    ).toBe(false);
+  test("toDisplayPath returns workspace-relative paths when possible", () => {
+    expect(toDisplayPath("/repo/src/index.ts", "/repo")).toBe("src/index.ts");
+    expect(toDisplayPath("src/index.ts", "/repo")).toBe("src/index.ts");
+    expect(toDisplayPath("/repo", "/repo")).toBe(".");
+    expect(toDisplayPath("/outside/file.ts", "/repo")).toBe("/outside/file.ts");
   });
 
-  test("getApprovalContext defaults to interactive approval when missing", () => {
-    const context = getApprovalContext({
-      sandbox: { workingDirectory: "/repo" },
-      approval: undefined,
+  test("getSandboxContext returns serializable sandbox context and working directory", () => {
+    const context = getSandboxContext({
+      sandbox: {
+        state: { type: "vercel" },
+        workingDirectory: "/repo",
+      },
       model: "test-model",
     });
 
     expect(context.workingDirectory).toBe("/repo");
-    expect(context.approval).toEqual({
-      type: "interactive",
-      autoApprove: "off",
-      sessionRules: [],
-    });
+    expect(context.sandbox.workingDirectory).toBe("/repo");
   });
 
-  test("pathMatchesGlob supports recursive file patterns and directory suffixes", () => {
-    expect(
-      pathMatchesGlob("/repo/apps/web/page.tsx", "apps/**/*.tsx", "/repo"),
-    ).toBe(true);
-    expect(pathMatchesGlob("/repo/apps", "apps/**", "/repo")).toBe(true);
-    expect(pathMatchesGlob("/other/page.tsx", "apps/**/*.tsx", "/repo")).toBe(
-      false,
+  test("getSandbox connects using the sandbox state from context", async () => {
+    const sandbox = await getSandbox(
+      {
+        sandbox: {
+          state: { type: "vercel", sandboxId: "sbx-456" },
+          workingDirectory: "/repo",
+        },
+        model: "test-model",
+      },
+      "read",
     );
-  });
 
-  test("pathMatchesGlob returns false for malformed patterns", () => {
-    expect(pathMatchesGlob("/repo/src/index.ts", "[", "/repo")).toBe(false);
-  });
-
-  test("pathMatchesApprovalRule matches only the requested tool", () => {
-    const rules: ApprovalRule[] = [
-      { type: "path-glob", tool: "read", glob: "outside/**" },
-      { type: "path-glob", tool: "write", glob: "writes/**" },
-    ];
-
-    expect(
-      pathMatchesApprovalRule("/repo/outside/file.ts", "read", "/repo", rules),
-    ).toBe(true);
-    expect(
-      pathMatchesApprovalRule("/repo/outside/file.ts", "write", "/repo", rules),
-    ).toBe(false);
-  });
-
-  test("pathNeedsApproval follows interactive read/write rules", () => {
-    const workingDirectory = "/repo";
-    const readRules: ApprovalRule[] = [
-      { type: "path-glob", tool: "read", glob: "../external/**" },
-    ];
-
-    expect(
-      pathNeedsApproval({
-        path: "/repo/src/index.ts",
-        tool: "read",
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: readRules,
-        },
-        workingDirectory,
-      }),
-    ).toBe(false);
-
-    expect(
-      pathNeedsApproval({
-        path: "/external/config.json",
-        tool: "read",
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: readRules,
-        },
-        workingDirectory,
-      }),
-    ).toBe(false);
-
-    expect(
-      pathNeedsApproval({
-        path: "/external/secret.json",
-        tool: "grep",
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: readRules,
-        },
-        workingDirectory,
-      }),
-    ).toBe(true);
-
-    expect(
-      pathNeedsApproval({
-        path: "/repo/src/index.ts",
-        tool: "write",
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: [],
-        },
-        workingDirectory,
-      }),
-    ).toBe(true);
-
-    expect(
-      pathNeedsApproval({
-        path: "/repo/src/index.ts",
-        tool: "write",
-        approval: {
-          type: "interactive",
-          autoApprove: "edits",
-          sessionRules: [],
-        },
-        workingDirectory,
-      }),
-    ).toBe(false);
-
-    expect(
-      pathNeedsApproval({
-        path: "/external/file.ts",
-        tool: "edit",
-        approval: {
-          type: "interactive",
-          autoApprove: "all",
-          sessionRules: [
-            { type: "path-glob", tool: "edit", glob: "../external/**" },
-          ],
-        },
-        workingDirectory,
-      }),
-    ).toBe(false);
+    expect(sandbox.workingDirectory).toBe("/repo");
+    expect(connectSandboxCalls).toEqual([
+      [{ type: "vercel", sandboxId: "sbx-456" }],
+    ]);
   });
 
   test("shellEscape safely escapes single quotes", () => {

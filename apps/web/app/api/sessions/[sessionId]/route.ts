@@ -1,15 +1,11 @@
-import { connectSandbox } from "@open-harness/sandbox";
 import { after } from "next/server";
 import {
   deleteSession,
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
-import {
-  canOperateOnSandbox,
-  clearSandboxState,
-  hasRuntimeSandboxState,
-} from "@/lib/sandbox/utils";
+import { archiveSession } from "@/lib/sandbox/archive-session";
+import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface UpdateSessionRequest {
@@ -98,11 +94,7 @@ export async function PATCH(
       sandboxExpiresAt: null;
       hibernateAfter: null;
     }> = { ...body };
-  if (shouldStopSandboxAfterArchive) {
-    updatePayload.lifecycleState = "archived";
-    updatePayload.sandboxExpiresAt = null;
-    updatePayload.hibernateAfter = null;
-  }
+
   if (shouldUnarchive) {
     // Reset lifecycle state so the session can be resumed normally.
     // If there is a snapshot the client will auto-restore it on entry.
@@ -110,63 +102,19 @@ export async function PATCH(
     updatePayload.lifecycleError = null;
   }
 
-  const updatedSession = await updateSession(sessionId, updatePayload);
+  const updatedSession = shouldStopSandboxAfterArchive
+    ? (
+        await archiveSession(sessionId, {
+          currentSession: existingSession,
+          update: updatePayload,
+          logPrefix: "[Sessions]",
+          scheduleBackgroundWork: after,
+        })
+      ).session
+    : await updateSession(sessionId, updatePayload);
+
   if (!updatedSession) {
     return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-
-  if (shouldStopSandboxAfterArchive) {
-    after(async () => {
-      try {
-        const archivedSession = await getSessionById(sessionId);
-        if (!archivedSession || archivedSession.status !== "archived") {
-          return;
-        }
-        if (!canOperateOnSandbox(archivedSession.sandboxState)) {
-          return;
-        }
-
-        const sandbox = await connectSandbox(archivedSession.sandboxState);
-
-        // Snapshot before stopping so the sandbox can be restored on unarchive.
-        // snapshot() automatically stops the sandbox, so no separate stop() needed.
-        let snapshotFields: {
-          snapshotUrl?: string;
-          snapshotCreatedAt?: Date;
-        } = {};
-        if (sandbox.snapshot) {
-          try {
-            const result = await sandbox.snapshot();
-            snapshotFields = {
-              snapshotUrl: result.snapshotId,
-              snapshotCreatedAt: new Date(),
-            };
-          } catch (snapshotError) {
-            console.error(
-              `[Sessions] Snapshot failed for session ${sessionId}, falling back to stop:`,
-              snapshotError,
-            );
-            await sandbox.stop();
-          }
-        } else {
-          await sandbox.stop();
-        }
-
-        await updateSession(sessionId, {
-          ...snapshotFields,
-          sandboxState: clearSandboxState(archivedSession.sandboxState),
-          lifecycleState: "archived",
-          sandboxExpiresAt: null,
-          hibernateAfter: null,
-          lifecycleError: null,
-        });
-      } catch (error) {
-        console.error(
-          `[Sessions] Failed to stop sandbox for archived session ${sessionId}:`,
-          error,
-        );
-      }
-    });
   }
 
   return Response.json({ session: updatedSession });

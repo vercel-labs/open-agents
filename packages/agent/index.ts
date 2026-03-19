@@ -1,9 +1,13 @@
 export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
-export type { OpenHarnessAgentCallOptions } from "./open-harness-agent";
+export type {
+  AgentModelSelection,
+  AgentSandboxContext,
+  OpenHarnessAgentCallOptions,
+  OpenHarnessAgentModelInput,
+} from "./open-harness-agent";
 export {
   defaultModel,
   defaultModelLabel,
-  extractTodosFromStep,
   openHarnessAgent,
 } from "./open-harness-agent";
 // Skills exports
@@ -34,12 +38,7 @@ export type {
   TaskToolOutput,
   TaskToolUIPart,
 } from "./tools/task";
-export type {
-  ApprovalConfig,
-  ApprovalRule,
-  TodoItem,
-  TodoStatus,
-} from "./types";
+export type { TodoItem, TodoStatus } from "./types";
 export {
   addLanguageModelUsage,
   collectTaskToolUsage,

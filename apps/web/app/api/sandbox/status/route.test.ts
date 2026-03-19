@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+mock.module("server-only", () => ({}));
+
 interface KickCall {
   sessionId: string;
   reason: string;
@@ -30,6 +32,7 @@ mock.module("@/lib/session/get-server-session", () => ({
 
 mock.module("@/lib/db/sessions", () => ({
   getSessionById: async () => sessionRecord,
+  updateSession: async () => undefined,
 }));
 
 mock.module("@/lib/sandbox/lifecycle-kick", () => ({

@@ -1,9 +1,12 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSessionWithSandboxGuard,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import { findPullRequestByBranch } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 interface CheckPrRequest {
   sessionId: string;
@@ -19,9 +22,9 @@ interface CheckPrRequest {
  * once sandbox connectivity is established.
  */
 export async function POST(req: Request) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   let body: CheckPrRequest;
@@ -36,25 +39,30 @@ export async function POST(req: Request) {
     return Response.json({ error: "sessionId is required" }, { status: 400 });
   }
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSessionWithSandboxGuard({
+    userId: authResult.userId,
+    sessionId,
+    sandboxGuard: isSandboxActive,
+    sandboxErrorMessage: "Sandbox not active",
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const { sessionRecord } = sessionContext;
+  const sandboxState = sessionRecord.sandboxState;
+  if (!sandboxState) {
+    return Response.json({ error: "Sandbox not active" }, { status: 400 });
   }
 
   // Need an active sandbox to check branch, and repo info to check PRs
-  if (!isSandboxActive(sessionRecord.sandboxState)) {
-    return Response.json({ error: "Sandbox not active" }, { status: 400 });
-  }
   if (!sessionRecord.repoOwner || !sessionRecord.repoName) {
     return Response.json({ error: "No repo info on session" }, { status: 400 });
   }
 
   try {
     // 1. Get current branch from sandbox
-    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const sandbox = await connectSandbox(sandboxState);
     const cwd = sandbox.workingDirectory;
     const symbolicRefResult = await sandbox.exec(
       "git symbolic-ref --short HEAD",
@@ -102,7 +110,7 @@ export async function POST(req: Request) {
     let token: string | undefined;
     try {
       const tokenResult = await getRepoToken(
-        session.user.id,
+        authResult.userId,
         sessionRecord.repoOwner,
       );
       token = tokenResult.token;

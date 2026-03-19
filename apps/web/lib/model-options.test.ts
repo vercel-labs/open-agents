@@ -104,8 +104,8 @@ describe("model options", () => {
   test("getDefaultModelOptionId prefers repository default model when present", () => {
     const options = [
       {
-        id: "anthropic/claude-haiku-4.5",
-        label: "Haiku",
+        id: "anthropic/claude-opus-4.6",
+        label: "Opus",
         isVariant: false,
       },
       {
@@ -115,7 +115,7 @@ describe("model options", () => {
       },
     ];
 
-    expect(getDefaultModelOptionId(options)).toBe("anthropic/claude-haiku-4.5");
+    expect(getDefaultModelOptionId(options)).toBe("anthropic/claude-opus-4.6");
   });
 
   test("getDefaultModelOptionId falls back to first option when default is missing", () => {

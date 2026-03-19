@@ -31,6 +31,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type SessionGitStatus } from "@/hooks/use-session-git-status";
 import type { Session } from "@/lib/db/schema";
+import {
+  commitAndPushSessionChanges,
+  createSessionBranch,
+  fetchRepoBranches,
+  type GitActionsResult,
+} from "@/lib/git-flow-client";
 
 interface CommitDialogProps {
   open: boolean;
@@ -43,28 +49,10 @@ interface CommitDialogProps {
   onOpenCreatePr?: () => void;
 }
 
-interface GitActions {
-  committed?: boolean;
-  commitMessage?: string;
-  commitSha?: string;
-  pushed?: boolean;
-  pushedToFork?: boolean;
-}
+type GitActions = GitActionsResult;
 
 type CommitStep = "loading" | "create-branch" | "commit" | "success";
 type CommitMode = "ai" | "manual";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
-function readBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
 
 export function CommitDialog({
   open,
@@ -102,30 +90,12 @@ export function CommitDialog({
     setIsLoadingBranches(true);
 
     try {
-      const res = await fetch(
-        `/api/github/branches?owner=${session.repoOwner}&repo=${session.repoName}`,
+      const branchData = await fetchRepoBranches(
+        session.repoOwner,
+        session.repoName,
       );
-      if (!res.ok) {
-        throw new Error("Failed to fetch branches");
-      }
-
-      const data: unknown = await res.json();
-      if (!isRecord(data)) {
-        setBranches(["main"]);
-        return;
-      }
-
-      const nextBranches = Array.isArray(data.branches)
-        ? data.branches.filter(
-            (branch): branch is string => typeof branch === "string",
-          )
-        : [];
-      setBranches(nextBranches);
-
-      const defaultBranch = readString(data.defaultBranch);
-      if (defaultBranch) {
-        setBaseBranch(defaultBranch);
-      }
+      setBranches(branchData.branches);
+      setBaseBranch(branchData.defaultBranch);
     } catch (err) {
       console.error("Failed to fetch branches:", err);
       setBranches(["main"]);
@@ -239,28 +209,15 @@ export function CommitDialog({
     setError(null);
 
     try {
-      const res = await fetch("/api/generate-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName: displayBranch,
-          createBranchOnly: true,
-        }),
+      const result = await createSessionBranch({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        baseBranch,
+        branchName: displayBranch,
       });
 
-      const data: unknown = await res.json();
-      const response = isRecord(data) ? data : null;
-      if (!res.ok) {
-        const message = response ? readString(response.error) : null;
-        throw new Error(message || "Failed to create branch");
-      }
-
-      const branchName = response ? readString(response.branchName) : null;
-      if (branchName && branchName !== "HEAD") {
-        setResolvedBranch(branchName);
+      if (result.branchName !== "HEAD") {
+        setResolvedBranch(result.branchName);
       }
 
       setIsDetachedHead(false);
@@ -290,53 +247,27 @@ export function CommitDialog({
     setError(null);
 
     try {
-      const res = await fetch("/api/generate-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName: displayBranch,
-          commitOnly: true,
-          ...(mode === "manual" && hasUncommittedChanges
-            ? {
-                commitTitle: manualTitle,
-                commitBody: manualBody,
-              }
-            : {}),
-        }),
+      const response = await commitAndPushSessionChanges({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        baseBranch,
+        branchName: displayBranch,
+        ...(mode === "manual" && hasUncommittedChanges
+          ? {
+              commitTitle: manualTitle,
+              commitBody: manualBody,
+            }
+          : {}),
       });
 
-      const data: unknown = await res.json();
-      const response = isRecord(data) ? data : null;
+      setGitActions(response.gitActions ?? null);
 
-      if (!res.ok) {
-        const message = response ? readString(response.error) : null;
-        throw new Error(message || "Failed to commit and push changes");
+      if (response.branchName && response.branchName !== "HEAD") {
+        setResolvedBranch(response.branchName);
       }
 
-      const responseGitActions = response?.gitActions;
-      if (isRecord(responseGitActions)) {
-        setGitActions({
-          committed: readBoolean(responseGitActions.committed) ?? undefined,
-          commitMessage:
-            readString(responseGitActions.commitMessage) ?? undefined,
-          commitSha: readString(responseGitActions.commitSha) ?? undefined,
-          pushed: readBoolean(responseGitActions.pushed) ?? undefined,
-          pushedToFork:
-            readBoolean(responseGitActions.pushedToFork) ?? undefined,
-        });
-      }
-
-      const branchName = response ? readString(response.branchName) : null;
-      if (branchName && branchName !== "HEAD") {
-        setResolvedBranch(branchName);
-      }
-
-      const nextHeadOwner = response ? readString(response.prHeadOwner) : null;
-      if (nextHeadOwner) {
-        setPrHeadOwner(nextHeadOwner);
+      if (response.prHeadOwner) {
+        setPrHeadOwner(response.prHeadOwner);
       }
 
       await syncGitStatus();

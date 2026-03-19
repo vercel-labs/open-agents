@@ -32,8 +32,6 @@ Neon database branching is enabled in the Vercel project settings. Every preview
 
 ```bash
 # Development
-turbo dev              # Run CLI agent (from root)
-bun run cli            # Alternative: run CLI directly
 bun run web            # Run web app
 
 # Quality checks (REQUIRED after making any changes)
@@ -43,19 +41,19 @@ turbo lint                                 # Lint all packages with oxlint
 turbo lint:fix                             # Lint and auto-fix all packages
 
 # Filter by package (use --filter)
-turbo typecheck --filter=web               # Type check web app only
-turbo typecheck --filter=@open-harness/cli # Type check CLI only
-turbo lint:fix --filter=web                # Lint web app only
-turbo lint:fix --filter=@open-harness/cli  # Lint CLI only
+turbo typecheck --filter=web # Type check web app only
+turbo lint:fix --filter=web  # Lint web app only
 
 # Formatting (Biome - run from root)
 bun run format                             # Format all files
 bun run format:check                       # Check formatting without writing
 
 # Testing
-bun test                        # Run all tests
-bun test path/to/file.test.ts   # Run single test file
-bun test --watch                # Watch mode
+bun test                                              # Run all tests
+bun test path/to/file.test.ts                         # Run single test file
+bun test --watch                                      # Watch mode
+bun run test:verbose                                  # Run tests with JUnit reporter streamed to stdout (useful in non-interactive shells)
+bun run test:verbose path/to/file.test.ts             # Same verbose output for a single test file
 ```
 
 **CI/script execution rules:**
@@ -64,6 +62,8 @@ bun test --watch                # Watch mode
 - Prefer `bun run <script>` over invoking tool binaries directly (`bunx`, `bun x`, `tsc`, `eslint`, etc.) so local runs match CI behavior.
 
 ## Git Commands
+
+- **Branch sync preference:** When bringing in `origin/main`, prefer a normal merge (`git fetch origin main` then `git merge origin/main`) instead of rebasing, unless explicitly requested otherwise.
 
 **Quote paths with special characters**: File paths containing brackets (like Next.js dynamic routes `[id]`, `[slug]`) are interpreted as glob patterns by zsh. Always quote these paths in git commands:
 
@@ -79,10 +79,18 @@ git add "apps/web/app/tasks/[id]/page.tsx"
 ## Architecture (Summary)
 
 ```
-CLI (apps/cli) -> TUI (packages/tui) -> Agent (packages/agent) -> Sandbox (packages/sandbox)
+Web -> Agent (packages/agent) -> Sandbox (packages/sandbox)
 ```
 
 See [Architecture & Workspace Structure](docs/agents/architecture.md) for details.
+
+## File Organization & Separation of Concerns
+
+- Do **not** append new functionality to the bottom of an existing file by default.
+- Before adding code, decide whether the behavior is a separate concern that should live in its own file.
+- Prefer creating a new colocated file for distinct concerns (components, hooks, utilities, schemas, data-access helpers, etc.).
+- If a file is already large or handling multiple responsibilities, extract the new logic (and related helpers/types) into focused modules and import them.
+- Keep each file focused on one primary responsibility; avoid mixing unrelated UI, business logic, and data-access code in the same file.
 
 ## Code Style (Summary)
 

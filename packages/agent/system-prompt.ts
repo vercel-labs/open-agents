@@ -294,10 +294,10 @@ function getModelOverlay(family: ModelFamily): string {
 }
 
 // ---------------------------------------------------------------------------
-// Background mode instructions
+// Cloud sandbox instructions
 // ---------------------------------------------------------------------------
 
-const BACKGROUND_MODE_INSTRUCTIONS = `# Background Mode - Ephemeral Sandbox
+const CLOUD_SANDBOX_INSTRUCTIONS = `# Cloud Sandbox
 
 Your sandbox is ephemeral. All work is lost when the session ends unless committed and pushed to git.
 
@@ -327,7 +327,6 @@ Your sandbox is ephemeral. All work is lost when the session ends unless committ
 
 export interface BuildSystemPromptOptions {
   cwd?: string;
-  mode?: "interactive" | "background";
   currentBranch?: string;
   customInstructions?: string;
   environmentDetails?: string;
@@ -391,7 +390,7 @@ npx skills --help                      # all options
  * 1. Core system prompt (shared across all models)
  * 2. Model-family overlay (persistence, verbosity, tool-use patterns)
  * 3. Environment details (cwd, platform, etc.)
- * 4. Background mode instructions (if applicable)
+ * 4. Cloud sandbox instructions
  * 5. Custom instructions (AGENTS.md, user config)
  * 6. Skills section (if skills registered)
  */
@@ -401,22 +400,21 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const parts = [CORE_SYSTEM_PROMPT, getModelOverlay(family)];
 
   if (options.cwd) {
-    parts.push(`\n# Environment\n\nWorking directory: ${options.cwd}`);
+    parts.push(
+      "\n# Environment\n\nWorking directory: . (workspace root)\nUse workspace-relative paths for all file operations.",
+    );
     if (options.environmentDetails) {
       parts.push(`\n${options.environmentDetails}`);
     }
   }
 
-  if (options.mode === "background") {
-    if (!options.currentBranch) {
-      throw new Error("Background mode requires currentBranch to be set.");
-    }
-    const backgroundInstructions = BACKGROUND_MODE_INSTRUCTIONS.replace(
+  if (options.currentBranch) {
+    const cloudSandboxInstructions = CLOUD_SANDBOX_INSTRUCTIONS.replace(
       "{branch}",
       options.currentBranch,
     );
     parts.push(`\nCurrent branch: ${options.currentBranch}`);
-    parts.push(`\n${backgroundInstructions}`);
+    parts.push(`\n${cloudSandboxInstructions}`);
   }
 
   if (options.customInstructions) {

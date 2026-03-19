@@ -5,10 +5,14 @@ import { fetcher } from "@/lib/swr";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import type { ModelVariant } from "@/lib/model-variants";
 
+export type DiffMode = "unified" | "split";
+
 export interface UserPreferences {
   defaultModelId: string;
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
+  defaultDiffMode: DiffMode;
+  autoCommitPush: boolean;
   modelVariants: ModelVariant[];
 }
 

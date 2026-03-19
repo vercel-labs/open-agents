@@ -1,27 +1,93 @@
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
-import { askUserQuestionTool } from "./ask-user-question";
-import { bashTool, commandNeedsApproval } from "./bash";
-import { webFetchTool } from "./fetch";
-import { globTool } from "./glob";
-import { grepTool } from "./grep";
-import { readFileTool } from "./read";
-import { skillTool } from "./skill";
-import { taskTool } from "./task";
-import { todoWriteTool } from "./todo";
-import { editFileTool, writeFileTool } from "./write";
 import type { ToolNeedsApprovalFunction } from "./utils";
 
-function createContext(sandbox: Record<string, unknown>) {
+const sandboxRegistry = new Map<string, Record<string, unknown>>();
+
+mock.module("ai", () => {
+  class MockToolLoopAgent {
+    constructor(_config: unknown) {}
+
+    stream() {
+      throw new Error(
+        "MockToolLoopAgent.stream should not be called in this test",
+      );
+    }
+  }
+
+  const gateway = (modelId: string) => ({ modelId });
+
   return {
-    sandbox,
-    approval: {
-      type: "interactive" as const,
-      autoApprove: "off" as const,
-      sessionRules: [],
+    tool: <T extends Record<string, unknown>>(definition: T) => definition,
+    gateway,
+    stepCountIs: (count: number) => ({ count }),
+    ToolLoopAgent: MockToolLoopAgent,
+    getToolName: (part: { toolName?: string; type?: string }) => {
+      if (part.toolName) {
+        return part.toolName;
+      }
+
+      if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+        return part.type.slice(5);
+      }
+
+      return "";
     },
+    isToolUIPart: (part: unknown) => {
+      if (!part || typeof part !== "object") {
+        return false;
+      }
+
+      const candidate = part as { type?: unknown };
+      return (
+        typeof candidate.type === "string" && candidate.type.startsWith("tool-")
+      );
+    },
+  };
+});
+
+mock.module("@open-harness/sandbox", () => ({
+  connectSandbox: async (state: { sandboxId?: string }) => {
+    if (!state.sandboxId) {
+      throw new Error("Missing sandboxId in test sandbox state.");
+    }
+
+    const sandbox = sandboxRegistry.get(state.sandboxId);
+    if (!sandbox) {
+      throw new Error(`Unknown test sandbox: ${state.sandboxId}`);
+    }
+
+    return sandbox;
+  },
+  tryConnectVercelSandboxDirect: async () => null,
+}));
+
+const { askUserQuestionTool } = await import("./ask-user-question");
+const { bashTool, commandNeedsApproval } = await import("./bash");
+const { webFetchTool } = await import("./fetch");
+const { globTool } = await import("./glob");
+const { grepTool } = await import("./grep");
+const { readFileTool } = await import("./read");
+const { skillTool } = await import("./skill");
+const { taskTool } = await import("./task");
+const { todoWriteTool } = await import("./todo");
+const { editFileTool, writeFileTool } = await import("./write");
+
+function createContext(sandbox: Record<string, unknown>) {
+  const sandboxId = `sandbox-${sandboxRegistry.size + 1}`;
+  sandboxRegistry.set(sandboxId, sandbox);
+
+  return {
+    sandbox: {
+      state: { type: "vercel" as const, sandboxId },
+      workingDirectory:
+        typeof sandbox.workingDirectory === "string"
+          ? sandbox.workingDirectory
+          : "/repo",
+    },
+    approval: {},
     model: "test-model",
   };
 }
@@ -77,7 +143,7 @@ describe("tools execute behavior", () => {
 
     expect(result).toEqual({
       success: true,
-      path: filePath,
+      path: "notes.txt",
       totalLines: 3,
       startLine: 2,
       endLine: 3,
@@ -114,7 +180,7 @@ describe("tools execute behavior", () => {
     expect(written).toBe("hello");
     expect(result).toEqual({
       success: true,
-      path: expectedPath,
+      path: relativePath,
       bytesWritten: 5,
     });
   });
@@ -150,7 +216,7 @@ describe("tools execute behavior", () => {
     expect(content).toBe("beta\nbeta\nomega");
     expect(result).toEqual({
       success: true,
-      path: filePath,
+      path: "src.txt",
       replacements: 2,
       startLine: 1,
     });
@@ -175,7 +241,7 @@ describe("tools execute behavior", () => {
     const result = await grepTool().execute?.(
       {
         pattern: "match",
-        path: "/repo/src",
+        path: "src",
         glob: "*.ts",
         caseSensitive: false,
       },
@@ -191,11 +257,16 @@ describe("tools execute behavior", () => {
       filesWithMatches: 2,
     });
 
+    const firstMatch =
+      result && typeof result === "object" && "matches" in result
+        ? (result.matches as Array<{ file: string; content: string }>)[0]
+        : undefined;
     const secondMatch =
       result && typeof result === "object" && "matches" in result
-        ? (result.matches as Array<{ content: string }>)[1]
+        ? (result.matches as Array<{ file: string; content: string }>)[1]
         : undefined;
 
+    expect(firstMatch?.file).toBe("src/a.ts");
     expect(secondMatch?.content.length).toBe(200);
   });
 
@@ -216,7 +287,7 @@ describe("tools execute behavior", () => {
     };
 
     const result = await globTool().execute?.(
-      { pattern: "src/**/*.ts", path: "/repo", limit: 2 },
+      { pattern: "src/**/*.ts", path: ".", limit: 2 },
       executionOptions(createContext(sandbox)),
     );
 
@@ -225,16 +296,16 @@ describe("tools execute behavior", () => {
     expect(result).toEqual({
       success: true,
       pattern: "src/**/*.ts",
-      baseDir: "/repo/src",
+      baseDir: "src",
       count: 2,
       files: [
         {
-          path: "/repo/src/a.ts",
+          path: "src/a.ts",
           size: 12,
           modifiedAt: "2023-11-14T22:13:20.000Z",
         },
         {
-          path: "/repo/src/b.ts",
+          path: "src/b.ts",
           size: 20,
           modifiedAt: "2023-07-22T04:26:40.000Z",
         },
@@ -299,17 +370,55 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags dangerous and unknown commands", () => {
+  test("commandNeedsApproval flags only rm -rf commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
-    expect(commandNeedsApproval("npm install")).toBe(true);
-    expect(commandNeedsApproval("echo hi | wc -c")).toBe(true);
-    expect(commandNeedsApproval("custom-command --help")).toBe(true);
+    expect(commandNeedsApproval("npm install")).toBe(false);
+    expect(commandNeedsApproval("bun install")).toBe(false);
+    expect(commandNeedsApproval("custom-command --help")).toBe(false);
+    expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
+    expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
+    expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
+  });
+
+  test("bashTool needsApproval blocks dangerous commands by default", async () => {
+    const baseContext = {
+      sandbox: { workingDirectory: "/repo" },
+      model: "test-model",
+    };
+
+    const safeCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "ls -la" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(safeCommand).toBe(false);
+
+    const dangerousCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "rm -rf tmp" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(dangerousCommand).toBe(true);
+
+    const allowedBuildCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "bun run ci" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(allowedBuildCommand).toBe(false);
   });
 
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    sandboxRegistry.clear();
   });
 
   test("webFetchTool truncates oversized response bodies", async () => {
@@ -447,72 +556,7 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("skillTool needsApproval respects auto-approve and session skill rules", async () => {
-    const baseContext = {
-      sandbox: { workingDirectory: "/repo" },
-      model: "test-model",
-    };
-
-    const defaultNeedsApproval = await getNeedsApprovalResult(
-      skillTool.needsApproval,
-      { skill: "commit", args: "" },
-      {
-        ...baseContext,
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: [],
-        },
-      },
-    );
-    expect(defaultNeedsApproval).toBe(true);
-
-    const autoApproved = await getNeedsApprovalResult(
-      skillTool.needsApproval,
-      { skill: "commit", args: "" },
-      {
-        ...baseContext,
-        approval: {
-          type: "interactive",
-          autoApprove: "all",
-          sessionRules: [],
-        },
-      },
-    );
-    expect(autoApproved).toBe(false);
-
-    const matchedRule = await getNeedsApprovalResult(
-      skillTool.needsApproval,
-      { skill: "CoMmIt", args: "" },
-      {
-        ...baseContext,
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: [
-            {
-              type: "skill",
-              tool: "skill",
-              skillName: "commit",
-            },
-          ],
-        },
-      },
-    );
-    expect(matchedRule).toBe(false);
-  });
-
-  test("taskTool needsApproval requires approval for executor in interactive mode", async () => {
-    const baseContext = {
-      sandbox: { workingDirectory: "/repo" },
-      model: "test-model",
-      approval: {
-        type: "interactive" as const,
-        autoApprove: "off" as const,
-        sessionRules: [],
-      },
-    };
-
+  test("taskTool exposes both subagent types without approval gates", async () => {
     const explorerNeedsApproval = await getNeedsApprovalResult(
       taskTool.needsApproval,
       {
@@ -520,7 +564,11 @@ describe("tools execute behavior", () => {
         task: "Find usages",
         instructions: "Search for helper usage",
       },
-      baseContext,
+      {
+        sandbox: { workingDirectory: "/repo" },
+        model: "test-model",
+        approval: {},
+      },
     );
     expect(explorerNeedsApproval).toBe(false);
 
@@ -531,47 +579,13 @@ describe("tools execute behavior", () => {
         task: "Apply changes",
         instructions: "Update files",
       },
-      baseContext,
-    );
-    expect(executorNeedsApproval).toBe(true);
-
-    const approvedByRule = await getNeedsApprovalResult(
-      taskTool.needsApproval,
       {
-        subagentType: "executor",
-        task: "Apply changes",
-        instructions: "Update files",
-      },
-      {
-        ...baseContext,
-        approval: {
-          type: "interactive",
-          autoApprove: "off",
-          sessionRules: [
-            {
-              type: "subagent-type",
-              tool: "task",
-              subagentType: "executor",
-            },
-          ],
-        },
+        sandbox: { workingDirectory: "/repo" },
+        model: "test-model",
+        approval: {},
       },
     );
-    expect(approvedByRule).toBe(false);
-
-    const backgroundApproval = await getNeedsApprovalResult(
-      taskTool.needsApproval,
-      {
-        subagentType: "executor",
-        task: "Apply changes",
-        instructions: "Update files",
-      },
-      {
-        ...baseContext,
-        approval: { type: "background" },
-      },
-    );
-    expect(backgroundApproval).toBe(false);
+    expect(executorNeedsApproval).toBe(false);
   });
 
   test("todoWriteTool returns updated todo list metadata", async () => {

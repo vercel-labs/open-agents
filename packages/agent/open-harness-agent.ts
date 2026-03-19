@@ -1,15 +1,12 @@
-import type { Sandbox } from "@open-harness/sandbox";
-import {
-  gateway,
-  type LanguageModel,
-  stepCountIs,
-  ToolLoopAgent,
-  type ToolSet,
-  type TypedToolResult,
-} from "ai";
+import type { SandboxState } from "@open-harness/sandbox";
+import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
 import { z } from "zod";
 import { addCacheControl } from "./context-management";
-import { aggressiveCompactContext } from "./context-management/aggressive-compaction";
+import {
+  type GatewayModelId,
+  gateway,
+  type ProviderOptionsByProvider,
+} from "./models";
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
@@ -26,106 +23,44 @@ import {
   webFetchTool,
   writeFileTool,
 } from "./tools";
-import type { ApprovalConfig, TodoItem } from "./types";
-import { approvalRuleSchema } from "./types";
 
-const approvalConfigSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("interactive"),
-    autoApprove: z.enum(["off", "edits", "all"]).default("off"),
-    sessionRules: z.array(approvalRuleSchema).default([]),
-  }),
-  z.object({ type: z.literal("background") }),
-  z.object({ type: z.literal("delegated") }),
-]);
+export interface AgentModelSelection {
+  id: GatewayModelId;
+  providerOptionsOverrides?: ProviderOptionsByProvider;
+}
 
-const compactionContextSchema = z.object({
-  contextLimit: z.number().int().positive().optional(),
-  lastInputTokens: z.number().int().nonnegative().optional(),
-});
+export type OpenHarnessAgentModelInput = GatewayModelId | AgentModelSelection;
+
+export interface AgentSandboxContext {
+  state: SandboxState;
+  workingDirectory: string;
+  currentBranch?: string;
+  environmentDetails?: string;
+}
 
 const callOptionsSchema = z.object({
-  sandbox: z.custom<Sandbox>(),
-  approval: approvalConfigSchema,
-  model: z.custom<LanguageModel>().optional(),
-  subagentModel: z.custom<LanguageModel>().optional(),
+  sandbox: z.custom<AgentSandboxContext>(),
+  model: z.custom<OpenHarnessAgentModelInput>().optional(),
+  subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
-  context: compactionContextSchema.optional(),
 });
-
-type CompactionContext = z.infer<typeof compactionContextSchema>;
 
 export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
-function getCompactionContextFromExperimentalContext(
-  experimentalContext: unknown,
-): CompactionContext | undefined {
-  if (!experimentalContext || typeof experimentalContext !== "object") {
-    return undefined;
+export const defaultModelLabel = "anthropic/claude-opus-4.6" as const;
+export const defaultModel = gateway(defaultModelLabel);
+
+function normalizeAgentModelSelection(
+  selection: OpenHarnessAgentModelInput | undefined,
+  fallbackId: GatewayModelId,
+): AgentModelSelection {
+  if (!selection) {
+    return { id: fallbackId };
   }
 
-  const contextValue = (experimentalContext as { context?: unknown }).context;
-  const parsed = compactionContextSchema.safeParse(contextValue);
-  return parsed.success ? parsed.data : undefined;
+  return typeof selection === "string" ? { id: selection } : selection;
 }
-
-const DEFAULT_CONTEXT_LIMIT = 200_000;
-
-interface CompactionTuning {
-  triggerPercent: number;
-  minSavingsPercent: number;
-  retainRecentToolCalls: number;
-}
-
-const DEFAULT_COMPACTION_TUNING: CompactionTuning = {
-  triggerPercent: 0.58,
-  minSavingsPercent: 0.03,
-  retainRecentToolCalls: 32,
-};
-
-/**
- * Optional model-specific compaction tuning overrides.
- *
- * Keys support exact matches ("provider/model") and partial matches
- * (any substring of the full model id).
- */
-const MODEL_COMPACTION_TUNING_OVERRIDES: Record<
-  string,
-  Partial<CompactionTuning>
-> = {};
-
-function getModelId(model: LanguageModel): string {
-  return typeof model === "string" ? model : model.modelId;
-}
-
-function resolveCompactionTuning(model: LanguageModel): CompactionTuning {
-  const modelId = getModelId(model);
-
-  const exactMatch = MODEL_COMPACTION_TUNING_OVERRIDES[modelId];
-  if (exactMatch) {
-    return {
-      ...DEFAULT_COMPACTION_TUNING,
-      ...exactMatch,
-    };
-  }
-
-  const partialMatch = Object.entries(MODEL_COMPACTION_TUNING_OVERRIDES).find(
-    ([key]) => modelId.includes(key),
-  );
-
-  if (partialMatch?.[1]) {
-    return {
-      ...DEFAULT_COMPACTION_TUNING,
-      ...partialMatch[1],
-    };
-  }
-
-  return DEFAULT_COMPACTION_TUNING;
-}
-
-export const defaultModel = gateway("anthropic/claude-haiku-4.5");
-export const defaultModelLabel = defaultModel.modelId;
 
 const tools = {
   todo_write: todoWriteTool,
@@ -145,53 +80,48 @@ export const openHarnessAgent = new ToolLoopAgent({
   model: defaultModel,
   instructions: buildSystemPrompt({}),
   tools,
-  stopWhen: stepCountIs(100),
+  stopWhen: stepCountIs(1),
   callOptionsSchema,
-  prepareStep: ({ messages, model, steps, experimental_context }) => {
-    const callContext =
-      getCompactionContextFromExperimentalContext(experimental_context);
-    const compactionTuning = resolveCompactionTuning(model);
-
+  prepareStep: ({ messages, model, steps: _steps }) => {
     return {
       messages: addCacheControl({
-        messages: aggressiveCompactContext({
-          messages,
-          steps,
-          contextLimit: callContext?.contextLimit ?? DEFAULT_CONTEXT_LIMIT,
-          lastInputTokens: callContext?.lastInputTokens,
-          triggerPercent: compactionTuning.triggerPercent,
-          minSavingsPercent: compactionTuning.minSavingsPercent,
-          retainRecentToolCalls: compactionTuning.retainRecentToolCalls,
-        }),
+        messages,
         model,
       }),
     };
   },
-  prepareCall: ({ options, model, ...settings }) => {
+  prepareCall: ({ options, ...settings }) => {
     if (!options) {
-      throw new Error(
-        "Open Harness agent requires call options with sandbox and approval config.",
-      );
+      throw new Error("Open Harness agent requires call options with sandbox.");
     }
-    const approval: ApprovalConfig = options.approval;
-    const callModel = options.model ?? model;
-    const subagentModel = options.subagentModel;
+
+    const mainSelection = normalizeAgentModelSelection(
+      options.model,
+      defaultModelLabel,
+    );
+    const subagentSelection = options.subagentModel
+      ? normalizeAgentModelSelection(options.subagentModel, defaultModelLabel)
+      : undefined;
+
+    const callModel = gateway(mainSelection.id, {
+      providerOptionsOverrides: mainSelection.providerOptionsOverrides,
+    });
+    const subagentModel = subagentSelection
+      ? gateway(subagentSelection.id, {
+          providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
+        })
+      : undefined;
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
-    const context = options.context;
-
-    // Derive mode for system prompt (interactive vs background)
-    const mode = approval.type === "background" ? "background" : "interactive";
 
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
-      mode,
       currentBranch: sandbox.currentBranch,
       customInstructions,
       environmentDetails: sandbox.environmentDetails,
       skills,
-      modelId: typeof callModel === "string" ? callModel : callModel.modelId,
+      modelId: mainSelection.id,
     });
 
     return {
@@ -204,25 +134,12 @@ export const openHarnessAgent = new ToolLoopAgent({
       instructions,
       experimental_context: {
         sandbox,
-        approval,
         skills,
         model: callModel,
         subagentModel,
-        context,
       },
     };
   },
 });
-
-export function extractTodosFromStep(
-  toolResults: Array<TypedToolResult<typeof openHarnessAgent.tools>>,
-): TodoItem[] | null {
-  for (const result of toolResults) {
-    if (!result.dynamic && result.toolName === "todo_write" && result.output) {
-      return result.output.todos;
-    }
-  }
-  return null;
-}
 
 export type OpenHarnessAgent = typeof openHarnessAgent;

@@ -11,24 +11,45 @@ describe("toUserPreferencesData", () => {
     const { toUserPreferencesData } = await userPreferencesModulePromise;
 
     expect(toUserPreferencesData()).toEqual({
-      defaultModelId: "anthropic/claude-haiku-4.5",
+      defaultModelId: "anthropic/claude-opus-4.6",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      defaultDiffMode: "unified",
+      autoCommitPush: false,
       modelVariants: [],
     });
   });
 
-  test("normalizes invalid sandbox types to default", async () => {
+  test("normalizes invalid sandbox and diff mode values to defaults", async () => {
     const { toUserPreferencesData } = await userPreferencesModulePromise;
 
     const result = toUserPreferencesData({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: "openai/gpt-5-mini",
       defaultSandboxType: "invalid" as never,
+      defaultDiffMode: "invalid" as never,
+      autoCommitPush: false,
       modelVariants: [],
     });
 
     expect(result.defaultSandboxType).toBe("vercel");
+    expect(result.defaultDiffMode).toBe("unified");
+  });
+
+  test("normalizes legacy hybrid sandbox types to vercel", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultModelId: "openai/gpt-5",
+      defaultSubagentModelId: null,
+      defaultSandboxType: "hybrid" as never,
+      defaultDiffMode: "unified",
+      autoCommitPush: false,
+      modelVariants: [],
+    });
+
+    expect(result.defaultSandboxType).toBe("vercel");
+    expect(result.defaultDiffMode).toBe("unified");
   });
 
   test("drops invalid modelVariants payloads", async () => {
@@ -38,6 +59,8 @@ describe("toUserPreferencesData", () => {
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: false,
       modelVariants: [{ id: "bad-id" }] as never,
     });
 
@@ -50,7 +73,9 @@ describe("toUserPreferencesData", () => {
     const result = toUserPreferencesData({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
-      defaultSandboxType: "hybrid",
+      defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: true,
       modelVariants: [
         {
           id: "variant:test",
@@ -64,7 +89,9 @@ describe("toUserPreferencesData", () => {
     expect(result).toEqual({
       defaultModelId: "openai/gpt-5",
       defaultSubagentModelId: null,
-      defaultSandboxType: "hybrid",
+      defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: true,
       modelVariants: [
         {
           id: "variant:test",

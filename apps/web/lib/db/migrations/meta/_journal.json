@@ -120,6 +120,41 @@
       "when": 1772635279958,
       "tag": "0016_slow_eddie_brock",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1773227614101,
+      "tag": "0017_cynical_blackheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1773229000000,
+      "tag": "0018_remove_hybrid_sandbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1773235344769,
+      "tag": "0019_loud_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1773410965743,
+      "tag": "0020_true_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1773686928144,
+      "tag": "0021_normal_human_torch",
+      "breakpoints": true
     }
   ]
 }

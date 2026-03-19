@@ -1,72 +1,37 @@
 import { nanoid } from "nanoid";
 import {
+  requireAuthenticatedUser,
+  requireOwnedSessionChat,
+} from "@/app/api/sessions/_lib/session-context";
+import {
   createShareIfNotExists,
   deleteShareByChatId,
-  getChatById,
-  getSessionById,
   getShareByChatId,
 } from "@/lib/db/sessions";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
 };
-
-async function validateOwnedChat(
-  sessionId: string,
-  chatId: string,
-  userId: string,
-): Promise<
-  | { ok: true }
-  | {
-      ok: false;
-      response: Response;
-    }
-> {
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return {
-      ok: false,
-      response: Response.json({ error: "Session not found" }, { status: 404 }),
-    };
-  }
-
-  if (sessionRecord.userId !== userId) {
-    return {
-      ok: false,
-      response: Response.json({ error: "Forbidden" }, { status: 403 }),
-    };
-  }
-
-  const existingChat = await getChatById(chatId);
-  if (!existingChat || existingChat.sessionId !== sessionId) {
-    return {
-      ok: false,
-      response: Response.json({ error: "Chat not found" }, { status: 404 }),
-    };
-  }
-
-  return { ok: true };
-}
 
 /**
  * GET /api/sessions/:sessionId/chats/:chatId/share
  * Returns the existing share link id for this chat, if present.
  */
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId, chatId } = await context.params;
-  const validation = await validateOwnedChat(
+
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
     sessionId,
     chatId,
-    session.user.id,
-  );
-  if (!validation.ok) {
-    return validation.response;
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
   const share = await getShareByChatId(chatId);
@@ -78,19 +43,20 @@ export async function GET(_req: Request, context: RouteContext) {
  * Generates a share id for a single chat, making only that chat publicly accessible.
  */
 export async function POST(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId, chatId } = await context.params;
-  const validation = await validateOwnedChat(
+
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
     sessionId,
     chatId,
-    session.user.id,
-  );
-  if (!validation.ok) {
-    return validation.response;
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
   const existingShare = await getShareByChatId(chatId);
@@ -115,19 +81,20 @@ export async function POST(_req: Request, context: RouteContext) {
  * Revokes public access for this chat share link.
  */
 export async function DELETE(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId, chatId } = await context.params;
-  const validation = await validateOwnedChat(
+
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
     sessionId,
     chatId,
-    session.user.id,
-  );
-  if (!validation.ok) {
-    return validation.response;
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
   await deleteShareByChatId(chatId);

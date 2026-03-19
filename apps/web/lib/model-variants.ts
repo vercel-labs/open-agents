@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const MODEL_VARIANT_ID_PREFIX = "variant:";
+export const BUILT_IN_VARIANT_ID_PREFIX = "variant:builtin:";
 const MODEL_VARIANT_NAME_MAX_LENGTH = 80;
 
 type JsonPrimitive = string | number | boolean | null;
@@ -127,4 +128,36 @@ export function resolveModelSelection(
     ),
     isMissingVariant: false,
   };
+}
+
+export function isBuiltInVariant(variantId: string): boolean {
+  return variantId.startsWith(BUILT_IN_VARIANT_ID_PREFIX);
+}
+
+export const BUILT_IN_VARIANTS: ModelVariant[] = [
+  {
+    id: `${BUILT_IN_VARIANT_ID_PREFIX}gpt-5.4-xhigh`,
+    name: "GPT-5.4 (XHigh)",
+    baseModelId: "openai/gpt-5.4-codex",
+    providerOptions: {
+      reasoningEffort: "xhigh",
+      reasoningSummary: "auto",
+    },
+  },
+  {
+    id: `${BUILT_IN_VARIANT_ID_PREFIX}claude-opus-4.6-high`,
+    name: "Claude Opus 4.6 (High)",
+    baseModelId: "anthropic/claude-opus-4.6",
+    providerOptions: {
+      effort: "high",
+    },
+  },
+];
+
+/**
+ * Combines built-in variants with user-defined variants.
+ * Built-in variants appear first.
+ */
+export function getAllVariants(userVariants: ModelVariant[]): ModelVariant[] {
+  return [...BUILT_IN_VARIANTS, ...userVariants];
 }

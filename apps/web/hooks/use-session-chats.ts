@@ -657,6 +657,10 @@ export function useSessionChats(
   };
 
   const setChatStreaming = async (chatId: string, isStreaming: boolean) => {
+    if (!sessionId) {
+      throw new Error("Missing sessionId");
+    }
+
     if (isStreaming) {
       updateOverlay(chatId, (overlay) => ({
         ...overlay,
@@ -672,6 +676,39 @@ export function useSessionChats(
         return next;
       });
     }
+
+    void mutateSessionSummaries<SessionsResponse>(
+      "/api/sessions",
+      (current) => {
+        if (!current) {
+          return current;
+        }
+
+        let changed = false;
+        const sessions = current.sessions.map((session) => {
+          if (session.id !== sessionId) {
+            return session;
+          }
+
+          if (
+            session.hasStreaming === isStreaming &&
+            session.latestChatId === chatId
+          ) {
+            return session;
+          }
+
+          changed = true;
+          return {
+            ...session,
+            hasStreaming: isStreaming,
+            latestChatId: chatId,
+          };
+        });
+
+        return changed ? { ...current, sessions } : current;
+      },
+      { revalidate: false },
+    );
 
     await mutate(
       (current) => {

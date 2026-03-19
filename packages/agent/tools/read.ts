@@ -2,18 +2,13 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import * as fs from "fs";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-} from "./utils";
+import { getSandbox, toDisplayPath } from "./utils";
 
 const readInputSchema = z.object({
   filePath: z
     .string()
     .describe(
-      "Full absolute path to the file (e.g., /Users/username/project/file.ts)",
+      "Workspace-relative path to the file to read (e.g., src/index.ts)",
     ),
   offset: z
     .number()
@@ -59,27 +54,11 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
 
 export const readFileTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "read");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: resolveFilePath(args.filePath, ctx.workingDirectory),
-        tool: "read",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Read a file from the filesystem.
 
 USAGE:
-- The path should be a FULL absolute path (e.g., /Users/username/project/file.ts), not just /file.ts
-- If a root-like path (e.g., /README.md) does not exist on disk, it may be resolved relative to the workspace root
+- Use workspace-relative paths (e.g., "src/index.ts")
+- Paths are resolved from the workspace root
 - By default reads up to 2000 lines starting from line 1
 - Use offset and limit for long files (both are line-based, 1-indexed)
 - Results include line numbers starting at 1 in "N: content" format
@@ -87,18 +66,17 @@ USAGE:
 IMPORTANT:
 - Always read a file at least once before editing it with the edit/write tools
 - This tool can only read files, not directories - attempting to read a directory returns an error
-- Paths outside the working directory require approval
 - You can call multiple reads in parallel to speculatively load several files
 
 EXAMPLES:
-- Read an entire file: filePath: "/Users/username/project/src/index.ts"
-- Read a slice of a long file: filePath: "/Users/username/project/logs/app.log", offset: 500, limit: 200`,
+- Read an entire file: filePath: "src/index.ts"
+- Read a slice of a long file: filePath: "logs/app.log", offset: 500, limit: 200`,
     inputSchema: readInputSchema,
     execute: async (
       { filePath, offset = 1, limit = 2000 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "read");
+      const sandbox = await getSandbox(experimental_context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -125,7 +103,7 @@ EXAMPLES:
 
         return {
           success: true,
-          path: absolutePath,
+          path: toDisplayPath(absolutePath, workingDirectory),
           totalLines: lines.length,
           startLine: startLine + 1,
           endLine,

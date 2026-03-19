@@ -107,7 +107,6 @@ T=1:45  W1 wakes
 | Event | Reason | Source |
 |---|---|---|
 | Sandbox created | `sandbox-created` | `POST /api/sandbox` |
-| Cloud sandbox ready (hybrid handoff) | `cloud-ready` | `onCloudSandboxReady` hook |
 | Manual extend | `timeout-extended` | `POST /api/sandbox/extend` |
 | Snapshot restore | `snapshot-restored` | `PUT /api/sandbox/snapshot` |
 | Status poll finds overdue sandbox | `status-check-overdue` | `GET /api/sandbox/status` |

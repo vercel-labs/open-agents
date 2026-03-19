@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { db } from "./client";
 import { usageEvents } from "./schema";
 
-export type UsageSource = "web" | "cli";
+export type UsageSource = "web";
 export type UsageAgentType = "main" | "subagent";
 
 export async function recordUsage(
@@ -19,11 +19,13 @@ export async function recordUsage(
       cachedInputTokens: number;
       outputTokens: number;
     };
+    toolCallCount?: number;
   },
 ) {
-  const toolCallCount = data.messages
+  const inferredToolCallCount = data.messages
     .flatMap((m) => m.parts)
     .filter(isToolUIPart).length;
+  const toolCallCount = data.toolCallCount ?? inferredToolCallCount;
 
   const provider =
     typeof data.model === "string"

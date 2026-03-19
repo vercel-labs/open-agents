@@ -1,9 +1,28 @@
-import { describe, expect, test } from "bun:test";
-import {
+import { describe, expect, mock, test } from "bun:test";
+import type { ProviderOptionsByProvider } from "./models";
+
+mock.module("ai", () => {
+  const gateway = (modelId: string) => ({ modelId });
+
+  return {
+    createGateway: () => gateway,
+    defaultSettingsMiddleware: (_settings: unknown) => ({
+      kind: "default-settings-middleware",
+    }),
+    gateway,
+    wrapLanguageModel: ({ model }: { model: unknown }) => model,
+  };
+});
+
+mock.module("@ai-sdk/devtools", () => ({
+  devToolsMiddleware: () => ({ kind: "devtools-middleware" }),
+}));
+
+const {
+  getProviderOptionsForModel,
   mergeProviderOptions,
-  type ProviderOptionsByProvider,
   shouldApplyOpenAIReasoningDefaults,
-} from "./models";
+} = await import("./models");
 
 describe("shouldApplyOpenAIReasoningDefaults", () => {
   test("returns true for existing GPT-5 variants", () => {
@@ -23,6 +42,51 @@ describe("shouldApplyOpenAIReasoningDefaults", () => {
 
   test("returns false for non-GPT-5 OpenAI models", () => {
     expect(shouldApplyOpenAIReasoningDefaults("openai/gpt-4o")).toBe(false);
+  });
+});
+
+describe("getProviderOptionsForModel", () => {
+  test("merges OpenAI defaults with custom variant options", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5", {
+      openai: {
+        reasoningEffort: "medium",
+      },
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+        reasoningEffort: "medium",
+        store: false,
+      },
+    });
+  });
+
+  test("enforces store false for OpenAI models even when variant overrides it", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5", {
+      openai: {
+        store: true,
+      },
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+        store: false,
+      },
+    });
+  });
+
+  test("applies store false to non-GPT-5 OpenAI models", () => {
+    const result = getProviderOptionsForModel("openai/gpt-4o");
+
+    expect(result).toEqual({
+      openai: {
+        store: false,
+      },
+    });
   });
 });
 

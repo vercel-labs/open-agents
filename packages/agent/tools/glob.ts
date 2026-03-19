@@ -1,13 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  shellEscape,
-} from "./utils";
+import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface FileInfo {
   path: string;
@@ -20,7 +14,7 @@ const globInputSchema = z.object({
   path: z
     .string()
     .optional()
-    .describe("Base directory to search from (absolute path)"),
+    .describe("Workspace-relative base directory to search from (e.g., src)"),
   limit: z
     .number()
     .optional()
@@ -29,27 +23,6 @@ const globInputSchema = z.object({
 
 export const globTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "glob");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      // If no path is provided, it defaults to working directory (no approval needed)
-      if (!args.path) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.path,
-        tool: "glob",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Find files matching a glob pattern.
 
 WHEN TO USE:
@@ -67,23 +40,23 @@ USAGE:
 - Returns FILES (not directories) sorted by modification time (newest first)
 - Skips hidden files (names starting with ".") and node_modules
 - If path is omitted, the current working directory is used as the base
+- Use workspace-relative paths when setting path
 - Results are limited by the limit parameter (default: 100)
 
 IMPORTANT:
-- Paths outside the working directory require approval
 - Patterns are matched primarily on the final path segment (file name), with basic "*" and "**" support
 - Use this to narrow down candidate files before calling readFileTool or grepTool
 
 EXAMPLES:
 - All TypeScript files in the project: pattern: "**/*.ts"
 - All Jest tests under src: pattern: "src/**/*.test.ts"
-- Recent JSON config files: pattern: "*.json", path: "/Users/username/project/config", limit: 20`,
+- Recent JSON config files: pattern: "*.json", path: "config", limit: 20`,
     inputSchema: globInputSchema,
     execute: async (
       { pattern, path: basePath, limit = 100 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "glob");
+      const sandbox = await getSandbox(experimental_context, "glob");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -191,7 +164,7 @@ EXAMPLES:
           if (isNaN(mtimeSeconds) || isNaN(size) || !filePath) continue;
 
           files.push({
-            path: filePath,
+            path: toDisplayPath(filePath, workingDirectory),
             size,
             modifiedAt: mtimeSeconds * 1000,
           });
@@ -200,7 +173,7 @@ EXAMPLES:
         const response: Record<string, unknown> = {
           success: true,
           pattern,
-          baseDir: searchDir,
+          baseDir: toDisplayPath(searchDir, workingDirectory),
           count: files.length,
           files: files.map((f) => ({
             path: f.path,

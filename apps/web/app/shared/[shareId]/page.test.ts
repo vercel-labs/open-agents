@@ -10,10 +10,12 @@ let chatRecord: {
   id: string;
   sessionId: string;
   title: string;
+  activeStreamId: string | null;
 } | null = {
   id: "chat-1",
   sessionId: "session-1",
   title: "Debug flaky tests",
+  activeStreamId: null,
 };
 let sessionRecord: {
   id: string;
@@ -87,6 +89,7 @@ describe("/shared/[shareId] page", () => {
       id: "chat-1",
       sessionId: "session-1",
       title: "Debug flaky tests",
+      activeStreamId: null,
     };
     sessionRecord = {
       id: "session-1",
@@ -141,5 +144,65 @@ describe("/shared/[shareId] page", () => {
     expect(async () => {
       await SharedPage({ params: Promise.resolve({ shareId: "missing" }) });
     }).toThrow("not-found");
+  });
+
+  test("passes isStreaming=false and lastUserMessageSentAt when chat is idle", async () => {
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: {
+        isStreaming: boolean;
+        lastUserMessageSentAt: string | null;
+        shareId: string;
+      };
+    };
+
+    expect(element.props.isStreaming).toBe(false);
+    expect(element.props.lastUserMessageSentAt).toBe(
+      "2025-01-01T00:00:00.000Z",
+    );
+    expect(element.props.shareId).toBe("share-1");
+  });
+
+  test("passes isStreaming=true when chat has an active stream", async () => {
+    chatRecord = {
+      id: "chat-1",
+      sessionId: "session-1",
+      title: "Debug flaky tests",
+      activeStreamId: "stream-abc",
+    };
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: { isStreaming: boolean; lastUserMessageSentAt: string | null };
+    };
+
+    expect(element.props.isStreaming).toBe(true);
+    expect(element.props.lastUserMessageSentAt).toBe(
+      "2025-01-01T00:00:00.000Z",
+    );
+  });
+
+  test("lastUserMessageSentAt is null when there are no user messages", async () => {
+    messageRows = [
+      {
+        parts: { id: "m1", role: "assistant", parts: [] },
+        role: "assistant",
+        createdAt: new Date("2025-01-01T00:01:00Z"),
+      },
+    ];
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: { lastUserMessageSentAt: string | null };
+    };
+
+    expect(element.props.lastUserMessageSentAt).toBeNull();
   });
 });
