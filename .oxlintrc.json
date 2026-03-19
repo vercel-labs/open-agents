@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "import",
-    "react"
-  ],
+  "plugins": ["typescript", "unicorn", "import", "react"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
@@ -92,9 +87,7 @@
       }
     },
     {
-      "files": [
-        "AGENTS.md"
-      ],
+      "files": ["AGENTS.md"],
       "rules": {
         "max-lines": [
           "error",

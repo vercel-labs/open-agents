@@ -2,6 +2,7 @@
 // https://oxc.rs/docs/guide/usage/formatter/config-file-reference.html
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [".agents/skills/**"],
   "arrowParens": "always",
   "bracketSameLine": false,
   "bracketSpacing": true,
@@ -9,7 +10,7 @@
   "experimentalSortImports": {
     "ignoreCase": true,
     "newlinesBetween": false,
-    "order": "asc"
+    "order": "asc",
   },
   "experimentalSortPackageJson": true,
   "jsxSingleQuote": false,
@@ -19,5 +20,5 @@
   "singleQuote": false,
   "tabWidth": 2,
   "trailingComma": "all",
-  "useTabs": false
+  "useTabs": false,
 }
