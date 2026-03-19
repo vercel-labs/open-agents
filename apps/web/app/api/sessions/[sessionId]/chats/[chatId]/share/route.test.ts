@@ -15,28 +15,88 @@ let createdShareRecord: ShareRecord = { id: "share-new", chatId: "chat-1" };
 const createShareInputs: Array<{ id: string; chatId: string }> = [];
 const deletedShareChatIds: string[] = [];
 
-mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () => currentSession,
-}));
+function registerRouteMocks() {
+  mock.module("@/app/api/sessions/_lib/session-context", () => ({
+    requireAuthenticatedUser: async () =>
+      currentSession
+        ? {
+            ok: true as const,
+            userId: currentSession.user.id,
+          }
+        : {
+            ok: false as const,
+            response: Response.json(
+              { error: "Not authenticated" },
+              { status: 401 },
+            ),
+          },
+    requireOwnedSessionChat: async ({
+      userId,
+      sessionId,
+      chatId,
+    }: {
+      userId: string;
+      sessionId: string;
+      chatId: string;
+    }) => {
+      if (!sessionRecord || sessionRecord.id !== sessionId) {
+        return {
+          ok: false as const,
+          response: Response.json(
+            { error: "Session not found" },
+            { status: 404 },
+          ),
+        };
+      }
 
-mock.module("nanoid", () => ({
-  nanoid: () => "generated-share-id",
-}));
+      if (sessionRecord.userId !== userId) {
+        return {
+          ok: false as const,
+          response: Response.json({ error: "Forbidden" }, { status: 403 }),
+        };
+      }
 
-mock.module("@/lib/db/sessions", () => ({
-  getSessionById: async () => sessionRecord,
-  getChatById: async () => chatRecord,
-  getShareByChatId: async () => shareRecord,
-  createShareIfNotExists: async (input: { id: string; chatId: string }) => {
-    createShareInputs.push(input);
-    return createdShareRecord;
-  },
-  deleteShareByChatId: async (chatId: string) => {
-    deletedShareChatIds.push(chatId);
-  },
-}));
+      if (
+        !chatRecord ||
+        chatRecord.id !== chatId ||
+        chatRecord.sessionId !== sessionId
+      ) {
+        return {
+          ok: false as const,
+          response: Response.json({ error: "Chat not found" }, { status: 404 }),
+        };
+      }
 
-const routeModulePromise = import("./route");
+      return {
+        ok: true as const,
+        sessionRecord,
+        chat: chatRecord,
+      };
+    },
+  }));
+
+  mock.module("nanoid", () => ({
+    nanoid: () => "generated-share-id",
+  }));
+
+  mock.module("@/lib/db/sessions", () => ({
+    getShareByChatId: async () => shareRecord,
+    createShareIfNotExists: async (input: { id: string; chatId: string }) => {
+      createShareInputs.push(input);
+      return createdShareRecord;
+    },
+    deleteShareByChatId: async (chatId: string) => {
+      deletedShareChatIds.push(chatId);
+    },
+  }));
+}
+
+let routeImportVersion = 0;
+
+async function loadRouteModule() {
+  routeImportVersion += 1;
+  return import(`./route?test=${routeImportVersion}`);
+}
 
 function createContext(sessionId = "session-1", chatId = "chat-1") {
   return {
@@ -53,11 +113,12 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
     createdShareRecord = { id: "share-new", chatId: "chat-1" };
     createShareInputs.length = 0;
     deletedShareChatIds.length = 0;
+    registerRouteMocks();
   });
 
   test("GET returns current chat share id", async () => {
     shareRecord = { id: "share-1", chatId: "chat-1" };
-    const { GET } = await routeModulePromise;
+    const { GET } = await loadRouteModule();
 
     const response = await GET(
       new Request("http://localhost/api/sessions/session-1/chats/chat-1/share"),
@@ -70,7 +131,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
   });
 
   test("POST creates a new share when one does not exist", async () => {
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request(
@@ -92,7 +153,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
 
   test("POST reuses existing share id when one already exists", async () => {
     shareRecord = { id: "share-existing", chatId: "chat-1" };
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request(
@@ -111,7 +172,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
   });
 
   test("DELETE revokes share for the chat", async () => {
-    const { DELETE } = await routeModulePromise;
+    const { DELETE } = await loadRouteModule();
 
     const response = await DELETE(
       new Request(
@@ -131,7 +192,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
 
   test("returns 401 when user is not authenticated", async () => {
     currentSession = null;
-    const { GET, POST, DELETE } = await routeModulePromise;
+    const { GET, POST, DELETE } = await loadRouteModule();
 
     const getResponse = await GET(
       new Request("http://localhost/api/sessions/session-1/chats/chat-1/share"),
@@ -164,7 +225,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
 
   test("returns 403 when session does not belong to current user", async () => {
     sessionRecord = { id: "session-1", userId: "different-user" };
-    const { GET } = await routeModulePromise;
+    const { GET } = await loadRouteModule();
 
     const response = await GET(
       new Request("http://localhost/api/sessions/session-1/chats/chat-1/share"),
@@ -176,7 +237,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/share", () => {
 
   test("returns 404 when chat does not belong to the session", async () => {
     chatRecord = { id: "chat-1", sessionId: "session-2" };
-    const { GET } = await routeModulePromise;
+    const { GET } = await loadRouteModule();
 
     const response = await GET(
       new Request("http://localhost/api/sessions/session-1/chats/chat-1/share"),

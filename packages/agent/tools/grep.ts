@@ -1,14 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  shellEscape,
-  toDisplayPath,
-} from "./utils";
+import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface GrepMatch {
   file: string;
@@ -33,22 +26,6 @@ const grepInputSchema = z.object({
 
 export const grepTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "grep");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.path,
-        tool: "grep",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Search for patterns in files using POSIX Extended Regular Expressions (ERE).
 
 WHEN TO USE:
@@ -74,7 +51,6 @@ IMPORTANT:
 - ALWAYS use this tool for code/content searches instead of running grep/rg via bashTool
 - Use caseSensitive: false for case-insensitive searches
 - Hidden files and node_modules are skipped when searching directories
-- Paths outside the working directory require approval
 
 EXAMPLES:
 - Find all TODO comments in TypeScript files: pattern: "TODO", path: "src", glob: "*.ts"
@@ -84,7 +60,7 @@ EXAMPLES:
       { pattern, path: searchPath, glob, caseSensitive = true },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "grep");
+      const sandbox = await getSandbox(experimental_context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

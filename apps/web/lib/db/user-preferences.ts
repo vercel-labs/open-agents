@@ -17,7 +17,7 @@ export interface UserPreferencesData {
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
-  defaultModelId: "anthropic/claude-haiku-4.5",
+  defaultModelId: "anthropic/claude-opus-4.6",
   defaultSubagentModelId: null,
   defaultSandboxType: "vercel",
   defaultDiffMode: "unified",

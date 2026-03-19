@@ -1,8 +1,21 @@
 import { describe, expect, mock, test } from "bun:test";
-import { cleanupChatRouteOnUnmount } from "./chat-route-cleanup";
+
+const spies = {
+  abortChatInstanceTransport: mock((_chatId: string) => {}),
+  removeChatInstance: mock((_chatId: string) => {}),
+};
+
+mock.module("@/lib/chat-instance-manager", () => ({
+  abortChatInstanceTransport: spies.abortChatInstanceTransport,
+  removeChatInstance: spies.removeChatInstance,
+}));
+
+const cleanupModulePromise = import("./chat-route-cleanup");
 
 describe("cleanupChatRouteOnUnmount", () => {
-  test("aborts local transport and removes chat instance", () => {
+  test("aborts local transport and removes chat instance", async () => {
+    const { cleanupChatRouteOnUnmount } = await cleanupModulePromise;
+
     const calls: string[] = [];
     const abortTransport = mock((chatId: string) => {
       calls.push(`abort:${chatId}`);
@@ -21,7 +34,9 @@ describe("cleanupChatRouteOnUnmount", () => {
     expect(calls).toEqual(["abort:chat-123", "remove:chat-123"]);
   });
 
-  test("never issues a server stop signal during route teardown", () => {
+  test("never issues a server stop signal during route teardown", async () => {
+    const { cleanupChatRouteOnUnmount } = await cleanupModulePromise;
+
     const abortTransport = mock((_chatId: string) => {});
     const removeInstance = mock((_chatId: string) => {});
     const stopStream = mock((_chatId: string) => {});

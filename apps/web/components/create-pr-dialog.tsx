@@ -2,6 +2,7 @@
 
 import {
   Check,
+  ChevronDown,
   ExternalLink,
   GitCommit,
   Loader2,
@@ -26,6 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
 import {
@@ -49,6 +56,7 @@ interface CreatePRDialogProps {
 type GitActions = GitActionsResult;
 
 type WizardStep = "create-branch" | "generate";
+type PrCreationMode = "ready" | "draft";
 
 function buildCompareUrl(params: {
   owner: string;
@@ -105,6 +113,8 @@ export function CreatePRDialog({
   const [step, setStep] = useState<WizardStep>("generate");
   const [hasGenerated, setHasGenerated] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
+  const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
+  const isDraft = prCreationMode === "draft";
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -121,6 +131,7 @@ export function CreatePRDialog({
       setStep("generate");
       setHasGenerated(false);
       setPrHeadOwner(null);
+      setPrCreationMode("ready");
     }
   }, [open]);
 
@@ -304,6 +315,7 @@ export function CreatePRDialog({
           body,
           baseBranch,
           headOwner: prHeadOwner ?? undefined,
+          isDraft,
         }),
       });
 
@@ -356,8 +368,12 @@ export function CreatePRDialog({
             <div className="text-center">
               <p className="font-medium">
                 {result.requiresManualCreation
-                  ? "Open GitHub to create the pull request"
-                  : "Pull request created successfully!"}
+                  ? isDraft
+                    ? "Open GitHub to create the draft pull request"
+                    : "Open GitHub to create the pull request"
+                  : isDraft
+                    ? "Draft pull request created successfully!"
+                    : "Pull request created successfully!"}
               </p>
               {/* External link to GitHub - not internal navigation */}
               {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
@@ -459,6 +475,17 @@ export function CreatePRDialog({
                       We pushed your branch, but this repository does not allow
                       API-based PR creation for the current app token. Open
                       GitHub to create the PR from the compare page.
+                      {isDraft && (
+                        <p className="mt-2">
+                          GitHub will still open the standard compare flow.
+                          Choose
+                          <span className="font-medium">
+                            {" "}
+                            Create draft pull request
+                          </span>
+                          on GitHub to keep it in draft mode.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -551,23 +578,89 @@ export function CreatePRDialog({
                       </>
                     )}
                   </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={
-                      isDisabled || !title.trim() || hasUncommittedChanges
-                    }
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : shouldOpenCompareInsteadOfApi ? (
-                      "Open Compare Page"
-                    ) : (
-                      "Create PR"
-                    )}
-                  </Button>
+                  <div className="flex">
+                    <Button
+                      onClick={handleCreate}
+                      className="rounded-r-none"
+                      disabled={
+                        isDisabled || !title.trim() || hasUncommittedChanges
+                      }
+                    >
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : shouldOpenCompareInsteadOfApi ? (
+                        isDraft ? (
+                          "Open Compare for Draft"
+                        ) : (
+                          "Open Compare Page"
+                        )
+                      ) : isDraft ? (
+                        "Create Draft PR"
+                      ) : (
+                        "Create PR"
+                      )}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="icon"
+                          className="rounded-l-none border-l border-l-primary-foreground/25"
+                          disabled={
+                            isDisabled || !title.trim() || hasUncommittedChanges
+                          }
+                          aria-label="Choose pull request type"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-72">
+                        <DropdownMenuItem
+                          className="items-start gap-3 py-2"
+                          onSelect={() => setPrCreationMode("ready")}
+                        >
+                          <Check
+                            className={
+                              prCreationMode === "ready"
+                                ? "mt-0.5 h-4 w-4"
+                                : "mt-0.5 h-4 w-4 opacity-0"
+                            }
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              Create pull request
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              Open a pull request that is ready for review
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="items-start gap-3 py-2"
+                          onSelect={() => setPrCreationMode("draft")}
+                        >
+                          <Check
+                            className={
+                              prCreationMode === "draft"
+                                ? "mt-0.5 h-4 w-4"
+                                : "mt-0.5 h-4 w-4 opacity-0"
+                            }
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              Create draft pull request
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              Cannot be merged until marked ready for review
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </>
               )}
             </DialogFooter>

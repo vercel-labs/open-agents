@@ -2,6 +2,8 @@ import { nanoid } from "nanoid";
 import {
   createModelVariantInputSchema,
   deleteModelVariantInputSchema,
+  getAllVariants,
+  isBuiltInVariant,
   MODEL_VARIANT_ID_PREFIX,
   modelVariantSchema,
   type ModelVariant,
@@ -42,7 +44,9 @@ export async function GET() {
   }
 
   const preferences = await getUserPreferences(session.user.id);
-  return Response.json({ modelVariants: preferences.modelVariants });
+  return Response.json({
+    modelVariants: getAllVariants(preferences.modelVariants),
+  });
 }
 
 export async function POST(req: Request) {
@@ -81,7 +85,9 @@ export async function POST(req: Request) {
       modelVariants: [...preferences.modelVariants, nextVariant],
     });
 
-    return Response.json({ modelVariants: updatedPreferences.modelVariants });
+    return Response.json({
+      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+    });
   } catch (error) {
     console.error("Failed to create model variant:", error);
     return jsonError("Failed to create model variant", 500);
@@ -104,6 +110,10 @@ export async function PATCH(req: Request) {
   const parsedBody = updateModelVariantInputSchema.safeParse(body);
   if (!parsedBody.success) {
     return jsonError("Invalid model variant payload", 400);
+  }
+
+  if (isBuiltInVariant(parsedBody.data.id)) {
+    return jsonError("Built-in variants cannot be modified", 403);
   }
 
   try {
@@ -137,7 +147,9 @@ export async function PATCH(req: Request) {
       modelVariants: nextVariants,
     });
 
-    return Response.json({ modelVariants: updatedPreferences.modelVariants });
+    return Response.json({
+      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+    });
   } catch (error) {
     console.error("Failed to update model variant:", error);
     return jsonError("Failed to update model variant", 500);
@@ -162,6 +174,10 @@ export async function DELETE(req: Request) {
     return jsonError("Invalid model variant payload", 400);
   }
 
+  if (isBuiltInVariant(parsedBody.data.id)) {
+    return jsonError("Built-in variants cannot be deleted", 403);
+  }
+
   try {
     const preferences = await getUserPreferences(session.user.id);
     const nextVariants = preferences.modelVariants.filter(
@@ -176,7 +192,9 @@ export async function DELETE(req: Request) {
       modelVariants: nextVariants,
     });
 
-    return Response.json({ modelVariants: updatedPreferences.modelVariants });
+    return Response.json({
+      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+    });
   } catch (error) {
     console.error("Failed to delete model variant:", error);
     return jsonError("Failed to delete model variant", 500);

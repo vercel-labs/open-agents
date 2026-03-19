@@ -1,14 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  shellEscape,
-  toDisplayPath,
-} from "./utils";
+import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface FileInfo {
   path: string;
@@ -30,27 +23,6 @@ const globInputSchema = z.object({
 
 export const globTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "glob");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      // If no path is provided, it defaults to working directory (no approval needed)
-      if (!args.path) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.path,
-        tool: "glob",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Find files matching a glob pattern.
 
 WHEN TO USE:
@@ -72,7 +44,6 @@ USAGE:
 - Results are limited by the limit parameter (default: 100)
 
 IMPORTANT:
-- Paths outside the working directory require approval
 - Patterns are matched primarily on the final path segment (file name), with basic "*" and "**" support
 - Use this to narrow down candidate files before calling readFileTool or grepTool
 
@@ -85,7 +56,7 @@ EXAMPLES:
       { pattern, path: basePath, limit = 100 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "glob");
+      const sandbox = await getSandbox(experimental_context, "glob");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

@@ -33,7 +33,7 @@ jobs:
         run: bun run typecheck
 
       - name: Test
-        run: bun test
+        run: bun run test:isolated
 
       - name: DB Check
         run: bun run --cwd apps/web db:check

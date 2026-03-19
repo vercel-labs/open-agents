@@ -1,5 +1,6 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
-import type { SandboxHooks } from "../interface";
+import type { Sandbox, SandboxHooks } from "../interface";
+import { tryConnectVercelSandboxDirect } from "./direct";
 import { VercelSandbox } from "./sandbox";
 import type { VercelState } from "./state";
 import { configureGitUser } from "./utils";
@@ -13,8 +14,25 @@ interface ConnectOptions {
   baseSnapshotId?: string;
 }
 
+function getRemainingTimeout(
+  expiresAt: number | undefined,
+): number | undefined {
+  if (!expiresAt) {
+    return undefined;
+  }
+
+  const remaining = expiresAt - Date.now();
+  return remaining > 10_000 ? remaining : undefined;
+}
+
+function canUseOptimisticAttach(options?: ConnectOptions): boolean {
+  // Keep the full SDK reconnect path for callers that need ports/environment
+  // details or lifecycle hooks.
+  return !options?.hooks && !options?.ports;
+}
+
 /**
- * Connect to a Vercel sandbox based on the provided state.
+ * Connect to the Vercel-backed cloud sandbox based on the provided state.
  *
  * - If `sandboxId` is present, reconnects to an existing running VM
  * - If `snapshotId` is present (without sandboxId), restores from native snapshot
@@ -24,26 +42,33 @@ interface ConnectOptions {
 export async function connectVercel(
   state: VercelState,
   options?: ConnectOptions,
-): Promise<VercelSandbox> {
+): Promise<Sandbox> {
   // Reconnect to existing VM
   if (state.sandboxId) {
-    // Calculate remaining timeout from persisted expiresAt.
-    // If persisted expiry is stale/expired, skip it so reconnect falls back to
-    // VercelSandbox's default reconnect timeout instead of immediately expiring.
-    let remainingTimeout: number | undefined;
-    if (state.expiresAt) {
-      const remaining = state.expiresAt - Date.now();
-      if (remaining > 10_000) {
-        remainingTimeout = remaining;
+    const remainingTimeout = getRemainingTimeout(state.expiresAt);
+
+    const connectManagedSandbox = () =>
+      VercelSandbox.connect(state.sandboxId as string, {
+        env: options?.env,
+        hooks: options?.hooks,
+        remainingTimeout,
+        ports: options?.ports,
+      });
+
+    if (canUseOptimisticAttach(options)) {
+      const directSandbox = await tryConnectVercelSandboxDirect({
+        sandboxId: state.sandboxId,
+        env: options?.env,
+        reconnect: connectManagedSandbox,
+        expiresAt: state.expiresAt,
+      });
+
+      if (directSandbox) {
+        return directSandbox;
       }
     }
 
-    return VercelSandbox.connect(state.sandboxId, {
-      env: options?.env,
-      hooks: options?.hooks,
-      remainingTimeout,
-      ports: options?.ports,
-    });
+    return connectManagedSandbox();
   }
 
   // Restore from snapshot (VM timed out, need to spin up new one)

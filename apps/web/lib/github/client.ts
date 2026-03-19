@@ -193,6 +193,13 @@ const FAILED_CHECK_CONCLUSIONS = new Set([
   "timed_out",
 ]);
 
+const MERGEABILITY_POLL_DELAY_MS = 200;
+const MERGEABILITY_MAX_POLL_ATTEMPTS = 3;
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getCheckRunState(
   status: string | null,
   conclusion: string | null,
@@ -376,7 +383,7 @@ export async function getPullRequestMergeReadiness(params: {
 
     const { owner, repo } = parsed;
 
-    const [pullRequestResponse, repositoryResponse] = await Promise.all([
+    const [initialPullRequestResponse, repositoryResponse] = await Promise.all([
       result.octokit.rest.pulls.get({
         owner,
         repo,
@@ -385,7 +392,34 @@ export async function getPullRequestMergeReadiness(params: {
       result.octokit.rest.repos.get({ owner, repo }),
     ]);
 
-    const pullRequest = pullRequestResponse.data;
+    let pullRequest = initialPullRequestResponse.data;
+
+    for (
+      let attempt = 0;
+      attempt < MERGEABILITY_MAX_POLL_ATTEMPTS &&
+      pullRequest.mergeable === null;
+      attempt += 1
+    ) {
+      await delay(MERGEABILITY_POLL_DELAY_MS);
+
+      try {
+        const refreshedPullRequestResponse =
+          await result.octokit.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: prNumber,
+          });
+
+        pullRequest = refreshedPullRequestResponse.data;
+      } catch (refreshError) {
+        console.warn(
+          "Failed to refresh pull request mergeability state:",
+          refreshError,
+        );
+        break;
+      }
+    }
+
     const repository = repositoryResponse.data;
     const isDraft = Boolean(pullRequest.draft);
 
@@ -436,10 +470,13 @@ export async function getPullRequestMergeReadiness(params: {
         })),
       );
     } catch (checksError) {
-      console.warn(
-        "Failed to list check runs for merge readiness:",
-        checksError,
-      );
+      const checksHttpError = checksError as { status?: number };
+      if (checksHttpError.status !== 403 && checksHttpError.status !== 404) {
+        console.warn(
+          "Failed to list check runs for merge readiness:",
+          checksError,
+        );
+      }
     }
 
     if (checksSummary.requiredTotal === 0) {
@@ -471,10 +508,13 @@ export async function getPullRequestMergeReadiness(params: {
           })),
         );
       } catch (statusError) {
-        console.warn(
-          "Failed to fetch combined status for merge readiness:",
-          statusError,
-        );
+        const statusHttpError = statusError as { status?: number };
+        if (statusHttpError.status !== 403 && statusHttpError.status !== 404) {
+          console.warn(
+            "Failed to fetch combined status for merge readiness:",
+            statusError,
+          );
+        }
       }
     }
 
@@ -585,6 +625,7 @@ export async function createPullRequest(params: {
   title: string;
   body?: string;
   baseBranch?: string;
+  isDraft?: boolean;
   token?: string;
 }): Promise<{
   success: boolean;
@@ -599,6 +640,7 @@ export async function createPullRequest(params: {
     title,
     body = "",
     baseBranch = "main",
+    isDraft = false,
     token,
   } = params;
 
@@ -623,6 +665,7 @@ export async function createPullRequest(params: {
       body,
       head: headRef ?? branchName,
       base: baseBranch,
+      draft: isDraft,
     });
 
     return {
@@ -741,6 +784,79 @@ export async function mergePullRequest(params: {
     return {
       success: false,
       error: "Failed to merge pull request",
+      statusCode: 502,
+    };
+  }
+}
+
+export async function closePullRequest(params: {
+  repoUrl: string;
+  prNumber: number;
+  token?: string;
+}): Promise<
+  { success: true } | { success: false; error: string; statusCode?: number }
+> {
+  const { repoUrl, prNumber, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return {
+        success: false,
+        error: "GitHub account not connected",
+        statusCode: 401,
+      };
+    }
+
+    const parsed = parseGitHubUrl(repoUrl);
+    if (!parsed) {
+      return {
+        success: false,
+        error: "Invalid GitHub repository URL",
+        statusCode: 400,
+      };
+    }
+
+    const { owner, repo } = parsed;
+
+    await result.octokit.rest.pulls.update({
+      owner,
+      repo,
+      pull_number: prNumber,
+      state: "closed",
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Error closing PR:", error);
+
+    const httpError = error as { status?: number };
+    if (httpError.status === 403) {
+      return {
+        success: false,
+        error: "Permission denied",
+        statusCode: 403,
+      };
+    }
+    if (httpError.status === 404) {
+      return {
+        success: false,
+        error: "Pull request not found",
+        statusCode: 404,
+      };
+    }
+    if (httpError.status === 422) {
+      return {
+        success: false,
+        error: "Pull request cannot be closed",
+        statusCode: 422,
+      };
+    }
+
+    return {
+      success: false,
+      error: "Failed to close pull request",
       statusCode: 502,
     };
   }

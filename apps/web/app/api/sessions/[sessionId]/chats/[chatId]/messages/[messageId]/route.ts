@@ -1,8 +1,11 @@
-import { getServerSession } from "@/lib/session/get-server-session";
+import { getRun } from "workflow/api";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSessionChat,
+} from "@/app/api/sessions/_lib/session-context";
 import {
   deleteChatMessageAndFollowing,
-  getChatById,
-  getSessionById,
+  updateChatActiveStreamId,
 } from "@/lib/db/sessions";
 
 type RouteContext = {
@@ -10,31 +13,43 @@ type RouteContext = {
 };
 
 export async function DELETE(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId, chatId, messageId } = await context.params;
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
+    sessionId,
+    chatId,
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
-  const chat = await getChatById(chatId);
-  if (!chat || chat.sessionId !== sessionId) {
-    return Response.json({ error: "Chat not found" }, { status: 404 });
-  }
+  const { chat } = chatContext;
 
   if (chat.activeStreamId) {
-    return Response.json(
-      { error: "Cannot delete messages while a response is streaming" },
-      { status: 409 },
-    );
+    // Check if the workflow is actually still running. If it terminated
+    // without cleaning up (e.g. due to a failure), clear the stale ID
+    // and allow the delete to proceed.
+    try {
+      const run = getRun(chat.activeStreamId);
+      const status = await run.status;
+      if (status === "running" || status === "pending") {
+        return Response.json(
+          { error: "Cannot delete messages while a response is streaming" },
+          { status: 409 },
+        );
+      }
+    } catch {
+      // Workflow run not found — treat as stale.
+    }
+
+    // Workflow is terminal or not found — clear the stale activeStreamId.
+    await updateChatActiveStreamId(chatId, null);
   }
 
   const result = await deleteChatMessageAndFollowing(chatId, messageId);

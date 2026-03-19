@@ -70,35 +70,85 @@ let deleteResult: { success: boolean; error?: string; statusCode?: number } = {
   success: true,
 };
 
-mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () => authSession,
-}));
+function registerRouteMocks() {
+  mock.module("@/app/api/sessions/_lib/session-context", () => ({
+    requireAuthenticatedUser: async () =>
+      authSession
+        ? {
+            ok: true as const,
+            userId: authSession.user.id,
+          }
+        : {
+            ok: false as const,
+            response: Response.json(
+              { error: "Not authenticated" },
+              { status: 401 },
+            ),
+          },
+    requireOwnedSession: async ({
+      userId,
+      sessionId,
+    }: {
+      userId: string;
+      sessionId: string;
+    }) => {
+      if (!sessionRecord || sessionRecord.id !== sessionId) {
+        return {
+          ok: false as const,
+          response: Response.json(
+            { error: "Session not found" },
+            { status: 404 },
+          ),
+        };
+      }
 
-mock.module("@/lib/db/sessions", () => ({
-  getSessionById: async () => sessionRecord,
-  updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
-    updateCalls.push({ sessionId, patch });
-    return sessionRecord ? { ...sessionRecord, ...patch } : null;
-  },
-}));
+      if (sessionRecord.userId !== userId) {
+        return {
+          ok: false as const,
+          response: Response.json({ error: "Forbidden" }, { status: 403 }),
+        };
+      }
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: async () => ({ token: "token-123", type: "user" as const }),
-}));
+      return {
+        ok: true as const,
+        sessionRecord,
+      };
+    },
+  }));
 
-mock.module("@/lib/github/client", () => ({
-  getPullRequestMergeReadiness: async () => readinessResult,
-  mergePullRequest: async (input: Record<string, unknown>) => {
-    mergeCalls.push(input);
-    return mergeResult;
-  },
-  deleteBranchRef: async (input: Record<string, unknown>) => {
-    deleteCalls.push(input);
-    return deleteResult;
-  },
-}));
+  mock.module("@/lib/db/sessions", () => ({
+    updateSession: async (
+      sessionId: string,
+      patch: Record<string, unknown>,
+    ) => {
+      updateCalls.push({ sessionId, patch });
+      return sessionRecord ? { ...sessionRecord, ...patch } : null;
+    },
+  }));
 
-const routeModulePromise = import("./route");
+  mock.module("@/lib/github/get-repo-token", () => ({
+    getRepoToken: async () => ({ token: "token-123", type: "user" as const }),
+  }));
+
+  mock.module("@/lib/github/client", () => ({
+    getPullRequestMergeReadiness: async () => readinessResult,
+    mergePullRequest: async (input: Record<string, unknown>) => {
+      mergeCalls.push(input);
+      return mergeResult;
+    },
+    deleteBranchRef: async (input: Record<string, unknown>) => {
+      deleteCalls.push(input);
+      return deleteResult;
+    },
+  }));
+}
+
+let routeImportVersion = 0;
+
+async function loadRouteModule() {
+  routeImportVersion += 1;
+  return import(`./route?test=${routeImportVersion}`);
+}
 
 function createContext(sessionId = "session-1") {
   return {
@@ -149,11 +199,12 @@ describe("/api/sessions/[sessionId]/merge", () => {
     updateCalls.length = 0;
     mergeCalls.length = 0;
     deleteCalls.length = 0;
+    registerRouteMocks();
   });
 
   test("returns 401 when user is not authenticated", async () => {
     authSession = null;
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request("http://localhost/api/sessions/session-1/merge", {
@@ -166,7 +217,7 @@ describe("/api/sessions/[sessionId]/merge", () => {
   });
 
   test("returns 400 when request body is invalid JSON", async () => {
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request("http://localhost/api/sessions/session-1/merge", {
@@ -192,7 +243,7 @@ describe("/api/sessions/[sessionId]/merge", () => {
       reasons: ["Required checks are still pending"],
     };
 
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request("http://localhost/api/sessions/session-1/merge", {
@@ -215,7 +266,7 @@ describe("/api/sessions/[sessionId]/merge", () => {
   });
 
   test("merges pull request, deletes branch, and stores merged status", async () => {
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request("http://localhost/api/sessions/session-1/merge", {
@@ -270,7 +321,7 @@ describe("/api/sessions/[sessionId]/merge", () => {
       },
     };
 
-    const { POST } = await routeModulePromise;
+    const { POST } = await loadRouteModule();
 
     const response = await POST(
       new Request("http://localhost/api/sessions/session-1/merge", {

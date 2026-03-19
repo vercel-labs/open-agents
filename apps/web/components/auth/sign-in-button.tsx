@@ -1,6 +1,7 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function VercelIcon({ className }: { className?: string }) {
@@ -33,22 +34,33 @@ function resolveRedirectPath(value: string): string {
   return window.location.pathname + window.location.search;
 }
 
-function handleSignIn(callbackUrl?: string) {
-  const fallback = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
-  const encodedRedirect = encodeURIComponent(redirectPath);
-  window.location.href = `/api/auth/signin/vercel?next=${encodedRedirect}`;
-}
-
 type SignInButtonProps = {
   callbackUrl?: string;
 } & Omit<ComponentProps<typeof Button>, "onClick">;
 
-export function SignInButton({ callbackUrl, ...props }: SignInButtonProps) {
+export function SignInButton({
+  callbackUrl,
+  disabled,
+  ...props
+}: SignInButtonProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  function handleSignIn() {
+    setIsLoading(true);
+    const fallback = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
+    const encodedRedirect = encodeURIComponent(redirectPath);
+    window.location.href = `/api/auth/signin/vercel?next=${encodedRedirect}`;
+  }
+
   return (
-    <Button {...props} onClick={() => handleSignIn(callbackUrl)}>
-      <VercelIcon className="mr-2 h-4 w-4" />
-      Sign in with Vercel
+    <Button {...props} disabled={disabled || isLoading} onClick={handleSignIn}>
+      {isLoading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <VercelIcon className="mr-2 h-4 w-4" />
+      )}
+      {isLoading ? "Signing in…" : "Sign in with Vercel"}
     </Button>
   );
 }

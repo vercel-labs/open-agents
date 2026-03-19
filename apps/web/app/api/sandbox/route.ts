@@ -1,6 +1,11 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+  type SessionRecord,
+} from "@/app/api/sessions/_lib/session-context";
 import { getGitHubAccount } from "@/lib/db/accounts";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
@@ -77,15 +82,17 @@ export async function POST(req: Request) {
   }
 
   // Validate session ownership
-  let sessionRecord;
+  let sessionRecord: SessionRecord | undefined;
   if (sessionId) {
-    sessionRecord = await getSessionById(sessionId);
-    if (!sessionRecord) {
-      return Response.json({ error: "Session not found" }, { status: 404 });
+    const sessionContext = await requireOwnedSession({
+      userId: session.user.id,
+      sessionId,
+    });
+    if (!sessionContext.ok) {
+      return sessionContext.response;
     }
-    if (sessionRecord.userId !== session.user.id) {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
+
+    sessionRecord = sessionContext.sessionRecord;
   }
 
   const githubAccount = await getGitHubAccount(session.user.id);
@@ -196,9 +203,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   let body: unknown;
@@ -219,13 +226,16 @@ export async function DELETE(req: Request) {
 
   const { sessionId } = body as { sessionId: string };
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+
+  const { sessionRecord } = sessionContext;
+
   // If there's no sandbox to stop, return success (idempotent)
   if (!canOperateOnSandbox(sessionRecord.sandboxState)) {
     return Response.json({ success: true, alreadyStopped: true });

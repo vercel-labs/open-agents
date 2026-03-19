@@ -12,6 +12,7 @@ interface CreatePRRequest {
   body?: string;
   baseBranch: string;
   headOwner?: string;
+  isDraft?: boolean;
 }
 
 function buildGitHubCompareUrl(params: {
@@ -64,10 +65,15 @@ export async function POST(req: Request) {
     body: prBody,
     baseBranch,
     headOwner,
+    isDraft = false,
   } = body;
 
   if (!sessionId || !repoUrl || !title || !baseBranch) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (typeof isDraft !== "boolean") {
+    return Response.json({ error: "Invalid draft flag" }, { status: 400 });
   }
 
   // Validate repoUrl format (GitHub URLs only)
@@ -164,6 +170,7 @@ export async function POST(req: Request) {
     title,
     body: prBody || "",
     baseBranch,
+    isDraft,
     token: dedupedTokenCandidates[0],
   });
 
@@ -175,6 +182,7 @@ export async function POST(req: Request) {
       title,
       body: prBody || "",
       baseBranch,
+      isDraft,
       token: dedupedTokenCandidates[1],
     });
   }

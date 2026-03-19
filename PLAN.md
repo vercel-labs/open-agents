@@ -1,0 +1,23 @@
+Summary: Add a lightweight public status surface for shared chats that shows whether a turn is still running and how long it has been in flight, without exposing the live assistant stream. Keep the shared page DB-backed for content, then layer a small polling-based status badge/timer on top using extracted, focused files rather than growing existing large components.
+
+Context: `apps/web/app/shared/[shareId]/page.tsx` currently resolves `shareId -> chatId`, loads the chat plus persisted messages, and renders `SharedChatContent`, but it does not pass through `chat.activeStreamId` or the last user-message timestamp. The private chat page in `apps/web/app/sessions/[sessionId]/chats/[chatId]/page.tsx` already computes per-message durations and a `lastUserMessageSentAt` fallback for in-flight turns, so the timing model already exists. Live stream ownership/reconnect complexity lives in the private chat runtime (`apps/web/app/api/chat/[chatId]/stream/route.ts`, `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-session-chat-runtime.ts`), and avoiding that path keeps the public share feature much simpler and cheaper. The repo guidance also explicitly prefers extracting distinct concerns into colocated files rather than appending new logic into already-large files.
+
+Approach: Reuse the existing "active stream means the turn is still cooking" model, but expose only a tiny read-only status payload keyed by `shareId`. On initial page render, seed the client with `isStreaming` and the last user-message timestamp; while the share is still streaming, poll a small public status endpoint every ~10 seconds and update a client-side elapsed timer locally once per second. Keep composition files thin: page does server data wiring, shared content does layout composition, a dedicated status component owns polling/timer UI, and pure helpers live in their own colocated utility file.
+
+Changes:
+- `apps/web/app/shared/[shareId]/page.tsx` - pass two new props into the shared page UI: `isStreaming` (derived from `chat.activeStreamId`) and `lastUserMessageSentAt` (derived from the latest persisted user message, mirroring the private page fallback). Keep the file limited to server-side data loading and prop wiring.
+- `apps/web/app/shared/[shareId]/shared-chat-content.tsx` - import and place a dedicated shared status component in the header area. Keep content rendering unchanged and avoid adding polling, timer, or formatting helpers here.
+- `apps/web/app/shared/[shareId]/shared-chat-status.tsx` - own the status badge, client-side elapsed timer, and polling behavior. Poll only while streaming; use a simple `fetch` + `setInterval` loop rather than introducing a new dependency.
+- `apps/web/app/shared/[shareId]/shared-chat-status-utils.ts` - hold pure helper logic such as duration formatting, elapsed-time derivation, and any small shared status types needed by the status component. Keep this logic out of the UI composition files.
+- `apps/web/app/api/shared/[shareId]/status/route.ts` - add a public read-only endpoint that resolves the share, loads the mapped chat/messages, and returns `{ isStreaming, startedAt }`, where `startedAt` is the latest persisted user message timestamp when the chat is in flight, otherwise `null`. Do not expose `chatId`, `activeStreamId`, workflow IDs, or any live message content.
+- `apps/web/app/api/shared/[shareId]/status/get-shared-chat-status.ts` - extract the route’s lookup/derivation logic into a small helper if the route starts to mix transport and query logic, so the route can stay thin and testable.
+- `apps/web/app/shared/[shareId]/page.test.ts` - extend the page test to assert the new initial props derived from chat/message state.
+- `apps/web/app/api/shared/[shareId]/status/route.test.ts` - cover share-not-found, idle chat, and active chat responses so the public endpoint behavior is locked down.
+
+Verification:
+- Install dependencies with `bun install` if `node_modules` is missing.
+- Run `bun test apps/web/app/shared/[shareId]/page.test.ts`.
+- Run `bun test apps/web/app/api/shared/[shareId]/status/route.test.ts`.
+- Run `bun run typecheck`.
+- Run `bun run ci`.
+- Edge cases to check: shared page opened mid-run shows an increasing timer immediately from SSR data; polling stops once the run finishes; a shared page with no prior user message does not show a bogus timer; revoked/missing share IDs return 404/`notFound` behavior without leaking chat existence.

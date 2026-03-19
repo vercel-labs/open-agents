@@ -1,13 +1,12 @@
-import type { Sandbox } from "@open-harness/sandbox";
 import type { LanguageModel } from "ai";
 import { gateway, stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
-import { preparePromptForOpenAIReasoning } from "../openai-reasoning";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import { editFileTool, writeFileTool } from "../tools/write";
+import type { SandboxExecutionContext } from "../types";
 
 const EXECUTOR_SYSTEM_PROMPT = `You are an executor agent - a fire-and-forget subagent that completes specific, well-defined implementation tasks autonomously.
 
@@ -60,7 +59,7 @@ const callOptionsSchema = z.object({
   task: z.string().describe("Short description of the task"),
   instructions: z.string().describe("Detailed instructions for the task"),
   sandbox: z
-    .custom<Sandbox>()
+    .custom<SandboxExecutionContext["sandbox"]>()
     .describe("Sandbox for file system and shell operations"),
   model: z.custom<LanguageModel>().describe("Language model for this subagent"),
 });
@@ -71,7 +70,6 @@ export const executorSubagent = new ToolLoopAgent({
   model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXECUTOR_SYSTEM_PROMPT,
   tools: {
-    // All tools auto-approve in delegated mode (set via prepareCall)
     read: readFileTool(),
     write: writeFileTool(),
     edit: editFileTool(),
@@ -82,16 +80,14 @@ export const executorSubagent = new ToolLoopAgent({
   stopWhen: stepCountIs(100),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
+    if (!options) {
+      throw new Error("Executor subagent requires task call options.");
+    }
+
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
-    const preparedPrompt = preparePromptForOpenAIReasoning({
-      model,
-      messages: settings.messages,
-      prompt: settings.prompt,
-    });
     return {
       ...settings,
-      ...preparedPrompt,
       model,
       instructions: `${EXECUTOR_SYSTEM_PROMPT}
 
@@ -110,7 +106,6 @@ ${options.instructions}
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`,
       experimental_context: {
         sandbox,
-        approval: { type: "delegated" },
         model,
       },
     };

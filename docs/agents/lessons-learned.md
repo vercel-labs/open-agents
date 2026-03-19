@@ -8,6 +8,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - The system prompt should list all model-invocable skills (including non-user-invocable ones), and reserve user-invocable filtering for the slash-command UI.
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
 - In shell tools, avoid piping primary command output directly to `head` when exit-code handling matters; pipeline semantics can mask real failures from the primary command.
+- Bash approval heuristics should reserve prompts for clearly destructive commands (for example `rm -rf`, `sudo`, or mutating git/package-manager operations); treating pipes/chaining and common filesystem reads as dangerous creates too many false-positive approvals for normal inspection commands.
 - Verification instructions must tell the agent to consult AGENTS.md / `package.json` scripts **before** listing generic steps like "typecheck -> lint -> build"; otherwise models default to raw commands (`npx tsc`, `eslint .`) which bypass project-specific tool config (turbo pipelines, tsconfig references, biome, etc.) and produce incorrect or incomplete results.
 - Tool renderer `part.output` values may be `unknown`; when accessing fields like `files` or `matches`, add runtime narrowing/type guards first (in both TUI and web renderers) to satisfy strict typecheck.
 - AI SDK stream handles may return `PromiseLike` values (not full `Promise`), so avoid methods like `.finally()` and use `then`/`catch` patterns that work with `PromiseLike`.
@@ -54,7 +55,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Keep the sandbox indicator dot on the same derived lifecycle state machine as the status chip; during inactivity countdown it should show a pausing state, and during server `hibernating` it should not remain green.
 - Split lifecycle UI polling from connectivity probing: poll a lightweight DB-backed sandbox status endpoint for timing/state, and reserve reconnect/connect checks for entry/resume or explicit recovery paths.
 - Prefer event-first lifecycle sync in the chat UI (chat completion, visibility return, window focus, network online), with sparse status polling (about 60s baseline, tighter only near transitions) instead of frequent fixed-interval polling.
-- When syncing status timestamps, avoid rewriting local sandbox connection state on every response; only update if expiry materially changes, or UI effects can enter rapid request loops.
+- When syncing status timestamps, avoid rewriting sandbox connection state on every response; only update if expiry materially changes, or UI effects can enter rapid request loops.
 - Resume/paused UI must not rely only on `session.snapshotUrl` from initial page props; keep a live `hasSnapshot` signal from reconnect/status responses, or the UI can incorrectly show `No sandbox` and hide resume actions.
 - `/api/sandbox/reconnect` should treat DB runtime state (`sandboxId`/`files`) as the source of reconnect eligibility; using `isSandboxActive` (which includes expiry heuristics) can misclassify recoverable sessions as `no_sandbox` and break restore/reconnect flows.
 - When `/api/sandbox/reconnect` reports `connected`, it must persist refreshed sandbox runtime state/expiry (`sandboxState`, `sandboxExpiresAt`) back to DB; otherwise `/files` and `/diff` can still fail with `Sandbox not initialized` against stale expired state while UI thinks reconnect succeeded.
@@ -71,7 +72,6 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 
 ## Chat / Streaming UI
 
-- GPT-5.4 incomplete OpenAI reasoning cleanup belongs in agent `prepareCall`, not in the web route, so every agent entry point sanitizes replay history immediately before model invocation.
 - In the web chat UI, do not keep `@ai-sdk/react` Chat instances alive after route transitions while they are still streaming; abort local stream processing and remove the instance on teardown, then rely on resumable stream reconnect when revisiting that chat.
 - For client-side tool flows (`ask_user_question`), `onFinish`-only assistant persistence is insufficient across route switches: persist the latest incoming message snapshot at API request start (upsert by message id) so answered/declined tool state survives teardown/resume and does not rehydrate stale `input-available` UI.
 - Request-start assistant snapshot persistence must be scoped and ownership-guarded: only upsert assistant messages when the request still owns the chat stream token, and refuse upserts on message-id scope conflict (different chat/role) to prevent stale writes and cross-chat overwrites.
@@ -86,6 +86,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - `hadInitialMessages` is an initial-load snapshot, not a live "first turn" signal; guard one-time optimistic UI (like first-message title previews) with a dedicated runtime ref/state that resets on send failure.
 - When session overlay maps are deleted after becoming empty, any later overlay writes in the same hook instance must re-register the map in the global registry, or optimistic overlays will not survive route transitions.
 - For resumed chat streams, `chat.stop()` alone is insufficient because reconnect fetches are not wired to the active abort signal; always pair stop with aborting the managed transport tied to that chat instance.
+- Automatic stream retries should use soft reconnect semantics and single-flight guards; overlapping hard retries can replay resumable chunks and cause visible reasoning/tool UI flicker.
 - In chat UI rendering, treat both `submitted` and `streaming` as in-flight. If only `streaming` is considered active, task/tool parts can be marked interrupted too early and stale `Thinking...` indicators can linger until a full page refresh.
 - In Streamdown, `plugins.code.getThemes()` overrides the `shikiTheme` prop; configure code themes in `createCodePlugin(...)` and pass actual custom theme objects for non-bundled themes (for example `vercelLight`/`vercelDark`) or highlighting can fall back to unstyled/plain tokens.
 - Shiki dual-theme `TokensResult` can encode dark variants inside semicolon-delimited `fg`/`bg` values and token `htmlStyle` fields (for example `color` + `--shiki-dark`); normalize these into Streamdown's `color`/`bgColor` fields plus root CSS vars, or inline light colors can override dark-mode classes and keep code blocks stuck in light theme.

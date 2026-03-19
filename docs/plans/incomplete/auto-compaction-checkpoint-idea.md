@@ -1,1 +1,0 @@
-When you hit certain token limit, force tool call to summarize then have a function in prepareStep that basically checkpoints to the last summary tool call and that becomes first assistant message and everything comes after 

@@ -1,14 +1,13 @@
 import * as path from "path";
 import { tool } from "ai";
 import { z } from "zod";
-import { getSandbox, getApprovalContext, shouldAutoApprove } from "./utils";
+import { getSandbox } from "./utils";
 import {
   extractSkillBody,
   substituteArguments,
   injectSkillDirectory,
 } from "../skills/loader";
 import type { SkillMetadata } from "../skills/types";
-import type { ApprovalRule } from "../types";
 
 /**
  * Extended agent context that includes skills.
@@ -25,53 +24,12 @@ function getSkills(experimental_context: unknown): SkillMetadata[] {
   return context?.skills ?? [];
 }
 
-/**
- * Check if a skill name matches any skill approval rules.
- * Comparison is case-insensitive to match slash command behavior.
- */
-function skillMatchesApprovalRule(
-  skillName: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  const normalizedName = skillName.toLowerCase();
-  for (const rule of approvalRules) {
-    if (rule.type === "skill" && rule.tool === "skill") {
-      if (rule.skillName.toLowerCase() === normalizedName) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 const skillInputSchema = z.object({
   skill: z.string().describe("The skill name to invoke"),
   args: z.string().optional().describe("Optional arguments for the skill"),
 });
 
 export const skillTool = tool({
-  needsApproval: ({ skill }, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context, "skill");
-    const { approval } = ctx;
-
-    // Background and delegated modes auto-approve
-    if (shouldAutoApprove(approval)) {
-      return false;
-    }
-
-    // Auto-approve all skills when autoApprove is "all"
-    if (approval.autoApprove === "all") {
-      return false;
-    }
-
-    // Check if a session rule matches this skill
-    if (skillMatchesApprovalRule(skill, approval.sessionRules)) {
-      return false;
-    }
-
-    // Default: skills need approval
-    return true;
-  },
   description: `Execute a skill within the main conversation.
 
 When users ask you to perform tasks, check if any of the available skills can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
@@ -96,7 +54,7 @@ Important:
 - If you see a <command-name> tag in the conversation, the skill is ALREADY loaded - follow its instructions directly`,
   inputSchema: skillInputSchema,
   execute: async ({ skill, args }, { experimental_context }) => {
-    const sandbox = getSandbox(experimental_context, "skill");
+    const sandbox = await getSandbox(experimental_context, "skill");
     const skills = getSkills(experimental_context);
 
     // Find the skill by name (case-insensitive to match slash command behavior)

@@ -1,13 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  toDisplayPath,
-} from "./utils";
+import { getSandbox, toDisplayPath } from "./utils";
 
 const writeInputSchema = z.object({
   filePath: z
@@ -40,22 +34,6 @@ const editInputSchema = z.object({
 
 export const writeFileTool = () =>
   tool({
-    needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "write");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.filePath,
-        tool: "write",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Write content to a file on the filesystem.
 
 WHEN TO USE:
@@ -78,14 +56,13 @@ IMPORTANT:
 - Prefer editing existing files over creating new ones unless a new file is explicitly needed
 - NEVER proactively create documentation files (e.g., *.md) unless the user explicitly requests them
 - Do not write files that contain secrets or credentials (API keys, passwords, .env, etc.)
-- Paths outside the working directory require approval
 
 EXAMPLES:
 - Create a new test file: filePath: "src/user.test.ts", content: "<full file contents>"
 - Replace a script after reading it: filePath: "scripts/build.sh", content: "<entire updated script>"`,
     inputSchema: writeInputSchema,
     execute: async ({ filePath, content }, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context, "write");
+      const sandbox = await getSandbox(experimental_context, "write");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -116,22 +93,6 @@ EXAMPLES:
 
 export const editFileTool = () =>
   tool({
-    needsApproval: async (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "edit");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.filePath,
-        tool: "edit",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Perform exact string replacement in a file.
 
 WHEN TO USE:
@@ -156,7 +117,6 @@ IMPORTANT:
 - Preserve exact indentation and spacing from the file's content as returned by readFileTool
 - Never include line numbers or the "N: " line prefixes from the read output in oldString or newString
 - If oldString appears multiple times and replaceAll is false, the tool will FAIL with an error and occurrence count
-- Paths outside the working directory require approval
 
 EXAMPLES:
 - Replace a single function call: filePath: "src/auth.ts", oldString: "login(user, password)", newString: "loginWithAudit(user, password)", startLine: 42
@@ -166,7 +126,7 @@ EXAMPLES:
       { filePath, oldString, newString, replaceAll = false },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "edit");
+      const sandbox = await getSandbox(experimental_context, "edit");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

@@ -35,7 +35,7 @@ export interface VercelSandboxConfig {
   env?: Record<string, string>;
   /**
    * Number of vCPUs (1-8). Each vCPU provides 2048 MB of memory.
-   * @default 2
+   * @default 4
    */
   vcpus?: number;
   /**

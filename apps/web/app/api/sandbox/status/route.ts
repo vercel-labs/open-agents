@@ -1,9 +1,15 @@
-import { getSessionById } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import { SANDBOX_EXPIRES_BUFFER_MS } from "@/lib/sandbox/config";
-import { getLifecycleDueAtMs } from "@/lib/sandbox/lifecycle";
+import {
+  getLifecycleDueAtMs,
+  getSandboxExpiresAtDate,
+} from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 export type SandboxStatusResponse = {
   status: "active" | "no_sandbox";
@@ -19,9 +25,9 @@ export type SandboxStatusResponse = {
 };
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const url = new URL(req.url);
@@ -31,14 +37,16 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
+  const { sessionRecord } = sessionContext;
+  let effectiveSessionRecord = sessionRecord;
   const hasRuntimeState = hasRuntimeSandboxState(sessionRecord.sandboxState);
 
   // Check expiry: the DB may still have sandboxId/files but the VM has expired.
@@ -52,14 +60,27 @@ export async function GET(req: Request): Promise<Response> {
 
   const isActive = hasRuntimeState && !isExpired;
 
+  // If the lifecycle evaluator previously failed but runtime state is still
+  // active, recover lifecycle state so UI does not get stuck in "Paused".
+  if (isActive && sessionRecord.lifecycleState === "failed") {
+    const recoveredSession = await updateSession(sessionRecord.id, {
+      lifecycleState: "active",
+      lifecycleError: null,
+      sandboxExpiresAt: getSandboxExpiresAtDate(sessionRecord.sandboxState),
+    });
+    if (recoveredSession) {
+      effectiveSessionRecord = recoveredSession;
+    }
+  }
+
   // Safety net: if the sandbox has stale runtime state (expired or overdue for
   // hibernation), kick the lifecycle to clean up DB state in the background.
-  if (hasRuntimeState && sessionRecord.lifecycleState === "active") {
+  if (hasRuntimeState && effectiveSessionRecord.lifecycleState === "active") {
     const now = Date.now();
-    const dueAtMs = getLifecycleDueAtMs(sessionRecord);
+    const dueAtMs = getLifecycleDueAtMs(effectiveSessionRecord);
     if (isExpired || now >= dueAtMs) {
       kickSandboxLifecycleWorkflow({
-        sessionId: sessionRecord.id,
+        sessionId: effectiveSessionRecord.id,
         reason: "status-check-overdue",
       });
     }
@@ -67,14 +88,15 @@ export async function GET(req: Request): Promise<Response> {
 
   return Response.json({
     status: isActive ? "active" : "no_sandbox",
-    hasSnapshot: !!sessionRecord.snapshotUrl,
-    lifecycleVersion: sessionRecord.lifecycleVersion,
+    hasSnapshot: !!effectiveSessionRecord.snapshotUrl,
+    lifecycleVersion: effectiveSessionRecord.lifecycleVersion,
     lifecycle: {
       serverTime: Date.now(),
-      state: sessionRecord.lifecycleState,
-      lastActivityAt: sessionRecord.lastActivityAt?.getTime() ?? null,
-      hibernateAfter: sessionRecord.hibernateAfter?.getTime() ?? null,
-      sandboxExpiresAt: sessionRecord.sandboxExpiresAt?.getTime() ?? null,
+      state: effectiveSessionRecord.lifecycleState,
+      lastActivityAt: effectiveSessionRecord.lastActivityAt?.getTime() ?? null,
+      hibernateAfter: effectiveSessionRecord.hibernateAfter?.getTime() ?? null,
+      sandboxExpiresAt:
+        effectiveSessionRecord.sandboxExpiresAt?.getTime() ?? null,
     },
   } satisfies SandboxStatusResponse);
 }

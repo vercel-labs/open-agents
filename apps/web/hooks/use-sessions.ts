@@ -33,6 +33,7 @@ interface CreateSessionInput {
   cloneUrl?: string;
   isNewBranch: boolean;
   sandboxType: "vercel";
+  autoCommitPush: boolean;
 }
 
 interface SessionsResponse {

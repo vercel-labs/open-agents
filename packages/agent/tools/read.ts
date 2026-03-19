@@ -2,13 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import * as fs from "fs";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  toDisplayPath,
-} from "./utils";
+import { getSandbox, toDisplayPath } from "./utils";
 
 const readInputSchema = z.object({
   filePath: z
@@ -60,22 +54,6 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
 
 export const readFileTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "read");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: resolveFilePath(args.filePath, ctx.workingDirectory),
-        tool: "read",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Read a file from the filesystem.
 
 USAGE:
@@ -88,7 +66,6 @@ USAGE:
 IMPORTANT:
 - Always read a file at least once before editing it with the edit/write tools
 - This tool can only read files, not directories - attempting to read a directory returns an error
-- Paths outside the working directory require approval
 - You can call multiple reads in parallel to speculatively load several files
 
 EXAMPLES:
@@ -99,7 +76,7 @@ EXAMPLES:
       { filePath, offset = 1, limit = 2000 },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "read");
+      const sandbox = await getSandbox(experimental_context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

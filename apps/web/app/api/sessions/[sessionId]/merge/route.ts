@@ -1,4 +1,8 @@
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import {
   deleteBranchRef,
   getPullRequestMergeReadiness,
@@ -6,7 +10,6 @@ import {
   type PullRequestMergeMethod,
 } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -18,6 +21,7 @@ interface MergePullRequestRequest {
   commitMessage?: string;
   deleteBranch?: boolean;
   expectedHeadSha?: string;
+  force?: boolean;
 }
 
 export type MergePullRequestResponse = {
@@ -53,6 +57,7 @@ function parseRequestBody(value: unknown): MergePullRequestRequest {
     typeof record.expectedHeadSha === "string"
       ? record.expectedHeadSha
       : undefined;
+  const force = typeof record.force === "boolean" ? record.force : undefined;
 
   return {
     mergeMethod,
@@ -60,25 +65,26 @@ function parseRequestBody(value: unknown): MergePullRequestRequest {
     commitMessage,
     deleteBranch,
     expectedHeadSha,
+    force,
   };
 }
 
 export async function POST(req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const sessionRecord = await getSessionById(sessionId);
-
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { sessionRecord } = sessionContext;
 
   if (
     !sessionRecord.cloneUrl ||
@@ -139,7 +145,7 @@ export async function POST(req: Request, context: RouteContext) {
   let token: string;
   try {
     const tokenResult = await getRepoToken(
-      session.user.id,
+      authResult.userId,
       sessionRecord.repoOwner,
     );
     token = tokenResult.token;
@@ -177,14 +183,31 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
+  // Reasons that can be bypassed with force (CI / check failures only)
+  const forceBypassableReasons = new Set([
+    "Required checks are failing",
+    "Required checks are still pending",
+    "Required checks are still in progress",
+    "Branch protection requirements are not yet satisfied",
+  ]);
+
   if (!readiness.canMerge) {
-    return Response.json(
-      {
-        error: readiness.reasons.join(". "),
-        reasons: readiness.reasons,
-      },
-      { status: 409 },
+    const nonBypassableReasons = readiness.reasons.filter(
+      (r) => !forceBypassableReasons.has(r),
     );
+
+    if (!parsedBody.force || nonBypassableReasons.length > 0) {
+      const reasons = parsedBody.force
+        ? nonBypassableReasons
+        : readiness.reasons;
+      return Response.json(
+        {
+          error: reasons.join(". "),
+          reasons,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const requestedMethod = parsedBody.mergeMethod ?? readiness.defaultMethod;

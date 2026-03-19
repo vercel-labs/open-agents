@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Chat } from "@/lib/db/schema";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
+import { SharedChatStatus } from "./shared-chat-status";
 import "streamdown/styles.css";
 
 export type MessageWithTiming = {
@@ -58,7 +59,18 @@ type ReasoningMessagePart = Extract<
   { type: "reasoning" }
 >;
 
-function displayModelName(modelId: string): string {
+function displayModelName(
+  modelId: string,
+  resolvedModelName: string | null,
+): string {
+  if (resolvedModelName) {
+    return resolvedModelName;
+  }
+
+  if (modelId.startsWith("variant:")) {
+    return "Custom variant";
+  }
+
   const slashIndex = modelId.indexOf("/");
   return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
 }
@@ -102,12 +114,20 @@ export function SharedChatContent({
   session,
   chats,
   modelId,
+  modelName,
   sharedBy,
+  isStreaming,
+  lastUserMessageSentAt,
+  shareId,
 }: {
   session: SharedSession;
   chats: ChatWithMessages[];
   modelId: string | null | undefined;
+  modelName: string | null;
   sharedBy: SharedBy;
+  isStreaming: boolean;
+  lastUserMessageSentAt: string | null;
+  shareId: string;
 }) {
   const [showToolCalls, setShowToolCalls] = useState(false);
 
@@ -221,7 +241,7 @@ export function SharedChatContent({
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
                 <Bot className="h-3 w-3" />
                 <span className="font-medium text-foreground">
-                  {displayModelName(modelId)}
+                  {displayModelName(modelId, modelName)}
                 </span>
                 {displayProviderName(modelId) && (
                   <span className="text-muted-foreground/60">
@@ -280,6 +300,12 @@ export function SharedChatContent({
                 </div>
               </div>
             ))}
+            {/* Inline streaming status indicator */}
+            <SharedChatStatus
+              shareId={shareId}
+              initialIsStreaming={isStreaming}
+              initialLastUserMessageSentAt={lastUserMessageSentAt}
+            />
           </div>
         </div>
       </div>

@@ -1,6 +1,10 @@
 import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
@@ -8,7 +12,6 @@ import {
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
 } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 export type SkillSuggestion = {
   name: string;
@@ -35,21 +38,22 @@ function toSkillSuggestions(
 }
 
 export async function GET(req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
+  const { sessionRecord } = sessionContext;
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });

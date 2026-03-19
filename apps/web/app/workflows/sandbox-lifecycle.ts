@@ -110,7 +110,9 @@ export async function sandboxLifecycleWorkflow(
 
     if (
       evaluation.action === "skipped" &&
-      evaluation.reason === "not-due-yet"
+      (evaluation.reason === "not-due-yet" ||
+        evaluation.reason === "active-workflow" ||
+        evaluation.reason === "snapshot-already-in-progress")
     ) {
       continue;
     }

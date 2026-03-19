@@ -7,6 +7,7 @@ interface TestSessionRecord {
   cloneUrl: string;
   repoOwner: string;
   repoName: string;
+  autoCommitPushOverride?: boolean | null;
   sandboxState: {
     type: "vercel";
   };
@@ -18,29 +19,16 @@ interface TestChatRecord {
   activeStreamId: string | null;
 }
 
-interface StreamResponseOptions {
-  onFinish: (params: {
-    responseMessage: {
-      id: string;
-      role: "assistant";
-      parts: unknown[];
-    };
-  }) => Promise<void>;
-}
-
-const autoCommitCalls: Array<Record<string, unknown>> = [];
-const backgroundTasks: Promise<void>[] = [];
-const fetchCalls: string[] = [];
-
-let sessionRecord: TestSessionRecord;
-let chatRecord: TestChatRecord;
-let shouldTriggerStopBeforeFinish = false;
-let stopCallback: (() => void) | null = null;
+let sessionRecord: TestSessionRecord | null;
+let chatRecord: TestChatRecord | null;
+let currentAuthSession: { user: { id: string } } | null;
+let isSandboxActive = true;
+let existingRunStatus: string = "completed";
+let compareAndSetResult = true;
 
 const originalFetch = globalThis.fetch;
 
-globalThis.fetch = (async (input: RequestInfo | URL) => {
-  fetchCalls.push(String(input));
+globalThis.fetch = (async (_input: RequestInfo | URL) => {
   return new Response("{}", {
     status: 200,
     headers: {
@@ -51,53 +39,53 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
 
 mock.module("next/server", () => ({
   after: (task: Promise<unknown>) => {
-    backgroundTasks.push(Promise.resolve(task).then(() => undefined));
+    void Promise.resolve(task);
   },
 }));
 
 mock.module("ai", () => ({
-  convertToModelMessages: async (messages: unknown) => messages,
+  createUIMessageStreamResponse: ({
+    stream,
+    headers,
+  }: {
+    stream: ReadableStream;
+    headers?: Record<string, string>;
+  }) => new Response(stream, { status: 200, headers }),
 }));
 
-mock.module("@/app/config", () => ({
-  webAgent: {
-    tools: {},
-    stream: async () => {
-      let resolveConsumeStream: (() => void) | null = null;
-
-      return {
-        consumeStream: () =>
-          new Promise<void>((resolve) => {
-            resolveConsumeStream = resolve;
-          }),
-        toUIMessageStreamResponse: async ({
-          onFinish,
-        }: StreamResponseOptions) => {
-          if (shouldTriggerStopBeforeFinish) {
-            stopCallback?.();
-          }
-
-          await onFinish({
-            responseMessage: {
-              id: "assistant-1",
-              role: "assistant",
-              parts: [],
-            },
-          });
-
-          resolveConsumeStream?.();
-          return new Response("ok", { status: 200 });
+mock.module("workflow/api", () => ({
+  start: async () => ({
+    runId: "wrun_test-123",
+    getReadable: () =>
+      new ReadableStream({
+        start(controller) {
+          controller.close();
         },
-      };
-    },
-  },
+      }),
+  }),
+  getRun: () => ({
+    status: Promise.resolve(existingRunStatus),
+    getReadable: () =>
+      new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+    cancel: () => Promise.resolve(),
+  }),
+}));
+
+mock.module("@/app/workflows/chat", () => ({
+  runAgentWorkflow: async () => {},
+}));
+
+mock.module("@/lib/chat/create-cancelable-readable-stream", () => ({
+  createCancelableReadableStream: (stream: ReadableStream) => stream,
 }));
 
 mock.module("@open-harness/agent", () => ({
-  collectTaskToolUsageEvents: () => [],
   discoverSkills: async () => [],
   gateway: () => "mock-model",
-  sumLanguageModelUsage: (_existing: unknown, usage: unknown) => usage,
 }));
 
 mock.module("@open-harness/sandbox", () => ({
@@ -105,34 +93,35 @@ mock.module("@open-harness/sandbox", () => ({
     workingDirectory: "/vercel/sandbox",
     exec: async () => ({ success: true, stdout: "", stderr: "" }),
     getState: () => ({
-      type: "vercel" as const,
+      type: "vercel",
       sandboxId: "sandbox-1",
       expiresAt: Date.now() + 60_000,
     }),
   }),
 }));
 
+const persistAssistantMessagesWithToolResultsSpy = mock(() =>
+  Promise.resolve(),
+);
+
+mock.module("./_lib/persist-tool-results", () => ({
+  persistAssistantMessagesWithToolResults:
+    persistAssistantMessagesWithToolResultsSpy,
+}));
+
 mock.module("@/lib/db/sessions", () => ({
-  compareAndSetChatActiveStreamId: async () => true,
+  compareAndSetChatActiveStreamId: async () => compareAndSetResult,
   createChatMessageIfNotExists: async () => undefined,
   getChatById: async () => chatRecord,
   getSessionById: async () => sessionRecord,
   isFirstChatMessage: async () => false,
   touchChat: async () => {},
   updateChat: async () => {},
+  updateChatActiveStreamId: async () => {},
   updateChatAssistantActivity: async () => {},
-  updateSession: async (
-    _sessionId: string,
-    patch: Record<string, unknown>,
-  ) => ({
-    ...sessionRecord,
-    ...patch,
-  }),
+  updateSession: async (_sessionId: string, patch: Record<string, unknown>) =>
+    patch,
   upsertChatMessageScoped: async () => ({ status: "inserted" as const }),
-}));
-
-mock.module("@/lib/db/usage", () => ({
-  recordUsage: async () => {},
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
@@ -140,12 +129,6 @@ mock.module("@/lib/db/user-preferences", () => ({
     autoCommitPush: true,
     modelVariants: [],
   }),
-}));
-
-mock.module("@/lib/chat-auto-commit", () => ({
-  runAutoCommitInBackground: async (params: Record<string, unknown>) => {
-    autoCommitCalls.push(params);
-  },
 }));
 
 mock.module("@/lib/github/get-repo-token", () => ({
@@ -161,24 +144,6 @@ mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
-mock.module("@/lib/model-variants", () => ({
-  resolveModelSelection: (modelId: string) => ({
-    isMissingVariant: false,
-    resolvedModelId: modelId,
-    providerOptionsByProvider: undefined,
-  }),
-}));
-
-mock.module("@/lib/models", () => ({
-  DEFAULT_MODEL_ID: "mock-model",
-}));
-
-mock.module("@/lib/resumable-stream-context", () => ({
-  resumableStreamContext: {
-    createNewResumableStream: async () => {},
-  },
-}));
-
 mock.module("@/lib/sandbox/config", () => ({
   DEFAULT_SANDBOX_PORTS: [],
 }));
@@ -188,24 +153,11 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
 }));
 
 mock.module("@/lib/sandbox/utils", () => ({
-  isSandboxActive: () => true,
+  isSandboxActive: () => isSandboxActive,
 }));
 
 mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () => ({
-    user: {
-      id: "user-1",
-    },
-  }),
-}));
-
-mock.module("@/lib/stop-signal", () => ({
-  onStopSignal: async (_chatId: string, callback: () => void) => {
-    stopCallback = callback;
-    return () => {
-      stopCallback = null;
-    };
-  },
+  getServerSession: async () => currentAuthSession,
 }));
 
 const routeModulePromise = import("./route");
@@ -214,13 +166,44 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("/api/chat auto commit", () => {
+function createRequest(body: string) {
+  return new Request("http://localhost/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: "session=abc",
+    },
+    body,
+  });
+}
+
+function createValidRequest() {
+  return createRequest(
+    JSON.stringify({
+      sessionId: "session-1",
+      chatId: "chat-1",
+      messages: [
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "Fix the bug" }],
+        },
+      ],
+    }),
+  );
+}
+
+describe("/api/chat route", () => {
   beforeEach(() => {
-    autoCommitCalls.length = 0;
-    backgroundTasks.length = 0;
-    fetchCalls.length = 0;
-    shouldTriggerStopBeforeFinish = false;
-    stopCallback = null;
+    isSandboxActive = true;
+    existingRunStatus = "completed";
+    compareAndSetResult = true;
+    persistAssistantMessagesWithToolResultsSpy.mockClear();
+    currentAuthSession = {
+      user: {
+        id: "user-1",
+      },
+    };
 
     sessionRecord = {
       id: "session-1",
@@ -229,6 +212,7 @@ describe("/api/chat auto commit", () => {
       cloneUrl: "https://github.com/acme/repo.git",
       repoOwner: "acme",
       repoName: "repo",
+      autoCommitPushOverride: null,
       sandboxState: {
         type: "vercel",
       },
@@ -241,59 +225,43 @@ describe("/api/chat auto commit", () => {
     };
   });
 
-  test("runs auto commit after a natural finish", async () => {
+  test("starts a workflow and returns a streaming response", async () => {
     const { POST } = await routeModulePromise;
 
-    const response = await POST(
-      new Request("http://localhost/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          cookie: "session=abc",
-        },
-        body: JSON.stringify({
-          sessionId: "session-1",
-          chatId: "chat-1",
-          messages: [
-            {
-              id: "user-1",
-              role: "user",
-              parts: [{ type: "text", text: "Fix the bug" }],
-            },
-          ],
-        }),
-      }),
-    );
-
-    await Promise.all(backgroundTasks);
+    const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
-    expect(autoCommitCalls).toHaveLength(1);
-    expect(autoCommitCalls[0]).toMatchObject({
-      sessionId: "session-1",
-      sessionTitle: "Session title",
-      repoOwner: "acme",
-      repoName: "repo",
-    });
-    expect(fetchCalls).toEqual([
-      "http://localhost/api/sessions/session-1/diff",
-    ]);
   });
 
-  test("skips auto commit when the chat is stopped", async () => {
-    shouldTriggerStopBeforeFinish = true;
+  test("returns 401 when not authenticated", async () => {
+    currentAuthSession = null;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Not authenticated",
+    });
+  });
+
+  test("returns 400 for invalid JSON body", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createRequest("{"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid JSON body",
+    });
+  });
+
+  test("returns 400 when sessionId and chatId are missing", async () => {
     const { POST } = await routeModulePromise;
 
     const response = await POST(
-      new Request("http://localhost/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          cookie: "session=abc",
-        },
-        body: JSON.stringify({
-          sessionId: "session-1",
-          chatId: "chat-1",
+      createRequest(
+        JSON.stringify({
           messages: [
             {
               id: "user-1",
@@ -302,15 +270,117 @@ describe("/api/chat auto commit", () => {
             },
           ],
         }),
-      }),
+      ),
     );
 
-    await Promise.all(backgroundTasks);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "sessionId and chatId are required",
+    });
+  });
+
+  test("returns 404 when session does not exist", async () => {
+    sessionRecord = null;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Session not found",
+    });
+  });
+
+  test("returns 403 when session is not owned by user", async () => {
+    if (!sessionRecord) {
+      throw new Error("sessionRecord must be set");
+    }
+    sessionRecord.userId = "user-2";
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Unauthorized",
+    });
+  });
+
+  test("returns 400 when sandbox is not active", async () => {
+    isSandboxActive = false;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Sandbox not initialized",
+    });
+  });
+
+  test("reconnects to existing running workflow instead of starting new one", async () => {
+    if (!chatRecord) throw new Error("chatRecord must be set");
+    chatRecord.activeStreamId = "wrun_existing-456";
+    existingRunStatus = "running";
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
-    expect(autoCommitCalls).toHaveLength(0);
-    expect(fetchCalls).toEqual([
-      "http://localhost/api/sessions/session-1/diff",
-    ]);
+    // Should include the existing run ID header
+    expect(response.headers.get("x-workflow-run-id")).toBe("wrun_existing-456");
+  });
+
+  test("starts new workflow when existing run is completed", async () => {
+    if (!chatRecord) throw new Error("chatRecord must be set");
+    chatRecord.activeStreamId = "wrun_old-789";
+    existingRunStatus = "completed";
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    // Should get the new run ID, not the old one
+    expect(response.headers.get("x-workflow-run-id")).toBe("wrun_test-123");
+  });
+
+  test("returns 409 when CAS race is lost", async () => {
+    compareAndSetResult = false;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "Another workflow is already running for this chat",
+    });
+  });
+
+  test("includes x-workflow-run-id header on success", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(response.headers.get("x-workflow-run-id")).toBe("wrun_test-123");
+  });
+
+  test("calls persistAssistantMessagesWithToolResults on submit", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+    expect(response.ok).toBe(true);
+
+    // Wait for the fire-and-forget call to settle
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(persistAssistantMessagesWithToolResultsSpy).toHaveBeenCalledTimes(1);
+    expect(persistAssistantMessagesWithToolResultsSpy).toHaveBeenCalledWith(
+      "chat-1",
+      expect.any(Array),
+    );
   });
 });
