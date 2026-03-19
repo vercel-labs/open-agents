@@ -100,6 +100,7 @@ import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
   hasRenderableAssistantPart,
   isChatInFlight as isChatInFlightStatus,
@@ -893,6 +894,7 @@ export function SessionChatContent({
   >(null);
   const hasMounted = useHasMounted();
   const isMobile = useIsMobile();
+  const { preferences } = useUserPreferences();
   const isIosDevice = useMemo(() => {
     if (typeof navigator === "undefined") {
       return false;
@@ -1048,8 +1050,14 @@ export function SessionChatContent({
     skills,
     skillsLoading,
   } = useSessionChatWorkspaceContext();
+  const autoCommitEnabled = Boolean(
+    session.cloneUrl &&
+      session.repoOwner &&
+      session.repoName &&
+      (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
+  );
   const { isAutoCommitting, markAutoCommitStarted } = useAutoCommitStatus(
-    session,
+    autoCommitEnabled,
     gitStatus,
     () => {
       void refreshGitStatus().catch(() => undefined);
