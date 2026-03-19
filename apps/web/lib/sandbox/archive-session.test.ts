@@ -5,12 +5,10 @@ mock.module("server-only", () => ({}));
 interface TestSessionRecord {
   id: string;
   status: "running" | "archived";
-  sandboxState:
-    | {
-        type: "vercel";
-        sandboxId?: string;
-      }
-    | null;
+  sandboxState: {
+    type: "vercel";
+    sandboxId?: string;
+  } | null;
   snapshotUrl: string | null;
   lifecycleState: "active" | "archived" | null;
   lifecycleError: string | null;
@@ -33,23 +31,25 @@ const spies = {
         : null,
     };
   }),
-  updateSession: mock(async (_sessionId: string, patch: Record<string, unknown>) => {
-    if (!sessionRecord) {
-      return null;
-    }
+  updateSession: mock(
+    async (_sessionId: string, patch: Record<string, unknown>) => {
+      if (!sessionRecord) {
+        return null;
+      }
 
-    sessionRecord = {
-      ...sessionRecord,
-      ...(patch as Partial<TestSessionRecord>),
-    };
+      sessionRecord = {
+        ...sessionRecord,
+        ...(patch as Partial<TestSessionRecord>),
+      };
 
-    return {
-      ...sessionRecord,
-      sandboxState: sessionRecord.sandboxState
-        ? { ...sessionRecord.sandboxState }
-        : null,
-    };
-  }),
+      return {
+        ...sessionRecord,
+        sandboxState: sessionRecord.sandboxState
+          ? { ...sessionRecord.sandboxState }
+          : null,
+      };
+    },
+  ),
   connectSandbox: mock(async () => {
     throw new Error("sandbox connection failed");
   }),

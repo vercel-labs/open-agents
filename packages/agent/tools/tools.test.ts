@@ -6,6 +6,48 @@ import type { ToolNeedsApprovalFunction } from "./utils";
 
 const sandboxRegistry = new Map<string, Record<string, unknown>>();
 
+mock.module("ai", () => {
+  class MockToolLoopAgent {
+    constructor(_config: unknown) {}
+
+    stream() {
+      throw new Error(
+        "MockToolLoopAgent.stream should not be called in this test",
+      );
+    }
+  }
+
+  const gateway = (modelId: string) => ({ modelId });
+
+  return {
+    tool: <T extends Record<string, unknown>>(definition: T) => definition,
+    gateway,
+    stepCountIs: (count: number) => ({ count }),
+    ToolLoopAgent: MockToolLoopAgent,
+    getToolName: (part: { toolName?: string; type?: string }) => {
+      if (part.toolName) {
+        return part.toolName;
+      }
+
+      if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+        return part.type.slice(5);
+      }
+
+      return "";
+    },
+    isToolUIPart: (part: unknown) => {
+      if (!part || typeof part !== "object") {
+        return false;
+      }
+
+      const candidate = part as { type?: unknown };
+      return (
+        typeof candidate.type === "string" && candidate.type.startsWith("tool-")
+      );
+    },
+  };
+});
+
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (state: { sandboxId?: string }) => {
     if (!state.sandboxId) {
