@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { getUsageInsights } from "@/lib/db/usage-insights";
 import { getUsageHistory } from "@/lib/db/usage";
 import { getSessionFromReq } from "@/lib/session/server";
 
@@ -12,8 +13,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const usage = await getUsageHistory(session.user.id);
-    return Response.json({ usage });
+    const [usage, insights] = await Promise.all([
+      getUsageHistory(session.user.id),
+      getUsageInsights(session.user.id),
+    ]);
+    return Response.json({ usage, insights });
   } catch (error) {
     console.error("Failed to get usage history:", error);
     return Response.json(

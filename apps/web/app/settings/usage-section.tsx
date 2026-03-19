@@ -14,6 +14,8 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
+import type { UsageInsights } from "@/lib/usage/types";
+import { UsageInsightsSection } from "./usage/usage-insights-section";
 
 interface DailyUsageRow {
   date: string;
@@ -56,6 +58,7 @@ interface PieSegment {
 
 interface UsageResponse {
   usage: DailyUsageRow[];
+  insights: UsageInsights;
 }
 
 function formatTokens(n: number) {
@@ -502,61 +505,67 @@ export function UsageSection() {
   })();
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Usage</CardTitle>
-            <CardDescription>
-              {dateRange?.from
-                ? "Showing filtered results."
-                : "Token consumption and activity over the past 39 weeks."}
-            </CardDescription>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle>Usage</CardTitle>
+              <CardDescription>
+                {dateRange?.from
+                  ? "Showing filtered results."
+                  : "Token consumption and activity over the past 39 weeks."}
+              </CardDescription>
+            </div>
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
-          <StatBlock
-            label="Messages"
-            value={totals.messageCount.toLocaleString()}
-          />
-          <StatBlock
-            label="Tool calls"
-            value={totals.toolCallCount.toLocaleString()}
-          />
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
+            <StatBlock
+              label="Messages"
+              value={totals.messageCount.toLocaleString()}
+            />
+            <StatBlock
+              label="Tool calls"
+              value={totals.toolCallCount.toLocaleString()}
+            />
+          </div>
 
-        <ContributionChart data={chartData} />
+          <ContributionChart data={chartData} />
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {hasUsage && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Agent split</h3>
-              <UsagePieChart
-                segments={agentSegments}
-                centerLabel="Total tokens"
-                emptyLabel="No agent usage"
-              />
-            </div>
-          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {hasUsage && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Agent split</h3>
+                <UsagePieChart
+                  segments={agentSegments}
+                  centerLabel="Total tokens"
+                  emptyLabel="No agent usage"
+                />
+              </div>
+            )}
 
-          {modelUsage.length > 0 ? (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Usage by model</h3>
-              <UsagePieChart
-                segments={modelSegments}
-                centerLabel="Total tokens"
-                emptyLabel="No model usage"
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No model data</p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            {modelUsage.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Usage by model</h3>
+                <UsagePieChart
+                  segments={modelSegments}
+                  centerLabel="Total tokens"
+                  emptyLabel="No model usage"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No model data</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {data?.insights ? (
+        <UsageInsightsSection insights={data.insights} />
+      ) : null}
+    </div>
   );
 }
