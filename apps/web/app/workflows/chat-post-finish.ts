@@ -238,7 +238,10 @@ export async function recordWorkflowUsage(
           continue;
         }
 
-        const combinedUsage = sumLanguageModelUsage(existing.usage, event.usage);
+        const combinedUsage = sumLanguageModelUsage(
+          existing.usage,
+          event.usage,
+        );
         if (!combinedUsage) {
           continue;
         }
