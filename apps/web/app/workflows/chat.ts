@@ -164,6 +164,7 @@ export async function runAgentWorkflow(options: Options) {
       options.modelId,
       totalUsage,
       pendingAssistantResponse,
+      latestMessage.role === "assistant" ? latestMessage : undefined,
     );
 
     // Persist the sandbox state so lifecycle timers stay accurate.

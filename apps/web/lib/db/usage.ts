@@ -19,11 +19,13 @@ export async function recordUsage(
       cachedInputTokens: number;
       outputTokens: number;
     };
+    toolCallCount?: number;
   },
 ) {
-  const toolCallCount = data.messages
+  const inferredToolCallCount = data.messages
     .flatMap((m) => m.parts)
     .filter(isToolUIPart).length;
+  const toolCallCount = data.toolCallCount ?? inferredToolCallCount;
 
   const provider =
     typeof data.model === "string"

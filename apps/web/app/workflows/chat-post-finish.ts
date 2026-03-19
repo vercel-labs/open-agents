@@ -17,6 +17,60 @@ import { recordUsage } from "@/lib/db/usage";
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
 
+type UsageByModel = {
+  usage: LanguageModelUsage;
+  toolCallCount: number;
+};
+
+function filterNewTaskUsageEvents<T extends { toolCallId?: string }>(
+  currentEvents: T[],
+  baselineEvents: T[],
+): T[] {
+  if (baselineEvents.length === 0) {
+    return currentEvents;
+  }
+
+  const existingToolCallIds = new Set<string>();
+  let existingEventsWithoutIds = 0;
+
+  for (const event of baselineEvents) {
+    const toolCallId =
+      typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+
+    if (toolCallId) {
+      existingToolCallIds.add(toolCallId);
+    } else {
+      existingEventsWithoutIds += 1;
+    }
+  }
+
+  let skippedWithoutIds = 0;
+  const deltaEvents: T[] = [];
+
+  for (const event of currentEvents) {
+    const toolCallId =
+      typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+
+    if (toolCallId) {
+      if (existingToolCallIds.has(toolCallId)) {
+        continue;
+      }
+
+      deltaEvents.push(event);
+      continue;
+    }
+
+    if (skippedWithoutIds < existingEventsWithoutIds) {
+      skippedWithoutIds += 1;
+      continue;
+    }
+
+    deltaEvents.push(event);
+  }
+
+  return deltaEvents;
+}
+
 export async function persistUserMessage(
   chatId: string,
   message: WebAgentUIMessage,
@@ -186,6 +240,7 @@ export async function recordWorkflowUsage(
   modelId: string,
   totalUsage: LanguageModelUsage | undefined,
   responseMessage: WebAgentUIMessage,
+  previousResponseMessage?: WebAgentUIMessage,
 ): Promise<void> {
   "use step";
 
@@ -210,9 +265,17 @@ export async function recordWorkflowUsage(
     }
 
     // Record subagent usage (aggregated by model)
-    const subagentUsageEvents = collectTaskToolUsageEvents(responseMessage);
+    const baselineSubagentUsageEvents = previousResponseMessage
+      ? collectTaskToolUsageEvents(previousResponseMessage)
+      : [];
+    const subagentUsageEvents = filterNewTaskUsageEvents(
+      collectTaskToolUsageEvents(responseMessage),
+      baselineSubagentUsageEvents,
+    );
+
     if (subagentUsageEvents.length > 0) {
-      const subagentUsageByModel = new Map<string, LanguageModelUsage>();
+      const subagentUsageByModel = new Map<string, UsageByModel>();
+
       for (const event of subagentUsageEvents) {
         const eventModelId = event.modelId ?? modelId;
         if (!eventModelId) {
@@ -220,23 +283,37 @@ export async function recordWorkflowUsage(
         }
 
         const existing = subagentUsageByModel.get(eventModelId);
-        const combined = sumLanguageModelUsage(existing, event.usage);
-        if (combined) {
-          subagentUsageByModel.set(eventModelId, combined);
+        if (!existing) {
+          subagentUsageByModel.set(eventModelId, {
+            usage: event.usage,
+            toolCallCount: 1,
+          });
+          continue;
         }
+
+        const combinedUsage = sumLanguageModelUsage(existing.usage, event.usage);
+        if (!combinedUsage) {
+          continue;
+        }
+
+        subagentUsageByModel.set(eventModelId, {
+          usage: combinedUsage,
+          toolCallCount: existing.toolCallCount + 1,
+        });
       }
 
-      for (const [eventModelId, usage] of subagentUsageByModel) {
+      for (const [eventModelId, modelUsage] of subagentUsageByModel) {
         await recordUsage(userId, {
           source: "web",
           agentType: "subagent",
           model: eventModelId,
           messages: [],
           usage: {
-            inputTokens: usage.inputTokens ?? 0,
-            cachedInputTokens: cachedInputTokensFor(usage),
-            outputTokens: usage.outputTokens ?? 0,
+            inputTokens: modelUsage.usage.inputTokens ?? 0,
+            cachedInputTokens: cachedInputTokensFor(modelUsage.usage),
+            outputTokens: modelUsage.usage.outputTokens ?? 0,
           },
+          toolCallCount: modelUsage.toolCallCount,
         });
       }
     }
