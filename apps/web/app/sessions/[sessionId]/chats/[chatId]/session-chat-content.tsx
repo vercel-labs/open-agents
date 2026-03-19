@@ -2633,7 +2633,9 @@ export function SessionChatContent({
                           </DropdownMenuItem>
                         )}
                         {canCloseAndArchive && (
-                          <DropdownMenuItem onClick={() => setCloseDialogOpen(true)}>
+                          <DropdownMenuItem
+                            onClick={() => setCloseDialogOpen(true)}
+                          >
                             <GitPullRequestClosed className="mr-2 h-4 w-4" />
                             Close & Archive
                           </DropdownMenuItem>

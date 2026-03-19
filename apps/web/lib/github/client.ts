@@ -753,7 +753,9 @@ export async function closePullRequest(params: {
   repoUrl: string;
   prNumber: number;
   token?: string;
-}): Promise<{ success: true } | { success: false; error: string; statusCode?: number }> {
+}): Promise<
+  { success: true } | { success: false; error: string; statusCode?: number }
+> {
   const { repoUrl, prNumber, token } = params;
 
   try {
