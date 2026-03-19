@@ -15,14 +15,7 @@
     "func-names": "off",
     "func-style": "off",
     "import/consistent-type-specifier-style": "off",
-    "max-lines": [
-      "error",
-      {
-        "max": 400,
-        "skipBlankLines": true,
-        "skipComments": true
-      }
-    ],
+    "max-lines": "off",
     "no-console": "off",
     "no-eq-null": "off",
     "no-inline-comments": "off",
