@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { SessionStarter } from "@/components/session-starter";
+import type { VercelProjectSelection } from "@/lib/vercel/types";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ type CreateSessionInput = {
   isNewBranch: boolean;
   sandboxType: SandboxType;
   autoCommitPush: boolean;
+  vercelProject?: VercelProjectSelection | null;
 };
 
 interface NewSessionDialogProps {

@@ -155,6 +155,13 @@
       "when": 1773686928144,
       "tag": "0021_normal_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1773963619200,
+      "tag": "0022_ambiguous_tiger_shark",
+      "breakpoints": true
     }
   ]
 }
