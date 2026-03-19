@@ -1,7 +1,4 @@
-import {
-  createUIMessageStreamResponse,
-  type InferUIMessageChunk,
-} from "ai";
+import { createUIMessageStreamResponse, type InferUIMessageChunk } from "ai";
 import { start } from "workflow/api";
 import type { WebAgentUIMessage } from "@/app/types";
 import {
@@ -261,5 +258,3 @@ async function persistLatestUserMessage(
     console.error("Failed to persist user message:", error);
   }
 }
-
-
