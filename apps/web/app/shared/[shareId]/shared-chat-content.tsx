@@ -237,12 +237,6 @@ export function SharedChatContent({
                 )}
               </span>
             )}
-            {/* Streaming status badge */}
-            <SharedChatStatus
-              shareId={shareId}
-              initialIsStreaming={isStreaming}
-              initialLastUserMessageSentAt={lastUserMessageSentAt}
-            />
           </div>
 
           {/* Tool call toggle */}
@@ -293,6 +287,12 @@ export function SharedChatContent({
                 </div>
               </div>
             ))}
+            {/* Inline streaming status indicator */}
+            <SharedChatStatus
+              shareId={shareId}
+              initialIsStreaming={isStreaming}
+              initialLastUserMessageSentAt={lastUserMessageSentAt}
+            />
           </div>
         </div>
       </div>
