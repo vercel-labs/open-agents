@@ -107,6 +107,7 @@ export async function runAgentWorkflow(options: Options) {
 
   let wasAborted = false;
   let totalUsage: LanguageModelUsage | undefined;
+  let streamClosed = false;
 
   try {
     for (
@@ -144,6 +145,13 @@ export async function runAgentWorkflow(options: Options) {
         break;
       }
     }
+
+    // Close the stream immediately after generation so the UI is unblocked.
+    await sendFinish(writable);
+    await closeStream(writable);
+    streamClosed = true;
+
+    // --- Post-stream persistence & background work ---
 
     // Always persist the assistant message — even on abort, save content
     // from completed steps so mid-stream output is not lost.
@@ -187,9 +195,11 @@ export async function runAgentWorkflow(options: Options) {
   } finally {
     // Always clear the active stream and close, even on unexpected errors,
     // so the chat is never permanently marked as streaming.
+    if (!streamClosed) {
+      await sendFinish(writable);
+      await closeStream(writable);
+    }
     await clearActiveStream(options.chatId, workflowRunId);
-    await sendFinish(writable);
-    await closeStream(writable);
   }
 }
 
