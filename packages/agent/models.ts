@@ -102,6 +102,10 @@ export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5");
 }
 
+function shouldApplyOpenAITextVerbosityDefaults(modelId: string): boolean {
+  return modelId.startsWith("openai/gpt-5.4");
+}
+
 export function getProviderOptionsForModel(
   modelId: string,
   providerOptionsOverrides?: ProviderOptionsByProvider,
@@ -131,6 +135,15 @@ export function getProviderOptionsForModel(
       toProviderOptionsRecord({
         reasoningSummary: "detailed",
         include: ["reasoning.encrypted_content"],
+      } satisfies OpenAIResponsesProviderOptions),
+    );
+  }
+
+  if (shouldApplyOpenAITextVerbosityDefaults(modelId)) {
+    defaultProviderOptions.openai = mergeRecords(
+      defaultProviderOptions.openai ?? {},
+      toProviderOptionsRecord({
+        textVerbosity: "low",
       } satisfies OpenAIResponsesProviderOptions),
     );
   }

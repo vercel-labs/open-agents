@@ -57,6 +57,19 @@ describe("getProviderOptionsForModel", () => {
     });
   });
 
+  test("applies low text verbosity defaults to GPT-5.4 snapshots", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5.4-2026-03-05");
+
+    expect(result).toEqual({
+      openai: {
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+        store: false,
+        textVerbosity: "low",
+      },
+    });
+  });
+
   test("preserves store false and encrypted reasoning content for the built-in GPT-5.4 variant", () => {
     const result = getProviderOptionsForModel("openai/gpt-5.4", {
       openai: {
@@ -71,6 +84,7 @@ describe("getProviderOptionsForModel", () => {
         reasoningSummary: "auto",
         include: ["reasoning.encrypted_content"],
         store: false,
+        textVerbosity: "low",
       },
     });
   });
