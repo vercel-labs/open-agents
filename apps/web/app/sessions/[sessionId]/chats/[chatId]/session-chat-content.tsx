@@ -1813,7 +1813,7 @@ export function SessionChatContent({
       pendingOptimisticTitleChatIdRef.current = null;
     }
 
-    let followUpTimeout: ReturnType<typeof setTimeout> | null = null;
+    const followUpTimeouts: ReturnType<typeof setTimeout>[] = [];
     if (
       (wasStreaming || wasSubmitted) &&
       status === "ready" &&
@@ -1832,15 +1832,26 @@ export function SessionChatContent({
       void refreshChats();
 
       if (session.cloneUrl && session.repoOwner && session.repoName) {
-        followUpTimeout = setTimeout(() => {
-          void refreshCompletedTurnState();
-        }, 3000);
+        // Schedule follow-up refreshes to catch post-stream server-side
+        // work (auto-commit, diff cache update). When auto-commit is
+        // enabled the server generates a commit message via LLM, commits,
+        // and pushes which can take 5-15 s, so we use a longer schedule.
+        const delays = session.autoCommitPushOverride
+          ? [3000, 8000, 16000]
+          : [3000];
+        for (const delay of delays) {
+          followUpTimeouts.push(
+            setTimeout(() => {
+              void refreshCompletedTurnState();
+            }, delay),
+          );
+        }
       }
     }
 
     return () => {
-      if (followUpTimeout !== null) {
-        clearTimeout(followUpTimeout);
+      for (const t of followUpTimeouts) {
+        clearTimeout(t);
       }
     };
   }, [
@@ -1858,6 +1869,7 @@ export function SessionChatContent({
     session.cloneUrl,
     session.repoOwner,
     session.repoName,
+    session.autoCommitPushOverride,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
@@ -2285,7 +2297,6 @@ export function SessionChatContent({
     hasRepo && !hasExistingPr && !hasUncommittedGitChanges && hasBranchDiff;
   const showCommitAction =
     hasRepo &&
-    !session.autoCommitPushOverride &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
