@@ -30,7 +30,6 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -127,6 +126,12 @@ import {
   CommitActionHeaderButton,
   CommitActionMenuItem,
 } from "./commit-action-button";
+import {
+  createSandbox,
+  getSandboxCreateErrorDetails,
+  type SandboxCreateErrorDetails,
+} from "./sandbox-create";
+import { SandboxCreateErrorBanner } from "./sandbox-create-error-banner";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -245,99 +250,6 @@ function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
     .map((part) => part.text)
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
-}
-
-type CreateSandboxResponse = SandboxInfo & {
-  type: string;
-};
-
-type CreateSandboxErrorResponse = {
-  error?: string;
-  reason?: string;
-  actionUrl?: string;
-};
-
-class SandboxCreateRequestError extends Error {
-  readonly reason?: string;
-  readonly actionUrl?: string;
-
-  constructor(
-    message: string,
-    options?: {
-      reason?: string;
-      actionUrl?: string;
-    },
-  ) {
-    super(message);
-    this.name = "SandboxCreateRequestError";
-    this.reason = options?.reason;
-    this.actionUrl = options?.actionUrl;
-  }
-}
-
-function getSandboxCreateErrorDetails(error: unknown): {
-  message: string;
-  actionUrl?: string;
-} {
-  if (error instanceof SandboxCreateRequestError) {
-    return {
-      message: error.message,
-      actionUrl: error.actionUrl,
-    };
-  }
-
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return { message: error.message };
-  }
-
-  return { message: "Failed to create sandbox. Please try again." };
-}
-
-async function createSandbox(
-  cloneUrl: string | undefined,
-  branch: string | undefined,
-  isNewBranch: boolean,
-  sessionId: string,
-  sandboxType?: string,
-): Promise<CreateSandboxResponse> {
-  const response = await fetch("/api/sandbox", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      repoUrl: cloneUrl,
-      branch: cloneUrl ? (branch ?? "main") : undefined,
-      isNewBranch: cloneUrl ? isNewBranch : false,
-      sessionId,
-      sandboxType: sandboxType ?? "vercel",
-    }),
-  });
-  if (!response.ok) {
-    const rawBody = await response.text().catch(() => "");
-    let payload: CreateSandboxErrorResponse | null = null;
-
-    if (rawBody) {
-      try {
-        payload = JSON.parse(rawBody) as CreateSandboxErrorResponse;
-      } catch {
-        payload = null;
-      }
-    }
-
-    const message =
-      typeof payload?.error === "string" && payload.error.trim().length > 0
-        ? payload.error
-        : `Failed to create sandbox: ${response.status}${rawBody ? ` - ${rawBody}` : ""}`;
-
-    throw new SandboxCreateRequestError(message, {
-      reason: typeof payload?.reason === "string" ? payload.reason : undefined,
-      actionUrl:
-        typeof payload?.actionUrl === "string" ? payload.actionUrl : undefined,
-    });
-  }
-  const data = (await response.json()) as {
-    mode: string;
-  } & SandboxInfo;
-  return { ...data, type: data.mode };
 }
 
 function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
@@ -1532,10 +1444,8 @@ export function SessionChatContent({
   });
 
   const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [sandboxCreateError, setSandboxCreateError] = useState<{
-    message: string;
-    actionUrl?: string;
-  } | null>(null);
+  const [sandboxCreateError, setSandboxCreateError] =
+    useState<SandboxCreateErrorDetails | null>(null);
   const [deleteMessageError, setDeleteMessageError] = useState<string | null>(
     null,
   );
@@ -3183,26 +3093,10 @@ export function SessionChatContent({
       <div className="p-4 pb-2 sm:pb-8">
         <div className="mx-auto max-w-4xl space-y-2">
           {sandboxCreateError && (
-            <div className="flex items-start justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <span>{sandboxCreateError.message}</span>
-                {sandboxCreateError.actionUrl ? (
-                  <Link
-                    href={sandboxCreateError.actionUrl}
-                    className="font-medium underline underline-offset-4 hover:no-underline"
-                  >
-                    Reconnect GitHub
-                  </Link>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSandboxCreateError(null)}
-                className="ml-2 rounded p-0.5 hover:bg-destructive/20"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <SandboxCreateErrorBanner
+              error={sandboxCreateError}
+              onDismiss={() => setSandboxCreateError(null)}
+            />
           )}
           {restoreError && (
             <div className="flex items-center justify-between rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
