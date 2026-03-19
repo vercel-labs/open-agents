@@ -13,9 +13,6 @@ let chatRecord: {
   activeStreamId: null,
 };
 
-let latestUserMessageCreatedAt: Date | null = new Date("2025-01-01T00:00:00Z");
-let latestUserMessageLookupCount = 0;
-
 mock.module("@/lib/db/sessions-cache", () => ({
   getShareByIdCached: async () => shareRecord,
   getSessionByIdCached: async () => null,
@@ -23,10 +20,6 @@ mock.module("@/lib/db/sessions-cache", () => ({
 
 mock.module("@/lib/db/sessions", () => ({
   getChatById: async () => chatRecord,
-  getLatestUserMessageCreatedAt: async () => {
-    latestUserMessageLookupCount += 1;
-    return latestUserMessageCreatedAt;
-  },
 }));
 
 const routeModulePromise = import("./route");
@@ -43,8 +36,6 @@ describe("GET /api/shared/:shareId/status", () => {
   beforeEach(() => {
     shareRecord = { id: "share-1", chatId: "chat-1" };
     chatRecord = { id: "chat-1", activeStreamId: null };
-    latestUserMessageCreatedAt = new Date("2025-01-01T00:00:00Z");
-    latestUserMessageLookupCount = 0;
   });
 
   test("returns 404 when share does not exist", async () => {
@@ -69,30 +60,14 @@ describe("GET /api/shared/:shareId/status", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isStreaming).toBe(false);
-    expect(body.startedAt).toBeNull();
-    expect(latestUserMessageLookupCount).toBe(0);
   });
 
-  test("returns isStreaming=true with startedAt for active chat", async () => {
+  test("returns isStreaming=true for active chat", async () => {
     chatRecord = { id: "chat-1", activeStreamId: "stream-xyz" };
     const { GET } = await routeModulePromise;
     const res = await GET(makeRequest(), makeContext());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isStreaming).toBe(true);
-    expect(body.startedAt).toBe("2025-01-01T00:00:00.000Z");
-    expect(latestUserMessageLookupCount).toBe(1);
-  });
-
-  test("returns startedAt=null when active but no user messages", async () => {
-    chatRecord = { id: "chat-1", activeStreamId: "stream-xyz" };
-    latestUserMessageCreatedAt = null;
-    const { GET } = await routeModulePromise;
-    const res = await GET(makeRequest(), makeContext());
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.isStreaming).toBe(true);
-    expect(body.startedAt).toBeNull();
-    expect(latestUserMessageLookupCount).toBe(1);
   });
 });

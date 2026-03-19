@@ -75,7 +75,9 @@ export function SharedChatStatus({
   // Poll the status endpoint while streaming.
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/shared/${shareId}/status`);
+      const res = await fetch(`/api/shared/${shareId}/status`, {
+        cache: "no-store",
+      });
       if (!res.ok) return;
       const data: SharedChatStatusData = await res.json();
       if (!data.isStreaming) {

@@ -2,7 +2,6 @@
 
 export type SharedChatStatusData = {
   isStreaming: boolean;
-  startedAt: string | null;
 };
 
 /**

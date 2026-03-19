@@ -7,7 +7,7 @@ type RouteContext = {
 /**
  * GET /api/shared/:shareId/status
  * Public read-only endpoint returning streaming status for a shared chat.
- * Returns { isStreaming, startedAt } or 404 if the share is invalid.
+ * Returns { isStreaming } or 404 if the share is invalid.
  */
 export async function GET(_req: Request, context: RouteContext) {
   const { shareId } = await context.params;
