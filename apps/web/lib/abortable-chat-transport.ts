@@ -3,13 +3,18 @@ import type { UIMessage } from "ai";
 import { DefaultChatTransport } from "ai";
 
 /**
- * A chat transport that allows aborting ALL active fetch connections,
- * including `reconnectToStream` requests.
+ * A chat transport that allows aborting active response streams without
+ * killing in-flight request uploads.
  *
- * The AI SDK's `reconnectToStream` does not pass an abort signal to its
- * internal fetch call, so `chatInstance.stop()` cannot cancel resumed
- * streams. This transport wraps every fetch with a transport-level abort
- * signal so that `abort()` reliably tears down any active connection.
+ * When `abort()` is called, any active response body readers are cancelled
+ * (stopping downstream data consumption and freeing the connection). The
+ * request itself is NOT aborted — this ensures the POST body reaches the
+ * server even on slow connections (e.g. when the user navigates away while
+ * the upload is still in progress).
+ *
+ * The AI SDK's own abort signal (`init.signal`, fired by `chatInstance.stop()`)
+ * still aborts the full fetch request when the user explicitly stops
+ * generation.
  *
  * After `abort()` the transport is immediately reusable — a fresh controller
  * is created so that subsequent fetches are not affected. This makes it safe
@@ -30,21 +35,48 @@ export class AbortableChatTransport<
 
     super({
       ...options,
-      fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
-        outerFetch(input, {
-          ...init,
-          signal: init?.signal
-            ? AbortSignal.any([state.controller.signal, init.signal])
-            : state.controller.signal,
-        })) as FetchFunction,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        // Capture the current abort signal BEFORE the await. abort() swaps
+        // in a new controller, so we need the reference that was live when
+        // this particular fetch was initiated.
+        const transportSignal = state.controller.signal;
+
+        // Only pass the SDK's own signal (init.signal) to fetch — NOT the
+        // transport-level signal. This lets the POST body finish uploading on
+        // slow connections even when transport.abort() fires on route unmount,
+        // while explicit stop (chatInstance.stop()) can still abort via the
+        // SDK signal.
+        const response = await outerFetch(input, { ...init });
+
+        // Cancel the response body if the transport was already aborted
+        // during the request (e.g. user navigated away while uploading), or
+        // register a listener to cancel on future abort.
+        if (response.body) {
+          if (transportSignal.aborted) {
+            response.body.cancel().catch(() => {});
+          } else {
+            transportSignal.addEventListener(
+              "abort",
+              () => {
+                response.body?.cancel().catch(() => {});
+              },
+              { once: true },
+            );
+          }
+        }
+
+        return response;
+      }) as FetchFunction,
     });
 
     this._state = state;
   }
 
   /**
-   * Abort every in-flight fetch made through this transport, then reset
-   * so new requests go through normally.
+   * Cancel every in-flight response body reader, then reset so new
+   * requests go through normally. The underlying fetch requests are NOT
+   * aborted — only response consumption is stopped, which frees the
+   * connection and stops wasting bandwidth.
    */
   abort(): void {
     this._state.controller.abort();
