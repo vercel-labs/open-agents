@@ -1,11 +1,18 @@
-import { describe, expect, test } from "bun:test";
-import {
+import { describe, expect, mock, test } from "bun:test";
+
+mock.module("ai", () => ({
+  isToolUIPart: (part: { type?: unknown }) =>
+    typeof part.type === "string" && part.type.startsWith("tool-"),
+  isReasoningUIPart: (part: { type?: unknown }) => part.type === "reasoning",
+}));
+
+const {
   hasRenderableAssistantPart,
   isChatInFlight,
   shouldKeepCollapsedReasoningStreaming,
   shouldRefreshAfterReadyTransition,
   shouldShowThinkingIndicator,
-} from "./chat-streaming-state";
+} = await import("./chat-streaming-state");
 
 describe("chat streaming state", () => {
   test("treats submitted and streaming as in-flight", () => {

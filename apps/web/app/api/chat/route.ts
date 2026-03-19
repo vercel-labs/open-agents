@@ -21,7 +21,7 @@ import { resolveChatModelSelection } from "./_lib/model-selection";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { createChatRuntime } from "./_lib/runtime";
 import { runAgentWorkflow } from "@/app/workflows/chat";
-import { persistAssistantMessagesWithToolResults } from "@/app/workflows/chat-post-finish";
+import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-results";
 
 export const maxDuration = 800;
 

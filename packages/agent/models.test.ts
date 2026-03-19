@@ -1,10 +1,28 @@
-import { describe, expect, test } from "bun:test";
-import {
+import { describe, expect, mock, test } from "bun:test";
+import type { ProviderOptionsByProvider } from "./models";
+
+mock.module("ai", () => {
+  const gateway = (modelId: string) => ({ modelId });
+
+  return {
+    createGateway: () => gateway,
+    defaultSettingsMiddleware: (_settings: unknown) => ({
+      kind: "default-settings-middleware",
+    }),
+    gateway,
+    wrapLanguageModel: ({ model }: { model: unknown }) => model,
+  };
+});
+
+mock.module("@ai-sdk/devtools", () => ({
+  devToolsMiddleware: () => ({ kind: "devtools-middleware" }),
+}));
+
+const {
   getProviderOptionsForModel,
   mergeProviderOptions,
-  type ProviderOptionsByProvider,
   shouldApplyOpenAIReasoningDefaults,
-} from "./models";
+} = await import("./models");
 
 describe("shouldApplyOpenAIReasoningDefaults", () => {
   test("returns true for existing GPT-5 variants", () => {

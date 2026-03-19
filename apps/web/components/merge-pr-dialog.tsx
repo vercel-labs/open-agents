@@ -1,14 +1,12 @@
 "use client";
 
 import {
+  AlertTriangle,
   Check,
-  CheckCircle2,
-  Clock3,
   ExternalLink,
   GitMerge,
   Loader2,
   RefreshCw,
-  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
@@ -33,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { CheckRunsList } from "@/components/merge-check-runs";
 
 interface MergePrDialogProps {
   open: boolean;
@@ -51,14 +50,6 @@ function formatMergeMethodLabel(method: PullRequestMergeMethod): string {
   return mergeMethodLabels[method] ?? method;
 }
 
-function getCheckStateLabel(state: "passed" | "pending" | "failed"): string {
-  return state === "passed"
-    ? "Passed"
-    : state === "pending"
-      ? "Pending"
-      : "Failing";
-}
-
 export function MergePrDialog({
   open,
   onOpenChange,
@@ -74,8 +65,12 @@ export function MergePrDialog({
   const [isLoadingReadiness, setIsLoadingReadiness] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forceConfirming, setForceConfirming] = useState(false);
 
   const readinessRequestIdRef = useRef(0);
+  const forceConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const loadReadiness = useCallback(async () => {
     const requestId = readinessRequestIdRef.current + 1;
@@ -133,6 +128,11 @@ export function MergePrDialog({
       setDeleteBranch(true);
       setMergeMethod("squash");
       setIsLoadingReadiness(false);
+      setForceConfirming(false);
+      if (forceConfirmTimeoutRef.current) {
+        clearTimeout(forceConfirmTimeoutRef.current);
+        forceConfirmTimeoutRef.current = null;
+      }
       return;
     }
 
@@ -152,7 +152,7 @@ export function MergePrDialog({
     }
   }, [pullRequestUrl]);
 
-  const handleMerge = async () => {
+  const handleMerge = async (force = false) => {
     if (!readiness?.pr) {
       setError("No pull request found for this session.");
       return;
@@ -172,6 +172,7 @@ export function MergePrDialog({
           mergeMethod,
           deleteBranch,
           expectedHeadSha: readiness.pr.headSha,
+          ...(force ? { force: true } : {}),
         }),
       });
 
@@ -211,6 +212,32 @@ export function MergePrDialog({
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Whether the user can bypass failing checks via force merge
+  const canForce =
+    readiness !== null &&
+    !readiness.canMerge &&
+    readiness.pr !== null &&
+    !isLoadingReadiness;
+
+  const handleForceClick = () => {
+    if (forceConfirming) {
+      // Second click – actually merge with force
+      if (forceConfirmTimeoutRef.current) {
+        clearTimeout(forceConfirmTimeoutRef.current);
+        forceConfirmTimeoutRef.current = null;
+      }
+      setForceConfirming(false);
+      void handleMerge(true);
+    } else {
+      // First click – enter confirmation state
+      setForceConfirming(true);
+      forceConfirmTimeoutRef.current = setTimeout(() => {
+        setForceConfirming(false);
+        forceConfirmTimeoutRef.current = null;
+      }, 5000);
     }
   };
 
@@ -277,59 +304,7 @@ export function MergePrDialog({
               ) : null}
 
               {readiness?.checkRuns.length ? (
-                <div className="rounded-md border border-border bg-muted/40 p-3">
-                  <p className="mb-2 text-sm font-medium text-foreground">
-                    Check details
-                  </p>
-                  <ul className="max-h-40 space-y-1 overflow-y-auto">
-                    {readiness.checkRuns.map((checkRun, index) => (
-                      <li
-                        key={`${checkRun.name}-${checkRun.detailsUrl ?? "no-url"}-${index}`}
-                        className="flex items-center justify-between gap-2 text-sm"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          {checkRun.state === "passed" ? (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
-                          ) : checkRun.state === "pending" ? (
-                            <Clock3 className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-                          ) : (
-                            <XCircle className="h-4 w-4 shrink-0 text-destructive" />
-                          )}
-                          <span className="truncate text-foreground">
-                            {checkRun.name}
-                          </span>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span
-                            className={
-                              checkRun.state === "passed"
-                                ? "text-xs text-emerald-600 dark:text-emerald-500"
-                                : checkRun.state === "pending"
-                                  ? "text-xs text-amber-600 dark:text-amber-500"
-                                  : "text-xs text-destructive"
-                            }
-                          >
-                            {getCheckStateLabel(checkRun.state)}
-                          </span>
-                          {checkRun.detailsUrl ? (
-                            /* External link to GitHub check details */
-                            /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-                            <a
-                              href={checkRun.detailsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-muted-foreground hover:text-foreground"
-                              aria-label={`Open details for ${checkRun.name}`}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <CheckRunsList checkRuns={readiness.checkRuns} />
               ) : null}
 
               <div className="grid gap-2">
@@ -409,28 +384,58 @@ export function MergePrDialog({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleMerge}
-            disabled={
-              isSubmitting ||
-              isLoadingReadiness ||
-              !readiness ||
-              !canMerge ||
-              !readiness.pr
-            }
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merging...
-              </>
-            ) : (
-              <>
-                <Check className="mr-2 h-4 w-4" />
-                Confirm Merge & Archive
-              </>
-            )}
-          </Button>
+          {canMerge ? (
+            <Button
+              onClick={() => void handleMerge()}
+              disabled={
+                isSubmitting ||
+                isLoadingReadiness ||
+                !readiness ||
+                !readiness.pr
+              }
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Merging...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Confirm Merge & Archive
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              onClick={handleForceClick}
+              disabled={
+                isSubmitting ||
+                isLoadingReadiness ||
+                !readiness ||
+                !canForce ||
+                !readiness.pr
+              }
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Merging...
+                </>
+              ) : forceConfirming ? (
+                <>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Click again to confirm
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Merge without passing checks
+                </>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

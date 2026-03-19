@@ -21,6 +21,7 @@ interface MergePullRequestRequest {
   commitMessage?: string;
   deleteBranch?: boolean;
   expectedHeadSha?: string;
+  force?: boolean;
 }
 
 export type MergePullRequestResponse = {
@@ -56,6 +57,7 @@ function parseRequestBody(value: unknown): MergePullRequestRequest {
     typeof record.expectedHeadSha === "string"
       ? record.expectedHeadSha
       : undefined;
+  const force = typeof record.force === "boolean" ? record.force : undefined;
 
   return {
     mergeMethod,
@@ -63,6 +65,7 @@ function parseRequestBody(value: unknown): MergePullRequestRequest {
     commitMessage,
     deleteBranch,
     expectedHeadSha,
+    force,
   };
 }
 
@@ -180,14 +183,31 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
+  // Reasons that can be bypassed with force (CI / check failures only)
+  const forceBypassableReasons = new Set([
+    "Required checks are failing",
+    "Required checks are still pending",
+    "Required checks are still in progress",
+    "Branch protection requirements are not yet satisfied",
+  ]);
+
   if (!readiness.canMerge) {
-    return Response.json(
-      {
-        error: readiness.reasons.join(". "),
-        reasons: readiness.reasons,
-      },
-      { status: 409 },
+    const nonBypassableReasons = readiness.reasons.filter(
+      (r) => !forceBypassableReasons.has(r),
     );
+
+    if (!parsedBody.force || nonBypassableReasons.length > 0) {
+      const reasons = parsedBody.force
+        ? nonBypassableReasons
+        : readiness.reasons;
+      return Response.json(
+        {
+          error: reasons.join(". "),
+          reasons,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const requestedMethod = parsedBody.mergeMethod ?? readiness.defaultMethod;

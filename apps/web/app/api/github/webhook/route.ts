@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { and, eq, sql } from "drizzle-orm";
+import { after } from "next/server";
 import { z } from "zod";
 import {
   deleteInstallationByInstallationId,
@@ -6,6 +8,10 @@ import {
   updateInstallationsByInstallationId,
   upsertInstallation,
 } from "@/lib/db/installations";
+import { updateSession } from "@/lib/db/sessions";
+import { db } from "@/lib/db/client";
+import { sessions } from "@/lib/db/schema";
+import { archiveSession } from "@/lib/sandbox/archive-session";
 
 const installationWebhookSchema = z.object({
   action: z.string(),
@@ -19,6 +25,20 @@ const installationWebhookSchema = z.object({
         type: z.string(),
       })
       .optional(),
+  }),
+});
+
+const pullRequestWebhookSchema = z.object({
+  action: z.string(),
+  repository: z.object({
+    name: z.string(),
+    owner: z.object({
+      login: z.string(),
+    }),
+  }),
+  pull_request: z.object({
+    number: z.number(),
+    merged: z.boolean().optional(),
   }),
 });
 
@@ -40,6 +60,92 @@ function verifySignature(
   }
 
   return timingSafeEqual(expected, provided);
+}
+
+async function handlePullRequestWebhook(
+  payload: z.infer<typeof pullRequestWebhookSchema>,
+): Promise<Response> {
+  const action = payload.action;
+  if (action !== "closed" && action !== "reopened") {
+    return Response.json({ ok: true, ignored: true, action });
+  }
+
+  const repoOwner = payload.repository.owner.login;
+  const repoName = payload.repository.name;
+  const prNumber = payload.pull_request.number;
+  const prStatus =
+    action === "closed"
+      ? payload.pull_request.merged
+        ? "merged"
+        : "closed"
+      : "open";
+
+  const linkedSessions = await db.query.sessions.findMany({
+    where: and(
+      sql`lower(${sessions.repoOwner}) = ${repoOwner.toLowerCase()}`,
+      sql`lower(${sessions.repoName}) = ${repoName.toLowerCase()}`,
+      eq(sessions.prNumber, prNumber),
+    ),
+  });
+
+  if (linkedSessions.length === 0) {
+    return Response.json({
+      ok: true,
+      event: "pull_request",
+      action,
+      matchedSessions: 0,
+      updatedSessions: 0,
+      archivedSessions: 0,
+    });
+  }
+
+  let updatedSessions = 0;
+  let archivedSessions = 0;
+
+  for (const sessionRecord of linkedSessions) {
+    const shouldArchive =
+      action === "closed" && sessionRecord.status !== "archived";
+
+    const updatePayload: Parameters<typeof updateSession>[1] = {};
+
+    if (sessionRecord.prStatus !== prStatus) {
+      updatePayload.prStatus = prStatus;
+    }
+
+    if (shouldArchive) {
+      const archived = await archiveSession(sessionRecord.id, {
+        currentSession: sessionRecord,
+        update: updatePayload,
+        logPrefix: "[GitHub webhook]",
+        scheduleBackgroundWork: after,
+      });
+
+      if (archived.session) {
+        updatedSessions += 1;
+      }
+      if (archived.archiveTriggered) {
+        archivedSessions += 1;
+      }
+      continue;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      const updated = await updateSession(sessionRecord.id, updatePayload);
+      if (updated) {
+        updatedSessions += 1;
+      }
+    }
+  }
+
+  return Response.json({
+    ok: true,
+    event: "pull_request",
+    action,
+    prStatus,
+    matchedSessions: linkedSessions.length,
+    updatedSessions,
+    archivedSessions,
+  });
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -70,15 +176,27 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ ok: true });
   }
 
-  if (event !== "installation" && event !== "installation_repositories") {
-    return Response.json({ ok: true, ignored: true, event });
-  }
-
   let parsedPayload: unknown;
   try {
     parsedPayload = JSON.parse(payloadText);
   } catch {
     return Response.json({ error: "Invalid JSON payload" }, { status: 400 });
+  }
+
+  if (event === "pull_request") {
+    const parsed = pullRequestWebhookSchema.safeParse(parsedPayload);
+    if (!parsed.success) {
+      return Response.json(
+        { error: "Invalid webhook payload" },
+        { status: 400 },
+      );
+    }
+
+    return handlePullRequestWebhook(parsed.data);
+  }
+
+  if (event !== "installation" && event !== "installation_repositories") {
+    return Response.json({ ok: true, ignored: true, event });
   }
 
   const parsed = installationWebhookSchema.safeParse(parsedPayload);

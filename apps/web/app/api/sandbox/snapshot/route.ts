@@ -138,10 +138,9 @@ export async function PUT(req: Request) {
 
   const { sessionRecord } = sessionContext;
 
-  // TODO: If the background after() callback in the archive flow crashes before
-  // reaching updateSession (e.g. connectSandbox or sandbox.snapshot() throws),
-  // sandboxState retains runtime data and snapshotUrl stays null. This leaves
-  // the session permanently returning 409 with no self-service recovery path.
+  // If archive finalization is still running, return 409 until the background
+  // task either stores a snapshot or clears runtime sandbox state after a
+  // recoverable archive failure.
   if (!sessionRecord.snapshotUrl) {
     if (hasRuntimeSandboxState(sessionRecord.sandboxState)) {
       console.warn(
