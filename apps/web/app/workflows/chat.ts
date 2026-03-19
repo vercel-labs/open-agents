@@ -147,9 +147,10 @@ export async function runAgentWorkflow(options: Options) {
     }
 
     // Close the stream immediately after generation so the UI is unblocked.
-    await clearActiveStream(options.chatId, workflowRunId);
-    await sendFinish(writable);
-    await closeStream(writable);
+    await Promise.all([
+      clearActiveStream(options.chatId, workflowRunId),
+      sendFinish(writable).then(() => closeStream(writable)),
+    ]);
     streamClosed = true;
 
     // --- Post-stream persistence & background work ---
@@ -197,9 +198,10 @@ export async function runAgentWorkflow(options: Options) {
     // On unexpected errors, still clear the active stream and close
     // so the chat is never permanently marked as streaming.
     if (!streamClosed) {
-      await clearActiveStream(options.chatId, workflowRunId);
-      await sendFinish(writable);
-      await closeStream(writable);
+      await Promise.all([
+        clearActiveStream(options.chatId, workflowRunId),
+        sendFinish(writable).then(() => closeStream(writable)),
+      ]);
     }
   }
 }
