@@ -8,7 +8,7 @@
   "endOfLine": "lf",
   "experimentalSortImports": {
     "ignoreCase": true,
-    "newlinesBetween": true,
+    "newlinesBetween": false,
     "order": "asc"
   },
   "experimentalSortPackageJson": true,
@@ -18,6 +18,6 @@
   "semi": true,
   "singleQuote": false,
   "tabWidth": 2,
-  "trailingComma": "es5",
+  "trailingComma": "all",
   "useTabs": false
 }
