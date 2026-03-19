@@ -2285,6 +2285,7 @@ export function SessionChatContent({
     hasRepo && !hasExistingPr && !hasUncommittedGitChanges && hasBranchDiff;
   const showCommitAction =
     hasRepo &&
+    !session.autoCommitPushOverride &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
