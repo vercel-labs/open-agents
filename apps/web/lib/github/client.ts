@@ -193,6 +193,13 @@ const FAILED_CHECK_CONCLUSIONS = new Set([
   "timed_out",
 ]);
 
+const MERGEABILITY_POLL_DELAY_MS = 200;
+const MERGEABILITY_MAX_POLL_ATTEMPTS = 3;
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getCheckRunState(
   status: string | null,
   conclusion: string | null,
@@ -376,7 +383,7 @@ export async function getPullRequestMergeReadiness(params: {
 
     const { owner, repo } = parsed;
 
-    const [pullRequestResponse, repositoryResponse] = await Promise.all([
+    const [initialPullRequestResponse, repositoryResponse] = await Promise.all([
       result.octokit.rest.pulls.get({
         owner,
         repo,
@@ -385,7 +392,34 @@ export async function getPullRequestMergeReadiness(params: {
       result.octokit.rest.repos.get({ owner, repo }),
     ]);
 
-    const pullRequest = pullRequestResponse.data;
+    let pullRequest = initialPullRequestResponse.data;
+
+    for (
+      let attempt = 0;
+      attempt < MERGEABILITY_MAX_POLL_ATTEMPTS &&
+      pullRequest.mergeable === null;
+      attempt += 1
+    ) {
+      await delay(MERGEABILITY_POLL_DELAY_MS);
+
+      try {
+        const refreshedPullRequestResponse =
+          await result.octokit.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: prNumber,
+          });
+
+        pullRequest = refreshedPullRequestResponse.data;
+      } catch (refreshError) {
+        console.warn(
+          "Failed to refresh pull request mergeability state:",
+          refreshError,
+        );
+        break;
+      }
+    }
+
     const repository = repositoryResponse.data;
     const isDraft = Boolean(pullRequest.draft);
 
@@ -436,10 +470,13 @@ export async function getPullRequestMergeReadiness(params: {
         })),
       );
     } catch (checksError) {
-      console.warn(
-        "Failed to list check runs for merge readiness:",
-        checksError,
-      );
+      const checksHttpError = checksError as { status?: number };
+      if (checksHttpError.status !== 403 && checksHttpError.status !== 404) {
+        console.warn(
+          "Failed to list check runs for merge readiness:",
+          checksError,
+        );
+      }
     }
 
     if (checksSummary.requiredTotal === 0) {
@@ -471,10 +508,13 @@ export async function getPullRequestMergeReadiness(params: {
           })),
         );
       } catch (statusError) {
-        console.warn(
-          "Failed to fetch combined status for merge readiness:",
-          statusError,
-        );
+        const statusHttpError = statusError as { status?: number };
+        if (statusHttpError.status !== 403 && statusHttpError.status !== 404) {
+          console.warn(
+            "Failed to fetch combined status for merge readiness:",
+            statusError,
+          );
+        }
       }
     }
 
