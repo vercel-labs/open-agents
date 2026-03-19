@@ -1,6 +1,11 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "import", "react"],
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "import",
+    "react"
+  ],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
@@ -40,7 +45,9 @@
       }
     },
     {
-      "files": ["AGENTS.md"],
+      "files": [
+        "AGENTS.md"
+      ],
       "rules": {
         "max-lines": [
           "error",
@@ -52,5 +59,10 @@
         ]
       }
     }
+  ],
+  "extends": [
+    "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
+    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
+    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json"
   ]
 }
