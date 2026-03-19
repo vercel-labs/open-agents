@@ -874,6 +874,7 @@ export function SessionChatContent({
   const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+  const [isAutoCommitting, setIsAutoCommitting] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -1819,6 +1820,18 @@ export function SessionChatContent({
       status === "ready" &&
       isMountedRef.current
     ) {
+      const isAutoCommitSession =
+        session.autoCommitPushOverride &&
+        session.cloneUrl &&
+        session.repoOwner &&
+        session.repoName;
+
+      // Optimistically mark auto-commit in progress so the UI shows a
+      // loading state instead of a stale "Commit & Push" button.
+      if (isAutoCommitSession) {
+        setIsAutoCommitting(true);
+      }
+
       const refreshCompletedTurnState = async () => {
         await requestStatusSync("force").catch(() => undefined);
         await refreshGitStatus().catch(() => undefined);
@@ -1836,7 +1849,7 @@ export function SessionChatContent({
         // work (auto-commit, diff cache update). When auto-commit is
         // enabled the server generates a commit message via LLM, commits,
         // and pushes which can take 5-15 s, so we use a longer schedule.
-        const delays = session.autoCommitPushOverride
+        const delays = isAutoCommitSession
           ? [3000, 8000, 16000]
           : [3000];
         for (const delay of delays) {
@@ -2298,6 +2311,15 @@ export function SessionChatContent({
   const showCommitAction =
     hasRepo &&
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
+
+  // Clear the optimistic auto-commit flag once git status catches up and
+  // the commit action would no longer be shown.
+  useEffect(() => {
+    if (isAutoCommitting && !showCommitAction) {
+      setIsAutoCommitting(false);
+    }
+  }, [isAutoCommitting, showCommitAction]);
+
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const canCloseAndArchive = hasOpenPr && !isArchived;
@@ -2443,13 +2465,20 @@ export function SessionChatContent({
                       variant="outline"
                       size="sm"
                       className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                      disabled={isAutoCommitting}
                       onClick={() => setCommitDialogOpen(true)}
                     >
-                      <GitCommit className="h-4 w-4 xl:mr-2" />
+                      {isAutoCommitting ? (
+                        <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                      ) : (
+                        <GitCommit className="h-4 w-4 xl:mr-2" />
+                      )}
                       <span className="hidden xl:inline">
-                        {commitActionLabel}
+                        {isAutoCommitting
+                          ? "Committing..."
+                          : commitActionLabel}
                       </span>
-                      {hasUncommittedGitChanges && (
+                      {hasUncommittedGitChanges && !isAutoCommitting && (
                         <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
                       )}
                     </Button>
@@ -2495,13 +2524,18 @@ export function SessionChatContent({
                     variant="outline"
                     size="sm"
                     className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    disabled={isAutoCommitting}
                     onClick={() => setCommitDialogOpen(true)}
                   >
-                    <GitCommit className="h-4 w-4 xl:mr-2" />
+                    {isAutoCommitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                    ) : (
+                      <GitCommit className="h-4 w-4 xl:mr-2" />
+                    )}
                     <span className="hidden xl:inline">
-                      {commitActionLabel}
+                      {isAutoCommitting ? "Committing..." : commitActionLabel}
                     </span>
-                    {hasUncommittedGitChanges && (
+                    {hasUncommittedGitChanges && !isAutoCommitting && (
                       <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
                     )}
                   </Button>
@@ -2654,10 +2688,17 @@ export function SessionChatContent({
                         )}
                         {showCommitAction && (
                           <DropdownMenuItem
+                            disabled={isAutoCommitting}
                             onClick={() => setCommitDialogOpen(true)}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitting ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {isAutoCommitting
+                              ? "Committing..."
+                              : commitActionLabel}
                           </DropdownMenuItem>
                         )}
                       </>
@@ -2665,10 +2706,17 @@ export function SessionChatContent({
                       <>
                         {showCommitAction && (
                           <DropdownMenuItem
+                            disabled={isAutoCommitting}
                             onClick={() => setCommitDialogOpen(true)}
                           >
-                            <GitCommit className="mr-2 h-4 w-4" />
-                            {commitActionLabel}
+                            {isAutoCommitting ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <GitCommit className="mr-2 h-4 w-4" />
+                            )}
+                            {isAutoCommitting
+                              ? "Committing..."
+                              : commitActionLabel}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
