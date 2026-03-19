@@ -1048,8 +1048,16 @@ export function SessionChatContent({
     skills,
     skillsLoading,
   } = useSessionChatWorkspaceContext();
-  const { isAutoCommitting, markAutoCommitStarted, followUpDelays } =
-    useAutoCommitStatus(session, gitStatus);
+  const { isAutoCommitting, markAutoCommitStarted } = useAutoCommitStatus(
+    session,
+    gitStatus,
+    () => {
+      void refreshGitStatus().catch(() => undefined);
+      void refreshDiff().catch(() => undefined);
+      void refreshFiles().catch(() => undefined);
+      void checkBranchAndPr().catch(() => undefined);
+    },
+  );
   const {
     messages,
     error,
@@ -1819,7 +1827,7 @@ export function SessionChatContent({
       pendingOptimisticTitleChatIdRef.current = null;
     }
 
-    const followUpTimeouts: ReturnType<typeof setTimeout>[] = [];
+    let followUpTimeout: ReturnType<typeof setTimeout> | null = null;
     if (
       (wasStreaming || wasSubmitted) &&
       status === "ready" &&
@@ -1840,19 +1848,15 @@ export function SessionChatContent({
       void refreshChats();
 
       if (session.cloneUrl && session.repoOwner && session.repoName) {
-        for (const delay of followUpDelays) {
-          followUpTimeouts.push(
-            setTimeout(() => {
-              void refreshCompletedTurnState();
-            }, delay),
-          );
-        }
+        followUpTimeout = setTimeout(() => {
+          void refreshCompletedTurnState();
+        }, 3000);
       }
     }
 
     return () => {
-      for (const t of followUpTimeouts) {
-        clearTimeout(t);
+      if (followUpTimeout !== null) {
+        clearTimeout(followUpTimeout);
       }
     };
   }, [
@@ -1871,7 +1875,6 @@ export function SessionChatContent({
     session.repoOwner,
     session.repoName,
     markAutoCommitStarted,
-    followUpDelays,
   ]);
 
   // Track whether we've auto-attempted sandbox startup for this page load.
