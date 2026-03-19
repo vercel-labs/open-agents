@@ -14,6 +14,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
+import { formatDateOnly } from "@/lib/usage/date-range";
 import type { UsageInsights } from "@/lib/usage/types";
 import { UsageInsightsSection } from "./usage/usage-insights-section";
 
@@ -66,13 +67,6 @@ function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
-}
-
-function toDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function sumRows(rows: DailyUsageRow[]) {
@@ -409,21 +403,25 @@ function StatBlock({
 }
 
 export function UsageSection() {
-  const { data, isLoading, error } = useSWR<UsageResponse>(
-    "/api/usage",
-    fetcher,
-  );
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const usagePath = useMemo(() => {
+    if (!dateRange?.from) {
+      return "/api/usage";
+    }
+
+    const from = formatDateOnly(dateRange.from);
+    const to = formatDateOnly(dateRange.to ?? dateRange.from);
+    const query = new URLSearchParams({ from, to });
+
+    return `/api/usage?${query.toString()}`;
+  }, [dateRange]);
+
+  const { data, isLoading, error } = useSWR<UsageResponse>(usagePath, fetcher);
 
   const { totals, chartData, modelUsage, mainTotals, subagentTotals } =
     useMemo(() => {
-      let usage = data?.usage ?? [];
-
-      if (dateRange?.from) {
-        const fromStr = toDateStr(dateRange.from);
-        const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
-        usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);
-      }
+      const usage = data?.usage ?? [];
 
       const main = usage.filter((r) => r.agentType === "main");
       const subagent = usage.filter((r) => r.agentType === "subagent");
@@ -434,7 +432,7 @@ export function UsageSection() {
         mainTotals: sumRows(main),
         subagentTotals: sumRows(subagent),
       };
-    }, [data, dateRange]);
+    }, [data]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 

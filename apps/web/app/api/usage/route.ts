@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
+import { parseUsageQueryRange } from "./_lib/query-range";
 import { getUsageInsights } from "@/lib/db/usage-insights";
 import { getUsageHistory } from "@/lib/db/usage";
 import { getSessionFromReq } from "@/lib/session/server";
 
 /**
- * GET /api/usage — Retrieve aggregated daily usage history (cookie auth)
+ * GET /api/usage — Retrieve aggregated usage history + derived insights (cookie auth)
+ * Optional query params: from=YYYY-MM-DD&to=YYYY-MM-DD
  */
 export async function GET(req: NextRequest) {
   const session = await getSessionFromReq(req);
@@ -12,10 +14,18 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const rangeResult = parseUsageQueryRange(req);
+  if (!rangeResult.ok) {
+    return rangeResult.response;
+  }
+
   try {
+    const queryOptions = rangeResult.range
+      ? { range: rangeResult.range }
+      : undefined;
     const [usage, insights] = await Promise.all([
-      getUsageHistory(session.user.id),
-      getUsageInsights(session.user.id),
+      getUsageHistory(session.user.id, queryOptions),
+      getUsageInsights(session.user.id, queryOptions),
     ]);
     return Response.json({ usage, insights });
   } catch (error) {

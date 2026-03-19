@@ -1,6 +1,7 @@
 import { isToolUIPart, type LanguageModel, type UIMessage } from "ai";
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { UsageDateRange } from "@/lib/usage/date-range";
 import { db } from "./client";
 import { usageEvents } from "./schema";
 
@@ -61,14 +62,30 @@ export interface DailyUsage {
   toolCallCount: number;
 }
 
-export async function getUsageHistory(
+export interface UsageHistoryOptions {
+  days?: number;
+  range?: UsageDateRange;
+}
+
+function buildUsageHistoryWhereClause(
   userId: string,
-  days = 280,
-): Promise<DailyUsage[]> {
+  options?: UsageHistoryOptions,
+) {
+  if (options?.range) {
+    return sql`${usageEvents.userId} = ${userId} and date(${usageEvents.createdAt}) >= ${options.range.from} and date(${usageEvents.createdAt}) <= ${options.range.to}`;
+  }
+
+  const days = options?.days ?? 280;
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceIso = since.toISOString();
 
+  return sql`${usageEvents.userId} = ${userId} and ${usageEvents.createdAt} >= ${since.toISOString()}`;
+}
+
+export async function getUsageHistory(
+  userId: string,
+  options?: UsageHistoryOptions,
+): Promise<DailyUsage[]> {
   const rows = await db
     .select({
       date: sql<string>`date(${usageEvents.createdAt})`,
@@ -83,9 +100,7 @@ export async function getUsageHistory(
       toolCallCount: sql<number>`sum(${usageEvents.toolCallCount})::int`,
     })
     .from(usageEvents)
-    .where(
-      sql`${usageEvents.userId} = ${userId} and ${usageEvents.createdAt} >= ${sinceIso}`,
-    )
+    .where(buildUsageHistoryWhereClause(userId, options))
     .groupBy(
       sql`date(${usageEvents.createdAt})`,
       usageEvents.source,

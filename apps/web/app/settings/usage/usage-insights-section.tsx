@@ -46,8 +46,21 @@ function InsightMetric({
   );
 }
 
+function formatLookbackLabel(lookbackDays: number): string {
+  if (lookbackDays <= 1) {
+    return "1 day";
+  }
+
+  if (lookbackDays < 14) {
+    return `${lookbackDays.toLocaleString()} days`;
+  }
+
+  const lookbackWeeks = Math.round(lookbackDays / 7);
+  return `${lookbackWeeks.toLocaleString()} weeks`;
+}
+
 export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
-  const lookbackWeeks = Math.round(insights.lookbackDays / 7);
+  const lookbackLabel = formatLookbackLabel(insights.lookbackDays);
   const prDetail = `${insights.pr.mergedPrCount} merged · ${insights.pr.openPrCount} open · ${insights.pr.closedPrCount} closed`;
 
   return (
@@ -55,7 +68,7 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
       <CardHeader>
         <CardTitle>Insights</CardTitle>
         <CardDescription>
-          Derived analytics from the last {lookbackWeeks} weeks.
+          Derived analytics from the last {lookbackLabel}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

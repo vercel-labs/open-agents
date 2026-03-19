@@ -4,6 +4,10 @@ import {
   type UsageAggregateRow,
   type UsageSessionInsightRow,
 } from "@/lib/usage/compute-insights";
+import {
+  getDateRangeDaysInclusive,
+  type UsageDateRange,
+} from "@/lib/usage/date-range";
 import type { UsageInsights } from "@/lib/usage/types";
 import { db } from "./client";
 import { sessions, usageEvents } from "./schema";
@@ -19,14 +23,60 @@ const EMPTY_USAGE_AGGREGATE: UsageAggregateRow = {
   largestMainTurnTokens: 0,
 };
 
-export async function getUsageInsights(
+export interface UsageInsightsOptions {
+  days?: number;
+  range?: UsageDateRange;
+}
+
+function buildUsageEventsWhereClause(
   userId: string,
-  days = 280,
-): Promise<UsageInsights> {
+  options?: UsageInsightsOptions,
+) {
+  if (options?.range) {
+    return sql`${usageEvents.userId} = ${userId} and date(${usageEvents.createdAt}) >= ${options.range.from} and date(${usageEvents.createdAt}) <= ${options.range.to}`;
+  }
+
+  const days = options?.days ?? 280;
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceIso = since.toISOString();
 
+  return sql`${usageEvents.userId} = ${userId} and ${usageEvents.createdAt} >= ${since.toISOString()}`;
+}
+
+function buildSessionsWhereClause(
+  userId: string,
+  options?: UsageInsightsOptions,
+) {
+  if (options?.range) {
+    return and(
+      eq(sessions.userId, userId),
+      sql`date(${sessions.updatedAt}) >= ${options.range.from}`,
+      sql`date(${sessions.updatedAt}) <= ${options.range.to}`,
+    );
+  }
+
+  const days = options?.days ?? 280;
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  return and(
+    eq(sessions.userId, userId),
+    sql`${sessions.updatedAt} >= ${since.toISOString()}`,
+  );
+}
+
+function getLookbackDays(options?: UsageInsightsOptions): number {
+  if (options?.range) {
+    return getDateRangeDaysInclusive(options.range);
+  }
+
+  return options?.days ?? 280;
+}
+
+export async function getUsageInsights(
+  userId: string,
+  options?: UsageInsightsOptions,
+): Promise<UsageInsights> {
   const [aggregateRows, sessionRows] = await Promise.all([
     db
       .select({
@@ -40,9 +90,7 @@ export async function getUsageInsights(
         largestMainTurnTokens: sql<number>`coalesce(max(case when ${usageEvents.agentType} = 'main' then ${usageEvents.inputTokens} + ${usageEvents.outputTokens} end), 0)::int`,
       })
       .from(usageEvents)
-      .where(
-        sql`${usageEvents.userId} = ${userId} and ${usageEvents.createdAt} >= ${sinceIso}`,
-      ),
+      .where(buildUsageEventsWhereClause(userId, options)),
     db
       .select({
         repoOwner: sessions.repoOwner,
@@ -54,18 +102,13 @@ export async function getUsageInsights(
         updatedAt: sessions.updatedAt,
       })
       .from(sessions)
-      .where(
-        and(
-          eq(sessions.userId, userId),
-          sql`${sessions.createdAt} >= ${sinceIso}`,
-        ),
-      ),
+      .where(buildSessionsWhereClause(userId, options)),
   ]);
 
   const aggregate = aggregateRows[0] ?? EMPTY_USAGE_AGGREGATE;
 
   return buildUsageInsights({
-    lookbackDays: days,
+    lookbackDays: getLookbackDays(options),
     aggregate,
     sessions: sessionRows as UsageSessionInsightRow[],
   });
