@@ -8,7 +8,6 @@ import {
   type UIMessageChunk,
 } from "ai";
 import type { OpenHarnessAgentCallOptions } from "@open-harness/agent";
-import { sumLanguageModelUsage } from "@open-harness/agent";
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
 import type {
@@ -66,6 +65,15 @@ const convertMessages = async (
 const generateId = async () => {
   "use step";
   return generateIdAi();
+};
+
+const addUsage = async (
+  a: LanguageModelUsage,
+  b: LanguageModelUsage,
+): Promise<LanguageModelUsage> => {
+  "use step";
+  const { addLanguageModelUsage } = await import("@open-harness/agent");
+  return addLanguageModelUsage(a, b);
 };
 
 export async function runAgentWorkflow(options: Options) {
@@ -130,7 +138,9 @@ export async function runAgentWorkflow(options: Options) {
       wasAborted = wasAborted || result.stepWasAborted;
 
       if (result.stepUsage) {
-        totalUsage = sumLanguageModelUsage(totalUsage, result.stepUsage);
+        totalUsage = totalUsage
+          ? await addUsage(totalUsage, result.stepUsage)
+          : result.stepUsage;
       }
 
       if (
