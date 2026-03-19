@@ -1,21 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@/lib/db/schema";
 import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 
-/**
- * Determines whether the given session is configured for auto-commit-and-push.
- * The session needs the override flag *and* a connected repo.
- */
-function isAutoCommitSession(session: Session): boolean {
-  return Boolean(
-    session.autoCommitPushOverride &&
-      session.cloneUrl &&
-      session.repoOwner &&
-      session.repoName,
-  );
-}
+const AUTO_COMMIT_DELAYS = [3000, 8000, 16000];
+const DEFAULT_DELAYS = [3000];
 
 /**
  * Tracks optimistic auto-commit-in-progress state for the UI.
@@ -36,13 +26,20 @@ export function useAutoCommitStatus(
 ) {
   const [isAutoCommitting, setIsAutoCommitting] = useState(false);
 
+  const autoCommitEnabled = Boolean(
+    session.autoCommitPushOverride &&
+      session.cloneUrl &&
+      session.repoOwner &&
+      session.repoName,
+  );
+
   // Called by the stream-completion effect to optimistically mark auto-commit
   // as in progress.
   const markAutoCommitStarted = useCallback(() => {
-    if (isAutoCommitSession(session)) {
+    if (autoCommitEnabled) {
       setIsAutoCommitting(true);
     }
-  }, [session]);
+  }, [autoCommitEnabled]);
 
   // Clear the flag once git status confirms there's nothing left to commit
   // (i.e. the server-side auto-commit has landed).
@@ -54,12 +51,11 @@ export function useAutoCommitStatus(
     }
   }, [isAutoCommitting, hasUncommittedChanges, hasUnpushedCommits]);
 
-  // Return the follow-up delay schedule for the post-stream refresh effect.
-  // Auto-commit involves an LLM call + git push and can take 5-15 s, so we
-  // use a longer schedule to ensure the UI eventually reconciles.
-  const followUpDelays = isAutoCommitSession(session)
-    ? [3000, 8000, 16000]
-    : [3000];
+  // Stable array references so the consumer's effect deps don't churn.
+  const followUpDelays = useMemo(
+    () => (autoCommitEnabled ? AUTO_COMMIT_DELAYS : DEFAULT_DELAYS),
+    [autoCommitEnabled],
+  );
 
   return { isAutoCommitting, markAutoCommitStarted, followUpDelays } as const;
 }
