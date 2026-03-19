@@ -48,7 +48,7 @@ const callOptionsSchema = z.object({
 
 export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
-export const defaultModelLabel = "anthropic/claude-haiku-4.5" as const;
+export const defaultModelLabel = "anthropic/claude-opus-4.6" as const;
 export const defaultModel = gateway(defaultModelLabel);
 
 function normalizeAgentModelSelection(
