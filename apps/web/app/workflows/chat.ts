@@ -10,6 +10,7 @@ import {
 import type { OpenHarnessAgentCallOptions } from "@open-harness/agent";
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
+import { addLanguageModelUsage } from "./usage-utils";
 import type {
   WebAgentMessageMetadata,
   WebAgentStepFinishMetadata,
@@ -129,27 +130,9 @@ export async function runAgentWorkflow(options: Options) {
       wasAborted = wasAborted || result.stepWasAborted;
 
       if (result.stepUsage) {
-        if (!totalUsage) {
-          totalUsage = result.stepUsage;
-        } else {
-          // Inline usage addition to avoid step overhead
-          totalUsage = {
-            inputTokens: (totalUsage.inputTokens ?? 0) + (result.stepUsage.inputTokens ?? 0),
-            inputTokenDetails: {
-              noCacheTokens: ((totalUsage.inputTokenDetails?.noCacheTokens ?? 0) + (result.stepUsage.inputTokenDetails?.noCacheTokens ?? 0)) || undefined,
-              cacheReadTokens: ((totalUsage.inputTokenDetails?.cacheReadTokens ?? 0) + (result.stepUsage.inputTokenDetails?.cacheReadTokens ?? 0)) || undefined,
-              cacheWriteTokens: ((totalUsage.inputTokenDetails?.cacheWriteTokens ?? 0) + (result.stepUsage.inputTokenDetails?.cacheWriteTokens ?? 0)) || undefined,
-            },
-            outputTokens: (totalUsage.outputTokens ?? 0) + (result.stepUsage.outputTokens ?? 0),
-            outputTokenDetails: {
-              textTokens: ((totalUsage.outputTokenDetails?.textTokens ?? 0) + (result.stepUsage.outputTokenDetails?.textTokens ?? 0)) || undefined,
-              reasoningTokens: ((totalUsage.outputTokenDetails?.reasoningTokens ?? 0) + (result.stepUsage.outputTokenDetails?.reasoningTokens ?? 0)) || undefined,
-            },
-            totalTokens: (totalUsage.totalTokens ?? 0) + (result.stepUsage.totalTokens ?? 0),
-            reasoningTokens: (totalUsage.reasoningTokens ?? 0) + (result.stepUsage.reasoningTokens ?? 0),
-            cachedInputTokens: (totalUsage.cachedInputTokens ?? 0) + (result.stepUsage.cachedInputTokens ?? 0),
-          };
-        }
+        totalUsage = totalUsage
+          ? addLanguageModelUsage(totalUsage, result.stepUsage)
+          : result.stepUsage;
       }
 
       if (
