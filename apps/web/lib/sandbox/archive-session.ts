@@ -68,10 +68,42 @@ async function finalizeArchivedSessionSandbox(
       lifecycleError: null,
     });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
     console.error(
       `${logPrefix} Failed to stop sandbox for archived session ${sessionId}:`,
       error,
     );
+
+    try {
+      const sessionAfterFailure = await getSessionById(sessionId);
+      if (!sessionAfterFailure || sessionAfterFailure.status !== "archived") {
+        return;
+      }
+
+      const failurePatch: SessionUpdateInput = {
+        lifecycleState: "archived",
+        sandboxExpiresAt: null,
+        hibernateAfter: null,
+        lifecycleError: `Archive finalization failed: ${errorMessage}`,
+      };
+
+      if (
+        !sessionAfterFailure.snapshotUrl &&
+        canOperateOnSandbox(sessionAfterFailure.sandboxState)
+      ) {
+        failurePatch.sandboxState = clearSandboxState(
+          sessionAfterFailure.sandboxState,
+        );
+      }
+
+      await updateSession(sessionId, failurePatch);
+    } catch (persistError) {
+      console.error(
+        `${logPrefix} Failed to persist archive recovery state for session ${sessionId}:`,
+        persistError,
+      );
+    }
   }
 }
 
