@@ -1,11 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "ignorePatterns": [".agents/skills/**", "apps/web/components/ui/**"],
-  "plugins": ["typescript", "unicorn", "import", "react"],
-  "categories": {
-    "correctness": "error",
-    "suspicious": "warn"
-  },
   "rules": {
     "arrow-body-style": "off",
     "complexity": "off",
@@ -58,45 +53,11 @@
     "unicorn/prefer-string-slice": "off",
     "unicorn/prefer-type-error": "off",
     "unicorn/switch-case-braces": "off",
-    "unicorn/text-encoding-identifier-case": "off"
+    "unicorn/text-encoding-identifier-case": "off",
   },
-  "overrides": [
-    {
-      "files": [
-        "packages/agent/system-prompt.ts",
-        "packages/agent/tools/tools.test.ts",
-        "packages/sandbox/just-bash/sandbox.ts",
-        "packages/sandbox/vercel/sandbox.test.ts",
-        "packages/sandbox/vercel/sandbox.ts"
-      ],
-      "rules": {
-        "max-lines": [
-          "warn",
-          {
-            "max": 400,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
-      }
-    },
-    {
-      "files": ["AGENTS.md"],
-      "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 100,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
-      }
-    }
-  ],
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json"
-  ]
+    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json",
+  ],
 }
