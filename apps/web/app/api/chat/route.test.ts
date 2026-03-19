@@ -25,6 +25,7 @@ let currentAuthSession: { user: { id: string } } | null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let compareAndSetResult = true;
+let startCalls: unknown[][] = [];
 
 const originalFetch = globalThis.fetch;
 
@@ -54,15 +55,18 @@ mock.module("ai", () => ({
 }));
 
 mock.module("workflow/api", () => ({
-  start: async () => ({
-    runId: "wrun_test-123",
-    getReadable: () =>
-      new ReadableStream({
-        start(controller) {
-          controller.close();
-        },
-      }),
-  }),
+  start: async (...args: unknown[]) => {
+    startCalls.push(args);
+    return {
+      runId: "wrun_test-123",
+      getReadable: () =>
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+    };
+  },
   getRun: () => ({
     status: Promise.resolve(existingRunStatus),
     getReadable: () =>
@@ -198,6 +202,7 @@ describe("/api/chat route", () => {
     isSandboxActive = true;
     existingRunStatus = "completed";
     compareAndSetResult = true;
+    startCalls = [];
     persistAssistantMessagesWithToolResultsSpy.mockClear();
     currentAuthSession = {
       user: {
@@ -231,6 +236,20 @@ describe("/api/chat route", () => {
     const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
+  });
+
+  test("passes the 500 maxSteps limit to the workflow", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        maxSteps: 500,
+      }),
+    ]);
   });
 
   test("returns 401 when not authenticated", async () => {

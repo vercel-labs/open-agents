@@ -153,7 +153,7 @@ export async function POST(req: Request) {
       sessionId,
       userId,
       modelId: mainModelSelection.id,
-      maxSteps: 250,
+      maxSteps: 500,
       agentOptions: {
         sandbox: {
           state: activeSandboxState,
