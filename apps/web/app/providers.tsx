@@ -258,8 +258,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }
 
       if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.ready
+        void navigator.serviceWorker
+          .getRegistration()
           .then((registration) => {
+            if (!registration) {
+              showFallbackNotification();
+              return;
+            }
+
             serviceWorkerRegistrationRef.current = registration;
             return registration.showNotification(title, notificationOptions);
           })

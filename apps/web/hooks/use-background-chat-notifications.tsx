@@ -148,11 +148,6 @@ export function useBackgroundChatNotifications(
     }));
 
     if (hasMountedRef.current) {
-      const completedIds = detectCompletedSessions(
-        prevStreamingRef.current,
-        items,
-        activeSessionId,
-      );
       const shouldSurfaceBrowserNotifications =
         isPageBackgrounded() ||
         wasPageRecentlyForegrounded(
@@ -160,6 +155,11 @@ export function useBackgroundChatNotifications(
           lastForegroundedAtRef.current,
           Date.now(),
         );
+      const completedIds = detectCompletedSessions(
+        prevStreamingRef.current,
+        items,
+        shouldSurfaceBrowserNotifications ? null : activeSessionId,
+      );
 
       let hasCompleted = false;
 
