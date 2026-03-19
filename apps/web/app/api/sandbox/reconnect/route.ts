@@ -121,12 +121,20 @@ export async function GET(req: Request): Promise<Response> {
         ...state,
         ...(sandbox.expiresAt ? { expiresAt: sandbox.expiresAt } : {}),
       } as SandboxState);
-    // Only sync sandbox state and expiry — do NOT reset lastActivityAt or
-    // hibernateAfter, otherwise every reconnect probe (including page entry)
-    // defeats the inactivity timer.
+    // Only sync sandbox state/expiry and recover stale failed lifecycle state
+    // without resetting lastActivityAt/hibernateAfter, otherwise every reconnect
+    // probe (including page entry) defeats the inactivity timer.
+    const shouldRecoverFailedLifecycle =
+      sessionRecord.lifecycleState === "failed";
     const updatedSession = await updateSession(sessionId, {
       sandboxState: refreshedState,
       sandboxExpiresAt: getSandboxExpiresAtDate(refreshedState),
+      ...(shouldRecoverFailedLifecycle
+        ? {
+            lifecycleState: "active",
+            lifecycleError: null,
+          }
+        : {}),
     });
 
     console.log(
