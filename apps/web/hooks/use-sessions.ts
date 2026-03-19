@@ -109,9 +109,6 @@ export function useSessions(options?: {
         // completion promptly for background-chat notifications.
         return hasStreamingSession ? 3_000 : 0;
       },
-      // Keep polling while the tab is hidden so browser notifications can
-      // still fire when the user is in another tab.
-      refreshWhenHidden: true,
     },
   );
   const { mutate: globalMutate } = useSWRConfig();

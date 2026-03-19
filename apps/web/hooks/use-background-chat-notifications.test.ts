@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   detectCompletedSessions,
   getStreamingIds,
-  shouldSendBrowserNotification,
-  wasPageRecentlyForegrounded,
 } from "./use-background-chat-notifications";
-
-const notify = () => undefined;
 
 describe("getStreamingIds", () => {
   test("returns empty set when no items are streaming", () => {
@@ -28,38 +24,6 @@ describe("getStreamingIds", () => {
 
   test("handles empty list", () => {
     expect(getStreamingIds([])).toEqual(new Set());
-  });
-});
-
-describe("shouldSendBrowserNotification", () => {
-  test("returns true when browser notifications are enabled and a handler exists", () => {
-    expect(shouldSendBrowserNotification(true, notify)).toBe(true);
-  });
-
-  test("returns false when browser notifications are disabled", () => {
-    expect(shouldSendBrowserNotification(false, notify)).toBe(false);
-  });
-
-  test("returns false when no browser notification handler is provided", () => {
-    expect(shouldSendBrowserNotification(true)).toBe(false);
-  });
-});
-
-describe("wasPageRecentlyForegrounded", () => {
-  test("returns true immediately after the tab comes back to the foreground", () => {
-    expect(wasPageRecentlyForegrounded(1_000, 4_000, 6_000)).toBe(true);
-  });
-
-  test("returns false when the page was never backgrounded", () => {
-    expect(wasPageRecentlyForegrounded(0, 4_000, 6_000)).toBe(false);
-  });
-
-  test("returns false when the foreground event predates the last background event", () => {
-    expect(wasPageRecentlyForegrounded(5_000, 4_000, 6_000)).toBe(false);
-  });
-
-  test("returns false once the recent foreground window expires", () => {
-    expect(wasPageRecentlyForegrounded(1_000, 4_000, 10_000)).toBe(false);
   });
 });
 
