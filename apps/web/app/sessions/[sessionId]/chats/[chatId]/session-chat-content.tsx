@@ -2811,12 +2811,13 @@ export function SessionChatContent({
                             .slice(group.index + 1)
                             .some((messagePart) => messagePart.type === "text");
 
-                        // When collapsed, only show the final text part once
-                        // streaming is complete (the finished response).
+                        // When collapsed, hide every text part except the
+                        // final one.  The final text part streams in live so
+                        // the user always sees the latest assistant prose.
                         if (
                           !isToolCallsExpanded &&
                           m.role === "assistant" &&
-                          (!isFinalAssistantTextPart || isMessageStreaming)
+                          !isFinalAssistantTextPart
                         ) {
                           return null;
                         }
