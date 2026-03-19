@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Chat } from "@/lib/db/schema";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
+import { SharedChatStatus } from "./shared-chat-status";
 import "streamdown/styles.css";
 
 export type MessageWithTiming = {
@@ -103,11 +104,17 @@ export function SharedChatContent({
   chats,
   modelId,
   sharedBy,
+  isStreaming,
+  lastUserMessageSentAt,
+  shareId,
 }: {
   session: SharedSession;
   chats: ChatWithMessages[];
   modelId: string | null | undefined;
   sharedBy: SharedBy;
+  isStreaming: boolean;
+  lastUserMessageSentAt: string | null;
+  shareId: string;
 }) {
   const [showToolCalls, setShowToolCalls] = useState(false);
 
@@ -230,6 +237,12 @@ export function SharedChatContent({
                 )}
               </span>
             )}
+            {/* Streaming status badge */}
+            <SharedChatStatus
+              shareId={shareId}
+              initialIsStreaming={isStreaming}
+              initialLastUserMessageSentAt={lastUserMessageSentAt}
+            />
           </div>
 
           {/* Tool call toggle */}

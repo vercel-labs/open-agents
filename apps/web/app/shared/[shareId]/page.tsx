@@ -75,6 +75,16 @@ export default async function SharedPage({ params }: SharedPageProps) {
     return { message, durationMs };
   });
 
+  // Derive streaming status and the timestamp of the last user message so the
+  // shared page can show a live "in progress" timer without accessing the stream.
+  const isStreaming = sharedChat.activeStreamId != null;
+  const lastUserMessage = dbMessages
+    .toReversed()
+    .find((m) => m.role === "user");
+  const lastUserMessageSentAt = lastUserMessage
+    ? lastUserMessage.createdAt.toISOString()
+    : null;
+
   const { title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus } =
     session;
 
@@ -100,6 +110,9 @@ export default async function SharedPage({ params }: SharedPageProps) {
             }
           : null
       }
+      isStreaming={isStreaming}
+      lastUserMessageSentAt={lastUserMessageSentAt}
+      shareId={shareId}
     />
   );
 }
