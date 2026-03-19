@@ -2,6 +2,11 @@ import "server-only";
 
 import { connectSandbox } from "@open-harness/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  findPullRequestByBranch,
+  getPullRequestStatus,
+} from "@/lib/github/client";
+import { getRepoToken } from "@/lib/github/get-repo-token";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
 type SessionRecord = NonNullable<Awaited<ReturnType<typeof getSessionById>>>;
@@ -17,6 +22,129 @@ interface ArchiveSessionOptions {
 interface ArchiveSessionResult {
   session: Awaited<ReturnType<typeof updateSession>> | null;
   archiveTriggered: boolean;
+}
+
+function getSessionRepoUrl(session: SessionRecord): string | null {
+  const cloneUrl = session.cloneUrl?.trim();
+  if (cloneUrl) {
+    return cloneUrl;
+  }
+
+  if (!session.repoOwner || !session.repoName) {
+    return null;
+  }
+
+  return `https://github.com/${session.repoOwner}/${session.repoName}`;
+}
+
+async function refreshArchiveGitState(
+  currentSession: SessionRecord,
+  logPrefix: string,
+): Promise<SessionUpdateInput> {
+  if (!canOperateOnSandbox(currentSession.sandboxState)) {
+    return {};
+  }
+
+  if (!currentSession.repoOwner || !currentSession.repoName) {
+    return {};
+  }
+
+  try {
+    const sandbox = await connectSandbox(currentSession.sandboxState);
+    const cwd = sandbox.workingDirectory;
+    const branchResult = await sandbox.exec(
+      "git symbolic-ref --short HEAD",
+      cwd,
+      10000,
+    );
+
+    const branch = branchResult.success ? branchResult.stdout.trim() : "";
+    if (!branch) {
+      return {};
+    }
+
+    const updates: SessionUpdateInput = {};
+    const branchChanged = branch !== currentSession.branch;
+
+    if (branchChanged) {
+      updates.branch = branch;
+    }
+
+    let token: string | undefined;
+    try {
+      const repoToken = await getRepoToken(
+        currentSession.userId,
+        currentSession.repoOwner,
+      );
+      token = repoToken.token;
+    } catch {
+      token = undefined;
+    }
+
+    if (!branchChanged && currentSession.prNumber != null) {
+      const repoUrl = getSessionRepoUrl(currentSession);
+      if (repoUrl) {
+        const prStatusResult = await getPullRequestStatus({
+          repoUrl,
+          prNumber: currentSession.prNumber,
+          token,
+        });
+
+        if (prStatusResult.success && prStatusResult.status) {
+          if (prStatusResult.status !== currentSession.prStatus) {
+            updates.prStatus = prStatusResult.status;
+          }
+
+          return updates;
+        }
+      }
+    }
+
+    if (!token) {
+      return updates;
+    }
+
+    const prResult = await findPullRequestByBranch({
+      owner: currentSession.repoOwner,
+      repo: currentSession.repoName,
+      branchName: branch,
+      token,
+    });
+
+    if (prResult.error) {
+      return updates;
+    }
+
+    if (prResult.found && prResult.prNumber && prResult.prStatus) {
+      if (prResult.prNumber !== currentSession.prNumber) {
+        updates.prNumber = prResult.prNumber;
+      }
+
+      if (prResult.prStatus !== currentSession.prStatus) {
+        updates.prStatus = prResult.prStatus;
+      }
+
+      return updates;
+    }
+
+    if (
+      currentSession.prNumber !== null ||
+      currentSession.prStatus !== null ||
+      updates.prNumber !== undefined ||
+      updates.prStatus !== undefined
+    ) {
+      updates.prNumber = null;
+      updates.prStatus = null;
+    }
+
+    return updates;
+  } catch (error) {
+    console.warn(
+      `${logPrefix} Failed to refresh git/PR state before archiving session ${currentSession.id}:`,
+      error,
+    );
+    return {};
+  }
 }
 
 async function finalizeArchivedSessionSandbox(
@@ -119,7 +247,13 @@ export async function archiveSession(
   }
 
   const shouldStopSandboxAfterArchive = currentSession.status !== "archived";
+  const logPrefix = options.logPrefix ?? "[Sessions]";
+  const gitStateUpdate = shouldStopSandboxAfterArchive
+    ? await refreshArchiveGitState(currentSession, logPrefix)
+    : {};
+
   const updatePayload: SessionUpdateInput = {
+    ...gitStateUpdate,
     ...options.update,
   };
 
@@ -138,7 +272,6 @@ export async function archiveSession(
   const archiveTriggered = shouldStopSandboxAfterArchive && !!updatedSession;
 
   if (archiveTriggered) {
-    const logPrefix = options.logPrefix ?? "[Sessions]";
     const runFinalize = () =>
       finalizeArchivedSessionSandbox(sessionId, logPrefix);
 
