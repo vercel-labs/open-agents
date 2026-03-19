@@ -104,7 +104,7 @@ describe("model variants", () => {
     );
 
     expect(result).toEqual({
-      resolvedModelId: "openai/gpt-5.4-codex",
+      resolvedModelId: "openai/gpt-5.4",
       providerOptionsByProvider: {
         openai: {
           reasoningEffort: "xhigh",
