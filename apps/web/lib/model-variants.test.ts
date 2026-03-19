@@ -20,13 +20,38 @@ describe("model variants", () => {
       openai: {
         reasoningEffort: "medium",
         reasoningSummary: "detailed",
+        store: false,
       },
     });
   });
 
-  test("toProviderOptionsByProvider returns undefined when provider options are empty", () => {
+  test("toProviderOptionsByProvider injects store false for OpenAI variants even when provider options are empty", () => {
     const result = toProviderOptionsByProvider("openai/gpt-5", {});
+
+    expect(result).toEqual({
+      openai: {
+        store: false,
+      },
+    });
+  });
+
+  test("toProviderOptionsByProvider returns undefined for non-OpenAI variants with no provider options", () => {
+    const result = toProviderOptionsByProvider("anthropic/claude-opus-4.6", {});
     expect(result).toBeUndefined();
+  });
+
+  test("toProviderOptionsByProvider forces store false for OpenAI variants", () => {
+    const result = toProviderOptionsByProvider("openai/gpt-5", {
+      reasoningEffort: "medium",
+      store: true,
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningEffort: "medium",
+        store: false,
+      },
+    });
   });
 
   test("isBuiltInVariant returns true for built-in ids and false for user ids", () => {
@@ -109,6 +134,7 @@ describe("model variants", () => {
         openai: {
           reasoningEffort: "xhigh",
           reasoningSummary: "auto",
+          store: false,
         },
       },
       isMissingVariant: false,

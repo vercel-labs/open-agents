@@ -57,6 +57,24 @@ describe("getProviderOptionsForModel", () => {
     });
   });
 
+  test("preserves store false and encrypted reasoning content for the built-in GPT-5.4 variant", () => {
+    const result = getProviderOptionsForModel("openai/gpt-5.4", {
+      openai: {
+        reasoningEffort: "xhigh",
+        reasoningSummary: "auto",
+      },
+    });
+
+    expect(result).toEqual({
+      openai: {
+        reasoningEffort: "xhigh",
+        reasoningSummary: "auto",
+        include: ["reasoning.encrypted_content"],
+        store: false,
+      },
+    });
+  });
+
   test("enforces store false for OpenAI models even when variant overrides it", () => {
     const result = getProviderOptionsForModel("openai/gpt-5", {
       openai: {

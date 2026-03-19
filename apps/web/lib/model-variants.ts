@@ -81,17 +81,42 @@ export type ProviderOptionsByProvider = Record<
   Record<string, JsonValue>
 >;
 
+function withVariantProviderDefaults(
+  provider: string,
+  providerOptions: Record<string, JsonValue>,
+): Record<string, JsonValue> {
+  if (provider !== "openai") {
+    return providerOptions;
+  }
+
+  // OpenAI Responses items are not persisted when store is false. Ensure
+  // variants always carry the non-persistent setting so follow-up turns never
+  // try to reference missing rs_* items.
+  return {
+    ...providerOptions,
+    store: false,
+  };
+}
+
 export function toProviderOptionsByProvider(
   baseModelId: string,
   providerOptions: Record<string, JsonValue>,
 ): ProviderOptionsByProvider | undefined {
   const provider = baseModelId.split("/")[0];
-  if (!provider || Object.keys(providerOptions).length === 0) {
+  if (!provider) {
+    return undefined;
+  }
+
+  const providerOptionsWithDefaults = withVariantProviderDefaults(
+    provider,
+    providerOptions,
+  );
+  if (Object.keys(providerOptionsWithDefaults).length === 0) {
     return undefined;
   }
 
   return {
-    [provider]: providerOptions,
+    [provider]: providerOptionsWithDefaults,
   };
 }
 

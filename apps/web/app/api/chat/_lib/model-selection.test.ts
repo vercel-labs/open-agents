@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ModelVariant } from "@/lib/model-variants";
+import { BUILT_IN_VARIANTS, type ModelVariant } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { resolveChatModelSelection } from "./model-selection";
 
@@ -39,6 +39,26 @@ describe("resolveChatModelSelection", () => {
       providerOptionsOverrides: {
         openai: {
           reasoningEffort: "medium",
+          store: false,
+        },
+      },
+    });
+  });
+
+  test("resolves built-in OpenAI variants with store false", () => {
+    const selection = resolveChatModelSelection({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelVariants: BUILT_IN_VARIANTS,
+      missingVariantLabel: "Selected model variant",
+    });
+
+    expect(selection).toEqual({
+      id: "openai/gpt-5.4",
+      providerOptionsOverrides: {
+        openai: {
+          reasoningEffort: "xhigh",
+          reasoningSummary: "auto",
+          store: false,
         },
       },
     });
