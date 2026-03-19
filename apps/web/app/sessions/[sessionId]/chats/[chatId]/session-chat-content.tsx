@@ -16,6 +16,7 @@ import {
   GitCompare,
   GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
   Link2,
   Loader2,
   MessageSquareMore,
@@ -132,6 +133,10 @@ const CreatePRDialog = dynamic(
 );
 const MergePrDialog = dynamic(
   () => import("@/components/merge-pr-dialog").then((m) => m.MergePrDialog),
+  { ssr: false },
+);
+const ClosePrDialog = dynamic(
+  () => import("@/components/close-pr-dialog").then((m) => m.ClosePrDialog),
   { ssr: false },
 );
 const CommitDialog = dynamic(
@@ -871,6 +876,7 @@ export function SessionChatContent({
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
@@ -2282,6 +2288,7 @@ export function SessionChatContent({
     (hasUncommittedGitChanges || (hasExistingPr && hasUnpushedCommits));
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
+  const canCloseAndArchive = hasOpenPr && !isArchived;
   const commitActionLabel = hasExistingPr ? "Commit & Push" : "Commit Changes";
   const openExistingPr = () => {
     if (!existingPrUrl) {
@@ -2323,6 +2330,32 @@ export function SessionChatContent({
             : "Failed to archive session";
         throw new Error(
           `Pull request merged, but archiving the session failed: ${archiveMessage}`,
+          {
+            cause: archiveError,
+          },
+        );
+      }
+    },
+    [archiveSession, router, updateSessionPullRequest],
+  );
+
+  const handleClosed = useCallback(
+    async (closeResult: { closed: boolean; prNumber: number }) => {
+      updateSessionPullRequest({
+        prNumber: closeResult.prNumber,
+        prStatus: "closed",
+      });
+
+      try {
+        await archiveSession();
+        router.push("/sessions");
+      } catch (archiveError) {
+        const archiveMessage =
+          archiveError instanceof Error
+            ? archiveError.message
+            : "Failed to archive session";
+        throw new Error(
+          `Pull request closed, but archiving the session failed: ${archiveMessage}`,
           {
             cause: archiveError,
           },
@@ -2597,6 +2630,12 @@ export function SessionChatContent({
                           >
                             <GitMerge className="mr-2 h-4 w-4" />
                             Merge & Archive
+                          </DropdownMenuItem>
+                        )}
+                        {canCloseAndArchive && (
+                          <DropdownMenuItem onClick={() => setCloseDialogOpen(true)}>
+                            <GitPullRequestClosed className="mr-2 h-4 w-4" />
+                            Close & Archive
                           </DropdownMenuItem>
                         )}
                         {showCommitAction && (
@@ -3465,6 +3504,16 @@ export function SessionChatContent({
           onOpenChange={setMergeDialogOpen}
           session={session}
           onMerged={handleMerged}
+        />
+      )}
+
+      {/* Close PR Dialog */}
+      {session && (
+        <ClosePrDialog
+          open={closeDialogOpen}
+          onOpenChange={setCloseDialogOpen}
+          session={session}
+          onClosed={handleClosed}
         />
       )}
 

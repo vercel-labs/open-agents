@@ -749,6 +749,77 @@ export async function mergePullRequest(params: {
   }
 }
 
+export async function closePullRequest(params: {
+  repoUrl: string;
+  prNumber: number;
+  token?: string;
+}): Promise<{ success: true } | { success: false; error: string; statusCode?: number }> {
+  const { repoUrl, prNumber, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return {
+        success: false,
+        error: "GitHub account not connected",
+        statusCode: 401,
+      };
+    }
+
+    const parsed = parseGitHubUrl(repoUrl);
+    if (!parsed) {
+      return {
+        success: false,
+        error: "Invalid GitHub repository URL",
+        statusCode: 400,
+      };
+    }
+
+    const { owner, repo } = parsed;
+
+    await result.octokit.rest.pulls.update({
+      owner,
+      repo,
+      pull_number: prNumber,
+      state: "closed",
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Error closing PR:", error);
+
+    const httpError = error as { status?: number };
+    if (httpError.status === 403) {
+      return {
+        success: false,
+        error: "Permission denied",
+        statusCode: 403,
+      };
+    }
+    if (httpError.status === 404) {
+      return {
+        success: false,
+        error: "Pull request not found",
+        statusCode: 404,
+      };
+    }
+    if (httpError.status === 422) {
+      return {
+        success: false,
+        error: "Pull request cannot be closed",
+        statusCode: 422,
+      };
+    }
+
+    return {
+      success: false,
+      error: "Failed to close pull request",
+      statusCode: 502,
+    };
+  }
+}
+
 export async function deleteBranchRef(params: {
   repoUrl: string;
   branchName: string;
