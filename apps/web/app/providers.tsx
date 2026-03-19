@@ -99,11 +99,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const handleError = useCallback(
     (error: Error) => {
-      if (
+      const isSessionAuthError =
         error instanceof FetchError &&
         error.status === 401 &&
-        !signingOut.current
-      ) {
+        error.message === "Not authenticated";
+
+      if (isSessionAuthError && !signingOut.current) {
         signingOut.current = true;
         // POST to the signout endpoint to clear the session cookie,
         // then redirect to the home page.

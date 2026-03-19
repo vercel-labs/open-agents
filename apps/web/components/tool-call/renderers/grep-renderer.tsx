@@ -38,50 +38,59 @@ export function GrepRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const matches = getGrepMatches(output);
 
-  // Show expanded content if there are matches
-  const hasExpandedContent = matches.length > 0;
+  const hasExpandedContent = output !== undefined;
 
   const expandedContent = hasExpandedContent ? (
-    <div className="space-y-3">
-      <div className="space-y-1 text-sm">
+    <div className="space-y-2">
+      <div className="space-y-1 text-sm leading-5">
         <div>
           <span className="text-muted-foreground">Pattern: </span>
-          <code className="text-foreground">{pattern}</code>
+          <code className="font-mono text-[13px] text-foreground">
+            {pattern}
+          </code>
         </div>
         {path && (
           <div>
             <span className="text-muted-foreground">Path: </span>
-            <code className="text-foreground">{path}</code>
+            <code className="font-mono text-[13px] text-foreground">
+              {path}
+            </code>
           </div>
         )}
         {include && (
           <div>
             <span className="text-muted-foreground">Include: </span>
-            <code className="text-foreground">{include}</code>
+            <code className="font-mono text-[13px] text-foreground">
+              {include}
+            </code>
           </div>
         )}
       </div>
 
-      <div>
-        <div className="mb-1 text-xs font-medium text-muted-foreground">
+      <div className="space-y-1">
+        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Matches ({matches.length})
         </div>
-        <div className="max-h-64 space-y-1 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
-          {matches.map((match) => (
-            <div
-              key={`${match.file}:${match.line}:${match.content ?? ""}`}
-              className="text-foreground"
-            >
-              <span className="text-muted-foreground">{match.file}</span>
-              <span className="text-yellow-500">:{match.line}</span>
-              {match.content && (
-                <span className="ml-2 text-foreground">
-                  {match.content.slice(0, 100)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        {matches.length > 0 ? (
+          <div className="max-h-64 space-y-1 overflow-auto font-mono text-xs leading-5">
+            {matches.map((match) => (
+              <div
+                key={`${match.file}:${match.line}:${match.content ?? ""}`}
+                className="text-foreground"
+              >
+                <span className="text-muted-foreground">{match.file}</span>
+                <span className="text-yellow-500">:{match.line}</span>
+                {match.content && (
+                  <span className="ml-2 text-foreground">
+                    {match.content.slice(0, 100)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">No matches</div>
+        )}
       </div>
     </div>
   ) : undefined;
@@ -90,10 +99,9 @@ export function GrepRenderer({
     <ToolLayout
       name="Grep"
       summary={`"${pattern}"`}
+      summaryClassName="font-mono"
+      meta={output ? `${matches.length} matches` : undefined}
       state={state}
-      output={
-        matches.length > 0 ? `Found ${matches.length} matches` : undefined
-      }
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}

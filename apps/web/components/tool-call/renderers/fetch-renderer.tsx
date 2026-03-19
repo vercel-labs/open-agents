@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -22,7 +23,6 @@ export function FetchRenderer({
     ? { ...state, error: state.error ?? outputError }
     : state;
 
-  // Truncate URL for summary display
   const displayUrl = url.length > 60 ? `${url.slice(0, 57)}...` : url;
   const summary = method === "GET" ? displayUrl : `${method} ${displayUrl}`;
 
@@ -32,7 +32,7 @@ export function FetchRenderer({
     <div className="space-y-2 text-sm">
       <div>
         <span className="text-muted-foreground">URL: </span>
-        <code className="text-foreground break-all">{url}</code>
+        <code className="break-all text-foreground">{url}</code>
       </div>
       <div>
         <span className="text-muted-foreground">Method: </span>
@@ -52,16 +52,28 @@ export function FetchRenderer({
     </div>
   ) : undefined;
 
-  const outputText = status
-    ? `${status} ${output?.statusText ?? ""}`
-    : undefined;
+  const meta: ReactNode =
+    status !== undefined || output?.truncated ? (
+      <span className="inline-flex items-center gap-1.5">
+        {status !== undefined && (
+          <span>
+            {status}
+            {output?.statusText ? ` ${output.statusText}` : ""}
+          </span>
+        )}
+        {output?.truncated && (
+          <span className="text-yellow-500">truncated</span>
+        )}
+      </span>
+    ) : undefined;
 
   return (
     <ToolLayout
       name="Fetch"
       summary={summary}
+      summaryClassName="font-mono"
+      meta={meta}
       state={mergedState}
-      output={outputError ?? outputText}
       expandedContent={expandedContent}
       onApprove={onApprove}
       onDeny={onDeny}

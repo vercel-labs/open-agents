@@ -1,52 +1,56 @@
 import { nanoid } from "nanoid";
 import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
+import {
   createChat,
   getChatById,
   getChatSummariesBySessionId,
-  getSessionById,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
   const [chats, preferences] = await Promise.all([
-    getChatSummariesBySessionId(sessionId, session.user.id),
-    getUserPreferences(session.user.id),
+    getChatSummariesBySessionId(sessionId, authResult.userId),
+    getUserPreferences(authResult.userId),
   ]);
   return Response.json({ chats, defaultModelId: preferences.defaultModelId });
 }
 
 export async function POST(req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
-  }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
   let requestedChatId: string | null = null;
@@ -77,7 +81,7 @@ export async function POST(req: Request, context: RouteContext) {
     }
   }
 
-  const preferences = await getUserPreferences(session.user.id);
+  const preferences = await getUserPreferences(authResult.userId);
   const chat = await createChat({
     id: requestedChatId ?? nanoid(),
     sessionId,

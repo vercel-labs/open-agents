@@ -1,12 +1,15 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSessionWithSandboxGuard,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
   clearSandboxState,
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
 } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 export type FileSuggestion = {
   value: string;
@@ -77,24 +80,24 @@ function parseGitFiles(output: string): FileSuggestion[] {
 }
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
 
-  // Verify session ownership
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSessionWithSandboxGuard({
+    userId: authResult.userId,
+    sessionId,
+    sandboxGuard: hasRuntimeSandboxState,
+    sandboxErrorMessage: "Sandbox not initialized",
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {
-    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
-  }
+
+  const { sessionRecord } = sessionContext;
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });

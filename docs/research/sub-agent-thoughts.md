@@ -1,1 +1,0 @@
-Maybe we do something like the read UI message stream utility function for reading the stream, returning that as preliminary tool results. So we basically have the full message stream, but we do it for model messages instead, and then we use toModelOutput to just return whatever the text is of the last tool call.

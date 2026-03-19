@@ -17,7 +17,7 @@ import { fetcher } from "@/lib/swr";
 
 interface DailyUsageRow {
   date: string;
-  source: "web" | "cli";
+  source: "web";
   agentType: "main" | "subagent";
   provider: string | null;
   modelId: string | null;
@@ -63,6 +63,13 @@ function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function toDateStr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function sumRows(rows: DailyUsageRow[]) {
@@ -124,7 +131,6 @@ function buildPieSegment(
   ].join(" ");
 }
 
-/** Aggregate rows by model across all dates */
 function aggregateByModel(rows: DailyUsageRow[]): ModelUsage[] {
   const map = new Map<string, ModelUsage>();
   for (const r of rows) {
@@ -153,13 +159,11 @@ function aggregateByModel(rows: DailyUsageRow[]): ModelUsage[] {
   );
 }
 
-/** Strip provider prefix from model ID (e.g. "anthropic/claude-haiku-4.5" → "claude-haiku-4.5") */
 function displayModelId(modelId: string): string {
   const slashIndex = modelId.indexOf("/");
   return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
 }
 
-/** Merge per-source rows into one row per date for the chart */
 function mergeDays(rows: DailyUsageRow[]): MergedDay[] {
   const map = new Map<string, MergedDay>();
   for (const r of rows) {
@@ -187,7 +191,6 @@ export function UsageSectionSkeleton() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Summary stats - match StatBlock: text-xs + text-lg + text-xs */}
         <div className="grid grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i}>
@@ -204,13 +207,9 @@ export function UsageSectionSkeleton() {
           ))}
         </div>
 
-        {/* Activity chart - match ContributionChart exact layout height */}
         <div className="flex flex-col gap-1">
-          {/* Month labels row */}
           <div className="h-4" />
-          {/* Grid: 7 * (12 + 2) - 2 = 96 */}
           <Skeleton className="h-[96px] w-full rounded-md" />
-          {/* Legend row */}
           <div className="mt-1 h-3" />
         </div>
 
@@ -413,43 +412,26 @@ export function UsageSection() {
   );
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const {
-    webTotals,
-    cliTotals,
-    totals,
-    chartData,
-    modelUsage,
-    mainTotals,
-    subagentTotals,
-  } = useMemo(() => {
-    let usage = data?.usage ?? [];
+  const { totals, chartData, modelUsage, mainTotals, subagentTotals } =
+    useMemo(() => {
+      let usage = data?.usage ?? [];
 
-    if (dateRange?.from) {
-      const toDateStr = (d: Date) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
+      if (dateRange?.from) {
+        const fromStr = toDateStr(dateRange.from);
+        const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
+        usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);
+      }
+
+      const main = usage.filter((r) => r.agentType === "main");
+      const subagent = usage.filter((r) => r.agentType === "subagent");
+      return {
+        totals: sumRows(usage),
+        chartData: mergeDays(usage),
+        modelUsage: aggregateByModel(usage),
+        mainTotals: sumRows(main),
+        subagentTotals: sumRows(subagent),
       };
-      const fromStr = toDateStr(dateRange.from);
-      const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
-      usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);
-    }
-
-    const web = usage.filter((r) => r.source === "web");
-    const cli = usage.filter((r) => r.source === "cli");
-    const main = usage.filter((r) => r.agentType === "main");
-    const subagent = usage.filter((r) => r.agentType === "subagent");
-    return {
-      webTotals: sumRows(web),
-      cliTotals: sumRows(cli),
-      totals: sumRows(usage),
-      chartData: mergeDays(usage),
-      modelUsage: aggregateByModel(usage),
-      mainTotals: sumRows(main),
-      subagentTotals: sumRows(subagent),
-    };
-  }, [data, dateRange]);
+    }, [data, dateRange]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -469,25 +451,11 @@ export function UsageSection() {
   }
 
   const totalTokens = totals.inputTokens + totals.outputTokens;
-  const webTokens = webTotals.inputTokens + webTotals.outputTokens;
-  const cliTokens = cliTotals.inputTokens + cliTotals.outputTokens;
   const mainTokens = mainTotals.inputTokens + mainTotals.outputTokens;
   const subagentTokens =
     subagentTotals.inputTokens + subagentTotals.outputTokens;
 
-  const hasWeb = webTotals.messageCount > 0;
-  const hasCli = cliTotals.messageCount > 0;
-  const hasBoth = hasWeb && hasCli;
   const hasUsage = totals.messageCount > 0;
-
-  const tokenDetailParts: string[] = [];
-  if (hasBoth) {
-    tokenDetailParts.push(
-      `${formatTokens(webTokens)} web · ${formatTokens(cliTokens)} cli`,
-    );
-  }
-  const tokenDetail =
-    tokenDetailParts.length > 0 ? tokenDetailParts.join(" · ") : undefined;
   const agentSegments: PieSegment[] = [
     {
       label: "Main agent",
@@ -498,19 +466,6 @@ export function UsageSection() {
       label: "Subagents",
       value: subagentTokens,
       color: CHART_COLORS[1] ?? "var(--chart-2)",
-    },
-  ];
-
-  const sourceSegments: PieSegment[] = [
-    {
-      label: "Web app",
-      value: webTokens,
-      color: CHART_COLORS[2] ?? "var(--chart-3)",
-    },
-    {
-      label: "CLI",
-      value: cliTokens,
-      color: CHART_COLORS[3] ?? "var(--chart-4)",
     },
   ];
 
@@ -562,38 +517,21 @@ export function UsageSection() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Summary stats */}
         <div className="grid grid-cols-3 gap-4">
-          <StatBlock
-            label="Total tokens"
-            value={formatTokens(totalTokens)}
-            detail={tokenDetail}
-          />
+          <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
           <StatBlock
             label="Messages"
             value={totals.messageCount.toLocaleString()}
-            detail={
-              hasBoth
-                ? `${webTotals.messageCount} web · ${cliTotals.messageCount} cli`
-                : undefined
-            }
           />
           <StatBlock
             label="Tool calls"
             value={totals.toolCallCount.toLocaleString()}
-            detail={
-              hasBoth
-                ? `${webTotals.toolCallCount} web · ${cliTotals.toolCallCount} cli`
-                : undefined
-            }
           />
         </div>
 
-        {/* Activity chart */}
         <ContributionChart data={chartData} />
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Agent split */}
           {hasUsage && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Agent split</h3>
@@ -605,19 +543,6 @@ export function UsageSection() {
             </div>
           )}
 
-          {/* App split */}
-          {(hasWeb || hasCli) && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">App split</h3>
-              <UsagePieChart
-                segments={sourceSegments}
-                centerLabel="Total tokens"
-                emptyLabel="No app usage"
-              />
-            </div>
-          )}
-
-          {/* Model breakdown */}
           {modelUsage.length > 0 ? (
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Usage by model</h3>

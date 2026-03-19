@@ -16,7 +16,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-export type SandboxType = "hybrid" | "vercel" | "just-bash";
+export type SandboxType = "vercel";
 
 interface SandboxOption {
   id: SandboxType;
@@ -28,17 +28,7 @@ export const SANDBOX_OPTIONS: SandboxOption[] = [
   {
     id: "vercel",
     name: "Vercel",
-    description: "Full cloud sandbox",
-  },
-  {
-    id: "just-bash",
-    name: "Just Bash",
-    description: "In-memory bash-only sandbox",
-  },
-  {
-    id: "hybrid",
-    name: "Hybrid",
-    description: "Starts in-memory, hands off to cloud",
+    description: "Cloud sandbox",
   },
 ];
 

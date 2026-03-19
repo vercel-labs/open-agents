@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Boxes, ChevronRight, Code2, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Boxes,
+  ChevronRight,
+  Code2,
+  ExternalLink,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { ModelCombobox } from "@/components/model-combobox";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 import { type AvailableModel, getModelDisplayName } from "@/lib/models";
 import {
+  isBuiltInVariant,
   providerOptionsSchema,
   type JsonValue,
   type ModelVariant,
@@ -227,6 +236,15 @@ function VariantFormDialog({
                 {"reasoningSummary"}
               </code>
             </p>
+            <a
+              href="https://ai-sdk.dev/docs/foundations/provider-options"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              View provider options docs
+              <ExternalLink className="size-3" />
+            </a>
           </div>
 
           {error && (
@@ -262,12 +280,14 @@ function VariantFormDialog({
 function VariantCard({
   variant,
   modelName,
+  builtIn,
   isSaving,
   onEdit,
   onDelete,
 }: {
   variant: ModelVariant;
   modelName: string;
+  builtIn: boolean;
   isSaving: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -338,38 +358,44 @@ function VariantCard({
         </div>
 
         {/* Actions */}
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                onClick={onEdit}
-                disabled={isSaving}
-                className="size-7"
-              >
-                <Pencil className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit variant</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                onClick={onDelete}
-                disabled={isSaving}
-                className="size-7 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete variant</TooltipContent>
-          </Tooltip>
-        </div>
+        {builtIn ? (
+          <span className="shrink-0 rounded-sm bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Built-in
+          </span>
+        ) : (
+          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={onEdit}
+                  disabled={isSaving}
+                  className="size-7"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit variant</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={onDelete}
+                  disabled={isSaving}
+                  className="size-7 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete variant</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -566,45 +592,21 @@ export function ModelVariantsSection() {
             </div>
           )}
 
-          {modelVariants.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-10">
-              <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-                <Boxes className="size-5 text-muted-foreground" />
-              </div>
-              <p className="mt-3 text-sm font-medium text-foreground">
-                No variants yet
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Create a variant to customize model behavior with provider
-                options.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleOpenCreate}
-                className="mt-4"
-              >
-                <Plus className="size-3.5" />
-                Create your first variant
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {modelVariants.map((variant) => (
-                <VariantCard
-                  key={variant.id}
-                  variant={variant}
-                  modelName={
-                    modelNameById.get(variant.baseModelId) ??
-                    variant.baseModelId
-                  }
-                  isSaving={isSaving}
-                  onEdit={() => handleOpenEdit(variant)}
-                  onDelete={() => handleDelete(variant.id)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="space-y-2">
+            {modelVariants.map((variant) => (
+              <VariantCard
+                key={variant.id}
+                variant={variant}
+                modelName={
+                  modelNameById.get(variant.baseModelId) ?? variant.baseModelId
+                }
+                builtIn={isBuiltInVariant(variant.id)}
+                isSaving={isSaving}
+                onEdit={() => handleOpenEdit(variant)}
+                onDelete={() => handleDelete(variant.id)}
+              />
+            ))}
+          </div>
         </CardContent>
       </Card>
 

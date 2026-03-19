@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BUILT_IN_VARIANT_ID_PREFIX,
+  BUILT_IN_VARIANTS,
+  getAllVariants,
+  isBuiltInVariant,
   resolveModelSelection,
   toProviderOptionsByProvider,
   type ModelVariant,
@@ -23,6 +27,38 @@ describe("model variants", () => {
   test("toProviderOptionsByProvider returns undefined when provider options are empty", () => {
     const result = toProviderOptionsByProvider("openai/gpt-5", {});
     expect(result).toBeUndefined();
+  });
+
+  test("isBuiltInVariant returns true for built-in ids and false for user ids", () => {
+    expect(isBuiltInVariant("variant:builtin:gpt-5.4-xhigh")).toBe(true);
+    expect(isBuiltInVariant("variant:openai-medium")).toBe(false);
+  });
+
+  test("BUILT_IN_VARIANTS has expected shape and ids", () => {
+    expect(BUILT_IN_VARIANTS).toHaveLength(2);
+    for (const variant of BUILT_IN_VARIANTS) {
+      expect(variant.id.startsWith(BUILT_IN_VARIANT_ID_PREFIX)).toBe(true);
+    }
+  });
+
+  test("getAllVariants prepends built-in variants to user variants", () => {
+    const userVariants: ModelVariant[] = [
+      {
+        id: "variant:openai-medium",
+        name: "OpenAI Medium Reasoning",
+        baseModelId: "openai/gpt-5",
+        providerOptions: {
+          reasoningEffort: "medium",
+        },
+      },
+    ];
+
+    const result = getAllVariants(userVariants);
+
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual(BUILT_IN_VARIANTS[0]);
+    expect(result[1]).toEqual(BUILT_IN_VARIANTS[1]);
+    expect(result[2]).toEqual(userVariants[0]);
   });
 
   test("resolveModelSelection returns base model unchanged when id is not a variant", () => {
@@ -55,6 +91,24 @@ describe("model variants", () => {
         openai: {
           reasoningEffort: "medium",
           store: false,
+        },
+      },
+      isMissingVariant: false,
+    });
+  });
+
+  test("resolveModelSelection resolves built-in variants", () => {
+    const result = resolveModelSelection(
+      "variant:builtin:gpt-5.4-xhigh",
+      BUILT_IN_VARIANTS,
+    );
+
+    expect(result).toEqual({
+      resolvedModelId: "openai/gpt-5.4-codex",
+      providerOptionsByProvider: {
+        openai: {
+          reasoningEffort: "xhigh",
+          reasoningSummary: "auto",
         },
       },
       isMissingVariant: false,

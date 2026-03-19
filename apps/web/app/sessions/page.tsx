@@ -1,11 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getLastRepoByUserId } from "@/lib/db/last-repo";
-import {
-  getArchivedSessionCountByUserId,
-  getSessionsWithUnreadByUserId,
-} from "@/lib/db/sessions";
-import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionsIndexShell } from "./sessions-index-shell";
 
 export const metadata: Metadata = {
@@ -13,23 +6,6 @@ export const metadata: Metadata = {
   description: "View and manage your sessions.",
 };
 
-export default async function SessionsPage() {
-  const session = await getServerSession();
-  if (!session?.user) {
-    redirect("/");
-  }
-
-  const [lastRepo, sessions, archivedCount] = await Promise.all([
-    getLastRepoByUserId(session.user.id),
-    getSessionsWithUnreadByUserId(session.user.id, { status: "active" }),
-    getArchivedSessionCountByUserId(session.user.id),
-  ]);
-
-  return (
-    <SessionsIndexShell
-      lastRepo={lastRepo}
-      currentUser={session.user}
-      initialSessionsData={{ sessions, archivedCount }}
-    />
-  );
+export default function SessionsPage() {
+  return <SessionsIndexShell />;
 }

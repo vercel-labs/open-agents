@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 
 mock.module("server-only", () => ({}));
 
@@ -6,13 +7,24 @@ interface TestSessionRecord {
   id: string;
   userId: string;
   lifecycleVersion: number;
-  sandboxState: { type: "vercel" | "hybrid" | "just-bash" };
+  sandboxState: { type: "vercel" };
 }
 
 interface KickCall {
   sessionId: string;
   reason: string;
-  scheduleBackgroundWork?: (callback: () => Promise<void>) => void;
+}
+
+interface ConnectConfig {
+  state: {
+    type: "vercel";
+    sandboxId?: string;
+  };
+  options?: {
+    gitUser?: {
+      email?: string;
+    };
+  };
 }
 
 const kickCalls: KickCall[] = [];
@@ -20,33 +32,9 @@ const updateCalls: Array<{
   sessionId: string;
   patch: Record<string, unknown>;
 }> = [];
-const connectConfigs: unknown[] = [];
+const connectConfigs: ConnectConfig[] = [];
 
 let sessionRecord: TestSessionRecord;
-
-function isConnectConfig(value: unknown): value is {
-  state: {
-    type: "vercel" | "hybrid" | "just-bash";
-    sandboxId?: string;
-  };
-} {
-  if (!value || typeof value !== "object") return false;
-  if (!("state" in value)) return false;
-  const state = value.state;
-  if (!state || typeof state !== "object") return false;
-  if (!("type" in state)) return false;
-  return (
-    state.type === "vercel" ||
-    state.type === "hybrid" ||
-    state.type === "just-bash"
-  );
-}
-
-mock.module("next/server", () => ({
-  after: (callback: () => void | Promise<void>) => {
-    void callback();
-  },
-}));
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => ({
@@ -73,10 +61,6 @@ mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
-mock.module("@/lib/github/tarball", () => ({
-  downloadAndExtractTarball: async () => ({ files: {} }),
-}));
-
 mock.module("@/lib/db/sessions", () => ({
   getSessionById: async () => sessionRecord,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
@@ -95,35 +79,17 @@ mock.module("@/lib/sandbox/lifecycle-kick", () => ({
 }));
 
 mock.module("@open-harness/sandbox", () => ({
-  connectSandbox: async (config: unknown) => {
+  connectSandbox: async (config: ConnectConfig) => {
     connectConfigs.push(config);
-
-    const nextState: {
-      type: "vercel" | "hybrid";
-      sandboxId: string;
-      expiresAt: number;
-    } = isConnectConfig(config)
-      ? config.state.type === "vercel"
-        ? {
-            type: "vercel",
-            sandboxId: "sbx-vercel-1",
-            expiresAt: Date.now() + 120_000,
-          }
-        : {
-            type: "hybrid",
-            sandboxId: config.state.sandboxId ?? "sbx-hybrid-1",
-            expiresAt: Date.now() + 120_000,
-          }
-      : {
-          type: "vercel",
-          sandboxId: "sbx-default-1",
-          expiresAt: Date.now() + 120_000,
-        };
 
     return {
       currentBranch: "main",
       workingDirectory: "/vercel/sandbox",
-      getState: () => nextState,
+      getState: () => ({
+        type: "vercel" as const,
+        sandboxId: config.state.sandboxId ?? "sbx-vercel-1",
+        expiresAt: Date.now() + 120_000,
+      }),
       stop: async () => {},
     };
   },
@@ -144,7 +110,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     };
   });
 
-  test("reconnect branch kicks lifecycle immediately", async () => {
+  test("reconnect branch uses vercel sandbox and kicks lifecycle immediately", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -157,11 +123,18 @@ describe("/api/sandbox lifecycle kicks", () => {
     });
 
     const response = await POST(request);
+
     expect(response.ok).toBe(true);
-    expect(kickCalls.length).toBe(1);
-    expect(kickCalls[0]?.sessionId).toBe("session-1");
-    expect(kickCalls[0]?.reason).toBe("sandbox-created");
-    expect(kickCalls[0]?.scheduleBackgroundWork).toBeUndefined();
+    expect(kickCalls).toEqual([
+      {
+        sessionId: "session-1",
+        reason: "sandbox-created",
+      },
+    ]);
+    expect(connectConfigs[0]?.state).toEqual({
+      type: "vercel",
+      sandboxId: "sbx-existing-1",
+    });
   });
 
   test("new vercel sandbox kicks lifecycle immediately", async () => {
@@ -177,19 +150,45 @@ describe("/api/sandbox lifecycle kicks", () => {
     });
 
     const response = await POST(request);
+
     expect(response.ok).toBe(true);
-    expect(kickCalls.length).toBe(1);
-    expect(kickCalls[0]?.sessionId).toBe("session-1");
-    expect(kickCalls[0]?.reason).toBe("sandbox-created");
-    expect(kickCalls[0]?.scheduleBackgroundWork).toBeUndefined();
+    expect(kickCalls).toEqual([
+      {
+        sessionId: "session-1",
+        reason: "sandbox-created",
+      },
+    ]);
     expect(updateCalls.length).toBeGreaterThan(0);
-
-    const vercelConfig = connectConfigs.find(
-      (config) => isConnectConfig(config) && config.state.type === "vercel",
-    ) as { options?: { gitUser?: { email?: string } } } | undefined;
-
-    expect(vercelConfig?.options?.gitUser?.email).toBe(
+    expect(connectConfigs[0]?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
+
+    const payload = (await response.json()) as {
+      timeout: number;
+      mode: string;
+    };
+    expect(payload.timeout).toBe(DEFAULT_SANDBOX_TIMEOUT_MS);
+    expect(payload.mode).toBe("vercel");
+  });
+
+  test("rejects unsupported sandbox types", async () => {
+    const { POST } = await routeModulePromise;
+
+    const request = new Request("http://localhost/api/sandbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "session-1",
+        sandboxType: "invalid",
+      }),
+    });
+
+    const response = await POST(request);
+    const payload = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe("Invalid sandbox type");
+    expect(connectConfigs).toHaveLength(0);
+    expect(kickCalls).toHaveLength(0);
   });
 });

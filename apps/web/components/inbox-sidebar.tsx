@@ -2,64 +2,43 @@
 
 import {
   Archive,
+  ChevronDown,
   EllipsisVertical,
+  FolderGit2,
   GitMerge,
+  Loader2,
   Pencil,
   Plus,
   Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  getValidRenameTitle,
-  isRenameSaveDisabled,
-} from "@/components/inbox-sidebar-rename";
-import { NewSessionDialog } from "@/components/new-session-dialog";
+import { InboxSidebarRenameDialog } from "@/components/inbox-sidebar-rename-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useSession } from "@/hooks/use-session";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 import type { Session as AuthSession } from "@/lib/session/types";
-
-type CreateSessionInput = {
-  repoOwner?: string;
-  repoName?: string;
-  branch?: string;
-  cloneUrl?: string;
-  isNewBranch: boolean;
-  sandboxType: "hybrid" | "vercel" | "just-bash";
-};
 
 type InboxSidebarProps = {
   sessions: SessionWithUnread[];
   archivedCount: number;
   sessionsLoading: boolean;
   activeSessionId: string;
+  pendingSessionId: string | null;
   onSessionClick: (session: SessionWithUnread) => void;
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onRenameSession: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (sessionId: string) => Promise<void>;
-  createSession: (input: CreateSessionInput) => Promise<{
-    session: { id: string };
-    chat: { id: string };
-  }>;
-  lastRepo: { owner: string; repo: string } | null;
+  onOpenNewSession: () => void;
   initialUser?: AuthSession["user"];
 };
 
@@ -74,6 +53,11 @@ type ArchivedSessionsResponse = {
 };
 
 const ARCHIVED_SESSIONS_PAGE_SIZE = 50;
+
+const sessionRowPerformanceStyle: CSSProperties = {
+  contentVisibility: "auto",
+  containIntrinsicSize: "3.25rem",
+};
 
 function formatRelativeTime(date: Date): string {
   const now = new Date();
@@ -113,9 +97,11 @@ function DiffStats({
 
   return (
     <span className="flex items-center gap-0.5 font-mono text-[10px]">
-      {added !== null ? <span className="text-green-500">+{added}</span> : null}
+      {added !== null ? (
+        <span className="text-green-600 dark:text-green-500">+{added}</span>
+      ) : null}
       {removed !== null ? (
-        <span className="text-red-400">-{removed}</span>
+        <span className="text-red-600 dark:text-red-400">-{removed}</span>
       ) : null}
     </span>
   );
@@ -132,7 +118,7 @@ function PrBadge({
 
   if (status === "merged") {
     return (
-      <span className="flex items-center gap-0.5 text-[10px] text-purple-400">
+      <span className="flex items-center gap-0.5 text-[10px] text-purple-700 dark:text-purple-400">
         <GitMerge className="h-2.5 w-2.5" />
         <span>#{prNumber}</span>
       </span>
@@ -142,9 +128,66 @@ function PrBadge({
   return <span className="text-[10px] text-muted-foreground">#{prNumber}</span>;
 }
 
+type SessionRepoGroup = {
+  id: string;
+  label: string;
+  sessions: SessionWithUnread[];
+};
+
+function getRepoGroupId(session: SessionWithUnread): string {
+  const repoName = session.repoName?.trim();
+  const repoOwner = session.repoOwner?.trim();
+
+  if (!repoName) {
+    return "repo:unscoped";
+  }
+
+  return `repo:${repoOwner ?? ""}/${repoName}`.toLowerCase();
+}
+
+function getRepoGroupLabel(session: SessionWithUnread): string {
+  const repoName = session.repoName?.trim();
+  const repoOwner = session.repoOwner?.trim();
+
+  if (!repoName) {
+    return "No repository";
+  }
+
+  return repoOwner ? `${repoOwner}/${repoName}` : repoName;
+}
+
+function groupSessionsByRepo(
+  sessions: SessionWithUnread[],
+): SessionRepoGroup[] {
+  const groups = new Map<string, SessionRepoGroup>();
+
+  for (const session of sessions) {
+    const groupId = getRepoGroupId(session);
+    const existingGroup = groups.get(groupId);
+
+    if (existingGroup) {
+      existingGroup.sessions.push(session);
+      continue;
+    }
+
+    groups.set(groupId, {
+      id: groupId,
+      label: getRepoGroupLabel(session),
+      sessions: [session],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
+function getRepoGroupContentId(groupId: string): string {
+  return `repo-group-panel-${groupId.replace(/[^a-z0-9-]+/gi, "-")}`;
+}
+
 type SessionRowProps = {
   session: SessionWithUnread;
   isActive: boolean;
+  isPending: boolean;
   onSessionClick: (session: SessionWithUnread) => void;
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onOpenRenameDialog: (session: SessionWithUnread) => void;
@@ -154,6 +197,7 @@ type SessionRowProps = {
 const SessionRow = memo(function SessionRow({
   session,
   isActive,
+  isPending,
   onSessionClick,
   onSessionPrefetch,
   onOpenRenameDialog,
@@ -161,16 +205,31 @@ const SessionRow = memo(function SessionRow({
 }: SessionRowProps) {
   const isWorking = session.hasStreaming;
   const isUnread = session.hasUnread && !isActive;
-  const createdAtLabel = useMemo(
-    () => formatRelativeTime(new Date(session.createdAt)),
-    [session.createdAt],
+  const lastActivityLabel = useMemo(
+    () =>
+      formatRelativeTime(new Date(session.lastActivityAt ?? session.createdAt)),
+    [session.createdAt, session.lastActivityAt],
   );
+  const metadataLabel =
+    session.branch ??
+    (isWorking ? "Working..." : !session.repoName ? "No repository" : null);
+  const metadataLabelClassName = session.branch
+    ? "truncate font-mono text-[11px]"
+    : "truncate";
+  const showMetadata =
+    Boolean(metadataLabel) ||
+    session.prNumber !== null ||
+    session.linesAdded !== null ||
+    session.linesRemoved !== null;
 
   return (
     <div
-      className={`group relative flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
-        isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
-      }`}
+      className={`group relative flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow,opacity] ${
+        isActive
+          ? "border-border/70 bg-sidebar-active shadow-sm"
+          : "border-transparent hover:border-border/40 hover:bg-muted/50"
+      } ${isPending ? "opacity-80" : "opacity-100"}`}
+      style={sessionRowPerformanceStyle}
     >
       <div className="flex h-5 w-3 shrink-0 items-center justify-center">
         {isWorking ? (
@@ -187,10 +246,11 @@ const SessionRow = memo(function SessionRow({
           onMouseEnter={() => onSessionPrefetch(session)}
           onFocus={() => onSessionPrefetch(session)}
           className="block w-full text-left"
+          aria-busy={isPending}
         >
-          <div className="flex items-baseline justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 pr-7">
             <p
-              className={`truncate text-sm ${
+              className={`min-w-0 flex-1 truncate text-sm ${
                 isUnread || isWorking
                   ? "font-semibold text-foreground"
                   : "font-medium text-foreground"
@@ -198,33 +258,29 @@ const SessionRow = memo(function SessionRow({
             >
               {session.title}
             </p>
-            <span className="shrink-0 text-[11px] text-muted-foreground">
-              {createdAtLabel}
+            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+              {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              <span>{lastActivityLabel}</span>
             </span>
           </div>
 
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-            {session.repoName && (
-              <span className="truncate">
-                {session.repoName}
-                {session.branch && (
-                  <span className="text-muted-foreground/50">
-                    /{session.branch}
-                  </span>
-                )}
+          {showMetadata ? (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {metadataLabel ? (
+                <span className={metadataLabelClassName}>{metadataLabel}</span>
+              ) : null}
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                <PrBadge
+                  prNumber={session.prNumber}
+                  status={session.prStatus}
+                />
+                <DiffStats
+                  added={session.linesAdded}
+                  removed={session.linesRemoved}
+                />
               </span>
-            )}
-            {!session.repoName && isWorking && (
-              <span className="text-muted-foreground/60">Working...</span>
-            )}
-            <span className="ml-auto flex shrink-0 items-center gap-1.5">
-              <PrBadge prNumber={session.prNumber} status={session.prStatus} />
-              <DiffStats
-                added={session.linesAdded}
-                removed={session.linesRemoved}
-              />
-            </span>
-          </div>
+            </div>
+          ) : null}
         </button>
       </div>
 
@@ -233,7 +289,7 @@ const SessionRow = memo(function SessionRow({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+            className="absolute right-2 top-2.5 rounded p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label={`Open menu for ${session.title}`}
           >
             <EllipsisVertical className="h-3 w-3" />
@@ -266,7 +322,7 @@ function areSessionRowsEqual(
   prev: SessionRowProps,
   next: SessionRowProps,
 ): boolean {
-  if (prev.isActive !== next.isActive) {
+  if (prev.isActive !== next.isActive || prev.isPending !== next.isPending) {
     return false;
   }
 
@@ -275,13 +331,14 @@ function areSessionRowsEqual(
     prev.session.title === next.session.title &&
     prev.session.hasStreaming === next.session.hasStreaming &&
     prev.session.hasUnread === next.session.hasUnread &&
+    prev.session.repoOwner === next.session.repoOwner &&
     prev.session.repoName === next.session.repoName &&
     prev.session.branch === next.session.branch &&
     prev.session.prNumber === next.session.prNumber &&
     prev.session.prStatus === next.session.prStatus &&
     prev.session.linesAdded === next.session.linesAdded &&
     prev.session.linesRemoved === next.session.linesRemoved &&
-    String(prev.session.createdAt) === String(next.session.createdAt)
+    String(prev.session.lastActivityAt) === String(next.session.lastActivityAt)
   );
 }
 
@@ -290,12 +347,12 @@ export function InboxSidebar({
   archivedCount,
   sessionsLoading,
   activeSessionId,
+  pendingSessionId,
   onSessionClick,
   onSessionPrefetch,
   onRenameSession,
   onArchiveSession,
-  createSession,
-  lastRepo,
+  onOpenNewSession,
   initialUser,
 }: InboxSidebarProps) {
   const router = useRouter();
@@ -311,12 +368,9 @@ export function InboxSidebar({
   >(null);
   const [hasMoreArchivedSessions, setHasMoreArchivedSessions] = useState(false);
   const archivedRequestInFlightRef = useRef(false);
-  const [newSessionOpen, setNewSessionOpen] = useState(false);
+  const lastLoadedArchivedCountRef = useRef(0);
   const [renameDialogSession, setRenameDialogSession] =
     useState<SessionWithUnread | null>(null);
-  const [renameTitle, setRenameTitle] = useState("");
-  const [renaming, setRenaming] = useState(false);
-  const renameInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchArchivedSessionsPage = useCallback(
     async ({ offset, replace }: { offset: number; replace: boolean }) => {
@@ -353,6 +407,7 @@ export function InboxSidebar({
 
           return [...current, ...nextSessions];
         });
+        lastLoadedArchivedCountRef.current = data.archivedCount;
         setHasMoreArchivedSessions(Boolean(data.pagination?.hasMore));
       } catch (error) {
         const message =
@@ -369,13 +424,6 @@ export function InboxSidebar({
   );
 
   useEffect(() => {
-    if (renameDialogSession && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [renameDialogSession]);
-
-  useEffect(() => {
     if (!showArchived) {
       return;
     }
@@ -384,6 +432,11 @@ export function InboxSidebar({
       setArchivedSessions([]);
       setHasMoreArchivedSessions(false);
       setArchivedSessionsError(null);
+      lastLoadedArchivedCountRef.current = 0;
+      return;
+    }
+
+    if (lastLoadedArchivedCountRef.current === archivedCount) {
       return;
     }
 
@@ -396,6 +449,47 @@ export function InboxSidebar({
     (!showArchived && sessionsLoading && sessions.length === 0) ||
     (showArchived && archivedSessionsLoading && archivedSessions.length === 0);
   const sidebarUser = session?.user ?? initialUser;
+  const groupedSessions = useMemo(
+    () => groupSessionsByRepo(displayedSessions),
+    [displayedSessions],
+  );
+  const activeGroupId = useMemo(
+    () =>
+      groupedSessions.find((group) =>
+        group.sessions.some((session) => session.id === activeSessionId),
+      )?.id ?? null,
+    [activeSessionId, groupedSessions],
+  );
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    setCollapsedGroupIds((current) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+
+      for (const group of groupedSessions) {
+        const nextCollapsed =
+          group.id === activeGroupId ? false : (current[group.id] ?? false);
+
+        next[group.id] = nextCollapsed;
+
+        if (current[group.id] !== nextCollapsed) {
+          changed = true;
+        }
+      }
+
+      if (!changed) {
+        const currentIds = Object.keys(current);
+        if (currentIds.length !== groupedSessions.length) {
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [activeGroupId, groupedSessions]);
 
   const handleSessionClick = useCallback(
     (session: SessionWithUnread) => {
@@ -414,15 +508,40 @@ export function InboxSidebar({
     [onSessionPrefetch],
   );
 
+  const handleToggleRepoGroup = useCallback((groupId: string) => {
+    setCollapsedGroupIds((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
+  }, []);
+
   const handleArchiveSession = useCallback(
     async (session: SessionWithUnread) => {
       try {
         await onArchiveSession(session.id);
+        setArchivedSessions((current) => {
+          const nextSessions = [
+            { ...session, status: "archived" as const },
+            ...current.filter(
+              (existingSession) => existingSession.id !== session.id,
+            ),
+          ];
+          const maxCachedSessions = Math.max(
+            current.length,
+            ARCHIVED_SESSIONS_PAGE_SIZE,
+          );
+
+          return nextSessions.slice(0, maxCachedSessions);
+        });
+        setHasMoreArchivedSessions(
+          (currentHasMore) =>
+            currentHasMore || archivedCount + 1 > ARCHIVED_SESSIONS_PAGE_SIZE,
+        );
       } catch (err) {
         console.error("Failed to archive session:", err);
       }
     },
-    [onArchiveSession],
+    [archivedCount, onArchiveSession],
   );
 
   const handleLoadMoreArchivedSessions = useCallback(() => {
@@ -446,52 +565,22 @@ export function InboxSidebar({
 
   const closeRenameDialog = useCallback(() => {
     setRenameDialogSession(null);
-    setRenameTitle("");
-    setRenaming(false);
   }, []);
 
   const handleOpenRenameDialog = useCallback((session: SessionWithUnread) => {
     setRenameDialogSession(session);
-    setRenameTitle(session.title);
   }, []);
 
-  const handleRenameSubmit = useCallback(async () => {
-    if (!renameDialogSession) {
-      return;
-    }
-
-    const nextTitle = getValidRenameTitle({
-      draftTitle: renameTitle,
-      originalTitle: renameDialogSession.title,
-    });
-    if (!nextTitle) {
-      closeRenameDialog();
-      return;
-    }
-
-    setRenaming(true);
-    try {
-      await onRenameSession(renameDialogSession.id, nextTitle);
+  const handleRenameArchivedSession = useCallback(
+    (sessionId: string, title: string) => {
       setArchivedSessions((current) =>
         current.map((session) =>
-          session.id === renameDialogSession.id
-            ? { ...session, title: nextTitle }
-            : session,
+          session.id === sessionId ? { ...session, title } : session,
         ),
       );
-      closeRenameDialog();
-    } catch (err) {
-      console.error("Failed to rename session:", err);
-      setRenaming(false);
-    }
-  }, [closeRenameDialog, onRenameSession, renameDialogSession, renameTitle]);
-
-  const isSaveDisabled = isRenameSaveDisabled({
-    renaming,
-    hasTargetSession: Boolean(renameDialogSession),
-    draftTitle: renameTitle,
-    originalTitle: renameDialogSession?.title ?? null,
-  });
+    },
+    [],
+  );
 
   return (
     <>
@@ -504,7 +593,7 @@ export function InboxSidebar({
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => setNewSessionOpen(true)}
+            onClick={onOpenNewSession}
             className="h-7 w-7"
           >
             <Plus className="h-4 w-4" />
@@ -578,18 +667,88 @@ export function InboxSidebar({
           </div>
         ) : (
           <>
-            <div className="space-y-px p-1.5">
-              {displayedSessions.map((session) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  isActive={session.id === activeSessionId}
-                  onSessionClick={handleSessionClick}
-                  onSessionPrefetch={handleSessionPrefetch}
-                  onOpenRenameDialog={handleOpenRenameDialog}
-                  onArchiveSession={handleArchiveSession}
-                />
-              ))}
+            <div className="space-y-3 p-1.5">
+              {groupedSessions.map((group) => {
+                const isCollapsed = collapsedGroupIds[group.id] ?? false;
+                const groupHasActiveSession = group.id === activeGroupId;
+                const groupHasUnread = group.sessions.some(
+                  (session) =>
+                    session.hasUnread && session.id !== activeSessionId,
+                );
+                const groupHasStreaming = group.sessions.some(
+                  (session) => session.hasStreaming,
+                );
+                const groupContentId = getRepoGroupContentId(group.id);
+
+                return (
+                  <section key={group.id} className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRepoGroup(group.id)}
+                      aria-controls={groupContentId}
+                      aria-expanded={!isCollapsed}
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                        groupHasActiveSession
+                          ? "bg-muted/35 text-foreground"
+                          : "text-muted-foreground hover:bg-muted/20 hover:text-foreground/85"
+                      }`}
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/70 text-muted-foreground/80">
+                        <FolderGit2 className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+                        {group.label}
+                      </span>
+                      {groupHasStreaming ? (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
+                      ) : groupHasUnread ? (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+                      ) : null}
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          groupHasActiveSession
+                            ? "bg-background/80 text-foreground/65"
+                            : "bg-muted/70 text-muted-foreground"
+                        }`}
+                      >
+                        {group.sessions.length}
+                      </span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-200 ${
+                          isCollapsed ? "-rotate-90" : "rotate-0"
+                        }`}
+                      />
+                    </button>
+                    <div
+                      id={groupContentId}
+                      aria-hidden={isCollapsed}
+                      inert={isCollapsed}
+                      className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${
+                        isCollapsed
+                          ? "grid-rows-[0fr] opacity-0 pointer-events-none"
+                          : "grid-rows-[1fr] opacity-100"
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
+                          {group.sessions.map((session) => (
+                            <SessionRow
+                              key={session.id}
+                              session={session}
+                              isActive={session.id === activeSessionId}
+                              isPending={session.id === pendingSessionId}
+                              onSessionClick={handleSessionClick}
+                              onSessionPrefetch={handleSessionPrefetch}
+                              onOpenRenameDialog={handleOpenRenameDialog}
+                              onArchiveSession={handleArchiveSession}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
             </div>
             {showArchived &&
             (hasMoreArchivedSessions || archivedSessionsError) ? (
@@ -656,58 +815,11 @@ export function InboxSidebar({
         </div>
       ) : null}
 
-      <Dialog
-        open={Boolean(renameDialogSession)}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeRenameDialog();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit session</DialogTitle>
-            <DialogDescription>
-              Update the session name shown in your sidebar.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleRenameSubmit();
-            }}
-            className="space-y-4"
-          >
-            <Input
-              ref={renameInputRef}
-              value={renameTitle}
-              onChange={(e) => setRenameTitle(e.target.value)}
-              placeholder="Session title"
-              maxLength={120}
-              disabled={renaming}
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={closeRenameDialog}
-                disabled={renaming}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSaveDisabled}>
-                {renaming ? "Saving..." : "Save"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <NewSessionDialog
-        open={newSessionOpen}
-        onOpenChange={setNewSessionOpen}
-        lastRepo={lastRepo}
-        createSession={createSession}
+      <InboxSidebarRenameDialog
+        session={renameDialogSession}
+        onClose={closeRenameDialog}
+        onRenameSession={onRenameSession}
+        onRenamed={handleRenameArchivedSession}
       />
     </>
   );

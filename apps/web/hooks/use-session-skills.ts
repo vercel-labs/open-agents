@@ -15,8 +15,11 @@ export function useSessionSkills(
   sessionId: string,
   sandboxConnected: boolean,
 ): UseSessionSkillsReturn {
+  const endpoint = sandboxConnected
+    ? `/api/sessions/${sessionId}/skills`
+    : null;
   const { data, error, isLoading, mutate } = useSWR<SkillsResponse>(
-    sandboxConnected ? `/api/sessions/${sessionId}/skills` : null,
+    endpoint,
     fetcher,
     {
       revalidateOnFocus: false,
@@ -27,6 +30,16 @@ export function useSessionSkills(
     skills: data?.skills ?? null,
     isLoading,
     error: error?.message ?? null,
-    refresh: mutate,
+    refresh: async () => {
+      if (!endpoint) {
+        return undefined;
+      }
+
+      const freshSkills = await fetcher<SkillsResponse>(
+        `${endpoint}?refresh=1`,
+      );
+      await mutate(freshSkills, { revalidate: false });
+      return freshSkills;
+    },
   };
 }

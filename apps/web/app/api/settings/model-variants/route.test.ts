@@ -10,7 +10,8 @@ let isAuthenticated = true;
 interface MockPreferences {
   defaultModelId: string;
   defaultSubagentModelId: string | null;
-  defaultSandboxType: "hybrid" | "vercel" | "just-bash";
+  defaultSandboxType: "vercel";
+  defaultDiffMode: "unified" | "split";
   modelVariants: ModelVariant[];
 }
 
@@ -21,6 +22,7 @@ function resetPreferences() {
     defaultModelId: "anthropic/claude-haiku-4.5",
     defaultSubagentModelId: null,
     defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
     modelVariants: [],
   };
 }
@@ -118,9 +120,9 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants).toHaveLength(1);
-    expect(body.modelVariants[0]?.id.startsWith("variant:")).toBe(true);
-    expect(body.modelVariants[0]?.name).toBe("OpenAI Medium");
+    expect(body.modelVariants).toHaveLength(3);
+    expect(body.modelVariants[2]?.id.startsWith("variant:")).toBe(true);
+    expect(body.modelVariants[2]?.name).toBe("OpenAI Medium");
   });
 
   test("POST accepts provider options exactly at 16KB", async () => {
@@ -192,6 +194,22 @@ describe("/api/settings/model-variants", () => {
     expect(response.status).toBe(400);
   });
 
+  test("PATCH returns 403 for built-in variant", async () => {
+    const { PATCH } = await routeModulePromise;
+    const response = await PATCH(
+      new Request("http://localhost/api/settings/model-variants", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "variant:builtin:gpt-5.4-xhigh",
+          name: "Modified",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   test("PATCH returns 404 when variant does not exist", async () => {
     const { PATCH } = await routeModulePromise;
     const response = await PATCH(
@@ -233,7 +251,7 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants[0]?.providerOptions).toEqual({
+    expect(body.modelVariants[2]?.providerOptions).toEqual({
       reasoningEffort: "high",
     });
   });
@@ -263,6 +281,20 @@ describe("/api/settings/model-variants", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  test("DELETE returns 403 for built-in variant", async () => {
+    const { DELETE } = await routeModulePromise;
+
+    const response = await DELETE(
+      new Request("http://localhost/api/settings/model-variants", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "variant:builtin:gpt-5.4-xhigh" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
   });
 
   test("DELETE returns 404 when variant does not exist", async () => {
@@ -301,6 +333,6 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants).toHaveLength(0);
+    expect(body.modelVariants).toHaveLength(2);
   });
 });

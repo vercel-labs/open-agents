@@ -1,13 +1,20 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
 import { z } from "zod";
-import { getGitHubAccount } from "@/lib/db/accounts";
 import {
-  getChatMessages,
-  getChatsBySessionId,
-  getSessionById,
-  updateSession,
-} from "@/lib/db/sessions";
+  ensureForkExists,
+  extractGitHubOwnerFromRemoteUrl,
+  forkPushRetryConfig,
+  generateBranchName,
+  getConversationContext,
+  isPermissionPushError,
+  isRetryableForkPushError,
+  looksLikeCommitHash,
+  redactGitHubToken,
+  sleepForForkRetry,
+} from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+import { getGitHubAccount } from "@/lib/db/accounts";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -25,244 +32,6 @@ const prContentSchema = z.object({
       "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points. Use real newlines for line breaks, NEVER literal backslash-n sequences.",
     ),
 });
-
-function generateBranchName(username: string, name?: string | null): string {
-  let initials = "nb";
-  if (name) {
-    initials =
-      name
-        .split(" ")
-        .map((part) => part[0]?.toLowerCase() ?? "")
-        .join("")
-        .slice(0, 2) || "nb";
-  } else if (username) {
-    initials = username.slice(0, 2).toLowerCase();
-  }
-  const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  return `${initials}/${randomSuffix}`;
-}
-
-/**
- * Detects if a string looks like a git commit hash (detached HEAD state).
- * Git short hashes are 7+ hex chars, full hashes are 40.
- */
-function looksLikeCommitHash(str: string): boolean {
-  return /^[0-9a-f]{7,40}$/i.test(str);
-}
-
-interface EnsureForkOptions {
-  token: string;
-  upstreamOwner: string;
-  upstreamRepo: string;
-  forkOwner: string;
-}
-
-type EnsureForkResult =
-  | { success: true; forkRepoName: string }
-  | { success: false; error: string };
-
-const FORK_PUSH_RETRY_ATTEMPTS = 12;
-const FORK_PUSH_RETRY_DELAY_MS = 2000;
-
-function getGitHubHeaders(token: string): HeadersInit {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function isPermissionPushError(output: string): boolean {
-  const lowerOutput = output.toLowerCase();
-  return (
-    lowerOutput.includes("permission to") ||
-    lowerOutput.includes("permission denied") ||
-    lowerOutput.includes("the requested url returned error: 403") ||
-    lowerOutput.includes("access denied") ||
-    lowerOutput.includes("authentication failed") ||
-    lowerOutput.includes("invalid username") ||
-    lowerOutput.includes("unable to access") ||
-    lowerOutput.includes("resource not accessible by integration")
-  );
-}
-
-function isRetryableForkPushError(output: string): boolean {
-  const lowerOutput = output.toLowerCase();
-  return (
-    lowerOutput.includes("repository not found") ||
-    lowerOutput.includes("could not read from remote repository") ||
-    lowerOutput.includes("remote not found")
-  );
-}
-
-function redactGitHubToken(text: string): string {
-  return text.replace(
-    /https:\/\/x-access-token:[^@\s]+@github\.com/gi,
-    "https://x-access-token:***@github.com",
-  );
-}
-
-function extractGitHubOwnerFromRemoteUrl(remoteUrl: string): string | null {
-  const trimmedRemoteUrl = remoteUrl.trim();
-  if (!trimmedRemoteUrl) {
-    return null;
-  }
-
-  const githubUrlMatch = trimmedRemoteUrl.match(
-    /github\.com[:/]([^/]+)\/[^/]+$/i,
-  );
-  if (githubUrlMatch?.[1]) {
-    return githubUrlMatch[1];
-  }
-
-  return null;
-}
-
-async function ensureForkExists({
-  token,
-  upstreamOwner,
-  upstreamRepo,
-  forkOwner,
-}: EnsureForkOptions): Promise<EnsureForkResult> {
-  const headers = getGitHubHeaders(token);
-  const forkRepoUrl = `https://api.github.com/repos/${forkOwner}/${upstreamRepo}`;
-
-  const publicForkResponse = await fetch(forkRepoUrl, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    cache: "no-store",
-  });
-
-  if (publicForkResponse.ok) {
-    const repoData: unknown = await publicForkResponse.json();
-    const forkRepoName =
-      typeof repoData === "object" &&
-      repoData !== null &&
-      "name" in repoData &&
-      typeof repoData.name === "string"
-        ? repoData.name
-        : upstreamRepo;
-    return { success: true, forkRepoName };
-  }
-
-  const existingForkResponse = await fetch(forkRepoUrl, {
-    headers,
-    cache: "no-store",
-  });
-
-  if (existingForkResponse.ok) {
-    const repoData: unknown = await existingForkResponse.json();
-    const forkRepoName =
-      typeof repoData === "object" &&
-      repoData !== null &&
-      "name" in repoData &&
-      typeof repoData.name === "string"
-        ? repoData.name
-        : upstreamRepo;
-    return { success: true, forkRepoName };
-  }
-
-  if (existingForkResponse.status !== 404) {
-    const responseText = await existingForkResponse.text();
-    return {
-      success: false,
-      error: `Failed to check fork repository: ${responseText.slice(0, 200)}`,
-    };
-  }
-
-  const createForkResponse = await fetch(
-    `https://api.github.com/repos/${upstreamOwner}/${upstreamRepo}/forks`,
-    {
-      method: "POST",
-      headers,
-      cache: "no-store",
-    },
-  );
-
-  if (
-    !createForkResponse.ok &&
-    createForkResponse.status !== 202 &&
-    createForkResponse.status !== 422
-  ) {
-    const responseText = await createForkResponse.text();
-    const lowerResponseText = responseText.toLowerCase();
-
-    if (
-      createForkResponse.status === 403 &&
-      lowerResponseText.includes("resource not accessible by integration")
-    ) {
-      return {
-        success: false,
-        error:
-          "GitHub denied automatic fork creation for this token. Create a fork manually on GitHub, then retry creating the PR.",
-      };
-    }
-
-    return {
-      success: false,
-      error: `Failed to create fork: ${responseText.slice(0, 200)}`,
-    };
-  }
-
-  const createData: unknown = await createForkResponse.json().catch(() => null);
-  const forkRepoName =
-    typeof createData === "object" &&
-    createData !== null &&
-    "name" in createData &&
-    typeof createData.name === "string"
-      ? createData.name
-      : upstreamRepo;
-  return { success: true, forkRepoName };
-}
-
-/**
- * Extracts user and assistant text parts from all chat messages in a session.
- * Tool calls and tool results are intentionally excluded to keep context
- * focused on the human–AI conversation.
- */
-async function getConversationContext(sessionId: string): Promise<string> {
-  const chats = await getChatsBySessionId(sessionId);
-  if (chats.length === 0) return "";
-
-  const lines: string[] = [];
-
-  for (const chat of chats) {
-    const messages = await getChatMessages(chat.id);
-    for (const message of messages) {
-      if (!Array.isArray(message.parts)) continue;
-
-      const textParts: string[] = [];
-      for (const part of message.parts) {
-        if (
-          typeof part === "object" &&
-          part !== null &&
-          "type" in part &&
-          part.type === "text" &&
-          "text" in part &&
-          typeof part.text === "string" &&
-          part.text.trim().length > 0
-        ) {
-          textParts.push(part.text.trim());
-        }
-      }
-
-      if (textParts.length > 0) {
-        const role = message.role === "user" ? "User" : "Assistant";
-        lines.push(`${role}: ${textParts.join(" ")}`);
-      }
-    }
-  }
-
-  return lines.join("\n");
-}
 
 // Allow up to 2 minutes for AI generation and git operations
 export const maxDuration = 120;
@@ -675,7 +444,7 @@ Respond with ONLY the commit message, nothing else.`,
       let errorMessage = "Failed to push branch.";
       let isPermissionError = isPermissionPushError(pushOutput);
 
-      // Vercel sandboxes can return empty output on push failure even when
+      // Cloud sandboxes backed by Vercel can return empty output on push failure even when
       // the actual error is a permission denial (exitCode 128 with no stderr).
       // Treat empty-output failures as potential permission errors so fallback
       // paths (user token, fork) are still attempted.
@@ -789,7 +558,7 @@ Respond with ONLY the commit message, nothing else.`,
 
           for (
             let attempt = 1;
-            attempt <= FORK_PUSH_RETRY_ATTEMPTS;
+            attempt <= forkPushRetryConfig.attempts;
             attempt += 1
           ) {
             const pushForkResult = await sandbox.exec(
@@ -814,12 +583,12 @@ Respond with ONLY the commit message, nothing else.`,
 
             if (
               isRetryableForkPushError(lastPushForkOutput) &&
-              attempt < FORK_PUSH_RETRY_ATTEMPTS
+              attempt < forkPushRetryConfig.attempts
             ) {
               console.log(
-                `[generate-pr] Fork push retry ${attempt}/${FORK_PUSH_RETRY_ATTEMPTS}: waiting for fork repository to become available`,
+                `[generate-pr] Fork push retry ${attempt}/${forkPushRetryConfig.attempts}: waiting for fork repository to become available`,
               );
-              await sleep(FORK_PUSH_RETRY_DELAY_MS);
+              await sleepForForkRetry();
               continue;
             }
 
