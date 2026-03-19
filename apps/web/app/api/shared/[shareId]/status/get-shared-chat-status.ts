@@ -1,5 +1,5 @@
 import type { SharedChatStatusData } from "@/app/shared/[shareId]/shared-chat-status-utils";
-import { getChatById, getChatMessages } from "@/lib/db/sessions";
+import { getChatById, getLatestUserMessageCreatedAt } from "@/lib/db/sessions";
 import { getShareByIdCached } from "@/lib/db/sessions-cache";
 
 /**
@@ -19,13 +19,10 @@ export async function getSharedChatStatus(
 
   let startedAt: string | null = null;
   if (isStreaming) {
-    const messages = await getChatMessages(chat.id);
-    const lastUserMessage = messages
-      .toReversed()
-      .find((m) => m.role === "user");
-    startedAt = lastUserMessage
-      ? lastUserMessage.createdAt.toISOString()
-      : null;
+    const latestUserMessageCreatedAt = await getLatestUserMessageCreatedAt(
+      chat.id,
+    );
+    startedAt = latestUserMessageCreatedAt?.toISOString() ?? null;
   }
 
   return { isStreaming, startedAt };

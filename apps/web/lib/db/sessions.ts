@@ -509,6 +509,17 @@ export async function getChatMessages(chatId: string) {
   });
 }
 
+export async function getLatestUserMessageCreatedAt(chatId: string) {
+  const [latestUserMessage] = await db
+    .select({ createdAt: chatMessages.createdAt })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.chatId, chatId), eq(chatMessages.role, "user")))
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(1);
+
+  return latestUserMessage?.createdAt ?? null;
+}
+
 type DeleteChatMessageAndFollowingResult =
   | { status: "not_found" }
   | { status: "not_user_message" }
