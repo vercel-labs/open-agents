@@ -59,7 +59,18 @@ type ReasoningMessagePart = Extract<
   { type: "reasoning" }
 >;
 
-function displayModelName(modelId: string): string {
+function displayModelName(
+  modelId: string,
+  resolvedModelName: string | null,
+): string {
+  if (resolvedModelName) {
+    return resolvedModelName;
+  }
+
+  if (modelId.startsWith("variant:")) {
+    return "Custom variant";
+  }
+
   const slashIndex = modelId.indexOf("/");
   return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
 }
@@ -230,7 +241,7 @@ export function SharedChatContent({
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
                 <Bot className="h-3 w-3" />
                 <span className="font-medium text-foreground">
-                  {modelName ?? displayModelName(modelId)}
+                  {displayModelName(modelId, modelName)}
                 </span>
                 {displayProviderName(modelId) && (
                   <span className="text-muted-foreground/60">

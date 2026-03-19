@@ -10,11 +10,13 @@ let chatRecord: {
   id: string;
   sessionId: string;
   title: string;
+  modelId: string | null;
   activeStreamId: string | null;
 } | null = {
   id: "chat-1",
   sessionId: "session-1",
   title: "Debug flaky tests",
+  modelId: "anthropic/claude-opus-4.6",
   activeStreamId: null,
 };
 let sessionRecord: {
@@ -45,6 +47,12 @@ let messageRows: Array<{ parts: unknown; role: string; createdAt: Date }> = [
     createdAt: new Date("2025-01-01T00:00:00Z"),
   },
 ];
+let userModelVariants: Array<{
+  id: string;
+  name: string;
+  baseModelId: string;
+  providerOptions: Record<string, unknown>;
+}> = [];
 
 mock.module("next/navigation", () => ({
   notFound: () => {
@@ -76,6 +84,17 @@ mock.module("@/lib/db/sessions", () => ({
   getChatMessages: async () => messageRows,
 }));
 
+mock.module("@/lib/db/user-preferences", () => ({
+  getUserPreferences: async () => ({
+    defaultModelId: "anthropic/claude-opus-4.6",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
+    autoCommitPush: false,
+    modelVariants: userModelVariants,
+  }),
+}));
+
 mock.module("./shared-chat-content", () => ({
   SharedChatContent: (_props: unknown) => null,
 }));
@@ -89,6 +108,7 @@ describe("/shared/[shareId] page", () => {
       id: "chat-1",
       sessionId: "session-1",
       title: "Debug flaky tests",
+      modelId: "anthropic/claude-opus-4.6",
       activeStreamId: null,
     };
     sessionRecord = {
@@ -109,6 +129,7 @@ describe("/shared/[shareId] page", () => {
         createdAt: new Date("2025-01-01T00:00:00Z"),
       },
     ];
+    userModelVariants = [];
   });
 
   test("generateMetadata uses shared chat title", async () => {
@@ -135,6 +156,38 @@ describe("/shared/[shareId] page", () => {
     expect(element.props.chats).toHaveLength(1);
     expect(element.props.chats[0]?.chat.id).toBe("chat-1");
     expect(element.props.chats[0]?.messagesWithTiming).toHaveLength(1);
+  });
+
+  test("passes custom variant name to shared chat content", async () => {
+    chatRecord = {
+      id: "chat-1",
+      sessionId: "session-1",
+      title: "Debug flaky tests",
+      modelId: "variant:abc123",
+      activeStreamId: null,
+    };
+    userModelVariants = [
+      {
+        id: "variant:abc123",
+        name: "Gateway Usage Variant",
+        baseModelId: "openai/gpt-5.4",
+        providerOptions: {
+          reasoningEffort: "high",
+        },
+      },
+    ];
+
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: {
+        modelName: string | null;
+      };
+    };
+
+    expect(element.props.modelName).toBe("Gateway Usage Variant");
   });
 
   test("throws notFound when share mapping does not exist", async () => {
@@ -171,6 +224,7 @@ describe("/shared/[shareId] page", () => {
       id: "chat-1",
       sessionId: "session-1",
       title: "Debug flaky tests",
+      modelId: "anthropic/claude-opus-4.6",
       activeStreamId: "stream-abc",
     };
     const { default: SharedPage } = await pageModulePromise;

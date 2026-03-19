@@ -10,10 +10,7 @@ import {
   getShareByIdCached,
 } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import {
-  getAllVariants,
-  MODEL_VARIANT_ID_PREFIX,
-} from "@/lib/model-variants";
+import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
 import { SharedChatContent } from "./shared-chat-content";
 import type { MessageWithTiming } from "./shared-chat-content";
 
