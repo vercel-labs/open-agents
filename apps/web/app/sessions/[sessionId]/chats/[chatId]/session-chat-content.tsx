@@ -3523,6 +3523,8 @@ export function SessionChatContent({
           onOpenChange={setMergeDialogOpen}
           session={session}
           onMerged={handleMerged}
+          onViewDiff={() => setShowDiffPanel(true)}
+          canViewDiff={supportsDiff && Boolean(diff || session.cachedDiff)}
         />
       )}
 

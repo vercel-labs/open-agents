@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Check,
-  ExternalLink,
-  GitMerge,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { AlertTriangle, Check, GitMerge, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
@@ -32,12 +25,15 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { CheckRunsList } from "@/components/merge-check-runs";
+import { MergePrDialogActions } from "@/components/merge-pr-dialog-actions";
 
 interface MergePrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: Session;
   onMerged?: (result: MergePullRequestResponse) => Promise<void> | void;
+  onViewDiff?: () => void;
+  canViewDiff?: boolean;
 }
 
 const mergeMethodLabels: Record<PullRequestMergeMethod, string> = {
@@ -55,6 +51,8 @@ export function MergePrDialog({
   onOpenChange,
   session,
   onMerged,
+  onViewDiff,
+  canViewDiff = false,
 }: MergePrDialogProps) {
   const [readiness, setReadiness] = useState<MergeReadinessResponse | null>(
     null,
@@ -260,32 +258,17 @@ export function MergePrDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={openPullRequest}
-            disabled={!pullRequestUrl}
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            View PR
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void loadReadiness();
-            }}
-            disabled={isLoadingReadiness || isSubmitting}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isLoadingReadiness ? "animate-spin" : ""}`}
-            />
-            Refresh status
-          </Button>
-        </div>
+        <MergePrDialogActions
+          canViewDiff={canViewDiff}
+          canOpenPullRequest={Boolean(pullRequestUrl)}
+          isLoadingReadiness={isLoadingReadiness}
+          isSubmitting={isSubmitting}
+          onOpenPullRequest={openPullRequest}
+          onRefresh={() => {
+            void loadReadiness();
+          }}
+          onViewDiff={onViewDiff}
+        />
 
         <div className="grid gap-4 py-2">
           {isLoadingReadiness ? (
