@@ -1,6 +1,7 @@
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   getUserPreferences,
+  type DiffMode,
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
@@ -9,6 +10,8 @@ interface UpdatePreferencesRequest {
   defaultModelId?: string;
   defaultSubagentModelId?: string | null;
   defaultSandboxType?: SandboxType;
+  defaultDiffMode?: DiffMode;
+  autoCommitPush?: boolean;
 }
 
 export async function GET() {
@@ -34,12 +37,34 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Validate sandbox type if provided
-  if (body.defaultSandboxType) {
-    const validTypes = ["hybrid", "vercel", "just-bash"];
-    if (!validTypes.includes(body.defaultSandboxType)) {
+  if (body.defaultSandboxType !== undefined) {
+    const validTypes = ["vercel"];
+    if (
+      typeof body.defaultSandboxType !== "string" ||
+      !validTypes.includes(body.defaultSandboxType)
+    ) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
     }
+  }
+
+  if (body.defaultDiffMode !== undefined) {
+    const validDiffModes = ["unified", "split"];
+    if (
+      typeof body.defaultDiffMode !== "string" ||
+      !validDiffModes.includes(body.defaultDiffMode)
+    ) {
+      return Response.json({ error: "Invalid diff mode" }, { status: 400 });
+    }
+  }
+
+  if (
+    body.autoCommitPush !== undefined &&
+    typeof body.autoCommitPush !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid autoCommitPush value" },
+      { status: 400 },
+    );
   }
 
   try {

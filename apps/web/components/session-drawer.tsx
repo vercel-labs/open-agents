@@ -122,43 +122,47 @@ function SessionGroup({
             key={session.id}
             type="button"
             onClick={() => onSessionClick(session.id)}
-            className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+            className="flex w-full items-start justify-between gap-2 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
               {session.hasStreaming ? (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-600 animate-pulse dark:bg-white" />
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-zinc-600 animate-pulse dark:bg-white" />
               ) : session.hasUnread ? (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
               ) : null}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {session.title}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatTime(new Date(session.createdAt))}
-                  {session.repoName && (
-                    <>
-                      {" "}
-                      <span className="text-muted-foreground/50">-</span>{" "}
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {session.repoName ? (
+                    <span className="truncate">
                       {session.repoName}
                       {session.branch && (
-                        <>
-                          {" "}
-                          <span className="text-muted-foreground/50">-</span>{" "}
-                          {session.branch}
-                        </>
+                        <span className="text-muted-foreground/50">
+                          /{session.branch}
+                        </span>
                       )}
-                    </>
-                  )}
+                    </span>
+                  ) : session.hasStreaming ? (
+                    <span className="text-muted-foreground/60">Working...</span>
+                  ) : null}
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <PrStatus status={session.prStatus} />
-              <DiffStats
-                added={session.linesAdded}
-                removed={session.linesRemoved}
-              />
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className="text-[11px] text-muted-foreground">
+                {formatTime(
+                  new Date(session.lastActivityAt ?? session.createdAt),
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                <PrStatus status={session.prStatus} />
+                <DiffStats
+                  added={session.linesAdded}
+                  removed={session.linesRemoved}
+                />
+              </div>
             </div>
           </button>
         ))}

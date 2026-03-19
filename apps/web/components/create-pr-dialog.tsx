@@ -35,6 +35,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
+import {
+  createSessionBranch,
+  fetchRepoBranches,
+  generatePullRequestContent,
+  type GitActionsResult,
+} from "@/lib/git-flow-client";
 
 interface CreatePRDialogProps {
   open: boolean;
@@ -47,12 +53,7 @@ interface CreatePRDialogProps {
   }) => void;
 }
 
-interface GitActions {
-  committed?: boolean;
-  commitMessage?: string;
-  pushed?: boolean;
-  pushedToFork?: boolean;
-}
+type GitActions = GitActionsResult;
 
 type WizardStep = "create-branch" | "generate";
 type PrCreationMode = "ready" | "draft";
@@ -190,20 +191,15 @@ export function CreatePRDialog({
   }, [isCheckingStatus, open, needsNewBranch]);
 
   const fetchBranches = useCallback(async () => {
+    if (!session.repoOwner || !session.repoName) return;
     setIsLoadingBranches(true);
     try {
-      const res = await fetch(
-        `/api/github/branches?owner=${session.repoOwner}&repo=${session.repoName}`,
+      const branchData = await fetchRepoBranches(
+        session.repoOwner,
+        session.repoName,
       );
-      if (!res.ok) {
-        throw new Error("Failed to fetch branches");
-      }
-      const data = await res.json();
-      setBranches(data.branches || []);
-      // Set default to repo's default branch if available
-      if (data.defaultBranch) {
-        setBaseBranch(data.defaultBranch);
-      }
+      setBranches(branchData.branches);
+      setBaseBranch(branchData.defaultBranch);
     } catch (err) {
       console.error("Failed to fetch branches:", err);
       // Keep default "main" if fetch fails
@@ -228,26 +224,15 @@ export function CreatePRDialog({
     setIsCreatingBranch(true);
     setError(null);
     try {
-      const res = await fetch("/api/generate-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName: displayBranch,
-          createBranchOnly: true,
-        }),
+      const result = await createSessionBranch({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        baseBranch,
+        branchName: displayBranch,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create branch");
-      }
-
-      if (data.branchName && data.branchName !== "HEAD") {
-        setResolvedBranch(data.branchName as string);
+      if (result.branchName !== "HEAD") {
+        setResolvedBranch(result.branchName);
         // Branch created successfully, no longer in detached HEAD state
         setIsDetachedHead(false);
         // Advance to PR generation step
@@ -264,25 +249,15 @@ export function CreatePRDialog({
     setIsGenerating(true);
     setError(null);
     try {
-      const res = await fetch("/api/generate-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          sessionTitle: session.title,
-          baseBranch,
-          branchName: displayBranch,
-        }),
+      const data = await generatePullRequestContent({
+        sessionId: session.id,
+        sessionTitle: session.title,
+        baseBranch,
+        branchName: displayBranch,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to generate PR content");
-      }
-
-      setTitle(data.title);
-      setBody(data.body);
+      setTitle(data.title ?? "");
+      setBody(data.body ?? "");
       setHasGenerated(true);
       if (data.gitActions) {
         setGitActions(data.gitActions);
@@ -291,7 +266,7 @@ export function CreatePRDialog({
         setPrHeadOwner(data.prHeadOwner);
       }
       if (data.branchName && data.branchName !== "HEAD") {
-        setResolvedBranch(data.branchName as string);
+        setResolvedBranch(data.branchName);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate");

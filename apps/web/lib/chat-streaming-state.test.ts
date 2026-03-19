@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  hasRenderableAssistantPart,
   isChatInFlight,
+  shouldKeepCollapsedReasoningStreaming,
   shouldRefreshAfterReadyTransition,
   shouldShowThinkingIndicator,
 } from "./chat-streaming-state";
@@ -11,6 +13,42 @@ describe("chat streaming state", () => {
     expect(isChatInFlight("streaming")).toBe(true);
     expect(isChatInFlight("ready")).toBe(false);
     expect(isChatInFlight("error")).toBe(false);
+  });
+
+  test("treats only visibly renderable assistant parts as content", () => {
+    type AssistantPart = Parameters<typeof hasRenderableAssistantPart>[0];
+
+    const emptyTextPart = {
+      type: "text",
+      text: "",
+    } as unknown as AssistantPart;
+    const textPart = {
+      type: "text",
+      text: "Hello",
+    } as unknown as AssistantPart;
+    const streamingReasoningPart = {
+      type: "reasoning",
+      text: "",
+      state: "streaming",
+    } as unknown as AssistantPart;
+    const completedReasoningPart = {
+      type: "reasoning",
+      text: "",
+      state: "done",
+    } as unknown as AssistantPart;
+    const completedReasoningWithTextPart = {
+      type: "reasoning",
+      text: "Planning the next step",
+      state: "done",
+    } as unknown as AssistantPart;
+
+    expect(hasRenderableAssistantPart(emptyTextPart)).toBe(false);
+    expect(hasRenderableAssistantPart(textPart)).toBe(true);
+    expect(hasRenderableAssistantPart(streamingReasoningPart)).toBe(true);
+    expect(hasRenderableAssistantPart(completedReasoningPart)).toBe(false);
+    expect(hasRenderableAssistantPart(completedReasoningWithTextPart)).toBe(
+      true,
+    );
   });
 
   test("does not show thinking when submitted already has assistant output", () => {
@@ -39,6 +77,40 @@ describe("chat streaming state", () => {
         lastMessageRole: "assistant",
       }),
     ).toBe(true);
+  });
+
+  test("keeps collapsed reasoning blocks streaming until later content appears", () => {
+    expect(
+      shouldKeepCollapsedReasoningStreaming({
+        isMessageStreaming: true,
+        hasStreamingReasoningPart: false,
+        hasRenderableContentAfterGroup: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldKeepCollapsedReasoningStreaming({
+        isMessageStreaming: true,
+        hasStreamingReasoningPart: false,
+        hasRenderableContentAfterGroup: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldKeepCollapsedReasoningStreaming({
+        isMessageStreaming: true,
+        hasStreamingReasoningPart: true,
+        hasRenderableContentAfterGroup: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldKeepCollapsedReasoningStreaming({
+        isMessageStreaming: false,
+        hasStreamingReasoningPart: false,
+        hasRenderableContentAfterGroup: false,
+      }),
+    ).toBe(false);
   });
 
   test("refreshes route only for submitted to ready transition", () => {

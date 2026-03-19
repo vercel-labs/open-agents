@@ -7,57 +7,68 @@ import { cn } from "@/lib/utils";
 interface ThinkingBlockProps {
   text: string;
   isStreaming?: boolean;
+  partCount?: number;
 }
 
 export function ThinkingBlock({
   text,
   isStreaming = false,
+  partCount = 1,
 }: ThinkingBlockProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [hasCompletedStreaming, setHasCompletedStreaming] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isActivelyStreaming = isStreaming && !hasCompletedStreaming;
+  const isActivelyStreaming = isStreaming;
 
   useEffect(() => {
-    if (isActivelyStreaming) {
-      if (startTimeRef.current === null) {
-        startTimeRef.current = Date.now();
-      }
-      intervalRef.current = setInterval(() => {
-        setElapsed(
-          Math.floor(
-            (Date.now() - (startTimeRef.current ?? Date.now())) / 1000,
-          ),
-        );
-      }, 1000);
-    } else {
-      if (startTimeRef.current !== null && !hasCompletedStreaming) {
-        setHasCompletedStreaming(true);
+    if (!isActivelyStreaming) {
+      if (startTimeRef.current !== null) {
+        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
     }
+
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now();
+    }
+
+    intervalRef.current = setInterval(() => {
+      setElapsed(
+        Math.floor((Date.now() - (startTimeRef.current ?? Date.now())) / 1000),
+      );
+    }, 1000);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [hasCompletedStreaming, isActivelyStreaming]);
+  }, [isActivelyStreaming]);
 
   const hasContent = text.trim().length > 0;
+  const thoughtLabel =
+    partCount === 1
+      ? "Thought"
+      : `${partCount} thought${partCount !== 1 ? "s" : ""}`;
 
   const formatLabel = () => {
     if (isActivelyStreaming) {
       return "Thinking...";
     }
     return elapsed > 0
-      ? `Thought for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
-      : "Thought";
+      ? `${thoughtLabel} for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
+      : thoughtLabel;
   };
 
   return (

@@ -1,5 +1,9 @@
 import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSessionWithSandboxGuard,
+} from "@/app/api/sessions/_lib/session-context";
+import { updateSession } from "@/lib/db/sessions";
 import { EXTEND_TIMEOUT_DURATION_MS } from "@/lib/sandbox/config";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
@@ -7,16 +11,15 @@ import {
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
-import { getServerSession } from "@/lib/session/get-server-session";
 
 interface ExtendRequest {
   sessionId: string;
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   let body: ExtendRequest;
@@ -32,20 +35,24 @@ export async function POST(req: Request) {
     return Response.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
-  // Verify session ownership
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSessionWithSandboxGuard({
+    userId: authResult.userId,
+    sessionId,
+    sandboxGuard: isSandboxActive,
+    sandboxErrorMessage: "Sandbox not initialized",
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-  if (!isSandboxActive(sessionRecord.sandboxState)) {
+
+  const { sessionRecord } = sessionContext;
+  const sandboxState = sessionRecord.sandboxState;
+  if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
   try {
-    const sandbox = await connectSandbox(sessionRecord.sandboxState);
+    const sandbox = await connectSandbox(sandboxState);
     if (!sandbox.extendTimeout) {
       return Response.json(
         { error: "Extend timeout not supported by this sandbox type" },

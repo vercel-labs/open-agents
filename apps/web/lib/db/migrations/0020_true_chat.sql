@@ -1,0 +1,1 @@
+DROP TABLE "cli_tokens" CASCADE;

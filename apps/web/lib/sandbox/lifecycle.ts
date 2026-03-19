@@ -23,7 +23,6 @@ export type SandboxLifecycleState =
 
 export type SandboxLifecycleReason =
   | "sandbox-created"
-  | "cloud-ready"
   | "timeout-extended"
   | "snapshot-restored"
   | "reconnect"
@@ -154,6 +153,42 @@ export function getLifecycleDueAtMs(source: LifecycleTimingSource): number {
   return Math.min(inactivityDueAtMs, expiryDueAtMs);
 }
 
+async function hasActiveWorkflowForSession(
+  sessionId: string,
+): Promise<boolean> {
+  const { compareAndSetChatActiveStreamId, getChatsBySessionId } = await import(
+    "@/lib/db/sessions"
+  );
+  const chatsInSession = await getChatsBySessionId(sessionId);
+  const { getRun } = await import("workflow/api");
+
+  for (const chat of chatsInSession) {
+    const activeStreamId = chat.activeStreamId;
+    if (!activeStreamId) {
+      continue;
+    }
+
+    try {
+      const run = getRun(activeStreamId);
+      const status = await run.status;
+
+      if (status === "running" || status === "pending") {
+        return true;
+      }
+    } catch (error) {
+      console.warn(
+        `[Lifecycle] Failed to read workflow status for run ${activeStreamId} in chat ${chat.id}; skipping hibernation to avoid interrupting a live workflow.`,
+        error,
+      );
+      return true;
+    }
+
+    await compareAndSetChatActiveStreamId(chat.id, activeStreamId, null);
+  }
+
+  return false;
+}
+
 /**
  * One-shot lifecycle evaluator for workflow orchestration.
  *
@@ -177,8 +212,8 @@ export async function evaluateSandboxLifecycle(
   if (!canOperateOnSandbox(sandboxState)) {
     return { action: "skipped", reason: "sandbox-not-operable" };
   }
-  if (sandboxState.type === "just-bash") {
-    return { action: "skipped", reason: "just-bash" };
+  if (sandboxState.type !== "vercel") {
+    return { action: "skipped", reason: "unsupported-sandbox-type" };
   }
 
   const nowMs = Date.now();
@@ -187,6 +222,10 @@ export async function evaluateSandboxLifecycle(
 
   if (!isInactive) {
     return { action: "skipped", reason: "not-due-yet" };
+  }
+
+  if (await hasActiveWorkflowForSession(sessionId)) {
+    return { action: "skipped", reason: "active-workflow" };
   }
 
   try {

@@ -1,13 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
-import {
-  getSandbox,
-  getApprovalContext,
-  shouldAutoApprove,
-  pathNeedsApproval,
-  shellEscape,
-} from "./utils";
+import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface GrepMatch {
   file: string;
@@ -17,7 +11,9 @@ interface GrepMatch {
 
 const grepInputSchema = z.object({
   pattern: z.string().describe("Regex pattern to search for"),
-  path: z.string().describe("File or directory to search in (absolute path)"),
+  path: z
+    .string()
+    .describe("Workspace-relative file or directory to search in (e.g., src)"),
   glob: z
     .string()
     .optional()
@@ -30,22 +26,6 @@ const grepInputSchema = z.object({
 
 export const grepTool = () =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "grep");
-      const { approval } = ctx;
-
-      // Background and delegated modes auto-approve all operations
-      if (shouldAutoApprove(approval)) {
-        return false;
-      }
-
-      return pathNeedsApproval({
-        path: args.path,
-        tool: "grep",
-        approval,
-        workingDirectory: ctx.workingDirectory,
-      });
-    },
     description: `Search for patterns in files using POSIX Extended Regular Expressions (ERE).
 
 WHEN TO USE:
@@ -62,6 +42,7 @@ USAGE:
 - Uses POSIX ERE syntax (e.g., "log.*Error", "function[[:space:]]+[a-zA-Z_]+")
 - Perl-style shorthands like \\s, \\w, \\d are NOT supported; use POSIX classes instead: [[:space:]], [[:alnum:]_], [[:digit:]]
 - Search a specific file OR an entire directory via the path parameter
+- Use workspace-relative paths for path (e.g., "src")
 - Optionally filter files with glob (e.g., "*.ts", "*.test.js")
 - Matches are SINGLE-LINE: patterns do not span across newline characters
 - Results are limited to 100 matches total, with up to 10 matches per file; each match line is truncated to 200 characters
@@ -70,17 +51,16 @@ IMPORTANT:
 - ALWAYS use this tool for code/content searches instead of running grep/rg via bashTool
 - Use caseSensitive: false for case-insensitive searches
 - Hidden files and node_modules are skipped when searching directories
-- Paths outside the working directory require approval
 
 EXAMPLES:
-- Find all TODO comments in TypeScript files: pattern: "TODO", path: "/Users/username/project", glob: "*.ts"
-- Find all references to a function (case-insensitive): pattern: "handleRequest", path: "/Users/username/project/src", caseSensitive: false`,
+- Find all TODO comments in TypeScript files: pattern: "TODO", path: "src", glob: "*.ts"
+- Find all references to a function (case-insensitive): pattern: "handleRequest", path: "src", caseSensitive: false`,
     inputSchema: grepInputSchema,
     execute: async (
       { pattern, path: searchPath, glob, caseSensitive = true },
       { experimental_context },
     ) => {
-      const sandbox = getSandbox(experimental_context, "grep");
+      const sandbox = await getSandbox(experimental_context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -163,13 +143,14 @@ EXAMPLES:
 
           if (isNaN(lineNum)) continue;
 
-          filesSet.add(file);
-          const currentFileCount = fileMatchCounts.get(file) ?? 0;
+          const displayFile = toDisplayPath(file, workingDirectory);
+          filesSet.add(displayFile);
+          const currentFileCount = fileMatchCounts.get(displayFile) ?? 0;
           if (currentFileCount >= maxPerFile) continue;
 
-          fileMatchCounts.set(file, currentFileCount + 1);
+          fileMatchCounts.set(displayFile, currentFileCount + 1);
           matches.push({
-            file,
+            file: displayFile,
             line: lineNum,
             content: content.slice(0, 200),
           });

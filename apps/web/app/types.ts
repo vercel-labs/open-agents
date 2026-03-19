@@ -1,5 +1,6 @@
 import type {
   DynamicToolUIPart,
+  FinishReason,
   InferAgentUIMessage,
   InferUITools,
   LanguageModelUsage,
@@ -12,9 +13,17 @@ export type WebAgentCallOptions = Parameters<
   WebAgent["generate"]
 >["0"]["options"];
 
+export type WebAgentStepFinishMetadata = {
+  finishReason: FinishReason;
+  rawFinishReason?: string;
+};
+
 export type WebAgentMessageMetadata = {
   lastStepUsage?: LanguageModelUsage;
   totalMessageUsage?: LanguageModelUsage;
+  lastStepFinishReason?: FinishReason;
+  lastStepRawFinishReason?: string;
+  stepFinishReasons?: WebAgentStepFinishMetadata[];
 };
 
 // All types derived from the agent

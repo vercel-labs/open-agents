@@ -1,20 +1,14 @@
 import {
-  tool,
-  type ModelMessage,
-  type UIToolInvocation,
   type LanguageModelUsage,
+  type ModelMessage,
+  tool,
+  type UIToolInvocation,
 } from "ai";
 import { z } from "zod";
 import { executorSubagent } from "../subagents/executor";
 import { explorerSubagent } from "../subagents/explorer";
-import type { ApprovalRule } from "../types";
-import {
-  getApprovalContext,
-  getSubagentModel,
-  getSandbox,
-  shouldAutoApprove,
-} from "./utils";
 import { sumLanguageModelUsage } from "../usage";
+import { getSandboxContext, getSubagentModel } from "./utils";
 
 const subagentTypeSchema = z.enum(["explorer", "executor"]);
 
@@ -52,49 +46,7 @@ export const taskOutputSchema = z.object({
 
 export type TaskToolOutput = z.infer<typeof taskOutputSchema>;
 
-/**
- * Check if a subagent type matches any approval rules.
- */
-function subagentMatchesApprovalRule(
-  subagentType: string,
-  approvalRules: ApprovalRule[],
-): boolean {
-  for (const rule of approvalRules) {
-    if (rule.type === "subagent-type" && rule.tool === "task") {
-      if (rule.subagentType === subagentType) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 export const taskTool = tool({
-  // Executor subagent has full write access, so require approval
-  // Explorer is read-only, so no approval needed
-  needsApproval: ({ subagentType }, { experimental_context }) => {
-    const ctx = getApprovalContext(experimental_context, "task");
-    const { approval } = ctx;
-
-    // Explorer never needs approval
-    if (subagentType !== "executor") {
-      return false;
-    }
-
-    // Background and delegated modes auto-approve
-    if (shouldAutoApprove(approval)) {
-      return false;
-    }
-
-    // Type guard narrowed approval to interactive mode
-    // Check if a session rule matches this subagent type
-    if (subagentMatchesApprovalRule(subagentType, approval.sessionRules)) {
-      return false;
-    }
-
-    // Default: executor needs approval
-    return true;
-  },
   description: `Launch a specialized subagent to handle complex tasks autonomously.
 
 SUBAGENT TYPES:
@@ -142,14 +94,14 @@ IMPORTANT:
 - Include critical context (APIs, function names, file paths) in the instructions
 - The parent agent will not see the subagent's internal tool calls, only its final summary
 
-NOTE: The executor subagent requires user approval before running because it has full write access.`,
+NOTE: Both subagents run within the sandbox. Use explorer for read-only research and executor for implementation work.`,
   inputSchema: taskInputSchema,
   outputSchema: taskOutputSchema,
   execute: async function* (
     { subagentType, task, instructions },
     { experimental_context, abortSignal },
   ) {
-    const sandbox = getSandbox(experimental_context, "task");
+    const sandboxContext = getSandboxContext(experimental_context, "task");
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
@@ -159,7 +111,12 @@ NOTE: The executor subagent requires user approval before running because it has
     const result = await subagent.stream({
       prompt:
         "Complete this task and provide a summary of what you accomplished.",
-      options: { task, instructions, sandbox, model },
+      options: {
+        task,
+        instructions,
+        sandbox: sandboxContext.sandbox,
+        model,
+      },
       abortSignal,
     });
 

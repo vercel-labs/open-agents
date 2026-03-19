@@ -1,7 +1,7 @@
 import type { Source } from "../types";
 
 /**
- * State configuration for creating, reconnecting, or restoring a Vercel sandbox.
+ * State configuration for creating, reconnecting, or restoring the current cloud sandbox provider.
  * Used with the unified `connectSandbox()` API.
  */
 export interface VercelState {

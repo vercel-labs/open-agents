@@ -22,15 +22,8 @@
   "overrides": [
     {
       "files": [
-        "apps/cli/tui/app.tsx",
-        "apps/cli/tui/chat-context.tsx",
-        "apps/cli/tui/components/input-box.tsx",
-        "apps/cli/tui/components/question-panel.tsx",
-        "apps/cli/tui/components/text-input.tsx",
-        "apps/cli/tui/components/tool-renderers/shared.tsx",
         "packages/agent/system-prompt.ts",
         "packages/agent/tools/tools.test.ts",
-        "packages/sandbox/hybrid/sandbox.ts",
         "packages/sandbox/just-bash/sandbox.ts",
         "packages/sandbox/vercel/sandbox.test.ts",
         "packages/sandbox/vercel/sandbox.ts"
@@ -40,6 +33,19 @@
           "warn",
           {
             "max": 400,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": ["AGENTS.md"],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 100,
             "skipBlankLines": true,
             "skipComments": true
           }

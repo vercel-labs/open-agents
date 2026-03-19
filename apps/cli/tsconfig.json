@@ -1,8 +1,0 @@
-{
-  "extends": "@open-harness/tsconfig/bun.json",
-  "compilerOptions": {
-    "jsxImportSource": "@opentui/react"
-  },
-  "include": ["./**/*"],
-  "exclude": ["node_modules"]
-}

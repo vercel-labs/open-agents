@@ -96,6 +96,63 @@ export interface GatewayOptions {
   providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
+export type { GatewayModelId, LanguageModel, JSONValue };
+
+export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
+  return modelId.startsWith("openai/gpt-5");
+}
+
+export function getProviderOptionsForModel(
+  modelId: string,
+  providerOptionsOverrides?: ProviderOptionsByProvider,
+): ProviderOptionsByProvider {
+  const defaultProviderOptions: ProviderOptionsByProvider = {};
+
+  // Apply anthropic defaults
+  if (modelId.startsWith("anthropic/")) {
+    defaultProviderOptions.anthropic = toProviderOptionsRecord(
+      getAnthropicSettings(modelId),
+    );
+  }
+
+  // OpenAI model responses should never be persisted.
+  if (modelId.startsWith("openai/")) {
+    defaultProviderOptions.openai = toProviderOptionsRecord({
+      store: false,
+    } satisfies OpenAIResponsesProviderOptions);
+  }
+
+  // Apply OpenAI defaults for all GPT-5 variants to expose encrypted reasoning content.
+  // This avoids Responses API failures when `store: false`, e.g.:
+  // "Item with id 'rs_...' not found. Items are not persisted when `store` is set to false."
+  if (shouldApplyOpenAIReasoningDefaults(modelId)) {
+    defaultProviderOptions.openai = mergeRecords(
+      defaultProviderOptions.openai ?? {},
+      toProviderOptionsRecord({
+        reasoningSummary: "detailed",
+        include: ["reasoning.encrypted_content"],
+      } satisfies OpenAIResponsesProviderOptions),
+    );
+  }
+
+  const providerOptions = mergeProviderOptions(
+    defaultProviderOptions,
+    providerOptionsOverrides,
+  );
+
+  // Enforce OpenAI non-persistence even when custom provider overrides are present.
+  if (modelId.startsWith("openai/")) {
+    providerOptions.openai = mergeRecords(
+      providerOptions.openai ?? {},
+      toProviderOptionsRecord({
+        store: false,
+      } satisfies OpenAIResponsesProviderOptions),
+    );
+  }
+
+  return providerOptions;
+}
+
 export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
@@ -109,27 +166,8 @@ export function gateway(
 
   let model: LanguageModel = baseGateway(modelId);
 
-  const defaultProviderOptions: ProviderOptionsByProvider = {};
-
-  // Apply anthropic defaults
-  if (modelId.startsWith("anthropic/")) {
-    defaultProviderOptions.anthropic = toProviderOptionsRecord(
-      getAnthropicSettings(modelId),
-    );
-  }
-
-  // Apply openai defaults to expose reasoning summaries
-  if (modelId.startsWith("openai/")) {
-    defaultProviderOptions.openai = toProviderOptionsRecord({
-      reasoningEffort: "high",
-      reasoningSummary: "detailed",
-      store: false,
-      include: ["reasoning.encrypted_content"],
-    } satisfies OpenAIResponsesProviderOptions);
-  }
-
-  const providerOptions = mergeProviderOptions(
-    defaultProviderOptions,
+  const providerOptions = getProviderOptionsForModel(
+    modelId,
     providerOptionsOverrides,
   );
 

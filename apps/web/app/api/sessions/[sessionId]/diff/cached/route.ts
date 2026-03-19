@@ -1,5 +1,7 @@
-import { getSessionById } from "@/lib/db/sessions";
-import { getServerSession } from "@/lib/session/get-server-session";
+import {
+  requireAuthenticatedUser,
+  requireOwnedSession,
+} from "@/app/api/sessions/_lib/session-context";
 import type { DiffResponse } from "../route";
 
 type RouteContext = {
@@ -13,20 +15,22 @@ export type CachedDiffResponse = {
 };
 
 export async function GET(_req: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { sessionId } = await context.params;
 
-  const sessionRecord = await getSessionById(sessionId);
-  if (!sessionRecord) {
-    return Response.json({ error: "Session not found" }, { status: 404 });
+  const sessionContext = await requireOwnedSession({
+    userId: authResult.userId,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
-  if (sessionRecord.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+
+  const { sessionRecord } = sessionContext;
 
   if (!sessionRecord.cachedDiff) {
     return Response.json(

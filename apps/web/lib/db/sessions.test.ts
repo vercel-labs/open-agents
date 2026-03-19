@@ -70,6 +70,38 @@ mock.module("./client", () => ({
 
 const sessionsModulePromise = import("./sessions");
 
+describe("normalizeLegacySandboxState", () => {
+  test("rewrites leftover legacy hybrid state to vercel while preserving fields", async () => {
+    const { normalizeLegacySandboxState } = await sessionsModulePromise;
+
+    const result = normalizeLegacySandboxState({
+      type: "hybrid",
+      sandboxId: "sbx-legacy-1",
+      snapshotId: "snap-legacy-1",
+      expiresAt: 123,
+    });
+
+    expect(result).toEqual({
+      type: "vercel",
+      sandboxId: "sbx-legacy-1",
+      snapshotId: "snap-legacy-1",
+      expiresAt: 123,
+    });
+  });
+
+  test("leaves supported sandbox states unchanged", async () => {
+    const { normalizeLegacySandboxState } = await sessionsModulePromise;
+
+    const state = {
+      type: "vercel",
+      sandboxId: "sbx-current-1",
+      expiresAt: 456,
+    } as const;
+
+    expect(normalizeLegacySandboxState(state)).toEqual(state);
+  });
+});
+
 describe("getUsedSessionTitles", () => {
   beforeEach(() => {
     fakeSelectRows = [];

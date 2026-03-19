@@ -17,7 +17,7 @@
     "db:check": "bun run scripts/check-migrations.ts"
   },
   "dependencies": {
-    "@ai-sdk/elevenlabs": "^2.0.22",
+    "@ai-sdk/elevenlabs": "^2.0.25",
     "@ai-sdk/react": "catalog:",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
@@ -56,7 +56,6 @@
     "react": "19.2.3",
     "react-day-picker": "^9.14.0",
     "react-dom": "19.2.3",
-    "resumable-stream": "^2.2.10",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "streamdown": "^2.2.0",

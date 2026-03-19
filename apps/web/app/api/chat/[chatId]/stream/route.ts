@@ -1,52 +1,66 @@
-import { after } from "next/server";
-import { UI_MESSAGE_STREAM_HEADERS } from "ai";
+import { createUIMessageStreamResponse, type InferUIMessageChunk } from "ai";
+import { getRun } from "workflow/api";
 import {
-  getChatById,
-  getSessionById,
-  updateChatActiveStreamId,
-} from "@/lib/db/sessions";
-import { resumableStreamContext } from "@/lib/resumable-stream-context";
-import { getServerSession } from "@/lib/session/get-server-session";
+  requireAuthenticatedUser,
+  requireOwnedChatById,
+} from "@/app/api/chat/_lib/chat-context";
+import type { WebAgentUIMessage } from "@/app/types";
+import { updateChatActiveStreamId } from "@/lib/db/sessions";
+import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
 
 type RouteContext = {
   params: Promise<{ chatId: string }>;
 };
 
+type WebAgentUIMessageChunk = InferUIMessageChunk<WebAgentUIMessage>;
+
 export async function GET(_request: Request, context: RouteContext) {
-  const session = await getServerSession();
-  if (!session?.user) {
-    return new Response("Not authenticated", { status: 401 });
+  const authResult = await requireAuthenticatedUser("text");
+  if (!authResult.ok) {
+    return authResult.response;
   }
 
   const { chatId } = await context.params;
 
-  const chat = await getChatById(chatId);
-  if (!chat) {
-    return new Response("Chat not found", { status: 404 });
+  const chatContext = await requireOwnedChatById({
+    userId: authResult.userId,
+    chatId,
+    format: "text",
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
   }
 
-  // Verify ownership through the session chain
-  const sessionRecord = await getSessionById(chat.sessionId);
-  if (!sessionRecord || sessionRecord.userId !== session.user.id) {
-    return new Response("Forbidden", { status: 403 });
-  }
+  const { chat } = chatContext;
 
   if (!chat.activeStreamId) {
     return new Response(null, { status: 204 });
   }
 
-  const stream = await resumableStreamContext.resumeExistingStream(
-    chat.activeStreamId,
-  );
+  const runId = chat.activeStreamId;
 
-  if (!stream) {
-    // Stream no longer exists in Redis (expired or finished) — clear the stale
-    // activeStreamId so future page loads don't attempt another resume.
-    after(async () => {
+  try {
+    const run = getRun(runId);
+    const status = await run.status;
+
+    if (
+      status === "completed" ||
+      status === "cancelled" ||
+      status === "failed"
+    ) {
+      // Workflow is done — clear the stale activeStreamId.
       await updateChatActiveStreamId(chatId, null);
-    });
+      return new Response(null, { status: 204 });
+    }
+
+    const stream = createCancelableReadableStream(
+      run.getReadable<WebAgentUIMessageChunk>(),
+    );
+
+    return createUIMessageStreamResponse({ stream });
+  } catch {
+    // Workflow run not found or inaccessible — clear stale ID.
+    await updateChatActiveStreamId(chatId, null);
     return new Response(null, { status: 204 });
   }
-
-  return new Response(stream, { headers: UI_MESSAGE_STREAM_HEADERS });
 }
