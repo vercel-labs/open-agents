@@ -30,6 +30,7 @@ let shouldThrowWhenLoadingRun = false;
 let sessionRecord: TestSessionRecord | null = null;
 let chatsInSession: Array<{ id: string; activeStreamId: string | null }> = [];
 let snapshotId = "snapshot-1";
+let snapshotError: Error | null = null;
 
 const spies = {
   getRun: mock((runId: string) => {
@@ -53,7 +54,12 @@ const spies = {
     async (_sessionId: string, patch: Record<string, unknown>) => patch,
   ),
   connectSandbox: mock(async () => ({
-    snapshot: async () => ({ snapshotId }),
+    snapshot: async () => {
+      if (snapshotError) {
+        throw snapshotError;
+      }
+      return { snapshotId };
+    },
   })),
 };
 
@@ -98,6 +104,7 @@ beforeEach(() => {
   sessionRecord = makeDueSession();
   chatsInSession = [];
   snapshotId = "snapshot-1";
+  snapshotError = null;
 
   Object.values(spies).forEach((spy) => spy.mockClear());
 });
@@ -131,6 +138,45 @@ describe("evaluateSandboxLifecycle", () => {
     expect(spies.connectSandbox).not.toHaveBeenCalled();
     expect(spies.updateSession).not.toHaveBeenCalled();
     expect(spies.compareAndSetChatActiveStreamId).not.toHaveBeenCalled();
+  });
+
+  test("does not extend lifecycle timers when snapshot is already in progress", async () => {
+    snapshotError = new Error(
+      "422 sandbox_snapshotting: creating a snapshot and will be stopped shortly",
+    );
+
+    const originalHibernateAfterMs = sessionRecord?.hibernateAfter?.getTime();
+    const originalLastActivityAtMs = sessionRecord?.lastActivityAt?.getTime();
+
+    const result = await evaluateSandboxLifecycle(
+      "session-1",
+      "status-check-overdue",
+    );
+
+    expect(result).toEqual({
+      action: "skipped",
+      reason: "snapshot-already-in-progress",
+    });
+
+    const updateCalls = spies.updateSession.mock.calls as unknown[][];
+    const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
+    const finalPatch = updateCalls.at(-1)?.[1] as Record<string, unknown>;
+
+    expect(firstPatch.lifecycleState).toBe("hibernating");
+    expect(finalPatch).toEqual({
+      lifecycleState: "active",
+      lifecycleError: null,
+      sandboxExpiresAt: null,
+    });
+    expect(finalPatch).not.toHaveProperty("lastActivityAt");
+    expect(finalPatch).not.toHaveProperty("hibernateAfter");
+
+    expect(sessionRecord?.hibernateAfter?.getTime()).toBe(
+      originalHibernateAfterMs,
+    );
+    expect(sessionRecord?.lastActivityAt?.getTime()).toBe(
+      originalLastActivityAtMs,
+    );
   });
 
   test("clears terminal stream ids before hibernating", async () => {

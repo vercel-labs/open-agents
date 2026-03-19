@@ -252,8 +252,15 @@ export async function evaluateSandboxLifecycle(
           refreshedSession?.sandboxState &&
           canOperateOnSandbox(refreshedSession.sandboxState)
         ) {
+          // Keep the lifecycle due immediately eligible for re-check; if a
+          // snapshot is already in progress we should not refresh
+          // lastActivityAt/hibernateAfter and accidentally extend "active" UI.
           await updateSession(sessionId, {
-            ...buildActiveLifecycleUpdate(refreshedSession.sandboxState),
+            lifecycleState: "active",
+            lifecycleError: null,
+            sandboxExpiresAt: getSandboxExpiresAtDate(
+              refreshedSession.sandboxState,
+            ),
           });
         } else {
           await updateSession(sessionId, {
