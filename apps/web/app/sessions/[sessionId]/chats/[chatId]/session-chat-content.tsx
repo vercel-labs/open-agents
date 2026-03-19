@@ -1058,7 +1058,11 @@ export function SessionChatContent({
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
   );
-  const isChatInFlight = isChatInFlightStatus(status);
+  // Track explicit user-initiated stops so the UI can immediately reflect the
+  // idle state even if the AI SDK `status` is stuck (common on iOS/Safari where
+  // fetch abort doesn't cleanly settle the hook status).
+  const [userStopped, setUserStopped] = useState(false);
+  const isChatInFlight = isChatInFlightStatus(status) && !userStopped;
   const lastMessage = useMemo(
     () => renderMessages[renderMessages.length - 1],
     [renderMessages],
@@ -1076,6 +1080,12 @@ export function SessionChatContent({
    *  summary bar can show an accurate live timer from the actual send time. */
   const lastSendTimestampRef = useRef<number | null>(null);
 
+  // Ensure a stop action from one chat does not suppress the in-flight state
+  // after switching to a different chat.
+  useEffect(() => {
+    setUserStopped(false);
+  }, [chatInfo.id]);
+
   // Sync hasPendingResponse with the AI SDK status.
   // IMPORTANT: hasPendingResponse is intentionally excluded from the dependency
   // array. The form submit handler sets it to true optimistically (before
@@ -1090,6 +1100,7 @@ export function SessionChatContent({
 
     if (status === "error" || status === "ready") {
       setHasPendingResponse(false);
+      setUserStopped(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
   }, [isChatInFlight, status]);
@@ -1113,7 +1124,11 @@ export function SessionChatContent({
   const hasSeenAssistantRenderableContent =
     hasAssistantRenderableContent ||
     hasSeenAssistantRenderableContentRef.current;
-  const effectiveStatus = hasPendingResponse ? "streaming" : status;
+  const effectiveStatus = userStopped
+    ? "ready"
+    : hasPendingResponse
+      ? "streaming"
+      : status;
   const showThinkingIndicator = useMemo(() => {
     // During the optimistic pending phase (user just clicked send but the
     // AI SDK status hasn't caught up yet due to throttling), always show
@@ -1462,6 +1477,7 @@ export function SessionChatContent({
   const sendMessageWithPendingState = useCallback(
     async (message: Parameters<typeof sendMessage>[0]) => {
       setHasPendingResponse(true);
+      setUserStopped(false);
       lastSendTimestampRef.current = Date.now();
       hasSeenAssistantRenderableContentRef.current = false;
       void setChatStreaming(chatInfo.id, true);
@@ -3433,6 +3449,8 @@ export function SessionChatContent({
                       onClick={() => {
                         stopChatStream();
                         setHasPendingResponse(false);
+                        setUserStopped(true);
+                        void setChatStreaming(chatInfo.id, false);
                       }}
                       className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       style={{ touchAction: "manipulation" }}
