@@ -7,16 +7,22 @@ const updateCalls: Array<{
   patch: Record<string, unknown>;
 }> = [];
 
+let probeResult: {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+};
+
 let sessionRecord: {
   id: string;
   userId: string;
   snapshotUrl: string | null;
-  lifecycleState: "failed" | "active";
+  lifecycleState: "failed" | "active" | "hibernated";
   lifecycleError: string | null;
   sandboxState: {
     type: "vercel";
-    sandboxId: string;
-    expiresAt: number;
+    sandboxId?: string;
+    expiresAt?: number;
   };
   lastActivityAt: Date | null;
   hibernateAfter: Date | null;
@@ -56,16 +62,17 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (state: {
     type: "vercel";
-    sandboxId: string;
-    expiresAt: number;
+    sandboxId?: string;
+    expiresAt?: number;
   }) => {
     const expiresAt = Date.now() + 2 * 60_000;
     return {
       workingDirectory: "/vercel/sandbox",
       expiresAt,
-      exec: async () => ({ success: true, stdout: "ok", stderr: "" }),
+      exec: async () => probeResult,
       getState: () => ({
         ...state,
+        ...(state.sandboxId ? { sandboxId: state.sandboxId } : {}),
         expiresAt,
       }),
     };
@@ -77,6 +84,12 @@ const routeModulePromise = import("./route");
 describe("/api/sandbox/reconnect", () => {
   beforeEach(() => {
     updateCalls.length = 0;
+    probeResult = {
+      success: true,
+      stdout: "ok",
+      stderr: "",
+    };
+
     const now = Date.now();
     sessionRecord = {
       id: "session-1",
@@ -116,5 +129,33 @@ describe("/api/sandbox/reconnect", () => {
     expect(updateCalls[0]?.sessionId).toBe("session-1");
     expect(updateCalls[0]?.patch.lifecycleState).toBe("active");
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
+  });
+
+  test("marks sandbox expired when the reconnect probe hits a 410", async () => {
+    const { GET } = await routeModulePromise;
+
+    probeResult = {
+      success: false,
+      stdout: "",
+      stderr: "Status code 410 is not ok",
+    };
+
+    const response = await GET(
+      new Request("http://localhost/api/sandbox/reconnect?sessionId=session-1"),
+    );
+    const payload = (await response.json()) as {
+      status: string;
+      lifecycle: { state: string | null };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(payload.status).toBe("expired");
+    expect(payload.lifecycle.state).toBe("hibernated");
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]?.sessionId).toBe("session-1");
+    expect(updateCalls[0]?.patch.lifecycleState).toBe("hibernated");
+    expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
+    expect(updateCalls[0]?.patch.sandboxState).toEqual({ type: "vercel" });
   });
 });
