@@ -103,6 +103,7 @@ export function SharedChatContent({
   session,
   chats,
   modelId,
+  modelName,
   sharedBy,
   isStreaming,
   lastUserMessageSentAt,
@@ -111,6 +112,7 @@ export function SharedChatContent({
   session: SharedSession;
   chats: ChatWithMessages[];
   modelId: string | null | undefined;
+  modelName: string | null;
   sharedBy: SharedBy;
   isStreaming: boolean;
   lastUserMessageSentAt: string | null;
@@ -228,7 +230,7 @@ export function SharedChatContent({
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
                 <Bot className="h-3 w-3" />
                 <span className="font-medium text-foreground">
-                  {displayModelName(modelId)}
+                  {modelName ?? displayModelName(modelId)}
                 </span>
                 {displayProviderName(modelId) && (
                   <span className="text-muted-foreground/60">

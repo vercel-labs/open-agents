@@ -9,11 +9,37 @@ import {
   getSessionByIdCached,
   getShareByIdCached,
 } from "@/lib/db/sessions-cache";
+import { getUserPreferences } from "@/lib/db/user-preferences";
+import {
+  getAllVariants,
+  MODEL_VARIANT_ID_PREFIX,
+} from "@/lib/model-variants";
 import { SharedChatContent } from "./shared-chat-content";
 import type { MessageWithTiming } from "./shared-chat-content";
 
 interface SharedPageProps {
   params: Promise<{ shareId: string }>;
+}
+
+async function resolveSharedModelName(
+  userId: string,
+  modelId: string | null | undefined,
+): Promise<string | null> {
+  if (!modelId || !modelId.startsWith(MODEL_VARIANT_ID_PREFIX)) {
+    return null;
+  }
+
+  try {
+    const preferences = await getUserPreferences(userId);
+    const variant = getAllVariants(preferences.modelVariants).find(
+      (item) => item.id === modelId,
+    );
+
+    return variant?.name ?? null;
+  } catch (error) {
+    console.error("Failed to resolve shared model name:", error);
+    return null;
+  }
 }
 
 export async function generateMetadata({
@@ -87,6 +113,10 @@ export default async function SharedPage({ params }: SharedPageProps) {
 
   const { title, repoOwner, repoName, branch, cloneUrl, prNumber, prStatus } =
     session;
+  const modelName = await resolveSharedModelName(
+    session.userId,
+    sharedChat.modelId,
+  );
 
   return (
     <SharedChatContent
@@ -101,6 +131,7 @@ export default async function SharedPage({ params }: SharedPageProps) {
       }}
       chats={[{ chat: sharedChat, messagesWithTiming }]}
       modelId={sharedChat.modelId}
+      modelName={modelName}
       sharedBy={
         sessionUser
           ? {
