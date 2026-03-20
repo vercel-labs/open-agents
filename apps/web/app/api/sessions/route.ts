@@ -12,6 +12,8 @@ import {
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { listMatchingVercelProjects } from "@/lib/vercel/projects";
+import { getUserVercelToken } from "@/lib/vercel/token";
 import {
   vercelProjectSelectionSchema,
   type VercelProjectSelection,
@@ -216,24 +218,48 @@ export async function POST(req: Request) {
 
     let resolvedVercelProject: VercelProjectSelection | null = null;
     const hasRepo = Boolean(repoOwner && repoName);
-    if (hasRepo) {
-      if (explicitVercelProject && repoOwner && repoName) {
+    if (hasRepo && repoOwner && repoName) {
+      if (explicitVercelProject) {
+        const vercelToken = await getUserVercelToken(session.user.id);
+        if (!vercelToken) {
+          return Response.json(
+            { error: "Connect Vercel to select a Vercel project" },
+            { status: 403 },
+          );
+        }
+
+        const matchingProjects = await listMatchingVercelProjects({
+          token: vercelToken,
+          repoOwner,
+          repoName,
+        });
+        const matchedProject =
+          matchingProjects.find(
+            (project) => project.projectId === explicitVercelProject.projectId,
+          ) ?? null;
+        if (!matchedProject) {
+          return Response.json(
+            {
+              error:
+                "Selected Vercel project no longer matches this repository",
+            },
+            { status: 400 },
+          );
+        }
+
         await upsertVercelProjectLink({
           userId: session.user.id,
           repoOwner,
           repoName,
-          project: explicitVercelProject,
+          project: matchedProject,
         });
-      }
-
-      if (explicitVercelProject === undefined && repoOwner && repoName) {
+        resolvedVercelProject = matchedProject;
+      } else if (explicitVercelProject === undefined) {
         resolvedVercelProject = await getVercelProjectLinkByRepo(
           session.user.id,
           repoOwner,
           repoName,
         );
-      } else {
-        resolvedVercelProject = explicitVercelProject ?? null;
       }
     }
 
