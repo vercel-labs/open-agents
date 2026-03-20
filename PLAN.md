@@ -1,35 +1,31 @@
-Summary: Make sandbox sessions Vercel-CLI-ready by reusing the app’s existing Vercel OAuth access token. Refresh the token server-side, sync Vercel CLI’s on-disk auth state into the sandbox, and provide project/org context automatically so agent-run `vercel` commands work without interactive login.
+Summary: Fix the production log noise by treating expected GitHub/workflow/sandbox 403/404 cases as graceful fallbacks, and by preventing duplicate sandbox lifecycle workflow starts that can race each other.
 
-Context: The app already stores encrypted Vercel access/refresh tokens and refreshes them in `apps/web/lib/vercel/token.ts`. The OAuth callback in `apps/web/app/api/auth/vercel/callback/route.ts` persists the Vercel `externalId`, access token, refresh token, and expiry in `users`. Chat runtime already reconnects sandboxes in `apps/web/app/api/chat/_lib/runtime.ts`, but only refreshes GitHub auth. Initial sandbox provisioning in `apps/web/app/api/sandbox/route.ts` already syncs linked Vercel project env vars into `.env.local`. Vercel CLI accepts bearer auth, but env-only `VERCEL_TOKEN` is unreliable in the current CLI version because the CLI checks for existing credentials before hoisting that env var. The CLI’s durable auth path is `auth.json`, and agent tool executions reconnect sandboxes without reapplying custom env, so the most reliable approach is to write the auth file to the CLI’s default global config location inside the sandbox and write `.vercel/project.json` in the repo. The CLI must not own the app-issued refresh token because CLI refresh uses Vercel CLI’s OAuth client, not this app’s OAuth client.
+Context: `apps/web/lib/github/client.ts` already intends to ignore forbidden/missing check-run reads, but the status handling is brittle and production is still surfacing 403 logs for optional check-run requests. `apps/web/app/api/chat/[chatId]/stream/route.ts` returns a 200 stream before the workflow runtime can emit late run-not-found errors, and `apps/web/lib/chat/create-cancelable-readable-stream.ts` currently treats those late 404s as fatal. Sandbox routes only classify 410-style sandbox expiration as unavailable even though the underlying sandbox APIs can also return 404-style not-found errors. `apps/web/lib/sandbox/lifecycle-kick.ts` starts lifecycle workflows before any lease is persisted, so overlapping kicks can launch duplicate short-lived runs that race to claim the same session.
 
-Approach: Keep token refresh entirely server-side and treat the app’s Vercel access token as the CLI credential. Add a structured helper that returns a fresh Vercel access token plus its expiry and the user’s Vercel `externalId`. Add a sandbox helper that writes/removes Vercel CLI auth at the default CLI config path, writes/removes `.vercel/project.json` based on the linked session project, and never persists the app-issued refresh token. Use that helper in the agent chat runtime on every reconnect so CLI auth stays fresh before agent tools reconnect the sandbox, and prime the sandbox during initial provisioning so the first agent turn starts from a ready state.
+Approach: Keep the successful paths unchanged, but normalize these expected external-service failure modes so they degrade quietly instead of throwing noisy errors. For lifecycle management, make the session lease claim happen before starting the workflow so concurrent kicks collapse to one owner.
 
 Changes:
-- `apps/web/lib/vercel/token.ts` - add a new structured helper (alongside `getUserVercelToken`) that returns `{ token, expiresAt, externalId }` after applying the existing refresh flow. Keep `getUserVercelToken()` as a thin wrapper for current callers.
-- `apps/web/lib/sandbox/vercel-cli-auth.ts` - add a new helper to prepare sandbox Vercel CLI state. It should:
-  - fetch fresh user Vercel auth via the new token helper
-  - choose the CLI org ID from `session.vercelTeamId ?? user.externalId`
-  - write or remove the default CLI `auth.json` containing only `token` and `expiresAt`
-  - write or remove `.vercel/project.json` based on the session’s linked Vercel project
-  - avoid writing the Vercel refresh token into CLI config
-- `apps/web/app/api/chat/_lib/runtime.ts` - extend the existing sandbox runtime setup to call the new helper on every reconnect, then sync the CLI files into the sandbox before skill discovery / agent execution.
-- `apps/web/app/api/sandbox/route.ts` - after provisioning or reconnecting a sandbox for a session, call the same helper to prime Vercel CLI auth/project metadata early, next to the existing `.env.local` sync logic.
-- `apps/web/app/api/sandbox/route.test.ts` - extend the existing sandbox provisioning tests to verify Vercel CLI prep runs: auth metadata is requested, auth/project files are written for linked projects, and the helper no-ops cleanly when no Vercel token is available.
-- `apps/web/app/api/chat/route.test.ts` - update mocks for the new Vercel token/CLI prep path so the chat route keeps exercising the runtime without hitting real DB/auth code.
-- `apps/web/lib/sandbox/vercel-cli-auth.test.ts` - add focused unit coverage for org/project resolution, auth file contents, stale-project cleanup, and the no-refresh-token rule.
+- `apps/web/lib/github/client.ts` - add a small helper to extract/normalize GitHub HTTP status codes from unknown errors and use it so optional check-run/status fetches consistently suppress 403/404 noise while preserving fallback behavior.
+- `apps/web/lib/chat/create-cancelable-readable-stream.ts` - treat workflow run-not-found 404 errors the same as abort/disconnect shutdown so late stream failures close cleanly instead of surfacing as unhandled rejections.
+- `apps/web/lib/chat/create-cancelable-readable-stream.test.ts` - add regression coverage for the workflow 404 shutdown case.
+- `apps/web/lib/sandbox/utils.ts` - recognize 404 sandbox-not-found responses as sandbox-unavailable alongside the existing 410 handling.
+- `packages/sandbox/vercel/direct.ts` - treat 404 direct-sandbox failures as reconnectable/unavailable just like 410 so callers can recover instead of bubbling raw transport errors.
+- `packages/sandbox/vercel/direct.test.ts` and/or `apps/web/app/api/sandbox/reconnect/route.test.ts` - add coverage for the 404 sandbox-unavailable path.
+- `apps/web/lib/db/sessions.ts` - add a targeted compare-and-set helper for claiming `lifecycleRunId` only when it is still null.
+- `apps/web/lib/sandbox/lifecycle-kick.ts` - use the new atomic claim before starting `sandboxLifecycleWorkflow`, and clear the claim on startup failure before the inline fallback path.
+- `apps/web/lib/sandbox/lifecycle-kick.test.ts` - add focused coverage showing overlapping kicks only start one lifecycle workflow lease.
 
 Verification:
 - Targeted tests:
-  - `bun test apps/web/app/api/sandbox/route.test.ts`
-  - `bun test apps/web/app/api/chat/route.test.ts`
-  - `bun test apps/web/lib/sandbox/vercel-cli-auth.test.ts`
-- End-to-end manual checks after implementation:
-  - Sign in with Vercel, create/resume a sandbox, then ask the agent to run `npx vercel whoami`
-  - Ask the agent to run a project-scoped command such as `npx vercel project inspect` or `npx vercel env pull .env.local --yes`
-  - Verify commands work without interactive login or passing `--token`
-  - Verify linked-team sessions resolve team-scoped projects, and personal-scope sessions fall back to the user’s Vercel `externalId`
-  - Verify sessions without a Vercel token do not leave stale CLI auth behind
-- Full repo validation after code changes:
+  - `bun test apps/web/lib/chat/create-cancelable-readable-stream.test.ts`
+  - `bun test packages/sandbox/vercel/direct.test.ts`
+  - `bun test apps/web/app/api/sandbox/reconnect/route.test.ts`
+  - `bun test apps/web/lib/sandbox/lifecycle-kick.test.ts`
+  - `bun test apps/web/app/api/sessions/[sessionId]/merge/route.test.ts`
+- Full validation:
   - `bun run ci`
-- Known risk to check explicitly:
-  - Some Vercel CLI commands may still be limited by the permissions granted to the app’s OAuth token. If a command fails for permission reasons after auth succeeds, that is a product-permissions gap, not a sandbox-auth plumbing bug.
+- Edge cases to confirm:
+  - merge-readiness still returns data when checks/check-runs are forbidden
+  - reconnecting to a stale chat stream closes cleanly instead of logging an unhandled 404
+  - stale/missing sandboxes are marked unavailable on both 404 and 410 responses
+  - repeated lifecycle kicks do not start duplicate workflow runs for one session
