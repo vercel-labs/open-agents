@@ -158,4 +158,32 @@ describe("/api/sandbox/reconnect", () => {
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
     expect(updateCalls[0]?.patch.sandboxState).toEqual({ type: "vercel" });
   });
+
+  test("marks sandbox expired when the reconnect probe hits a 404", async () => {
+    const { GET } = await routeModulePromise;
+
+    probeResult = {
+      success: false,
+      stdout: "",
+      stderr: "Status code 404 is not ok",
+    };
+
+    const response = await GET(
+      new Request("http://localhost/api/sandbox/reconnect?sessionId=session-1"),
+    );
+    const payload = (await response.json()) as {
+      status: string;
+      lifecycle: { state: string | null };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(payload.status).toBe("expired");
+    expect(payload.lifecycle.state).toBe("hibernated");
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]?.sessionId).toBe("session-1");
+    expect(updateCalls[0]?.patch.lifecycleState).toBe("hibernated");
+    expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
+    expect(updateCalls[0]?.patch.sandboxState).toEqual({ type: "vercel" });
+  });
 });

@@ -117,6 +117,20 @@ describe("createCancelableReadableStream", () => {
     expect(result.done).toBe(true);
   });
 
+  test("handles workflow 404 errors as graceful shutdown", async () => {
+    const source = new ReadableStream<string>({
+      pull() {
+        throw new Error("Status code 404 is not ok");
+      },
+    });
+
+    const wrapped = createCancelableReadableStream(source);
+    const reader = wrapped.getReader();
+
+    const result = await reader.read();
+    expect(result.done).toBe(true);
+  });
+
   test("propagates non-abort errors via controller.error", async () => {
     const realError = new Error("Something broke");
 

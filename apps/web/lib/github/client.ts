@@ -67,6 +67,36 @@ export async function getOctokit(token?: string): Promise<OctokitResult> {
   };
 }
 
+function getGitHubHttpStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const errorRecord = error as {
+    status?: unknown;
+    response?: { status?: unknown };
+    cause?: {
+      status?: unknown;
+      response?: { status?: unknown };
+    };
+  };
+
+  const statusCandidates = [
+    errorRecord.status,
+    errorRecord.response?.status,
+    errorRecord.cause?.status,
+    errorRecord.cause?.response?.status,
+  ];
+
+  for (const status of statusCandidates) {
+    if (typeof status === "number") {
+      return status;
+    }
+  }
+
+  return null;
+}
+
 export function parseGitHubUrl(
   repoUrl: string,
 ): { owner: string; repo: string } | null {
@@ -412,10 +442,13 @@ export async function getPullRequestMergeReadiness(params: {
 
         pullRequest = refreshedPullRequestResponse.data;
       } catch (refreshError) {
-        console.warn(
-          "Failed to refresh pull request mergeability state:",
-          refreshError,
-        );
+        const refreshStatus = getGitHubHttpStatus(refreshError);
+        if (refreshStatus !== 403 && refreshStatus !== 404) {
+          console.warn(
+            "Failed to refresh pull request mergeability state:",
+            refreshError,
+          );
+        }
         break;
       }
     }
@@ -470,8 +503,8 @@ export async function getPullRequestMergeReadiness(params: {
         })),
       );
     } catch (checksError) {
-      const checksHttpError = checksError as { status?: number };
-      if (checksHttpError.status !== 403 && checksHttpError.status !== 404) {
+      const checksStatus = getGitHubHttpStatus(checksError);
+      if (checksStatus !== 403 && checksStatus !== 404) {
         console.warn(
           "Failed to list check runs for merge readiness:",
           checksError,
@@ -508,8 +541,8 @@ export async function getPullRequestMergeReadiness(params: {
           })),
         );
       } catch (statusError) {
-        const statusHttpError = statusError as { status?: number };
-        if (statusHttpError.status !== 403 && statusHttpError.status !== 404) {
+        const statusCode = getGitHubHttpStatus(statusError);
+        if (statusCode !== 403 && statusCode !== 404) {
           console.warn(
             "Failed to fetch combined status for merge readiness:",
             statusError,
@@ -576,10 +609,14 @@ export async function getPullRequestMergeReadiness(params: {
       },
     };
   } catch (error: unknown) {
-    console.error("Error checking PR merge readiness:", error);
+    const httpStatus = getGitHubHttpStatus(error);
+    if (httpStatus === 403 || httpStatus === 404) {
+      console.warn("GitHub merge readiness request failed:", error);
+    } else {
+      console.error("Error checking PR merge readiness:", error);
+    }
 
-    const httpError = error as { status?: number };
-    if (httpError.status === 404) {
+    if (httpStatus === 404) {
       return {
         success: false,
         canMerge: false,
@@ -592,7 +629,7 @@ export async function getPullRequestMergeReadiness(params: {
       };
     }
 
-    if (httpError.status === 403) {
+    if (httpStatus === 403) {
       return {
         success: false,
         canMerge: false,
