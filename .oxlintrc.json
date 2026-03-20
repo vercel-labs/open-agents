@@ -15,6 +15,7 @@
     "no-eq-null": "off",
     "no-inline-comments": "off",
     "no-negated-condition": "off",
+    "no-shadow": "off",
     "no-nested-ternary": "off",
     "no-plusplus": "off",
     "no-use-before-define": "off",
@@ -53,11 +54,11 @@
     "unicorn/prefer-string-slice": "off",
     "unicorn/prefer-type-error": "off",
     "unicorn/switch-case-braces": "off",
-    "unicorn/text-encoding-identifier-case": "off",
+    "unicorn/text-encoding-identifier-case": "off"
   },
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
-    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json",
-  ],
+    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json"
+  ]
 }
