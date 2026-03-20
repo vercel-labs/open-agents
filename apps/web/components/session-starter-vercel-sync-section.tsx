@@ -110,10 +110,7 @@ export function SessionStarterVercelSyncSection({
               <SelectContent align="start">
                 {repoProjects.projects.map((project) => (
                   <SelectItem key={project.projectId} value={project.projectId}>
-                    <span className="flex items-center gap-2">
-                      <VercelIcon className="h-3 w-3 shrink-0 opacity-60" />
-                      {formatVercelProjectLabel(project)}
-                    </span>
+                    {formatVercelProjectLabel(project)}
                   </SelectItem>
                 ))}
                 <SelectSeparator />
