@@ -14,12 +14,11 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 - `noUncheckedIndexedAccess: true` - always check indexed access
 - `verbatimModuleSyntax: true` - use explicit type imports
 
-## Formatting (Biome)
+## Formatting (Ultracite — oxfmt)
 
 - Indent: 2 spaces
 - Quote style: double quotes for JavaScript/TypeScript
-- Organize imports: enabled via Biome assist
-- Run `bun run format` before committing
+- Run `bun run fix` before committing
 
 ## Naming Conventions
 

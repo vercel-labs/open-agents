@@ -37,16 +37,13 @@ bun run web            # Run web app
 # Quality checks (REQUIRED after making any changes)
 bun run ci                                 # Required: run format check, lint, typecheck, and tests
 turbo typecheck                            # Type check all packages
-turbo lint                                 # Lint all packages with oxlint
-turbo lint:fix                             # Lint and auto-fix all packages
+
+# Linting and formatting (Ultracite - oxlint + oxfmt, run from root)
+bun run check                              # Lint and format check all files
+bun run fix                                # Lint fix and format all files
 
 # Filter by package (use --filter)
 turbo typecheck --filter=web # Type check web app only
-turbo lint:fix --filter=web  # Lint web app only
-
-# Formatting (Biome - run from root)
-bun run format                             # Format all files
-bun run format:check                       # Check formatting without writing
 
 # Testing
 bun test                                              # Run all tests
@@ -98,7 +95,7 @@ See [Architecture & Workspace Structure](docs/agents/architecture.md) for detail
 - **Files**: kebab-case, **Types**: PascalCase, **Functions**: camelCase
 - **Never use `any`** -- use `unknown` and narrow with type guards
 - **No `.js` extensions** in imports
-- **Biome** for formatting (double quotes, 2-space indent)
+- **Ultracite** (oxlint + oxfmt) for linting and formatting (double quotes, 2-space indent)
 - **Zod** schemas for validation, derive types with `z.infer`
 
 See [Code Style & Patterns](docs/agents/code-style.md) for full conventions, tool implementation patterns, and dependency patterns.
