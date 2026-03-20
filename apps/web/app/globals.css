@@ -124,6 +124,50 @@
   --sidebar-active-foreground: oklch(0.985 0 0);
 }
 
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+    filter: blur(0.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+.landing-fade-up {
+  animation: landing-fade-up 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-fade-up {
+    animation: none;
+  }
+}
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAP0lEQVR4nO3QoQkAIBAEwZ//aQ0YzZzJq8M0p7oJ9A8jzq0AAACAvw9Yx0n4Kkq6qgAAAAAAAAAAAPw4b8m8wN8bK9yS8yZ0bA9x5wAAc2u7oQAAAABJRU5ErkJggg==");
+  mix-blend-mode: overlay;
+  opacity: 0.06;
+}
+
+.terminal-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.terminal-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
