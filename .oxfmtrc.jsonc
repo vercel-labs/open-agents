@@ -7,11 +7,6 @@
   "bracketSameLine": false,
   "bracketSpacing": true,
   "endOfLine": "lf",
-  "experimentalSortImports": {
-    "ignoreCase": true,
-    "newlinesBetween": false,
-    "order": "asc",
-  },
   "experimentalSortPackageJson": true,
   "jsxSingleQuote": false,
   "printWidth": 80,
