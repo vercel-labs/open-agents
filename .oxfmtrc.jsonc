@@ -2,7 +2,11 @@
 // https://oxc.rs/docs/guide/usage/formatter/config-file-reference.html
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": [".agents/skills/**", "apps/web/components/ui/**", "**/*.md"],
+  "ignorePatterns": [
+    ".agents/skills/**",
+    "apps/web/components/ui/**",
+    "**/*.md",
+  ],
   "arrowParens": "always",
   "bracketSameLine": false,
   "bracketSpacing": true,
