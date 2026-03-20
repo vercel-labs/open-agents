@@ -2,7 +2,9 @@ import Redis, { type RedisOptions } from "ioredis";
 
 const warnedMissingRedisFeatures = new Set<string>();
 
-type RedisConnectionOptions = RedisOptions & Record<string, unknown>;
+type RedisConnectionOptions = Omit<RedisOptions, "tls"> & {
+  tls?: RedisOptions["tls"] | string;
+} & Record<string, unknown>;
 
 function decodeRedisUrlComponent(value: string): string {
   try {
@@ -59,7 +61,7 @@ export function getRedisUrl(): string | null {
   return process.env.REDIS_URL ?? process.env.KV_URL ?? null;
 }
 
-export function getRedisConnectionOptions(url: string): RedisOptions {
+export function getRedisConnectionOptions(url: string): RedisConnectionOptions {
   if (/^[0-9]+$/.test(url)) {
     return { port: Number.parseInt(url, 10) };
   }
@@ -103,11 +105,11 @@ export function getRedisConnectionOptions(url: string): RedisOptions {
     }
   }
 
-  if (parsedUrl.protocol === "rediss:") {
+  applyRedisQueryOptions(parsedUrl.searchParams, options);
+
+  if (parsedUrl.protocol === "rediss:" && options.tls === undefined) {
     options.tls = {};
   }
-
-  applyRedisQueryOptions(parsedUrl.searchParams, options);
 
   return options;
 }
@@ -133,7 +135,7 @@ export function createRedisClient(clientName = "redis-client"): Redis {
     throw new Error("REDIS_URL or KV_URL environment variable is required");
   }
 
-  const client = new Redis(getRedisConnectionOptions(url));
+  const client = new Redis(getRedisConnectionOptions(url) as RedisOptions);
   client.on("error", (error) => {
     console.error(`[redis] ${clientName} error:`, error);
   });

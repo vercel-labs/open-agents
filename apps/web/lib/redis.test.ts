@@ -26,6 +26,19 @@ describe("getRedisConnectionOptions", () => {
     });
   });
 
+  test("preserves explicit tls query parameters for secure redis URLs", () => {
+    expect(
+      getRedisConnectionOptions(
+        "rediss://localhost:6379?tls=RedisCloudFixed&connectionName=skills-cache",
+      ),
+    ).toEqual({
+      host: "localhost",
+      port: 6379,
+      tls: "RedisCloudFixed",
+      connectionName: "skills-cache",
+    });
+  });
+
   test("parses unix socket paths and query defaults", () => {
     expect(
       getRedisConnectionOptions(
