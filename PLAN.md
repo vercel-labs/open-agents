@@ -1,34 +1,23 @@
-Summary: Recreate the Vercel-aware repo session flow by adding a server-side Vercel project/env helper, repo-level remembered Vercel project links, session-level Vercel project snapshots, a repo-to-project lookup API, and sandbox-time `.env.local` sync. Keep the implementation aligned with the existing session creation, Drizzle schema, and sandbox lifecycle patterns that already exist in `apps/web`.
+Summary: Extend the current Vercel env-sync flow with a CLI-style manual link fallback. When repo-based matching finds no Vercel project, let the user choose a scope/team first and then a project within that scope, and persist that explicit choice as the repo’s remembered Vercel link.
 
-Context: `apps/web/app/api/sessions/route.ts` is the main session creation entrypoint and currently only persists repo metadata plus sandbox preferences. `apps/web/app/[username]/[repo]/page.tsx` creates repo-backed sessions directly and needs to stay consistent with the main flow. `apps/web/app/api/sandbox/route.ts` already has the exact “first create vs reconnect” split where sandbox-only work should happen; that is the right place to add non-blocking `.env.local` sync. Vercel OAuth/token plumbing already exists in `apps/web/lib/vercel/oauth.ts` and `apps/web/lib/vercel/token.ts`, but there is no project/env helper or repo-project API yet. Drizzle schema lives in `apps/web/lib/db/schema.ts`, migrations are generated from there, and focused DB helpers live under `apps/web/lib/db/`.
+Context: `apps/web/components/session-starter.tsx` currently only supports repo-url matches returned by `apps/web/app/api/vercel/repo-projects/route.ts`; if that list is empty it immediately sets the choice to `null` and only offers “start without env sync”. `apps/web/app/api/sessions/route.ts` also only accepts explicit selections that still appear in `listMatchingVercelProjects()`, so a manual team/project pick would be rejected today. The existing `vercel_project_links` table already persists repo-level defaults, and `apps/web/app/[username]/[repo]/page.tsx` already reuses saved links when auto-creating a session, so we can build on the current storage model instead of adding new persistence.
 
-Approach: Add a small shared Vercel helper for matching projects by GitHub repo URL, retrieving project env vars, reducing them to a deterministic Development-only snapshot, and serializing `.env.local` content. Persist remembered repo defaults in a new table and copy immutable Vercel project fields onto each session record. In the session starter, only fetch/show Vercel project choices for Vercel-authenticated repo flows; use the lookup API to preselect remembered defaults or a single live match, require an explicit choice only when multiple candidates exist, and preserve the API’s `undefined` vs `null` vs object semantics in the session creation route.
+Approach: Keep the current repo-match flow unchanged when we already have 1+ matches. Only when there are zero repo matches, switch the UI into a fallback flow that mirrors `vercel link`: choose a Vercel scope/team, then choose a project in that scope, or opt out. Return the saved repo link separately from live repo matches so the client can prefill a previously chosen manual link even when it never shows up in repo-url matches. On submit, validate manual picks against the selected scope’s accessible projects (not against repo-url matches), then store the canonical project/team data in the existing repo-link table. I would keep this fallback-only for now rather than exposing a manual override on every repo flow.
 
 Changes:
-- `apps/web/lib/vercel/projects.ts` - add server-side helpers to list repo-matching Vercel projects across personal/team scopes, fetch project env vars, select deterministic Development values, and serialize `.env.local` content.
-- `apps/web/lib/vercel/types.ts` - add shared Zod-backed types for Vercel project selection and repo-project lookup responses so client/server code can share contracts without importing server-only modules.
-- `apps/web/lib/db/schema.ts` - add repo-level `vercel_project_links` persistence plus session snapshot columns (`vercelProjectId`, `vercelProjectName`, `vercelTeamId`, `vercelTeamSlug`).
-- `apps/web/lib/db/vercel-project-links.ts` - add focused helpers to normalize repo keys, fetch remembered links, and upsert a remembered repo→project default.
-- `apps/web/app/api/vercel/repo-projects/route.ts` - add an authenticated lookup route that returns live candidates and the default project selection for a repo.
-- `apps/web/hooks/use-vercel-repo-projects.ts` - add a focused client hook for the session starter to load repo-project matches without bloating the component.
-- `apps/web/components/session-starter.tsx` - wire Vercel project lookup/selection into repo-backed session creation, including loading, multi-match selection, and explicit “don’t sync env vars” handling.
-- `apps/web/hooks/use-sessions.ts`, `apps/web/app/home-page.tsx`, `apps/web/components/new-session-dialog.tsx` - pass the optional Vercel project payload through the existing create-session client flow.
-- `apps/web/app/api/sessions/route.ts` - accept `vercelProject?: VercelProjectSelection | null`, preserve the tri-state semantics, upsert remembered repo defaults on explicit project choices, and snapshot the resolved Vercel project fields onto the session.
-- `apps/web/app/[username]/[repo]/page.tsx` - apply any remembered repo-level Vercel link when repo pages auto-create a session.
-- `apps/web/app/api/sandbox/route.ts` - on first sandbox creation only, fetch Development env vars for the linked session project, generate `.env.local`, write it through the sandbox abstraction, and log failures without blocking startup.
-- `apps/web/app/api/vercel/repo-projects/route.test.ts` - cover remembered default selection and single-match auto-selection.
-- `apps/web/app/api/sessions/route.test.ts` - cover explicit project persistence+memory, omitted project fallback, and explicit `null` suppression.
-- `apps/web/app/api/sandbox/route.test.ts` - extend the lifecycle tests to cover `.env.local` sync on first create, no resync on reconnect, and non-blocking sync failures.
-- `apps/web/lib/vercel/projects.test.ts` - cover candidate dedupe, Development env filtering precedence, and dotenv escaping/ordering.
-- `apps/web/lib/db/migrations/*` - generate and commit the new Drizzle migration and metadata snapshot after schema changes.
+- `apps/web/lib/vercel/projects.ts` - factor out/export shared helpers for listing accessible scopes and listing projects for a selected scope, while keeping the existing repo-match helper for auto-detection.
+- `apps/web/lib/vercel/types.ts` - add a shared Vercel scope schema and update the repo-project lookup response shape so it can distinguish `matchedProjects` from a `savedProject`.
+- `apps/web/app/api/vercel/repo-projects/route.ts` - return live repo matches, the remembered repo link, and the accessible scopes needed to seed the fallback picker.
+- `apps/web/app/api/vercel/projects/route.ts` - add an authenticated endpoint that lists all accessible projects for a selected scope/team; this is loaded lazily only after the user picks a scope.
+- `apps/web/hooks/use-vercel-repo-projects.ts` - update the client contract for the richer lookup response.
+- `apps/web/hooks/use-vercel-scope-projects.ts` - add a focused hook for lazy-loading projects for the selected scope.
+- `apps/web/components/session-starter.tsx` - preserve the simple single-select UI for matched projects, but when there are zero matches render a two-step scope -> project picker, prefill saved manual links, and keep the existing “Don’t sync env variables” option.
+- `apps/web/app/api/sessions/route.ts` - accept explicit selections that are either repo matches or accessible projects in the chosen scope, and upsert the chosen manual link so future repo launches reuse it.
+- `apps/web/app/api/vercel/repo-projects/route.test.ts`, `apps/web/app/api/vercel/projects/route.test.ts`, and `apps/web/app/api/sessions/route.test.ts` - cover zero-match fallback, saved manual links, inaccessible scope/project selections, and opt-out behavior.
 
 Verification:
-- If `node_modules` is missing, run `bun install`.
-- Run targeted tests while iterating:
-  - `bun test apps/web/lib/vercel/projects.test.ts`
-  - `bun test apps/web/app/api/vercel/repo-projects/route.test.ts`
-  - `bun test apps/web/app/api/sessions/route.test.ts`
-  - `bun test apps/web/app/api/sandbox/route.test.ts`
-- Generate the migration with `bun run --cwd apps/web db:generate` and confirm `bun run --cwd apps/web db:check` passes.
-- Run full required verification from the repo root: `bun run ci`.
-- Edge cases to confirm: saved repo defaults are case-insensitive; multiple scope lookups tolerate partial failures; explicit “don’t sync” does not erase the remembered default; reconnects do not rewrite `.env.local`; failed env sync does not fail sandbox creation.
+- `bun test apps/web/app/api/vercel/repo-projects/route.test.ts`
+- `bun test apps/web/app/api/vercel/projects/route.test.ts`
+- `bun test apps/web/app/api/sessions/route.test.ts`
+- `bun run ci`
+- UI checks: zero repo matches requires scope then project (or explicit opt-out); a saved manual link prefills the next session; one-match and multi-match repo flows still behave exactly as they do now.
