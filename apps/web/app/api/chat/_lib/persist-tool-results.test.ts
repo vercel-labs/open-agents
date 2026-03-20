@@ -16,9 +16,8 @@ mock.module("@/lib/db/sessions", () => ({
   upsertChatMessageScoped: upsertSpy,
 }));
 
-const { persistAssistantMessagesWithToolResults } = await import(
-  "./persist-tool-results"
-);
+const { persistAssistantMessagesWithToolResults } =
+  await import("./persist-tool-results");
 
 function assistantWithToolResult(
   overrides?: Partial<WebAgentUIMessage>,

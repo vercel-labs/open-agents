@@ -14,26 +14,26 @@
       "zod": "^4.3.6"
     }
   },
-  "overrides": {
-    "zod": "^4.3.6"
-  },
   "scripts": {
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "lint": "turbo lint",
-    "lint:fix": "turbo lint:fix",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
-    "ci": "bun run format:check && bun run lint && bun run typecheck && bun run test:isolated && bun run --cwd apps/web db:check",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "ci": "bun run check && bun run typecheck && bun run test:isolated && bun run --cwd apps/web db:check",
     "test:isolated": "bun run scripts/test-isolated.ts",
     "test:verbose": "bun test --reporter=junit --reporter-outfile /dev/stdout"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.11",
+    "oxfmt": "^0.41.0",
+    "oxlint": "^1.56.0",
     "turbo": "^2.5.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "ultracite": "7.3.2"
+  },
+  "overrides": {
+    "zod": "^4.3.6"
   },
   "packageManager": "bun@1.2.14"
 }

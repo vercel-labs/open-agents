@@ -129,7 +129,9 @@ export function SessionList({
                         {session.repoName && (
                           <>
                             {" "}
-                            <span className="text-muted-foreground/50">-</span>{" "}
+                            <span className="text-muted-foreground/50">
+                              -
+                            </span>{" "}
                             {session.repoName}
                             {session.branch && (
                               <>

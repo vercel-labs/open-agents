@@ -1024,9 +1024,9 @@ export function SessionChatContent({
   } = useSessionChatWorkspaceContext();
   const autoCommitEnabled = Boolean(
     session.cloneUrl &&
-      session.repoOwner &&
-      session.repoName &&
-      (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
+    session.repoOwner &&
+    session.repoName &&
+    (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
   );
   const { isAutoCommitting, markAutoCommitStarted } = useAutoCommitStatus(
     autoCommitEnabled,

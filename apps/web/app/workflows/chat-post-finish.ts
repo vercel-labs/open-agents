@@ -192,9 +192,8 @@ export async function recordWorkflowUsage(
   "use step";
 
   try {
-    const { collectTaskToolUsageEvents, sumLanguageModelUsage } = await import(
-      "@open-harness/agent"
-    );
+    const { collectTaskToolUsageEvents, sumLanguageModelUsage } =
+      await import("@open-harness/agent");
 
     // Record main agent usage
     if (totalUsage) {

@@ -8,9 +8,7 @@
     ".": "./index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
@@ -23,8 +21,7 @@
     "@ai-sdk/devtools": "^0.0.15",
     "@open-harness/tsconfig": "workspace:*",
     "@types/bun": "latest",
-    "@types/node": "^22",
-    "oxlint": "^1.38.0"
+    "@types/node": "^22"
   },
   "peerDependencies": {
     "typescript": "^5"

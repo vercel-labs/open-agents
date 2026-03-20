@@ -188,7 +188,7 @@ export function UsageSectionSkeleton() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-3 min-[420px]:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i}>
               <div className="text-xs">
@@ -355,24 +355,26 @@ function UsagePieChart({
             return (
               <div
                 key={segment.label}
-                className="flex items-center gap-2 text-sm"
+                className="flex items-start gap-2 text-sm"
               >
                 <span
-                  className="h-2.5 w-2.5 rounded-sm"
+                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm"
                   style={{ backgroundColor: segment.color }}
                 />
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="font-medium">{segment.label}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-medium leading-snug">
+                    {segment.label}
+                  </div>
                   {segment.detail ? (
-                    <span className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {segment.detail}
-                    </span>
+                    </div>
                   ) : null}
                 </div>
-                <span className="ml-auto text-muted-foreground">
-                  {formatTokens(segment.value)}
-                </span>
-                <span className="text-muted-foreground">({share}%)</span>
+                <div className="shrink-0 text-right text-xs text-muted-foreground sm:text-sm">
+                  <div>{formatTokens(segment.value)}</div>
+                  <div>({share}%)</div>
+                </div>
               </div>
             );
           })
@@ -392,11 +394,15 @@ function StatBlock({
   detail?: string;
 }) {
   return (
-    <div>
+    <div className="min-w-0 rounded-xl border border-border/50 bg-muted/20 p-3 sm:p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
+      <div className="mt-1 break-words text-lg font-semibold leading-tight sm:text-xl">
+        {value}
+      </div>
       {detail ? (
-        <div className="text-xs text-muted-foreground">{detail}</div>
+        <div className="mt-1 text-xs leading-snug text-muted-foreground">
+          {detail}
+        </div>
       ) : null}
     </div>
   );
@@ -506,7 +512,7 @@ export function UsageSection() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <CardTitle>Usage</CardTitle>
               <CardDescription>
@@ -515,11 +521,15 @@ export function UsageSection() {
                   : "Token consumption and activity over the past 39 weeks."}
               </CardDescription>
             </div>
-            <DateRangePicker value={dateRange} onChange={setDateRange} />
+            <DateRangePicker
+              value={dateRange}
+              onChange={setDateRange}
+              className="w-full justify-center sm:w-auto sm:justify-start"
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-3 min-[420px]:grid-cols-3">
             <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
             <StatBlock
               label="Messages"

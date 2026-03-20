@@ -156,9 +156,8 @@ export function getLifecycleDueAtMs(source: LifecycleTimingSource): number {
 async function hasActiveWorkflowForSession(
   sessionId: string,
 ): Promise<boolean> {
-  const { compareAndSetChatActiveStreamId, getChatsBySessionId } = await import(
-    "@/lib/db/sessions"
-  );
+  const { compareAndSetChatActiveStreamId, getChatsBySessionId } =
+    await import("@/lib/db/sessions");
   const chatsInSession = await getChatsBySessionId(sessionId);
   const { getRun } = await import("workflow/api");
 

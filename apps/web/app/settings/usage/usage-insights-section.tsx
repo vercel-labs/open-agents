@@ -49,11 +49,17 @@ function InsightMetric({
   detail?: string;
 }) {
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold tracking-tight">{value}</div>
+    <div className="min-w-0 rounded-xl border border-border/50 bg-muted/20 p-4">
+      <div className="text-[11px] font-medium leading-snug text-muted-foreground sm:text-xs">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-2xl font-bold tracking-tight sm:text-3xl">
+        {value}
+      </div>
       {detail ? (
-        <div className="text-xs text-muted-foreground/70">{detail}</div>
+        <div className="text-xs leading-snug text-muted-foreground/70">
+          {detail}
+        </div>
       ) : null}
     </div>
   );
@@ -108,9 +114,9 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
           Derived analytics from the last {lookbackLabel}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-8">
+      <CardContent className="space-y-6 sm:space-y-8">
         {/* Primary metrics row */}
-        <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
+        <div className="grid gap-3 min-[420px]:grid-cols-2 xl:grid-cols-3">
           <InsightMetric
             label="Tracked PRs"
             value={insights.pr.trackedPrCount.toLocaleString()}
@@ -157,30 +163,30 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
                 removed={insights.code.linesRemoved}
               />
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border/50 bg-muted/20 p-3">
                   <div className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
                     <span className="text-xs text-muted-foreground">Added</span>
                   </div>
-                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                  <div className="mt-1 text-lg font-semibold tabular-nums">
                     {insights.code.linesAdded.toLocaleString()}
                   </div>
                 </div>
-                <div>
+                <div className="rounded-xl border border-border/50 bg-muted/20 p-3">
                   <div className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 rounded-full bg-red-400" />
                     <span className="text-xs text-muted-foreground">
                       Removed
                     </span>
                   </div>
-                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                  <div className="mt-1 text-lg font-semibold tabular-nums">
                     {insights.code.linesRemoved.toLocaleString()}
                   </div>
                 </div>
-                <div>
+                <div className="col-span-2 rounded-xl border border-border/50 bg-muted/20 p-3 sm:col-span-1">
                   <div className="text-xs text-muted-foreground">Total</div>
-                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                  <div className="mt-1 text-lg font-semibold tabular-nums">
                     {insights.code.totalLinesChanged.toLocaleString()}
                   </div>
                 </div>
@@ -202,13 +208,13 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
                 {insights.topRepositories.map((repo) => (
                   <div
                     key={`${repo.repoOwner}/${repo.repoName}`}
-                    className="space-y-1.5"
+                    className="space-y-2 rounded-xl border border-border/50 bg-muted/20 p-3"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium">
+                    <div className="flex flex-col gap-1 min-[480px]:flex-row min-[480px]:items-baseline min-[480px]:justify-between">
+                      <span className="min-w-0 break-words text-sm font-medium leading-snug min-[480px]:truncate">
                         {repo.repoOwner}/{repo.repoName}
                       </span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground min-[480px]:text-right">
                         {repo.sessionCount.toLocaleString()} sessions
                       </span>
                     </div>
@@ -216,7 +222,7 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
                       value={repo.totalLinesChanged}
                       max={maxRepoLines}
                     />
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>{repo.trackedPrCount.toLocaleString()} PRs</span>
                       <span>
                         {repo.totalLinesChanged.toLocaleString()} lines changed

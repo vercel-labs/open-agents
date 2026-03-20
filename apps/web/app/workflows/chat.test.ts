@@ -21,6 +21,9 @@ let agentFinishReason = "stop";
 let agentRawFinishReason: string | undefined = "provider_stop";
 let agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
 let agentResponseMessages: unknown[] = [];
+let agentResponse: Record<string, unknown> = {
+  messages: agentResponseMessages,
+};
 let streamOnFinishCallback:
   | ((args: { responseMessage: unknown }) => void)
   | undefined;
@@ -113,7 +116,7 @@ mock.module("@/app/config", () => ({
         totalUsage: Promise.resolve(agentTotalUsage),
         finishReason: Promise.resolve(agentFinishReason),
         rawFinishReason: Promise.resolve(agentRawFinishReason),
-        response: Promise.resolve({ messages: agentResponseMessages }),
+        response: Promise.resolve(agentResponse),
       };
     },
   },
@@ -162,6 +165,7 @@ beforeEach(() => {
   agentRawFinishReason = "provider_stop";
   agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
   agentResponseMessages = [];
+  agentResponse = { messages: agentResponseMessages };
   streamOnFinishCallback = undefined;
   Object.values(spies).forEach((s) => s.mockClear());
 });
@@ -199,6 +203,41 @@ describe("runAgentWorkflow", () => {
     const rwCalls = spies.recordWorkflowUsage.mock.calls as unknown[][];
     expect(rwCalls[0][0]).toBe("user-1");
     expect(rwCalls[0][1]).toBe("gpt-4");
+  });
+
+  test("logs full step details when the agent finishes with reason other", async () => {
+    agentFinishReason = "other";
+    agentRawFinishReason = "provider_other";
+    agentResponseMessages = [{ role: "assistant" }];
+    agentResponse = {
+      id: "response-1",
+      messages: agentResponseMessages,
+      modelId: "test-model",
+    };
+
+    const originalWarn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    try {
+      await runAgentWorkflow(makeOptions());
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.[0]).toBe(
+        "[workflow] Agent step finished with reason 'other':",
+      );
+      expect(warnings[0]?.[1]).toMatchObject({
+        workflowRunId: "wrun_test-123",
+        messageId: "gen-id-1",
+        finishReason: "other",
+        rawFinishReason: "provider_other",
+        response: agentResponse,
+      });
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   test("persists raw finish reasons for each agent step in message metadata", async () => {

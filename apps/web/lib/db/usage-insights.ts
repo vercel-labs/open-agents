@@ -80,14 +80,14 @@ export async function getUsageInsights(
   const [aggregateRows, sessionRows] = await Promise.all([
     db
       .select({
-        totalInputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)::int`,
-        totalCachedInputTokens: sql<number>`coalesce(sum(${usageEvents.cachedInputTokens}), 0)::int`,
-        totalOutputTokens: sql<number>`coalesce(sum(${usageEvents.outputTokens}), 0)::int`,
-        totalToolCallCount: sql<number>`coalesce(sum(${usageEvents.toolCallCount}), 0)::int`,
-        mainInputTokens: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then ${usageEvents.inputTokens} else 0 end), 0)::int`,
-        mainOutputTokens: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then ${usageEvents.outputTokens} else 0 end), 0)::int`,
-        mainAssistantTurnCount: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then 1 else 0 end), 0)::int`,
-        largestMainTurnTokens: sql<number>`coalesce(max(case when ${usageEvents.agentType} = 'main' then ${usageEvents.inputTokens} + ${usageEvents.outputTokens} end), 0)::int`,
+        totalInputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)::double precision`,
+        totalCachedInputTokens: sql<number>`coalesce(sum(${usageEvents.cachedInputTokens}), 0)::double precision`,
+        totalOutputTokens: sql<number>`coalesce(sum(${usageEvents.outputTokens}), 0)::double precision`,
+        totalToolCallCount: sql<number>`coalesce(sum(${usageEvents.toolCallCount}), 0)::double precision`,
+        mainInputTokens: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then ${usageEvents.inputTokens} else 0 end), 0)::double precision`,
+        mainOutputTokens: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then ${usageEvents.outputTokens} else 0 end), 0)::double precision`,
+        mainAssistantTurnCount: sql<number>`coalesce(sum(case when ${usageEvents.agentType} = 'main' then 1 else 0 end), 0)::double precision`,
+        largestMainTurnTokens: sql<number>`coalesce(max(case when ${usageEvents.agentType} = 'main' then cast(${usageEvents.inputTokens} as bigint) + cast(${usageEvents.outputTokens} as bigint) end), 0)::double precision`,
       })
       .from(usageEvents)
       .where(buildUsageEventsWhereClause(userId, options)),
