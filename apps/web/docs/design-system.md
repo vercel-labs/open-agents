@@ -62,20 +62,14 @@ The design follows a **dark terminal aesthetic** that reflects the developer-foc
 Large, blurred gradient orbs that create depth and atmosphere:
 
 ```tsx
-{
-  /* Primary glow - top center */
-}
-<div className="absolute left-1/2 top-0 h-[600px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.07] blur-[150px]" />;
+{/* Primary glow - top center */}
+<div className="absolute left-1/2 top-0 h-[600px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.07] blur-[150px]" />
 
-{
-  /* Secondary glow - bottom right */
-}
-<div className="absolute bottom-0 right-0 h-[400px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-blue-500/[0.05] blur-[120px]" />;
+{/* Secondary glow - bottom right */}
+<div className="absolute bottom-0 right-0 h-[400px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-blue-500/[0.05] blur-[120px]" />
 
-{
-  /* Tertiary glow - left */
-}
-<div className="absolute bottom-1/3 left-0 h-[300px] w-[400px] -translate-x-1/2 rounded-full bg-violet-500/[0.04] blur-[100px]" />;
+{/* Tertiary glow - left */}
+<div className="absolute bottom-1/3 left-0 h-[300px] w-[400px] -translate-x-1/2 rounded-full bg-violet-500/[0.04] blur-[100px]" />
 ```
 
 ### Dot Grid Pattern
