@@ -4,6 +4,10 @@ import { connectSandbox } from "@open-harness/sandbox";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
+import {
+  getVercelCliSandboxSetup,
+  syncVercelCliAuthToSandbox,
+} from "@/lib/sandbox/vercel-cli-auth";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import type { SessionRecord } from "./chat-context";
 
@@ -98,17 +102,37 @@ export async function createChatRuntime(params: {
 }> {
   const { userId, sessionId, sessionRecord } = params;
 
-  const githubToken = await resolveGitHubToken(userId, sessionRecord);
-
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
     throw new Error("Sandbox state is required to create chat runtime");
   }
 
+  const [githubToken, vercelCliSetup] = await Promise.all([
+    resolveGitHubToken(userId, sessionRecord),
+    getVercelCliSandboxSetup({ userId, sessionRecord }).catch((error) => {
+      console.warn(
+        `Failed to prepare Vercel CLI setup for session ${sessionId}:`,
+        error,
+      );
+      return null;
+    }),
+  ]);
+
   const sandbox = await connectSandbox(sandboxState, {
     env: githubToken ? { GITHUB_TOKEN: githubToken } : undefined,
     ports: DEFAULT_SANDBOX_PORTS,
   });
+
+  if (vercelCliSetup) {
+    try {
+      await syncVercelCliAuthToSandbox({ sandbox, setup: vercelCliSetup });
+    } catch (error) {
+      console.warn(
+        `Failed to sync Vercel CLI auth for session ${sessionId}:`,
+        error,
+      );
+    }
+  }
 
   await refreshGitRemoteAuth(sandbox, sessionId, sessionRecord, githubToken);
 
