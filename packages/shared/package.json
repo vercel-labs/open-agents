@@ -10,9 +10,7 @@
     "./hooks/*": "./hooks/*.tsx"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^19.2.3"
@@ -20,8 +18,7 @@
   "devDependencies": {
     "@open-harness/tsconfig": "workspace:*",
     "@types/bun": "latest",
-    "@types/react": "^19.2.7",
-    "oxlint": "^1.38.0"
+    "@types/react": "^19.2.7"
   },
   "peerDependencies": {
     "typescript": "^5"
