@@ -69,25 +69,6 @@ function formatTokens(n: number) {
   return String(n);
 }
 
-const RANGE_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-function formatDateRangeLabel(range?: DateRange): string | null {
-  if (!range?.from) {
-    return null;
-  }
-
-  const from = range.from;
-  const to = range.to ?? range.from;
-  const fromLabel = RANGE_DATE_FORMATTER.format(from);
-  const toLabel = RANGE_DATE_FORMATTER.format(to);
-
-  return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`;
-}
-
 function sumRows(rows: DailyUsageRow[]) {
   return rows.reduce(
     (acc, d) => ({
@@ -453,8 +434,6 @@ export function UsageSection() {
       };
     }, [data]);
 
-  const activeDateRangeLabel = formatDateRangeLabel(dateRange);
-
   if (isLoading) return <UsageSectionSkeleton />;
 
   if (error) {
@@ -529,14 +508,7 @@ export function UsageSection() {
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle>Usage</CardTitle>
-                {activeDateRangeLabel ? (
-                  <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {activeDateRangeLabel}
-                  </span>
-                ) : null}
-              </div>
+              <CardTitle>Usage</CardTitle>
               <CardDescription>
                 {dateRange?.from
                   ? "Showing filtered results."
