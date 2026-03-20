@@ -11,14 +11,12 @@ vc link
 When `vc link` prompts you, use team `vercel-labs` and project `open-harness-web`.
 
 `scripts/setup.sh` will:
-
 - Copy `apps/web/.env.example` to `.env` if missing
 - Pull Vercel env into `.env.local`, then sync the relevant values into `apps/web/.env`
 
 ### Credentials
 
 Web (`apps/web/.env`):
-
 - `POSTGRES_URL`
 - `JWE_SECRET` (example: `openssl rand -base64 32`)
 - `ENCRYPTION_KEY` (example: `openssl rand -hex 32`)

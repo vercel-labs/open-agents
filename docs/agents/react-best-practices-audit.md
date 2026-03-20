@@ -13,7 +13,7 @@ Audited against the Vercel React Best Practices (57 rules, 8 categories). Findin
 `app/sessions/[sessionId]/chats/[chatId]/page.tsx:67-93` -- Four sequential `await` calls where some are independent:
 
 ```typescript
-const session = await getServerSession(); // 1. auth
+const session = await getServerSession();     // 1. auth
 const sessionRecord = await getSessionById(sessionId); // 2. depends on nothing
 const chat = await getChatByIdWithRetry(chatId, sessionId); // 3. depends on sessionId only
 const dbMessages = await getChatMessages(chatId); // 4. depends on chatId only
@@ -65,12 +65,12 @@ This means:
 
 The entire codebase has **zero** `next/dynamic` or `import()` calls for lazy-loading components. Every component is statically imported. Heavy, on-demand-only components are eagerly bundled:
 
-| Component            | File                     | Lines | When Used                     |
-| -------------------- | ------------------------ | ----- | ----------------------------- |
-| `DiffViewer`         | `diff-viewer.tsx`        | ~308  | Modal opened on button click  |
-| `CreatePRDialog`     | `create-pr-dialog.tsx`   | ~686  | Modal opened on button click  |
-| `CreateRepoDialog`   | `create-repo-dialog.tsx` | ~348  | Modal opened on button click  |
-| `Streamdown` (shiki) | External dependency      | Large | Only during message rendering |
+| Component | File | Lines | When Used |
+|-----------|------|-------|-----------|
+| `DiffViewer` | `diff-viewer.tsx` | ~308 | Modal opened on button click |
+| `CreatePRDialog` | `create-pr-dialog.tsx` | ~686 | Modal opened on button click |
+| `CreateRepoDialog` | `create-repo-dialog.tsx` | ~348 | Modal opened on button click |
+| `Streamdown` (shiki) | External dependency | Large | Only during message rendering |
 
 All are imported at `session-chat-content.tsx:43-52,83`.
 
@@ -78,12 +78,12 @@ All are imported at `session-chat-content.tsx:43-52,83`.
 
 ```typescript
 const DiffViewer = dynamic(
-  () => import("./diff-viewer").then((m) => m.DiffViewer),
-  { ssr: false },
+  () => import("./diff-viewer").then(m => m.DiffViewer),
+  { ssr: false }
 );
 const CreatePRDialog = dynamic(
-  () => import("@/components/create-pr-dialog").then((m) => m.CreatePRDialog),
-  { ssr: false },
+  () => import("@/components/create-pr-dialog").then(m => m.CreatePRDialog),
+  { ssr: false }
 );
 ```
 
@@ -95,30 +95,11 @@ const CreatePRDialog = dynamic(
 
 ```typescript
 import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowLeft,
-  ArrowUp,
-  Check,
-  Copy,
-  ExternalLink,
-  FolderGit2,
-  GitCompare,
-  GitPullRequest,
-  Link2,
-  Loader2,
-  Menu,
-  MessageSquare,
-  Mic,
-  Paperclip,
-  Pencil,
-  Plus,
-  Share2,
-  Square,
-  Trash2,
-  X,
-} from "lucide-react";
+  Archive, ArchiveRestore, ArrowDown, ArrowLeft, ArrowUp,
+  Check, Copy, ExternalLink, FolderGit2, GitCompare,
+  GitPullRequest, Link2, Loader2, Menu, MessageSquare,
+  Mic, Paperclip, Pencil, Plus, Share2, Square, Trash2, X,
+} from "lucide-react"
 ```
 
 This loads the entire `lucide-react` module graph (~1,583 modules).
@@ -205,9 +186,7 @@ const sandboxUiStatus = useMemo(() => {
 `session-chat-content.tsx:575-577` -- Uses a `useEffect` just to set `hasMounted`:
 
 ```typescript
-useEffect(() => {
-  setHasMounted(true);
-}, []);
+useEffect(() => { setHasMounted(true); }, []);
 ```
 
 This causes an extra render on mount. A ref would avoid the extra render if the only purpose is guarding hydration.
@@ -217,11 +196,7 @@ This causes an extra render on mount. A ref would avoid the extra render if the 
 ```typescript
 const emptySubscribe = () => () => {};
 function useHasMounted() {
-  return useSyncExternalStore(
-    emptySubscribe,
-    () => true,
-    () => false,
-  );
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
 }
 ```
 
@@ -239,9 +214,7 @@ function useHasMounted() {
 
 ```typescript
 useEffect(() => {
-  if (isAtBottom) {
-    scrollToBottom();
-  }
+  if (isAtBottom) { scrollToBottom(); }
 }, [messages, isAtBottom, scrollToBottom]);
 ```
 
@@ -294,22 +267,22 @@ No `error.tsx` files exist in any route segment and no `<ErrorBoundary>` compone
 
 ## Summary by Priority
 
-| Priority     | Issue                                 | Rule                           | Impact                             | Status                            |
-| ------------ | ------------------------------------- | ------------------------------ | ---------------------------------- | --------------------------------- |
-| **CRITICAL** | Sequential awaits in page.tsx         | `async-parallel`               | 2-3x slower page load              | FIXED                             |
-| **CRITICAL** | No Suspense boundaries                | `async-suspense-boundaries`    | No streaming, 5s blocking possible | FIXED                             |
-| **CRITICAL** | No dynamic imports for modals         | `bundle-dynamic-imports`       | Inflated initial bundle            | FIXED                             |
-| **CRITICAL** | Barrel imports from lucide-react      | `bundle-barrel-imports`        | +200-800ms cold start              | FIXED                             |
-| **HIGH**     | Context value not memoized (40 props) | `rerender-memo`                | All context consumers re-render    | FIXED                             |
-| **HIGH**     | Full session record to client         | `server-serialization`         | Serialization overhead             | INVESTIGATED (full record needed) |
-| **HIGH**     | Monolithic 2200-line component        | `rerender-memo`                | No render bailouts possible        | IMPROVED (sidebar extracted)      |
-| **MEDIUM**   | Derived state not memoized            | `rerender-derived-state`       | Unnecessary per-token work         | FIXED                             |
-| **MEDIUM**   | Scroll effect on every token          | `rerender-dependencies`        | Excessive effect runs              | FIXED                             |
-| **MEDIUM**   | sandboxUiStatus IIFE                  | `rerender-memo`                | Unnecessary per-render work        | FIXED                             |
-| **MEDIUM**   | hasMounted effect pattern             | `rerender-derived-state`       | Extra render on mount              | FIXED                             |
-| **MEDIUM**   | Direct fetch bypasses SWR             | `client-swr-dedup`             | Duplicate network requests         | FIXED                             |
-| **MEDIUM**   | Conditional rendering with &&         | `rendering-conditional-render` | Potential falsy renders            | FIXED                             |
-| **LOW**      | Unused dependencies                   | `bundle-*`                     | Unnecessary package weight         | FIXED                             |
-| **LOW**      | No error boundaries                   | N/A                            | Poor error UX                      | FIXED                             |
+| Priority | Issue | Rule | Impact | Status |
+|----------|-------|------|--------|--------|
+| **CRITICAL** | Sequential awaits in page.tsx | `async-parallel` | 2-3x slower page load | FIXED |
+| **CRITICAL** | No Suspense boundaries | `async-suspense-boundaries` | No streaming, 5s blocking possible | FIXED |
+| **CRITICAL** | No dynamic imports for modals | `bundle-dynamic-imports` | Inflated initial bundle | FIXED |
+| **CRITICAL** | Barrel imports from lucide-react | `bundle-barrel-imports` | +200-800ms cold start | FIXED |
+| **HIGH** | Context value not memoized (40 props) | `rerender-memo` | All context consumers re-render | FIXED |
+| **HIGH** | Full session record to client | `server-serialization` | Serialization overhead | INVESTIGATED (full record needed) |
+| **HIGH** | Monolithic 2200-line component | `rerender-memo` | No render bailouts possible | IMPROVED (sidebar extracted) |
+| **MEDIUM** | Derived state not memoized | `rerender-derived-state` | Unnecessary per-token work | FIXED |
+| **MEDIUM** | Scroll effect on every token | `rerender-dependencies` | Excessive effect runs | FIXED |
+| **MEDIUM** | sandboxUiStatus IIFE | `rerender-memo` | Unnecessary per-render work | FIXED |
+| **MEDIUM** | hasMounted effect pattern | `rerender-derived-state` | Extra render on mount | FIXED |
+| **MEDIUM** | Direct fetch bypasses SWR | `client-swr-dedup` | Duplicate network requests | FIXED |
+| **MEDIUM** | Conditional rendering with && | `rendering-conditional-render` | Potential falsy renders | FIXED |
+| **LOW** | Unused dependencies | `bundle-*` | Unnecessary package weight | FIXED |
+| **LOW** | No error boundaries | N/A | Poor error UX | FIXED |
 
 All audit items have been addressed.

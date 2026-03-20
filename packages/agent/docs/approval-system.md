@@ -64,9 +64,9 @@ Subagents follow the exact same bash safety policy as the main agent. They no lo
 
 ## Key Files
 
-| File                                   | Purpose                      |
-| -------------------------------------- | ---------------------------- |
-| `packages/agent/tools/bash.ts`         | Hardcoded bash safety policy |
-| `packages/agent/tools/utils.ts`        | Sandbox context helpers      |
-| `packages/agent/subagents/executor.ts` | Executor subagent context    |
-| `packages/agent/subagents/explorer.ts` | Explorer subagent context    |
+| File | Purpose |
+| --- | --- |
+| `packages/agent/tools/bash.ts` | Hardcoded bash safety policy |
+| `packages/agent/tools/utils.ts` | Sandbox context helpers |
+| `packages/agent/subagents/executor.ts` | Executor subagent context |
+| `packages/agent/subagents/explorer.ts` | Explorer subagent context |

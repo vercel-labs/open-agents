@@ -27,9 +27,9 @@ export const taskDiffs = pgTable("task_diffs", {
   taskId: text("task_id")
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
-  diffContent: text("diff_content").notNull(), // git diff HEAD output
-  untrackedFiles: jsonb("untracked_files"), // Array<{path, content (base64)}>
-  baseCommit: text("base_commit"), // SHA for validation
+  diffContent: text("diff_content").notNull(),        // git diff HEAD output
+  untrackedFiles: jsonb("untracked_files"),           // Array<{path, content (base64)}>
+  baseCommit: text("base_commit"),                    // SHA for validation
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 ```
@@ -47,11 +47,10 @@ export async function captureSandboxState(sandbox: Sandbox): Promise<{
   diffContent: string;
   untrackedFiles: Array<{ path: string; content: string }>;
   baseCommit: string;
-}>;
+}>
 ```
 
 **Captures:**
-
 1. `git rev-parse HEAD` - base commit SHA
 2. `git diff HEAD` - all tracked file changes (staged + unstaged)
 3. `git ls-files --others --exclude-standard` - untracked file paths
@@ -65,12 +64,10 @@ export async function captureSandboxState(sandbox: Sandbox): Promise<{
 
 ```typescript
 // Create new diff, keep only latest 3 per task
-export async function createTaskDiff(data: NewTaskDiff): Promise<TaskDiff>;
+export async function createTaskDiff(data: NewTaskDiff): Promise<TaskDiff>
 
 // Get latest diff for restoration
-export async function getLatestTaskDiff(
-  taskId: string,
-): Promise<TaskDiff | null>;
+export async function getLatestTaskDiff(taskId: string): Promise<TaskDiff | null>
 ```
 
 ---
@@ -119,12 +116,11 @@ const sandbox = await connectVercelSandbox({
 ```typescript
 export async function restoreSandboxState(
   sandbox: Sandbox,
-  diff: TaskDiff,
-): Promise<{ success: boolean; error?: string }>;
+  diff: TaskDiff
+): Promise<{ success: boolean; error?: string }>
 ```
 
 **Steps:**
-
 1. Optionally verify/checkout base commit
 2. Write diff to temp file, run `git apply --3way /tmp/restore.patch`
 3. Restore untracked files by writing base64-decoded content
@@ -132,7 +128,6 @@ export async function restoreSandboxState(
 5. Return success/failure status
 
 **Error handling:**
-
 - If `git apply` fails, try `git apply --reject` for partial restoration
 - Log failures but don't block sandbox creation
 - Skip untracked files that already exist
@@ -168,7 +163,7 @@ return Response.json({
   createdAt: Date.now(),
   timeout: DEFAULT_TIMEOUT,
   currentBranch: sandbox.currentBranch,
-  stateRestored, // inform client
+  stateRestored,  // inform client
 });
 ```
 
@@ -179,7 +174,6 @@ return Response.json({
 **Modify:** `apps/web/app/tasks/[id]/task-detail-content.tsx`
 
 When `createSandbox` is called:
-
 1. Show "Restoring workspace..." text during sandbox creation (if task has messages)
 2. If `stateRestored: true` in response, continue normally
 3. If restoration failed, show subtle warning but continue
@@ -188,14 +182,14 @@ When `createSandbox` is called:
 
 ## File Changes Summary
 
-| File                                              | Action                                             |
-| ------------------------------------------------- | -------------------------------------------------- |
-| `apps/web/lib/db/schema.ts`                       | Add `taskDiffs` table                              |
-| `apps/web/lib/db/task-diffs.ts`                   | **New** - CRUD operations                          |
-| `apps/web/lib/sandbox/capture-state.ts`           | **New** - diff capture logic                       |
-| `apps/web/lib/sandbox/restore-state.ts`           | **New** - diff restoration logic                   |
-| `apps/web/app/api/sandbox/route.ts`               | Add `beforeStop` hook + restoration after creation |
-| `apps/web/app/tasks/[id]/task-detail-content.tsx` | Add "Restoring workspace..." UI                    |
+| File | Action |
+|------|--------|
+| `apps/web/lib/db/schema.ts` | Add `taskDiffs` table |
+| `apps/web/lib/db/task-diffs.ts` | **New** - CRUD operations |
+| `apps/web/lib/sandbox/capture-state.ts` | **New** - diff capture logic |
+| `apps/web/lib/sandbox/restore-state.ts` | **New** - diff restoration logic |
+| `apps/web/app/api/sandbox/route.ts` | Add `beforeStop` hook + restoration after creation |
+| `apps/web/app/tasks/[id]/task-detail-content.tsx` | Add "Restoring workspace..." UI |
 
 ---
 
@@ -204,7 +198,6 @@ When `createSandbox` is called:
 ### Why beforeStop Hook
 
 Using `beforeStop` is more efficient than capturing after every message:
-
 - Only runs once when sandbox is stopping
 - No per-message overhead
 - Git diff operation is slightly slow (~100-500ms), so doing it once is better

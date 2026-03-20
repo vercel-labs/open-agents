@@ -14,44 +14,44 @@ The design follows a **dark terminal aesthetic** that reflects the developer-foc
 
 ### Background Colors
 
-| Token        | Value          | Usage                    |
-| ------------ | -------------- | ------------------------ |
-| `bg-primary` | `#0a0a0b`      | Main page background     |
-| `bg-card`    | `#111113`      | Card/panel backgrounds   |
-| `bg-subtle`  | `white/[0.02]` | Subtle surface elevation |
-| `bg-hover`   | `white/[0.04]` | Hover states             |
+| Token | Value | Usage |
+|-------|-------|-------|
+| `bg-primary` | `#0a0a0b` | Main page background |
+| `bg-card` | `#111113` | Card/panel backgrounds |
+| `bg-subtle` | `white/[0.02]` | Subtle surface elevation |
+| `bg-hover` | `white/[0.04]` | Hover states |
 
 ### Text Colors
 
-| Token            | Value      | Usage                   |
-| ---------------- | ---------- | ----------------------- |
-| `text-primary`   | `white`    | Headings, primary text  |
+| Token | Value | Usage |
+|-------|-------|-------|
+| `text-primary` | `white` | Headings, primary text |
 | `text-secondary` | `white/50` | Body text, descriptions |
-| `text-muted`     | `white/40` | Secondary descriptions  |
-| `text-subtle`    | `white/30` | Hints, labels, metadata |
+| `text-muted` | `white/40` | Secondary descriptions |
+| `text-subtle` | `white/30` | Hints, labels, metadata |
 
 ### Border Colors
 
-| Token            | Value          | Usage                  |
-| ---------------- | -------------- | ---------------------- |
+| Token | Value | Usage |
+|-------|-------|-------|
 | `border-default` | `white/[0.08]` | Card borders, dividers |
-| `border-subtle`  | `white/[0.06]` | Subtle separators      |
-| `border-hover`   | `white/[0.12]` | Hover state borders    |
+| `border-subtle` | `white/[0.06]` | Subtle separators |
+| `border-hover` | `white/[0.12]` | Hover state borders |
 
 ### Accent Colors
 
-| Token            | Value                         | Usage                                        |
-| ---------------- | ----------------------------- | -------------------------------------------- |
+| Token | Value | Usage |
+|-------|-------|-------|
 | `accent-emerald` | `emerald-400` / `emerald-500` | Success, terminal prompts, status indicators |
-| `accent-blue`    | `blue-400` / `blue-500`       | Links, secondary highlights                  |
-| `accent-violet`  | `violet-400` / `violet-500`   | Tertiary accents                             |
-| `accent-amber`   | `amber-400`                   | Warnings                                     |
+| `accent-blue` | `blue-400` / `blue-500` | Links, secondary highlights |
+| `accent-violet` | `violet-400` / `violet-500` | Tertiary accents |
+| `accent-amber` | `amber-400` | Warnings |
 
 ### macOS Window Chrome
 
-| Element         | Color     |
-| --------------- | --------- |
-| Close button    | `#ff5f57` |
+| Element | Color |
+|---------|-------|
+| Close button | `#ff5f57` |
 | Minimize button | `#febc2e` |
 | Maximize button | `#28c840` |
 
@@ -80,8 +80,7 @@ Subtle dot matrix for texture:
 <div
   className="pointer-events-none absolute inset-0 opacity-[0.4]"
   style={{
-    backgroundImage:
-      "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
+    backgroundImage: "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)",
     backgroundSize: "24px 24px",
   }}
 />
@@ -95,8 +94,7 @@ Retro CRT-style scanlines for terminal feel:
 <div
   className="pointer-events-none absolute inset-0 opacity-[0.02]"
   style={{
-    backgroundImage:
-      "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)",
+    backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)",
   }}
 />
 ```
@@ -120,9 +118,11 @@ macOS-style window with traffic light controls:
       <span className="font-mono text-xs text-white/30">terminal</span>
     </div>
   </div>
-
+  
   {/* Content */}
-  <div className="p-5">{/* ... */}</div>
+  <div className="p-5">
+    {/* ... */}
+  </div>
 </div>
 ```
 
@@ -224,7 +224,6 @@ Horizontal divider that fades at edges:
 Use inline SVGs for consistency. Common icons:
 
 ### Terminal Icon
-
 ```tsx
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
   <polyline points="4,17 10,11 4,5" />
@@ -233,7 +232,6 @@ Use inline SVGs for consistency. Common icons:
 ```
 
 ### Lock Icon
-
 ```tsx
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -242,7 +240,6 @@ Use inline SVGs for consistency. Common icons:
 ```
 
 ### Shield Icon
-
 ```tsx
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -250,7 +247,6 @@ Use inline SVGs for consistency. Common icons:
 ```
 
 ### Cloud Icon
-
 ```tsx
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
   <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
