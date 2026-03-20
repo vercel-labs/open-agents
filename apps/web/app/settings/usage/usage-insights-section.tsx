@@ -26,26 +26,6 @@ function formatDecimal(value: number): string {
   return value.toFixed(1);
 }
 
-function InsightMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="rounded-md border bg-card p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
-      {detail ? (
-        <div className="text-xs text-muted-foreground">{detail}</div>
-      ) : null}
-    </div>
-  );
-}
-
 function formatLookbackLabel(lookbackDays: number): string {
   if (lookbackDays <= 1) {
     return "1 day";
@@ -59,9 +39,66 @@ function formatLookbackLabel(lookbackDays: number): string {
   return `${lookbackWeeks.toLocaleString()} weeks`;
 }
 
+function InsightMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="text-2xl font-bold tracking-tight">{value}</div>
+      {detail ? (
+        <div className="text-xs text-muted-foreground/70">{detail}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChurnBar({ added, removed }: { added: number; removed: number }) {
+  const total = added + removed;
+  if (total === 0) return null;
+  const addedPct = (added / total) * 100;
+  const removedPct = (removed / total) * 100;
+
+  return (
+    <div className="flex h-2 w-full overflow-hidden rounded-full">
+      <div
+        className="bg-emerald-500 transition-all dark:bg-emerald-400"
+        style={{ width: `${addedPct}%` }}
+      />
+      <div
+        className="bg-red-400 transition-all dark:bg-red-400"
+        style={{ width: `${removedPct}%` }}
+      />
+    </div>
+  );
+}
+
+function RepoBar({ value, max }: { value: number; max: number }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+
+  return (
+    <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className="h-full rounded-full bg-foreground/20 transition-all"
+        style={{ width: `${Math.max(pct, 2)}%` }}
+      />
+    </div>
+  );
+}
+
 export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
   const lookbackLabel = formatLookbackLabel(insights.lookbackDays);
   const prDetail = `${insights.pr.mergedPrCount} merged · ${insights.pr.openPrCount} open · ${insights.pr.closedPrCount} closed`;
+  const maxRepoLines = Math.max(
+    ...insights.topRepositories.map((r) => r.totalLinesChanged),
+    1,
+  );
 
   return (
     <Card>
@@ -71,8 +108,9 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
           Derived analytics from the last {lookbackLabel}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <CardContent className="space-y-8">
+        {/* Primary metrics row */}
+        <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
           <InsightMetric
             label="Tracked PRs"
             value={insights.pr.trackedPrCount.toLocaleString()}
@@ -105,58 +143,81 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
           />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Code churn</h3>
-            <div className="space-y-1 rounded-md border bg-card p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Lines added</span>
-                <span className="font-medium">
-                  {insights.code.linesAdded.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Lines removed</span>
-                <span className="font-medium">
-                  {insights.code.linesRemoved.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t pt-2">
-                <span className="text-muted-foreground">
-                  Total lines changed
-                </span>
-                <span className="font-semibold">
-                  {insights.code.totalLinesChanged.toLocaleString()}
-                </span>
+        <div className="h-px bg-border" />
+
+        {/* Code churn + Top repos */}
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Code churn */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold tracking-tight">Code churn</h3>
+
+            <div className="space-y-3">
+              <ChurnBar
+                added={insights.code.linesAdded}
+                removed={insights.code.linesRemoved}
+              />
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+                    <span className="text-xs text-muted-foreground">Added</span>
+                  </div>
+                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                    {insights.code.linesAdded.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full bg-red-400" />
+                    <span className="text-xs text-muted-foreground">
+                      Removed
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                    {insights.code.linesRemoved.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="mt-0.5 text-lg font-semibold tabular-nums">
+                    {insights.code.totalLinesChanged.toLocaleString()}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Top repositories</h3>
+          {/* Top repositories */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold tracking-tight">
+              Top repositories
+            </h3>
             {insights.topRepositories.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No repository activity in this period.
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {insights.topRepositories.map((repo) => (
                   <div
                     key={`${repo.repoOwner}/${repo.repoName}`}
-                    className="rounded-md border bg-card p-3"
+                    className="space-y-1.5"
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-medium">
                         {repo.repoOwner}/{repo.repoName}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                         {repo.sessionCount.toLocaleString()} sessions
                       </span>
                     </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {repo.trackedPrCount.toLocaleString()} tracked PRs
-                      </span>
+                    <RepoBar
+                      value={repo.totalLinesChanged}
+                      max={maxRepoLines}
+                    />
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{repo.trackedPrCount.toLocaleString()} PRs</span>
                       <span>
                         {repo.totalLinesChanged.toLocaleString()} lines changed
                       </span>
