@@ -14,9 +14,6 @@
       "zod": "^4.3.6"
     }
   },
-  "overrides": {
-    "zod": "^4.3.6"
-  },
   "scripts": {
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
@@ -34,6 +31,9 @@
     "turbo": "^2.5.4",
     "typescript": "^5",
     "ultracite": "7.3.2"
+  },
+  "overrides": {
+    "zod": "^4.3.6"
   },
   "packageManager": "bun@1.2.14"
 }

@@ -4,8 +4,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 The following environment variables are required:
 
-| Variable | Description |
-|----------|-------------|
+| Variable       | Description                                                                                                                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_URL` | PostgreSQL connection string. Required for builds — migrations run automatically during `next build` via `lib/db/migrate.ts`. Preview deployments use a Neon branch database; production uses the main database. |
 
 ## Getting Started

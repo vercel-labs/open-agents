@@ -21,6 +21,7 @@ Web -> Agent (packages/agent) -> Sandbox (packages/sandbox)
 ## Subagent Pattern
 
 The `task` tool delegates to specialized subagents:
+
 - **explorer**: Read-only, for codebase research (grep, glob, read, safe bash)
 - **executor**: Full access, for implementation tasks (all tools)
 

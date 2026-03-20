@@ -5,6 +5,7 @@
 The diff viewer shows users all changes made by the agent in real-time, comparing the current sandbox state against HEAD (essentially all staged + unstaged changes).
 
 **Data Flow:**
+
 ```
 Agent modifies files -> Tool completes -> refreshKey++ -> DiffViewer fetches -> Git commands run -> UI updates
 ```
@@ -169,7 +170,7 @@ const triggerDiffRefresh = useCallback(() => {
 ### Tool Types to Watch
 
 - `write` - file creation
-- `edit` - file modification  
+- `edit` - file modification
 - `bash` - could modify files (git commands, mv, rm, etc.)
 
 ### Implementation
@@ -184,21 +185,22 @@ useEffect(() => {
 
   for (const message of messages) {
     if (message.role !== "assistant") continue;
-    
+
     for (const part of message.parts) {
       if (!isToolUIPart(part)) continue;
-      
+
       const toolId = part.id;
       const toolState = part.state;
       currentToolStates.set(toolId, toolState);
-      
+
       // Check if this tool just completed
       const prevState = prevToolStatesRef.current.get(toolId);
-      const isFileModifyingTool = ["write", "edit", "bash"].includes(part.toolName);
-      const justCompleted = 
-        toolState === "output-available" && 
-        prevState !== "output-available";
-      
+      const isFileModifyingTool = ["write", "edit", "bash"].includes(
+        part.toolName,
+      );
+      const justCompleted =
+        toolState === "output-available" && prevState !== "output-available";
+
       if (isFileModifyingTool && justCompleted) {
         shouldRefresh = true;
       }
@@ -206,7 +208,7 @@ useEffect(() => {
   }
 
   prevToolStatesRef.current = currentToolStates;
-  
+
   if (shouldRefresh) {
     triggerDiffRefresh();
   }
@@ -222,13 +224,15 @@ useEffect(() => {
 Replace placeholder (lines 564-594) with:
 
 ```tsx
-{showDiffPanel && sandboxInfo && (
-  <DiffViewer
-    sandboxId={sandboxInfo.sandboxId}
-    refreshKey={diffRefreshKey}
-    onClose={() => setShowDiffPanel(false)}
-  />
-)}
+{
+  showDiffPanel && sandboxInfo && (
+    <DiffViewer
+      sandboxId={sandboxInfo.sandboxId}
+      refreshKey={diffRefreshKey}
+      onClose={() => setShowDiffPanel(false)}
+    />
+  );
+}
 ```
 
 ### Add button to open diff panel

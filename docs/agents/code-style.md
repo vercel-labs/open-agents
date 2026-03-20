@@ -111,6 +111,7 @@ export const myTool = (options?: { needsApproval?: boolean }) =>
 ### Workspace Dependencies
 
 Use `workspace:*` for internal packages:
+
 ```json
 {
   "dependencies": {
@@ -122,6 +123,7 @@ Use `workspace:*` for internal packages:
 ### Catalog Dependencies
 
 Use `catalog:` for shared external versions:
+
 ```json
 {
   "dependencies": {
