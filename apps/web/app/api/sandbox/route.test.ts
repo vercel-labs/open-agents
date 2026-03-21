@@ -95,6 +95,7 @@ mock.module("@/lib/vercel/projects", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
   getSessionById: async () => sessionRecord,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
     updateCalls.push({ sessionId, patch });

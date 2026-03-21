@@ -1,31 +1,23 @@
-Summary: Fix the production log noise by treating expected GitHub/workflow/sandbox 403/404 cases as graceful fallbacks, and by preventing duplicate sandbox lifecycle workflow starts that can race each other.
+Summary: Keep the new lifecycle rule that any non-null chat `activeStreamId` blocks hibernation, but make `activeStreamId` cleanup more reliable so stale stream markers do not keep sessions stuck forever or block the next prompt.
 
-Context: `apps/web/lib/github/client.ts` already intends to ignore forbidden/missing check-run reads, but the status handling is brittle and production is still surfacing 403 logs for optional check-run requests. `apps/web/app/api/chat/[chatId]/stream/route.ts` returns a 200 stream before the workflow runtime can emit late run-not-found errors, and `apps/web/lib/chat/create-cancelable-readable-stream.ts` currently treats those late 404s as fatal. Sandbox routes only classify 410-style sandbox expiration as unavailable even though the underlying sandbox APIs can also return 404-style not-found errors. `apps/web/lib/sandbox/lifecycle-kick.ts` starts lifecycle workflows before any lease is persisted, so overlapping kicks can launch duplicate short-lived runs that race to claim the same session.
+Context: `apps/web/lib/sandbox/lifecycle.ts` now treats `activeStreamId` as the authoritative “workflow is still active” signal and rechecks it right before snapshotting, which is the right protection against long-running chat workflows being hibernated mid-run. The remaining gap is stale cleanup: `apps/web/app/workflows/chat-post-finish.ts` clears the stream id on a best-effort basis, and `apps/web/app/api/chat/route.ts` currently inspects an existing run but does not clear a terminal/not-found stream id before trying to claim a new run. If that stale id lingers, lifecycle keeps skipping hibernation and a later chat submit can lose its CAS claim even though nothing is actually running.
 
-Approach: Keep the successful paths unchanged, but normalize these expected external-service failure modes so they degrade quietly instead of throwing noisy errors. For lifecycle management, make the session lease claim happen before starting the workflow so concurrent kicks collapse to one owner.
+Approach: Preserve the lifecycle evaluator exactly as the new change intends, and instead harden the two places responsible for stream-id correctness: (1) retry workflow-finish cleanup so transient DB failures do not strand stale ids, and (2) reconcile terminal/not-found ids on the chat-start path before launching a new workflow so stale state self-heals the next time the chat is used.
 
 Changes:
-- `apps/web/lib/github/client.ts` - add a small helper to extract/normalize GitHub HTTP status codes from unknown errors and use it so optional check-run/status fetches consistently suppress 403/404 noise while preserving fallback behavior.
-- `apps/web/lib/chat/create-cancelable-readable-stream.ts` - treat workflow run-not-found 404 errors the same as abort/disconnect shutdown so late stream failures close cleanly instead of surfacing as unhandled rejections.
-- `apps/web/lib/chat/create-cancelable-readable-stream.test.ts` - add regression coverage for the workflow 404 shutdown case.
-- `apps/web/lib/sandbox/utils.ts` - recognize 404 sandbox-not-found responses as sandbox-unavailable alongside the existing 410 handling.
-- `packages/sandbox/vercel/direct.ts` - treat 404 direct-sandbox failures as reconnectable/unavailable just like 410 so callers can recover instead of bubbling raw transport errors.
-- `packages/sandbox/vercel/direct.test.ts` and/or `apps/web/app/api/sandbox/reconnect/route.test.ts` - add coverage for the 404 sandbox-unavailable path.
-- `apps/web/lib/db/sessions.ts` - add a targeted compare-and-set helper for claiming `lifecycleRunId` only when it is still null.
-- `apps/web/lib/sandbox/lifecycle-kick.ts` - use the new atomic claim before starting `sandboxLifecycleWorkflow`, and clear the claim on startup failure before the inline fallback path.
-- `apps/web/lib/sandbox/lifecycle-kick.test.ts` - add focused coverage showing overlapping kicks only start one lifecycle workflow lease.
+- `apps/web/app/workflows/chat-post-finish.ts` - make `clearActiveStream` retry `compareAndSetChatActiveStreamId(chatId, workflowRunId, null)` a few times before giving up, while still avoiding clobbering a newer workflow id.
+- `apps/web/app/workflows/chat-post-finish.test.ts` - add regression coverage for transient clear failures being retried and for the helper remaining non-throwing after retries are exhausted.
+- `apps/web/app/api/chat/route.ts` - when a chat already has `activeStreamId`, reconnect immediately only for `running`/`pending` runs; otherwise clear the stale id with CAS (and re-read if needed) before starting a new workflow so stale terminal ids do not cause false 409s.
+- `apps/web/app/api/chat/route.test.ts` - cover stale completed/not-found run ids being cleared before a new run is started, while keeping the reconnect-on-running behavior unchanged.
 
 Verification:
 - Targeted tests:
-  - `bun test apps/web/lib/chat/create-cancelable-readable-stream.test.ts`
-  - `bun test packages/sandbox/vercel/direct.test.ts`
-  - `bun test apps/web/app/api/sandbox/reconnect/route.test.ts`
-  - `bun test apps/web/lib/sandbox/lifecycle-kick.test.ts`
-  - `bun test apps/web/app/api/sessions/[sessionId]/merge/route.test.ts`
+  - `bun test apps/web/app/workflows/chat-post-finish.test.ts`
+  - `bun test apps/web/app/api/chat/route.test.ts`
+  - `bun test apps/web/lib/sandbox/lifecycle-evaluate.test.ts`
 - Full validation:
   - `bun run ci`
-- Edge cases to confirm:
-  - merge-readiness still returns data when checks/check-runs are forbidden
-  - reconnecting to a stale chat stream closes cleanly instead of logging an unhandled 404
-  - stale/missing sandboxes are marked unavailable on both 404 and 410 responses
-  - repeated lifecycle kicks do not start duplicate workflow runs for one session
+- Edge cases to check:
+  - a long-running workflow with non-null `activeStreamId` still blocks hibernation
+  - a completed or missing workflow run no longer causes the next `/api/chat` request to fail with a false “already running” conflict
+  - transient DB failures while clearing `activeStreamId` are retried without clearing a newer workflow id

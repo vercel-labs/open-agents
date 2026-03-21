@@ -168,18 +168,40 @@ export async function persistSandboxState(
   }
 }
 
+const ACTIVE_STREAM_CLEAR_MAX_ATTEMPTS = 3;
+const ACTIVE_STREAM_CLEAR_RETRY_DELAY_MS = 50;
+
 export async function clearActiveStream(
   chatId: string,
   workflowRunId: string,
 ): Promise<void> {
   "use step";
-  try {
-    // Only clear if this workflow's run ID is still the active one.
-    // Prevents a late-finishing workflow from clearing a newer workflow's ID.
-    await compareAndSetChatActiveStreamId(chatId, workflowRunId, null);
-  } catch (error) {
-    console.error("[workflow] Failed to clear activeStreamId:", error);
+
+  for (
+    let attempt = 1;
+    attempt <= ACTIVE_STREAM_CLEAR_MAX_ATTEMPTS;
+    attempt++
+  ) {
+    try {
+      // Only clear if this workflow's run ID is still the active one.
+      // Prevents a late-finishing workflow from clearing a newer workflow's ID.
+      await compareAndSetChatActiveStreamId(chatId, workflowRunId, null);
+      return;
+    } catch (error) {
+      if (attempt === ACTIVE_STREAM_CLEAR_MAX_ATTEMPTS) {
+        console.error("[workflow] Failed to clear activeStreamId:", error);
+        return;
+      }
+
+      await delay(ACTIVE_STREAM_CLEAR_RETRY_DELAY_MS);
+    }
   }
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export async function recordWorkflowUsage(

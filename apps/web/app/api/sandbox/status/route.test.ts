@@ -36,6 +36,7 @@ mock.module("@/lib/session/get-server-session", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
   getSessionById: async () => sessionRecord,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
     updateCalls.push({ sessionId, patch });

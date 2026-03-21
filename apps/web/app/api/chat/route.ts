@@ -4,6 +4,7 @@ import type { WebAgentUIMessage } from "@/app/types";
 import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
+  getChatById,
   isFirstChatMessage,
   touchChat,
   updateChat,
@@ -72,21 +73,23 @@ export async function POST(req: Request) {
   // instead of starting a duplicate. This prevents auto-submit from spawning
   // parallel workflows when the client sees completed tool calls mid-loop.
   if (chat.activeStreamId) {
-    try {
-      const { getRun } = await import("workflow/api");
-      const existingRun = getRun(chat.activeStreamId);
-      const status = await existingRun.status;
-      if (status === "running" || status === "pending") {
-        const stream = createCancelableReadableStream(
-          existingRun.getReadable<WebAgentUIMessageChunk>(),
-        );
-        return createUIMessageStreamResponse({
-          stream,
-          headers: { "x-workflow-run-id": chat.activeStreamId },
-        });
-      }
-    } catch {
-      // Workflow not found or inaccessible — proceed with new workflow.
+    const existingStreamResolution = await reconcileExistingActiveStream(
+      chatId,
+      chat.activeStreamId,
+    );
+
+    if (existingStreamResolution.action === "resume") {
+      return createUIMessageStreamResponse({
+        stream: existingStreamResolution.stream,
+        headers: { "x-workflow-run-id": existingStreamResolution.runId },
+      });
+    }
+
+    if (existingStreamResolution.action === "conflict") {
+      return Response.json(
+        { error: "Another workflow is already running for this chat" },
+        { status: 409 },
+      );
     }
   }
 
@@ -210,6 +213,65 @@ export async function POST(req: Request) {
       "x-workflow-run-id": run.runId,
     },
   });
+}
+
+type ExistingActiveStreamResolution =
+  | {
+      action: "resume";
+      runId: string;
+      stream: ReadableStream<WebAgentUIMessageChunk>;
+    }
+  | {
+      action: "ready";
+    }
+  | {
+      action: "conflict";
+    };
+
+const ACTIVE_STREAM_RECONCILIATION_MAX_ATTEMPTS = 3;
+
+async function reconcileExistingActiveStream(
+  chatId: string,
+  activeStreamId: string,
+): Promise<ExistingActiveStreamResolution> {
+  const { getRun } = await import("workflow/api");
+  let currentStreamId: string | null = activeStreamId;
+
+  for (
+    let attempt = 1;
+    currentStreamId && attempt <= ACTIVE_STREAM_RECONCILIATION_MAX_ATTEMPTS;
+    attempt++
+  ) {
+    try {
+      const existingRun = getRun(currentStreamId);
+      const status = await existingRun.status;
+      if (status === "running" || status === "pending") {
+        return {
+          action: "resume",
+          runId: currentStreamId,
+          stream: createCancelableReadableStream(
+            existingRun.getReadable<WebAgentUIMessageChunk>(),
+          ),
+        };
+      }
+    } catch {
+      // Workflow not found or inaccessible — try to clear the stale stream ID.
+    }
+
+    const cleared = await compareAndSetChatActiveStreamId(
+      chatId,
+      currentStreamId,
+      null,
+    );
+    if (cleared) {
+      return { action: "ready" };
+    }
+
+    const latestChat = await getChatById(chatId);
+    currentStreamId = latestChat?.activeStreamId ?? null;
+  }
+
+  return currentStreamId ? { action: "conflict" } : { action: "ready" };
 }
 
 async function persistLatestUserMessage(
