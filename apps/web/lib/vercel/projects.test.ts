@@ -148,4 +148,58 @@ describe("Vercel project helpers", () => {
       'ALPHA="quote \\\"value\\\""\nMULTILINE="line1\\nline2"\n',
     );
   });
+
+  test("findLatestPreviewDeploymentUrlForBranch prefers the newest non-production branch deployment", async () => {
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+
+      if (url.pathname === "/v6/deployments") {
+        expect(url.searchParams.get("projectId")).toBe("project-1");
+        expect(url.searchParams.get("branch")).toBe("feature/preview");
+        expect(url.searchParams.get("state")).toBe("READY");
+        expect(url.searchParams.get("limit")).toBe("20");
+        expect(url.searchParams.get("teamId")).toBe("team-1");
+
+        return Response.json({
+          deployments: [
+            {
+              url: "project-production.vercel.app",
+              readyState: "READY",
+              target: "production",
+              createdAt: 50,
+            },
+            {
+              url: "project-preview-old.vercel.app",
+              readyState: "READY",
+              target: null,
+              createdAt: 20,
+            },
+            {
+              url: "project-preview.vercel.app",
+              readyState: "READY",
+              target: null,
+              createdAt: 40,
+              defaultRoute: "/docs",
+            },
+          ],
+        });
+      }
+
+      return new Response("Not found", { status: 404 });
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const { findLatestPreviewDeploymentUrlForBranch } =
+      await projectsModulePromise;
+    const deploymentUrl = await findLatestPreviewDeploymentUrlForBranch({
+      token: "token",
+      projectIdOrName: "project-1",
+      branch: "feature/preview",
+      teamId: "team-1",
+    });
+
+    expect(deploymentUrl).toBe("https://project-preview.vercel.app/docs");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

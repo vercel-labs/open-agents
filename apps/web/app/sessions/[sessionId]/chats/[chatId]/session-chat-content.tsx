@@ -2274,24 +2274,29 @@ export function SessionChatContent({
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
+  const hasBranchPreviewLookup = Boolean(
+    session.vercelProjectId && session.branch,
+  );
   const existingPrUrl =
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
   const { data: prDeploymentData, mutate: refreshPrDeployment } =
     useSWR<PrDeploymentResponse>(
-      hasExistingPr
-        ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
+      hasExistingPr || hasBranchPreviewLookup
+        ? `/api/sessions/${session.id}/pr-deployment${
+            hasExistingPr ? `?prNumber=${session.prNumber}` : ""
+          }`
         : null,
       fetcher,
       {
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
         // Poll while we're still waiting for the first deployment so the Preview
-        // action appears quickly after opening/creating the PR.
+        // action appears quickly after opening a PR or pushing a preview branch.
         refreshInterval: (latestData) =>
           getPrDeploymentRefreshInterval({
-            hasExistingPr,
+            shouldPoll: hasExistingPr || hasBranchPreviewLookup,
             deploymentUrl: latestData?.deploymentUrl,
             documentHasFocus:
               typeof document === "undefined" ? true : document.hasFocus(),
@@ -2503,6 +2508,16 @@ export function SessionChatContent({
                     hasUncommittedChanges={hasUncommittedGitChanges}
                     onClick={() => setCommitDialogOpen(true)}
                   />
+                ) : prDeploymentUrl ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    onClick={openPreviewOrPr}
+                  >
+                    <ExternalLink className="h-4 w-4 xl:mr-2" />
+                    <span className="hidden xl:inline">Preview</span>
+                  </Button>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
                     variant="outline"
@@ -2666,6 +2681,12 @@ export function SessionChatContent({
                             isAutoCommitting={isAutoCommitting}
                             onClick={() => setCommitDialogOpen(true)}
                           />
+                        )}
+                        {prDeploymentUrl && (
+                          <DropdownMenuItem onClick={openPreviewOrPr}>
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Preview
+                          </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
                           disabled={!canCreatePr || !isCreatePrBranchReady}

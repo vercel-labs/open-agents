@@ -4,6 +4,8 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { findLatestPreviewDeploymentUrlForBranch } from "@/lib/vercel/projects";
+import { getUserVercelToken } from "@/lib/vercel/token";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -50,6 +52,24 @@ export async function GET(req: Request, context: RouteContext) {
     return Response.json({
       deploymentUrl: null,
     } satisfies PrDeploymentResponse);
+  }
+
+  if (sessionRecord.vercelProjectId && sessionRecord.branch) {
+    const vercelToken = await getUserVercelToken(authResult.userId);
+    if (vercelToken) {
+      const deploymentUrl = await findLatestPreviewDeploymentUrlForBranch({
+        token: vercelToken,
+        projectIdOrName: sessionRecord.vercelProjectId,
+        branch: sessionRecord.branch,
+        teamId: sessionRecord.vercelTeamId,
+      }).catch(() => null);
+
+      if (deploymentUrl) {
+        return Response.json({
+          deploymentUrl,
+        } satisfies PrDeploymentResponse);
+      }
+    }
   }
 
   if (

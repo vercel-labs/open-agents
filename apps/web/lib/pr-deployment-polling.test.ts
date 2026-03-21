@@ -6,10 +6,10 @@ import {
 } from "./pr-deployment-polling";
 
 describe("pr deployment polling", () => {
-  test("stops polling when no PR exists", () => {
+  test("stops polling when preview lookup is disabled", () => {
     expect(
       getPrDeploymentRefreshInterval({
-        hasExistingPr: false,
+        shouldPoll: false,
         deploymentUrl: null,
         documentHasFocus: true,
       }),
@@ -19,7 +19,7 @@ describe("pr deployment polling", () => {
   test("stops polling once deployment url exists", () => {
     expect(
       getPrDeploymentRefreshInterval({
-        hasExistingPr: true,
+        shouldPoll: true,
         deploymentUrl: "https://preview.example.com",
         documentHasFocus: true,
       }),
@@ -29,7 +29,7 @@ describe("pr deployment polling", () => {
   test("uses active poll interval when page is focused", () => {
     expect(
       getPrDeploymentRefreshInterval({
-        hasExistingPr: true,
+        shouldPoll: true,
         deploymentUrl: null,
         documentHasFocus: true,
       }),
@@ -39,7 +39,7 @@ describe("pr deployment polling", () => {
   test("uses background poll interval when page is not focused", () => {
     expect(
       getPrDeploymentRefreshInterval({
-        hasExistingPr: true,
+        shouldPoll: true,
         deploymentUrl: null,
         documentHasFocus: false,
       }),

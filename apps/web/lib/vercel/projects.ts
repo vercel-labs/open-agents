@@ -317,3 +317,104 @@ export async function buildDevelopmentDotenvFromVercelProject(params: {
   const envs = await listVercelProjectEnvs(params);
   return serializeEnvVarsToDotenv(selectDevelopmentEnvVars(envs));
 }
+
+interface VercelDeployment {
+  url?: string | null;
+  defaultRoute?: string | null;
+  created?: number;
+  createdAt?: number;
+  ready?: number;
+  state?: string;
+  readyState?: string;
+  target?: string | null;
+}
+
+interface VercelDeploymentsResponse {
+  deployments?: VercelDeployment[];
+}
+
+function getDeploymentRecencyTimestamp(deployment: VercelDeployment): number {
+  const timestamps = [
+    deployment.ready,
+    deployment.createdAt,
+    deployment.created,
+  ]
+    .filter((value): value is number => typeof value === "number")
+    .filter((value) => Number.isFinite(value));
+
+  return timestamps.length > 0 ? Math.max(...timestamps) : 0;
+}
+
+function normalizeDeploymentBaseUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function getDeploymentUrl(deployment: VercelDeployment): string | null {
+  if (!isNonEmptyString(deployment.url)) {
+    return null;
+  }
+
+  const baseUrl = normalizeDeploymentBaseUrl(deployment.url.trim());
+  const defaultRoute =
+    typeof deployment.defaultRoute === "string"
+      ? deployment.defaultRoute.trim()
+      : "";
+
+  if (!defaultRoute || defaultRoute === "/") {
+    return baseUrl;
+  }
+
+  if (!defaultRoute.startsWith("/")) {
+    return baseUrl;
+  }
+
+  return new URL(defaultRoute, baseUrl).toString();
+}
+
+export async function findLatestPreviewDeploymentUrlForBranch(params: {
+  token: string;
+  projectIdOrName: string;
+  branch: string;
+  teamId?: string | null;
+}): Promise<string | null> {
+  const branch = params.branch.trim();
+  if (!branch) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    projectId: params.projectIdOrName,
+    branch,
+    state: "READY",
+    limit: "20",
+  });
+  if (params.teamId) {
+    query.set("teamId", params.teamId);
+  }
+
+  const response = await fetchVercelJson<VercelDeploymentsResponse>({
+    path: "/v6/deployments",
+    token: params.token,
+    query,
+  });
+
+  const latestDeployment = (response.deployments ?? [])
+    .filter((deployment) => {
+      if (!getDeploymentUrl(deployment)) {
+        return false;
+      }
+
+      if ((deployment.readyState ?? deployment.state) !== "READY") {
+        return false;
+      }
+
+      return deployment.target !== "production";
+    })
+    .sort(
+      (left, right) =>
+        getDeploymentRecencyTimestamp(right) -
+        getDeploymentRecencyTimestamp(left),
+    )[0];
+
+  return latestDeployment ? getDeploymentUrl(latestDeployment) : null;
+}
