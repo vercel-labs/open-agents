@@ -73,6 +73,11 @@ function formatDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const DAY_LABEL_WIDTH = 32;
+const CELL_GAP = 2;
+const LEGEND_CELL_SIZE = 12;
+const MIN_CELL_SIZE = 10;
+
 export function ContributionChart({ data }: ContributionChartProps) {
   const { grid, monthLabels, thresholds } = useMemo(() => {
     const dataMap = new Map<string, DayData>();
@@ -137,23 +142,28 @@ export function ContributionChart({ data }: ContributionChartProps) {
     return { grid: weeks, monthLabels: months, thresholds: t };
   }, [data]);
 
-  const cellSize = 12;
-  const cellGap = 2;
-  const step = cellSize + cellGap;
+  const weekCount = grid.length;
+  const minGridWidth =
+    DAY_LABEL_WIDTH + weekCount * MIN_CELL_SIZE + (weekCount - 1) * CELL_GAP;
 
   return (
     <div className="flex flex-col gap-1 overflow-x-auto">
       {/* Month labels */}
-      <div className="flex" style={{ paddingLeft: 32 }}>
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
+          columnGap: CELL_GAP,
+          minWidth: minGridWidth,
+        }}
+      >
         {monthLabels.map((m, i) => (
           <span
             key={`${m.label}-${i}`}
-            className="text-xs text-muted-foreground"
+            className="whitespace-nowrap text-xs text-muted-foreground"
             style={{
-              position: "relative",
-              left: m.weekIndex * step,
-              width: 0,
-              whiteSpace: "nowrap",
+              gridColumn: m.weekIndex + 2,
+              gridRow: 1,
             }}
           >
             {m.label}
@@ -161,85 +171,88 @@ export function ContributionChart({ data }: ContributionChartProps) {
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="flex gap-0">
+      {/* Chart grid */}
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
+          gridTemplateRows: `repeat(${DAYS_IN_WEEK}, auto)`,
+          gap: CELL_GAP,
+          minWidth: minGridWidth,
+        }}
+      >
         {/* Day labels */}
-        <div
-          className="flex flex-col justify-between pr-1"
-          style={{ height: DAYS_IN_WEEK * step - cellGap }}
-        >
-          {DAY_LABELS.map((label, i) => (
-            <span
-              key={i}
-              className="text-xs leading-none text-muted-foreground"
-              style={{ height: cellSize, lineHeight: `${cellSize}px` }}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
+        {DAY_LABELS.map((label, i) => (
+          <span
+            key={i}
+            className="flex items-center text-xs leading-none text-muted-foreground"
+            style={{ gridColumn: 1, gridRow: i + 1 }}
+          >
+            {label}
+          </span>
+        ))}
 
-        {/* Weeks */}
-        <div className="flex" style={{ gap: cellGap }}>
-          {grid.map((week, wi) => (
-            <div key={wi} className="flex flex-col" style={{ gap: cellGap }}>
-              {week.map((cell) => {
-                if (cell.isFuture) {
-                  return (
-                    <div
-                      key={cell.date}
-                      style={{ width: cellSize, height: cellSize }}
-                    />
-                  );
-                }
+        {/* Week cells */}
+        {grid.flatMap((week, wi) =>
+          week.map((cell, di) => {
+            if (cell.isFuture) {
+              return (
+                <div
+                  key={cell.date}
+                  style={{
+                    gridColumn: wi + 2,
+                    gridRow: di + 1,
+                    aspectRatio: "1 / 1",
+                  }}
+                />
+              );
+            }
 
-                const messageCount = cell.data?.messageCount ?? 0;
-                const intensity = getIntensity(messageCount, thresholds);
+            const messageCount = cell.data?.messageCount ?? 0;
+            const intensity = getIntensity(messageCount, thresholds);
 
-                return (
-                  <Tooltip key={cell.date}>
-                    <TooltipTrigger asChild>
-                      <div
-                        className={`rounded-[2px] ${INTENSITY_CLASSES[intensity]}`}
-                        style={{ width: cellSize, height: cellSize }}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      <div className="text-xs">
-                        <div className="font-medium">
-                          {formatDate(cell.date)}
+            return (
+              <Tooltip key={cell.date}>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`rounded-[2px] ${INTENSITY_CLASSES[intensity]}`}
+                    style={{
+                      gridColumn: wi + 2,
+                      gridRow: di + 1,
+                      aspectRatio: "1 / 1",
+                    }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <div className="text-xs">
+                    <div className="font-medium">{formatDate(cell.date)}</div>
+                    {messageCount > 0 ? (
+                      <>
+                        <div>
+                          {messageCount} message
+                          {messageCount !== 1 ? "s" : ""}
                         </div>
-                        {messageCount > 0 ? (
-                          <>
-                            <div>
-                              {messageCount} message
-                              {messageCount !== 1 ? "s" : ""}
-                            </div>
-                            <div>
-                              {formatTokens(
-                                (cell.data?.inputTokens ?? 0) +
-                                  (cell.data?.outputTokens ?? 0),
-                              )}{" "}
-                              tokens
-                            </div>
-                            <div>
-                              {cell.data?.toolCallCount ?? 0} tool call
-                              {(cell.data?.toolCallCount ?? 0) !== 1 ? "s" : ""}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-muted-foreground">
-                            No activity
-                          </div>
-                        )}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+                        <div>
+                          {formatTokens(
+                            (cell.data?.inputTokens ?? 0) +
+                              (cell.data?.outputTokens ?? 0),
+                          )}{" "}
+                          tokens
+                        </div>
+                        <div>
+                          {cell.data?.toolCallCount ?? 0} tool call
+                          {(cell.data?.toolCallCount ?? 0) !== 1 ? "s" : ""}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-muted-foreground">No activity</div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            );
+          }),
+        )}
       </div>
 
       {/* Legend */}
@@ -249,7 +262,7 @@ export function ContributionChart({ data }: ContributionChartProps) {
           <div
             key={i}
             className={`rounded-[2px] ${cls}`}
-            style={{ width: cellSize, height: cellSize }}
+            style={{ width: LEGEND_CELL_SIZE, height: LEGEND_CELL_SIZE }}
           />
         ))}
         <span>More</span>
