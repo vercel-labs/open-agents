@@ -153,7 +153,12 @@ function SettingsLayout({
             {activeItem?.label ?? "Settings"}
           </span>
         </div>
-        <div className="mx-auto max-w-2xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+        <div
+          className={cn(
+            "mx-auto space-y-6 px-4 py-6 md:px-6 md:py-8",
+            pathname === "/settings/usage" ? "max-w-4xl" : "max-w-2xl",
+          )}
+        >
           {children}
         </div>
       </main>

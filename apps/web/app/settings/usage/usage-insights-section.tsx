@@ -116,7 +116,7 @@ export function UsageInsightsSection({ insights }: UsageInsightsSectionProps) {
       </CardHeader>
       <CardContent className="space-y-6 sm:space-y-8">
         {/* Primary metrics row */}
-        <div className="grid gap-3 min-[420px]:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3">
           <InsightMetric
             label="Tracked PRs"
             value={insights.pr.trackedPrCount.toLocaleString()}
