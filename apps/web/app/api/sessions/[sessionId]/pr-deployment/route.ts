@@ -58,7 +58,11 @@ export async function GET(req: Request, context: RouteContext) {
 
   const previewLookupBranch = requestedBranch ?? sessionRecord.branch;
 
-  if (sessionRecord.vercelProjectId && previewLookupBranch) {
+  if (
+    sessionRecord.prNumber === null &&
+    sessionRecord.vercelProjectId &&
+    previewLookupBranch
+  ) {
     const vercelToken = await getUserVercelToken(authResult.userId);
     if (vercelToken) {
       const deploymentUrl = await findLatestPreviewDeploymentUrlForBranch({

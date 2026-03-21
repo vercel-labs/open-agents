@@ -132,10 +132,11 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     });
   });
 
-  test("falls back to the PR-based lookup when no branch preview is available yet", async () => {
+  test("uses the PR-based lookup directly when the session already has a PR", async () => {
     const { GET } = await routeModulePromise;
 
     currentSessionRecord.prNumber = 42;
+    currentBranchDeploymentUrl = "https://branch-preview.vercel.app";
     currentPullRequestDeploymentResult = {
       success: true,
       deploymentUrl: "https://pr-preview.vercel.app",
@@ -143,7 +144,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
 
     const response = await GET(
       new Request(
-        "http://localhost/api/sessions/session-1/pr-deployment?prNumber=42",
+        "http://localhost/api/sessions/session-1/pr-deployment?prNumber=42&branch=feature/preview",
       ),
       createRouteContext(),
     );
@@ -152,7 +153,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     expect(response.status).toBe(200);
     expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
     expect(findLatestPreviewDeploymentUrlForBranchMock).toHaveBeenCalledTimes(
-      1,
+      0,
     );
     expect(getRepoTokenMock).toHaveBeenCalledTimes(1);
     expect(
