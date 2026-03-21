@@ -5,7 +5,11 @@ import {
   type SandboxState,
   type SnapshotResult,
 } from "@open-harness/sandbox";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  getChatsBySessionId,
+  getSessionById,
+  updateSession,
+} from "@/lib/db/sessions";
 import {
   SANDBOX_EXPIRES_BUFFER_MS,
   SANDBOX_INACTIVITY_TIMEOUT_MS,
@@ -153,39 +157,20 @@ export function getLifecycleDueAtMs(source: LifecycleTimingSource): number {
   return Math.min(inactivityDueAtMs, expiryDueAtMs);
 }
 
-async function hasActiveWorkflowForSession(
-  sessionId: string,
-): Promise<boolean> {
-  const { compareAndSetChatActiveStreamId, getChatsBySessionId } =
-    await import("@/lib/db/sessions");
+async function hasActiveStreamForSession(sessionId: string): Promise<boolean> {
   const chatsInSession = await getChatsBySessionId(sessionId);
-  const { getRun } = await import("workflow/api");
+  return chatsInSession.some((chat) => chat.activeStreamId !== null);
+}
 
-  for (const chat of chatsInSession) {
-    const activeStreamId = chat.activeStreamId;
-    if (!activeStreamId) {
-      continue;
-    }
-
-    try {
-      const run = getRun(activeStreamId);
-      const status = await run.status;
-
-      if (status === "running" || status === "pending") {
-        return true;
-      }
-    } catch (error) {
-      console.warn(
-        `[Lifecycle] Failed to read workflow status for run ${activeStreamId} in chat ${chat.id}; skipping hibernation to avoid interrupting a live workflow.`,
-        error,
-      );
-      return true;
-    }
-
-    await compareAndSetChatActiveStreamId(chat.id, activeStreamId, null);
-  }
-
-  return false;
+async function restoreActiveLifecycleState(
+  sessionId: string,
+  sandboxState: SandboxState,
+): Promise<void> {
+  await updateSession(sessionId, {
+    lifecycleState: "active",
+    lifecycleError: null,
+    sandboxExpiresAt: getSandboxExpiresAtDate(sandboxState),
+  });
 }
 
 /**
@@ -223,7 +208,7 @@ export async function evaluateSandboxLifecycle(
     return { action: "skipped", reason: "not-due-yet" };
   }
 
-  if (await hasActiveWorkflowForSession(sessionId)) {
+  if (await hasActiveStreamForSession(sessionId)) {
     return { action: "skipped", reason: "active-workflow" };
   }
 
@@ -239,6 +224,11 @@ export async function evaluateSandboxLifecycle(
         ...buildActiveLifecycleUpdate(sandboxState),
       });
       return { action: "skipped", reason: "snapshot-not-supported" };
+    }
+
+    if (await hasActiveStreamForSession(sessionId)) {
+      await restoreActiveLifecycleState(sessionId, sandboxState);
+      return { action: "skipped", reason: "active-workflow" };
     }
 
     let snapshot: SnapshotResult;

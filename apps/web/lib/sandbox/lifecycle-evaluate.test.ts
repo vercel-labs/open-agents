@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.module("server-only", () => ({}));
 
-type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
-
 interface TestSessionRecord {
   id: string;
   status: "running" | "completed" | "failed" | "archived";
@@ -25,27 +23,19 @@ interface TestSessionRecord {
   updatedAt: Date;
 }
 
-let runStatus: RunStatus = "running";
-let shouldThrowWhenLoadingRun = false;
 let sessionRecord: TestSessionRecord | null = null;
 let chatsInSession: Array<{ id: string; activeStreamId: string | null }> = [];
 let snapshotId = "snapshot-1";
 let snapshotError: Error | null = null;
 
-const spies = {
-  getRun: mock((runId: string) => {
-    if (shouldThrowWhenLoadingRun) {
-      throw new Error(`missing run ${runId}`);
-    }
+const snapshotSpy = mock(async () => {
+  if (snapshotError) {
+    throw snapshotError;
+  }
+  return { snapshotId };
+});
 
-    return {
-      status: Promise.resolve(runStatus),
-    };
-  }),
-  compareAndSetChatActiveStreamId: mock(
-    (_chatId: string, _expectedStreamId: string | null, _nextStreamId: null) =>
-      Promise.resolve(true),
-  ),
+const spies = {
   getChatsBySessionId: mock(
     async (_sessionId: string) => chatsInSession as never,
   ),
@@ -54,21 +44,12 @@ const spies = {
     async (_sessionId: string, patch: Record<string, unknown>) => patch,
   ),
   connectSandbox: mock(async () => ({
-    snapshot: async () => {
-      if (snapshotError) {
-        throw snapshotError;
-      }
-      return { snapshotId };
-    },
+    snapshot: snapshotSpy,
   })),
+  snapshot: snapshotSpy,
 };
 
-mock.module("workflow/api", () => ({
-  getRun: spies.getRun,
-}));
-
 mock.module("@/lib/db/sessions", () => ({
-  compareAndSetChatActiveStreamId: spies.compareAndSetChatActiveStreamId,
   getChatsBySessionId: spies.getChatsBySessionId,
   getSessionById: spies.getSessionById,
   updateSession: spies.updateSession,
@@ -99,8 +80,6 @@ function makeDueSession(): TestSessionRecord {
 }
 
 beforeEach(() => {
-  runStatus = "running";
-  shouldThrowWhenLoadingRun = false;
   sessionRecord = makeDueSession();
   chatsInSession = [];
   snapshotId = "snapshot-1";
@@ -110,9 +89,8 @@ beforeEach(() => {
 });
 
 describe("evaluateSandboxLifecycle", () => {
-  test("skips hibernation when a chat workflow is actively running", async () => {
+  test("skips hibernation whenever any chat still has an activeStreamId", async () => {
     chatsInSession = [{ id: "chat-1", activeStreamId: "wrun-running-1" }];
-    runStatus = "running";
 
     const result = await evaluateSandboxLifecycle(
       "session-1",
@@ -122,12 +100,16 @@ describe("evaluateSandboxLifecycle", () => {
     expect(result).toEqual({ action: "skipped", reason: "active-workflow" });
     expect(spies.connectSandbox).not.toHaveBeenCalled();
     expect(spies.updateSession).not.toHaveBeenCalled();
-    expect(spies.compareAndSetChatActiveStreamId).not.toHaveBeenCalled();
+    expect(spies.snapshot).not.toHaveBeenCalled();
   });
 
-  test("skips hibernation when workflow status cannot be read", async () => {
-    chatsInSession = [{ id: "chat-1", activeStreamId: "wrun-unknown-1" }];
-    shouldThrowWhenLoadingRun = true;
+  test("rechecks for activeStreamId before snapshotting and restores active lifecycle state", async () => {
+    spies.connectSandbox.mockImplementationOnce(async () => {
+      chatsInSession = [{ id: "chat-1", activeStreamId: "wrun-raced-in-1" }];
+      return {
+        snapshot: snapshotSpy,
+      };
+    });
 
     const result = await evaluateSandboxLifecycle(
       "session-1",
@@ -135,9 +117,24 @@ describe("evaluateSandboxLifecycle", () => {
     );
 
     expect(result).toEqual({ action: "skipped", reason: "active-workflow" });
-    expect(spies.connectSandbox).not.toHaveBeenCalled();
-    expect(spies.updateSession).not.toHaveBeenCalled();
-    expect(spies.compareAndSetChatActiveStreamId).not.toHaveBeenCalled();
+    expect(spies.getChatsBySessionId).toHaveBeenCalledTimes(2);
+    expect(spies.snapshot).not.toHaveBeenCalled();
+
+    const updateCalls = spies.updateSession.mock.calls as unknown[][];
+    const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
+    const finalPatch = updateCalls.at(-1)?.[1] as Record<string, unknown>;
+
+    expect(firstPatch).toEqual({
+      lifecycleState: "hibernating",
+      lifecycleError: null,
+    });
+    expect(finalPatch).toEqual({
+      lifecycleState: "active",
+      lifecycleError: null,
+      sandboxExpiresAt: null,
+    });
+    expect(finalPatch).not.toHaveProperty("lastActivityAt");
+    expect(finalPatch).not.toHaveProperty("hibernateAfter");
   });
 
   test("does not extend lifecycle timers when snapshot is already in progress", async () => {
@@ -179,22 +176,15 @@ describe("evaluateSandboxLifecycle", () => {
     );
   });
 
-  test("clears terminal stream ids before hibernating", async () => {
-    chatsInSession = [{ id: "chat-1", activeStreamId: "wrun-complete-1" }];
-    runStatus = "completed";
-
+  test("hibernates when no chat has an activeStreamId", async () => {
     const result = await evaluateSandboxLifecycle(
       "session-1",
       "status-check-overdue",
     );
 
     expect(result).toEqual({ action: "hibernated" });
-    expect(spies.compareAndSetChatActiveStreamId).toHaveBeenCalledWith(
-      "chat-1",
-      "wrun-complete-1",
-      null,
-    );
     expect(spies.connectSandbox).toHaveBeenCalledTimes(1);
+    expect(spies.snapshot).toHaveBeenCalledTimes(1);
 
     const updateCalls = spies.updateSession.mock.calls as unknown[][];
     const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
