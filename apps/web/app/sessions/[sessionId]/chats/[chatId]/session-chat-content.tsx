@@ -864,6 +864,8 @@ export function SessionChatContent({
   const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
     string | null
   >(null);
+  const [branchPreviewUrlChangeBaseline, setBranchPreviewUrlChangeBaseline] =
+    useState<string | null | undefined>(undefined);
   const hasMounted = useHasMounted();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
@@ -2292,19 +2294,43 @@ export function SessionChatContent({
       {
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
-        // Poll while we're still waiting for the first deployment so the Preview
-        // action appears quickly after opening a PR or pushing a preview branch.
+        // Poll while we're still waiting for the first deployment, or while a
+        // branch preview is rolling forward to a newer deployment after a push.
         refreshInterval: (latestData) =>
           getPrDeploymentRefreshInterval({
             shouldPoll: hasExistingPr || hasBranchPreviewLookup,
             deploymentUrl: latestData?.deploymentUrl,
             documentHasFocus:
               typeof document === "undefined" ? true : document.hasFocus(),
+            waitForDeploymentUrlChangeFrom: branchPreviewUrlChangeBaseline,
           }),
         shouldRetryOnError: false,
       },
     );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
+
+  useEffect(() => {
+    if (hasExistingPr || !hasBranchPreviewLookup) {
+      if (branchPreviewUrlChangeBaseline !== undefined) {
+        setBranchPreviewUrlChangeBaseline(undefined);
+      }
+      return;
+    }
+
+    if (branchPreviewUrlChangeBaseline === undefined) {
+      return;
+    }
+
+    if (prDeploymentUrl !== branchPreviewUrlChangeBaseline) {
+      setBranchPreviewUrlChangeBaseline(undefined);
+    }
+  }, [
+    hasExistingPr,
+    hasBranchPreviewLookup,
+    branchPreviewUrlChangeBaseline,
+    prDeploymentUrl,
+  ]);
+
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
   const hasBranchDiff =
@@ -2336,6 +2362,32 @@ export function SessionChatContent({
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
+
+  const handleCommitted = useCallback(async () => {
+    if (!hasExistingPr && hasBranchPreviewLookup) {
+      setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
+    }
+
+    await Promise.all([
+      refreshGitStatus().catch(() => undefined),
+      refreshDiff().catch(() => undefined),
+      refreshFiles().catch(() => undefined),
+      checkBranchAndPr().catch(() => undefined),
+    ]);
+
+    if (hasExistingPr || hasBranchPreviewLookup) {
+      await refreshPrDeployment().catch(() => undefined);
+    }
+  }, [
+    hasExistingPr,
+    hasBranchPreviewLookup,
+    prDeploymentUrl,
+    refreshGitStatus,
+    refreshDiff,
+    refreshFiles,
+    checkBranchAndPr,
+    refreshPrDeployment,
+  ]);
 
   const handleMerged = useCallback(
     async (mergeResult: MergePullRequestResponse) => {
@@ -3569,14 +3621,7 @@ export function SessionChatContent({
           gitStatus={gitStatus}
           refreshGitStatus={refreshGitStatus}
           onOpenCreatePr={() => setPrDialogOpen(true)}
-          onCommitted={() => {
-            refreshGitStatus().catch(() => {});
-            refreshDiff().catch(() => {});
-            refreshFiles().catch(() => {});
-            if (hasExistingPr) {
-              refreshPrDeployment().catch(() => {});
-            }
-          }}
+          onCommitted={handleCommitted}
         />
       )}
 

@@ -5,14 +5,24 @@ type GetPrDeploymentRefreshIntervalOptions = {
   shouldPoll: boolean;
   deploymentUrl: string | null | undefined;
   documentHasFocus: boolean;
+  waitForDeploymentUrlChangeFrom?: string | null;
 };
 
 export function getPrDeploymentRefreshInterval({
   shouldPoll,
   deploymentUrl,
   documentHasFocus,
+  waitForDeploymentUrlChangeFrom,
 }: GetPrDeploymentRefreshIntervalOptions): number {
-  if (!shouldPoll || deploymentUrl) {
+  if (!shouldPoll) {
+    return 0;
+  }
+
+  const shouldKeepPollingForUpdatedDeployment =
+    waitForDeploymentUrlChangeFrom !== undefined &&
+    (deploymentUrl ?? null) === waitForDeploymentUrlChangeFrom;
+
+  if (deploymentUrl && !shouldKeepPollingForUpdatedDeployment) {
     return 0;
   }
 
