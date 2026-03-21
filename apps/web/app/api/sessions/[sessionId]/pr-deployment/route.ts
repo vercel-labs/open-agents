@@ -32,8 +32,10 @@ export async function GET(req: Request, context: RouteContext) {
 
   const { sessionRecord } = sessionContext;
 
-  const requestedPrNumber = new URL(req.url).searchParams.get("prNumber");
+  const searchParams = new URL(req.url).searchParams;
+  const requestedPrNumber = searchParams.get("prNumber");
   const parsedPrNumber = requestedPrNumber ? Number(requestedPrNumber) : null;
+  const requestedBranch = searchParams.get("branch")?.trim() || null;
 
   if (
     parsedPrNumber !== null &&
@@ -54,13 +56,15 @@ export async function GET(req: Request, context: RouteContext) {
     } satisfies PrDeploymentResponse);
   }
 
-  if (sessionRecord.vercelProjectId && sessionRecord.branch) {
+  const previewLookupBranch = requestedBranch ?? sessionRecord.branch;
+
+  if (sessionRecord.vercelProjectId && previewLookupBranch) {
     const vercelToken = await getUserVercelToken(authResult.userId);
     if (vercelToken) {
       const deploymentUrl = await findLatestPreviewDeploymentUrlForBranch({
         token: vercelToken,
         projectIdOrName: sessionRecord.vercelProjectId,
-        branch: sessionRecord.branch,
+        branch: previewLookupBranch,
         teamId: sessionRecord.vercelTeamId,
       }).catch(() => null);
 

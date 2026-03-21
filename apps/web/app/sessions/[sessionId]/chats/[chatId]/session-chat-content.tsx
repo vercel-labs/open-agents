@@ -2276,18 +2276,28 @@ export function SessionChatContent({
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
+  const previewLookupBranch =
+    gitStatus?.branch && gitStatus.branch !== "HEAD"
+      ? gitStatus.branch
+      : session.branch;
   const hasBranchPreviewLookup = Boolean(
-    session.vercelProjectId && session.branch,
+    session.vercelProjectId && previewLookupBranch,
   );
   const existingPrUrl =
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
+  const prDeploymentQuery = new URLSearchParams(
+    Object.entries({
+      ...(hasExistingPr ? { prNumber: String(session.prNumber) } : {}),
+      ...(previewLookupBranch ? { branch: previewLookupBranch } : {}),
+    }),
+  ).toString();
   const { data: prDeploymentData, mutate: refreshPrDeployment } =
     useSWR<PrDeploymentResponse>(
       hasExistingPr || hasBranchPreviewLookup
         ? `/api/sessions/${session.id}/pr-deployment${
-            hasExistingPr ? `?prNumber=${session.prNumber}` : ""
+            prDeploymentQuery ? `?${prDeploymentQuery}` : ""
           }`
         : null,
       fetcher,

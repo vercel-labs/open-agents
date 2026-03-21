@@ -108,6 +108,30 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     ).toHaveBeenCalledTimes(0);
   });
 
+  test("uses the requested branch for preview lookup so freshly-created branches resolve immediately", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentSessionRecord.branch = "main";
+    currentBranchDeploymentUrl = "https://project-preview.vercel.app";
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/sessions/session-1/pr-deployment?branch=feature/fresh-preview",
+      ),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as { deploymentUrl: string | null };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBe("https://project-preview.vercel.app");
+    expect(findLatestPreviewDeploymentUrlForBranchMock).toHaveBeenCalledWith({
+      token: "vercel-token",
+      projectIdOrName: "project-1",
+      branch: "feature/fresh-preview",
+      teamId: "team-1",
+    });
+  });
+
   test("falls back to the PR-based lookup when no branch preview is available yet", async () => {
     const { GET } = await routeModulePromise;
 
