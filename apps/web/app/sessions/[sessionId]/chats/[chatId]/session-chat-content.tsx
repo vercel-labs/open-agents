@@ -110,7 +110,6 @@ import {
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
-import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
@@ -1661,6 +1660,22 @@ export function SessionChatContent({
     [attemptReconnection, syncSandboxStatus],
   );
 
+  const refreshWorkspaceAfterRestore = useCallback(async () => {
+    await requestStatusSync("force").catch(() => undefined);
+    await Promise.all([
+      refreshGitStatus().catch(() => undefined),
+      refreshDiff().catch(() => undefined),
+      refreshFiles().catch(() => undefined),
+      checkBranchAndPr().catch(() => undefined),
+    ]);
+  }, [
+    requestStatusSync,
+    refreshGitStatus,
+    refreshDiff,
+    refreshFiles,
+    checkBranchAndPr,
+  ]);
+
   const handleRestoreSnapshot = useCallback(async () => {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
@@ -1689,6 +1704,7 @@ export function SessionChatContent({
         // If a sandbox is already running (for example after a lifecycle
         // restore), reconnect instead of surfacing a blocking error.
         if (errorMsg.includes("sandbox is still running")) {
+          shouldRefreshRestoredWorkspaceRef.current = true;
           const reconnected = await waitForSandboxReady();
           if (!reconnected) {
             setRestoreError(
@@ -1698,30 +1714,25 @@ export function SessionChatContent({
           return;
         }
 
+        shouldRefreshRestoredWorkspaceRef.current = false;
         setRestoreError(`Snapshot restore failed: ${errorMsg}`);
         return;
       }
 
       if (payload.alreadyRunning) {
+        shouldRefreshRestoredWorkspaceRef.current = true;
         const reconnected = await waitForSandboxReady();
         if (!reconnected) {
           setRestoreError(
             "Sandbox is already running. Refresh in a few seconds if it does not reconnect automatically.",
           );
-        } else {
-          void requestStatusSync("force");
         }
         return;
       }
 
-      // Set sandbox info for the restored sandbox
-      setSandboxInfo({
-        createdAt: Date.now(),
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      });
-
       // Keep preferred sandbox mode aligned with the preserved session state.
       setSandboxTypeFromUnknown(session.sandboxState?.type);
+      shouldRefreshRestoredWorkspaceRef.current = true;
 
       // Refresh local timeout/connection data from server state.
       const reconnected = await waitForSandboxReady();
@@ -1729,10 +1740,9 @@ export function SessionChatContent({
         setRestoreError(
           "Snapshot restored, but reconnect did not complete yet. Try Resume sandbox again.",
         );
-      } else {
-        void requestStatusSync("force");
       }
     } catch (err) {
+      shouldRefreshRestoredWorkspaceRef.current = false;
       const errorMsg = err instanceof Error ? err.message : String(err);
       setRestoreError(`Failed to restore snapshot: ${errorMsg}`);
     } finally {
@@ -1741,9 +1751,7 @@ export function SessionChatContent({
   }, [
     session.id,
     session.sandboxState,
-    setSandboxInfo,
     setSandboxTypeFromUnknown,
-    requestStatusSync,
     waitForSandboxReady,
   ]);
 
@@ -1886,8 +1894,25 @@ export function SessionChatContent({
   const hasAutoStartedSandboxRef = useRef(false);
   const hasAutoRestoredSnapshotRef = useRef(false);
   const shouldAutoResumeOnEntryRef = useRef(true);
+  const shouldRefreshRestoredWorkspaceRef = useRef(false);
 
   const isArchived = session.status === "archived";
+
+  // After a snapshot restore, wait for the live workspace hooks to be active
+  // again before forcing refreshes. Calling the pre-restore callbacks inside
+  // the async restore handler can be a no-op because they were created while
+  // the sandbox was still offline.
+  useEffect(() => {
+    if (!shouldRefreshRestoredWorkspaceRef.current) {
+      return;
+    }
+    if (!sandboxInfo || reconnectionStatus !== "connected") {
+      return;
+    }
+
+    shouldRefreshRestoredWorkspaceRef.current = false;
+    void refreshWorkspaceAfterRestore();
+  }, [sandboxInfo, reconnectionStatus, refreshWorkspaceAfterRestore]);
 
   // Attempt a single reconnect probe on entry to pick up authoritative server state
   // (connected sandbox, no sandbox, and snapshot availability).
