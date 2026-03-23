@@ -13,6 +13,7 @@ export interface UserPreferencesData {
   defaultSandboxType: SandboxType;
   defaultDiffMode: DiffMode;
   autoCommitPush: boolean;
+  autoCreatePr: boolean;
   modelVariants: ModelVariant[];
 }
 
@@ -22,6 +23,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultSandboxType: "vercel",
   defaultDiffMode: "unified",
   autoCommitPush: false,
+  autoCreatePr: false,
   modelVariants: [],
 };
 
@@ -62,6 +64,7 @@ export function toUserPreferencesData(
     | "defaultSandboxType"
     | "defaultDiffMode"
     | "autoCommitPush"
+    | "autoCreatePr"
     | "modelVariants"
   >,
 ): UserPreferencesData {
@@ -75,6 +78,7 @@ export function toUserPreferencesData(
     defaultSandboxType: normalizeSandboxType(row?.defaultSandboxType),
     defaultDiffMode: normalizeDiffMode(row?.defaultDiffMode),
     autoCommitPush: row?.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
+    autoCreatePr: row?.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
   };
 }
@@ -135,6 +139,8 @@ export async function updateUserPreferences(
         updates.defaultDiffMode ?? DEFAULT_PREFERENCES.defaultDiffMode,
       autoCommitPush:
         updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
+      autoCreatePr:
+        updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
     })
     .returning();

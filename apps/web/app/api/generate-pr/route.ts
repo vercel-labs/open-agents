@@ -1,12 +1,10 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { gateway, generateText, NoObjectGeneratedError, Output } from "ai";
-import { z } from "zod";
+import { gateway, generateText } from "ai";
 import {
   ensureForkExists,
   extractGitHubOwnerFromRemoteUrl,
   forkPushRetryConfig,
   generateBranchName,
-  getConversationContext,
   isPermissionPushError,
   isRetryableForkPushError,
   looksLikeCommitHash,
@@ -16,22 +14,10 @@ import {
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-const prContentSchema = z.object({
-  title: z
-    .string()
-    .describe(
-      "A concise PR title, max 72 characters. Should follow conventional commits format.",
-    ),
-  body: z
-    .string()
-    .describe(
-      "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points. Use real newlines for line breaks, NEVER literal backslash-n sequences.",
-    ),
-});
 
 // Allow up to 2 minutes for AI generation and git operations
 export const maxDuration = 120;
@@ -656,227 +642,22 @@ Respond with ONLY the commit message, nothing else.`,
     });
   }
 
-  // 6. Determine the best base ref for comparison
-  // Reuse the baseRef we determined earlier, but re-check after push
-  // since origin/<base> should now be available
-  let finalBaseRef = baseRef;
+  const prContentResult = await generatePullRequestContentFromSandbox({
+    sandbox,
+    sessionId,
+    sessionTitle,
+    baseBranch,
+    branchName: resolvedBranch,
+    baseRef,
+  });
 
-  // After push, try again to get origin/<base> (might be available now)
-  if (finalBaseRef === baseBranch || finalBaseRef === "FETCH_HEAD") {
-    const remoteRefResult = await sandbox.exec(
-      `git rev-parse --verify origin/${baseBranch}`,
-      cwd,
-      10000,
-    );
-    if (remoteRefResult.success && remoteRefResult.stdout.trim()) {
-      finalBaseRef = `origin/${baseBranch}`;
-      console.log(
-        `[generate-pr] After push, found origin/${baseBranch} at ${remoteRefResult.stdout.trim().slice(0, 8)}`,
-      );
-    }
+  if (!prContentResult.success) {
+    return Response.json({ error: prContentResult.error }, { status: 400 });
   }
 
-  // Debug: log current state
-  const debugHead = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
-  const debugBase = await sandbox.exec(
-    `git rev-parse ${finalBaseRef}`,
-    cwd,
-    5000,
-  );
-  const baseResolved = debugBase.success
-    ? debugBase.stdout.trim().slice(0, 8)
-    : "not found";
-  console.log(
-    `[generate-pr] HEAD: ${debugHead.stdout.trim()}, finalBaseRef: ${finalBaseRef} -> ${baseResolved}`,
-  );
-
-  // If base ref still can't be resolved, we have a problem
-  if (!debugBase.success || !debugBase.stdout.trim()) {
-    return Response.json(
-      {
-        error: `Cannot find base branch '${baseBranch}'. Make sure the branch exists on the remote repository.`,
-      },
-      { status: 400 },
-    );
-  }
-
-  // Get the merge-base between base and HEAD to find the common ancestor
-  const mergeBaseResult = await sandbox.exec(
-    `git merge-base ${finalBaseRef} HEAD`,
-    cwd,
-    10000,
-  );
-  const mergeBase = mergeBaseResult.success
-    ? mergeBaseResult.stdout.trim()
-    : "";
-  console.log(`[generate-pr] merge-base: ${mergeBase || "none"}`);
-
-  // 6a. Get diff stats for PR generation
-  // Compare from merge-base to HEAD to show all changes
-  let diffStats = "";
-  if (mergeBase) {
-    const diffStatsResult = await sandbox.exec(
-      `git diff ${mergeBase}..HEAD --stat`,
-      cwd,
-      30000,
-    );
-    diffStats = diffStatsResult.stdout;
-  }
-
-  // Fallback: try direct comparison if merge-base approach didn't work
-  if (!diffStats.trim()) {
-    const directDiffResult = await sandbox.exec(
-      `git diff ${finalBaseRef}..HEAD --stat`,
-      cwd,
-      30000,
-    );
-    diffStats = directDiffResult.stdout;
-  }
-
-  // 6b. Get commit log
-  let commitLog = "";
-  if (mergeBase) {
-    const commitLogResult = await sandbox.exec(
-      `git log ${mergeBase}..HEAD --oneline`,
-      cwd,
-      10000,
-    );
-    commitLog = commitLogResult.stdout;
-  }
-
-  // Fallback for commit log
-  if (!commitLog.trim()) {
-    const directLogResult = await sandbox.exec(
-      `git log ${finalBaseRef}..HEAD --oneline`,
-      cwd,
-      10000,
-    );
-    commitLog = directLogResult.stdout;
-  }
-
-  // 7. Check if there are changes to PR
-  if (!diffStats.trim() && !commitLog.trim()) {
-    // Debug: check what branches/refs we're comparing
-    const headRefResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
-    const baseRefParsed = await sandbox.exec(
-      `git rev-parse ${finalBaseRef} 2>/dev/null || echo "unknown"`,
-      cwd,
-      5000,
-    );
-    const headCommit = headRefResult.stdout.trim().slice(0, 8) || "unknown";
-    const baseCommit = baseRefParsed.stdout.trim().slice(0, 8) || "unknown";
-
-    // If HEAD and base resolve to the same commit, there truly are no changes
-    if (
-      headRefResult.stdout.trim() &&
-      baseRefParsed.stdout.trim() &&
-      headRefResult.stdout.trim() === baseRefParsed.stdout.trim()
-    ) {
-      return Response.json(
-        {
-          error: `No changes found: branch '${resolvedBranch}' is at the same commit as '${baseBranch}'. Make some changes first.`,
-        },
-        { status: 400 },
-      );
-    }
-
-    // Check if there are uncommitted changes that weren't committed
-    const uncommittedStatus = await sandbox.exec(
-      "git status --porcelain",
-      cwd,
-      5000,
-    );
-    if (uncommittedStatus.stdout.trim()) {
-      return Response.json(
-        {
-          error: `There are uncommitted changes but they couldn't be committed. Please check if there are git issues in the sandbox.`,
-        },
-        { status: 400 },
-      );
-    }
-
-    // Otherwise something unexpected happened
-    return Response.json(
-      {
-        error: `No changes detected between '${resolvedBranch}' and '${baseBranch}'. HEAD: ${headCommit}, base (${finalBaseRef}): ${baseCommit}, merge-base: ${mergeBase?.slice(0, 8) || "none"}`,
-      },
-      { status: 400 },
-    );
-  }
-
-  // 8. Generate PR title and body with AI using structured output
-  // Load conversation context (user + assistant text parts only) for richer PR descriptions
-  const conversationContext = await getConversationContext(sessionId);
-  const conversationSection = conversationContext
-    ? `\nConversation context:\n${conversationContext.slice(0, 8000)}\n`
-    : "";
-
-  let prContent: z.infer<typeof prContentSchema>;
-  try {
-    const { output } = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
-      output: Output.object({
-        schema: prContentSchema,
-      }),
-      prompt: `Generate a pull request title and body for these changes.
-
-CRITICAL FORMATTING RULE: The body field must contain real newlines (actual line breaks), NOT literal backslash-n sequences. Never write \\n in the output — use actual new lines instead.
-
-The body MUST follow this exact format:
-
-## Summary
-
-<One or two sentences describing the overall purpose of the PR.>
-
-## Changes
-
-**<Group label> (\`<file path>\`)**
-
-- <Change description>
-- <Change description>
-
-**<Group label> (\`<file path>\`)**
-
-- <Change description>
-- <Change description>
-
-Group related changes by area (e.g. API, UI, Config, Tests) and include the file path in backticks after the group label. Each change should be a concise bullet point. If a group has sub-details, use nested bullets.
-
-Session: ${sessionTitle}
-Branch: ${resolvedBranch} -> ${baseBranch}
-${conversationSection}
-Changes summary:
-${diffStats}
-
-Commits:
-${commitLog}`,
-    });
-
-    // Handle case where output is undefined (model failed to generate valid object)
-    if (!output) {
-      prContent = {
-        title: sessionTitle,
-        body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
-      };
-    } else {
-      prContent = output;
-    }
-  } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error)) {
-      // Fallback if structured output generation fails
-      prContent = {
-        title: sessionTitle,
-        body: `## Changes\n\n${diffStats}\n\n## Commits\n\n${commitLog}`,
-      };
-    } else {
-      throw error;
-    }
-  }
-
-  // 10. Return response
   return Response.json({
-    title: prContent.title,
-    body: prContent.body,
+    title: prContentResult.title,
+    body: prContentResult.body,
     branchName: resolvedBranch,
     ...(prHeadOwner ? { prHeadOwner } : {}),
     ...(Object.keys(gitActions).length > 0 && { gitActions }),

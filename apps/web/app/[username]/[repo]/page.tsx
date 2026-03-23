@@ -111,6 +111,9 @@ export default async function RepoPage({ params }: RepoPageProps) {
       vercelTeamSlug: savedVercelProject?.teamSlug ?? null,
       isNewBranch: false,
       autoCommitPushOverride: preferences.autoCommitPush,
+      autoCreatePrOverride: preferences.autoCommitPush
+        ? preferences.autoCreatePr
+        : false,
       sandboxState: { type: preferences.defaultSandboxType },
       lifecycleState: "provisioning",
       lifecycleVersion: 0,

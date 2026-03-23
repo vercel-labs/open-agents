@@ -12,6 +12,7 @@ interface UpdatePreferencesRequest {
   defaultSandboxType?: SandboxType;
   defaultDiffMode?: DiffMode;
   autoCommitPush?: boolean;
+  autoCreatePr?: boolean;
 }
 
 export async function GET() {
@@ -63,6 +64,16 @@ export async function PATCH(req: Request) {
   ) {
     return Response.json(
       { error: "Invalid autoCommitPush value" },
+      { status: 400 },
+    );
+  }
+
+  if (
+    body.autoCreatePr !== undefined &&
+    typeof body.autoCreatePr !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid autoCreatePr value" },
       { status: 400 },
     );
   }

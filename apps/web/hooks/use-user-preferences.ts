@@ -13,6 +13,7 @@ export interface UserPreferences {
   defaultSandboxType: SandboxType;
   defaultDiffMode: DiffMode;
   autoCommitPush: boolean;
+  autoCreatePr: boolean;
   modelVariants: ModelVariant[];
 }
 

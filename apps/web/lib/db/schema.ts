@@ -149,6 +149,9 @@ export const sessions = pgTable(
     // Optional per-session override for auto commit + push behavior.
     // null means "use the user's default preference".
     autoCommitPushOverride: boolean("auto_commit_push_override"),
+    // Optional per-session override for auto PR creation after auto-commit.
+    // null means "use the user's default preference".
+    autoCreatePrOverride: boolean("auto_create_pr_override"),
     // Unified sandbox state
     sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
     // Lifecycle orchestration state for sandbox management
@@ -315,6 +318,7 @@ export const userPreferences = pgTable("user_preferences", {
     enum: ["unified", "split"],
   }).default("unified"),
   autoCommitPush: boolean("auto_commit_push").notNull().default(false),
+  autoCreatePr: boolean("auto_create_pr").notNull().default(false),
   modelVariants: jsonb("model_variants")
     .$type<ModelVariant[]>()
     .notNull()

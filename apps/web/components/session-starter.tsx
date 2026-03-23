@@ -29,6 +29,7 @@ interface SessionStarterProps {
     isNewBranch: boolean;
     sandboxType: SandboxType;
     autoCommitPush: boolean;
+    autoCreatePr: boolean;
     vercelProject?: VercelProjectSelection | null;
   }) => void;
   isLoading?: boolean;
@@ -56,7 +57,9 @@ export function SessionStarter({
   const { session, loading: sessionLoading } = useSession();
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
+  const defaultAutoCreatePr = preferences?.autoCreatePr ?? false;
   const [autoCommitPush, setAutoCommitPush] = useState<boolean | null>(null);
+  const [autoCreatePr, setAutoCreatePr] = useState<boolean | null>(null);
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
     SANDBOX_OPTIONS.find((s) => s.id === sandboxType)?.name ?? sandboxType;
@@ -141,6 +144,7 @@ export function SessionStarter({
     isVercelLookupPending ||
     requiresVercelChoice;
   const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
+  const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
   const showVercelProjectSection =
     mode === "repo" &&
     !!selectedOwner &&
@@ -177,6 +181,7 @@ export function SessionStarter({
       isNewBranch: mode === "repo" ? isNewBranch : false,
       sandboxType,
       autoCommitPush: effectiveAutoCommitPush,
+      autoCreatePr: effectiveAutoCommitPush ? effectiveAutoCreatePr : false,
       vercelProject,
     });
   };
@@ -284,6 +289,20 @@ export function SessionStarter({
             checked={effectiveAutoCommitPush}
             onCheckedChange={setAutoCommitPush}
             disabled={controlsDisabled}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-md border border-border/70 bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Auto create pull request</p>
+            <p className="text-xs text-muted-foreground">
+              Automatically open a pull request after auto commit and push.
+            </p>
+          </div>
+          <Switch
+            checked={effectiveAutoCreatePr}
+            onCheckedChange={setAutoCreatePr}
+            disabled={controlsDisabled || !effectiveAutoCommitPush}
           />
         </div>
 

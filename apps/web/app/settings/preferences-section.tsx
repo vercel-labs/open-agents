@@ -199,6 +199,17 @@ export function PreferencesSection() {
     }
   };
 
+  const handleAutoCreatePrChange = async (enabled: boolean) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({ autoCreatePr: enabled });
+    } catch (error) {
+      console.error("Failed to update auto-PR preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return <PreferencesSectionSkeleton />;
   }
@@ -339,6 +350,24 @@ export function PreferencesSection() {
               checked={preferences?.autoCommitPush ?? false}
               onCheckedChange={handleAutoCommitPushChange}
               disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="auto-create-pr">Auto create pull request</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically open a pull request after auto commit and push for
+                repo-backed sessions.
+              </p>
+            </div>
+            <Switch
+              id="auto-create-pr"
+              checked={preferences?.autoCreatePr ?? false}
+              onCheckedChange={handleAutoCreatePrChange}
+              disabled={isSaving || !(preferences?.autoCommitPush ?? false)}
             />
           </div>
         </div>

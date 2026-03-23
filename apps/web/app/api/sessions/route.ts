@@ -28,6 +28,7 @@ interface CreateSessionRequest {
   isNewBranch?: boolean;
   sandboxType?: "vercel";
   autoCommitPush?: boolean;
+  autoCreatePr?: boolean;
   vercelProject?: VercelProjectSelection | null;
 }
 
@@ -181,6 +182,16 @@ export async function POST(req: Request) {
     );
   }
 
+  if (
+    body.autoCreatePr !== undefined &&
+    typeof body.autoCreatePr !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid autoCreatePr value" },
+      { status: 400 },
+    );
+  }
+
   let explicitVercelProject: VercelProjectSelection | null | undefined;
   if (body.vercelProject === null) {
     explicitVercelProject = null;
@@ -205,6 +216,7 @@ export async function POST(req: Request) {
     isNewBranch,
     sandboxType = "vercel",
     autoCommitPush,
+    autoCreatePr,
   } = body;
 
   let finalBranch = branch;
@@ -267,6 +279,10 @@ export async function POST(req: Request) {
       titlePromise,
       preferencesPromise,
     ]);
+    const effectiveAutoCommitPush =
+      autoCommitPush ?? preferences.autoCommitPush;
+    const effectiveAutoCreatePr =
+      autoCreatePr ?? preferences.autoCreatePr;
     const result = await createSessionWithInitialChat({
       session: {
         id: nanoid(),
@@ -282,7 +298,10 @@ export async function POST(req: Request) {
         vercelTeamId: resolvedVercelProject?.teamId ?? null,
         vercelTeamSlug: resolvedVercelProject?.teamSlug ?? null,
         isNewBranch: isNewBranch ?? false,
-        autoCommitPushOverride: autoCommitPush ?? preferences.autoCommitPush,
+        autoCommitPushOverride: effectiveAutoCommitPush,
+        autoCreatePrOverride: effectiveAutoCommitPush
+          ? effectiveAutoCreatePr
+          : false,
         sandboxState: { type: sandboxType },
         lifecycleState: "provisioning",
         lifecycleVersion: 0,

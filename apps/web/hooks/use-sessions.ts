@@ -35,6 +35,7 @@ interface CreateSessionInput {
   isNewBranch: boolean;
   sandboxType: "vercel";
   autoCommitPush: boolean;
+  autoCreatePr: boolean;
   vercelProject?: VercelProjectSelection | null;
 }
 

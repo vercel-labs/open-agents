@@ -39,6 +39,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     isNewBranch: boolean;
     sandboxType: SandboxType;
     autoCommitPush: boolean;
+    autoCreatePr: boolean;
     vercelProject?: VercelProjectSelection | null;
   }) => {
     setIsCreating(true);
@@ -51,6 +52,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
         isNewBranch: input.isNewBranch,
         sandboxType: input.sandboxType,
         autoCommitPush: input.autoCommitPush,
+        autoCreatePr: input.autoCreatePr,
         vercelProject: input.vercelProject,
       });
 

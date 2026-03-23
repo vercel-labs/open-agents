@@ -20,6 +20,7 @@ type CreateSessionInput = {
   isNewBranch: boolean;
   sandboxType: SandboxType;
   autoCommitPush: boolean;
+  autoCreatePr: boolean;
   vercelProject?: VercelProjectSelection | null;
 };
 
