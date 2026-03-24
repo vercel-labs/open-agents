@@ -107,6 +107,13 @@ export const myTool = (options?: { needsApproval?: boolean }) =>
 
 ## Common Patterns
 
+### Large UI files
+
+- In already-large React view/page/client components, do **not** add new feature-specific state, effects, network calls, and JSX inline by default.
+- Extract feature logic into a colocated hook (for example `use-dev-server.ts`) and extract self-contained UI regions into a colocated component (for example `dev-server-menu-items.tsx`).
+- Keep the parent view responsible for shared capability flags and long-lived page state; pass the extracted feature controls down as props.
+- If the feature state must survive menu/popover/dialog open-state changes, mount the hook in the parent view and pass its controls into the extracted child component instead of mounting the hook inside ephemeral UI content.
+
 ### Workspace Dependencies
 
 Use `workspace:*` for internal packages:
