@@ -73,9 +73,11 @@ export function DomainUsageLeaderboardSection({
                       <div className="font-medium">
                         {row.name?.trim() || row.username}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {row.email}
-                      </div>
+                      {row.name?.trim() ? (
+                        <div className="text-xs text-muted-foreground">
+                          @{row.username}
+                        </div>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">

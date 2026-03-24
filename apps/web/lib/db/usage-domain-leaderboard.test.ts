@@ -5,8 +5,13 @@ import {
 } from "./usage-domain-leaderboard";
 
 describe("getUsageLeaderboardDomain", () => {
-  test("normalizes vercel emails and rejects unsupported domains", () => {
+  test("accepts verified internal domains", () => {
     expect(getUsageLeaderboardDomain("Alice@Vercel.com")).toBe("vercel.com");
+  });
+
+  test("rejects personal and unverified domains", () => {
+    expect(getUsageLeaderboardDomain("alice@gmail.com")).toBeNull();
+    expect(getUsageLeaderboardDomain("alice@hotmail.com")).toBeNull();
     expect(getUsageLeaderboardDomain("alice@example.com")).toBeNull();
     expect(getUsageLeaderboardDomain("missing-at-symbol")).toBeNull();
     expect(getUsageLeaderboardDomain(undefined)).toBeNull();
@@ -14,7 +19,7 @@ describe("getUsageLeaderboardDomain", () => {
 });
 
 describe("buildUsageDomainLeaderboardRows", () => {
-  test("aggregates total tokens per user and derives the top model", () => {
+  test("aggregates total tokens per user and derives the top model without exposing emails", () => {
     const rows = buildUsageDomainLeaderboardRows([
       {
         userId: "user-1",
@@ -66,7 +71,6 @@ describe("buildUsageDomainLeaderboardRows", () => {
     expect(rows).toEqual([
       {
         userId: "user-1",
-        email: "alice@vercel.com",
         username: "alice",
         name: "Alice",
         totalTokens: 160,
@@ -75,7 +79,6 @@ describe("buildUsageDomainLeaderboardRows", () => {
       },
       {
         userId: "user-2",
-        email: "bob@vercel.com",
         username: "bob",
         name: null,
         totalTokens: 90,
@@ -83,6 +86,7 @@ describe("buildUsageDomainLeaderboardRows", () => {
         mostUsedModelTokens: 90,
       },
     ]);
+    expect(rows[0]).not.toHaveProperty("email");
   });
 
   test("prefers a known model over unknown when token totals tie", () => {
@@ -109,7 +113,6 @@ describe("buildUsageDomainLeaderboardRows", () => {
 
     expect(row).toEqual({
       userId: "user-1",
-      email: "alice@vercel.com",
       username: "alice",
       name: "Alice",
       totalTokens: 100,

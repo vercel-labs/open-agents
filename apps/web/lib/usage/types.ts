@@ -33,7 +33,6 @@ export interface UsageRepositoryInsight {
 
 export interface UsageDomainLeaderboardRow {
   userId: string;
-  email: string;
   username: string;
   name: string | null;
   totalTokens: number;

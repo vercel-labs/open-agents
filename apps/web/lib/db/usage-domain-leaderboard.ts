@@ -7,7 +7,22 @@ import type {
 import { db } from "./client";
 import { usageEvents, users } from "./schema";
 
-const INTERNAL_USAGE_LEADERBOARD_DOMAINS = new Set(["vercel.com"]);
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "aol.com",
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "icloud.com",
+  "live.com",
+  "mac.com",
+  "me.com",
+  "outlook.com",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+]);
+
+const VERIFIED_USAGE_LEADERBOARD_DOMAINS = new Set(["vercel.com"]);
 
 interface UsageDomainLeaderboardQueryRow {
   userId: string;
@@ -53,7 +68,11 @@ export function getUsageLeaderboardDomain(
   }
 
   const domain = trimmedEmail.slice(atIndex + 1);
-  if (!INTERNAL_USAGE_LEADERBOARD_DOMAINS.has(domain)) {
+  if (PERSONAL_EMAIL_DOMAINS.has(domain)) {
+    return null;
+  }
+
+  if (!VERIFIED_USAGE_LEADERBOARD_DOMAINS.has(domain)) {
     return null;
   }
 
@@ -123,7 +142,6 @@ export function buildUsageDomainLeaderboardRows(
 
     leaderboard.set(row.userId, {
       userId: row.userId,
-      email: row.email,
       username: row.username,
       name: row.name,
       totalTokens: modelTokens,
@@ -139,7 +157,12 @@ export function buildUsageDomainLeaderboardRows(
         return b.totalTokens - a.totalTokens;
       }
 
-      return a.email.localeCompare(b.email);
+      const usernameOrder = a.username.localeCompare(b.username);
+      if (usernameOrder !== 0) {
+        return usernameOrder;
+      }
+
+      return a.userId.localeCompare(b.userId);
     });
 }
 
