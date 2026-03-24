@@ -40,7 +40,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
-import type { DevServerLaunchResponse } from "@/app/api/sessions/[sessionId]/dev-server/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
@@ -122,10 +121,12 @@ import {
 } from "./session-chat-context";
 import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
+import { useDevServer } from "./hooks/use-dev-server";
 import {
   CommitActionHeaderButton,
   CommitActionMenuItem,
 } from "./commit-action-button";
+import { DevServerMenuItems } from "./dev-server-menu-items";
 import {
   createSandbox,
   getSandboxCreateErrorDetails,
@@ -831,13 +832,6 @@ function ChatSwitcherPanel({
   );
 }
 
-type DevServerLaunchState =
-  | { status: "idle" }
-  | { status: "starting" }
-  | { status: "stopping"; info: DevServerLaunchResponse }
-  | { status: "error"; message: string }
-  | { status: "ready"; info: DevServerLaunchResponse };
-
 export function SessionChatContent({
   initialIsOnlyChatInSession,
   messageDurationMap,
@@ -865,9 +859,6 @@ export function SessionChatContent({
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
   const [mobileShareOpen, setMobileShareOpen] = useState(false);
-  const [devServerState, setDevServerState] = useState<DevServerLaunchState>({
-    status: "idle",
-  });
   const [chatSwitcherOpen, setChatSwitcherOpen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -2316,126 +2307,10 @@ export function SessionChatContent({
     !isRestoringSnapshot &&
     !isReconnectingSandbox &&
     !isHibernatingUi;
-
-  useEffect(() => {
-    setDevServerState({ status: "idle" });
-  }, [session.id]);
-
-  useEffect(() => {
-    if (!canRunDevServer) {
-      setDevServerState({ status: "idle" });
-    }
-  }, [canRunDevServer]);
-
-  const openDevServerUrl = useCallback((url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, []);
-
-  const handleDevServerAction = useCallback(async () => {
-    if (devServerState.status === "ready") {
-      openDevServerUrl(devServerState.info.url);
-      return;
-    }
-
-    if (
-      devServerState.status === "starting" ||
-      devServerState.status === "stopping"
-    ) {
-      return;
-    }
-
-    setDevServerState({ status: "starting" });
-
-    try {
-      const response = await fetch(`/api/sessions/${session.id}/dev-server`, {
-        method: "POST",
-      });
-      const body: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const errorValue =
-          body && typeof body === "object"
-            ? (body as { error?: unknown }).error
-            : undefined;
-        throw new Error(
-          typeof errorValue === "string"
-            ? errorValue
-            : "Failed to launch dev server",
-        );
-      }
-
-      const packagePath =
-        body && typeof body === "object"
-          ? (body as { packagePath?: unknown }).packagePath
-          : undefined;
-      const port =
-        body && typeof body === "object"
-          ? (body as { port?: unknown }).port
-          : undefined;
-      const url =
-        body && typeof body === "object"
-          ? (body as { url?: unknown }).url
-          : undefined;
-
-      if (
-        typeof packagePath !== "string" ||
-        typeof port !== "number" ||
-        typeof url !== "string"
-      ) {
-        throw new Error("Invalid dev server response");
-      }
-
-      setDevServerState({
-        status: "ready",
-        info: { packagePath, port, url },
-      });
-    } catch (error) {
-      console.error("Failed to launch dev server:", error);
-      setDevServerState({
-        status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to launch dev server",
-      });
-    }
-  }, [devServerState, openDevServerUrl, session.id]);
-
-  const handleStopDevServer = useCallback(async () => {
-    if (devServerState.status !== "ready") {
-      return;
-    }
-
-    setDevServerState({ status: "stopping", info: devServerState.info });
-
-    try {
-      const response = await fetch(`/api/sessions/${session.id}/dev-server`, {
-        method: "DELETE",
-      });
-      const body: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const errorValue =
-          body && typeof body === "object"
-            ? (body as { error?: unknown }).error
-            : undefined;
-        throw new Error(
-          typeof errorValue === "string"
-            ? errorValue
-            : "Failed to stop dev server",
-        );
-      }
-
-      setDevServerState({ status: "idle" });
-    } catch (error) {
-      console.error("Failed to stop dev server:", error);
-      setDevServerState({
-        status: "error",
-        message:
-          error instanceof Error ? error.message : "Failed to stop dev server",
-      });
-    }
-  }, [devServerState, session.id]);
+  const devServer = useDevServer({
+    sessionId: session.id,
+    canRun: canRunDevServer,
+  });
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
@@ -2481,26 +2356,6 @@ export function SessionChatContent({
       },
     );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
-  const devServerMenuLabel =
-    devServerState.status === "ready"
-      ? devServerState.info.packagePath === "root"
-        ? "Open Dev Server"
-        : `Open ${devServerState.info.packagePath}`
-      : devServerState.status === "starting"
-        ? "Starting Dev Server..."
-        : devServerState.status === "stopping"
-          ? "Stopping Dev Server..."
-          : devServerState.status === "error"
-            ? "Retry Dev Server"
-            : "Run Dev Server";
-  const devServerMenuDetail =
-    devServerState.status === "ready" || devServerState.status === "stopping"
-      ? devServerState.info.url
-      : devServerState.status === "error"
-        ? devServerState.message
-        : null;
-  const showStopDevServerAction =
-    devServerState.status === "ready" || devServerState.status === "stopping";
 
   useEffect(() => {
     if (hasExistingPr || !hasBranchPreviewLookup) {
@@ -2848,60 +2703,10 @@ export function SessionChatContent({
                       Archive
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem
-                    disabled={
-                      devServerState.status === "starting" ||
-                      devServerState.status === "stopping" ||
-                      !canRunDevServer
-                    }
-                    onClick={() => {
-                      void handleDevServerAction();
-                    }}
-                    className={cn(
-                      "gap-2",
-                      devServerMenuDetail ? "items-start" : undefined,
-                    )}
-                  >
-                    {devServerState.status === "starting" ||
-                    devServerState.status === "stopping" ? (
-                      <Loader2 className="mt-0.5 h-4 w-4 animate-spin" />
-                    ) : (
-                      <ExternalLink
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          devServerMenuDetail ? "mt-0.5" : undefined,
-                        )}
-                      />
-                    )}
-                    {devServerMenuDetail ? (
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span>{devServerMenuLabel}</span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {devServerMenuDetail}
-                        </span>
-                      </span>
-                    ) : (
-                      <span>{devServerMenuLabel}</span>
-                    )}
-                  </DropdownMenuItem>
-                  {showStopDevServerAction ? (
-                    <DropdownMenuItem
-                      disabled={devServerState.status === "stopping"}
-                      onClick={() => {
-                        void handleStopDevServer();
-                      }}
-                    >
-                      {devServerState.status === "stopping" ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Square className="mr-2 h-3.5 w-3.5 fill-current" />
-                      )}
-                      {devServerState.status === "stopping"
-                        ? "Stopping Dev Server..."
-                        : "Stop Dev Server"}
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuSeparator />
+                  <DevServerMenuItems
+                    canRun={canRunDevServer}
+                    devServer={devServer}
+                  />
                   {supportsDiff && (
                     <DropdownMenuItem
                       disabled={!diff && !session.cachedDiff}
