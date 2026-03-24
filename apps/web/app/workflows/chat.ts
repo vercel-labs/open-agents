@@ -110,6 +110,7 @@ export async function runAgentWorkflow(options: Options) {
 
   let wasAborted = false;
   let totalUsage: LanguageModelUsage | undefined;
+  let finalFinishReason: FinishReason | undefined;
   let streamClosed = false;
 
   try {
@@ -132,6 +133,7 @@ export async function runAgentWorkflow(options: Options) {
       originalMessagesForStep = [pendingAssistantResponse];
       modelMessages.push(...result.responseMessages);
       wasAborted = wasAborted || result.stepWasAborted;
+      finalFinishReason = result.finishReason;
 
       if (result.stepUsage) {
         totalUsage = totalUsage
@@ -176,15 +178,23 @@ export async function runAgentWorkflow(options: Options) {
       await persistSandboxState(options.sessionId, sandboxState);
     }
 
-    // Auto-commit if enabled and the agent finished naturally.
-    if (
+    const finishedNaturally =
       !wasAborted &&
+      finalFinishReason !== undefined &&
+      finalFinishReason !== "tool-calls";
+
+    let autoCommitResult: Awaited<ReturnType<typeof runAutoCommitStep>> | null =
+      null;
+
+    // Auto-commit if enabled and the agent reached a terminal finish.
+    if (
+      finishedNaturally &&
       options.autoCommitEnabled &&
       sandboxState &&
       options.repoOwner &&
       options.repoName
     ) {
-      await runAutoCommitStep({
+      autoCommitResult = await runAutoCommitStep({
         userId: options.userId,
         sessionId: options.sessionId,
         sessionTitle: options.sessionTitle ?? "",
@@ -194,10 +204,17 @@ export async function runAgentWorkflow(options: Options) {
       });
     }
 
-    // Auto-create a PR if enabled and the agent finished naturally.
+    const canAutoCreatePr =
+      autoCommitResult != null &&
+      !autoCommitResult.error &&
+      (autoCommitResult.pushed || !autoCommitResult.committed);
+
+    // Auto-create a PR if auto-commit left origin in sync with the local HEAD.
     if (
-      !wasAborted &&
+      finishedNaturally &&
+      options.autoCommitEnabled &&
       options.autoCreatePrEnabled &&
+      canAutoCreatePr &&
       sandboxState &&
       options.repoOwner &&
       options.repoName

@@ -59,7 +59,7 @@ export async function getRepoToken(
     }
   }
 
-  const userToken = await getUserGitHubToken();
+  const userToken = await getUserGitHubToken(userId);
   if (userToken) {
     return { token: userToken, type: "user" };
   }

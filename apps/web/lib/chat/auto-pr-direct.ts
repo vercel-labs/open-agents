@@ -164,7 +164,9 @@ export async function performAutoCreatePr(
   }
 
   const userToken =
-    repoTokenResult.type === "installation" ? await getUserGitHubToken() : null;
+    repoTokenResult.type === "installation"
+      ? await getUserGitHubToken(userId)
+      : null;
   const tokenCandidates = dedupeTokenCandidates([
     repoTokenResult.token,
     userToken,
@@ -229,6 +231,30 @@ export async function performAutoCreatePr(
       syncedExisting: false,
       skipped: true,
       skipReason: "Current branch is not available on origin",
+    };
+  }
+
+  const localHeadResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
+  const localHead = localHeadResult.success
+    ? localHeadResult.stdout.trim()
+    : "";
+  const remoteHead = remoteBranchResult.stdout.trim().split(/\s+/)[0] ?? "";
+
+  if (!localHead || !remoteHead) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: "Failed to resolve local or remote branch HEAD",
+    };
+  }
+
+  if (remoteHead !== localHead) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch is not fully pushed to origin",
     };
   }
 

@@ -76,6 +76,7 @@ const createPullRequestSpy = mock(async () => createPullRequestResult);
 const generatePullRequestContentFromSandboxSpy = mock(
   async () => prContentResult,
 );
+const getUserGitHubTokenSpy = mock(async (_userId?: string) => userTokenResult);
 
 const sandbox = {
   workingDirectory: "/vercel/sandbox",
@@ -99,7 +100,7 @@ mock.module("@/lib/github/get-repo-token", () => ({
 }));
 
 mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => userTokenResult,
+  getUserGitHubToken: getUserGitHubTokenSpy,
 }));
 
 mock.module("@/lib/github/client", () => ({
@@ -122,6 +123,7 @@ function defaultExecResults(): Map<string, ExecResult> {
     ],
     ["git remote set-url", { success: true, stdout: "" }],
     ["git fetch origin", { success: true, stdout: "" }],
+    ["git rev-parse HEAD", { success: true, stdout: "abc123" }],
     [
       "git ls-remote --heads origin",
       {
@@ -154,6 +156,7 @@ beforeEach(() => {
   findPullRequestByBranchSpy.mockClear();
   createPullRequestSpy.mockClear();
   generatePullRequestContentFromSandboxSpy.mockClear();
+  getUserGitHubTokenSpy.mockClear();
 
   execResults = defaultExecResults();
   repoTokenResult = {
@@ -235,6 +238,24 @@ describe("performAutoCreatePr", () => {
     expect(generatePullRequestContentFromSandboxSpy).not.toHaveBeenCalled();
   });
 
+  test("skips when the current branch is not fully pushed to origin", async () => {
+    execResults.set("git ls-remote --heads origin", {
+      success: true,
+      stdout: "def456\trefs/heads/feature-branch",
+    });
+
+    const result = await performAutoCreatePr(makeParams());
+
+    expect(result).toEqual({
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch is not fully pushed to origin",
+    } satisfies AutoCreatePrResult);
+    expect(findPullRequestByBranchSpy).not.toHaveBeenCalled();
+    expect(createPullRequestSpy).not.toHaveBeenCalled();
+  });
+
   test("syncs an existing open pull request instead of creating a new one", async () => {
     findPullRequestResult = {
       found: true,
@@ -269,6 +290,7 @@ describe("performAutoCreatePr", () => {
       prNumber: 42,
       prUrl: "https://github.com/acme/repo/pull/42",
     } satisfies AutoCreatePrResult);
+    expect(getUserGitHubTokenSpy).toHaveBeenCalledWith("user-1");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
     expect(createPullRequestSpy).toHaveBeenCalledWith(
       expect.objectContaining({
