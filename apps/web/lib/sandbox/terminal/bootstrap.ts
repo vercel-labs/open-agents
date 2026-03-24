@@ -9,7 +9,10 @@ import {
   DEFAULT_WORKING_DIRECTORY,
   TERMINAL_SANDBOX_PORT,
 } from "../config";
-import { TERMINAL_SERVER_SCRIPT } from "./server-script";
+import {
+  TERMINAL_SERVER_SCRIPT,
+  TERMINAL_SERVER_VERSION,
+} from "./server-script";
 
 const TERMINAL_RUNTIME_DIR = "/tmp/open-harness-terminal";
 const TERMINAL_PACKAGE_JSON_PATH = `${TERMINAL_RUNTIME_DIR}/package.json`;
@@ -19,7 +22,6 @@ const TERMINAL_LOG_PATH = `${TERMINAL_RUNTIME_DIR}/server.log`;
 const TERMINAL_INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
 const TERMINAL_START_ATTEMPTS = 30;
 const TERMINAL_START_INTERVAL_MS = 1_000;
-const TERMINAL_PRESTART_HEALTH_ATTEMPTS = 2;
 
 const TERMINAL_PACKAGE_JSON = JSON.stringify(
   {
@@ -124,15 +126,38 @@ function buildHealthUrl(terminalBaseUrl: string): string {
   return new URL("/health", terminalBaseUrl).toString();
 }
 
-async function isTerminalHealthy(terminalBaseUrl: string): Promise<boolean> {
+type TerminalHealthStatus = {
+  ok: boolean;
+  version: string | null;
+};
+
+async function getTerminalHealthStatus(
+  terminalBaseUrl: string,
+): Promise<TerminalHealthStatus> {
   try {
     const response = await fetch(buildHealthUrl(terminalBaseUrl), {
       cache: "no-store",
     });
-    return response.ok;
+    if (!response.ok) {
+      return { ok: false, version: null };
+    }
+
+    try {
+      const body = (await response.json()) as { version?: unknown };
+      return {
+        ok: true,
+        version: typeof body.version === "string" ? body.version : null,
+      };
+    } catch {
+      return { ok: true, version: null };
+    }
   } catch {
-    return false;
+    return { ok: false, version: null };
   }
+}
+
+function hasExpectedTerminalVersion(status: TerminalHealthStatus): boolean {
+  return status.ok && status.version === TERMINAL_SERVER_VERSION;
 }
 
 async function waitForTerminalHealthcheck(
@@ -140,7 +165,8 @@ async function waitForTerminalHealthcheck(
   attempts: number,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (await isTerminalHealthy(terminalBaseUrl)) {
+    const status = await getTerminalHealthStatus(terminalBaseUrl);
+    if (hasExpectedTerminalVersion(status)) {
       return true;
     }
 
@@ -152,6 +178,22 @@ async function waitForTerminalHealthcheck(
   return false;
 }
 
+async function stopTerminalServer(
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>,
+): Promise<void> {
+  const stopResult = await sandbox.exec(
+    `pkill -f "${TERMINAL_SERVER_PATH}" || true`,
+    DEFAULT_WORKING_DIRECTORY,
+    15_000,
+  );
+
+  if (!stopResult.success) {
+    throw new Error(
+      `Failed to stop the terminal server: ${getCommandError(stopResult)}`,
+    );
+  }
+}
+
 async function startTerminalServer(
   sandbox: Awaited<ReturnType<typeof connectSandbox>>,
   terminalBaseUrl: string,
@@ -160,18 +202,10 @@ async function startTerminalServer(
     throw new Error("Detached execution is not supported by this sandbox");
   }
 
-  try {
-    await sandbox.execDetached(
-      `node server.mjs > "${TERMINAL_LOG_PATH}" 2>&1`,
-      TERMINAL_RUNTIME_DIR,
-    );
-  } catch (error) {
-    if (await isTerminalHealthy(terminalBaseUrl)) {
-      return;
-    }
-
-    throw error;
-  }
+  await sandbox.execDetached(
+    `node server.mjs > "${TERMINAL_LOG_PATH}" 2>&1`,
+    TERMINAL_RUNTIME_DIR,
+  );
 
   const isHealthy = await waitForTerminalHealthcheck(
     terminalBaseUrl,
@@ -223,12 +257,10 @@ export async function bootstrapSessionTerminal(
   const launchToken = randomUUID();
   await sandbox.writeFile(TERMINAL_TOKEN_PATH, launchToken, "utf-8");
 
-  const alreadyHealthy = await waitForTerminalHealthcheck(
-    terminalBaseUrl,
-    TERMINAL_PRESTART_HEALTH_ATTEMPTS,
-  );
-  if (!alreadyHealthy) {
+  const currentHealth = await getTerminalHealthStatus(terminalBaseUrl);
+  if (!hasExpectedTerminalVersion(currentHealth)) {
     await ensureTerminalDependencies(sandbox);
+    await stopTerminalServer(sandbox);
     await startTerminalServer(sandbox, terminalBaseUrl);
   }
 

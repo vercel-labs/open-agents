@@ -1,3 +1,5 @@
+export const TERMINAL_SERVER_VERSION = "2026-03-24-dist-assets-v2";
+
 const TERMINAL_PAGE_HTML = `<!doctype html>
 <html lang="en">
   <head>
@@ -229,6 +231,7 @@ const TERMINAL_SERVER_SCRIPT_LINES = [
   'const TOKEN_FILE = process.env.OPEN_HARNESS_TERMINAL_TOKEN_FILE ?? "/tmp/open-harness-terminal/token";',
   'const DIST_DIR = path.join(process.cwd(), "node_modules", "ghostty-web", "dist");',
   'const GHOSTTY_WASM_PATH = path.join(process.cwd(), "node_modules", "ghostty-web", "ghostty-vt.wasm");',
+  `const SERVER_VERSION = ${JSON.stringify(TERMINAL_SERVER_VERSION)};`,
   `const INDEX_HTML = ${JSON.stringify(TERMINAL_PAGE_HTML)};`,
   "",
   "const MIME_TYPES = new Map([",
@@ -299,7 +302,7 @@ const TERMINAL_SERVER_SCRIPT_LINES = [
   '  const host = req.headers.host ?? ("127.0.0.1:" + PORT);',
   '  const url = new URL(req.url ?? "/", "http://" + host);',
   '  if (url.pathname === "/health") {',
-  "    sendJson(res, 200, { ok: true });",
+  "    sendJson(res, 200, { ok: true, version: SERVER_VERSION });",
   "    return;",
   "  }",
   '  if (url.pathname === "/" || url.pathname === "/index.html") {',
@@ -311,8 +314,19 @@ const TERMINAL_SERVER_SCRIPT_LINES = [
   "    res.end(INDEX_HTML);",
   "    return;",
   "  }",
-  '  if (url.pathname === "/dist/ghostty-web.js") {',
-  '    serveFile(res, path.join(DIST_DIR, "ghostty-web.js"));',
+  '  if (url.pathname.startsWith("/dist/")) {',
+  "    const distRoot = path.resolve(DIST_DIR);",
+  '    const requestedDistPath = url.pathname.slice("/dist/".length);',
+  "    const resolvedDistPath = path.resolve(distRoot, requestedDistPath);",
+  "    if (resolvedDistPath !== distRoot && !resolvedDistPath.startsWith(distRoot + path.sep)) {",
+  "      res.writeHead(403, {",
+  "        ...COMMON_HEADERS,",
+  '        "Content-Type": "text/plain; charset=utf-8",',
+  "      });",
+  '      res.end("Forbidden");',
+  "      return;",
+  "    }",
+  "    serveFile(res, resolvedDistPath);",
   "    return;",
   "  }",
   '  if (url.pathname === "/ghostty-vt.wasm") {',
