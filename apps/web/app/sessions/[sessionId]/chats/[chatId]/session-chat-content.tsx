@@ -834,6 +834,7 @@ function ChatSwitcherPanel({
 type DevServerLaunchState =
   | { status: "idle" }
   | { status: "starting" }
+  | { status: "stopping"; info: DevServerLaunchResponse }
   | { status: "error"; message: string }
   | { status: "ready"; info: DevServerLaunchResponse };
 
@@ -2336,6 +2337,13 @@ export function SessionChatContent({
       return;
     }
 
+    if (
+      devServerState.status === "starting" ||
+      devServerState.status === "stopping"
+    ) {
+      return;
+    }
+
     setDevServerState({ status: "starting" });
 
     try {
@@ -2393,6 +2401,42 @@ export function SessionChatContent({
     }
   }, [devServerState, openDevServerUrl, session.id]);
 
+  const handleStopDevServer = useCallback(async () => {
+    if (devServerState.status !== "ready") {
+      return;
+    }
+
+    setDevServerState({ status: "stopping", info: devServerState.info });
+
+    try {
+      const response = await fetch(`/api/sessions/${session.id}/dev-server`, {
+        method: "DELETE",
+      });
+      const body: unknown = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorValue =
+          body && typeof body === "object"
+            ? (body as { error?: unknown }).error
+            : undefined;
+        throw new Error(
+          typeof errorValue === "string"
+            ? errorValue
+            : "Failed to stop dev server",
+        );
+      }
+
+      setDevServerState({ status: "idle" });
+    } catch (error) {
+      console.error("Failed to stop dev server:", error);
+      setDevServerState({
+        status: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to stop dev server",
+      });
+    }
+  }, [devServerState, session.id]);
+
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
   const previewLookupBranch =
@@ -2444,15 +2488,19 @@ export function SessionChatContent({
         : `Open ${devServerState.info.packagePath}`
       : devServerState.status === "starting"
         ? "Starting Dev Server..."
-        : devServerState.status === "error"
-          ? "Retry Dev Server"
-          : "Run Dev Server";
+        : devServerState.status === "stopping"
+          ? "Stopping Dev Server..."
+          : devServerState.status === "error"
+            ? "Retry Dev Server"
+            : "Run Dev Server";
   const devServerMenuDetail =
-    devServerState.status === "ready"
+    devServerState.status === "ready" || devServerState.status === "stopping"
       ? devServerState.info.url
       : devServerState.status === "error"
         ? devServerState.message
         : null;
+  const showStopDevServerAction =
+    devServerState.status === "ready" || devServerState.status === "stopping";
 
   useEffect(() => {
     if (hasExistingPr || !hasBranchPreviewLookup) {
@@ -2802,7 +2850,9 @@ export function SessionChatContent({
                   )}
                   <DropdownMenuItem
                     disabled={
-                      devServerState.status === "starting" || !canRunDevServer
+                      devServerState.status === "starting" ||
+                      devServerState.status === "stopping" ||
+                      !canRunDevServer
                     }
                     onClick={() => {
                       void handleDevServerAction();
@@ -2812,7 +2862,8 @@ export function SessionChatContent({
                       devServerMenuDetail ? "items-start" : undefined,
                     )}
                   >
-                    {devServerState.status === "starting" ? (
+                    {devServerState.status === "starting" ||
+                    devServerState.status === "stopping" ? (
                       <Loader2 className="mt-0.5 h-4 w-4 animate-spin" />
                     ) : (
                       <ExternalLink
@@ -2833,6 +2884,23 @@ export function SessionChatContent({
                       <span>{devServerMenuLabel}</span>
                     )}
                   </DropdownMenuItem>
+                  {showStopDevServerAction ? (
+                    <DropdownMenuItem
+                      disabled={devServerState.status === "stopping"}
+                      onClick={() => {
+                        void handleStopDevServer();
+                      }}
+                    >
+                      {devServerState.status === "stopping" ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Square className="mr-2 h-3.5 w-3.5 fill-current" />
+                      )}
+                      {devServerState.status === "stopping"
+                        ? "Stopping Dev Server..."
+                        : "Stop Dev Server"}
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuSeparator />
                   {supportsDiff && (
                     <DropdownMenuItem

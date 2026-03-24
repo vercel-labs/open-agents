@@ -17,6 +17,12 @@ export type DevServerLaunchResponse = {
   url: string;
 };
 
+export type DevServerStopResponse = {
+  stopped: boolean;
+  packagePath: string;
+  port: number;
+};
+
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 type DevFramework =
   | "next"
@@ -26,6 +32,8 @@ type DevFramework =
   | "remix"
   | "nuxt"
   | "custom";
+
+type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 
 interface PackageManifest {
   packageManager?: string;
@@ -45,6 +53,7 @@ interface DevServerCandidate {
 }
 
 const SUPPORTED_PORTS = new Set(DEFAULT_SANDBOX_PORTS);
+const DEV_SERVER_PIDFILE_PREFIX = ".open-harness-dev-server";
 const INSTALL_COMMANDS: Record<PackageManager, string> = {
   bun: "bun install",
   pnpm: "pnpm install",
@@ -315,7 +324,7 @@ function pickBestCandidate(
 }
 
 async function pathExists(
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>,
+  sandbox: ConnectedSandbox,
   targetPath: string,
 ): Promise<boolean> {
   try {
@@ -368,7 +377,7 @@ function parsePackageManagerName(
 }
 
 async function detectPackageManager(
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>,
+  sandbox: ConnectedSandbox,
   packageDirAbs: string,
   packageManagerField: string | undefined,
 ): Promise<{ packageManager: PackageManager; installRootAbs: string }> {
@@ -436,19 +445,25 @@ function buildRunCommand(
   framework: DevFramework,
   port: number,
 ): string {
-  const envPrefix = `BROWSER=none HOST=0.0.0.0 PORT=${port}`;
   const extraArgs = getFrameworkArgs(framework, port).join(" ");
 
   switch (packageManager) {
     case "bun":
-      return `${envPrefix} bun run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} bun run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
     case "pnpm":
-      return `${envPrefix} pnpm dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} pnpm dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
     case "yarn":
-      return `${envPrefix} yarn dev${extraArgs ? ` ${extraArgs}` : ""}`;
+      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} yarn dev${extraArgs ? ` ${extraArgs}` : ""}`;
     case "npm":
-      return `${envPrefix} npm run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} npm run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
   }
+}
+
+function getDevServerPidFilePath(packageDirAbs: string, port: number): string {
+  return path.posix.join(
+    packageDirAbs,
+    `${DEV_SERVER_PIDFILE_PREFIX}-${port}.pid`,
+  );
 }
 
 function buildLaunchCommand(params: {
@@ -458,27 +473,109 @@ function buildLaunchCommand(params: {
   installRootAbs: string;
   packageDirAbs: string;
   installDependencies: boolean;
+  pidFilePath: string;
 }): string {
   const runCommand = buildRunCommand(
     params.packageManager,
     params.framework,
     params.port,
   );
+  const commandSteps = [`printf '%s' "$$" > ${shellQuote(params.pidFilePath)}`];
 
-  if (!params.installDependencies) {
-    return runCommand;
+  if (params.installDependencies) {
+    const installCommand = INSTALL_COMMANDS[params.packageManager];
+    commandSteps.push(
+      params.installRootAbs === params.packageDirAbs
+        ? installCommand
+        : `(cd ${shellQuote(params.installRootAbs)} && ${installCommand})`,
+    );
   }
 
-  const installCommand = INSTALL_COMMANDS[params.packageManager];
-  if (params.installRootAbs === params.packageDirAbs) {
-    return `${installCommand} && ${runCommand}`;
+  commandSteps.push(`exec ${runCommand}`);
+
+  return commandSteps.join(" && ");
+}
+
+function buildDevServerResponse(
+  sandbox: ConnectedSandbox,
+  candidate: DevServerCandidate,
+): DevServerLaunchResponse {
+  if (!sandbox.domain) {
+    throw new Error("Sandbox does not expose preview URLs");
   }
 
-  return `(cd ${shellQuote(params.installRootAbs)} && ${installCommand}) && ${runCommand}`;
+  return {
+    packagePath: candidate.packagePath,
+    port: candidate.port,
+    url: sandbox.domain(candidate.port),
+  };
+}
+
+async function clearDevServerPidFile(
+  sandbox: ConnectedSandbox,
+  packageDirAbs: string,
+  port: number,
+): Promise<void> {
+  const pidFilePath = getDevServerPidFilePath(packageDirAbs, port);
+  await sandbox.exec(`rm -f ${shellQuote(pidFilePath)}`, packageDirAbs, 5_000);
+}
+
+async function getRunningDevServerPid(params: {
+  sandbox: ConnectedSandbox;
+  packageDirAbs: string;
+  port: number;
+}): Promise<string | null> {
+  const { sandbox, packageDirAbs, port } = params;
+  const pidFilePath = getDevServerPidFilePath(packageDirAbs, port);
+
+  try {
+    const pid = (await sandbox.readFile(pidFilePath, "utf-8")).trim();
+    if (!/^[1-9][0-9]*$/.test(pid)) {
+      await clearDevServerPidFile(sandbox, packageDirAbs, port);
+      return null;
+    }
+
+    const checkResult = await sandbox.exec(
+      `kill -0 ${pid}`,
+      packageDirAbs,
+      5_000,
+    );
+    if (!checkResult.success) {
+      await clearDevServerPidFile(sandbox, packageDirAbs, port);
+      return null;
+    }
+
+    return pid;
+  } catch {
+    return null;
+  }
+}
+
+async function stopDevServer(params: {
+  sandbox: ConnectedSandbox;
+  packageDirAbs: string;
+  port: number;
+}): Promise<boolean> {
+  const pid = await getRunningDevServerPid(params);
+  if (!pid) {
+    return false;
+  }
+
+  await params.sandbox.exec(
+    `kill ${pid} 2>/dev/null || true`,
+    params.packageDirAbs,
+    5_000,
+  );
+  await clearDevServerPidFile(
+    params.sandbox,
+    params.packageDirAbs,
+    params.port,
+  );
+  return true;
 }
 
 async function findDevServerCandidates(
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>,
+  sandbox: ConnectedSandbox,
 ): Promise<DevServerCandidate[]> {
   const result = await sandbox.exec(
     PACKAGE_JSON_FIND_COMMAND,
@@ -523,6 +620,59 @@ async function findDevServerCandidates(
   );
 }
 
+async function resolveDevServerTarget(
+  sandbox: ConnectedSandbox,
+): Promise<{ candidate: DevServerCandidate; packageDirAbs: string } | null> {
+  const candidate = pickBestCandidate(await findDevServerCandidates(sandbox));
+  if (!candidate) {
+    return null;
+  }
+
+  return {
+    candidate,
+    packageDirAbs:
+      candidate.packageDir === "."
+        ? sandbox.workingDirectory
+        : path.posix.join(sandbox.workingDirectory, candidate.packageDir),
+  };
+}
+
+async function connectDevServerSandboxForSession(
+  sessionId: string,
+  userId: string,
+) {
+  const sessionContext = await requireOwnedSessionWithSandboxGuard({
+    userId,
+    sessionId,
+    sandboxGuard: isSandboxActive,
+    sandboxErrorMessage: "Resume the sandbox before running a dev server",
+    sandboxErrorStatus: 409,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext;
+  }
+
+  const sandboxState = sessionContext.sessionRecord.sandboxState;
+  if (!sandboxState) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        { error: "Resume the sandbox before running a dev server" },
+        { status: 409 },
+      ),
+    };
+  }
+
+  const sandbox = await connectSandbox(sandboxState, {
+    ports: DEFAULT_SANDBOX_PORTS,
+  });
+
+  return {
+    ok: true as const,
+    sandbox,
+  };
+}
+
 export async function POST(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
@@ -530,31 +680,17 @@ export async function POST(_req: Request, context: RouteContext) {
   }
 
   const { sessionId } = await context.params;
-  const sessionContext = await requireOwnedSessionWithSandboxGuard({
-    userId: authResult.userId,
-    sessionId,
-    sandboxGuard: isSandboxActive,
-    sandboxErrorMessage: "Resume the sandbox before running a dev server",
-    sandboxErrorStatus: 409,
-  });
-  if (!sessionContext.ok) {
-    return sessionContext.response;
-  }
-
-  const { sessionRecord } = sessionContext;
-  const sandboxState = sessionRecord.sandboxState;
-  if (!sandboxState) {
-    return Response.json(
-      { error: "Resume the sandbox before running a dev server" },
-      { status: 409 },
-    );
-  }
 
   try {
-    const sandbox = await connectSandbox(sandboxState, {
-      ports: DEFAULT_SANDBOX_PORTS,
-    });
+    const sandboxResult = await connectDevServerSandboxForSession(
+      sessionId,
+      authResult.userId,
+    );
+    if (!sandboxResult.ok) {
+      return sandboxResult.response;
+    }
 
+    const { sandbox } = sandboxResult;
     if (!sandbox.execDetached) {
       return Response.json(
         { error: "Sandbox does not support background commands" },
@@ -562,25 +698,24 @@ export async function POST(_req: Request, context: RouteContext) {
       );
     }
 
-    if (!sandbox.domain) {
-      return Response.json(
-        { error: "Sandbox does not expose preview URLs" },
-        { status: 500 },
-      );
-    }
-
-    const candidate = pickBestCandidate(await findDevServerCandidates(sandbox));
-    if (!candidate) {
+    const target = await resolveDevServerTarget(sandbox);
+    if (!target) {
       return Response.json(
         { error: "No supported dev script found in package.json files" },
         { status: 404 },
       );
     }
 
-    const packageDirAbs =
-      candidate.packageDir === "."
-        ? sandbox.workingDirectory
-        : path.posix.join(sandbox.workingDirectory, candidate.packageDir);
+    const { candidate, packageDirAbs } = target;
+    const existingPid = await getRunningDevServerPid({
+      sandbox,
+      packageDirAbs,
+      port: candidate.port,
+    });
+    if (existingPid) {
+      return Response.json(buildDevServerResponse(sandbox, candidate));
+    }
+
     const { packageManager, installRootAbs } = await detectPackageManager(
       sandbox,
       packageDirAbs,
@@ -597,19 +732,69 @@ export async function POST(_req: Request, context: RouteContext) {
       installRootAbs,
       packageDirAbs,
       installDependencies,
+      pidFilePath: getDevServerPidFilePath(packageDirAbs, candidate.port),
     });
 
-    await sandbox.execDetached(launchCommand, packageDirAbs);
+    try {
+      await sandbox.execDetached(launchCommand, packageDirAbs);
+    } catch (error) {
+      await clearDevServerPidFile(sandbox, packageDirAbs, candidate.port).catch(
+        () => undefined,
+      );
+      throw error;
+    }
 
-    return Response.json({
-      packagePath: candidate.packagePath,
-      port: candidate.port,
-      url: sandbox.domain(candidate.port),
-    } satisfies DevServerLaunchResponse);
+    return Response.json(buildDevServerResponse(sandbox, candidate));
   } catch (error) {
     console.error("Failed to launch dev server:", error);
     return Response.json(
       { error: "Failed to launch dev server" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(_req: Request, context: RouteContext) {
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { sessionId } = await context.params;
+
+  try {
+    const sandboxResult = await connectDevServerSandboxForSession(
+      sessionId,
+      authResult.userId,
+    );
+    if (!sandboxResult.ok) {
+      return sandboxResult.response;
+    }
+
+    const { sandbox } = sandboxResult;
+    const target = await resolveDevServerTarget(sandbox);
+    if (!target) {
+      return Response.json(
+        { error: "No supported dev script found in package.json files" },
+        { status: 404 },
+      );
+    }
+
+    const stopped = await stopDevServer({
+      sandbox,
+      packageDirAbs: target.packageDirAbs,
+      port: target.candidate.port,
+    });
+
+    return Response.json({
+      stopped,
+      packagePath: target.candidate.packagePath,
+      port: target.candidate.port,
+    } satisfies DevServerStopResponse);
+  } catch (error) {
+    console.error("Failed to stop dev server:", error);
+    return Response.json(
+      { error: "Failed to stop dev server" },
       { status: 500 },
     );
   }

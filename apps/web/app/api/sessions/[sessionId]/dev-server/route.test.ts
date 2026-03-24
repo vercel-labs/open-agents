@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+const DEV_SERVER_PID_FILE =
+  "/vercel/sandbox/apps/web/.open-harness-dev-server-3000.pid";
+const RUNNING_PID = "4242";
+
 const currentSessionRecord = {
   userId: "user-1",
   sandboxState: {
@@ -12,8 +16,29 @@ const currentSessionRecord = {
 let currentFindOutput = "./package.json\n./apps/web/package.json\n";
 let fileContents = new Map<string, string>();
 let existingPaths = new Set<string>();
+let runningPids = new Set<string>();
 let lastLaunchCommand: string | null = null;
 let lastLaunchCwd: string | null = null;
+
+function successResult(stdout = "") {
+  return {
+    success: true,
+    exitCode: 0,
+    stdout,
+    stderr: "",
+    truncated: false,
+  };
+}
+
+function failureResult(stderr: string) {
+  return {
+    success: false,
+    exitCode: 1,
+    stdout: "",
+    stderr,
+    truncated: false,
+  };
+}
 
 const requireAuthenticatedUserMock = mock(async () => ({
   ok: true as const,
@@ -25,20 +50,38 @@ const requireOwnedSessionWithSandboxGuardMock = mock(async () => ({
 }));
 const execMock = mock(async (command: string) => {
   if (command.includes("find .")) {
-    return {
-      success: true,
-      exitCode: 0,
-      stdout: currentFindOutput,
-      stderr: "",
-      truncated: false,
-    };
+    return successResult(currentFindOutput);
+  }
+
+  if (command.startsWith("kill -0 ")) {
+    const pid = command.slice("kill -0 ".length).trim();
+    return runningPids.has(pid)
+      ? successResult()
+      : failureResult(`No such process: ${pid}`);
+  }
+
+  if (command.startsWith("kill ")) {
+    const pid = command.match(/^kill ([0-9]+)/)?.[1];
+    if (pid) {
+      runningPids.delete(pid);
+    }
+    return successResult();
+  }
+
+  if (command.startsWith("rm -f ")) {
+    const filePath = command.match(/^rm -f '(.+)'$/)?.[1];
+    if (filePath) {
+      existingPaths.delete(filePath);
+      fileContents.delete(filePath);
+    }
+    return successResult();
   }
 
   throw new Error(`Unexpected exec command: ${command}`);
 });
 const readFileMock = mock(async (filePath: string) => {
   const content = fileContents.get(filePath);
-  if (!content) {
+  if (content === undefined) {
     throw new Error(`Missing file: ${filePath}`);
   }
   return content;
@@ -51,6 +94,16 @@ const accessMock = mock(async (filePath: string) => {
 const execDetachedMock = mock(async (command: string, cwd: string) => {
   lastLaunchCommand = command;
   lastLaunchCwd = cwd;
+
+  const pidFilePath = command.match(
+    /> '([^']+\.open-harness-dev-server-[0-9]+\.pid)'/,
+  )?.[1];
+  if (pidFilePath) {
+    fileContents.set(pidFilePath, `${RUNNING_PID}\n`);
+    existingPaths.add(pidFilePath);
+    runningPids.add(RUNNING_PID);
+  }
+
   return { commandId: "cmd-1" };
 });
 const domainMock = mock((port: number) => `https://sb-${port}.vercel.run`);
@@ -106,6 +159,7 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
       ],
     ]);
     existingPaths = new Set(["/vercel/sandbox/bun.lock"]);
+    runningPids = new Set<string>();
     lastLaunchCommand = null;
     lastLaunchCwd = null;
     currentSessionRecord.sandboxState.expiresAt = Date.now() + 60_000;
@@ -145,16 +199,77 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
       { ports: [3000, 5173, 4321] },
     );
     expect(execDetachedMock).toHaveBeenCalledTimes(1);
-
     expect(lastLaunchCwd).toBe("/vercel/sandbox/apps/web");
     expect(lastLaunchCommand).not.toBeNull();
+    expect(existingPaths.has(DEV_SERVER_PID_FILE)).toBe(true);
+    expect(runningPids.has(RUNNING_PID)).toBe(true);
+
     if (!lastLaunchCommand) {
       throw new Error("Expected execDetached to receive a launch command");
     }
 
+    expect(lastLaunchCommand).toContain(DEV_SERVER_PID_FILE);
     expect(lastLaunchCommand).toContain("bun install");
     expect(lastLaunchCommand).toContain("bun run dev");
     expect(lastLaunchCommand).toContain("--hostname 0.0.0.0 --port 3000");
+  });
+
+  test("returns the existing preview URL without relaunching when the dev server is already running", async () => {
+    const { POST } = await routeModulePromise;
+
+    fileContents.set(DEV_SERVER_PID_FILE, `${RUNNING_PID}\n`);
+    existingPaths.add(DEV_SERVER_PID_FILE);
+    runningPids.add(RUNNING_PID);
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      packagePath: string;
+      port: number;
+      url: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      packagePath: "apps/web",
+      port: 3000,
+      url: "https://sb-3000.vercel.run",
+    });
+    expect(execDetachedMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("stops the running dev server and clears its pid file", async () => {
+    const { DELETE } = await routeModulePromise;
+
+    fileContents.set(DEV_SERVER_PID_FILE, `${RUNNING_PID}\n`);
+    existingPaths.add(DEV_SERVER_PID_FILE);
+    runningPids.add(RUNNING_PID);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "DELETE",
+      }),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      stopped: boolean;
+      packagePath: string;
+      port: number;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      stopped: true,
+      packagePath: "apps/web",
+      port: 3000,
+    });
+    expect(runningPids.has(RUNNING_PID)).toBe(false);
+    expect(existingPaths.has(DEV_SERVER_PID_FILE)).toBe(false);
+    expect(fileContents.has(DEV_SERVER_PID_FILE)).toBe(false);
   });
 
   test("returns 404 when no supported dev script is found", async () => {
