@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 
 interface TestSessionRecord {
   id: string;
@@ -272,6 +273,9 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         maxSteps: 500,
+        agentOptions: expect.objectContaining({
+          customInstructions: assistantFileLinkPrompt,
+        }),
       }),
     ]);
   });
