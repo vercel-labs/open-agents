@@ -52,8 +52,25 @@ interface DevServerCandidate {
   packageManagerField?: string;
 }
 
+interface ResolvedDevServerTarget {
+  packagePath: string;
+  packageDir: string;
+  packageDirAbs: string;
+  port: number;
+}
+
+interface LaunchableDevServerTarget extends ResolvedDevServerTarget {
+  candidate: DevServerCandidate;
+}
+
+interface PersistedDevServerTarget {
+  packageDir: string;
+  port: number;
+}
+
 const SUPPORTED_PORTS = new Set(DEFAULT_SANDBOX_PORTS);
 const DEV_SERVER_PIDFILE_PREFIX = ".open-harness-dev-server";
+const DEV_SERVER_STATE_FILENAME = `${DEV_SERVER_PIDFILE_PREFIX}-state.json`;
 const INSTALL_COMMANDS: Record<PackageManager, string> = {
   bun: "bun install",
   pnpm: "pnpm install",
@@ -120,6 +137,97 @@ function normalizePackageDir(packageJsonPath: string): string {
 
 function formatPackagePath(packageDir: string): string {
   return packageDir === "." ? "root" : packageDir;
+}
+
+function resolvePackageDirAbs(
+  workingDirectory: string,
+  packageDir: string,
+): string {
+  return packageDir === "."
+    ? workingDirectory
+    : path.posix.join(workingDirectory, packageDir);
+}
+
+function buildResolvedDevServerTarget(params: {
+  workingDirectory: string;
+  packageDir: string;
+  port: number;
+}): ResolvedDevServerTarget {
+  return {
+    packagePath: formatPackagePath(params.packageDir),
+    packageDir: params.packageDir,
+    packageDirAbs: resolvePackageDirAbs(
+      params.workingDirectory,
+      params.packageDir,
+    ),
+    port: params.port,
+  };
+}
+
+function toLaunchableDevServerTarget(
+  sandbox: ConnectedSandbox,
+  candidate: DevServerCandidate,
+): LaunchableDevServerTarget {
+  return {
+    ...buildResolvedDevServerTarget({
+      workingDirectory: sandbox.workingDirectory,
+      packageDir: candidate.packageDir,
+      port: candidate.port,
+    }),
+    candidate,
+  };
+}
+
+function isValidPersistedPackageDir(packageDir: string): boolean {
+  if (packageDir === ".") {
+    return true;
+  }
+
+  if (packageDir.length === 0 || path.posix.isAbsolute(packageDir)) {
+    return false;
+  }
+
+  const normalizedPackageDir = path.posix.normalize(packageDir);
+  return (
+    normalizedPackageDir === packageDir &&
+    normalizedPackageDir !== "." &&
+    normalizedPackageDir !== ".." &&
+    !normalizedPackageDir.startsWith("../")
+  );
+}
+
+function parsePersistedDevServerTarget(
+  content: string,
+): PersistedDevServerTarget | null {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    const packageDir =
+      typeof parsed.packageDir === "string" ? parsed.packageDir : null;
+    const port = toSupportedPort(
+      typeof parsed.port === "number" && Number.isInteger(parsed.port)
+        ? parsed.port
+        : null,
+    );
+
+    if (
+      !packageDir ||
+      port === null ||
+      !isValidPersistedPackageDir(packageDir)
+    ) {
+      return null;
+    }
+
+    return {
+      packageDir,
+      port,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function extractExplicitPort(script: string): number | null {
@@ -423,6 +531,73 @@ async function detectPackageManager(
   };
 }
 
+function getPackageManagerLockfiles(packageManager: PackageManager): string[] {
+  return (
+    PACKAGE_MANAGER_LOCKFILES.find((entry) => entry.manager === packageManager)
+      ?.files ?? []
+  );
+}
+
+async function getPathStat(sandbox: ConnectedSandbox, targetPath: string) {
+  try {
+    return await sandbox.stat(targetPath);
+  } catch {
+    return null;
+  }
+}
+
+function getDependencyInputPaths(params: {
+  packageDirAbs: string;
+  installRootAbs: string;
+  packageManager: PackageManager;
+}): string[] {
+  const dependencyInputPaths = new Set<string>();
+  const ancestorDirectories = getAncestorDirectories(
+    params.packageDirAbs,
+    params.installRootAbs,
+  );
+
+  for (const directory of ancestorDirectories) {
+    dependencyInputPaths.add(path.posix.join(directory, "package.json"));
+
+    for (const lockfile of getPackageManagerLockfiles(params.packageManager)) {
+      dependencyInputPaths.add(path.posix.join(directory, lockfile));
+    }
+  }
+
+  return [...dependencyInputPaths];
+}
+
+async function shouldInstallDependencies(params: {
+  sandbox: ConnectedSandbox;
+  packageDirAbs: string;
+  installRootAbs: string;
+  packageManager: PackageManager;
+}): Promise<boolean> {
+  const nodeModulesStat = await getPathStat(
+    params.sandbox,
+    path.posix.join(params.installRootAbs, "node_modules"),
+  );
+  if (!nodeModulesStat?.isDirectory()) {
+    return true;
+  }
+
+  for (const dependencyInputPath of getDependencyInputPaths(params)) {
+    const dependencyInputStat = await getPathStat(
+      params.sandbox,
+      dependencyInputPath,
+    );
+    if (
+      dependencyInputStat &&
+      dependencyInputStat.mtimeMs > nodeModulesStat.mtimeMs
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
@@ -496,19 +671,72 @@ function buildLaunchCommand(params: {
   return commandSteps.join(" && ");
 }
 
+function getDevServerStateFilePath(workingDirectory: string): string {
+  return path.posix.join(workingDirectory, DEV_SERVER_STATE_FILENAME);
+}
+
 function buildDevServerResponse(
   sandbox: ConnectedSandbox,
-  candidate: DevServerCandidate,
+  target: Pick<ResolvedDevServerTarget, "packagePath" | "port">,
 ): DevServerLaunchResponse {
   if (!sandbox.domain) {
     throw new Error("Sandbox does not expose preview URLs");
   }
 
   return {
-    packagePath: candidate.packagePath,
-    port: candidate.port,
-    url: sandbox.domain(candidate.port),
+    packagePath: target.packagePath,
+    port: target.port,
+    url: sandbox.domain(target.port),
   };
+}
+
+async function clearPersistedDevServerTarget(
+  sandbox: ConnectedSandbox,
+): Promise<void> {
+  await sandbox.exec(
+    `rm -f ${shellQuote(getDevServerStateFilePath(sandbox.workingDirectory))}`,
+    sandbox.workingDirectory,
+    5_000,
+  );
+}
+
+async function readPersistedDevServerTarget(
+  sandbox: ConnectedSandbox,
+): Promise<ResolvedDevServerTarget | null> {
+  try {
+    const persistedTarget = parsePersistedDevServerTarget(
+      await sandbox.readFile(
+        getDevServerStateFilePath(sandbox.workingDirectory),
+        "utf-8",
+      ),
+    );
+    if (!persistedTarget) {
+      await clearPersistedDevServerTarget(sandbox);
+      return null;
+    }
+
+    return buildResolvedDevServerTarget({
+      workingDirectory: sandbox.workingDirectory,
+      packageDir: persistedTarget.packageDir,
+      port: persistedTarget.port,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function writePersistedDevServerTarget(
+  sandbox: ConnectedSandbox,
+  target: Pick<ResolvedDevServerTarget, "packageDir" | "port">,
+): Promise<void> {
+  await sandbox.writeFile(
+    getDevServerStateFilePath(sandbox.workingDirectory),
+    JSON.stringify({
+      packageDir: target.packageDir,
+      port: target.port,
+    }),
+    "utf-8",
+  );
 }
 
 async function clearDevServerPidFile(
@@ -622,19 +850,13 @@ async function findDevServerCandidates(
 
 async function resolveDevServerTarget(
   sandbox: ConnectedSandbox,
-): Promise<{ candidate: DevServerCandidate; packageDirAbs: string } | null> {
+): Promise<LaunchableDevServerTarget | null> {
   const candidate = pickBestCandidate(await findDevServerCandidates(sandbox));
   if (!candidate) {
     return null;
   }
 
-  return {
-    candidate,
-    packageDirAbs:
-      candidate.packageDir === "."
-        ? sandbox.workingDirectory
-        : path.posix.join(sandbox.workingDirectory, candidate.packageDir),
-  };
+  return toLaunchableDevServerTarget(sandbox, candidate);
 }
 
 async function connectDevServerSandboxForSession(
@@ -698,6 +920,20 @@ export async function POST(_req: Request, context: RouteContext) {
       );
     }
 
+    const persistedTarget = await readPersistedDevServerTarget(sandbox);
+    if (persistedTarget) {
+      const existingPersistedPid = await getRunningDevServerPid({
+        sandbox,
+        packageDirAbs: persistedTarget.packageDirAbs,
+        port: persistedTarget.port,
+      });
+      if (existingPersistedPid) {
+        return Response.json(buildDevServerResponse(sandbox, persistedTarget));
+      }
+
+      await clearPersistedDevServerTarget(sandbox);
+    }
+
     const target = await resolveDevServerTarget(sandbox);
     if (!target) {
       return Response.json(
@@ -706,14 +942,15 @@ export async function POST(_req: Request, context: RouteContext) {
       );
     }
 
-    const { candidate, packageDirAbs } = target;
+    const { candidate, packageDirAbs, port } = target;
     const existingPid = await getRunningDevServerPid({
       sandbox,
       packageDirAbs,
-      port: candidate.port,
+      port,
     });
     if (existingPid) {
-      return Response.json(buildDevServerResponse(sandbox, candidate));
+      await writePersistedDevServerTarget(sandbox, target);
+      return Response.json(buildDevServerResponse(sandbox, target));
     }
 
     const { packageManager, installRootAbs } = await detectPackageManager(
@@ -721,30 +958,33 @@ export async function POST(_req: Request, context: RouteContext) {
       packageDirAbs,
       candidate.packageManagerField,
     );
-    const installDependencies = !(await pathExists(
+    const installDependencies = await shouldInstallDependencies({
       sandbox,
-      path.posix.join(installRootAbs, "node_modules"),
-    ));
+      installRootAbs,
+      packageDirAbs,
+      packageManager,
+    });
     const launchCommand = buildLaunchCommand({
       packageManager,
       framework: candidate.framework,
-      port: candidate.port,
+      port,
       installRootAbs,
       packageDirAbs,
       installDependencies,
-      pidFilePath: getDevServerPidFilePath(packageDirAbs, candidate.port),
+      pidFilePath: getDevServerPidFilePath(packageDirAbs, port),
     });
 
     try {
       await sandbox.execDetached(launchCommand, packageDirAbs);
     } catch (error) {
-      await clearDevServerPidFile(sandbox, packageDirAbs, candidate.port).catch(
+      await clearDevServerPidFile(sandbox, packageDirAbs, port).catch(
         () => undefined,
       );
       throw error;
     }
 
-    return Response.json(buildDevServerResponse(sandbox, candidate));
+    await writePersistedDevServerTarget(sandbox, target);
+    return Response.json(buildDevServerResponse(sandbox, target));
   } catch (error) {
     console.error("Failed to launch dev server:", error);
     return Response.json(
@@ -772,6 +1012,24 @@ export async function DELETE(_req: Request, context: RouteContext) {
     }
 
     const { sandbox } = sandboxResult;
+    const persistedTarget = await readPersistedDevServerTarget(sandbox);
+    if (persistedTarget) {
+      const stopped = await stopDevServer({
+        sandbox,
+        packageDirAbs: persistedTarget.packageDirAbs,
+        port: persistedTarget.port,
+      });
+      await clearPersistedDevServerTarget(sandbox);
+
+      if (stopped) {
+        return Response.json({
+          stopped,
+          packagePath: persistedTarget.packagePath,
+          port: persistedTarget.port,
+        } satisfies DevServerStopResponse);
+      }
+    }
+
     const target = await resolveDevServerTarget(sandbox);
     if (!target) {
       return Response.json(
@@ -783,13 +1041,16 @@ export async function DELETE(_req: Request, context: RouteContext) {
     const stopped = await stopDevServer({
       sandbox,
       packageDirAbs: target.packageDirAbs,
-      port: target.candidate.port,
+      port: target.port,
     });
+    if (stopped) {
+      await clearPersistedDevServerTarget(sandbox);
+    }
 
     return Response.json({
       stopped,
-      packagePath: target.candidate.packagePath,
-      port: target.candidate.port,
+      packagePath: target.packagePath,
+      port: target.port,
     } satisfies DevServerStopResponse);
   } catch (error) {
     console.error("Failed to stop dev server:", error);

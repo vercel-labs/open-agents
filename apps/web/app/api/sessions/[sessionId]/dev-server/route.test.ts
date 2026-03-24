@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const DEV_SERVER_PID_FILE =
   "/vercel/sandbox/apps/web/.open-harness-dev-server-3000.pid";
+const DEV_SERVER_STATE_FILE =
+  "/vercel/sandbox/.open-harness-dev-server-state.json";
 const RUNNING_PID = "4242";
 
 const currentSessionRecord = {
@@ -13,12 +15,20 @@ const currentSessionRecord = {
   },
 };
 
+type MockPathEntry = {
+  type: "file" | "directory";
+  mtimeMs: number;
+  size: number;
+};
+
 let currentFindOutput = "./package.json\n./apps/web/package.json\n";
 let fileContents = new Map<string, string>();
 let existingPaths = new Set<string>();
+let pathEntries = new Map<string, MockPathEntry>();
 let runningPids = new Set<string>();
 let lastLaunchCommand: string | null = null;
 let lastLaunchCwd: string | null = null;
+let currentMtimeMs = 1_000;
 
 function successResult(stdout = "") {
   return {
@@ -38,6 +48,66 @@ function failureResult(stderr: string) {
     stderr,
     truncated: false,
   };
+}
+
+function nextMtime(): number {
+  currentMtimeMs += 100;
+  return currentMtimeMs;
+}
+
+function setMockFile(filePath: string, content: string, mtimeMs = nextMtime()) {
+  fileContents.set(filePath, content);
+  existingPaths.add(filePath);
+  pathEntries.set(filePath, {
+    type: "file",
+    mtimeMs,
+    size: content.length,
+  });
+}
+
+function setMockDirectory(dirPath: string, mtimeMs = nextMtime()) {
+  existingPaths.add(dirPath);
+  pathEntries.set(dirPath, {
+    type: "directory",
+    mtimeMs,
+    size: 0,
+  });
+}
+
+function removeMockPath(targetPath: string) {
+  existingPaths.delete(targetPath);
+  fileContents.delete(targetPath);
+  pathEntries.delete(targetPath);
+}
+
+function seedDefaultWorkspace() {
+  currentFindOutput = "./package.json\n./apps/web/package.json\n";
+
+  setMockDirectory("/vercel/sandbox");
+  setMockDirectory("/vercel/sandbox/apps");
+  setMockDirectory("/vercel/sandbox/apps/web");
+
+  setMockFile(
+    "/vercel/sandbox/package.json",
+    JSON.stringify({
+      packageManager: "bun@1.2.14",
+      scripts: {
+        dev: "turbo dev",
+      },
+    }),
+  );
+  setMockFile(
+    "/vercel/sandbox/apps/web/package.json",
+    JSON.stringify({
+      scripts: {
+        dev: "next dev",
+      },
+      dependencies: {
+        next: "15.0.0",
+      },
+    }),
+  );
+  setMockFile("/vercel/sandbox/bun.lock", "");
 }
 
 const requireAuthenticatedUserMock = mock(async () => ({
@@ -71,8 +141,7 @@ const execMock = mock(async (command: string) => {
   if (command.startsWith("rm -f ")) {
     const filePath = command.match(/^rm -f '(.+)'$/)?.[1];
     if (filePath) {
-      existingPaths.delete(filePath);
-      fileContents.delete(filePath);
+      removeMockPath(filePath);
     }
     return successResult();
   }
@@ -85,6 +154,22 @@ const readFileMock = mock(async (filePath: string) => {
     throw new Error(`Missing file: ${filePath}`);
   }
   return content;
+});
+const writeFileMock = mock(async (filePath: string, content: string) => {
+  setMockFile(filePath, content);
+});
+const statMock = mock(async (filePath: string) => {
+  const entry = pathEntries.get(filePath);
+  if (!entry) {
+    throw new Error(`ENOENT: ${filePath}`);
+  }
+
+  return {
+    isDirectory: () => entry.type === "directory",
+    isFile: () => entry.type === "file",
+    size: entry.size,
+    mtimeMs: entry.mtimeMs,
+  };
 });
 const accessMock = mock(async (filePath: string) => {
   if (!existingPaths.has(filePath)) {
@@ -99,8 +184,7 @@ const execDetachedMock = mock(async (command: string, cwd: string) => {
     /> '([^']+\.open-harness-dev-server-[0-9]+\.pid)'/,
   )?.[1];
   if (pidFilePath) {
-    fileContents.set(pidFilePath, `${RUNNING_PID}\n`);
-    existingPaths.add(pidFilePath);
+    setMockFile(pidFilePath, `${RUNNING_PID}\n`);
     runningPids.add(RUNNING_PID);
   }
 
@@ -111,6 +195,8 @@ const connectSandboxMock = mock(async () => ({
   workingDirectory: "/vercel/sandbox",
   exec: execMock,
   readFile: readFileMock,
+  writeFile: writeFileMock,
+  stat: statMock,
   access: accessMock,
   execDetached: execDetachedMock,
   domain: domainMock,
@@ -135,30 +221,11 @@ function createRouteContext(sessionId = "session-1") {
 
 describe("/api/sessions/[sessionId]/dev-server", () => {
   beforeEach(() => {
-    currentFindOutput = "./package.json\n./apps/web/package.json\n";
-    fileContents = new Map([
-      [
-        "/vercel/sandbox/package.json",
-        JSON.stringify({
-          packageManager: "bun@1.2.14",
-          scripts: {
-            dev: "turbo dev",
-          },
-        }),
-      ],
-      [
-        "/vercel/sandbox/apps/web/package.json",
-        JSON.stringify({
-          scripts: {
-            dev: "next dev",
-          },
-          dependencies: {
-            next: "15.0.0",
-          },
-        }),
-      ],
-    ]);
-    existingPaths = new Set(["/vercel/sandbox/bun.lock"]);
+    currentMtimeMs = 1_000;
+    fileContents = new Map();
+    existingPaths = new Set<string>();
+    pathEntries = new Map<string, MockPathEntry>();
+    seedDefaultWorkspace();
     runningPids = new Set<string>();
     lastLaunchCommand = null;
     lastLaunchCwd = null;
@@ -168,6 +235,8 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
     connectSandboxMock.mockClear();
     execMock.mockClear();
     readFileMock.mockClear();
+    writeFileMock.mockClear();
+    statMock.mockClear();
     accessMock.mockClear();
     execDetachedMock.mockClear();
     domainMock.mockClear();
@@ -202,6 +271,10 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
     expect(lastLaunchCwd).toBe("/vercel/sandbox/apps/web");
     expect(lastLaunchCommand).not.toBeNull();
     expect(existingPaths.has(DEV_SERVER_PID_FILE)).toBe(true);
+    expect(existingPaths.has(DEV_SERVER_STATE_FILE)).toBe(true);
+    expect(fileContents.get(DEV_SERVER_STATE_FILE)).toBe(
+      JSON.stringify({ packageDir: "apps/web", port: 3000 }),
+    );
     expect(runningPids.has(RUNNING_PID)).toBe(true);
 
     if (!lastLaunchCommand) {
@@ -217,8 +290,11 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
   test("returns the existing preview URL without relaunching when the dev server is already running", async () => {
     const { POST } = await routeModulePromise;
 
-    fileContents.set(DEV_SERVER_PID_FILE, `${RUNNING_PID}\n`);
-    existingPaths.add(DEV_SERVER_PID_FILE);
+    setMockFile(DEV_SERVER_PID_FILE, `${RUNNING_PID}\n`);
+    setMockFile(
+      DEV_SERVER_STATE_FILE,
+      JSON.stringify({ packageDir: "apps/web", port: 3000 }),
+    );
     runningPids.add(RUNNING_PID);
 
     const response = await POST(
@@ -242,12 +318,78 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
     expect(execDetachedMock).toHaveBeenCalledTimes(0);
   });
 
-  test("stops the running dev server and clears its pid file", async () => {
-    const { DELETE } = await routeModulePromise;
+  test("keeps using the launched app when package discovery later prefers another app", async () => {
+    const { POST } = await routeModulePromise;
 
-    fileContents.set(DEV_SERVER_PID_FILE, `${RUNNING_PID}\n`);
-    existingPaths.add(DEV_SERVER_PID_FILE);
-    runningPids.add(RUNNING_PID);
+    const firstResponse = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+    expect(firstResponse.status).toBe(200);
+
+    setMockDirectory("/vercel/sandbox/apps/admin");
+    setMockFile(
+      "/vercel/sandbox/apps/admin/package.json",
+      JSON.stringify({
+        scripts: {
+          dev: "next dev",
+        },
+        dependencies: {
+          next: "15.0.0",
+        },
+      }),
+    );
+    currentFindOutput =
+      "./apps/admin/package.json\n./apps/web/package.json\n./package.json\n";
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      packagePath: string;
+      port: number;
+      url: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      packagePath: "apps/web",
+      port: 3000,
+      url: "https://sb-3000.vercel.run",
+    });
+    expect(execDetachedMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("stops the running dev server even when package discovery later prefers another app", async () => {
+    const { DELETE, POST } = await routeModulePromise;
+
+    const launchResponse = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+    expect(launchResponse.status).toBe(200);
+
+    setMockDirectory("/vercel/sandbox/apps/admin");
+    setMockFile(
+      "/vercel/sandbox/apps/admin/package.json",
+      JSON.stringify({
+        scripts: {
+          dev: "next dev",
+        },
+        dependencies: {
+          next: "15.0.0",
+        },
+      }),
+    );
+    currentFindOutput =
+      "./apps/admin/package.json\n./apps/web/package.json\n./package.json\n";
 
     const response = await DELETE(
       new Request("http://localhost/api/sessions/session-1/dev-server", {
@@ -269,22 +411,81 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
     });
     expect(runningPids.has(RUNNING_PID)).toBe(false);
     expect(existingPaths.has(DEV_SERVER_PID_FILE)).toBe(false);
-    expect(fileContents.has(DEV_SERVER_PID_FILE)).toBe(false);
+    expect(existingPaths.has(DEV_SERVER_STATE_FILE)).toBe(false);
+  });
+
+  test("reinstalls dependencies when a package manifest changed after node_modules was created", async () => {
+    const { POST } = await routeModulePromise;
+
+    setMockDirectory("/vercel/sandbox/node_modules", 5_000);
+    setMockFile(
+      "/vercel/sandbox/apps/web/package.json",
+      JSON.stringify({
+        scripts: {
+          dev: "next dev",
+        },
+        dependencies: {
+          next: "15.0.0",
+          react: "19.0.0",
+        },
+      }),
+      6_000,
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(lastLaunchCommand).not.toBeNull();
+
+    if (!lastLaunchCommand) {
+      throw new Error("Expected execDetached to receive a launch command");
+    }
+
+    expect(lastLaunchCommand).toContain("bun install");
+  });
+
+  test("skips dependency install when node_modules is newer than manifests and lockfiles", async () => {
+    const { POST } = await routeModulePromise;
+
+    setMockDirectory("/vercel/sandbox/node_modules", 10_000);
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(lastLaunchCommand).not.toBeNull();
+
+    if (!lastLaunchCommand) {
+      throw new Error("Expected execDetached to receive a launch command");
+    }
+
+    expect(lastLaunchCommand).not.toContain("bun install");
   });
 
   test("returns 404 when no supported dev script is found", async () => {
     const { POST } = await routeModulePromise;
 
-    fileContents = new Map([
-      [
-        "/vercel/sandbox/package.json",
-        JSON.stringify({
-          scripts: {
-            test: "bun test",
-          },
-        }),
-      ],
-    ]);
+    fileContents = new Map();
+    existingPaths = new Set<string>();
+    pathEntries = new Map<string, MockPathEntry>();
+    setMockDirectory("/vercel/sandbox");
+    setMockFile(
+      "/vercel/sandbox/package.json",
+      JSON.stringify({
+        scripts: {
+          test: "bun test",
+        },
+      }),
+    );
     currentFindOutput = "./package.json\n";
 
     const response = await POST(
