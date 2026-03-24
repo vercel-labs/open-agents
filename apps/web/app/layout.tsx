@@ -61,7 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} overflow-x-hidden antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans overflow-x-hidden antialiased`}
       >
         <script
           dangerouslySetInnerHTML={{ __html: themeInitializationScript }}
