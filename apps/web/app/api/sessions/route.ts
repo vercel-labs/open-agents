@@ -281,8 +281,7 @@ export async function POST(req: Request) {
     ]);
     const effectiveAutoCommitPush =
       autoCommitPush ?? preferences.autoCommitPush;
-    const effectiveAutoCreatePr =
-      autoCreatePr ?? preferences.autoCreatePr;
+    const effectiveAutoCreatePr = autoCreatePr ?? preferences.autoCreatePr;
     const result = await createSessionWithInitialChat({
       session: {
         id: nanoid(),

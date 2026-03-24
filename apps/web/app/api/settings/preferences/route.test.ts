@@ -9,6 +9,7 @@ const preferencesState = {
   defaultSubagentModelId: null as string | null,
   defaultSandboxType: "vercel" as const,
   autoCommitPush: false,
+  autoCreatePr: false,
 };
 
 const updateCalls: Array<Record<string, unknown>> = [];
@@ -58,7 +59,7 @@ describe("/api/settings/preferences", () => {
     expect(body.error).toBe("Not authenticated");
   });
 
-  test("GET returns preferences including autoCommitPush", async () => {
+  test("GET returns preferences including autoCommitPush and autoCreatePr", async () => {
     const { GET } = await routeModulePromise;
 
     const response = await GET();
@@ -68,6 +69,7 @@ describe("/api/settings/preferences", () => {
 
     expect(response.status).toBe(200);
     expect(body.preferences.autoCommitPush).toBe(false);
+    expect(body.preferences.autoCreatePr).toBe(false);
     expect(body.preferences.defaultSandboxType).toBe("vercel");
   });
 
@@ -111,6 +113,35 @@ describe("/api/settings/preferences", () => {
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]).toEqual({ autoCommitPush: true });
     expect(body.preferences.autoCommitPush).toBe(true);
+  });
+
+  test("PATCH rejects invalid autoCreatePr values", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { autoCreatePr: "yes" }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid autoCreatePr value");
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  test("PATCH updates autoCreatePr when boolean is provided", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { autoCreatePr: true }),
+    );
+    const body = (await response.json()) as {
+      preferences: typeof preferencesState;
+    };
+
+    expect(response.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toEqual({ autoCreatePr: true });
+    expect(body.preferences.autoCreatePr).toBe(true);
   });
 
   test("PATCH returns 400 for invalid JSON", async () => {

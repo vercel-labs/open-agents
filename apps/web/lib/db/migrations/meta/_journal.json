@@ -162,6 +162,13 @@
       "when": 1773963619200,
       "tag": "0022_ambiguous_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774310138902,
+      "tag": "0023_colorful_gladiator",
+      "breakpoints": true
     }
   ]
 }

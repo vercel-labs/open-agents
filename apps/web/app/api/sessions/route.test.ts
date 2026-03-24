@@ -32,6 +32,7 @@ mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => ({
     defaultModelId: "anthropic/claude-haiku-4.5",
     autoCommitPush: false,
+    autoCreatePr: false,
   }),
 }));
 
@@ -256,5 +257,26 @@ describe("/api/sessions POST vercel project linking", () => {
       vercelTeamSlug: null,
     });
     expect(body.session.vercelProjectId).toBeNull();
+  });
+
+  test("persists autoCreatePr when autoCommitPush is enabled", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        branch: "feature/auto-pr",
+        cloneUrl: "https://github.com/vercel/open-harness",
+        autoCommitPush: true,
+        autoCreatePr: true,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCalls[0]).toMatchObject({
+      autoCommitPushOverride: true,
+      autoCreatePrOverride: true,
+    });
   });
 });

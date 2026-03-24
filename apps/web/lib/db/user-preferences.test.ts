@@ -16,6 +16,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "vercel",
       defaultDiffMode: "unified",
       autoCommitPush: false,
+      autoCreatePr: false,
       modelVariants: [],
     });
   });
@@ -29,6 +30,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "invalid" as never,
       defaultDiffMode: "invalid" as never,
       autoCommitPush: false,
+      autoCreatePr: false,
       modelVariants: [],
     });
 
@@ -45,6 +47,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "hybrid" as never,
       defaultDiffMode: "unified",
       autoCommitPush: false,
+      autoCreatePr: false,
       modelVariants: [],
     });
 
@@ -61,6 +64,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "vercel",
       defaultDiffMode: "split",
       autoCommitPush: false,
+      autoCreatePr: false,
       modelVariants: [{ id: "bad-id" }] as never,
     });
 
@@ -76,6 +80,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "vercel",
       defaultDiffMode: "split",
       autoCommitPush: true,
+      autoCreatePr: true,
       modelVariants: [
         {
           id: "variant:test",
@@ -92,6 +97,7 @@ describe("toUserPreferencesData", () => {
       defaultSandboxType: "vercel",
       defaultDiffMode: "split",
       autoCommitPush: true,
+      autoCreatePr: true,
       modelVariants: [
         {
           id: "variant:test",

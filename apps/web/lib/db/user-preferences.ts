@@ -139,8 +139,7 @@ export async function updateUserPreferences(
         updates.defaultDiffMode ?? DEFAULT_PREFERENCES.defaultDiffMode,
       autoCommitPush:
         updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
-      autoCreatePr:
-        updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
+      autoCreatePr: updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
     })
     .returning();

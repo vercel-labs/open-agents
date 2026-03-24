@@ -23,6 +23,7 @@ import {
   recordWorkflowUsage,
   refreshDiffCache,
   runAutoCommitStep,
+  runAutoCreatePrStep,
 } from "./chat-post-finish";
 
 type Options = {
@@ -35,6 +36,8 @@ type Options = {
   maxSteps?: number;
   /** Whether auto-commit+push should run after a natural finish. */
   autoCommitEnabled?: boolean;
+  /** Whether auto PR creation should run after auto-commit on a natural finish. */
+  autoCreatePrEnabled?: boolean;
   /** Session title for commit message generation. */
   sessionTitle?: string;
   /** GitHub repo owner (required for auto-commit and diff refresh). */
@@ -182,6 +185,24 @@ export async function runAgentWorkflow(options: Options) {
       options.repoName
     ) {
       await runAutoCommitStep({
+        userId: options.userId,
+        sessionId: options.sessionId,
+        sessionTitle: options.sessionTitle ?? "",
+        repoOwner: options.repoOwner,
+        repoName: options.repoName,
+        sandboxState,
+      });
+    }
+
+    // Auto-create a PR if enabled and the agent finished naturally.
+    if (
+      !wasAborted &&
+      options.autoCreatePrEnabled &&
+      sandboxState &&
+      options.repoOwner &&
+      options.repoName
+    ) {
+      await runAutoCreatePrStep({
         userId: options.userId,
         sessionId: options.sessionId,
         sessionTitle: options.sessionTitle ?? "",

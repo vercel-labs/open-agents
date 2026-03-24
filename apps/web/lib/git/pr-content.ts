@@ -75,7 +75,11 @@ export async function generatePullRequestContentFromSandbox(
   }
 
   const debugHead = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
-  const debugBase = await sandbox.exec(`git rev-parse ${finalBaseRef}`, cwd, 5000);
+  const debugBase = await sandbox.exec(
+    `git rev-parse ${finalBaseRef}`,
+    cwd,
+    5000,
+  );
   if (!debugBase.success || !debugBase.stdout.trim()) {
     return {
       success: false,
@@ -145,7 +149,11 @@ export async function generatePullRequestContentFromSandbox(
       };
     }
 
-    const uncommittedStatus = await sandbox.exec("git status --porcelain", cwd, 5000);
+    const uncommittedStatus = await sandbox.exec(
+      "git status --porcelain",
+      cwd,
+      5000,
+    );
     if (uncommittedStatus.stdout.trim()) {
       return {
         success: false,

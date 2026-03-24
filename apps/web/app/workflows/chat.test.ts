@@ -13,6 +13,7 @@ const spies = {
   recordWorkflowUsage: mock(() => Promise.resolve()),
   refreshDiffCache: mock(() => Promise.resolve()),
   runAutoCommitStep: mock(() => Promise.resolve()),
+  runAutoCreatePrStep: mock(() => Promise.resolve()),
 };
 
 // Track what the agent stream yields
@@ -336,6 +337,40 @@ describe("runAgentWorkflow", () => {
         repoName: "repo",
       }),
     );
+  });
+
+  test("runs auto PR creation when enabled and not aborted", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        sessionTitle: "My session",
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledTimes(1);
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+  });
+
+  test("skips auto PR creation when not enabled", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: false,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCreatePrStep).not.toHaveBeenCalled();
   });
 
   test("skips auto-commit when not enabled", async () => {

@@ -333,3 +333,33 @@ export async function runAutoCommitStep(params: {
     console.error("[workflow] Auto-commit failed:", error);
   }
 }
+
+export async function runAutoCreatePrStep(params: {
+  userId: string;
+  sessionId: string;
+  sessionTitle: string;
+  repoOwner: string;
+  repoName: string;
+  sandboxState: SandboxState;
+}): Promise<void> {
+  "use step";
+  try {
+    const { connectSandbox } = await import("@open-harness/sandbox");
+    const { performAutoCreatePr } = await import("@/lib/chat/auto-pr-direct");
+    const sandbox = await connectSandbox(params.sandboxState);
+    const result = await performAutoCreatePr({
+      sandbox,
+      userId: params.userId,
+      sessionId: params.sessionId,
+      sessionTitle: params.sessionTitle,
+      repoOwner: params.repoOwner,
+      repoName: params.repoName,
+    });
+
+    if (result.error) {
+      console.warn("[workflow] Auto-PR failed:", result.error);
+    }
+  } catch (error) {
+    console.error("[workflow] Auto-PR failed:", error);
+  }
+}

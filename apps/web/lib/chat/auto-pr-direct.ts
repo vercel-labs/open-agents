@@ -1,0 +1,371 @@
+import type { Sandbox } from "@open-harness/sandbox";
+import { looksLikeCommitHash } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+import { updateSession } from "@/lib/db/sessions";
+import {
+  createPullRequest,
+  findPullRequestByBranch,
+} from "@/lib/github/client";
+import { getCachedGitHubBranches } from "@/lib/github/cached-api";
+import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
+import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
+
+const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
+
+export interface AutoCreatePrParams {
+  sandbox: Sandbox;
+  userId: string;
+  sessionId: string;
+  sessionTitle: string;
+  repoOwner: string;
+  repoName: string;
+}
+
+export interface AutoCreatePrResult {
+  created: boolean;
+  syncedExisting: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  prNumber?: number;
+  prUrl?: string;
+  error?: string;
+}
+
+function dedupeTokenCandidates(
+  candidates: Array<string | null | undefined>,
+): string[] {
+  const deduped: string[] = [];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (!deduped.includes(candidate)) {
+      deduped.push(candidate);
+    }
+  }
+
+  return deduped;
+}
+
+function parseOriginHeadRef(output: string): string | null {
+  const trimmed = output.trim();
+  const match = trimmed.match(/^refs\/remotes\/origin\/(.+)$/);
+  return match?.[1] ?? null;
+}
+
+function isSkippablePrContentError(error: string): boolean {
+  return (
+    error.startsWith("No changes found:") ||
+    error.startsWith("No changes detected between") ||
+    error.startsWith("There are uncommitted changes")
+  );
+}
+
+async function resolveDefaultBranch(params: {
+  sandbox: Sandbox;
+  userId: string;
+  repoOwner: string;
+  repoName: string;
+  tokenCandidates: string[];
+}): Promise<string | null> {
+  const { sandbox, userId, repoOwner, repoName, tokenCandidates } = params;
+  const cwd = sandbox.workingDirectory;
+
+  for (const token of tokenCandidates) {
+    const branchData = await getCachedGitHubBranches(
+      userId,
+      token,
+      repoOwner,
+      repoName,
+    );
+
+    if (branchData?.defaultBranch?.trim()) {
+      return branchData.defaultBranch.trim();
+    }
+  }
+
+  const originHeadResult = await sandbox.exec(
+    "git symbolic-ref refs/remotes/origin/HEAD",
+    cwd,
+    10000,
+  );
+
+  return parseOriginHeadRef(originHeadResult.stdout);
+}
+
+async function findExistingOpenPullRequest(params: {
+  repoOwner: string;
+  repoName: string;
+  branchName: string;
+  tokenCandidates: string[];
+}): Promise<Awaited<ReturnType<typeof findPullRequestByBranch>> | null> {
+  const { repoOwner, repoName, branchName, tokenCandidates } = params;
+
+  for (const token of tokenCandidates) {
+    const prResult = await findPullRequestByBranch({
+      owner: repoOwner,
+      repo: repoName,
+      branchName,
+      token,
+    });
+
+    if (prResult.found && prResult.prStatus === "open") {
+      return prResult;
+    }
+  }
+
+  return null;
+}
+
+export async function performAutoCreatePr(
+  params: AutoCreatePrParams,
+): Promise<AutoCreatePrResult> {
+  const { sandbox, userId, sessionId, sessionTitle, repoOwner, repoName } =
+    params;
+  const cwd = sandbox.workingDirectory;
+
+  const branchResult = await sandbox.exec(
+    "git symbolic-ref --short HEAD",
+    cwd,
+    5000,
+  );
+  const branchName = branchResult.success ? branchResult.stdout.trim() : "";
+
+  if (!branchName || branchName === "HEAD" || looksLikeCommitHash(branchName)) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch is detached",
+    };
+  }
+
+  if (!SAFE_BRANCH_PATTERN.test(branchName)) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch name is not supported for auto PR creation",
+    };
+  }
+
+  let repoTokenResult: Awaited<ReturnType<typeof getRepoToken>>;
+  try {
+    repoTokenResult = await getRepoToken(userId, repoOwner);
+  } catch {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "No GitHub token available for this repository",
+    };
+  }
+
+  const userToken =
+    repoTokenResult.type === "installation" ? await getUserGitHubToken() : null;
+  const tokenCandidates = dedupeTokenCandidates([
+    repoTokenResult.token,
+    userToken,
+  ]);
+
+  await sandbox.exec(
+    `git remote set-url origin "https://x-access-token:${repoTokenResult.token}@github.com/${repoOwner}/${repoName}.git"`,
+    cwd,
+    10000,
+  );
+
+  const defaultBranch = await resolveDefaultBranch({
+    sandbox,
+    userId,
+    repoOwner,
+    repoName,
+    tokenCandidates,
+  });
+
+  if (!defaultBranch) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: "Failed to resolve the repository default branch",
+    };
+  }
+
+  if (!SAFE_BRANCH_PATTERN.test(defaultBranch)) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Default branch name is not supported for auto PR creation",
+    };
+  }
+
+  if (branchName === defaultBranch) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch matches the default branch",
+    };
+  }
+
+  await sandbox.exec(
+    `git fetch origin ${defaultBranch}:refs/remotes/origin/${defaultBranch}`,
+    cwd,
+    30000,
+  );
+
+  const remoteBranchResult = await sandbox.exec(
+    `git ls-remote --heads origin ${branchName}`,
+    cwd,
+    10000,
+  );
+
+  if (!remoteBranchResult.success || !remoteBranchResult.stdout.trim()) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason: "Current branch is not available on origin",
+    };
+  }
+
+  const existingPr = await findExistingOpenPullRequest({
+    repoOwner,
+    repoName,
+    branchName,
+    tokenCandidates,
+  });
+
+  if (existingPr?.prNumber) {
+    await updateSession(sessionId, {
+      prNumber: existingPr.prNumber,
+      prStatus: "open",
+    }).catch((error) => {
+      console.error(
+        `[auto-pr] Failed to sync existing PR metadata for session ${sessionId}:`,
+        error,
+      );
+    });
+
+    console.log(
+      `[auto-pr] Reused existing PR #${existingPr.prNumber} for session ${sessionId}`,
+    );
+
+    return {
+      created: false,
+      syncedExisting: true,
+      skipped: false,
+      prNumber: existingPr.prNumber,
+      prUrl: existingPr.prUrl,
+    };
+  }
+
+  const prContentResult = await generatePullRequestContentFromSandbox({
+    sandbox,
+    sessionId,
+    sessionTitle,
+    baseBranch: defaultBranch,
+    branchName,
+  });
+
+  if (!prContentResult.success) {
+    if (isSkippablePrContentError(prContentResult.error)) {
+      return {
+        created: false,
+        syncedExisting: false,
+        skipped: true,
+        skipReason: prContentResult.error,
+      };
+    }
+
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: prContentResult.error,
+    };
+  }
+
+  const repoUrl = `https://github.com/${repoOwner}/${repoName}`;
+  let createResult: Awaited<ReturnType<typeof createPullRequest>> | undefined;
+
+  for (const token of tokenCandidates) {
+    createResult = await createPullRequest({
+      repoUrl,
+      branchName,
+      title: prContentResult.title,
+      body: prContentResult.body,
+      baseBranch: defaultBranch,
+      token,
+    });
+
+    if (createResult.success) {
+      break;
+    }
+  }
+
+  if (!createResult?.success) {
+    if (createResult?.error === "PR already exists or branch not found") {
+      const detectedPr = await findExistingOpenPullRequest({
+        repoOwner,
+        repoName,
+        branchName,
+        tokenCandidates,
+      });
+
+      if (detectedPr?.prNumber) {
+        await updateSession(sessionId, {
+          prNumber: detectedPr.prNumber,
+          prStatus: "open",
+        }).catch((error) => {
+          console.error(
+            `[auto-pr] Failed to sync raced PR metadata for session ${sessionId}:`,
+            error,
+          );
+        });
+
+        return {
+          created: false,
+          syncedExisting: true,
+          skipped: false,
+          prNumber: detectedPr.prNumber,
+          prUrl: detectedPr.prUrl,
+        };
+      }
+    }
+
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: createResult?.error ?? "Failed to create pull request",
+    };
+  }
+
+  if (createResult.prNumber) {
+    await updateSession(sessionId, {
+      prNumber: createResult.prNumber,
+      prStatus: "open",
+    }).catch((error) => {
+      console.error(
+        `[auto-pr] Failed to persist PR metadata for session ${sessionId}:`,
+        error,
+      );
+    });
+  }
+
+  console.log(
+    `[auto-pr] Created PR #${createResult.prNumber ?? "unknown"} for session ${sessionId}`,
+  );
+
+  return {
+    created: true,
+    syncedExisting: false,
+    skipped: false,
+    prNumber: createResult.prNumber,
+    prUrl: createResult.prUrl,
+  };
+}

@@ -8,6 +8,7 @@ interface TestSessionRecord {
   repoOwner: string;
   repoName: string;
   autoCommitPushOverride?: boolean | null;
+  autoCreatePrOverride?: boolean | null;
   sandboxState: {
     type: "vercel";
   };
@@ -28,6 +29,11 @@ let getRunShouldThrow = false;
 let compareAndSetDefaultResult = true;
 let compareAndSetResults: boolean[] = [];
 let startCalls: unknown[][] = [];
+let preferencesState = {
+  autoCommitPush: true,
+  autoCreatePr: false,
+  modelVariants: [],
+};
 
 const compareAndSetChatActiveStreamIdSpy = mock(async () => {
   const nextResult = compareAndSetResults.shift();
@@ -142,10 +148,7 @@ mock.module("@/lib/db/sessions", () => ({
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
-  getUserPreferences: async () => ({
-    autoCommitPush: true,
-    modelVariants: [],
-  }),
+  getUserPreferences: async () => preferencesState,
 }));
 
 mock.module("@/lib/github/get-repo-token", () => ({
@@ -226,6 +229,11 @@ describe("/api/chat route", () => {
     compareAndSetDefaultResult = true;
     compareAndSetResults = [];
     startCalls = [];
+    preferencesState = {
+      autoCommitPush: true,
+      autoCreatePr: false,
+      modelVariants: [],
+    };
     compareAndSetChatActiveStreamIdSpy.mockClear();
     persistAssistantMessagesWithToolResultsSpy.mockClear();
     currentAuthSession = {
@@ -242,6 +250,7 @@ describe("/api/chat route", () => {
       repoOwner: "acme",
       repoName: "repo",
       autoCommitPushOverride: null,
+      autoCreatePrOverride: null,
       sandboxState: {
         type: "vercel",
       },
@@ -272,6 +281,38 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         maxSteps: 500,
+      }),
+    ]);
+  });
+
+  test("passes autoCreatePrEnabled when auto commit and auto PR are enabled", async () => {
+    const { POST } = await routeModulePromise;
+    preferencesState.autoCreatePr = true;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+      }),
+    ]);
+  });
+
+  test("does not enable auto PR when auto commit is disabled", async () => {
+    const { POST } = await routeModulePromise;
+    preferencesState.autoCommitPush = false;
+    preferencesState.autoCreatePr = true;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.not.objectContaining({
+        autoCommitEnabled: true,
       }),
     ]);
   });
