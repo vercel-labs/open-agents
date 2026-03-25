@@ -14,7 +14,7 @@ export type AssistantFileLinkProps = StreamdownAnchorProps & {
 };
 
 const fileChipClassName =
-  "inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.9em] leading-none text-foreground no-underline";
+  "inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.9em] leading-none text-foreground no-underline";
 
 export function AssistantFileLink({
   children,
@@ -42,7 +42,7 @@ export function AssistantFileLink({
         title={workspaceFilePath}
       >
         <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span>{content}</span>
+        <span className="min-w-0 truncate">{content}</span>
       </span>
     );
   }
@@ -59,7 +59,7 @@ export function AssistantFileLink({
       title={`Open ${workspaceFilePath}`}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span>{content}</span>
+      <span className="min-w-0 truncate">{content}</span>
     </button>
   );
 }
