@@ -16,6 +16,30 @@ export type AssistantFileLinkProps = StreamdownAnchorProps & {
 const fileChipClassName =
   "inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.9em] leading-none text-foreground no-underline";
 
+/**
+ * Extract the filename from a path string, returning the last segment.
+ * Falls back to the full string if there are no separators.
+ */
+function getFileName(filePath: string): string {
+  const lastSlash = filePath.lastIndexOf("/");
+  if (lastSlash === -1) {
+    return filePath;
+  }
+  return filePath.slice(lastSlash + 1);
+}
+
+/**
+ * Get the directory portion of a path (everything before the last segment).
+ * Returns null if there is no directory prefix.
+ */
+function getDirPath(filePath: string): string | null {
+  const lastSlash = filePath.lastIndexOf("/");
+  if (lastSlash === -1) {
+    return null;
+  }
+  return filePath.slice(0, lastSlash + 1);
+}
+
 export function AssistantFileLink({
   children,
   className,
@@ -33,7 +57,26 @@ export function AssistantFileLink({
     );
   }
 
-  const content = children ?? workspaceFilePath;
+  // If the link has custom children that differ from the raw path, render them
+  // as-is (truncated). Otherwise show dir + filename with smarter overflow.
+  const hasCustomContent =
+    children != null && children !== workspaceFilePath;
+
+  const fileName = getFileName(workspaceFilePath);
+  const dirPath = getDirPath(workspaceFilePath);
+
+  const chipContent = hasCustomContent ? (
+    <span className="min-w-0 truncate">{children}</span>
+  ) : (
+    <>
+      {dirPath && (
+        <span className="min-w-0 shrink truncate text-muted-foreground">
+          {dirPath}
+        </span>
+      )}
+      <span className="shrink-0">{fileName}</span>
+    </>
+  );
 
   if (!onOpenFile) {
     return (
@@ -42,7 +85,7 @@ export function AssistantFileLink({
         title={workspaceFilePath}
       >
         <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate">{content}</span>
+        {chipContent}
       </span>
     );
   }
@@ -59,7 +102,7 @@ export function AssistantFileLink({
       title={`Open ${workspaceFilePath}`}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate">{content}</span>
+      {chipContent}
     </button>
   );
 }
