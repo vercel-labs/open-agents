@@ -1,0 +1,167 @@
+{
+  "version": "1.0.0",
+  "steps": {
+    "app/workflows/sandbox-lifecycle.ts": {
+      "clearLifecycleRunIdIfOwned": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
+      },
+      "computeLifecycleWakeDecision": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//computeLifecycleWakeDecision"
+      },
+      "runLifecycleEvaluation": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//runLifecycleEvaluation"
+      }
+    },
+    "node_modules/workflow/dist/stdlib.js": {
+      "fetch": {
+        "stepId": "step//workflow@4.2.0-beta.72//fetch"
+      }
+    },
+    "node_modules/workflow/dist/internal/builtins.js": {
+      "__builtin_response_array_buffer": {
+        "stepId": "__builtin_response_array_buffer"
+      },
+      "__builtin_response_json": {
+        "stepId": "__builtin_response_json"
+      },
+      "__builtin_response_text": {
+        "stepId": "__builtin_response_text"
+      }
+    },
+    "app/workflows/chat.ts": {
+      "closeStream": {
+        "stepId": "step//./app/workflows/chat//closeStream"
+      },
+      "convertMessages": {
+        "stepId": "step//./app/workflows/chat//convertMessages"
+      },
+      "generateId": {
+        "stepId": "step//./app/workflows/chat//generateId"
+      },
+      "runAgentStep": {
+        "stepId": "step//./app/workflows/chat//runAgentStep"
+      },
+      "sendFinish": {
+        "stepId": "step//./app/workflows/chat//sendFinish"
+      },
+      "sendStart": {
+        "stepId": "step//./app/workflows/chat//sendStart"
+      }
+    },
+    "app/workflows/chat-post-finish.ts": {
+      "clearActiveStream": {
+        "stepId": "step//./app/workflows/chat-post-finish//clearActiveStream"
+      },
+      "persistAssistantMessage": {
+        "stepId": "step//./app/workflows/chat-post-finish//persistAssistantMessage"
+      },
+      "persistSandboxState": {
+        "stepId": "step//./app/workflows/chat-post-finish//persistSandboxState"
+      },
+      "persistUserMessage": {
+        "stepId": "step//./app/workflows/chat-post-finish//persistUserMessage"
+      },
+      "recordWorkflowUsage": {
+        "stepId": "step//./app/workflows/chat-post-finish//recordWorkflowUsage"
+      },
+      "refreshDiffCache": {
+        "stepId": "step//./app/workflows/chat-post-finish//refreshDiffCache"
+      },
+      "runAutoCommitStep": {
+        "stepId": "step//./app/workflows/chat-post-finish//runAutoCommitStep"
+      }
+    }
+  },
+  "workflows": {
+    "app/workflows/sandbox-lifecycle.ts": {
+      "sandboxLifecycleWorkflow": {
+        "workflowId": "workflow//./app/workflows/sandbox-lifecycle//sandboxLifecycleWorkflow",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "workflowStart",
+              "data": {
+                "label": "Start: sandboxLifecycleWorkflow",
+                "nodeKind": "workflow_start"
+              }
+            },
+            {
+              "id": "node_0",
+              "type": "primitive",
+              "data": {
+                "label": "sleep",
+                "nodeKind": "primitive"
+              },
+              "metadata": {
+                "loopId": "loop_0"
+              }
+            },
+            {
+              "id": "end",
+              "type": "workflowEnd",
+              "data": {
+                "label": "Return",
+                "nodeKind": "workflow_end"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e_node_0_back_node_0",
+              "source": "node_0",
+              "target": "node_0",
+              "type": "loop"
+            },
+            {
+              "id": "e_start_node_0",
+              "source": "start",
+              "target": "node_0",
+              "type": "default"
+            },
+            {
+              "id": "e_node_0_end",
+              "source": "node_0",
+              "target": "end",
+              "type": "default"
+            }
+          ]
+        }
+      }
+    },
+    "app/workflows/chat.ts": {
+      "runAgentWorkflow": {
+        "workflowId": "workflow//./app/workflows/chat//runAgentWorkflow",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "workflowStart",
+              "data": {
+                "label": "Start: runAgentWorkflow",
+                "nodeKind": "workflow_start"
+              }
+            },
+            {
+              "id": "end",
+              "type": "workflowEnd",
+              "data": {
+                "label": "Return",
+                "nodeKind": "workflow_end"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e_start_end",
+              "source": "start",
+              "target": "end",
+              "type": "default"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "classes": {}
+}
