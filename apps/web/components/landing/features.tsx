@@ -25,16 +25,16 @@ function Spotlight({
   return (
     <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
       <div className={flip ? "order-2 md:order-2" : "order-2 md:order-1"}>
-        <h2 className="text-3xl font-semibold tracking-tighter text-white sm:text-4xl">
+        <h2 className="text-3xl font-semibold tracking-tighter sm:text-4xl">
           {title}
         </h2>
-        <p className="mt-5 text-lg leading-relaxed text-[#888]">
+        <p className="mt-5 text-lg leading-relaxed text-(--l-fg-3)">
           {description}
         </p>
         <ul className="mt-8 space-y-3">
           {bullets.map((b) => (
-            <li key={b} className="flex items-center gap-3 text-white/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-white/60" />
+            <li key={b} className="flex items-center gap-3 text-(--l-fg-2)">
+              <span className="h-1.5 w-1.5 rounded-full bg-(--l-fg-3)" />
               {b}
             </li>
           ))}

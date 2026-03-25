@@ -52,7 +52,7 @@ export function FeatureAgent() {
   }, [run, clear]);
 
   return (
-    <div className="flex h-[280px] flex-col bg-[#050505]">
+    <div className="flex h-[280px] flex-col bg-(--l-code-bg)">
       <div className="flex-1 px-5 py-4">
         <div className="space-y-[3px]">
           {tools.map((tool, i) => (
@@ -66,20 +66,20 @@ export function FeatureAgent() {
                 style={{
                   backgroundColor:
                     i === count - 1 && count <= tools.length
-                      ? "rgba(255,255,255,0.7)"
+                      ? "var(--l-panel-fg)"
                       : i < count
-                        ? "rgba(255,255,255,0.25)"
-                        : "rgba(255,255,255,0.1)",
+                        ? "var(--l-panel-fg-3)"
+                        : "var(--l-panel-fg-5)",
                 }}
               />
-              <span className="text-white/45">{tool.name}</span>
-              <span className="text-white/25">{tool.detail}</span>
+              <span className="text-(--l-panel-fg-2)">{tool.name}</span>
+              <span className="text-(--l-panel-fg-3)">{tool.detail}</span>
             </div>
           ))}
         </div>
 
         <div
-          className="mt-5 text-[12px] leading-relaxed text-white/40 transition-opacity duration-500"
+          className="mt-5 text-[12px] leading-relaxed text-(--l-panel-fg-2) transition-opacity duration-500"
           style={{ opacity: count >= tools.length ? 1 : 0 }}
         >
           auth flow complete. 2 routes, middleware, callback. typecheck passes.

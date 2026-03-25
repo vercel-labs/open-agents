@@ -94,22 +94,22 @@ function useTypewriter(text: string, active: boolean, speed = 14) {
 
 function SummaryBar({ session: s }: { readonly session: FakeSession }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-[10px]">
-      <span className="text-white/30">{s.toolCount} tool calls</span>
-      <span className="h-3 w-px bg-white/[0.08]" />
-      <span className="text-white/30">
+    <div className="flex items-center gap-2 rounded-xl bg-(--l-panel-surface) px-3 py-2 text-[10px]">
+      <span className="text-(--l-panel-fg-3)">{s.toolCount} tool calls</span>
+      <span className="h-3 w-px bg-(--l-panel-border)" />
+      <span className="text-(--l-panel-fg-3)">
         {s.todoDone}/{s.todoTotal}
       </span>
       <div className="flex gap-0.5">
         {Array.from({ length: s.todoTotal }).map((_, i) => (
           <div
             key={i}
-            className={`size-1 rounded-full ${i < s.todoDone ? "bg-white/40" : "bg-white/10"}`}
+            className={`size-1 rounded-full ${i < s.todoDone ? "bg-(--l-panel-fg-2)" : "bg-(--l-panel-fg-5)"}`}
           />
         ))}
       </div>
-      <span className="h-3 w-px bg-white/[0.08]" />
-      <span className="text-white/20">{s.elapsed}</span>
+      <span className="h-3 w-px bg-(--l-panel-border)" />
+      <span className="text-(--l-panel-fg-4)">{s.elapsed}</span>
     </div>
   );
 }
@@ -136,10 +136,13 @@ export function AppMockup() {
   }, [justSwitched, active.summary.length]);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] shadow-[0_40px_80px_rgba(0,0,0,0.55)] ring-1 ring-white/5">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2 lg:px-4">
+    <div
+      className="overflow-hidden rounded-xl border border-(--l-panel-border) bg-(--l-panel) ring-1 ring-(--l-panel-border)"
+      style={{ boxShadow: "var(--l-window-shadow)" }}
+    >
+      <div className="flex items-center justify-between border-b border-(--l-panel-border) px-3 py-2 lg:px-4">
         <div className="flex min-w-0 items-center gap-2 text-[11px]">
-          <div className="flex items-center gap-1.5 text-white/25">
+          <div className="flex items-center gap-1.5 text-(--l-panel-fg-3)">
             <svg
               viewBox="0 0 16 16"
               fill="none"
@@ -184,28 +187,28 @@ export function AppMockup() {
               />
             </svg>
           </div>
-          <span className="font-medium text-white/70">{active.repo}</span>
-          <span className="text-white/20">/</span>
-          <span className="text-white/40">{active.branch}</span>
-          <span className="text-white/20">/</span>
-          <span className="text-white/40">{active.title}</span>
-          <span className="size-2 rounded-full bg-white/30" />
+          <span className="font-medium text-(--l-panel-fg)">{active.repo}</span>
+          <span className="text-(--l-panel-fg-4)">/</span>
+          <span className="text-(--l-panel-fg-2)">{active.branch}</span>
+          <span className="text-(--l-panel-fg-4)">/</span>
+          <span className="text-(--l-panel-fg-2)">{active.title}</span>
+          <span className="size-2 rounded-full bg-(--l-panel-dot)" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/40 sm:inline">
+          <span className="hidden rounded-full bg-(--l-panel-surface) px-2 py-0.5 text-[10px] text-(--l-panel-fg-2) sm:inline">
             active
           </span>
         </div>
       </div>
 
       <div className="flex">
-        <div className="hidden w-48 shrink-0 border-r border-white/[0.06] sm:block">
+        <div className="hidden w-48 shrink-0 border-r border-(--l-panel-border) sm:block">
           <div className="p-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/20">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-(--l-panel-fg-4)">
                 Sessions
               </span>
-              <div className="flex size-5 items-center justify-center rounded-md bg-white/[0.04] text-[10px] text-white/25">
+              <div className="flex size-5 items-center justify-center rounded-md bg-(--l-panel-surface) text-[10px] text-(--l-panel-fg-3)">
                 +
               </div>
             </div>
@@ -217,16 +220,16 @@ export function AppMockup() {
                   onClick={() => handleSwitch(i)}
                   className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors ${
                     i === activeIndex
-                      ? "bg-white/[0.05]"
-                      : "hover:bg-white/[0.02]"
+                      ? "bg-(--l-panel-active)"
+                      : "hover:bg-(--l-panel-surface)"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <div
                       className={`truncate text-[11px] ${
                         i === activeIndex
-                          ? "font-medium text-white/70"
-                          : "text-white/30"
+                          ? "font-medium text-(--l-panel-fg)"
+                          : "text-(--l-panel-fg-3)"
                       }`}
                     >
                       {s.title}
@@ -234,7 +237,9 @@ export function AppMockup() {
                   </div>
                   <span
                     className={`shrink-0 text-[10px] ${
-                      i === activeIndex ? "text-white/25" : "text-white/15"
+                      i === activeIndex
+                        ? "text-(--l-panel-fg-3)"
+                        : "text-(--l-panel-fg-4)"
                     }`}
                   >
                     {i === 0 ? "3m" : i === 1 ? "2h" : "1d"}
@@ -249,8 +254,8 @@ export function AppMockup() {
           <div className="min-h-[360px] flex-1 overflow-hidden sm:min-h-[420px]">
             <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
               <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-3xl bg-white/[0.06] px-4 py-2.5">
-                  <p className="text-[12px] leading-relaxed text-white/60">
+                <div className="max-w-[80%] rounded-3xl bg-(--l-panel-surface) px-4 py-2.5">
+                  <p className="text-[12px] leading-relaxed text-(--l-panel-fg)">
                     {active.prompt}
                   </p>
                 </div>
@@ -260,11 +265,11 @@ export function AppMockup() {
                 <SummaryBar session={active} />
 
                 <div className="max-w-[90%]">
-                  <p className="text-[12px] leading-[1.7] text-white/50">
+                  <p className="text-[12px] leading-[1.7] text-(--l-panel-fg-2)">
                     {typedSummary}
                     {justSwitched &&
                       typedSummary.length < active.summary.length && (
-                        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-white/40" />
+                        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-(--l-panel-fg-2)" />
                       )}
                   </p>
                 </div>
@@ -273,12 +278,12 @@ export function AppMockup() {
                   {active.files.map((name) => (
                     <span
                       key={name}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2 py-1 font-mono text-[10px] text-white/25"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-(--l-panel-surface) px-2 py-1 font-mono text-[10px] text-(--l-panel-fg-3)"
                     >
                       <svg
                         viewBox="0 0 16 16"
                         fill="currentColor"
-                        className="size-2.5 text-white/15"
+                        className="size-2.5 text-(--l-panel-fg-4)"
                         aria-hidden="true"
                       >
                         <path d="M2 1.5A1.5 1.5 0 013.5 0h6.879a1.5 1.5 0 011.06.44l2.122 2.12A1.5 1.5 0 0114 3.622V14.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 14.5v-13z" />
@@ -293,26 +298,28 @@ export function AppMockup() {
 
           <div className="px-4 pb-3 pt-1">
             <div className="mx-auto max-w-2xl">
-              <div className="overflow-hidden rounded-2xl bg-white/[0.04]">
+              <div className="overflow-hidden rounded-2xl bg-(--l-panel-surface)">
                 <div className="px-4 py-2.5">
-                  <span className="text-[12px] text-white/20">
+                  <span className="text-[12px] text-(--l-panel-fg-4)">
                     Request changes or ask a question...
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-3 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-white/20">
+                    <span className="text-[10px] text-(--l-panel-fg-4)">
                       Claude Opus 4.6
                     </span>
-                    <span className="text-[10px] text-white/[0.12]">1%</span>
+                    <span className="text-[10px] text-(--l-panel-fg-5)">
+                      1%
+                    </span>
                   </div>
-                  <div className="flex size-7 items-center justify-center rounded-full bg-white/80">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-(--l-btn-bg)">
                     <svg
                       viewBox="0 0 16 16"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
-                      className="size-3 text-black"
+                      className="size-3 text-(--l-btn-fg)"
                       aria-hidden="true"
                     >
                       <path d="M8 12V4M8 4l-3 3M8 4l3 3" />

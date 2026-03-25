@@ -10,9 +10,9 @@ import { Stage } from "@/components/landing/stage";
 
 export function SignedOutHero() {
   return (
-    <div className="relative isolate min-h-screen bg-[#0a0a0a] text-white selection:bg-white/20 selection:text-white">
+    <div className="landing relative isolate min-h-screen bg-(--l-bg) text-(--l-fg) selection:bg-(--l-fg)/20">
       <div className="pointer-events-none absolute inset-y-0 left-0 right-0 hidden md:block">
-        <div className="mx-auto h-full max-w-[1320px] border-x border-x-white/[0.06]" />
+        <div className="mx-auto h-full max-w-[1320px] border-x border-x-(--l-border)" />
       </div>
 
       <div className="relative z-10">
@@ -22,13 +22,13 @@ export function SignedOutHero() {
           <div className="mx-auto max-w-[1320px] px-6">
             <div className="max-w-[740px]">
               <h1
-                className="landing-fade-up text-5xl font-semibold leading-[1.03] tracking-tighter text-white sm:text-6xl md:text-7xl"
+                className="landing-fade-up text-5xl font-semibold leading-[1.03] tracking-tighter sm:text-6xl md:text-7xl"
                 style={{ animationDelay: "30ms" }}
               >
                 Open cloud agents.
               </h1>
               <p
-                className="landing-fade-up mt-6 text-lg leading-relaxed text-[#888]"
+                className="landing-fade-up mt-6 text-lg leading-relaxed text-(--l-fg-3)"
                 style={{ animationDelay: "90ms" }}
               >
                 Spawn coding agents that run infinitely in the cloud. Powered by
@@ -40,12 +40,12 @@ export function SignedOutHero() {
               className="landing-fade-up mt-8 flex items-center gap-4"
               style={{ animationDelay: "150ms" }}
             >
-              <SignInButton className="h-10 rounded-md border-0 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90" />
+              <SignInButton className="h-10 rounded-md border-0 bg-(--l-btn-bg) px-5 text-[13px] font-medium text-(--l-btn-fg) transition-colors hover:bg-(--l-btn-hover)" />
               <a
                 href="https://github.com/vercel-labs/open-harness"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-[13px] text-white/40 transition-colors hover:text-white/70"
+                className="flex items-center gap-1.5 text-[13px] text-(--l-fg-4) transition-colors hover:text-(--l-fg-2)"
               >
                 <GitHubIcon />
                 Open Source

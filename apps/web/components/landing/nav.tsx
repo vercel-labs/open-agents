@@ -18,7 +18,7 @@ export function LandingNav() {
         <div
           className={`flex h-16 items-center justify-between border-x border-b px-6 transition-colors duration-200 ${
             scrolled
-              ? "border-x-white/[0.06] border-b-white/[0.06] bg-[#0a0a0a]/95 backdrop-blur-sm"
+              ? "border-x-(--l-border) border-b-(--l-border) bg-(--l-nav-bg) backdrop-blur-sm"
               : "border-x-transparent border-b-transparent bg-transparent"
           }`}
         >
@@ -54,7 +54,7 @@ export function LandingNav() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub"
-              className="inline-flex size-9 items-center justify-center text-white/50 transition-colors hover:text-white"
+              className="inline-flex size-9 items-center justify-center text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
             >
               <svg
                 viewBox="0 0 24 24"

@@ -42,11 +42,11 @@ export function FeatureSandbox() {
   }, [idx, entry.ms, advance]);
 
   return (
-    <div className="flex h-[280px] flex-col bg-[#050505]">
+    <div className="flex h-[280px] flex-col bg-(--l-code-bg)">
       <div className="flex-1 px-5 py-4">
         <div className="flex items-center gap-3 font-mono text-[12px]">
-          <span className="text-white/25">sandbox</span>
-          <span className="text-white/50">feat/auth</span>
+          <span className="text-(--l-panel-fg-3)">sandbox</span>
+          <span className="text-(--l-panel-fg-2)">feat/auth</span>
         </div>
 
         <div className="mt-6 flex gap-1">
@@ -57,40 +57,40 @@ export function FeatureSandbox() {
               style={{
                 backgroundColor:
                   i === idx
-                    ? "rgba(255,255,255,0.5)"
+                    ? "var(--l-panel-fg-2)"
                     : i < idx
-                      ? "rgba(255,255,255,0.15)"
-                      : "rgba(255,255,255,0.04)",
+                      ? "var(--l-panel-fg-4)"
+                      : "var(--l-panel-fg-5)",
               }}
             />
           ))}
         </div>
 
         <div className="mt-5">
-          <div className="font-mono text-[13px] text-white/60">
+          <div className="font-mono text-[13px] text-(--l-panel-fg)">
             {entry.state}
           </div>
-          <div className="mt-1 text-[11px] text-white/25">
+          <div className="mt-1 text-[11px] text-(--l-panel-fg-3)">
             {descriptions[entry.state]}
           </div>
         </div>
 
         <div className="mt-8 flex gap-8 font-mono text-[10px]">
           <div>
-            <div className="text-white/15">branch</div>
-            <div className="mt-0.5 text-white/35">feat/auth</div>
+            <div className="text-(--l-panel-fg-4)">branch</div>
+            <div className="mt-0.5 text-(--l-panel-fg-2)">feat/auth</div>
           </div>
           <div>
-            <div className="text-white/15">snapshot</div>
-            <div className="mt-0.5 text-white/35">
+            <div className="text-(--l-panel-fg-4)">snapshot</div>
+            <div className="mt-0.5 text-(--l-panel-fg-2)">
               {entry.state === "hibernated" || entry.state === "restoring"
                 ? "snap_a1b2c3"
                 : "\u2014"}
             </div>
           </div>
           <div>
-            <div className="text-white/15">cost</div>
-            <div className="mt-0.5 text-white/35">
+            <div className="text-(--l-panel-fg-4)">cost</div>
+            <div className="mt-0.5 text-(--l-panel-fg-2)">
               {entry.state === "hibernated" ? "$0.00" : "$0.02/m"}
             </div>
           </div>

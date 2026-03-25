@@ -124,6 +124,170 @@
   --sidebar-active-foreground: oklch(0.985 0 0);
 }
 
+.landing {
+  --l-stage-slate-bg: #e8e8e8;
+  --l-stage-slate-img:
+    radial-gradient(
+      900px 420px at 26% 18%,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      720px 520px at 82% 72%,
+      rgba(0, 0, 0, 0.08) 0%,
+      rgba(0, 0, 0, 0) 58%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-slate-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.12), 0 2px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.06) inset;
+  --l-stage-ash-bg: #dedede;
+  --l-stage-ash-img:
+    radial-gradient(
+      900px 420px at 22% 20%,
+      rgba(255, 255, 255, 0.65) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      820px 560px at 80% 74%,
+      rgba(0, 0, 0, 0.06) 0%,
+      rgba(0, 0, 0, 0) 60%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-ash-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.12), 0 2px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.06) inset;
+  --l-stage-iron-bg: #e4e2df;
+  --l-stage-iron-img:
+    radial-gradient(
+      900px 420px at 24% 18%,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      780px 560px at 82% 72%,
+      rgba(0, 0, 0, 0.07) 0%,
+      rgba(0, 0, 0, 0) 60%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-iron-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.12), 0 2px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.06) inset;
+  --l-stage-overlay: rgba(0, 0, 0, 0.03);
+  --l-bg: #fafafa;
+  --l-surface: #ffffff;
+  --l-surface-2: #f5f5f5;
+  --l-surface-3: rgba(0, 0, 0, 0.04);
+  --l-surface-4: rgba(0, 0, 0, 0.06);
+  --l-border: rgba(0, 0, 0, 0.1);
+  --l-border-subtle: rgba(0, 0, 0, 0.06);
+  --l-fg: #111111;
+  --l-fg-2: rgba(0, 0, 0, 0.7);
+  --l-fg-3: rgba(0, 0, 0, 0.45);
+  --l-fg-4: rgba(0, 0, 0, 0.3);
+  --l-fg-5: rgba(0, 0, 0, 0.15);
+  --l-fg-6: rgba(0, 0, 0, 0.08);
+  --l-accent: #ff8a3d;
+  --l-panel: #ffffff;
+  --l-panel-fg: rgba(0, 0, 0, 0.8);
+  --l-panel-fg-2: rgba(0, 0, 0, 0.55);
+  --l-panel-fg-3: rgba(0, 0, 0, 0.35);
+  --l-panel-fg-4: rgba(0, 0, 0, 0.2);
+  --l-panel-fg-5: rgba(0, 0, 0, 0.1);
+  --l-panel-border: rgba(0, 0, 0, 0.1);
+  --l-panel-surface: rgba(0, 0, 0, 0.04);
+  --l-panel-active: rgba(0, 0, 0, 0.06);
+  --l-panel-dot: rgba(0, 0, 0, 0.3);
+  --l-btn-bg: #111111;
+  --l-btn-fg: #ffffff;
+  --l-btn-hover: rgba(0, 0, 0, 0.85);
+  --l-code-bg: #fafafa;
+  --l-window-shadow: 0 40px 80px rgba(0, 0, 0, 0.08);
+  --l-nav-bg: rgba(250, 250, 250, 0.95);
+}
+
+.dark .landing {
+  --l-stage-slate-bg: #b8b8b8;
+  --l-stage-slate-img:
+    radial-gradient(
+      900px 420px at 26% 18%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      720px 520px at 82% 72%,
+      rgba(0, 0, 0, 0.18) 0%,
+      rgba(0, 0, 0, 0) 58%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-slate-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.24) inset;
+  --l-stage-ash-bg: #a8a8a8;
+  --l-stage-ash-img:
+    radial-gradient(
+      900px 420px at 22% 20%,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      820px 560px at 80% 74%,
+      rgba(0, 0, 0, 0.16) 0%,
+      rgba(0, 0, 0, 0) 60%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-ash-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.24) inset;
+  --l-stage-iron-bg: #c0bdb8;
+  --l-stage-iron-img:
+    radial-gradient(
+      900px 420px at 24% 18%,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0) 62%
+    ),
+    radial-gradient(
+      780px 560px at 82% 72%,
+      rgba(0, 0, 0, 0.17) 0%,
+      rgba(0, 0, 0, 0) 60%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0) 55%);
+  --l-stage-iron-shadow:
+    0 50px 90px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.24) inset;
+  --l-stage-overlay: rgba(0, 0, 0, 0.1);
+  --l-bg: #0a0a0a;
+  --l-surface: #111111;
+  --l-surface-2: #0a0a0a;
+  --l-surface-3: rgba(255, 255, 255, 0.03);
+  --l-surface-4: rgba(255, 255, 255, 0.05);
+  --l-border: rgba(255, 255, 255, 0.06);
+  --l-border-subtle: rgba(255, 255, 255, 0.04);
+  --l-fg: #ffffff;
+  --l-fg-2: rgba(255, 255, 255, 0.7);
+  --l-fg-3: rgba(255, 255, 255, 0.5);
+  --l-fg-4: rgba(255, 255, 255, 0.35);
+  --l-fg-5: rgba(255, 255, 255, 0.2);
+  --l-fg-6: rgba(255, 255, 255, 0.1);
+  --l-accent: #ff8a3d;
+  --l-panel: #0a0a0a;
+  --l-panel-fg: rgba(255, 255, 255, 0.6);
+  --l-panel-fg-2: rgba(255, 255, 255, 0.4);
+  --l-panel-fg-3: rgba(255, 255, 255, 0.25);
+  --l-panel-fg-4: rgba(255, 255, 255, 0.15);
+  --l-panel-fg-5: rgba(255, 255, 255, 0.08);
+  --l-panel-border: rgba(255, 255, 255, 0.06);
+  --l-panel-surface: rgba(255, 255, 255, 0.03);
+  --l-panel-active: rgba(255, 255, 255, 0.05);
+  --l-panel-dot: rgba(255, 255, 255, 0.25);
+  --l-btn-bg: #ffffff;
+  --l-btn-fg: #000000;
+  --l-btn-hover: rgba(255, 255, 255, 0.9);
+  --l-code-bg: #050505;
+  --l-window-shadow: 0 40px 80px rgba(0, 0, 0, 0.55);
+  --l-nav-bg: rgba(10, 10, 10, 0.95);
+}
+
 @keyframes landing-fade-up {
   from {
     opacity: 0;

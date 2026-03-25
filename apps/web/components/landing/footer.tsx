@@ -1,36 +1,23 @@
+import { ThemeToggle } from "./theme-toggle";
+
 export function LandingFooter() {
   return (
     <footer>
-      <div className="mx-auto max-w-[1320px] border-t border-white/[0.06] px-6 py-14 md:py-18">
+      <div className="mx-auto max-w-[1320px] border-t border-(--l-border) px-6 py-14 md:py-18">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
-          <div className="flex h-full flex-col">
-            <div className="font-mono text-xs uppercase tracking-widest text-white/35">
+          <div>
+            <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
               Open Harness
             </div>
-            <div className="mt-3 text-sm text-white/40">
+            <div className="mt-3 text-sm text-(--l-fg-3)">
               Open cloud agents for
               <br />
               shipping code.
             </div>
-            <a
-              href="https://vercel.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-auto block pt-6 text-white/35 transition-colors hover:text-white/60"
-            >
-              <svg
-                viewBox="0 0 76 65"
-                className="h-4"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
-              </svg>
-            </a>
           </div>
 
           <div>
-            <div className="font-mono text-xs uppercase tracking-widest text-white/35">
+            <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
               Product
             </div>
             <div className="mt-4 flex flex-col gap-2">
@@ -38,7 +25,7 @@ export function LandingFooter() {
                 href="https://ai-sdk.dev/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-sm text-white/45 transition-colors hover:text-white"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 AI SDK
               </a>
@@ -46,7 +33,7 @@ export function LandingFooter() {
                 href="https://vercel.com/ai-gateway"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-sm text-white/45 transition-colors hover:text-white"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 AI Gateway
               </a>
@@ -54,7 +41,7 @@ export function LandingFooter() {
                 href="https://vercel.com/sandbox"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-sm text-white/45 transition-colors hover:text-white"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 Sandbox
               </a>
@@ -62,7 +49,7 @@ export function LandingFooter() {
                 href="https://useworkflow.dev/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-sm text-white/45 transition-colors hover:text-white"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 Workflow DevKit
               </a>
@@ -70,10 +57,10 @@ export function LandingFooter() {
           </div>
 
           <div>
-            <div className="font-mono text-xs uppercase tracking-widest text-white/35">
+            <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
               Agent
             </div>
-            <div className="mt-4 flex flex-col gap-2 font-mono text-sm text-white/45">
+            <div className="mt-4 flex flex-col gap-2 font-mono text-sm text-(--l-fg-3)">
               <span>read / write / edit</span>
               <span>grep / glob / bash</span>
               <span>task / todo / skill</span>
@@ -81,7 +68,7 @@ export function LandingFooter() {
           </div>
 
           <div>
-            <div className="font-mono text-xs uppercase tracking-widest text-white/35">
+            <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
               Links
             </div>
             <div className="mt-4 flex flex-col gap-2">
@@ -89,7 +76,7 @@ export function LandingFooter() {
                 href="https://github.com/vercel-labs/open-harness"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-white/45 transition-colors hover:text-white"
+                className="text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 GitHub
               </a>
@@ -97,7 +84,7 @@ export function LandingFooter() {
                 href="https://vercel.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-white/45 transition-colors hover:text-white"
+                className="text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 Vercel
               </a>
@@ -105,12 +92,31 @@ export function LandingFooter() {
                 href="https://ai-sdk.dev/docs/introduction"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-white/45 transition-colors hover:text-white"
+                className="text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 AI SDK Docs
               </a>
             </div>
           </div>
+        </div>
+
+        <div className="mt-10 flex items-center justify-between">
+          <a
+            href="https://vercel.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-(--l-fg-4) transition-colors hover:text-(--l-fg-2)"
+          >
+            <svg
+              viewBox="0 0 76 65"
+              className="h-4"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+            </svg>
+          </a>
+          <ThemeToggle />
         </div>
       </div>
     </footer>

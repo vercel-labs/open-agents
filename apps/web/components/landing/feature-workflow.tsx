@@ -44,12 +44,12 @@ export function FeatureWorkflow() {
   const done = active >= steps.length;
 
   return (
-    <div className="flex h-[280px] flex-col bg-[#050505]">
+    <div className="flex h-[280px] flex-col bg-(--l-code-bg)">
       <div className="flex-1 px-5 py-4">
         <div className="flex items-center gap-3 font-mono text-[12px]">
-          <span className="text-white/25">workflow</span>
-          <span className="text-white/50">chat</span>
-          <span className="text-white/15">durable</span>
+          <span className="text-(--l-panel-fg-3)">workflow</span>
+          <span className="text-(--l-panel-fg-2)">chat</span>
+          <span className="text-(--l-panel-fg-4)">durable</span>
         </div>
 
         <div className="mt-5 space-y-[2px]">
@@ -67,15 +67,15 @@ export function FeatureWorkflow() {
                   className="inline-flex size-1 shrink-0 rounded-full transition-colors duration-300"
                   style={{
                     backgroundColor: isActive
-                      ? "rgba(255,255,255,0.7)"
+                      ? "var(--l-panel-fg)"
                       : isDone
-                        ? "rgba(255,255,255,0.25)"
-                        : "rgba(255,255,255,0.1)",
+                        ? "var(--l-panel-fg-3)"
+                        : "var(--l-panel-fg-5)",
                   }}
                 />
-                <span className="text-white/45">{step.label}</span>
+                <span className="text-(--l-panel-fg-2)">{step.label}</span>
                 {isDone && (
-                  <span className="text-white/15">
+                  <span className="text-(--l-panel-fg-4)">
                     {(step.ms / 1000).toFixed(1)}s
                   </span>
                 )}
@@ -85,7 +85,7 @@ export function FeatureWorkflow() {
         </div>
 
         <div
-          className="mt-5 font-mono text-[11px] text-white/30 transition-opacity duration-500"
+          className="mt-5 font-mono text-[11px] text-(--l-panel-fg-3) transition-opacity duration-500"
           style={{ opacity: done ? 1 : 0 }}
         >
           complete · {steps.length} steps · resumable
