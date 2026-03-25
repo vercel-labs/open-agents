@@ -1,6 +1,6 @@
 "use client";
 
-import { GitBranch, Plus, X } from "lucide-react";
+import { GitBranch, Loader2, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
@@ -278,32 +278,37 @@ export function SessionStarter({
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-4 rounded-md border border-border/70 bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Auto commit and push</p>
-            <p className="text-xs text-muted-foreground">
-              Automatically commit and push after each agent turn.
-            </p>
+        <div className="rounded-md border border-border/70 bg-muted/20 dark:border-white/10 dark:bg-white/[0.02]">
+          <div className="flex items-center justify-between gap-4 px-3 py-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Auto commit and push</p>
+              <p className="text-xs text-muted-foreground">
+                Automatically commit and push after each agent turn.
+              </p>
+            </div>
+            <Switch
+              checked={effectiveAutoCommitPush}
+              onCheckedChange={setAutoCommitPush}
+              disabled={controlsDisabled}
+            />
           </div>
-          <Switch
-            checked={effectiveAutoCommitPush}
-            onCheckedChange={setAutoCommitPush}
-            disabled={controlsDisabled}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-4 rounded-md border border-border/70 bg-muted/20 px-3 py-2 dark:border-white/10 dark:bg-white/[0.02]">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Auto create pull request</p>
-            <p className="text-xs text-muted-foreground">
-              Automatically open a pull request after auto commit and push.
-            </p>
-          </div>
-          <Switch
-            checked={effectiveAutoCreatePr}
-            onCheckedChange={setAutoCreatePr}
-            disabled={controlsDisabled || !effectiveAutoCommitPush}
-          />
+          {effectiveAutoCommitPush && (
+            <div className="flex items-center justify-between gap-4 border-t border-border/50 px-3 py-2 pl-6 dark:border-white/[0.06]">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Auto create pull request
+                </p>
+                <p className="text-xs text-muted-foreground/80">
+                  Open a pull request after each push.
+                </p>
+              </div>
+              <Switch
+                checked={effectiveAutoCreatePr}
+                onCheckedChange={setAutoCreatePr}
+                disabled={controlsDisabled}
+              />
+            </div>
+          )}
         </div>
 
         <button
@@ -311,13 +316,14 @@ export function SessionStarter({
           onClick={handleSubmit}
           disabled={isSubmitDisabled}
           className={cn(
-            "w-full rounded-md px-4 py-2 text-sm font-medium transition-colors",
+            "flex w-full items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
             isSubmitDisabled
               ? "cursor-not-allowed bg-muted text-muted-foreground"
               : "bg-foreground text-background hover:bg-foreground/90",
           )}
         >
-          {buttonLabel}
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isLoading ? "Creating session…" : buttonLabel}
         </button>
 
         <p className="text-center text-xs text-muted-foreground">

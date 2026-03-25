@@ -1,6 +1,13 @@
 "use client";
 
-import { AlertCircleIcon, SearchIcon, XCircleIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  SearchIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useState } from "react";
 import type {
   VercelProjectSelection,
   VercelRepoProjectsResponse,
@@ -49,6 +56,40 @@ export function SessionStarterVercelSyncSection({
   vercelProjectChoice,
   onVercelProjectChoiceChange,
 }: SessionStarterVercelSyncSectionProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Determine if we're in a "resolved" state where the project was auto-selected
+  const autoSelectedProject =
+    repoProjects?.selectedProjectId && !requiresVercelChoice
+      ? repoProjects.projects.find(
+          (p) => p.projectId === repoProjects.selectedProjectId,
+        )
+      : null;
+  // Compact single-line view when project was auto-resolved
+  if (
+    !isVercelLookupPending &&
+    !repoProjectsError &&
+    autoSelectedProject &&
+    !expanded
+  ) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex w-full items-center gap-2.5 rounded-lg border border-border/70 bg-muted/20 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
+      >
+        <CheckCircle2Icon className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400/80" />
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          Syncing env from{" "}
+          <span className="font-medium text-foreground/80">
+            {formatVercelProjectLabel(autoSelectedProject)}
+          </span>
+        </span>
+        <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+      </button>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-border/70 dark:border-white/10">
       <div className="flex items-start gap-3 bg-muted/30 px-3.5 py-3 dark:bg-white/[0.025]">
