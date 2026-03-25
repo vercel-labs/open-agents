@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
 import { formatDateOnly } from "@/lib/usage/date-range";
 import type { UsageDomainLeaderboard, UsageInsights } from "@/lib/usage/types";
-import { DomainUsageLeaderboardSection } from "./usage/domain-usage-leaderboard-section";
 import { UsageInsightsSection } from "./usage/usage-insights-section";
 
 interface DailyUsageRow {
@@ -572,10 +571,6 @@ export function UsageSection() {
           </div>
         </CardContent>
       </Card>
-
-      {data?.domainLeaderboard ? (
-        <DomainUsageLeaderboardSection leaderboard={data.domainLeaderboard} />
-      ) : null}
 
       {data?.insights ? (
         <UsageInsightsSection insights={data.insights} />

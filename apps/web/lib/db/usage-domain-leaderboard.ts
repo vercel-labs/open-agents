@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import type { UsageDateRange } from "@/lib/usage/date-range";
+import { getUsageLeaderboardDomain } from "@/lib/usage/leaderboard-domain";
 import type {
   UsageDomainLeaderboard,
   UsageDomainLeaderboardRow,
@@ -7,22 +8,7 @@ import type {
 import { db } from "./client";
 import { usageEvents, users } from "./schema";
 
-const PERSONAL_EMAIL_DOMAINS = new Set([
-  "aol.com",
-  "gmail.com",
-  "googlemail.com",
-  "hotmail.com",
-  "icloud.com",
-  "live.com",
-  "mac.com",
-  "me.com",
-  "outlook.com",
-  "proton.me",
-  "protonmail.com",
-  "yahoo.com",
-]);
-
-const VERIFIED_USAGE_LEADERBOARD_DOMAINS = new Set(["vercel.com"]);
+export { getUsageLeaderboardDomain };
 
 interface UsageDomainLeaderboardQueryRow {
   userId: string;
@@ -52,31 +38,6 @@ function buildUsageDomainLeaderboardWhereClause(
   since.setDate(since.getDate() - days);
 
   return sql`${users.email} is not null and lower(split_part(${users.email}, '@', 2)) = ${domain} and ${usageEvents.createdAt} >= ${since.toISOString()}`;
-}
-
-export function getUsageLeaderboardDomain(
-  email: string | null | undefined,
-): string | null {
-  if (!email) {
-    return null;
-  }
-
-  const trimmedEmail = email.trim().toLowerCase();
-  const atIndex = trimmedEmail.lastIndexOf("@");
-  if (atIndex <= 0 || atIndex === trimmedEmail.length - 1) {
-    return null;
-  }
-
-  const domain = trimmedEmail.slice(atIndex + 1);
-  if (PERSONAL_EMAIL_DOMAINS.has(domain)) {
-    return null;
-  }
-
-  if (!VERIFIED_USAGE_LEADERBOARD_DOMAINS.has(domain)) {
-    return null;
-  }
-
-  return domain;
 }
 
 function shouldReplaceMostUsedModel(params: {

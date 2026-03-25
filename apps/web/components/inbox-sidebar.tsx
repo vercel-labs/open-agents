@@ -11,6 +11,7 @@ import {
   Plus,
   Settings,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +29,7 @@ import { useLeaderboardRank } from "@/hooks/use-leaderboard-rank";
 import { useSession } from "@/hooks/use-session";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 import type { Session as AuthSession } from "@/lib/session/types";
+import { getUsageLeaderboardDomain } from "@/lib/usage/leaderboard-domain";
 
 type InboxSidebarProps = {
   sessions: SessionWithUnread[];
@@ -364,7 +366,8 @@ export function InboxSidebar({
 }: InboxSidebarProps) {
   const router = useRouter();
   const { session } = useSession();
-  const { rank: leaderboardRank } = useLeaderboardRank();
+  const { rank: leaderboardRank, loading: leaderboardLoading } =
+    useLeaderboardRank();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
   const [archivedSessions, setArchivedSessions] = useState<SessionWithUnread[]>(
@@ -809,12 +812,18 @@ export function InboxSidebar({
                 </p>
               ) : null}
               {leaderboardRank ? (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
+                <Link
+                  href="/settings/leaderboard"
+                  className="mt-1 block truncate text-xs text-muted-foreground hover:text-foreground"
+                >
                   <span className="font-semibold tabular-nums text-foreground/70">
                     #{leaderboardRank.rank}
                   </span>{" "}
                   in {formatDomainOrg(leaderboardRank.domain)}
-                </p>
+                </Link>
+              ) : leaderboardLoading &&
+                getUsageLeaderboardDomain(sidebarUser.email) ? (
+                <span className="mt-1 block h-4 w-24 animate-pulse rounded bg-muted" />
               ) : null}
             </div>
             <Button
