@@ -38,10 +38,7 @@ export function AssistantFileLink({
   // Truncate from the left so the filename is always visible:
   // "…components/assistant-file-link.tsx" instead of "apps/web/compone…"
   const chipContent = (
-    <span
-      dir="rtl"
-      className="min-w-0 truncate"
-    >
+    <span dir="rtl" className="min-w-0 truncate">
       <bdi>{content}</bdi>
     </span>
   );
