@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   Card,
@@ -20,10 +20,40 @@ import {
 } from "@/components/ui/table";
 import { useSession } from "@/hooks/use-session";
 import { fetcher } from "@/lib/swr";
+import { formatDateOnly } from "@/lib/usage/date-range";
 import type { UsageDomainLeaderboard } from "@/lib/usage/types";
+
+type LeaderboardRange = "today" | "week" | "all";
 
 interface UsageResponse {
   domainLeaderboard: UsageDomainLeaderboard | null;
+}
+
+const RANGE_OPTIONS: { value: LeaderboardRange; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "This week" },
+  { value: "all", label: "All time" },
+];
+
+function getStartOfWeek(now: Date): Date {
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diff);
+  return monday;
+}
+
+function buildUsagePath(range: LeaderboardRange): string {
+  if (range === "all") {
+    return "/api/usage";
+  }
+
+  const now = new Date();
+  const to = formatDateOnly(now);
+  const from = range === "today" ? to : formatDateOnly(getStartOfWeek(now));
+
+  const query = new URLSearchParams({ from, to });
+  return `/api/usage?${query.toString()}`;
 }
 
 function formatTokens(n: number): string {
@@ -60,14 +90,41 @@ export function LeaderboardSectionSkeleton() {
   );
 }
 
+function RangeFilter({
+  value,
+  onChange,
+}: {
+  value: LeaderboardRange;
+  onChange: (next: LeaderboardRange) => void;
+}) {
+  return (
+    <div className="flex gap-1 rounded-lg bg-muted p-1">
+      {RANGE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+            value === option.value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function LeaderboardSection() {
   const { session } = useSession();
   const userId = session?.user?.id;
+  const [range, setRange] = useState<LeaderboardRange>("all");
 
-  const { data, isLoading, error } = useSWR<UsageResponse>(
-    "/api/usage",
-    fetcher,
-  );
+  const usagePath = useMemo(() => buildUsagePath(range), [range]);
+
+  const { data, isLoading, error } = useSWR<UsageResponse>(usagePath, fetcher);
 
   const leaderboard = data?.domainLeaderboard ?? null;
 
@@ -113,23 +170,24 @@ export function LeaderboardSection() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
             <CardTitle>Internal leaderboard</CardTitle>
             <CardDescription>
               Ranked by total tokens for users with @{leaderboard.domain}.
             </CardDescription>
           </div>
-          {currentUserRank ? (
-            <div className="text-sm text-muted-foreground">
-              Your rank:{" "}
-              <span className="font-semibold tabular-nums text-foreground">
-                #{currentUserRank}
-              </span>{" "}
-              of {leaderboard.rows.length}
-            </div>
-          ) : null}
+          <RangeFilter value={range} onChange={setRange} />
         </div>
+        {currentUserRank ? (
+          <div className="text-sm text-muted-foreground">
+            Your rank:{" "}
+            <span className="font-semibold tabular-nums text-foreground">
+              #{currentUserRank}
+            </span>{" "}
+            of {leaderboard.rows.length}
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent>
         {leaderboard.rows.length === 0 ? (
