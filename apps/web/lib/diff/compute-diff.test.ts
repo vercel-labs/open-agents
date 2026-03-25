@@ -32,9 +32,8 @@ mock.module("@/lib/sandbox/utils", () => ({
     msg.includes("sandbox unavailable"),
 }));
 
-const { computeAndCacheDiff, DiffComputationError } = await import(
-  "./compute-diff"
-);
+const { computeAndCacheDiff, DiffComputationError } =
+  await import("./compute-diff");
 
 // ── Helpers ────────────────────────────────────────────────────────
 

@@ -2,8 +2,8 @@
 // `getReadable()` does not support cancellation. When a client disconnects
 // mid-stream the underlying reader is never released, which causes the
 // response to hang. This wrapper adds proper cancel() handling and
-// treats AbortError / ResponseAborted as clean shutdown so disconnects
-// resolve gracefully.
+// treats AbortError / ResponseAborted plus late workflow run-not-found
+// failures as clean shutdown so reconnect races resolve gracefully.
 
 function closeController<T>(controller: ReadableStreamDefaultController<T>) {
   try {
@@ -60,6 +60,7 @@ export function createCancelableReadableStream<T>(source: ReadableStream<T>) {
           return;
         }
 
+        releaseReader();
         controller.error(error);
       }
     },
@@ -74,8 +75,17 @@ function isAbortLikeError(error: unknown) {
     return true;
   }
 
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (error.name === "AbortError" || error.name === "ResponseAborted") {
+    return true;
+  }
+
+  const normalizedMessage = error.message.toLowerCase();
   return (
-    error instanceof Error &&
-    (error.name === "AbortError" || error.name === "ResponseAborted")
+    normalizedMessage.includes("status code 404") &&
+    normalizedMessage.includes("not ok")
   );
 }

@@ -268,12 +268,35 @@ describe("clearActiveStream", () => {
     );
   });
 
-  test("does not throw on db error", async () => {
-    spies.compareAndSetChatActiveStreamId.mockImplementationOnce(() =>
-      Promise.reject(new Error("DB down")),
-    );
+  test("retries transient db errors before succeeding", async () => {
+    spies.compareAndSetChatActiveStreamId
+      .mockImplementationOnce(() => Promise.reject(new Error("DB down")))
+      .mockImplementationOnce(() => Promise.reject(new Error("DB still down")));
 
     await clearActiveStream("chat-1", "wrun_abc");
+
+    expect(spies.compareAndSetChatActiveStreamId).toHaveBeenCalledTimes(3);
+
+    const compareAndSetCalls = spies.compareAndSetChatActiveStreamId.mock
+      .calls as unknown[][];
+    expect(compareAndSetCalls).toEqual([
+      ["chat-1", "wrun_abc", null],
+      ["chat-1", "wrun_abc", null],
+      ["chat-1", "wrun_abc", null],
+    ]);
+  });
+
+  test("does not throw after retry budget is exhausted", async () => {
+    spies.compareAndSetChatActiveStreamId
+      .mockImplementationOnce(() => Promise.reject(new Error("DB down")))
+      .mockImplementationOnce(() => Promise.reject(new Error("DB still down")))
+      .mockImplementationOnce(() =>
+        Promise.reject(new Error("DB really down")),
+      );
+
+    await clearActiveStream("chat-1", "wrun_abc");
+
+    expect(spies.compareAndSetChatActiveStreamId).toHaveBeenCalledTimes(3);
   });
 });
 

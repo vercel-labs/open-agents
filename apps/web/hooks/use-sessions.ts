@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import type { Chat, Session } from "@/lib/db/schema";
+import type { VercelProjectSelection } from "@/lib/vercel/types";
 import { fetcher } from "@/lib/swr";
 
 export type SessionWithUnread = Pick<
@@ -34,6 +35,7 @@ interface CreateSessionInput {
   isNewBranch: boolean;
   sandboxType: "vercel";
   autoCommitPush: boolean;
+  vercelProject?: VercelProjectSelection | null;
 }
 
 interface SessionsResponse {

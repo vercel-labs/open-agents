@@ -14,12 +14,11 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 - `noUncheckedIndexedAccess: true` - always check indexed access
 - `verbatimModuleSyntax: true` - use explicit type imports
 
-## Formatting (Biome)
+## Formatting (Ultracite — oxfmt)
 
 - Indent: 2 spaces
 - Quote style: double quotes for JavaScript/TypeScript
-- Organize imports: enabled via Biome assist
-- Run `bun run format` before committing
+- Run `bun run fix` before committing
 
 ## Naming Conventions
 
@@ -107,6 +106,13 @@ export const myTool = (options?: { needsApproval?: boolean }) =>
 ```
 
 ## Common Patterns
+
+### Large UI files
+
+- In already-large React view/page/client components, do **not** add new feature-specific state, effects, network calls, and JSX inline by default.
+- Extract feature logic into a colocated hook (for example `use-dev-server.ts`) and extract self-contained UI regions into a colocated component (for example `dev-server-menu-items.tsx`).
+- Keep the parent view responsible for shared capability flags and long-lived page state; pass the extracted feature controls down as props.
+- If the feature state must survive menu/popover/dialog open-state changes, mount the hook in the parent view and pass its controls into the extracted child component instead of mounting the hook inside ephemeral UI content.
 
 ### Workspace Dependencies
 

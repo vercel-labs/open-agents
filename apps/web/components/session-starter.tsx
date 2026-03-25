@@ -2,8 +2,11 @@
 
 import { GitBranch, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "@/hooks/use-session";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useVercelRepoProjects } from "@/hooks/use-vercel-repo-projects";
+import type { VercelProjectSelection } from "@/lib/vercel/types";
 import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
 import { RepoSelectorCompact } from "./repo-selector-compact";
@@ -12,6 +15,7 @@ import {
   SANDBOX_OPTIONS,
   type SandboxType,
 } from "./sandbox-selector-compact";
+import { SessionStarterVercelSyncSection } from "./session-starter-vercel-sync-section";
 import { Switch } from "./ui/switch";
 
 type SessionMode = "empty" | "repo";
@@ -25,6 +29,7 @@ interface SessionStarterProps {
     isNewBranch: boolean;
     sandboxType: SandboxType;
     autoCommitPush: boolean;
+    vercelProject?: VercelProjectSelection | null;
   }) => void;
   isLoading?: boolean;
   lastRepo: { owner: string; repo: string } | null;
@@ -44,21 +49,56 @@ export function SessionStarter({
   const [selectedRepo, setSelectedRepo] = useState(() => lastRepo?.repo ?? "");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
+  const [vercelProjectChoice, setVercelProjectChoice] = useState<
+    string | null | undefined
+  >(undefined);
 
+  const { session, loading: sessionLoading } = useSession();
   const { preferences, loading: preferencesLoading } = useUserPreferences();
-
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const [autoCommitPush, setAutoCommitPush] = useState<boolean | null>(null);
-
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
     SANDBOX_OPTIONS.find((s) => s.id === sandboxType)?.name ?? sandboxType;
+
+  const shouldLoadVercelProjects =
+    mode === "repo" &&
+    !!selectedOwner &&
+    !!selectedRepo &&
+    session?.authProvider === "vercel";
+  const {
+    data: repoProjects,
+    loading: repoProjectsLoading,
+    error: repoProjectsError,
+  } = useVercelRepoProjects({
+    enabled: shouldLoadVercelProjects,
+    repoOwner: selectedOwner,
+    repoName: selectedRepo,
+  });
+
+  useEffect(() => {
+    if (!shouldLoadVercelProjects) {
+      setVercelProjectChoice(undefined);
+      return;
+    }
+    if (!repoProjects || repoProjectsLoading) return;
+    if (repoProjects.selectedProjectId) {
+      setVercelProjectChoice(repoProjects.selectedProjectId);
+      return;
+    }
+    if (repoProjects.projects.length === 0) {
+      setVercelProjectChoice(null);
+      return;
+    }
+    setVercelProjectChoice(undefined);
+  }, [repoProjects, repoProjectsLoading, shouldLoadVercelProjects]);
 
   const handleRepoSelect = (owner: string, repo: string) => {
     setSelectedOwner(owner);
     setSelectedRepo(repo);
     setSelectedBranch(null);
     setIsNewBranch(false);
+    setVercelProjectChoice(undefined);
   };
 
   const handleRepoClear = () => {
@@ -66,6 +106,7 @@ export function SessionStarter({
     setSelectedRepo("");
     setSelectedBranch(null);
     setIsNewBranch(false);
+    setVercelProjectChoice(undefined);
   };
 
   const handleBranchChange = (branch: string | null, newBranch: boolean) => {
@@ -75,19 +116,55 @@ export function SessionStarter({
 
   const handleModeChange = (newMode: SessionMode) => {
     setMode(newMode);
-    if (newMode === "empty") {
-      handleRepoClear();
-    }
+    if (newMode === "empty") handleRepoClear();
   };
 
   const isRepoSelectionComplete =
     mode !== "repo" || (selectedOwner && selectedRepo);
+  const isVercelLookupPending =
+    mode === "repo" &&
+    !!selectedOwner &&
+    !!selectedRepo &&
+    (sessionLoading || (shouldLoadVercelProjects && repoProjectsLoading));
+  const requiresVercelChoice =
+    shouldLoadVercelProjects &&
+    !repoProjectsLoading &&
+    !repoProjectsError &&
+    !!repoProjects &&
+    repoProjects.projects.length > 0 &&
+    repoProjects.selectedProjectId === null &&
+    vercelProjectChoice === undefined;
   const controlsDisabled = isLoading || preferencesLoading;
-  const isSubmitDisabled = controlsDisabled || !isRepoSelectionComplete;
+  const isSubmitDisabled =
+    controlsDisabled ||
+    !isRepoSelectionComplete ||
+    isVercelLookupPending ||
+    requiresVercelChoice;
   const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
+  const showVercelProjectSection =
+    mode === "repo" &&
+    !!selectedOwner &&
+    !!selectedRepo &&
+    (sessionLoading || session?.authProvider === "vercel");
 
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
+
+    let vercelProject: VercelProjectSelection | null | undefined;
+    if (shouldLoadVercelProjects) {
+      if (repoProjectsError || !repoProjects) {
+        vercelProject = undefined;
+      } else if (vercelProjectChoice === null) {
+        vercelProject = null;
+      } else if (typeof vercelProjectChoice === "string") {
+        vercelProject =
+          repoProjects.projects.find(
+            (project) => project.projectId === vercelProjectChoice,
+          ) ?? null;
+      } else {
+        return;
+      }
+    }
 
     onSubmit({
       repoOwner: mode === "repo" ? selectedOwner || undefined : undefined,
@@ -100,6 +177,7 @@ export function SessionStarter({
       isNewBranch: mode === "repo" ? isNewBranch : false,
       sandboxType,
       autoCommitPush: effectiveAutoCommitPush,
+      vercelProject,
     });
   };
 
@@ -116,7 +194,6 @@ export function SessionStarter({
       )}
     >
       <div className="flex flex-col gap-4">
-        {/* Segmented toggle */}
         <div className="flex rounded-lg bg-muted/70 p-1 dark:bg-white/[0.04]">
           <button
             type="button"
@@ -146,7 +223,6 @@ export function SessionStarter({
           </button>
         </div>
 
-        {/* Repo mode: show repo/branch pickers */}
         {mode === "repo" && (
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -167,7 +243,6 @@ export function SessionStarter({
                 </button>
               )}
             </div>
-
             {selectedOwner && selectedRepo && (
               <BranchSelectorCompact
                 owner={selectedOwner}
@@ -177,10 +252,21 @@ export function SessionStarter({
                 onChange={handleBranchChange}
               />
             )}
+
+            {showVercelProjectSection && (
+              <SessionStarterVercelSyncSection
+                controlsDisabled={controlsDisabled}
+                isVercelLookupPending={isVercelLookupPending}
+                repoProjects={repoProjects}
+                repoProjectsError={repoProjectsError}
+                requiresVercelChoice={requiresVercelChoice}
+                vercelProjectChoice={vercelProjectChoice}
+                onVercelProjectChoiceChange={setVercelProjectChoice}
+              />
+            )}
           </div>
         )}
 
-        {/* Empty mode: brief description */}
         {mode === "empty" && (
           <p className="text-center text-sm text-muted-foreground dark:text-neutral-500">
             Start with a blank sandbox -- no repository required.

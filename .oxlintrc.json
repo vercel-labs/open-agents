@@ -1,56 +1,101 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "import", "react"],
-  "categories": {
-    "correctness": "error",
-    "suspicious": "warn"
-  },
+  "ignorePatterns": [".agents/skills/**", "apps/web/components/ui/**"],
   "rules": {
+    "arrow-body-style": "off",
+    "complexity": "off",
+    "curly": "off",
+    "default-case": "off",
+    "eqeqeq": "off",
+    "func-names": "off",
+    "func-style": "off",
+    "import/consistent-type-specifier-style": "off",
+    "max-lines": "off",
+    "class-methods-use-this": "off",
+    "no-accumulating-spread": "off",
+    "no-alert": "off",
+    "no-bitwise": "off",
     "no-console": "off",
-    "max-lines": [
-      "error",
-      {
-        "max": 400,
-        "skipBlankLines": true,
-        "skipComments": true
-      }
-    ],
-    "react/rules-of-hooks": "error",
+    "no-else-return": "off",
+    "no-empty-function": "off",
+    "no-eq-null": "off",
+    "no-inline-comments": "off",
+    "no-lonely-if": "off",
+    "no-negated-condition": "off",
+    "no-promise-executor-return": "off",
+    "no-shadow": "off",
+    "no-nested-ternary": "off",
+    "no-plusplus": "off",
+    "no-throw-literal": "off",
+    "no-unmodified-loop-condition": "off",
+    "no-use-before-define": "off",
+    "no-useless-constructor": "off",
+    "no-void": "off",
+    "no-warning-comments": "off",
+    "prefer-const": "off",
+    "prefer-destructuring": "off",
+    "prefer-object-spread": "off",
+    "prefer-template": "off",
+    "promise/avoid-new": "off",
+    "promise/no-nesting": "off",
+    "promise/no-promise-in-callback": "off",
+    "promise/prefer-await-to-callbacks": "off",
+    "promise/prefer-await-to-then": "off",
     "react/exhaustive-deps": "warn",
-    "typescript/no-explicit-any": "error"
+    "react/jsx-curly-brace-presence": "off",
+    "react/jsx-no-constructed-context-values": "off",
+    "react/jsx-no-useless-fragment": "off",
+    "react/no-array-index-key": "off",
+    "react/no-danger": "off",
+    "react/rules-of-hooks": "error",
+    "react-perf/jsx-no-new-function-as-prop": "off",
+    "require-await": "off",
+    "sort-keys": "off",
+    "typescript/array-type": "off",
+    "typescript/consistent-type-definitions": "off",
+    "typescript/consistent-type-imports": "off",
+    "typescript/no-dynamic-delete": "off",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-import-type-side-effects": "off",
+    "typescript/no-inferrable-types": "off",
+    "typescript/no-non-null-assertion": "off",
+    "typescript/parameter-properties": "off",
+    "unicorn/catch-error-name": "off",
+    "unicorn/no-array-for-each": "off",
+    "unicorn/consistent-existence-index-check": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-array-reduce": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-await-expression-member": "off",
+    "unicorn/no-hex-escape": "off",
+    "unicorn/no-lonely-if": "off",
+    "unicorn/no-nested-ternary": "off",
+    "unicorn/no-typeof-undefined": "off",
+    "unicorn/no-useless-undefined": "off",
+    "unicorn/number-literal-case": "off",
+    "unicorn/numeric-separators-style": "off",
+    "unicorn/prefer-at": "off",
+    "unicorn/prefer-code-point": "off",
+    "unicorn/prefer-negative-index": "off",
+    "unicorn/prefer-node-protocol": "off",
+    "unicorn/prefer-number-properties": "off",
+    "unicorn/prefer-set-has": "off",
+    "unicorn/prefer-spread": "off",
+    "unicorn/prefer-string-replace-all": "off",
+    "unicorn/prefer-dom-node-append": "off",
+    "unicorn/prefer-logical-operator-over-ternary": "off",
+    "unicorn/prefer-math-min-max": "off",
+    "unicorn/prefer-math-trunc": "off",
+    "unicorn/prefer-response-static-json": "off",
+    "unicorn/prefer-string-slice": "off",
+    "unicorn/prefer-ternary": "off",
+    "unicorn/prefer-type-error": "off",
+    "unicorn/switch-case-braces": "off",
+    "unicorn/text-encoding-identifier-case": "off"
   },
-  "overrides": [
-    {
-      "files": [
-        "packages/agent/system-prompt.ts",
-        "packages/agent/tools/tools.test.ts",
-        "packages/sandbox/just-bash/sandbox.ts",
-        "packages/sandbox/vercel/sandbox.test.ts",
-        "packages/sandbox/vercel/sandbox.ts"
-      ],
-      "rules": {
-        "max-lines": [
-          "warn",
-          {
-            "max": 400,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
-      }
-    },
-    {
-      "files": ["AGENTS.md"],
-      "rules": {
-        "max-lines": [
-          "error",
-          {
-            "max": 100,
-            "skipBlankLines": true,
-            "skipComments": true
-          }
-        ]
-      }
-    }
+  "extends": [
+    "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
+    "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json",
+    "./node_modules/ultracite/config/oxlint/next/.oxlintrc.json"
   ]
 }

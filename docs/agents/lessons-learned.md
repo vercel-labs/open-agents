@@ -9,11 +9,12 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
 - In shell tools, avoid piping primary command output directly to `head` when exit-code handling matters; pipeline semantics can mask real failures from the primary command.
 - Bash approval heuristics should reserve prompts for clearly destructive commands (for example `rm -rf`, `sudo`, or mutating git/package-manager operations); treating pipes/chaining and common filesystem reads as dangerous creates too many false-positive approvals for normal inspection commands.
-- Verification instructions must tell the agent to consult AGENTS.md / `package.json` scripts **before** listing generic steps like "typecheck -> lint -> build"; otherwise models default to raw commands (`npx tsc`, `eslint .`) which bypass project-specific tool config (turbo pipelines, tsconfig references, biome, etc.) and produce incorrect or incomplete results.
+- Verification instructions must tell the agent to consult AGENTS.md / `package.json` scripts **before** listing generic steps like "typecheck -> lint -> build"; otherwise models default to raw commands (`npx tsc`, `eslint .`) which bypass project-specific tool config (turbo pipelines, tsconfig references, ultracite, etc.) and produce incorrect or incomplete results.
 - Tool renderer `part.output` values may be `unknown`; when accessing fields like `files` or `matches`, add runtime narrowing/type guards first (in both TUI and web renderers) to satisfy strict typecheck.
 - AI SDK stream handles may return `PromiseLike` values (not full `Promise`), so avoid methods like `.finally()` and use `then`/`catch` patterns that work with `PromiseLike`.
 - After schema edits, review generated Drizzle migrations for unrelated schema drift changes before committing (for example defaults on untouched columns), since `drizzle-kit generate` can include those alongside intended changes.
 - `bunx @vercel/config validate` executes the CLI under Node via its shebang and cannot parse TypeScript-style `vercel.ts` imports; use `bunx --bun @vercel/config validate` (or `bun node_modules/@vercel/config/dist/cli.js validate`) for reliable local validation.
+- Successful Vercel CLI auth (`vercel whoami`, team/project REST APIs, `.vercel` linking) does **not** guarantee Workflow observability access. `workflow inspect ... --backend vercel` can still fail with `401 {"error":{"code":"unauthorized","message":"You are not allowed to access this endpoint."}}` when the user/token lacks the Vercel product permission documented as `Vercel Workflow` (and possibly related Observability access), even if `WORKFLOW_VERCEL_AUTH_TOKEN` is passed explicitly from the Vercel CLI auth file.
 
 ## Next.js
 
@@ -69,9 +70,11 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Archive uses a deferred background snapshot; if unarchive runs before `snapshotUrl` is persisted, resume/restore can race with `no_snapshot`, so unarchive/restore flows must gate on snapshot readiness (or surface a clear snapshot-in-progress state).
 - Client UI `sandboxUiStatus` must check server `lifecycleTiming.state` (from status poll) as primary source, not only local `sandboxInfo`; otherwise UI stays "Active" after server-side hibernation until the local timeout expires or user refreshes.
 - The `isSandboxActive` client flag must incorporate `lifecycleTiming.state`; local `isSandboxValid(sandboxInfo)` alone is insufficient because the server can hibernate the sandbox while the local timeout is still valid.
+- In the sandbox lifecycle evaluator, treat any non-null chat `activeStreamId` as an authoritative no-hibernate signal; do not inspect workflow status or clear stream ids from the lifecycle path, and recheck immediately before snapshotting to avoid racing a newly-started stream.
 
 ## Chat / Streaming UI
 
+- In large chat/page client components, extract new feature-specific UI flows into colocated hooks and child components instead of adding more state/effects/handlers inline; if the feature state must survive dropdown/popover/dialog toggles, mount the hook in the parent view and pass its controls down.
 - In the web chat UI, do not keep `@ai-sdk/react` Chat instances alive after route transitions while they are still streaming; abort local stream processing and remove the instance on teardown, then rely on resumable stream reconnect when revisiting that chat.
 - For client-side tool flows (`ask_user_question`), `onFinish`-only assistant persistence is insufficient across route switches: persist the latest incoming message snapshot at API request start (upsert by message id) so answered/declined tool state survives teardown/resume and does not rehydrate stale `input-available` UI.
 - Request-start assistant snapshot persistence must be scoped and ownership-guarded: only upsert assistant messages when the request still owns the chat stream token, and refuse upserts on message-id scope conflict (different chat/role) to prevent stale writes and cross-chat overwrites.

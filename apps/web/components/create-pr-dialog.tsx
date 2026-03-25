@@ -175,9 +175,9 @@ export function CreatePRDialog({
   const normalizedHeadOwner = prHeadOwner?.toLowerCase() ?? null;
   const shouldOpenCompareInsteadOfApi = Boolean(
     gitActions?.pushedToFork ||
-      (normalizedRepoOwner &&
-        normalizedHeadOwner &&
-        normalizedHeadOwner !== normalizedRepoOwner),
+    (normalizedRepoOwner &&
+      normalizedHeadOwner &&
+      normalizedHeadOwner !== normalizedRepoOwner),
   );
 
   useEffect(() => {

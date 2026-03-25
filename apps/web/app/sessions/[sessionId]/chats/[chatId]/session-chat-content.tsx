@@ -47,6 +47,10 @@ import type {
   WebAgentUIMessagePart,
   WebAgentUIToolPart,
 } from "@/app/types";
+import {
+  AssistantFileLink,
+  type AssistantFileLinkProps,
+} from "@/components/assistant-file-link";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
@@ -110,7 +114,6 @@ import {
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
-import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
@@ -122,16 +125,19 @@ import {
 } from "./session-chat-context";
 import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
+import { useDevServer } from "./hooks/use-dev-server";
 import {
   CommitActionHeaderButton,
   CommitActionMenuItem,
 } from "./commit-action-button";
+import { DevServerMenuItems } from "./dev-server-menu-items";
 import {
   createSandbox,
   getSandboxCreateErrorDetails,
   type SandboxCreateErrorDetails,
 } from "./sandbox-create";
 import { SandboxCreateErrorBanner } from "./sandbox-create-error-banner";
+import { WorkspaceFileViewer } from "./workspace-file-viewer";
 import "streamdown/styles.css";
 
 const DiffViewer = dynamic(
@@ -856,6 +862,9 @@ export function SessionChatContent({
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [repoDialogOpen, setRepoDialogOpen] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<
+    string | null
+  >(null);
   const [mobileArchiveDialogOpen, setMobileArchiveDialogOpen] = useState(false);
   const [mobileShareOpen, setMobileShareOpen] = useState(false);
   const [chatSwitcherOpen, setChatSwitcherOpen] = useState(false);
@@ -864,6 +873,8 @@ export function SessionChatContent({
   const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
     string | null
   >(null);
+  const [branchPreviewUrlChangeBaseline, setBranchPreviewUrlChangeBaseline] =
+    useState<string | null | undefined>(undefined);
   const hasMounted = useHasMounted();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
@@ -1024,9 +1035,9 @@ export function SessionChatContent({
   } = useSessionChatWorkspaceContext();
   const autoCommitEnabled = Boolean(
     session.cloneUrl &&
-      session.repoOwner &&
-      session.repoName &&
-      (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
+    session.repoOwner &&
+    session.repoName &&
+    (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
   );
   const { isAutoCommitting, markAutoCommitStarted } = useAutoCommitStatus(
     autoCommitEnabled,
@@ -1242,6 +1253,19 @@ export function SessionChatContent({
       };
     });
   }, [renderMessages, isChatInFlight]);
+  const streamdownComponents = useMemo(
+    () => ({
+      a: (props: AssistantFileLinkProps) => (
+        <AssistantFileLink
+          {...props}
+          onOpenFile={(filePath) => {
+            setSelectedWorkspaceFile(filePath);
+          }}
+        />
+      ),
+    }),
+    [],
+  );
   const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
@@ -1659,6 +1683,22 @@ export function SessionChatContent({
     [attemptReconnection, syncSandboxStatus],
   );
 
+  const refreshWorkspaceAfterRestore = useCallback(async () => {
+    await requestStatusSync("force").catch(() => undefined);
+    await Promise.all([
+      refreshGitStatus().catch(() => undefined),
+      refreshDiff().catch(() => undefined),
+      refreshFiles().catch(() => undefined),
+      checkBranchAndPr().catch(() => undefined),
+    ]);
+  }, [
+    requestStatusSync,
+    refreshGitStatus,
+    refreshDiff,
+    refreshFiles,
+    checkBranchAndPr,
+  ]);
+
   const handleRestoreSnapshot = useCallback(async () => {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
@@ -1687,6 +1727,7 @@ export function SessionChatContent({
         // If a sandbox is already running (for example after a lifecycle
         // restore), reconnect instead of surfacing a blocking error.
         if (errorMsg.includes("sandbox is still running")) {
+          shouldRefreshRestoredWorkspaceRef.current = true;
           const reconnected = await waitForSandboxReady();
           if (!reconnected) {
             setRestoreError(
@@ -1696,30 +1737,25 @@ export function SessionChatContent({
           return;
         }
 
+        shouldRefreshRestoredWorkspaceRef.current = false;
         setRestoreError(`Snapshot restore failed: ${errorMsg}`);
         return;
       }
 
       if (payload.alreadyRunning) {
+        shouldRefreshRestoredWorkspaceRef.current = true;
         const reconnected = await waitForSandboxReady();
         if (!reconnected) {
           setRestoreError(
             "Sandbox is already running. Refresh in a few seconds if it does not reconnect automatically.",
           );
-        } else {
-          void requestStatusSync("force");
         }
         return;
       }
 
-      // Set sandbox info for the restored sandbox
-      setSandboxInfo({
-        createdAt: Date.now(),
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      });
-
       // Keep preferred sandbox mode aligned with the preserved session state.
       setSandboxTypeFromUnknown(session.sandboxState?.type);
+      shouldRefreshRestoredWorkspaceRef.current = true;
 
       // Refresh local timeout/connection data from server state.
       const reconnected = await waitForSandboxReady();
@@ -1727,10 +1763,9 @@ export function SessionChatContent({
         setRestoreError(
           "Snapshot restored, but reconnect did not complete yet. Try Resume sandbox again.",
         );
-      } else {
-        void requestStatusSync("force");
       }
     } catch (err) {
+      shouldRefreshRestoredWorkspaceRef.current = false;
       const errorMsg = err instanceof Error ? err.message : String(err);
       setRestoreError(`Failed to restore snapshot: ${errorMsg}`);
     } finally {
@@ -1739,9 +1774,7 @@ export function SessionChatContent({
   }, [
     session.id,
     session.sandboxState,
-    setSandboxInfo,
     setSandboxTypeFromUnknown,
-    requestStatusSync,
     waitForSandboxReady,
   ]);
 
@@ -1884,8 +1917,25 @@ export function SessionChatContent({
   const hasAutoStartedSandboxRef = useRef(false);
   const hasAutoRestoredSnapshotRef = useRef(false);
   const shouldAutoResumeOnEntryRef = useRef(true);
+  const shouldRefreshRestoredWorkspaceRef = useRef(false);
 
   const isArchived = session.status === "archived";
+
+  // After a snapshot restore, wait for the live workspace hooks to be active
+  // again before forcing refreshes. Calling the pre-restore callbacks inside
+  // the async restore handler can be a no-op because they were created while
+  // the sandbox was still offline.
+  useEffect(() => {
+    if (!shouldRefreshRestoredWorkspaceRef.current) {
+      return;
+    }
+    if (!sandboxInfo || reconnectionStatus !== "connected") {
+      return;
+    }
+
+    shouldRefreshRestoredWorkspaceRef.current = false;
+    void refreshWorkspaceAfterRestore();
+  }, [sandboxInfo, reconnectionStatus, refreshWorkspaceAfterRestore]);
 
   // Attempt a single reconnect probe on entry to pick up authoritative server state
   // (connected sandbox, no sandbox, and snapshot availability).
@@ -2271,35 +2321,85 @@ export function SessionChatContent({
     isSandboxActive,
     reconnectionStatus,
   ]);
+  const canRunDevServer =
+    !isArchived &&
+    isSandboxActive &&
+    !isCreatingSandbox &&
+    !isRestoringSnapshot &&
+    !isReconnectingSandbox &&
+    !isHibernatingUi;
+  const devServer = useDevServer({
+    sessionId: session.id,
+    canRun: canRunDevServer,
+  });
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
+  const previewLookupBranch =
+    gitStatus?.branch && gitStatus.branch !== "HEAD"
+      ? gitStatus.branch
+      : session.branch;
+  const hasBranchPreviewLookup = Boolean(
+    session.vercelProjectId && previewLookupBranch,
+  );
   const existingPrUrl =
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
+  const prDeploymentQuery = new URLSearchParams(
+    Object.entries({
+      ...(hasExistingPr ? { prNumber: String(session.prNumber) } : {}),
+      ...(previewLookupBranch ? { branch: previewLookupBranch } : {}),
+    }),
+  ).toString();
   const { data: prDeploymentData, mutate: refreshPrDeployment } =
     useSWR<PrDeploymentResponse>(
-      hasExistingPr
-        ? `/api/sessions/${session.id}/pr-deployment?prNumber=${session.prNumber}`
+      hasExistingPr || hasBranchPreviewLookup
+        ? `/api/sessions/${session.id}/pr-deployment${
+            prDeploymentQuery ? `?${prDeploymentQuery}` : ""
+          }`
         : null,
       fetcher,
       {
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
-        // Poll while we're still waiting for the first deployment so the Preview
-        // action appears quickly after opening/creating the PR.
+        // Poll while we're still waiting for the first deployment, or while a
+        // branch preview is rolling forward to a newer deployment after a push.
         refreshInterval: (latestData) =>
           getPrDeploymentRefreshInterval({
-            hasExistingPr,
+            shouldPoll: hasExistingPr || hasBranchPreviewLookup,
             deploymentUrl: latestData?.deploymentUrl,
             documentHasFocus:
               typeof document === "undefined" ? true : document.hasFocus(),
+            waitForDeploymentUrlChangeFrom: branchPreviewUrlChangeBaseline,
           }),
         shouldRetryOnError: false,
       },
     );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
+
+  useEffect(() => {
+    if (hasExistingPr || !hasBranchPreviewLookup) {
+      if (branchPreviewUrlChangeBaseline !== undefined) {
+        setBranchPreviewUrlChangeBaseline(undefined);
+      }
+      return;
+    }
+
+    if (branchPreviewUrlChangeBaseline === undefined) {
+      return;
+    }
+
+    if (prDeploymentUrl !== branchPreviewUrlChangeBaseline) {
+      setBranchPreviewUrlChangeBaseline(undefined);
+    }
+  }, [
+    hasExistingPr,
+    hasBranchPreviewLookup,
+    branchPreviewUrlChangeBaseline,
+    prDeploymentUrl,
+  ]);
+
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
   const hasBranchDiff =
@@ -2331,6 +2431,32 @@ export function SessionChatContent({
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
+
+  const handleCommitted = useCallback(async () => {
+    if (!hasExistingPr && hasBranchPreviewLookup) {
+      setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
+    }
+
+    await Promise.all([
+      refreshGitStatus().catch(() => undefined),
+      refreshDiff().catch(() => undefined),
+      refreshFiles().catch(() => undefined),
+      checkBranchAndPr().catch(() => undefined),
+    ]);
+
+    if (hasExistingPr || hasBranchPreviewLookup) {
+      await refreshPrDeployment().catch(() => undefined);
+    }
+  }, [
+    hasExistingPr,
+    hasBranchPreviewLookup,
+    prDeploymentUrl,
+    refreshGitStatus,
+    refreshDiff,
+    refreshFiles,
+    checkBranchAndPr,
+    refreshPrDeployment,
+  ]);
 
   const handleMerged = useCallback(
     async (mergeResult: MergePullRequestResponse) => {
@@ -2503,6 +2629,16 @@ export function SessionChatContent({
                     hasUncommittedChanges={hasUncommittedGitChanges}
                     onClick={() => setCommitDialogOpen(true)}
                   />
+                ) : prDeploymentUrl ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 px-0 xl:w-auto xl:px-3"
+                    onClick={openPreviewOrPr}
+                  >
+                    <ExternalLink className="h-4 w-4 xl:mr-2" />
+                    <span className="hidden xl:inline">Preview</span>
+                  </Button>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
                     variant="outline"
@@ -2545,7 +2681,7 @@ export function SessionChatContent({
                     <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-72">
                   <NewChatMenuItem />
                   <DropdownMenuItem onClick={() => setChatSwitcherOpen(true)}>
                     <MessageSquareMore className="mr-2 h-4 w-4" />
@@ -2588,7 +2724,10 @@ export function SessionChatContent({
                       Archive
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuSeparator />
+                  <DevServerMenuItems
+                    canRun={canRunDevServer}
+                    devServer={devServer}
+                  />
                   {supportsDiff && (
                     <DropdownMenuItem
                       disabled={!diff && !session.cachedDiff}
@@ -2666,6 +2805,12 @@ export function SessionChatContent({
                             isAutoCommitting={isAutoCommitting}
                             onClick={() => setCommitDialogOpen(true)}
                           />
+                        )}
+                        {prDeploymentUrl && (
+                          <DropdownMenuItem onClick={openPreviewOrPr}>
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Preview
+                          </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
                           disabled={!canCreatePr || !isCreatePrBranchReady}
@@ -2944,6 +3089,7 @@ export function SessionChatContent({
                                     isMessageStreaming ? "streaming" : "static"
                                   }
                                   isAnimating={isMessageStreaming}
+                                  components={streamdownComponents}
                                   plugins={streamdownPlugins}
                                 >
                                   {p.text}
@@ -3548,14 +3694,7 @@ export function SessionChatContent({
           gitStatus={gitStatus}
           refreshGitStatus={refreshGitStatus}
           onOpenCreatePr={() => setPrDialogOpen(true)}
-          onCommitted={() => {
-            refreshGitStatus().catch(() => {});
-            refreshDiff().catch(() => {});
-            refreshFiles().catch(() => {});
-            if (hasExistingPr) {
-              refreshPrDeployment().catch(() => {});
-            }
-          }}
+          onCommitted={handleCommitted}
         />
       )}
 
@@ -3579,6 +3718,16 @@ export function SessionChatContent({
 
       {/* Diff Viewer Modal */}
       <DiffViewer open={showDiffPanel} onOpenChange={setShowDiffPanel} />
+      <WorkspaceFileViewer
+        sessionId={session.id}
+        filePath={selectedWorkspaceFile}
+        open={selectedWorkspaceFile !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedWorkspaceFile(null);
+          }
+        }}
+      />
     </>
   );
 }

@@ -14,6 +14,9 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
+import { formatDateOnly } from "@/lib/usage/date-range";
+import type { UsageDomainLeaderboard, UsageInsights } from "@/lib/usage/types";
+import { UsageInsightsSection } from "./usage/usage-insights-section";
 
 interface DailyUsageRow {
   date: string;
@@ -56,6 +59,8 @@ interface PieSegment {
 
 interface UsageResponse {
   usage: DailyUsageRow[];
+  insights: UsageInsights;
+  domainLeaderboard: UsageDomainLeaderboard | null;
 }
 
 function formatTokens(n: number) {
@@ -63,13 +68,6 @@ function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
-}
-
-function toDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function sumRows(rows: DailyUsageRow[]) {
@@ -191,7 +189,7 @@ export function UsageSectionSkeleton() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-3 min-[420px]:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i}>
               <div className="text-xs">
@@ -358,24 +356,26 @@ function UsagePieChart({
             return (
               <div
                 key={segment.label}
-                className="flex items-center gap-2 text-sm"
+                className="flex items-start gap-2 text-sm"
               >
                 <span
-                  className="h-2.5 w-2.5 rounded-sm"
+                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm"
                   style={{ backgroundColor: segment.color }}
                 />
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="font-medium">{segment.label}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-medium leading-snug">
+                    {segment.label}
+                  </div>
                   {segment.detail ? (
-                    <span className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {segment.detail}
-                    </span>
+                    </div>
                   ) : null}
                 </div>
-                <span className="ml-auto text-muted-foreground">
-                  {formatTokens(segment.value)}
-                </span>
-                <span className="text-muted-foreground">({share}%)</span>
+                <div className="shrink-0 text-right text-xs text-muted-foreground sm:text-sm">
+                  <div>{formatTokens(segment.value)}</div>
+                  <div>({share}%)</div>
+                </div>
               </div>
             );
           })
@@ -395,32 +395,40 @@ function StatBlock({
   detail?: string;
 }) {
   return (
-    <div>
+    <div className="min-w-0 rounded-xl border border-border/50 bg-muted/20 p-3 sm:p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
+      <div className="mt-1 break-words text-lg font-semibold leading-tight sm:text-xl">
+        {value}
+      </div>
       {detail ? (
-        <div className="text-xs text-muted-foreground">{detail}</div>
+        <div className="mt-1 text-xs leading-snug text-muted-foreground">
+          {detail}
+        </div>
       ) : null}
     </div>
   );
 }
 
 export function UsageSection() {
-  const { data, isLoading, error } = useSWR<UsageResponse>(
-    "/api/usage",
-    fetcher,
-  );
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const usagePath = useMemo(() => {
+    if (!dateRange?.from) {
+      return "/api/usage";
+    }
+
+    const from = formatDateOnly(dateRange.from);
+    const to = formatDateOnly(dateRange.to ?? dateRange.from);
+    const query = new URLSearchParams({ from, to });
+
+    return `/api/usage?${query.toString()}`;
+  }, [dateRange]);
+
+  const { data, isLoading, error } = useSWR<UsageResponse>(usagePath, fetcher);
 
   const { totals, chartData, modelUsage, mainTotals, subagentTotals } =
     useMemo(() => {
-      let usage = data?.usage ?? [];
-
-      if (dateRange?.from) {
-        const fromStr = toDateStr(dateRange.from);
-        const toStr = dateRange.to ? toDateStr(dateRange.to) : fromStr;
-        usage = usage.filter((r) => r.date >= fromStr && r.date <= toStr);
-      }
+      const usage = data?.usage ?? [];
 
       const main = usage.filter((r) => r.agentType === "main");
       const subagent = usage.filter((r) => r.agentType === "subagent");
@@ -431,7 +439,7 @@ export function UsageSection() {
         mainTotals: sumRows(main),
         subagentTotals: sumRows(subagent),
       };
-    }, [data, dateRange]);
+    }, [data]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -502,61 +510,71 @@ export function UsageSection() {
   })();
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Usage</CardTitle>
-            <CardDescription>
-              {dateRange?.from
-                ? "Showing filtered results."
-                : "Token consumption and activity over the past 39 weeks."}
-            </CardDescription>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Usage</CardTitle>
+              <CardDescription>
+                {dateRange?.from
+                  ? "Showing filtered results."
+                  : "Token consumption and activity over the past 39 weeks."}
+              </CardDescription>
+            </div>
+            <DateRangePicker
+              value={dateRange}
+              onChange={setDateRange}
+              className="w-full justify-center sm:w-auto sm:justify-start"
+            />
           </div>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
-          <StatBlock
-            label="Messages"
-            value={totals.messageCount.toLocaleString()}
-          />
-          <StatBlock
-            label="Tool calls"
-            value={totals.toolCallCount.toLocaleString()}
-          />
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-3 min-[420px]:grid-cols-3">
+            <StatBlock label="Total tokens" value={formatTokens(totalTokens)} />
+            <StatBlock
+              label="Messages"
+              value={totals.messageCount.toLocaleString()}
+            />
+            <StatBlock
+              label="Tool calls"
+              value={totals.toolCallCount.toLocaleString()}
+            />
+          </div>
 
-        <ContributionChart data={chartData} />
+          <ContributionChart data={chartData} />
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {hasUsage && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Agent split</h3>
-              <UsagePieChart
-                segments={agentSegments}
-                centerLabel="Total tokens"
-                emptyLabel="No agent usage"
-              />
-            </div>
-          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {hasUsage && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Agent split</h3>
+                <UsagePieChart
+                  segments={agentSegments}
+                  centerLabel="Total tokens"
+                  emptyLabel="No agent usage"
+                />
+              </div>
+            )}
 
-          {modelUsage.length > 0 ? (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Usage by model</h3>
-              <UsagePieChart
-                segments={modelSegments}
-                centerLabel="Total tokens"
-                emptyLabel="No model usage"
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No model data</p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            {modelUsage.length > 0 ? (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Usage by model</h3>
+                <UsagePieChart
+                  segments={modelSegments}
+                  centerLabel="Total tokens"
+                  emptyLabel="No model usage"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No model data</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {data?.insights ? (
+        <UsageInsightsSection insights={data.insights} />
+      ) : null}
+    </div>
   );
 }

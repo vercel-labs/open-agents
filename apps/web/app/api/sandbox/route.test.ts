@@ -8,6 +8,15 @@ interface TestSessionRecord {
   userId: string;
   lifecycleVersion: number;
   sandboxState: { type: "vercel" };
+  vercelProjectId: string | null;
+  vercelProjectName: string | null;
+  vercelTeamId: string | null;
+}
+
+interface TestVercelAuthInfo {
+  token: string;
+  expiresAt: number;
+  externalId: string;
 }
 
 interface KickCall {
@@ -33,8 +42,15 @@ const updateCalls: Array<{
   patch: Record<string, unknown>;
 }> = [];
 const connectConfigs: ConnectConfig[] = [];
+const writeFileCalls: Array<{ path: string; content: string }> = [];
+const execCalls: Array<{ command: string; cwd: string; timeoutMs: number }> =
+  [];
+const dotenvSyncCalls: Array<Record<string, unknown>> = [];
 
 let sessionRecord: TestSessionRecord;
+let currentVercelAuthInfo: TestVercelAuthInfo | null;
+let currentDotenvContent: string;
+let currentDotenvError: Error | null;
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => ({
@@ -61,7 +77,25 @@ mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
+mock.module("@/lib/vercel/token", () => ({
+  getUserVercelAuthInfo: async () => currentVercelAuthInfo,
+  getUserVercelToken: async () => currentVercelAuthInfo?.token ?? null,
+}));
+
+mock.module("@/lib/vercel/projects", () => ({
+  buildDevelopmentDotenvFromVercelProject: async (
+    input: Record<string, unknown>,
+  ) => {
+    dotenvSyncCalls.push(input);
+    if (currentDotenvError) {
+      throw currentDotenvError;
+    }
+    return currentDotenvContent;
+  },
+}));
+
 mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
   getSessionById: async () => sessionRecord,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
     updateCalls.push({ sessionId, patch });
@@ -90,6 +124,29 @@ mock.module("@open-harness/sandbox", () => ({
         sandboxId: config.state.sandboxId ?? "sbx-vercel-1",
         expiresAt: Date.now() + 120_000,
       }),
+      exec: async (command: string, cwd: string, timeoutMs: number) => {
+        execCalls.push({ command, cwd, timeoutMs });
+        if (command === 'printf %s "$HOME"') {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "/root",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
+        return {
+          success: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          truncated: false,
+        };
+      },
+      writeFile: async (path: string, content: string) => {
+        writeFileCalls.push({ path, content });
+      },
       stop: async () => {},
     };
   },
@@ -102,15 +159,28 @@ describe("/api/sandbox lifecycle kicks", () => {
     kickCalls.length = 0;
     updateCalls.length = 0;
     connectConfigs.length = 0;
+    writeFileCalls.length = 0;
+    execCalls.length = 0;
+    dotenvSyncCalls.length = 0;
+    currentVercelAuthInfo = {
+      token: "vercel-token",
+      expiresAt: 1_700_000_000,
+      externalId: "user_ext_1",
+    };
+    currentDotenvContent = 'API_KEY="secret"\n';
+    currentDotenvError = null;
     sessionRecord = {
       id: "session-1",
       userId: "user-1",
       lifecycleVersion: 3,
       sandboxState: { type: "vercel" },
+      vercelProjectId: "project-1",
+      vercelProjectName: "open-harness-web",
+      vercelTeamId: "team-1",
     };
   });
 
-  test("reconnect branch uses vercel sandbox and kicks lifecycle immediately", async () => {
+  test("reconnect branch uses vercel sandbox and does not resync .env.local", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -135,9 +205,22 @@ describe("/api/sandbox lifecycle kicks", () => {
       type: "vercel",
       sandboxId: "sbx-existing-1",
     });
+    expect(dotenvSyncCalls).toHaveLength(0);
+    expect(writeFileCalls).toEqual([
+      {
+        path: "/root/.local/share/com.vercel.cli/auth.json",
+        content:
+          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
+      },
+      {
+        path: "/vercel/sandbox/.vercel/project.json",
+        content:
+          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
+      },
+    ]);
   });
 
-  test("new vercel sandbox kicks lifecycle immediately", async () => {
+  test("new vercel sandbox writes linked Development env vars to .env.local", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -162,6 +245,29 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(connectConfigs[0]?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
+    expect(dotenvSyncCalls).toEqual([
+      {
+        token: "vercel-token",
+        projectIdOrName: "project-1",
+        teamId: "team-1",
+      },
+    ]);
+    expect(writeFileCalls).toEqual([
+      {
+        path: "/vercel/sandbox/.env.local",
+        content: 'API_KEY="secret"\n',
+      },
+      {
+        path: "/root/.local/share/com.vercel.cli/auth.json",
+        content:
+          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
+      },
+      {
+        path: "/vercel/sandbox/.vercel/project.json",
+        content:
+          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
+      },
+    ]);
 
     const payload = (await response.json()) as {
       timeout: number;
@@ -169,6 +275,44 @@ describe("/api/sandbox lifecycle kicks", () => {
     };
     expect(payload.timeout).toBe(DEFAULT_SANDBOX_TIMEOUT_MS);
     expect(payload.mode).toBe("vercel");
+  });
+
+  test("env sync failures do not block sandbox creation", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentDotenvError = new Error("boom");
+
+    const response = await POST(
+      new Request("http://localhost/api/sandbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "session-1",
+          sandboxType: "vercel",
+        }),
+      }),
+    );
+
+    expect(response.ok).toBe(true);
+    expect(kickCalls).toEqual([
+      {
+        sessionId: "session-1",
+        reason: "sandbox-created",
+      },
+    ]);
+    expect(dotenvSyncCalls).toHaveLength(1);
+    expect(writeFileCalls).toEqual([
+      {
+        path: "/root/.local/share/com.vercel.cli/auth.json",
+        content:
+          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
+      },
+      {
+        path: "/vercel/sandbox/.vercel/project.json",
+        content:
+          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
+      },
+    ]);
   });
 
   test("rejects unsupported sandbox types", async () => {

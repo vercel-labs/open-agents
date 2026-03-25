@@ -1,9 +1,5 @@
 // Types
-export type {
-  SkillFrontmatter,
-  SkillOptions,
-  SkillMetadata,
-} from "./types";
+export type { SkillFrontmatter, SkillOptions, SkillMetadata } from "./types";
 export { skillFrontmatterSchema, frontmatterToOptions } from "./types";
 
 // Discovery

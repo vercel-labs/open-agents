@@ -284,6 +284,18 @@ const runAgentStep = async (
         result.response,
       ]);
 
+    if (finishReason === "other") {
+      console.warn("[workflow] Agent step finished with reason 'other':", {
+        workflowRunId,
+        messageId,
+        finishReason,
+        rawFinishReason,
+        stepUsage,
+        response,
+        responseMessage,
+      });
+    }
+
     return {
       responseMessage,
       responseMessages: response.messages,

@@ -2,7 +2,11 @@ import "server-only";
 
 import { start } from "workflow/api";
 import { sandboxLifecycleWorkflow } from "@/app/workflows/sandbox-lifecycle";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  claimSessionLifecycleRunId,
+  getSessionById,
+  updateSession,
+} from "@/lib/db/sessions";
 import { SANDBOX_LIFECYCLE_STALE_RUN_GRACE_MS } from "./config";
 import {
   evaluateSandboxLifecycle,
@@ -112,6 +116,11 @@ export function kickSandboxLifecycleWorkflow(input: KickSandboxLifecycleInput) {
     }
 
     const runId = createLifecycleRunId();
+    const claimed = await claimSessionLifecycleRunId(input.sessionId, runId);
+    if (!claimed) {
+      return;
+    }
+
     await startLifecycleRun(input.sessionId, input.reason, runId);
   };
 

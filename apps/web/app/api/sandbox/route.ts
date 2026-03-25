@@ -19,8 +19,14 @@ import {
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import {
+  getVercelCliSandboxSetup,
+  syncVercelCliAuthToSandbox,
+} from "@/lib/sandbox/vercel-cli-auth";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
+import { getUserVercelToken } from "@/lib/vercel/token";
 
 interface CreateSandboxRequest {
   repoUrl?: string;
@@ -29,6 +35,52 @@ interface CreateSandboxRequest {
   sessionId?: string;
   sandboxId?: string;
   sandboxType?: "vercel";
+}
+
+async function syncVercelProjectEnvVarsToSandbox(params: {
+  userId: string;
+  sessionRecord: SessionRecord;
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+}): Promise<void> {
+  if (!params.sessionRecord.vercelProjectId) {
+    return;
+  }
+
+  const token = await getUserVercelToken(params.userId);
+  if (!token) {
+    return;
+  }
+
+  const dotenvContent = await buildDevelopmentDotenvFromVercelProject({
+    token,
+    projectIdOrName: params.sessionRecord.vercelProjectId,
+    teamId: params.sessionRecord.vercelTeamId,
+  });
+  if (!dotenvContent) {
+    return;
+  }
+
+  await params.sandbox.writeFile(
+    `${params.sandbox.workingDirectory}/.env.local`,
+    dotenvContent,
+    "utf-8",
+  );
+}
+
+async function syncVercelCliAuthForSandbox(params: {
+  userId: string;
+  sessionRecord: SessionRecord;
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+}): Promise<void> {
+  const setup = await getVercelCliSandboxSetup({
+    userId: params.userId,
+    sessionRecord: params.sessionRecord,
+  });
+
+  await syncVercelCliAuthToSandbox({
+    sandbox: params.sandbox,
+    setup,
+  });
 }
 
 export async function POST(req: Request) {
@@ -132,6 +184,22 @@ export async function POST(req: Request) {
         ),
         ...buildActiveLifecycleUpdate(nextState),
       });
+
+      if (sessionRecord) {
+        try {
+          await syncVercelCliAuthForSandbox({
+            userId: session.user.id,
+            sessionRecord,
+            sandbox,
+          });
+        } catch (error) {
+          console.error(
+            `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
+            error,
+          );
+        }
+      }
+
       kickSandboxLifecycleWorkflow({
         sessionId,
         reason: "sandbox-created",
@@ -184,6 +252,34 @@ export async function POST(req: Request) {
       ),
       ...buildActiveLifecycleUpdate(nextState),
     });
+
+    if (sessionRecord) {
+      try {
+        await syncVercelProjectEnvVarsToSandbox({
+          userId: session.user.id,
+          sessionRecord,
+          sandbox,
+        });
+      } catch (error) {
+        console.error(
+          `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
+          error,
+        );
+      }
+
+      try {
+        await syncVercelCliAuthForSandbox({
+          userId: session.user.id,
+          sessionRecord,
+          sandbox,
+        });
+      } catch (error) {
+        console.error(
+          `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
+          error,
+        );
+      }
+    }
 
     kickSandboxLifecycleWorkflow({
       sessionId,

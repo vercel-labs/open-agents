@@ -270,6 +270,23 @@ export async function updateSession(
   return session ? normalizeSessionRecord(session) : session;
 }
 
+/**
+ * Atomically claims the session lifecycle lease when no run is currently
+ * recorded. Returns true when the claim succeeds.
+ */
+export async function claimSessionLifecycleRunId(
+  sessionId: string,
+  runId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({ lifecycleRunId: runId, updatedAt: new Date() })
+    .where(and(eq(sessions.id, sessionId), isNull(sessions.lifecycleRunId)))
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
 export async function deleteSession(sessionId: string) {
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 }

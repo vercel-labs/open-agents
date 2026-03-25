@@ -37,16 +37,13 @@ bun run web            # Run web app
 # Quality checks (REQUIRED after making any changes)
 bun run ci                                 # Required: run format check, lint, typecheck, and tests
 turbo typecheck                            # Type check all packages
-turbo lint                                 # Lint all packages with oxlint
-turbo lint:fix                             # Lint and auto-fix all packages
+
+# Linting and formatting (Ultracite - oxlint + oxfmt, run from root)
+bun run check                              # Lint and format check all files
+bun run fix                                # Lint fix and format all files
 
 # Filter by package (use --filter)
 turbo typecheck --filter=web # Type check web app only
-turbo lint:fix --filter=web  # Lint web app only
-
-# Formatting (Biome - run from root)
-bun run format                             # Format all files
-bun run format:check                       # Check formatting without writing
 
 # Testing
 bun test                                              # Run all tests
@@ -90,6 +87,8 @@ See [Architecture & Workspace Structure](docs/agents/architecture.md) for detail
 - Before adding code, decide whether the behavior is a separate concern that should live in its own file.
 - Prefer creating a new colocated file for distinct concerns (components, hooks, utilities, schemas, data-access helpers, etc.).
 - If a file is already large or handling multiple responsibilities, extract the new logic (and related helpers/types) into focused modules and import them.
+- For large page/view/client components, default to adding new feature behavior in colocated hooks and colocated child components instead of growing the main file.
+- If a change introduces a distinct cluster of state, effects, handlers, API calls, or derived UI labels for one feature, treat that as a strong signal to extract it.
 - Keep each file focused on one primary responsibility; avoid mixing unrelated UI, business logic, and data-access code in the same file.
 
 ## Code Style (Summary)
@@ -98,7 +97,7 @@ See [Architecture & Workspace Structure](docs/agents/architecture.md) for detail
 - **Files**: kebab-case, **Types**: PascalCase, **Functions**: camelCase
 - **Never use `any`** -- use `unknown` and narrow with type guards
 - **No `.js` extensions** in imports
-- **Biome** for formatting (double quotes, 2-space indent)
+- **Ultracite** (oxlint + oxfmt) for linting and formatting (double quotes, 2-space indent)
 - **Zod** schemas for validation, derive types with `z.infer`
 
 See [Code Style & Patterns](docs/agents/code-style.md) for full conventions, tool implementation patterns, and dependency patterns.

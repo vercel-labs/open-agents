@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 
 interface TestSessionRecord {
   id: string;
@@ -24,8 +25,15 @@ let chatRecord: TestChatRecord | null;
 let currentAuthSession: { user: { id: string } } | null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
-let compareAndSetResult = true;
+let getRunShouldThrow = false;
+let compareAndSetDefaultResult = true;
+let compareAndSetResults: boolean[] = [];
 let startCalls: unknown[][] = [];
+
+const compareAndSetChatActiveStreamIdSpy = mock(async () => {
+  const nextResult = compareAndSetResults.shift();
+  return nextResult ?? compareAndSetDefaultResult;
+});
 
 const originalFetch = globalThis.fetch;
 
@@ -67,16 +75,22 @@ mock.module("workflow/api", () => ({
         }),
     };
   },
-  getRun: () => ({
-    status: Promise.resolve(existingRunStatus),
-    getReadable: () =>
-      new ReadableStream({
-        start(controller) {
-          controller.close();
-        },
-      }),
-    cancel: () => Promise.resolve(),
-  }),
+  getRun: () => {
+    if (getRunShouldThrow) {
+      throw new Error("Run not found");
+    }
+
+    return {
+      status: Promise.resolve(existingRunStatus),
+      getReadable: () =>
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      cancel: () => Promise.resolve(),
+    };
+  },
 }));
 
 mock.module("@/app/workflows/chat", () => ({
@@ -114,7 +128,7 @@ mock.module("./_lib/persist-tool-results", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
-  compareAndSetChatActiveStreamId: async () => compareAndSetResult,
+  compareAndSetChatActiveStreamId: compareAndSetChatActiveStreamIdSpy,
   createChatMessageIfNotExists: async () => undefined,
   getChatById: async () => chatRecord,
   getSessionById: async () => sessionRecord,
@@ -150,6 +164,14 @@ mock.module("@/lib/github/user-token", () => ({
 
 mock.module("@/lib/sandbox/config", () => ({
   DEFAULT_SANDBOX_PORTS: [],
+}));
+
+mock.module("@/lib/sandbox/vercel-cli-auth", () => ({
+  getVercelCliSandboxSetup: async () => ({
+    auth: null,
+    projectLink: null,
+  }),
+  syncVercelCliAuthToSandbox: async () => {},
 }));
 
 mock.module("@/lib/sandbox/lifecycle", () => ({
@@ -201,8 +223,11 @@ describe("/api/chat route", () => {
   beforeEach(() => {
     isSandboxActive = true;
     existingRunStatus = "completed";
-    compareAndSetResult = true;
+    getRunShouldThrow = false;
+    compareAndSetDefaultResult = true;
+    compareAndSetResults = [];
     startCalls = [];
+    compareAndSetChatActiveStreamIdSpy.mockClear();
     persistAssistantMessagesWithToolResultsSpy.mockClear();
     currentAuthSession = {
       user: {
@@ -248,6 +273,9 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         maxSteps: 500,
+        agentOptions: expect.objectContaining({
+          customInstructions: assistantFileLinkPrompt,
+        }),
       }),
     ]);
   });
@@ -348,11 +376,12 @@ describe("/api/chat route", () => {
     const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
-    // Should include the existing run ID header
     expect(response.headers.get("x-workflow-run-id")).toBe("wrun_existing-456");
+    expect(startCalls).toHaveLength(0);
+    expect(compareAndSetChatActiveStreamIdSpy).not.toHaveBeenCalled();
   });
 
-  test("starts new workflow when existing run is completed", async () => {
+  test("starts new workflow when existing run is completed and clears the stale stream id first", async () => {
     if (!chatRecord) throw new Error("chatRecord must be set");
     chatRecord.activeStreamId = "wrun_old-789";
     existingRunStatus = "completed";
@@ -362,12 +391,38 @@ describe("/api/chat route", () => {
     const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
-    // Should get the new run ID, not the old one
     expect(response.headers.get("x-workflow-run-id")).toBe("wrun_test-123");
+
+    const compareAndSetCalls = compareAndSetChatActiveStreamIdSpy.mock
+      .calls as unknown[][];
+    expect(compareAndSetCalls).toEqual([
+      ["chat-1", "wrun_old-789", null],
+      ["chat-1", null, "wrun_test-123"],
+    ]);
+  });
+
+  test("starts new workflow when the existing run cannot be loaded and clears the stale stream id first", async () => {
+    if (!chatRecord) throw new Error("chatRecord must be set");
+    chatRecord.activeStreamId = "wrun_missing-789";
+    getRunShouldThrow = true;
+
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(response.headers.get("x-workflow-run-id")).toBe("wrun_test-123");
+
+    const compareAndSetCalls = compareAndSetChatActiveStreamIdSpy.mock
+      .calls as unknown[][];
+    expect(compareAndSetCalls).toEqual([
+      ["chat-1", "wrun_missing-789", null],
+      ["chat-1", null, "wrun_test-123"],
+    ]);
   });
 
   test("returns 409 when CAS race is lost", async () => {
-    compareAndSetResult = false;
+    compareAndSetDefaultResult = false;
     const { POST } = await routeModulePromise;
 
     const response = await POST(createValidRequest());

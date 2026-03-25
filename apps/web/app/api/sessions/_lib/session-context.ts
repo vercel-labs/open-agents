@@ -52,8 +52,7 @@ interface RequireOwnedSessionChatParams {
   forbiddenMessage?: string;
 }
 
-interface RequireOwnedSessionWithSandboxGuardParams
-  extends RequireOwnedSessionParams {
+interface RequireOwnedSessionWithSandboxGuardParams extends RequireOwnedSessionParams {
   sandboxGuard: (sandboxState: SessionRecord["sandboxState"]) => boolean;
   sandboxErrorMessage?: string;
   sandboxErrorStatus?: number;

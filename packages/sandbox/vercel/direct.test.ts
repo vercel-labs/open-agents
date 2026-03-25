@@ -66,34 +66,46 @@ function createFallbackSandbox() {
   return sandbox;
 }
 
+async function expectManagedFallback(errorMessage: string) {
+  runCommandCalls = 0;
+  MockApiClient.prototype.runCommand = async () => {
+    runCommandCalls += 1;
+    throw new Error(errorMessage);
+  };
+
+  const { tryConnectVercelSandboxDirect } = await directModulePromise;
+  const reconnect = mock(async () => createFallbackSandbox());
+
+  const sandbox = await tryConnectVercelSandboxDirect({
+    sandboxId: "sbx-1",
+    reconnect,
+    expiresAt: Date.now() + 60_000,
+  });
+
+  expect(sandbox).not.toBeNull();
+  if (!sandbox) {
+    throw new Error("Expected a direct sandbox instance");
+  }
+
+  const result = await sandbox.exec("pwd", "/vercel/sandbox", 5_000);
+
+  expect(result).toEqual({
+    success: true,
+    exitCode: 0,
+    stdout: "/vercel/sandbox\n",
+    stderr: "",
+    truncated: false,
+  });
+  expect(runCommandCalls).toBe(1);
+  expect(reconnect).toHaveBeenCalledTimes(1);
+}
+
 describe("tryConnectVercelSandboxDirect", () => {
   test("falls back to the managed sandbox when direct exec returns a 410", async () => {
-    runCommandCalls = 0;
+    await expectManagedFallback("Status code 410 is not ok");
+  });
 
-    const { tryConnectVercelSandboxDirect } = await directModulePromise;
-    const reconnect = mock(async () => createFallbackSandbox());
-
-    const sandbox = await tryConnectVercelSandboxDirect({
-      sandboxId: "sbx-1",
-      reconnect,
-      expiresAt: Date.now() + 60_000,
-    });
-
-    expect(sandbox).not.toBeNull();
-    if (!sandbox) {
-      throw new Error("Expected a direct sandbox instance");
-    }
-
-    const result = await sandbox.exec("pwd", "/vercel/sandbox", 5_000);
-
-    expect(result).toEqual({
-      success: true,
-      exitCode: 0,
-      stdout: "/vercel/sandbox\n",
-      stderr: "",
-      truncated: false,
-    });
-    expect(runCommandCalls).toBe(1);
-    expect(reconnect).toHaveBeenCalledTimes(1);
+  test("falls back to the managed sandbox when direct exec returns a 404", async () => {
+    await expectManagedFallback("Status code 404 is not ok");
   });
 });

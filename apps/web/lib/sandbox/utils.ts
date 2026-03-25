@@ -53,6 +53,7 @@ export function isSandboxUnavailableError(message: string): boolean {
   return (
     normalized.includes("expected a stream of command data") ||
     normalized.includes("status code 410") ||
+    normalized.includes("status code 404") ||
     normalized.includes("sandbox is stopped") ||
     normalized.includes("sandbox not found") ||
     normalized.includes("sandbox probe failed")

@@ -1,5 +1,8 @@
 {
   "extends": "@open-harness/tsconfig/bun.json",
   "include": ["./**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
 }
