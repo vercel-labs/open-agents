@@ -87,6 +87,8 @@ See [Architecture & Workspace Structure](docs/agents/architecture.md) for detail
 - Before adding code, decide whether the behavior is a separate concern that should live in its own file.
 - Prefer creating a new colocated file for distinct concerns (components, hooks, utilities, schemas, data-access helpers, etc.).
 - If a file is already large or handling multiple responsibilities, extract the new logic (and related helpers/types) into focused modules and import them.
+- For large page/view/client components, default to adding new feature behavior in colocated hooks and colocated child components instead of growing the main file.
+- If a change introduces a distinct cluster of state, effects, handlers, API calls, or derived UI labels for one feature, treat that as a strong signal to extract it.
 - Keep each file focused on one primary responsibility; avoid mixing unrelated UI, business logic, and data-access code in the same file.
 
 ## Code Style (Summary)

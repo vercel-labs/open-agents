@@ -13,6 +13,7 @@ import {
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getAllVariants } from "@/lib/model-variants";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
+import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
   requireAuthenticatedUser,
@@ -172,6 +173,7 @@ export async function POST(req: Request) {
           ? { subagentModel: subagentModelSelection }
           : {}),
         ...(skills.length > 0 && { skills }),
+        customInstructions: assistantFileLinkPrompt,
       },
       ...(shouldAutoCommitPush &&
         sessionRecord.repoOwner &&

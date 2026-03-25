@@ -15,7 +15,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
 import { formatDateOnly } from "@/lib/usage/date-range";
-import type { UsageInsights } from "@/lib/usage/types";
+import type { UsageDomainLeaderboard, UsageInsights } from "@/lib/usage/types";
 import { UsageInsightsSection } from "./usage/usage-insights-section";
 
 interface DailyUsageRow {
@@ -60,6 +60,7 @@ interface PieSegment {
 interface UsageResponse {
   usage: DailyUsageRow[];
   insights: UsageInsights;
+  domainLeaderboard: UsageDomainLeaderboard | null;
 }
 
 function formatTokens(n: number) {

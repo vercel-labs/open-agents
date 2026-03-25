@@ -18,6 +18,10 @@ import type {
   WebAgentUIMessagePart,
   WebAgentUIToolPart,
 } from "@/app/types";
+import {
+  AssistantFileLink,
+  type AssistantFileLinkProps,
+} from "@/components/assistant-file-link";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
@@ -430,6 +434,12 @@ function SharedMessage({
   // When tool calls are hidden and this assistant message has tool calls,
   // show a compact summary bar instead
   const showSummary = !showToolCalls && m.role === "assistant" && hasToolCalls;
+  const streamdownComponents = useMemo(
+    () => ({
+      a: (props: AssistantFileLinkProps) => <AssistantFileLink {...props} />,
+    }),
+    [],
+  );
 
   return (
     <>
@@ -502,6 +512,7 @@ function SharedMessage({
                   <Streamdown
                     mode="static"
                     isAnimating={false}
+                    components={streamdownComponents}
                     plugins={streamdownPlugins}
                   >
                     {p.text}

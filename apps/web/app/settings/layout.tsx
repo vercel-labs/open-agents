@@ -7,6 +7,7 @@ import {
   Menu,
   Settings as SettingsIcon,
   SlidersHorizontal,
+  Trophy,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AccountsSectionSkeleton } from "./accounts-section";
+import { LeaderboardSectionSkeleton } from "./leaderboard-section";
 import { ModelVariantsSectionSkeleton } from "./model-variants-section";
 import { PreferencesSectionSkeleton } from "./preferences-section";
 import { ProfileSectionSkeleton } from "./profile-section";
@@ -56,6 +58,12 @@ const sidebarItems = [
     label: "Usage",
     href: "/settings/usage",
     icon: BarChart3,
+  },
+  {
+    id: "leaderboard",
+    label: "Leaderboard",
+    href: "/settings/leaderboard",
+    icon: Trophy,
   },
 ];
 
@@ -156,7 +164,10 @@ function SettingsLayout({
         <div
           className={cn(
             "mx-auto space-y-6 px-4 py-6 md:px-6 md:py-8",
-            pathname === "/settings/usage" ? "max-w-4xl" : "max-w-2xl",
+            pathname === "/settings/usage" ||
+              pathname === "/settings/leaderboard"
+              ? "max-w-4xl"
+              : "max-w-2xl",
           )}
         >
           {children}
@@ -179,6 +190,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <AccountsSectionSkeleton />
     ) : activeItem?.id === "usage" ? (
       <UsageSectionSkeleton />
+    ) : activeItem?.id === "leaderboard" ? (
+      <LeaderboardSectionSkeleton />
     ) : (
       <ProfileSectionSkeleton />
     );
