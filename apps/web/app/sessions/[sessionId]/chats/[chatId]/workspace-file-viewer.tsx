@@ -47,7 +47,7 @@ function ViewerBody({
 }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 sm:pr-12">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 lg:pr-12">
         <p className="min-w-0 truncate font-mono text-sm text-foreground">
           {filePath}
         </p>
