@@ -53,48 +53,52 @@ export function DomainUsageLeaderboardSection({
             No matching usage in this period.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead className="text-right">Total tokens</TableHead>
-                <TableHead>Most used model</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaderboard.rows.map((row, index) => (
-                <TableRow key={row.userId}>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="min-w-[220px] whitespace-normal">
-                    <div className="min-w-0">
-                      <div className="font-medium">
-                        {row.name?.trim() || row.username}
-                      </div>
-                      {row.name?.trim() ? (
-                        <div className="text-xs text-muted-foreground">
-                          @{row.username}
-                        </div>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatTokens(row.totalTokens)}
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    <div className="font-medium">
-                      {displayModelId(row.mostUsedModelId)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatTokens(row.mostUsedModelTokens)} tokens
-                    </div>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead className="text-right">Total tokens</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Most used model
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {leaderboard.rows.map((row, index) => (
+                  <TableRow key={row.userId}>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {index + 1}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="min-w-0">
+                        <div className="font-medium">
+                          {row.name?.trim() || row.username}
+                        </div>
+                        {row.name?.trim() ? (
+                          <div className="text-xs text-muted-foreground">
+                            @{row.username}
+                          </div>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {formatTokens(row.totalTokens)}
+                    </TableCell>
+                    <TableCell className="hidden whitespace-normal sm:table-cell">
+                      <div className="font-medium">
+                        {displayModelId(row.mostUsedModelId)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatTokens(row.mostUsedModelTokens)} tokens
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>

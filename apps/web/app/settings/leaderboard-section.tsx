@@ -194,59 +194,63 @@ export function LeaderboardSection() {
             No matching usage in this period.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead className="text-right">Total tokens</TableHead>
-                <TableHead>Most used model</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaderboard.rows.map((row, index) => {
-                const isCurrentUser = row.userId === userId;
-                return (
-                  <TableRow
-                    key={row.userId}
-                    className={isCurrentUser ? "bg-muted/50" : undefined}
-                  >
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {index + 1}
-                    </TableCell>
-                    <TableCell className="min-w-[220px] whitespace-normal">
-                      <div className="min-w-0">
-                        <div className="font-medium">
-                          {row.name?.trim() || row.username}
-                          {isCurrentUser ? (
-                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                              (you)
-                            </span>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead className="text-right">Total tokens</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Most used model
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {leaderboard.rows.map((row, index) => {
+                  const isCurrentUser = row.userId === userId;
+                  return (
+                    <TableRow
+                      key={row.userId}
+                      className={isCurrentUser ? "bg-muted/50" : undefined}
+                    >
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {row.name?.trim() || row.username}
+                            {isCurrentUser ? (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                (you)
+                              </span>
+                            ) : null}
+                          </div>
+                          {row.name?.trim() ? (
+                            <div className="text-xs text-muted-foreground">
+                              @{row.username}
+                            </div>
                           ) : null}
                         </div>
-                        {row.name?.trim() ? (
-                          <div className="text-xs text-muted-foreground">
-                            @{row.username}
-                          </div>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {formatTokens(row.totalTokens)}
-                    </TableCell>
-                    <TableCell className="whitespace-normal">
-                      <div className="font-medium">
-                        {displayModelId(row.mostUsedModelId)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatTokens(row.mostUsedModelTokens)} tokens
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatTokens(row.totalTokens)}
+                      </TableCell>
+                      <TableCell className="hidden whitespace-normal sm:table-cell">
+                        <div className="font-medium">
+                          {displayModelId(row.mostUsedModelId)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatTokens(row.mostUsedModelTokens)} tokens
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
