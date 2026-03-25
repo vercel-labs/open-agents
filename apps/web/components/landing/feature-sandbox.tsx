@@ -17,7 +17,7 @@ const descriptions: Record<State, string> = {
   provisioning: "spinning up isolated environment",
   active: "full filesystem, network, runtime access",
   hibernating: "creating snapshot for instant restore",
-  hibernated: "zero compute \u00b7 snapshot saved",
+  hibernated: "zero compute \u00B7 snapshot saved",
   restoring: "restoring from snapshot",
 };
 
