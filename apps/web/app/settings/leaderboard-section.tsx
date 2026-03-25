@@ -97,7 +97,7 @@ function RangeFilter({
   onChange: (next: LeaderboardRange) => void;
 }) {
   return (
-    <div className="flex gap-1 rounded-lg bg-muted p-1">
+    <div className="flex w-fit gap-1 rounded-lg bg-muted p-1">
       {RANGE_OPTIONS.map((option) => (
         <button
           key={option.value}
