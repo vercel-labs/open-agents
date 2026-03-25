@@ -119,13 +119,11 @@ function ViewerBody({
 
       <div className="relative min-h-0 flex-1 overflow-auto">
         {hasContent && (
-          <div className="sticky top-2 z-10 flex justify-end pr-4 pointer-events-none">
-            <CopyButton
-              text={response.content}
-              title="Copy file contents"
-              className="pointer-events-auto bg-background/80 backdrop-blur-sm border border-border/60 shadow-sm hover:bg-muted"
-            />
-          </div>
+          <CopyButton
+            text={response.content}
+            title="Copy file contents"
+            className="absolute top-2 right-4 z-10 bg-background/80 backdrop-blur-sm border border-border/60 shadow-sm hover:bg-muted"
+          />
         )}
         {isLoading ? (
           <div className="flex h-full min-h-48 items-center justify-center px-4 py-8 text-sm text-muted-foreground">
