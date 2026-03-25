@@ -1,8 +1,8 @@
 "use client";
 
 import { File as DiffsFile } from "@pierre/diffs/react";
-import { Loader2, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
+import { Check, Copy, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import type { WorkspaceFileContentResponse } from "@/app/api/sessions/[sessionId]/files/content/route";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,52 @@ type WorkspaceFileViewerProps = {
   sessionId: string;
 };
 
+function useCopyAction() {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copy = useCallback((text: string) => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
+
+  return { copied, copy };
+}
+
+function CopyButton({
+  text,
+  title,
+  className,
+}: {
+  text: string;
+  title: string;
+  className?: string;
+}) {
+  const { copied, copy } = useCopyAction();
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={() => copy(text)}
+      className={cn("h-7 shrink-0 px-2", className)}
+      title={title}
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
+    </Button>
+  );
+}
+
 function ViewerBody({
   errorMessage,
   filePath,
@@ -45,25 +91,35 @@ function ViewerBody({
   onRefresh: () => void;
   response: WorkspaceFileContentResponse | undefined;
 }) {
+  const hasContent = response != null && response.content.length > 0;
+
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 lg:pr-12">
-        <p className="min-w-0 truncate font-mono text-sm text-foreground">
-          {filePath}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isLoading || isRefreshing}
-          className="h-7 shrink-0 px-2"
-          title="Refresh file contents"
-        >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
-          />
-        </Button>
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2 lg:pr-12">
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="min-w-0 truncate font-mono text-sm text-foreground">
+            {filePath}
+          </p>
+          <CopyButton text={filePath} title="Copy file path" />
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {hasContent && (
+            <CopyButton text={response.content} title="Copy file contents" />
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isLoading || isRefreshing}
+            className="h-7 shrink-0 px-2"
+            title="Refresh file contents"
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+            />
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
