@@ -7,6 +7,7 @@ interface TestSessionRecord {
   cloneUrl: string;
   repoOwner: string;
   repoName: string;
+  prNumber?: number | null;
   autoCommitPushOverride?: boolean | null;
   autoCreatePrOverride?: boolean | null;
   sandboxState: {
@@ -249,6 +250,7 @@ describe("/api/chat route", () => {
       cloneUrl: "https://github.com/acme/repo.git",
       repoOwner: "acme",
       repoName: "repo",
+      prNumber: null,
       autoCommitPushOverride: null,
       autoCreatePrOverride: null,
       sandboxState: {
@@ -297,6 +299,26 @@ describe("/api/chat route", () => {
       expect.objectContaining({
         autoCommitEnabled: true,
         autoCreatePrEnabled: true,
+      }),
+    ]);
+  });
+
+  test("does not enable auto PR when the session already has a PR", async () => {
+    const { POST } = await routeModulePromise;
+    preferencesState.autoCreatePr = true;
+    if (!sessionRecord) {
+      throw new Error("sessionRecord must be set");
+    }
+    sessionRecord.prNumber = 42;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: false,
       }),
     ]);
   });
