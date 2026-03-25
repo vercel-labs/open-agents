@@ -7,6 +7,11 @@ import {
 } from "@/lib/github/client";
 import { getCachedGitHubBranches } from "@/lib/github/cached-api";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import {
+  buildGitHubAuthRemoteUrl,
+  isValidGitHubRepoName,
+  isValidGitHubRepoOwner,
+} from "@/lib/github/repo-identifiers";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 
@@ -151,6 +156,16 @@ export async function performAutoCreatePr(
     };
   }
 
+  if (!isValidGitHubRepoOwner(repoOwner) || !isValidGitHubRepoName(repoName)) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason:
+        "Repository owner or name is not supported for auto PR creation",
+    };
+  }
+
   let repoTokenResult: Awaited<ReturnType<typeof getRepoToken>>;
   try {
     repoTokenResult = await getRepoToken(userId, repoOwner);
@@ -172,11 +187,23 @@ export async function performAutoCreatePr(
     userToken,
   ]);
 
-  await sandbox.exec(
-    `git remote set-url origin "https://x-access-token:${repoTokenResult.token}@github.com/${repoOwner}/${repoName}.git"`,
-    cwd,
-    10000,
-  );
+  const authUrl = buildGitHubAuthRemoteUrl({
+    token: repoTokenResult.token,
+    owner: repoOwner,
+    repo: repoName,
+  });
+
+  if (!authUrl) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason:
+        "Repository owner or name is not supported for auto PR creation",
+    };
+  }
+
+  await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 10000);
 
   const defaultBranch = await resolveDefaultBranch({
     sandbox,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox } from "@open-harness/sandbox";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import {
@@ -44,7 +45,17 @@ async function refreshGitRemoteAuth(
   githubToken: string | null,
 ): Promise<void> {
   if (githubToken && sessionRecord.repoOwner && sessionRecord.repoName) {
-    const authUrl = `https://x-access-token:${githubToken}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+    const authUrl = buildGitHubAuthRemoteUrl({
+      token: githubToken,
+      owner: sessionRecord.repoOwner,
+      repo: sessionRecord.repoName,
+    });
+
+    if (!authUrl) {
+      remoteAuthFingerprintBySessionId.delete(sessionId);
+      return;
+    }
+
     const authFingerprint = getRemoteAuthFingerprint(authUrl);
     const previousAuthFingerprint =
       remoteAuthFingerprintBySessionId.get(sessionId);

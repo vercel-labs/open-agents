@@ -149,7 +149,6 @@ export async function POST(req: Request) {
     false;
   const shouldAutoCreatePr =
     shouldAutoCommitPush &&
-    sessionRecord.prNumber == null &&
     (sessionRecord.autoCreatePrOverride ?? preferences?.autoCreatePr ?? false);
 
   // Start the durable workflow

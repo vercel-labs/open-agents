@@ -14,6 +14,7 @@ import {
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -104,7 +105,17 @@ export async function POST(req: Request) {
         session.user.id,
         sessionRecord.repoOwner,
       );
-      const authUrl = `https://x-access-token:${repoTokenResult.token}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+      const authUrl = buildGitHubAuthRemoteUrl({
+        token: repoTokenResult.token,
+        owner: sessionRecord.repoOwner,
+        repo: sessionRecord.repoName,
+      });
+      if (!authUrl) {
+        return Response.json(
+          { error: "Invalid repository configuration" },
+          { status: 400 },
+        );
+      }
       await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 5000);
     } catch {
       return Response.json(
@@ -448,7 +459,17 @@ Respond with ONLY the commit message, nothing else.`,
         }
 
         if (cachedUserToken) {
-          const userAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${sessionRecord.repoOwner}/${sessionRecord.repoName}.git`;
+          const userAuthUrl = buildGitHubAuthRemoteUrl({
+            token: cachedUserToken,
+            owner: sessionRecord.repoOwner,
+            repo: sessionRecord.repoName,
+          });
+          if (!userAuthUrl) {
+            return Response.json(
+              { error: "Invalid repository configuration" },
+              { status: 400 },
+            );
+          }
           const setOriginUserAuthResult = await sandbox.exec(
             `git remote set-url origin "${userAuthUrl}"`,
             cwd,

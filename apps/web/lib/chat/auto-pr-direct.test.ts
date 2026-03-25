@@ -221,6 +221,25 @@ describe("performAutoCreatePr", () => {
     expect(createPullRequestSpy).not.toHaveBeenCalled();
   });
 
+  test("skips when the repository owner is not a safe GitHub path segment", async () => {
+    const result = await performAutoCreatePr({
+      ...makeParams(),
+      repoOwner: 'acme" && echo nope && "',
+    });
+
+    expect(result).toEqual({
+      created: false,
+      syncedExisting: false,
+      skipped: true,
+      skipReason:
+        "Repository owner or name is not supported for auto PR creation",
+    } satisfies AutoCreatePrResult);
+    const setUrlCall = execSpy.mock.calls.find((call) =>
+      String(call[0]).includes("git remote set-url"),
+    );
+    expect(setUrlCall).toBeUndefined();
+  });
+
   test("skips when the current branch is not available on origin", async () => {
     execResults.set("git ls-remote --heads origin", {
       success: true,

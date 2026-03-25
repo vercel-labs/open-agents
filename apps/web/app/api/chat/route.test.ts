@@ -303,7 +303,7 @@ describe("/api/chat route", () => {
     ]);
   });
 
-  test("does not enable auto PR when the session already has a PR", async () => {
+  test("keeps auto PR enabled when the session already has PR metadata", async () => {
     const { POST } = await routeModulePromise;
     preferencesState.autoCreatePr = true;
     if (!sessionRecord) {
@@ -318,7 +318,7 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         autoCommitEnabled: true,
-        autoCreatePrEnabled: false,
+        autoCreatePrEnabled: true,
       }),
     ]);
   });

@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import { gateway } from "@open-harness/agent";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getRepoToken } from "@/lib/github/get-repo-token";
+import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 
 export interface AutoCommitParams {
   sandbox: Sandbox;
@@ -47,11 +48,15 @@ export async function performAutoCommit(
   }
 
   if (repoToken) {
-    await sandbox.exec(
-      `git remote set-url origin "https://x-access-token:${repoToken}@github.com/${repoOwner}/${repoName}.git"`,
-      cwd,
-      10000,
-    );
+    const authUrl = buildGitHubAuthRemoteUrl({
+      token: repoToken,
+      owner: repoOwner,
+      repo: repoName,
+    });
+
+    if (authUrl) {
+      await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 10000);
+    }
   }
 
   // 3. Stage all changes

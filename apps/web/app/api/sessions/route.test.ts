@@ -259,6 +259,24 @@ describe("/api/sessions POST vercel project linking", () => {
     expect(body.session.vercelProjectId).toBeNull();
   });
 
+  test("rejects invalid repository owners", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: 'vercel" && echo nope && "',
+        repoName: "open-harness",
+        branch: "main",
+        cloneUrl: "https://github.com/vercel/open-harness",
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid repository owner");
+    expect(createCalls).toHaveLength(0);
+  });
+
   test("persists autoCreatePr when autoCommitPush is enabled", async () => {
     const { POST } = await routeModulePromise;
 
