@@ -31,17 +31,9 @@ interface UsageResponse {
 
 const RANGE_OPTIONS: { value: LeaderboardRange; label: string }[] = [
   { value: "today", label: "Today" },
-  { value: "week", label: "This week" },
+  { value: "week", label: "7 days" },
   { value: "all", label: "All time" },
 ];
-
-function getStartOfWeek(now: Date): Date {
-  const day = now.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - diff);
-  return monday;
-}
 
 function buildUsagePath(range: LeaderboardRange): string {
   if (range === "all") {
@@ -50,9 +42,16 @@ function buildUsagePath(range: LeaderboardRange): string {
 
   const now = new Date();
   const to = formatDateOnly(now);
-  const from = range === "today" ? to : formatDateOnly(getStartOfWeek(now));
 
-  const query = new URLSearchParams({ from, to });
+  let fromDate: Date;
+  if (range === "today") {
+    fromDate = now;
+  } else {
+    fromDate = new Date(now);
+    fromDate.setDate(now.getDate() - 6);
+  }
+
+  const query = new URLSearchParams({ from: formatDateOnly(fromDate), to });
   return `/api/usage?${query.toString()}`;
 }
 
