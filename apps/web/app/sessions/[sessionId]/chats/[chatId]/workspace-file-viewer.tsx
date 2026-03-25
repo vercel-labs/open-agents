@@ -102,27 +102,31 @@ function ViewerBody({
           </p>
           <CopyButton text={filePath} title="Copy file path" />
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {hasContent && (
-            <CopyButton text={response.content} title="Copy file contents" />
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isLoading || isRefreshing}
-            className="h-7 shrink-0 px-2"
-            title="Refresh file contents"
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
-            />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isLoading || isRefreshing}
+          className="h-7 shrink-0 px-2"
+          title="Refresh file contents"
+        >
+          <RefreshCw
+            className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+          />
+        </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="relative min-h-0 flex-1 overflow-auto">
+        {hasContent && (
+          <div className="sticky top-2 z-10 flex justify-end pr-4 pointer-events-none">
+            <CopyButton
+              text={response.content}
+              title="Copy file contents"
+              className="pointer-events-auto bg-background/80 backdrop-blur-sm border border-border/60 shadow-sm hover:bg-muted"
+            />
+          </div>
+        )}
         {isLoading ? (
           <div className="flex h-full min-h-48 items-center justify-center px-4 py-8 text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
