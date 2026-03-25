@@ -61,18 +61,9 @@ export function SessionStarterVercelSyncSection({
   const [manualExpanded, setManualExpanded] = useState(false);
   const expanded = manualExpanded || requiresVercelChoice;
 
-  const autoSelectedProject =
-    repoProjects?.selectedProjectId && !requiresVercelChoice
-      ? repoProjects.projects.find(
-          (p) => p.projectId === repoProjects.selectedProjectId,
-        )
-      : null;
-
   const selectedProject =
     typeof vercelProjectChoice === "string"
-      ? repoProjects?.projects.find(
-          (p) => p.projectId === vercelProjectChoice,
-        )
+      ? repoProjects?.projects.find((p) => p.projectId === vercelProjectChoice)
       : null;
 
   // Determine compact-row content
@@ -106,9 +97,7 @@ export function SessionStarterVercelSyncSection({
     }
     if (repoProjects?.projects.length === 0) {
       return {
-        icon: (
-          <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
-        ),
+        icon: <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />,
         label: (
           <span className="text-xs text-muted-foreground">
             No linked Vercel projects &mdash; starting without env sync
@@ -133,9 +122,7 @@ export function SessionStarterVercelSyncSection({
     }
     if (vercelProjectChoice === null) {
       return {
-        icon: (
-          <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
-        ),
+        icon: <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />,
         label: (
           <span className="text-xs text-muted-foreground">
             Env sync disabled for this session

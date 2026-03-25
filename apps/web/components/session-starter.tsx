@@ -302,9 +302,7 @@ export function SessionStarter({
                   {effectiveAutoCreatePr && (
                     <>
                       {" · "}Auto PR{" "}
-                      <span className="font-medium text-foreground/80">
-                        on
-                      </span>
+                      <span className="font-medium text-foreground/80">on</span>
                     </>
                   )}
                 </>
