@@ -2402,7 +2402,7 @@ export function SessionChatContent({
               <Link
                 href="/sessions"
                 className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label="Back to Mission Control"
+                aria-label="Back to sessions"
               >
                 <ArrowLeft className="size-4" />
               </Link>

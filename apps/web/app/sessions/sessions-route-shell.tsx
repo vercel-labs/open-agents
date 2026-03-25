@@ -41,7 +41,7 @@ type SessionsRouteShellProps = {
   lastRepo: { owner: string; repo: string } | null;
 };
 
-function MissionControlDetailPlaceholder({
+function DetailPlaceholder({
   hasSessions,
   isLoadingPrioritySession,
   onOpenNewSession,
@@ -53,14 +53,14 @@ function MissionControlDetailPlaceholder({
   if (isLoadingPrioritySession) {
     return (
       <div className="flex h-full items-center justify-center p-8">
-        <Empty className="max-w-md rounded-2xl border border-dashed border-border/70 bg-background/80">
+        <Empty className="max-w-sm rounded-xl border border-dashed border-border/70">
           <EmptyMedia variant="icon">
             <Loader2 className="h-5 w-5 animate-spin" />
           </EmptyMedia>
           <EmptyHeader>
-            <EmptyTitle>Loading top priority session</EmptyTitle>
+            <EmptyTitle>Opening session</EmptyTitle>
             <EmptyDescription>
-              Mission Control is opening the session that needs you first.
+              Loading the session that needs your attention.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -74,18 +74,18 @@ function MissionControlDetailPlaceholder({
 
   return (
     <div className="flex h-full items-center justify-center p-8">
-      <Empty className="max-w-md rounded-2xl border border-dashed border-border/70 bg-background/80">
+      <Empty className="max-w-sm rounded-xl border border-dashed border-border/70">
         <EmptyMedia variant="icon">
           <Plus className="h-5 w-5" />
         </EmptyMedia>
         <EmptyHeader>
           <EmptyTitle>No sessions yet</EmptyTitle>
           <EmptyDescription>
-            Start a session to begin tracking work in Mission Control.
+            Start a session to begin working with the agent.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button type="button" onClick={onOpenNewSession}>
+          <Button type="button" size="sm" onClick={onOpenNewSession}>
             <Plus className="h-4 w-4" />
             <span>New session</span>
           </Button>
@@ -298,7 +298,7 @@ export function SessionsRouteShell({
                   {children}
                 </div>
               ) : (
-                <MissionControlDetailPlaceholder
+                <DetailPlaceholder
                   hasSessions={sessions.length > 0}
                   isLoadingPrioritySession={isLoadingPrioritySession}
                   onOpenNewSession={openNewSessionDialog}

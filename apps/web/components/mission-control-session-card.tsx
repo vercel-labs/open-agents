@@ -2,6 +2,7 @@
 
 import {
   Archive,
+  Circle,
   EllipsisVertical,
   ExternalLink,
   GitMerge,
@@ -10,7 +11,6 @@ import {
   Pencil,
 } from "lucide-react";
 import type { CSSProperties } from "react";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +21,7 @@ import {
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import {
-  getMissionControlPrimaryActionLabel,
   getMissionControlStatusLabel,
-  getMissionControlSummary,
   type MissionControlLane,
 } from "./mission-control-session";
 
@@ -39,9 +37,9 @@ type MissionControlSessionCardProps = {
   onArchiveSession?: (session: SessionWithUnread) => void;
 };
 
-const cardPerformanceStyle: CSSProperties = {
+const rowPerformanceStyle: CSSProperties = {
   contentVisibility: "auto",
-  containIntrinsicSize: "12rem",
+  containIntrinsicSize: "3.5rem",
 };
 
 function formatRelativeTime(date: Date): string {
@@ -56,37 +54,21 @@ function formatRelativeTime(date: Date): string {
   }
 
   if (diffMins < 60) {
-    return `${diffMins}m ago`;
+    return `${diffMins}m`;
   }
 
   if (diffHours < 24) {
-    return `${diffHours}h ago`;
+    return `${diffHours}h`;
   }
 
   if (diffDays < 7) {
-    return `${diffDays}d ago`;
+    return `${diffDays}d`;
   }
 
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
-}
-
-function getRepoMeta(session: SessionWithUnread): string | null {
-  const parts: string[] = [];
-
-  if (session.repoOwner && session.repoName) {
-    parts.push(`${session.repoOwner}/${session.repoName}`);
-  } else if (session.repoName) {
-    parts.push(session.repoName);
-  }
-
-  if (session.branch) {
-    parts.push(session.branch);
-  }
-
-  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function getGitHubPrUrl(session: SessionWithUnread): string | null {
@@ -105,96 +87,35 @@ function getGitHubRepoUrl(session: SessionWithUnread): string | null {
   return `https://github.com/${session.repoOwner}/${session.repoName}`;
 }
 
-function getHistorySummary(session: SessionWithUnread): string {
-  if (session.prStatus === "merged") {
-    return session.prNumber
-      ? `Pull request #${session.prNumber} was merged before this session moved to history.`
-      : "This session was archived after work was merged.";
-  }
-
-  return "This session lives in history and is ready whenever you need to revisit it.";
-}
-
-function StatusPill({
-  label,
+function StatusIndicator({
   lane,
+  isStreaming,
   variant,
 }: {
-  label: string;
   lane: MissionControlLane;
+  isStreaming: boolean;
   variant: "mission-control" | "history";
 }) {
-  const classes =
-    variant === "history"
-      ? "border-border bg-muted/60 text-muted-foreground"
-      : lane === "needs-you"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-        : lane === "running"
-          ? "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-          : label === "Merged"
-            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-            : "border-border bg-muted/60 text-muted-foreground";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-medium",
-        classes,
-      )}
-    >
-      {variant === "history" ? "Archived" : label}
-    </span>
-  );
-}
-
-function PrBadge({ session }: { session: SessionWithUnread }) {
-  if (!session.prNumber) {
-    return null;
+  if (variant === "history") {
+    return (
+      <Circle className="mt-[3px] h-2 w-2 shrink-0 fill-muted-foreground/30 text-muted-foreground/30" />
+    );
   }
 
-  const isMerged = session.prStatus === "merged";
-  const classes = isMerged
-    ? "border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300"
-    : "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium",
-        classes,
-      )}
-    >
-      {isMerged ? (
-        <GitMerge className="h-3 w-3" />
-      ) : (
-        <GitPullRequest className="h-3 w-3" />
-      )}
-      <span>#{session.prNumber}</span>
-    </span>
-  );
-}
-
-function DiffStats({
-  added,
-  removed,
-}: {
-  added: number | null;
-  removed: number | null;
-}) {
-  if (added === null && removed === null) {
-    return null;
+  if (isStreaming) {
+    return (
+      <Loader2 className="mt-[3px] h-3 w-3 shrink-0 animate-spin text-sky-500" />
+    );
   }
 
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-1 font-mono text-[11px] text-muted-foreground">
-      {added !== null ? (
-        <span className="text-green-600 dark:text-green-400">+{added}</span>
-      ) : null}
-      {removed !== null ? (
-        <span className="text-red-600 dark:text-red-400">-{removed}</span>
-      ) : null}
-    </span>
-  );
+  const dotColor =
+    lane === "needs-you"
+      ? "fill-amber-500 text-amber-500"
+      : lane === "running"
+        ? "fill-sky-500 text-sky-500"
+        : "fill-emerald-500 text-emerald-500";
+
+  return <Circle className={cn("mt-[3px] h-2 w-2 shrink-0", dotColor)} />;
 }
 
 export function MissionControlSessionCard({
@@ -211,166 +132,189 @@ export function MissionControlSessionCard({
   const lastActivityLabel = formatRelativeTime(
     new Date(session.lastActivityAt ?? session.createdAt),
   );
-  const repoMeta = getRepoMeta(session);
   const statusLabel = getMissionControlStatusLabel(session);
-  const summary =
-    variant === "history"
-      ? getHistorySummary(session)
-      : getMissionControlSummary(session);
-  const primaryActionLabel =
-    variant === "history"
-      ? "Open session"
-      : getMissionControlPrimaryActionLabel(session);
   const prUrl = getGitHubPrUrl(session);
   const repoUrl = getGitHubRepoUrl(session);
+  const repoShortName =
+    session.repoOwner && session.repoName
+      ? `${session.repoOwner}/${session.repoName}`
+      : (session.repoName ?? null);
 
   return (
-    <article
+    <div
       className={cn(
-        "rounded-2xl border bg-card/95 p-4 shadow-sm transition-all",
-        isActive
-          ? "border-foreground/15 bg-accent/35 shadow-md"
-          : "border-border/70 hover:border-foreground/10 hover:bg-accent/15",
-        variant === "mission-control" && lane === "needs-you"
-          ? "border-amber-500/20"
-          : null,
-        variant === "mission-control" && lane === "running"
-          ? "border-sky-500/20"
-          : null,
-        variant === "mission-control" && statusLabel === "Merged"
-          ? "border-emerald-500/20"
-          : null,
-        isPending ? "opacity-70" : "opacity-100",
+        "group relative flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors",
+        isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+        isPending && "opacity-60",
       )}
-      style={cardPerformanceStyle}
+      style={rowPerformanceStyle}
       data-session-id={session.id}
     >
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => onSessionClick(session)}
-          onMouseEnter={() => onSessionPrefetch(session)}
-          onFocus={() => onSessionPrefetch(session)}
-          className="min-w-0 flex-1 text-left"
-          aria-current={isActive ? "page" : undefined}
-          aria-busy={isPending}
-        >
-          <div className="flex items-center gap-2">
-            <StatusPill label={statusLabel} lane={lane} variant={variant} />
-            {session.prNumber ? <PrBadge session={session} /> : null}
-            <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-              {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-              <span className="tabular-nums">{lastActivityLabel}</span>
-            </span>
-          </div>
+      <StatusIndicator
+        lane={lane}
+        isStreaming={session.hasStreaming}
+        variant={variant}
+      />
 
-          <div className="mt-3 space-y-2">
-            <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-              {session.title}
-            </p>
-            <p className="text-sm leading-6 text-muted-foreground">{summary}</p>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
-              <span className="truncate font-mono">
-                {repoMeta ?? "No repository connected"}
-              </span>
-            </span>
-            <DiffStats
-              added={session.linesAdded}
-              removed={session.linesRemoved}
-            />
-          </div>
-        </button>
-
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={
-              variant === "history"
-                ? "outline"
-                : lane === "needs-you"
-                  ? "default"
-                  : "outline"
-            }
-            className="min-w-[8rem] justify-center"
-            onClick={() => onSessionClick(session)}
-          >
-            {primaryActionLabel}
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label={`Open menu for ${session.title}`}
-              >
-                <EllipsisVertical className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => onSessionClick(session)}
-                className="gap-2"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>Open session</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onOpenRenameDialog(session)}
-                className="gap-2"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                <span>Rename</span>
-              </DropdownMenuItem>
-              {onArchiveSession ? (
-                <DropdownMenuItem
-                  onClick={() => onArchiveSession(session)}
-                  className="gap-2"
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span>Move to history</span>
-                </DropdownMenuItem>
-              ) : null}
-              {prUrl || repoUrl ? <DropdownMenuSeparator /> : null}
-              {prUrl ? (
-                <DropdownMenuItem
-                  onClick={() =>
-                    window.open(prUrl, "_blank", "noopener,noreferrer")
-                  }
-                  className="gap-2"
-                >
-                  {session.prStatus === "merged" ? (
-                    <GitMerge className="h-3.5 w-3.5" />
-                  ) : (
-                    <GitPullRequest className="h-3.5 w-3.5" />
-                  )}
-                  <span>
-                    {session.prStatus === "merged"
-                      ? "View merged PR"
-                      : "View PR"}
-                    {session.prNumber ? ` #${session.prNumber}` : ""}
-                  </span>
-                </DropdownMenuItem>
-              ) : null}
-              {repoUrl ? (
-                <DropdownMenuItem
-                  onClick={() =>
-                    window.open(repoUrl, "_blank", "noopener,noreferrer")
-                  }
-                  className="gap-2"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  <span>View on GitHub</span>
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <button
+        type="button"
+        onClick={() => onSessionClick(session)}
+        onMouseEnter={() => onSessionPrefetch(session)}
+        onFocus={() => onSessionPrefetch(session)}
+        className="min-w-0 flex-1 text-left"
+        aria-current={isActive ? "page" : undefined}
+        aria-busy={isPending}
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[13px] font-medium leading-tight text-foreground">
+            {session.title}
+          </p>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            {lastActivityLabel}
+          </span>
         </div>
-      </div>
-    </article>
+
+        <div className="mt-1 flex items-center gap-1.5">
+          {variant !== "history" ? (
+            <span
+              className={cn(
+                "text-[11px] font-medium",
+                lane === "needs-you"
+                  ? "text-amber-600 dark:text-amber-400"
+                  : lane === "running"
+                    ? "text-sky-600 dark:text-sky-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {statusLabel}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Archived</span>
+          )}
+
+          {repoShortName ? (
+            <>
+              <span className="text-[11px] text-muted-foreground/50">·</span>
+              <span className="truncate font-mono text-[11px] text-muted-foreground">
+                {repoShortName}
+              </span>
+            </>
+          ) : null}
+
+          {session.prNumber ? (
+            <>
+              <span className="text-[11px] text-muted-foreground/50">·</span>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-0.5 text-[11px] font-medium",
+                  session.prStatus === "merged"
+                    ? "text-purple-600 dark:text-purple-400"
+                    : "text-green-600 dark:text-green-400",
+                )}
+              >
+                {session.prStatus === "merged" ? (
+                  <GitMerge className="h-2.5 w-2.5" />
+                ) : (
+                  <GitPullRequest className="h-2.5 w-2.5" />
+                )}
+                #{session.prNumber}
+              </span>
+            </>
+          ) : null}
+
+          {session.linesAdded !== null || session.linesRemoved !== null ? (
+            <>
+              <span className="text-[11px] text-muted-foreground/50">·</span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {session.linesAdded !== null ? (
+                  <span className="text-green-600 dark:text-green-400">
+                    +{session.linesAdded}
+                  </span>
+                ) : null}
+                {session.linesAdded !== null && session.linesRemoved !== null
+                  ? " "
+                  : null}
+                {session.linesRemoved !== null ? (
+                  <span className="text-red-600 dark:text-red-400">
+                    -{session.linesRemoved}
+                  </span>
+                ) : null}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "mt-0.5 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground",
+              "opacity-0 focus-visible:opacity-100 group-hover:opacity-100",
+              isActive && "opacity-100",
+            )}
+            aria-label={`Actions for ${session.title}`}
+          >
+            <EllipsisVertical className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem
+            onClick={() => onSessionClick(session)}
+            className="gap-2"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>Open session</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onOpenRenameDialog(session)}
+            className="gap-2"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            <span>Rename</span>
+          </DropdownMenuItem>
+          {onArchiveSession ? (
+            <DropdownMenuItem
+              onClick={() => onArchiveSession(session)}
+              className="gap-2"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span>Archive</span>
+            </DropdownMenuItem>
+          ) : null}
+          {prUrl || repoUrl ? <DropdownMenuSeparator /> : null}
+          {prUrl ? (
+            <DropdownMenuItem
+              onClick={() =>
+                window.open(prUrl, "_blank", "noopener,noreferrer")
+              }
+              className="gap-2"
+            >
+              {session.prStatus === "merged" ? (
+                <GitMerge className="h-3.5 w-3.5" />
+              ) : (
+                <GitPullRequest className="h-3.5 w-3.5" />
+              )}
+              <span>
+                {session.prStatus === "merged" ? "View merged PR" : "View PR"}
+                {session.prNumber ? ` #${session.prNumber}` : ""}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
+          {repoUrl ? (
+            <DropdownMenuItem
+              onClick={() =>
+                window.open(repoUrl, "_blank", "noopener,noreferrer")
+              }
+              className="gap-2"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>View on GitHub</span>
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
