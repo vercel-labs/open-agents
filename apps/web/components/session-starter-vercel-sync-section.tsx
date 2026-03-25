@@ -4,7 +4,8 @@ import {
   AlertCircleIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
-  SearchIcon,
+  ChevronUpIcon,
+  Loader2Icon,
   XCircleIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -56,35 +57,106 @@ export function SessionStarterVercelSyncSection({
   vercelProjectChoice,
   onVercelProjectChoiceChange,
 }: SessionStarterVercelSyncSectionProps) {
-  const [expanded, setExpanded] = useState(false);
+  // Auto-expand when user needs to make a choice
+  const [manualExpanded, setManualExpanded] = useState(false);
+  const expanded = manualExpanded || requiresVercelChoice;
 
-  // Determine if we're in a "resolved" state where the project was auto-selected
   const autoSelectedProject =
     repoProjects?.selectedProjectId && !requiresVercelChoice
       ? repoProjects.projects.find(
           (p) => p.projectId === repoProjects.selectedProjectId,
         )
       : null;
-  // Compact single-line view when project was auto-resolved
-  if (
-    !isVercelLookupPending &&
-    !repoProjectsError &&
-    autoSelectedProject &&
-    !expanded
-  ) {
+
+  const selectedProject =
+    typeof vercelProjectChoice === "string"
+      ? repoProjects?.projects.find(
+          (p) => p.projectId === vercelProjectChoice,
+        )
+      : null;
+
+  // Determine compact-row content
+  const getCompactContent = (): {
+    icon: React.ReactNode;
+    label: React.ReactNode;
+  } | null => {
+    if (isVercelLookupPending) {
+      return {
+        icon: (
+          <Loader2Icon className="h-3.5 w-3.5 animate-spin text-muted-foreground/70" />
+        ),
+        label: (
+          <span className="text-xs text-muted-foreground">
+            Scanning for linked Vercel projects&hellip;
+          </span>
+        ),
+      };
+    }
+    if (repoProjectsError) {
+      return {
+        icon: (
+          <AlertCircleIcon className="h-3.5 w-3.5 text-muted-foreground/70" />
+        ),
+        label: (
+          <span className="text-xs text-muted-foreground">
+            Could not load Vercel projects
+          </span>
+        ),
+      };
+    }
+    if (repoProjects?.projects.length === 0) {
+      return {
+        icon: (
+          <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+        ),
+        label: (
+          <span className="text-xs text-muted-foreground">
+            No linked Vercel projects &mdash; starting without env sync
+          </span>
+        ),
+      };
+    }
+    if (selectedProject) {
+      return {
+        icon: (
+          <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400/80" />
+        ),
+        label: (
+          <span className="text-xs text-muted-foreground">
+            Syncing env from{" "}
+            <span className="font-medium text-foreground/80">
+              {formatVercelProjectLabel(selectedProject)}
+            </span>
+          </span>
+        ),
+      };
+    }
+    if (vercelProjectChoice === null) {
+      return {
+        icon: (
+          <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground/50" />
+        ),
+        label: (
+          <span className="text-xs text-muted-foreground">
+            Env sync disabled for this session
+          </span>
+        ),
+      };
+    }
+    return null;
+  };
+
+  const compact = getCompactContent();
+
+  if (!expanded && compact) {
     return (
       <button
         type="button"
-        onClick={() => setExpanded(true)}
+        onClick={() => setManualExpanded(true)}
         className="flex w-full items-center gap-2.5 rounded-lg border border-border/70 bg-muted/20 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
       >
-        <CheckCircle2Icon className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400/80" />
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          Syncing env from{" "}
-          <span className="font-medium text-foreground/80">
-            {formatVercelProjectLabel(autoSelectedProject)}
-          </span>
-        </span>
+        {compact.icon}
+        <span className="min-w-0 flex-1 truncate">{compact.label}</span>
         <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
       </button>
     );
@@ -92,11 +164,15 @@ export function SessionStarterVercelSyncSection({
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/70 dark:border-white/10">
-      <div className="flex items-start gap-3 bg-muted/30 px-3.5 py-3 dark:bg-white/[0.025]">
+      <button
+        type="button"
+        onClick={() => setManualExpanded(false)}
+        className="flex w-full items-start gap-3 bg-muted/30 px-3.5 py-3 text-left transition-colors hover:bg-muted/40 dark:bg-white/[0.025] dark:hover:bg-white/[0.04]"
+      >
         <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background dark:border-white/10 dark:bg-white/[0.06]">
           <VercelIcon className="h-3 w-3" />
         </div>
-        <div className="min-w-0 space-y-0.5">
+        <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-sm font-medium leading-snug">Environment sync</p>
           <p className="text-xs leading-relaxed text-muted-foreground">
             Pull Development env vars into{" "}
@@ -106,11 +182,14 @@ export function SessionStarterVercelSyncSection({
             when the sandbox is created.
           </p>
         </div>
-      </div>
+        {!requiresVercelChoice && (
+          <ChevronUpIcon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/50" />
+        )}
+      </button>
       <div className="border-t border-border/70 px-3.5 py-3 dark:border-white/10">
         {isVercelLookupPending ? (
           <div className="flex items-center gap-2.5 py-0.5">
-            <SearchIcon className="h-3.5 w-3.5 animate-pulse text-muted-foreground/70" />
+            <Loader2Icon className="h-3.5 w-3.5 animate-spin text-muted-foreground/70" />
             <span className="text-xs text-muted-foreground">
               Scanning for linked Vercel projects&hellip;
             </span>
