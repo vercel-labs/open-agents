@@ -11,7 +11,7 @@ export function Stage({
 }) {
   return (
     <div
-      className="relative overflow-hidden rounded-none border border-(--l-border) p-4 sm:p-6 md:p-10"
+      className="relative overflow-hidden rounded-none border border-(--l-border) p-3 sm:p-6 md:p-10"
       style={{
         backgroundColor: `var(--l-stage-${tone}-bg)`,
         backgroundImage: `var(--l-stage-${tone}-img)`,

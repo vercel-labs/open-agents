@@ -23,15 +23,15 @@ function Spotlight({
   readonly window: ReactNode;
 }) {
   return (
-    <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
-      <div className={flip ? "order-2 md:order-2" : "order-2 md:order-1"}>
+    <div className="grid items-center gap-8 md:grid-cols-2 md:gap-16">
+      <div className={flip ? "order-1 md:order-2" : "order-1 md:order-1"}>
         <h2 className="text-2xl font-semibold tracking-tighter sm:text-3xl md:text-4xl">
           {title}
         </h2>
-        <p className="mt-5 text-lg leading-relaxed text-(--l-fg-3)">
+        <p className="mt-4 text-base leading-relaxed text-(--l-fg-3) sm:mt-5 sm:text-lg">
           {description}
         </p>
-        <ul className="mt-8 space-y-3">
+        <ul className="mt-6 space-y-3 sm:mt-8">
           {bullets.map((b) => (
             <li key={b} className="flex items-center gap-3 text-(--l-fg-2)">
               <span className="h-1.5 w-1.5 rounded-full bg-(--l-fg-3)" />
@@ -41,7 +41,7 @@ function Spotlight({
         </ul>
       </div>
 
-      <div className={flip ? "order-1 md:order-1" : "order-1 md:order-2"}>
+      <div className={flip ? "order-2 md:order-1" : "order-2 md:order-2"}>
         <Stage tone={tone}>
           <div className="mx-auto w-full max-w-[1160px]">
             <Window>{windowContent}</Window>
@@ -55,8 +55,8 @@ function Spotlight({
 export function LandingFeatures() {
   return (
     <section>
-      <div className="mx-auto max-w-[1320px] px-6 pb-20 pt-20 md:pb-28 md:pt-28">
-        <div className="space-y-16 md:space-y-28">
+      <div className="mx-auto max-w-[1320px] px-4 pb-14 pt-14 sm:px-6 md:pb-28 md:pt-28">
+        <div className="space-y-12 sm:space-y-16 md:space-y-28">
           <Spotlight
             tone="slate"
             title="Agents that ship real code."
