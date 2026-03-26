@@ -4,7 +4,7 @@ export function LandingFooter() {
   return (
     <footer>
       <div className="mx-auto max-w-[1320px] border-t border-(--l-border) px-6 py-14 md:py-18">
-        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
+        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-3">
           <div>
             <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
               Open Harness
@@ -53,17 +53,6 @@ export function LandingFooter() {
               >
                 Workflow DevKit
               </a>
-            </div>
-          </div>
-
-          <div>
-            <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
-              Agent
-            </div>
-            <div className="mt-4 flex flex-col gap-2 font-mono text-sm text-(--l-fg-3)">
-              <span>read / write / edit</span>
-              <span>grep / glob / bash</span>
-              <span>task / todo / skill</span>
             </div>
           </div>
 

@@ -62,7 +62,7 @@ export function LandingFeatures() {
             title="Agents that ship real code."
             description="Each agent gets a full sandbox environment with filesystem, network, and runtime access. Describe what to build and let the agent work autonomously until it's done."
             bullets={[
-              "22 tools: read, write, edit, grep, glob, bash, task",
+              "File ops, search, shell, and task delegation built in",
               "Explorer and executor subagents for parallel work",
               "Multi-model support with AI Gateway",
             ]}
