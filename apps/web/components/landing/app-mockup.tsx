@@ -94,10 +94,12 @@ function useTypewriter(text: string, active: boolean, speed = 14) {
 
 function SummaryBar({ session: s }: { readonly session: FakeSession }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-(--l-panel-surface) px-3 py-2 text-[10px]">
-      <span className="text-(--l-panel-fg-3)">{s.toolCount} tool calls</span>
-      <span className="h-3 w-px bg-(--l-panel-border)" />
-      <span className="text-(--l-panel-fg-3)">
+    <div className="flex items-center gap-1.5 overflow-hidden rounded-xl bg-(--l-panel-surface) px-2 py-1.5 text-[9px] sm:gap-2 sm:px-3 sm:py-2 sm:text-[10px]">
+      <span className="shrink-0 text-(--l-panel-fg-3)">
+        {s.toolCount} tools
+      </span>
+      <span className="h-3 w-px shrink-0 bg-(--l-panel-border)" />
+      <span className="shrink-0 text-(--l-panel-fg-3)">
         {s.todoDone}/{s.todoTotal}
       </span>
       <div className="flex gap-0.5">
@@ -188,10 +190,14 @@ export function AppMockup() {
             </svg>
           </div>
           <span className="font-medium text-(--l-panel-fg)">{active.repo}</span>
-          <span className="text-(--l-panel-fg-4)">/</span>
-          <span className="text-(--l-panel-fg-2)">{active.branch}</span>
-          <span className="text-(--l-panel-fg-4)">/</span>
-          <span className="text-(--l-panel-fg-2)">{active.title}</span>
+          <span className="hidden sm:inline text-(--l-panel-fg-4)">/</span>
+          <span className="hidden sm:inline truncate text-(--l-panel-fg-2)">
+            {active.branch}
+          </span>
+          <span className="hidden sm:inline text-(--l-panel-fg-4)">/</span>
+          <span className="hidden sm:inline text-(--l-panel-fg-2)">
+            {active.title}
+          </span>
           <span className="size-2 rounded-full bg-(--l-panel-dot)" />
         </div>
         <div className="flex items-center gap-2">
@@ -251,10 +257,10 @@ export function AppMockup() {
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="min-h-[360px] flex-1 overflow-hidden sm:min-h-[420px]">
-            <div className="mx-auto max-w-2xl space-y-5 px-4 py-6">
+          <div className="min-h-[280px] flex-1 overflow-hidden sm:min-h-[420px]">
+            <div className="mx-auto max-w-2xl space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 sm:py-6">
               <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-3xl bg-(--l-panel-surface) px-4 py-2.5">
+                <div className="max-w-[85%] rounded-3xl bg-(--l-panel-surface) px-3 py-2 sm:max-w-[80%] sm:px-4 sm:py-2.5">
                   <p className="text-[12px] leading-relaxed text-(--l-panel-fg)">
                     {active.prompt}
                   </p>
@@ -274,11 +280,11 @@ export function AppMockup() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {active.files.map((name) => (
                     <span
                       key={name}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-(--l-panel-surface) px-2 py-1 font-mono text-[10px] text-(--l-panel-fg-3)"
+                      className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-(--l-panel-surface) px-1.5 py-0.5 font-mono text-[9px] text-(--l-panel-fg-3) sm:gap-1.5 sm:px-2 sm:py-1 sm:text-[10px]"
                     >
                       <svg
                         viewBox="0 0 16 16"
@@ -296,15 +302,15 @@ export function AppMockup() {
             </div>
           </div>
 
-          <div className="px-4 pb-3 pt-1">
+          <div className="px-3 pb-2 pt-1 sm:px-4 sm:pb-3">
             <div className="mx-auto max-w-2xl">
               <div className="overflow-hidden rounded-2xl bg-(--l-panel-surface)">
-                <div className="px-4 py-2.5">
-                  <span className="text-[12px] text-(--l-panel-fg-4)">
+                <div className="px-3 py-2 sm:px-4 sm:py-2.5">
+                  <span className="text-[11px] text-(--l-panel-fg-4) sm:text-[12px]">
                     Request changes or ask a question...
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-3 pb-2">
+                <div className="flex items-center justify-between px-2.5 pb-1.5 sm:px-3 sm:pb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-(--l-panel-fg-4)">
                       Claude Opus 4.6
@@ -313,7 +319,7 @@ export function AppMockup() {
                       1%
                     </span>
                   </div>
-                  <div className="flex size-7 items-center justify-center rounded-full bg-(--l-btn-bg)">
+                  <div className="flex size-6 items-center justify-center rounded-full bg-(--l-btn-bg) sm:size-7">
                     <svg
                       viewBox="0 0 16 16"
                       fill="none"

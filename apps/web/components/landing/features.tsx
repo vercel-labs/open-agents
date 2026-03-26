@@ -25,7 +25,7 @@ function Spotlight({
   return (
     <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
       <div className={flip ? "order-2 md:order-2" : "order-2 md:order-1"}>
-        <h2 className="text-3xl font-semibold tracking-tighter sm:text-4xl">
+        <h2 className="text-2xl font-semibold tracking-tighter sm:text-3xl md:text-4xl">
           {title}
         </h2>
         <p className="mt-5 text-lg leading-relaxed text-(--l-fg-3)">

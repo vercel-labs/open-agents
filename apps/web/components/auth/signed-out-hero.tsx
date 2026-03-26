@@ -18,17 +18,17 @@ export function SignedOutHero() {
       <div className="relative z-10">
         <LandingNav />
 
-        <section className="relative overflow-hidden pb-0 pt-32 md:pb-0 md:pt-44">
+        <section className="relative overflow-hidden pb-0 pt-24 md:pb-0 md:pt-44">
           <div className="mx-auto max-w-[1320px] px-6">
             <div className="max-w-[740px]">
               <h1
-                className="landing-fade-up text-5xl font-semibold leading-[1.03] tracking-tighter sm:text-6xl md:text-7xl"
+                className="landing-fade-up text-4xl font-semibold leading-[1.03] tracking-tighter sm:text-5xl md:text-7xl"
                 style={{ animationDelay: "30ms" }}
               >
                 Open cloud agents.
               </h1>
               <p
-                className="landing-fade-up mt-6 text-lg leading-relaxed text-(--l-fg-3)"
+                className="landing-fade-up mt-4 text-base leading-relaxed text-(--l-fg-2) sm:mt-6 sm:text-lg sm:text-(--l-fg-3)"
                 style={{ animationDelay: "90ms" }}
               >
                 Spawn coding agents that run infinitely in the cloud. Powered by
@@ -37,7 +37,7 @@ export function SignedOutHero() {
             </div>
 
             <div
-              className="landing-fade-up mt-8 flex items-center gap-4"
+              className="landing-fade-up mt-6 flex items-center gap-4 sm:mt-8"
               style={{ animationDelay: "150ms" }}
             >
               <SignInButton className="h-10 rounded-md border-0 bg-(--l-btn-bg) px-5 text-[13px] font-medium text-(--l-btn-fg) transition-colors hover:bg-(--l-btn-hover)" />
@@ -53,7 +53,7 @@ export function SignedOutHero() {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-[1320px] px-6 md:mt-20 md:px-0">
+          <div className="mx-auto mt-12 max-w-[1320px] px-4 sm:px-6 md:mt-20 md:px-0">
             <div
               className="landing-fade-up"
               style={{ animationDelay: "240ms" }}
