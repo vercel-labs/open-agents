@@ -3,6 +3,7 @@
 import type { TaskToolUIPart } from "@open-harness/agent";
 import { isReasoningUIPart, isToolUIPart } from "ai";
 import {
+  ArrowRight,
   Bot,
   ExternalLink,
   Eye,
@@ -11,6 +12,7 @@ import {
   GitPullRequest,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 import type {
@@ -26,6 +28,7 @@ import { TaskGroupView } from "@/components/task-group-view";
 import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import type { Chat } from "@/lib/db/schema";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
@@ -120,6 +123,7 @@ export function SharedChatContent({
   modelId,
   modelName,
   sharedBy,
+  ownerSessionHref,
   isStreaming,
   lastUserMessageSentAt,
   shareId,
@@ -129,6 +133,7 @@ export function SharedChatContent({
   modelId: string | null | undefined;
   modelName: string | null;
   sharedBy: SharedBy;
+  ownerSessionHref: string | null;
   isStreaming: boolean;
   lastUserMessageSentAt: string | null;
   shareId: string;
@@ -147,6 +152,26 @@ export function SharedChatContent({
       {/* Hero Header */}
       <header className="border-b border-border bg-background">
         <div className="mx-auto max-w-4xl px-4 py-6">
+          {ownerSessionHref && (
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-secondary/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  You own this shared chat
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Open the original session to keep working from your private
+                  view.
+                </p>
+              </div>
+              <Button size="sm" asChild className="shrink-0">
+                <Link href={ownerSessionHref}>
+                  Open session
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          )}
+
           {/* Top row: shared by user */}
           {sharedBy && (
             <div className="mb-4 flex items-center gap-2.5">

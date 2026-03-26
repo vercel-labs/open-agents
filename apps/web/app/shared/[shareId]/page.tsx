@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
+import { getServerSession } from "@/lib/session/get-server-session";
 import { SharedChatContent } from "./shared-chat-content";
 import type { MessageWithTiming } from "./shared-chat-content";
 
@@ -55,7 +56,13 @@ export async function generateMetadata({
 export default async function SharedPage({ params }: SharedPageProps) {
   const { shareId } = await params;
 
-  const share = await getShareByIdCached(shareId);
+  const viewerSessionPromise = getServerSession();
+  const sharePromise = getShareByIdCached(shareId);
+
+  const [viewerSession, share] = await Promise.all([
+    viewerSessionPromise,
+    sharePromise,
+  ]);
   if (!share) {
     notFound();
   }
@@ -114,6 +121,10 @@ export default async function SharedPage({ params }: SharedPageProps) {
     session.userId,
     sharedChat.modelId,
   );
+  const ownerSessionHref =
+    viewerSession?.user?.id === session.userId
+      ? `/sessions/${sharedChat.sessionId}/chats/${sharedChat.id}`
+      : null;
 
   return (
     <SharedChatContent
@@ -138,6 +149,7 @@ export default async function SharedPage({ params }: SharedPageProps) {
             }
           : null
       }
+      ownerSessionHref={ownerSessionHref}
       isStreaming={isStreaming}
       lastUserMessageSentAt={lastUserMessageSentAt}
       shareId={shareId}

@@ -47,6 +47,7 @@ let messageRows: Array<{ parts: unknown; role: string; createdAt: Date }> = [
     createdAt: new Date("2025-01-01T00:00:00Z"),
   },
 ];
+let viewerSession: { user: { id: string } } | null = null;
 let userModelVariants: Array<{
   id: string;
   name: string;
@@ -95,6 +96,10 @@ mock.module("@/lib/db/user-preferences", () => ({
   }),
 }));
 
+mock.module("@/lib/session/get-server-session", () => ({
+  getServerSession: async () => viewerSession,
+}));
+
 mock.module("./shared-chat-content", () => ({
   SharedChatContent: (_props: unknown) => null,
 }));
@@ -129,6 +134,7 @@ describe("/shared/[shareId] page", () => {
         createdAt: new Date("2025-01-01T00:00:00Z"),
       },
     ];
+    viewerSession = null;
     userModelVariants = [];
   });
 
@@ -156,6 +162,23 @@ describe("/shared/[shareId] page", () => {
     expect(element.props.chats).toHaveLength(1);
     expect(element.props.chats[0]?.chat.id).toBe("chat-1");
     expect(element.props.chats[0]?.messagesWithTiming).toHaveLength(1);
+  });
+
+  test("passes ownerSessionHref when viewer owns the session", async () => {
+    viewerSession = { user: { id: "user-1" } };
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: {
+        ownerSessionHref: string | null;
+      };
+    };
+
+    expect(element.props.ownerSessionHref).toBe(
+      "/sessions/session-1/chats/chat-1",
+    );
   });
 
   test("passes custom variant name to shared chat content", async () => {
