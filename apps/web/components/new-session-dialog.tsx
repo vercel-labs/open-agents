@@ -58,11 +58,11 @@ export function NewSessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(calc(100vw-2rem),86rem)] max-w-none gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none [&>button]:hidden">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[86rem] sm:max-w-[86rem] gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none [&>button]:hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
-        <div className="max-w-none rounded-[28px] border border-border/60 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        <div className="min-w-0 rounded-2xl sm:rounded-[28px] border border-border/60 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <SessionStarter
             onSubmit={handleCreateSession}
             isLoading={isCreating}
