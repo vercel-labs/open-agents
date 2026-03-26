@@ -670,6 +670,7 @@ Respond with ONLY the commit message, nothing else.`,
     baseBranch,
     branchName: resolvedBranch,
     baseRef,
+    appBaseUrl: new URL(req.url).origin,
   });
 
   if (!prContentResult.success) {

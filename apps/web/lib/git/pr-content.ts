@@ -1,8 +1,13 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import { gateway } from "@open-harness/agent";
 import { generateText, NoObjectGeneratedError, Output } from "ai";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getConversationContext } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+import { getGitHubAccount } from "@/lib/db/accounts";
+import { db } from "@/lib/db/client";
+import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
+import { users } from "@/lib/db/schema";
 
 const prContentSchema = z.object({
   title: z
@@ -19,6 +24,123 @@ const prContentSchema = z.object({
 
 const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
 
+function normalizePullRequestAppBaseUrl(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const candidate =
+    trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return null;
+  }
+}
+
+function escapeMarkdownText(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]");
+}
+
+export function resolvePullRequestAppBaseUrl(
+  appBaseUrl?: string,
+): string | null {
+  const candidates = [
+    appBaseUrl,
+    process.env.VERCEL_URL,
+    process.env.VERCEL_ENV === "production"
+      ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+      : null,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizePullRequestAppBaseUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+export async function resolvePullRequestContextSection(params: {
+  sessionId: string;
+  appBaseUrl?: string;
+}): Promise<string> {
+  const { sessionId, appBaseUrl } = params;
+  const [sessionRecord, chats] = await Promise.all([
+    getSessionById(sessionId),
+    getChatsBySessionId(sessionId),
+  ]);
+  const lines: string[] = [];
+  const latestChatId = chats[0]?.id;
+  const resolvedAppBaseUrl = resolvePullRequestAppBaseUrl(appBaseUrl);
+
+  if (latestChatId && resolvedAppBaseUrl) {
+    lines.push(
+      `- Chat: [Open chat](${resolvedAppBaseUrl}/sessions/${encodeURIComponent(sessionId)}/chats/${encodeURIComponent(latestChatId)})`,
+    );
+  }
+
+  if (sessionRecord) {
+    const [userRecord, githubAccount] = await Promise.all([
+      db.query.users.findFirst({
+        where: eq(users.id, sessionRecord.userId),
+        columns: {
+          name: true,
+          username: true,
+        },
+      }),
+      getGitHubAccount(sessionRecord.userId),
+    ]);
+    const githubUsername = githubAccount?.username?.trim() || null;
+    const displayName =
+      userRecord?.name?.trim() ||
+      githubUsername ||
+      userRecord?.username?.trim() ||
+      null;
+
+    if (displayName) {
+      const escapedDisplayName = escapeMarkdownText(displayName);
+      const originator = githubUsername
+        ? `[${escapedDisplayName}](https://github.com/${githubUsername})`
+        : escapedDisplayName;
+      lines.push(`- Built with guidance from ${originator}`);
+    }
+  }
+
+  if (lines.length === 0) {
+    return "";
+  }
+
+  return `## Context\n\n${lines.join("\n")}`;
+}
+
+export function appendPullRequestContextSection(
+  body: string,
+  contextSection: string,
+): string {
+  const trimmedBody = body.trimEnd();
+  if (!contextSection) {
+    return trimmedBody;
+  }
+
+  if (!trimmedBody) {
+    return contextSection;
+  }
+
+  return `${trimmedBody}\n\n${contextSection}`;
+}
+
 export interface GeneratePullRequestContentParams {
   sandbox: Sandbox;
   sessionId: string;
@@ -26,6 +148,7 @@ export interface GeneratePullRequestContentParams {
   baseBranch: string;
   branchName: string;
   baseRef?: string;
+  appBaseUrl?: string;
 }
 
 export type GeneratePullRequestContentResult =
@@ -168,7 +291,13 @@ export async function generatePullRequestContentFromSandbox(
     };
   }
 
-  const conversationContext = await getConversationContext(sessionId);
+  const [conversationContext, pullRequestContextSection] = await Promise.all([
+    getConversationContext(sessionId),
+    resolvePullRequestContextSection({
+      sessionId,
+      appBaseUrl: params.appBaseUrl,
+    }),
+  ]);
   const conversationSection = conversationContext
     ? `\nConversation context:\n${conversationContext.slice(0, 8000)}\n`
     : "";
@@ -236,7 +365,10 @@ ${commitLog}`,
   return {
     success: true,
     title: prContent.title,
-    body: prContent.body,
+    body: appendPullRequestContextSection(
+      prContent.body,
+      pullRequestContextSection,
+    ),
     diffStats,
     commitLog,
     baseRef: finalBaseRef,
