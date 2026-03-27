@@ -81,13 +81,13 @@ export async function resolvePullRequestContextSection(params: {
     getSessionById(sessionId),
     getChatsBySessionId(sessionId),
   ]);
-  const lines: string[] = [];
+  const parts: string[] = [];
   const latestChatId = chats[0]?.id;
   const resolvedAppBaseUrl = resolvePullRequestAppBaseUrl(appBaseUrl);
 
   if (latestChatId && resolvedAppBaseUrl) {
-    lines.push(
-      `- Chat: [Open chat](${resolvedAppBaseUrl}/sessions/${encodeURIComponent(sessionId)}/chats/${encodeURIComponent(latestChatId)})`,
+    parts.push(
+      `[OpenHarness Chat](${resolvedAppBaseUrl}/sessions/${encodeURIComponent(sessionId)}/chats/${encodeURIComponent(latestChatId)})`,
     );
   }
 
@@ -114,15 +114,11 @@ export async function resolvePullRequestContextSection(params: {
       const originator = githubUsername
         ? `[${escapedDisplayName}](https://github.com/${githubUsername})`
         : escapedDisplayName;
-      lines.push(`- Built with guidance from ${originator}`);
+      parts.push(`Built with guidance from ${originator}`);
     }
   }
 
-  if (lines.length === 0) {
-    return "";
-  }
-
-  return `## Context\n\n${lines.join("\n")}`;
+  return parts.join(" - ");
 }
 
 export function appendPullRequestContextSection(
@@ -130,15 +126,16 @@ export function appendPullRequestContextSection(
   contextSection: string,
 ): string {
   const trimmedBody = body.trimEnd();
-  if (!contextSection) {
+  const trimmedContextSection = contextSection.trim();
+  if (!trimmedContextSection) {
     return trimmedBody;
   }
 
   if (!trimmedBody) {
-    return contextSection;
+    return trimmedContextSection;
   }
 
-  return `${trimmedBody}\n\n${contextSection}`;
+  return `${trimmedBody}\n\n---\n\n${trimmedContextSection}`;
 }
 
 export interface GeneratePullRequestContentParams {

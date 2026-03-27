@@ -69,7 +69,7 @@ describe("pr-content", () => {
     restoreEnv();
   });
 
-  test("resolvePullRequestContextSection includes chat link and originator attribution", async () => {
+  test("resolvePullRequestContextSection returns a single-line footer with chat link and attribution", async () => {
     const { resolvePullRequestContextSection } = await prContentModulePromise;
 
     sessionRecord = { userId: "user-1" };
@@ -82,13 +82,12 @@ describe("pr-content", () => {
       appBaseUrl: "https://openharness.dev",
     });
 
-    expect(section).toBe(`## Context
-
-- Chat: [Open chat](https://openharness.dev/sessions/session-1/chats/chat-2)
-- Built with guidance from [Nico Albanese](https://github.com/nicoalbanese10)`);
+    expect(section).toBe(
+      "[OpenHarness Chat](https://openharness.dev/sessions/session-1/chats/chat-2) - Built with guidance from [Nico Albanese](https://github.com/nicoalbanese10)",
+    );
   });
 
-  test("resolvePullRequestContextSection falls back to plain text when no GitHub account exists", async () => {
+  test("resolvePullRequestContextSection falls back to plain-text attribution when no GitHub account exists", async () => {
     const { resolvePullRequestContextSection } = await prContentModulePromise;
 
     sessionRecord = { userId: "user-1" };
@@ -98,9 +97,7 @@ describe("pr-content", () => {
       sessionId: "session-1",
     });
 
-    expect(section).toBe(`## Context
-
-- Built with guidance from nico`);
+    expect(section).toBe("Built with guidance from nico");
   });
 
   test("resolvePullRequestAppBaseUrl prefers the active deployment url", async () => {
@@ -120,20 +117,20 @@ describe("pr-content", () => {
     expect(resolvePullRequestAppBaseUrl()).toBe("https://openharness.dev");
   });
 
-  test("appendPullRequestContextSection appends the context section after the body", async () => {
+  test("appendPullRequestContextSection appends the footer after a horizontal rule", async () => {
     const { appendPullRequestContextSection } = await prContentModulePromise;
 
     expect(
       appendPullRequestContextSection(
         "## Summary\n\nInitial body\n",
-        "## Context\n\n- Chat: [Open chat](https://example.com)",
+        "[OpenHarness Chat](https://example.com) - Built with guidance from Nico",
       ),
     ).toBe(`## Summary
 
 Initial body
 
-## Context
+---
 
-- Chat: [Open chat](https://example.com)`);
+[OpenHarness Chat](https://example.com) - Built with guidance from Nico`);
   });
 });
