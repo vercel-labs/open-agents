@@ -1,18 +1,17 @@
-# Video Recording
+# Recording Demos
 
-Capture polished demo videos of browser automation sessions.
+Produce polished, shareable demo videos with a visible cursor and minimal dead time.
 
-## Quick Reference
+This guide builds on the basics in `video-recording.md` with techniques specific to recording demos that look good to viewers.
 
-```bash
-agent-browser record start ./demo.webm   # Start recording to file
-agent-browser record stop                 # Stop and save
-agent-browser record restart ./take2.webm # Stop current + start new
-```
+## Key Principles
 
-Output format: WebM (VP8/VP9), compatible with all modern browsers.
+- **Minimize dead time** — chain commands with `&&` so tool-call overhead stays out of the video.
+- **Visible cursor** — headless Playwright has no cursor; inject a fake one via DOM.
+- **One chain per page** — navigation destroys the DOM cursor, so re-inject after every page change.
+- **No `sleep` calls** — tool execution provides enough natural pacing.
 
-## Demo Recording Playbook
+## Step-by-step
 
 ### 1. Set up the page BEFORE recording
 
