@@ -1,162 +1,120 @@
 # Video Recording
 
-Capture browser automation sessions as video for debugging, documentation, or verification.
+Capture polished demo videos of browser automation sessions.
 
-## Basic Recording
+## Quick Reference
 
 ```bash
-# Start recording
-agent-browser record start ./demo.webm
+agent-browser record start ./demo.webm   # Start recording to file
+agent-browser record stop                 # Stop and save
+agent-browser record restart ./take2.webm # Stop current + start new
+```
 
-# Perform actions
-agent-browser open https://example.com
+Output format: WebM (VP8/VP9), compatible with all modern browsers.
+
+## Demo Recording Playbook
+
+### 1. Set up the page BEFORE recording
+
+Navigate and snapshot **before** `record start`. Any time after recording starts is in the video.
+
+```bash
+agent-browser open <url>
+```
+```bash
 agent-browser snapshot -i
-agent-browser click @e1
-agent-browser fill @e2 "test input"
-
-# Stop and save
-agent-browser record stop
 ```
 
-## Recording Commands
+Review the snapshot to identify element refs (`@e1`, `@e2`, …) and plan the interaction sequence.
+
+### 2. Find element coordinates for mouse moves
+
+Use `getBoundingClientRect()` to get the (x, y) center of each target element. Do this **before** recording starts so the lookup doesn't appear in the video.
 
 ```bash
-# Start recording to file
-agent-browser record start ./output.webm
-
-# Stop current recording
-agent-browser record stop
-
-# Restart with new file (stops current + starts new)
-agent-browser record restart ./take2.webm
+agent-browser eval "(() => {
+  const el = document.querySelector('<selector>');
+  const r = el.getBoundingClientRect();
+  return JSON.stringify({ x: Math.round(r.x + r.width/2), y: Math.round(r.y + r.height/2) });
+})()"
 ```
 
-## Use Cases
+### 3. Inject a visible cursor
 
-### Debugging Failed Automation
+Headless Playwright doesn't render a cursor. Inject a DOM element that tracks mouse events:
 
 ```bash
-#!/bin/bash
-# Record automation for debugging
-
-agent-browser record start ./debug-$(date +%Y%m%d-%H%M%S).webm
-
-# Run your automation
-agent-browser open https://app.example.com
-agent-browser snapshot -i
-agent-browser click @e1 || {
-    echo "Click failed - check recording"
-    agent-browser record stop
-    exit 1
-}
-
-agent-browser record stop
+agent-browser eval "(() => {
+  const c = document.createElement('div');
+  c.style.cssText = 'width:20px;height:20px;border-radius:50%;background:rgba(255,50,50,0.85);position:fixed;top:290px;left:390px;z-index:999999;pointer-events:none;transition:top 0.15s ease,left 0.15s ease;box-shadow:0 0 8px rgba(255,50,50,0.5);';
+  document.body.appendChild(c);
+  document.addEventListener('mousemove', e => {
+    c.style.top=(e.clientY-10)+'px';
+    c.style.left=(e.clientX-10)+'px';
+  });
+})(); 'ok'"
 ```
 
-### Documentation Generation
+**Re-inject after every navigation** — page transitions destroy the DOM element.
+
+### 4. Chain all commands with `&&`
+
+Every separate tool call adds seconds of dead time. Chain everything into as few bash calls as possible:
 
 ```bash
-#!/bin/bash
-# Record workflow for documentation
-
-agent-browser record start ./docs/how-to-login.webm
-
-agent-browser open https://app.example.com/login
-agent-browser wait 1000  # Pause for visibility
-
-agent-browser snapshot -i
-agent-browser fill @e1 "demo@example.com"
-agent-browser wait 500
-
-agent-browser fill @e2 "password"
-agent-browser wait 500
-
-agent-browser click @e3
-agent-browser wait --load networkidle
-agent-browser wait 1000  # Show result
-
-agent-browser record stop
+agent-browser record start ./demo.webm && agent-browser eval "<inject cursor>" && agent-browser mouse move 400 300 && agent-browser click @e1 && agent-browser mouse move 600 200 && agent-browser click @e2 && agent-browser record stop
 ```
 
-### CI/CD Test Evidence
+### 5. Use `mouse move` before every click
+
+Move the cursor to the target first so viewers can follow the action:
 
 ```bash
-#!/bin/bash
-# Record E2E test runs for CI artifacts
-
-TEST_NAME="${1:-e2e-test}"
-RECORDING_DIR="./test-recordings"
-mkdir -p "$RECORDING_DIR"
-
-agent-browser record start "$RECORDING_DIR/$TEST_NAME-$(date +%s).webm"
-
-# Run test
-if run_e2e_test; then
-    echo "Test passed"
-else
-    echo "Test failed - recording saved"
-fi
-
-agent-browser record stop
+agent-browser mouse move 623 52 && agent-browser click @e5
 ```
 
-## Best Practices
+### 6. No `sleep` calls
 
-### 1. Add Pauses for Clarity
+Every millisecond counts. Tool execution itself provides enough natural pacing. Drop all `sleep` and `wait` calls entirely.
+
+### 7. One chain per page
+
+Since the cursor needs re-injection after navigation, structure as one `&&` chain per page. The recording persists across chains — only stop it in the final chain.
 
 ```bash
-# Slow down for human viewing
-agent-browser click @e1
-agent-browser wait 500  # Let viewer see result
+# Chain 1: first page → click navigates away
+agent-browser record start ./demo.webm && agent-browser eval "<inject cursor>" && agent-browser mouse move 400 300 && agent-browser click @e5
 ```
-
-### 2. Use Descriptive Filenames
 
 ```bash
-# Include context in filename
-agent-browser record start ./recordings/login-flow-2024-01-15.webm
-agent-browser record start ./recordings/checkout-test-run-42.webm
+# Chain 2: new page → finish
+agent-browser eval "<inject cursor>" && agent-browser mouse move 200 150 && agent-browser click @e3 && agent-browser scroll down 200 && agent-browser record stop
 ```
 
-### 3. Handle Recording in Error Cases
+### 8. Serve the result
+
+Copy the `.webm` into `public/`, create a minimal viewer page, and share the sandbox URL.
 
 ```bash
-#!/bin/bash
-set -e
-
-cleanup() {
-    agent-browser record stop 2>/dev/null || true
-    agent-browser close 2>/dev/null || true
-}
-trap cleanup EXIT
-
-agent-browser record start ./automation.webm
-# ... automation steps ...
+mkdir -p public && cp demo.webm public/demo.webm
 ```
 
-### 4. Combine with Screenshots
+Viewer page (`public/demo.html`):
 
-```bash
-# Record video AND capture key frames
-agent-browser record start ./flow.webm
-
-agent-browser open https://example.com
-agent-browser screenshot ./screenshots/step1-homepage.png
-
-agent-browser click @e1
-agent-browser screenshot ./screenshots/step2-after-click.png
-
-agent-browser record stop
+```html
+<!DOCTYPE html>
+<html>
+<head><title>Demo</title></head>
+<body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#111">
+  <video controls autoplay style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5)" src="/demo.webm"></video>
+</body>
+</html>
 ```
 
-## Output Format
+## Common Mistakes
 
-- Default format: WebM (VP8/VP9 codec)
-- Compatible with all modern browsers and video players
-- Compressed but high quality
-
-## Limitations
-
-- Recording adds slight overhead to automation
-- Large recordings can consume significant disk space
-- Some headless environments may have codec limitations
+- **Recording before the page is ready** — navigate and snapshot first.
+- **Forgetting to re-inject the cursor after navigation** — the DOM element is gone.
+- **Separate tool calls instead of `&&` chains** — adds seconds of blank screen.
+- **Using `sleep` or `wait`** — unnecessary; tool execution provides natural pacing.
+- **Clicking without `mouse move`** — clicks without visible cursor movement look jarring.
