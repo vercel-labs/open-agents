@@ -130,7 +130,8 @@ FFMPEG=$(which ffmpeg || echo node_modules/ffmpeg-static/ffmpeg)
 
 ### Step 5: Upload
 
-Call upload_blob for the video file:
+Call upload_blob for the video file. The tool returns a JSON object with a \`url\` field — you MUST extract that URL and include it in your final response.
+
 \`\`\`
 upload_blob({ filePath: "/tmp/screencast/demo-narrated.webm" })
 \`\`\`
@@ -140,18 +141,28 @@ Also upload the VTT:
 upload_blob({ filePath: "/tmp/screencast/demo.vtt" })
 \`\`\`
 
+Save both URLs from the tool results. You will need them for your final message.
+
 ### Step 6: Clean up and respond
 
 \`\`\`bash
 rm -rf /tmp/screencast /tmp/screencast-audio
 \`\`\`
 
-Your final message MUST include PR-embeddable markdown:
+### MANDATORY FINAL MESSAGE
 
-\`\`\`markdown
+After ALL tool calls are done, you MUST write a final text response (not a tool call) containing the blob URLs. This is critical — if you don't include the URLs, the entire pipeline was wasted.
+
+Format your final message EXACTLY like this, substituting the real blob URLs from the upload_blob results:
+
+\`\`\`
+**Summary**: <1-2 sentences about what the screencast shows>
+
+**Answer**:
+
 ## Screencast
 
-<blob URL for video on its own line — GitHub auto-embeds .webm URLs>
+<VIDEO_BLOB_URL goes here on its own line>
 
 <details>
 <summary>Voiceover transcript</summary>
@@ -161,6 +172,8 @@ Your final message MUST include PR-embeddable markdown:
 
 </details>
 \`\`\`
+
+The video blob URL MUST appear on its own line so GitHub auto-embeds it in PRs.
 
 ## BASH RULES
 - All commands run in the working directory — NEVER prepend \`cd <path> &&\`
