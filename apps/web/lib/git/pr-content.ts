@@ -87,7 +87,7 @@ export async function resolvePullRequestContextSection(params: {
 
   if (latestChatId && resolvedAppBaseUrl) {
     parts.push(
-      `[OpenHarness Chat](${resolvedAppBaseUrl}/sessions/${encodeURIComponent(sessionId)}/chats/${encodeURIComponent(latestChatId)})`,
+      `[Chat](${resolvedAppBaseUrl}/sessions/${encodeURIComponent(sessionId)}/chats/${encodeURIComponent(latestChatId)})`,
     );
   }
 

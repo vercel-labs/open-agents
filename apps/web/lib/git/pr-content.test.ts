@@ -83,7 +83,7 @@ describe("pr-content", () => {
     });
 
     expect(section).toBe(
-      "[OpenHarness Chat](https://openharness.dev/sessions/session-1/chats/chat-2) - Built with guidance from [Nico Albanese](https://github.com/nicoalbanese10)",
+      "[Chat](https://openharness.dev/sessions/session-1/chats/chat-2) - Built with guidance from [Nico Albanese](https://github.com/nicoalbanese10)",
     );
   });
 
@@ -123,7 +123,7 @@ describe("pr-content", () => {
     expect(
       appendPullRequestContextSection(
         "## Summary\n\nInitial body\n",
-        "[OpenHarness Chat](https://example.com) - Built with guidance from Nico",
+        "[Chat](https://example.com) - Built with guidance from Nico",
       ),
     ).toBe(`## Summary
 
@@ -131,6 +131,6 @@ Initial body
 
 ---
 
-[OpenHarness Chat](https://example.com) - Built with guidance from Nico`);
+[Chat](https://example.com) - Built with guidance from Nico`);
   });
 });
