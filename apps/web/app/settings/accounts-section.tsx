@@ -7,6 +7,7 @@ import {
   Circle,
   ExternalLink,
   Loader2,
+  LogOut,
   RefreshCw,
   User as UserIcon,
 } from "lucide-react";
@@ -443,6 +444,40 @@ export function AccountsSection() {
             )}
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Sign-out section ─────────────────────────────────────────────────────
+
+function handleSignOut() {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/auth/signout";
+  document.body.appendChild(form);
+  form.submit();
+}
+
+export function SignOutSection() {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between py-4">
+        <div>
+          <p className="text-sm font-medium">Sign out</p>
+          <p className="text-xs text-muted-foreground">
+            Sign out of your account on this device.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSignOut}
+          className="text-destructive hover:text-destructive"
+        >
+          <LogOut className="mr-1.5 size-3.5" />
+          Sign out
+        </Button>
       </CardContent>
     </Card>
   );
