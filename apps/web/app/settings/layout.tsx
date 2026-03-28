@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BarChart3,
   Link2,
+  LogOut,
   Menu,
   Settings as SettingsIcon,
   SlidersHorizontal,
@@ -67,6 +68,14 @@ const sidebarItems = [
   },
 ];
 
+function handleSignOut() {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/auth/signout";
+  document.body.appendChild(form);
+  form.submit();
+}
+
 function SettingsLayout({
   children,
   pathname,
@@ -121,6 +130,16 @@ function SettingsLayout({
             </div>
             {navItems}
           </nav>
+          <div className="border-t border-border px-2 py-3">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -145,6 +164,16 @@ function SettingsLayout({
             </div>
             {navItems}
           </nav>
+          <div className="border-t border-border px-2 py-3">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
         </SheetContent>
       </Sheet>
 

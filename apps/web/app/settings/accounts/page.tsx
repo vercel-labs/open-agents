@@ -1,9 +1,5 @@
 import { Suspense } from "react";
-import {
-  AccountsSection,
-  AccountsSectionSkeleton,
-  SignOutSection,
-} from "../accounts-section";
+import { AccountsSection, AccountsSectionSkeleton } from "../accounts-section";
 
 export default function AccountsPage() {
   return (
@@ -12,7 +8,6 @@ export default function AccountsPage() {
       <Suspense fallback={<AccountsSectionSkeleton />}>
         <AccountsSection />
       </Suspense>
-      <SignOutSection />
     </>
   );
 }
