@@ -447,5 +447,3 @@ export function AccountsSection() {
     </Card>
   );
 }
-
-
