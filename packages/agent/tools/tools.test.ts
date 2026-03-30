@@ -591,10 +591,10 @@ describe("tools execute behavior", () => {
 
   test("taskTool description lists subagents from the shared registry", () => {
     expect(taskTool.description).toContain(
-      "`explorer` - Fast, read-only codebase exploration",
+      "`explorer` - Use for read-only codebase exploration, tracing behavior, and answering questions without changing files",
     );
     expect(taskTool.description).toContain(
-      "`executor` - Autonomous implementation for well-defined tasks",
+      "`executor` - Use for well-scoped implementation work, including edits, scaffolding, refactors, and other file changes",
     );
     expect(taskTool.description).toContain("up to 100 tool steps");
   });
@@ -604,10 +604,10 @@ describe("tools execute behavior", () => {
 
     expect(prompt).toContain("Available subagents:");
     expect(prompt).toContain(
-      "`explorer` - Fast, read-only codebase exploration",
+      "`explorer` - Use for read-only codebase exploration, tracing behavior, and answering questions without changing files",
     );
     expect(prompt).toContain(
-      "`executor` - Autonomous implementation for well-defined tasks",
+      "`executor` - Use for well-scoped implementation work, including edits, scaffolding, refactors, and other file changes",
     );
   });
 

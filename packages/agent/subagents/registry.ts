@@ -3,11 +3,13 @@ import { explorerSubagent } from "./explorer";
 
 export const SUBAGENT_REGISTRY = {
   explorer: {
-    shortDescription: "Fast, read-only codebase exploration",
+    shortDescription:
+      "Use for read-only codebase exploration, tracing behavior, and answering questions without changing files",
     agent: explorerSubagent,
   },
   executor: {
-    shortDescription: "Autonomous implementation for well-defined tasks",
+    shortDescription:
+      "Use for well-scoped implementation work, including edits, scaffolding, refactors, and other file changes",
     agent: executorSubagent,
   },
 } as const;
