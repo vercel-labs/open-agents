@@ -82,9 +82,7 @@ HOW TO USE:
 IMPORTANT:
 - Be explicit and concrete - subagents cannot ask clarifying questions
 - Include critical context (APIs, function names, file paths) in the instructions
-- The parent agent will not see the subagent's internal tool calls, only its final summary
-
-NOTE: Both subagents run within the sandbox.`,
+- The parent agent will not see the subagent's internal tool calls, only its final summary`,
   inputSchema: taskInputSchema,
   outputSchema: taskOutputSchema,
   execute: async function* (
