@@ -6,7 +6,13 @@ import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import type { SandboxExecutionContext } from "../types";
-import { SUBAGENT_STEP_LIMIT } from "./constants";
+import {
+  SUBAGENT_EXPLORER_REMINDER,
+  SUBAGENT_NO_QUESTIONS_RULES,
+  SUBAGENT_RESPONSE_FORMAT,
+  SUBAGENT_STEP_LIMIT,
+  SUBAGENT_WORKING_DIR,
+} from "./constants";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 
@@ -21,16 +27,9 @@ This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:
 
 Your role is EXCLUSIVELY to search and analyze existing code.
 
-### NEVER ASK QUESTIONS
-- You work in a zero-shot manner with NO ability to ask follow-up questions
-- You will NEVER receive a response to any question you ask
-- If instructions are ambiguous, make reasonable assumptions and document them
+${SUBAGENT_NO_QUESTIONS_RULES}
 
-### FINAL RESPONSE FORMAT (MANDATORY)
-Your final message MUST contain exactly two sections:
-
-1. **Summary**: A brief (2-4 sentences) description of what you searched/analyzed
-2. **Answer**: The direct answer to the original task/question, including relevant file paths
+${SUBAGENT_RESPONSE_FORMAT}
 
 Example final response:
 ---
@@ -93,8 +92,7 @@ export const explorerSubagent = new ToolLoopAgent({
       model,
       instructions: `${EXPLORER_SYSTEM_PROMPT}
 
-Working directory: . (workspace root)
-Use workspace-relative paths for all file operations.
+${SUBAGENT_WORKING_DIR}
 
 ## Your Task
 ${options.task}
@@ -102,10 +100,7 @@ ${options.task}
 ## Detailed Instructions
 ${options.instructions}
 
-## REMINDER
-- You CANNOT ask questions - no one will respond
-- This is READ-ONLY - do NOT create, modify, or delete any files
-- Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`,
+${SUBAGENT_EXPLORER_REMINDER}`,
       experimental_context: {
         sandbox,
         model,
