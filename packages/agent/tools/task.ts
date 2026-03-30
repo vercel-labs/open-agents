@@ -60,9 +60,9 @@ AVAILABLE SUBAGENTS:
 ${subagentSummaryLines}
 
 WHEN TO USE:
-- Large mechanical work that can be clearly specified
-- Multi-file implementation where detailed execution would clutter the main conversation
-- Read-only codebase exploration or focused implementation work
+- Clearly-scoped work that can be delegated with explicit instructions
+- Work where focused execution would clutter the main conversation
+- Tasks that match one of the available subagent descriptions above
 
 WHEN NOT TO USE (do it yourself):
 - Simple, single-file or single-change edits
