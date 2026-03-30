@@ -131,14 +131,19 @@ export function TaskRenderer({
             ? "bg-green-500"
             : "bg-yellow-500";
 
-  const subagentLabel =
-    subagentType === "explorer"
-      ? "Explorer"
-      : subagentType === "executor"
-        ? "Executor"
-        : subagentType === "general"
-          ? "General"
-          : "Task";
+  const subagentLabel = "Subagent";
+  const subagentTypeBadge = subagentType ? (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none",
+        subagentType === "executor"
+          ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
+          : "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+      )}
+    >
+      {subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}
+    </span>
+  ) : null;
 
   const hasExpandableContent =
     pendingToolCall !== null ||
@@ -153,27 +158,32 @@ export function TaskRenderer({
     <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
   );
 
-  const meta = pendingToolCall ? (
-    <span className="inline-flex max-w-[220px] items-center gap-1.5 overflow-hidden">
-      <span className={cn(isPreliminary && "text-yellow-500")}>
-        {pendingToolCall.name}
-      </span>
-      {getToolSummary(pendingToolCall) && (
-        <span className="truncate text-muted-foreground">
-          {getToolSummary(pendingToolCall)}
-        </span>
-      )}
-    </span>
-  ) : isComplete ? (
+  const meta = (
     <span className="inline-flex items-center gap-1.5">
-      <span>
-        {toolCount} tool{toolCount === 1 ? "" : "s"}
-      </span>
-      {output?.usage?.inputTokens ? (
-        <span>{formatTokens(output.usage.inputTokens)} tokens</span>
+      {subagentTypeBadge}
+      {pendingToolCall ? (
+        <span className="inline-flex max-w-[220px] items-center gap-1.5 overflow-hidden">
+          <span className={cn(isPreliminary && "text-yellow-500")}>
+            {pendingToolCall.name}
+          </span>
+          {getToolSummary(pendingToolCall) && (
+            <span className="truncate text-muted-foreground">
+              {getToolSummary(pendingToolCall)}
+            </span>
+          )}
+        </span>
+      ) : isComplete ? (
+        <>
+          <span>
+            {toolCount} tool{toolCount === 1 ? "" : "s"}
+          </span>
+          {output?.usage?.inputTokens ? (
+            <span>{formatTokens(output.usage.inputTokens)} tokens</span>
+          ) : null}
+        </>
       ) : null}
     </span>
-  ) : undefined;
+  );
 
   const expandedContent = hasExpandableContent ? (
     <div className="space-y-3">
@@ -185,13 +195,6 @@ export function TaskRenderer({
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
             {fullPrompt}
           </pre>
-        </div>
-      )}
-
-      {subagentType && (
-        <div>
-          <span className="text-xs text-muted-foreground">Subagent type: </span>
-          <span className="text-sm text-foreground">{subagentType}</span>
         </div>
       )}
 

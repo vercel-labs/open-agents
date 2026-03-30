@@ -159,6 +159,10 @@ function TaskItem({
 
   const desc = part.input?.task ?? "Task";
   const subagentType = part.input?.subagentType;
+  const typeBadgeColor =
+    subagentType === "executor"
+      ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
+      : "bg-blue-500/15 text-blue-600 dark:text-blue-400";
 
   // Handle approval state
   const approvalRequested = part.state === "approval-requested";
@@ -204,6 +208,16 @@ function TaskItem({
         {/* Task row */}
         <div className="flex items-center gap-2 min-w-0">
           <TaskStatusIndicator status={status} />
+          {subagentType && (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none",
+                typeBadgeColor,
+              )}
+            >
+              {subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}
+            </span>
+          )}
           <span
             className={cn(
               "text-sm truncate",
@@ -304,14 +318,15 @@ export function TaskGroupView({
 
   // Determine header text
   let headerText: string;
+  const agentNoun = `Subagent${taskParts.length > 1 ? "s" : ""}`;
   if (allComplete) {
-    headerText = `Completed ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}`;
+    headerText = `Completed ${taskParts.length} ${agentNoun}`;
   } else if (hasInterrupted && runningCount === 0) {
-    headerText = `Interrupted ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}`;
+    headerText = `Interrupted ${taskParts.length} ${agentNoun}`;
   } else if (hasApprovalPending && runningCount === 0) {
-    headerText = `${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""} (approval needed)`;
+    headerText = `${taskParts.length} ${agentNoun} (approval needed)`;
   } else {
-    headerText = `Running ${taskParts.length} Task agent${taskParts.length > 1 ? "s" : ""}...`;
+    headerText = `Running ${taskParts.length} ${agentNoun}...`;
   }
 
   return (
