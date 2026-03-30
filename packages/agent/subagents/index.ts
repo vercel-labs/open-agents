@@ -1,4 +1,5 @@
 export { SUBAGENT_STEP_LIMIT } from "./constants";
+export { designSubagent, type DesignCallOptions } from "./design";
 export { explorerSubagent, type ExplorerCallOptions } from "./explorer";
 export { executorSubagent, type ExecutorCallOptions } from "./executor";
 export {

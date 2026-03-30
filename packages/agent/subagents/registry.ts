@@ -1,3 +1,4 @@
+import { designSubagent } from "./design";
 import { executorSubagent } from "./executor";
 import { explorerSubagent } from "./explorer";
 
@@ -11,6 +12,11 @@ export const SUBAGENT_REGISTRY = {
     shortDescription:
       "Use for well-scoped implementation work, including edits, scaffolding, refactors, and other file changes",
     agent: executorSubagent,
+  },
+  design: {
+    shortDescription:
+      "Use for creating distinctive, production-grade frontend interfaces with high design quality. Generates creative, polished code that avoids generic AI aesthetics.",
+    agent: designSubagent,
   },
 } as const;
 
