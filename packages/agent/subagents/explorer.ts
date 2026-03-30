@@ -6,6 +6,7 @@ import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import type { SandboxExecutionContext } from "../types";
+import { SUBAGENT_STEP_LIMIT } from "./constants";
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 
@@ -78,7 +79,7 @@ export const explorerSubagent = new ToolLoopAgent({
     glob: globTool(),
     bash: bashTool(),
   },
-  stopWhen: stepCountIs(100),
+  stopWhen: stepCountIs(SUBAGENT_STEP_LIMIT),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     if (!options) {

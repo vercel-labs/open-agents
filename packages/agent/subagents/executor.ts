@@ -7,6 +7,7 @@ import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import { editFileTool, writeFileTool } from "../tools/write";
 import type { SandboxExecutionContext } from "../types";
+import { SUBAGENT_STEP_LIMIT } from "./constants";
 
 const EXECUTOR_SYSTEM_PROMPT = `You are an executor agent - a fire-and-forget subagent that completes specific, well-defined implementation tasks autonomously.
 
@@ -77,7 +78,7 @@ export const executorSubagent = new ToolLoopAgent({
     glob: globTool(),
     bash: bashTool(),
   },
-  stopWhen: stepCountIs(100),
+  stopWhen: stepCountIs(SUBAGENT_STEP_LIMIT),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     if (!options) {

@@ -1,3 +1,4 @@
+import { buildSubagentSummaryLines } from "./subagents/registry";
 import type { SkillMetadata } from "./skills/types";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,8 @@ Serialize when there are dependencies:
 
 ## Delegation
 - \`task\` - Spawn a subagent for complex, isolated work
+- Available subagents:
+${buildSubagentSummaryLines()}
 - Use when: Large mechanical work that can be clearly specified (migrations, scaffolding)
 - Avoid for: Ambiguous requirements, architectural decisions, small localized fixes
 

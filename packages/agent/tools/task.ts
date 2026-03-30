@@ -5,16 +5,22 @@ import {
   type UIToolInvocation,
 } from "ai";
 import { z } from "zod";
-import { executorSubagent } from "../subagents/executor";
-import { explorerSubagent } from "../subagents/explorer";
+import {
+  buildSubagentSummaryLines,
+  SUBAGENT_REGISTRY,
+  SUBAGENT_TYPES,
+} from "../subagents/registry";
+import { SUBAGENT_STEP_LIMIT } from "../subagents/constants";
 import { sumLanguageModelUsage } from "../usage";
 import { getSandboxContext, getSubagentModel } from "./utils";
 
-const subagentTypeSchema = z.enum(["explorer", "executor"]);
+const subagentTypeSchema = z.enum(SUBAGENT_TYPES);
+
+const subagentSummaryLines = buildSubagentSummaryLines();
 
 const taskInputSchema = z.object({
   subagentType: subagentTypeSchema.describe(
-    "Type of subagent: 'explorer' for read-only research, 'executor' for implementation tasks",
+    `Subagent to launch. Available options:\n${subagentSummaryLines}`,
   ),
   task: z
     .string()
@@ -47,45 +53,29 @@ export const taskOutputSchema = z.object({
 export type TaskToolOutput = z.infer<typeof taskOutputSchema>;
 
 export const taskTool = tool({
+  needsApproval: false,
   description: `Launch a specialized subagent to handle complex tasks autonomously.
 
-SUBAGENT TYPES:
+AVAILABLE SUBAGENTS:
+${subagentSummaryLines}
 
-1. **explorer** (READ-ONLY)
-   - Use for: Finding files, searching code, answering questions about the codebase
-   - Tools: read, grep, glob, bash (read-only commands only)
-   - CANNOT create, modify, or delete files
-   - Best for: Research, codebase exploration, finding implementations
-
-2. **executor** (FULL ACCESS)
-   - Use for: Implementation tasks that require creating or modifying files
-   - Tools: read, write, edit, grep, glob, bash
-   - CAN create, modify, and delete files
-   - Best for: Feature scaffolding, refactors, migrations, code generation
-
-WHEN TO USE EXPLORER:
-- "Where is X implemented?"
-- "Find all usages of Y"
-- "How does Z work in this codebase?"
-- Gathering context before making changes
-
-WHEN TO USE EXECUTOR:
-- Feature scaffolding that touches multiple files
-- Cross-layer refactors requiring coordinated changes
-- Mass migrations or boilerplate generation
-- Any implementation task where detailed execution would clutter the main conversation
+WHEN TO USE:
+- Large mechanical work that can be clearly specified
+- Multi-file implementation where detailed execution would clutter the main conversation
+- Read-only codebase exploration or focused implementation work
 
 WHEN NOT TO USE (do it yourself):
 - Simple, single-file or single-change edits
 - Tasks where you already have all the context you need
+- Ambiguous work that requires back-and-forth clarification
 
 BEHAVIOR:
 - Subagents work AUTONOMOUSLY without asking follow-up questions
-- They run up to 30 tool steps and then return
+- They run up to ${SUBAGENT_STEP_LIMIT} tool steps and then return
 - They return ONLY a concise summary - their internal steps are isolated from the parent
 
 HOW TO USE:
-- Choose the appropriate subagentType based on whether you need read-only or write access
+- Choose the appropriate subagentType based on the subagent descriptions above
 - Provide a short task string (for display) summarizing the goal
 - Provide detailed instructions including goals, steps, constraints, and verification criteria
 
@@ -94,7 +84,7 @@ IMPORTANT:
 - Include critical context (APIs, function names, file paths) in the instructions
 - The parent agent will not see the subagent's internal tool calls, only its final summary
 
-NOTE: Both subagents run within the sandbox. Use explorer for read-only research and executor for implementation work.`,
+NOTE: Both subagents run within the sandbox.`,
   inputSchema: taskInputSchema,
   outputSchema: taskOutputSchema,
   execute: async function* (
@@ -105,8 +95,7 @@ NOTE: Both subagents run within the sandbox. Use explorer for read-only research
     const model = getSubagentModel(experimental_context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
-    const subagent =
-      subagentType === "explorer" ? explorerSubagent : executorSubagent;
+    const subagent = SUBAGENT_REGISTRY[subagentType].agent;
 
     const result = await subagent.stream({
       prompt:
