@@ -52,9 +52,3 @@ export const SUBAGENT_REMINDER = `## REMINDER
 - You CANNOT ask questions - no one will respond
 - Complete the task fully before returning
 - Your final message MUST include both a **Summary** of what you did AND the **Answer** to the task`;
-
-/** Reminder block for the read-only explorer subagent. */
-export const SUBAGENT_EXPLORER_REMINDER = `## REMINDER
-- You CANNOT ask questions - no one will respond
-- This is READ-ONLY - do NOT create, modify, or delete any files
-- Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`;

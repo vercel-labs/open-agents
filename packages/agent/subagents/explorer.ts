@@ -7,12 +7,16 @@ import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import type { SandboxExecutionContext } from "../types";
 import {
-  SUBAGENT_EXPLORER_REMINDER,
   SUBAGENT_NO_QUESTIONS_RULES,
   SUBAGENT_RESPONSE_FORMAT,
   SUBAGENT_STEP_LIMIT,
   SUBAGENT_WORKING_DIR,
 } from "./constants";
+
+const EXPLORER_REMINDER = `## REMINDER
+- You CANNOT ask questions - no one will respond
+- This is READ-ONLY - do NOT create, modify, or delete any files
+- Your final message MUST include both a **Summary** of what you searched AND the **Answer** to the task`;
 
 const EXPLORER_SYSTEM_PROMPT = `You are an explorer agent - a fast, read-only subagent specialized for exploring codebases.
 
@@ -100,7 +104,7 @@ ${options.task}
 ## Detailed Instructions
 ${options.instructions}
 
-${SUBAGENT_EXPLORER_REMINDER}`,
+${EXPLORER_REMINDER}`,
       experimental_context: {
         sandbox,
         model,
