@@ -25,6 +25,7 @@ import {
   runAutoCommitStep,
   runAutoCreatePrStep,
 } from "./chat-post-finish";
+import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 
 type Options = {
   messages: WebAgentUIMessage[];
@@ -60,7 +61,8 @@ const convertMessages = async (
 ): Promise<ModelMessage[]> => {
   "use step";
   const { webAgent } = await import("@/app/config");
-  return await convertToModelMessages(messages, {
+  const dedupedMessages = messages.map(dedupeMessageReasoning);
+  return await convertToModelMessages(dedupedMessages, {
     ignoreIncompleteToolCalls: true,
     tools: webAgent.tools,
   });

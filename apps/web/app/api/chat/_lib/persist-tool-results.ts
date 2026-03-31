@@ -1,5 +1,6 @@
 import { isToolUIPart } from "ai";
 import type { WebAgentUIMessage } from "@/app/types";
+import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { upsertChatMessageScoped } from "@/lib/db/sessions";
 
 /**
@@ -39,11 +40,12 @@ export async function persistAssistantMessagesWithToolResults(
   }
 
   try {
+    const dedupedMessage = dedupeMessageReasoning(latestMessage);
     const result = await upsertChatMessageScoped({
-      id: latestMessage.id,
+      id: dedupedMessage.id,
       chatId,
       role: "assistant",
-      parts: latestMessage,
+      parts: dedupedMessage,
     });
 
     if (result.status === "conflict") {

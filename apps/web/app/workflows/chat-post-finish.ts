@@ -13,6 +13,7 @@ import {
   updateChatAssistantActivity,
 } from "@/lib/db/sessions";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
+import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { recordUsage } from "@/lib/db/usage";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
@@ -128,11 +129,12 @@ export async function persistAssistantMessage(
   "use step";
 
   try {
+    const dedupedMessage = dedupeMessageReasoning(message);
     const result = await upsertChatMessageScoped({
-      id: message.id,
+      id: dedupedMessage.id,
       chatId,
       role: "assistant",
-      parts: message,
+      parts: dedupedMessage,
     });
 
     if (result.status === "conflict") {
