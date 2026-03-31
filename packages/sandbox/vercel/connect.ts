@@ -1,6 +1,5 @@
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Sandbox, SandboxHooks } from "../interface";
-import { tryConnectVercelSandboxDirect } from "./direct";
 import { VercelSandbox } from "./sandbox";
 import type { VercelState } from "./state";
 import { configureGitUser } from "./utils";
@@ -23,12 +22,6 @@ function getRemainingTimeout(
 
   const remaining = expiresAt - Date.now();
   return remaining > 10_000 ? remaining : undefined;
-}
-
-function canUseOptimisticAttach(options?: ConnectOptions): boolean {
-  // Keep the full SDK reconnect path for callers that need ports/environment
-  // details or lifecycle hooks.
-  return !options?.hooks && !options?.ports;
 }
 
 /**
@@ -54,19 +47,6 @@ export async function connectVercel(
         remainingTimeout,
         ports: options?.ports,
       });
-
-    if (canUseOptimisticAttach(options)) {
-      const directSandbox = await tryConnectVercelSandboxDirect({
-        sandboxId: state.sandboxId,
-        env: options?.env,
-        reconnect: connectManagedSandbox,
-        expiresAt: state.expiresAt,
-      });
-
-      if (directSandbox) {
-        return directSandbox;
-      }
-    }
 
     return connectManagedSandbox();
   }

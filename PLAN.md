@@ -22,7 +22,7 @@ Context: Key findings from exploration -- existing patterns, relevant files, con
 - The DB schema already has a flexible `sandboxState` JSON column plus legacy snapshot fields. We can likely avoid a SQL migration if we keep using `sandboxState.sandboxId` as the persisted identifier and reserve `snapshotUrl` for legacy migration / optional backup only.
   - `apps/web/lib/db/schema.ts`
   - `apps/web/lib/db/sessions.ts`
-- There is a high-risk direct REST optimization path that uses internal `@vercel/sandbox/dist/*` APIs and passes `sandboxId` everywhere. Beta docs only guarantee the high-level SDK (`Sandbox.create/get/update/delete`) and name-based lookup, so this path should be treated as migration-sensitive.
+- There is a high-risk direct REST optimization path that uses internal `@vercel/sandbox/dist/*` APIs and passes `sandboxId` everywhere. Since we are comfortable dropping it, the migration should explicitly remove/bypass this path and standardize on the documented SDK methods only.
   - `packages/sandbox/vercel/direct.ts`
   - `packages/sandbox/vercel/direct-operations.ts`
 
@@ -45,15 +45,15 @@ Approach: High-level design decision and why
 - Keep the existing restore endpoint shape as the explicit “resume sandbox” entrypoint so the UI can stay mostly unchanged:
   - legacy sessions: restore from `snapshotUrl` into the named sandbox
   - v2 sessions: resume the named sandbox by name
-- First implementation should prefer correctness over low-level optimization: if beta internals do not clearly support name-based direct REST operations, temporarily route reconnects through the documented SDK path and reintroduce direct operations later.
+- First implementation should prefer correctness over low-level optimization: remove the direct REST optimization entirely for this migration and route reconnect/resume/file operations through the documented SDK path.
 
 Changes:
 - `packages/sandbox/package.json` - upgrade `@vercel/sandbox` to the beta version.
 - `packages/sandbox/vercel/state.ts` - redefine `sandboxId` semantics as persistent sandbox name; keep legacy snapshot support during migration.
 - `packages/sandbox/vercel/sandbox.ts` - switch create/get/connect logic from `sandboxId` to `name`, return the stable name from `getState()`, add explicit resume support, and expose `delete()` for legacy cleanup if needed.
 - `packages/sandbox/vercel/connect.ts` - connect/resume by name for v2 sandboxes, keep a legacy restore path for old snapshot-based sessions, and avoid name/ID confusion in state branching.
-- `packages/sandbox/vercel/direct.ts` - either adapt the direct path to beta name semantics or disable/bypass it during the first migration if only the documented SDK path is reliable.
-- `packages/sandbox/vercel/direct-operations.ts` - same as above; update or bypass any low-level calls that still require ephemeral ids.
+- `packages/sandbox/vercel/direct.ts` - remove or bypass the direct REST optimization so the provider always uses the documented SDK path.
+- `packages/sandbox/vercel/direct-operations.ts` - delete or retire the unused low-level direct-operation helpers that depend on ephemeral ids.
 - `apps/web/lib/sandbox/utils.ts` - replace the current “runtime state exists iff sandboxId exists” helpers with separate helpers for persistent identity vs active runtime session; stop clearing sandbox identity on ordinary stop/unavailability.
 - `apps/web/lib/sandbox/lifecycle.ts` - for v2 sandboxes, hibernate with `stop()` and preserve `sandboxState`; keep legacy snapshot migration logic only for old sessions.
 - `apps/web/lib/sandbox/archive-session.ts` - archive by stopping persistent named sandboxes without clearing their identity; use snapshot+restore only as a migration bridge for legacy sessions.
@@ -69,7 +69,7 @@ Changes:
 - `apps/web/lib/db/sessions.ts` - add helpers for deterministic sandbox naming / legacy detection and normalize session records without changing SQL schema.
 - Tests to update alongside the implementation:
   - `packages/sandbox/vercel/sandbox.test.ts`
-  - `packages/sandbox/vercel/direct.test.ts`
+  - `packages/sandbox/vercel/direct.test.ts` (remove if the direct path is deleted, or replace with coverage that proves the SDK path is always used)
   - `apps/web/lib/sandbox/lifecycle-evaluate.test.ts`
   - `apps/web/lib/sandbox/archive-session.test.ts`
   - `apps/web/app/api/sandbox/route.test.ts`
@@ -107,4 +107,4 @@ Verification:
   - skills cache continuity across stop/resume with the same stable sandbox name
 
 Open implementation note:
-- Before coding the direct-REST path, verify whether the beta package still documents/supports the internal API client calls currently used in `packages/sandbox/vercel/direct.ts`. If not, the safest first rollout is to use the documented SDK path only and reintroduce the optimization afterward.
+- Since we are dropping the direct path, implementation should remove that branch early so the rest of the migration only has one execution path to reason about.
