@@ -7,10 +7,10 @@
       "packages/*"
     ],
     "catalog": {
-      "ai": "^6.0.127",
-      "@ai-sdk/anthropic": "^3.0.60",
-      "@ai-sdk/openai": "^3.0.45",
-      "@ai-sdk/react": "^3.0.129",
+      "ai": "^6.0.141",
+      "@ai-sdk/anthropic": "^3.0.64",
+      "@ai-sdk/openai": "^3.0.49",
+      "@ai-sdk/react": "^3.0.143",
       "zod": "^4.3.6"
     }
   },

@@ -16,7 +16,7 @@
       "name": "web",
       "version": "0.1.0",
       "dependencies": {
-        "@ai-sdk/elevenlabs": "^2.0.25",
+        "@ai-sdk/elevenlabs": "^2.0.26",
         "@ai-sdk/react": "catalog:",
         "@octokit/auth-app": "^8.2.0",
         "@octokit/rest": "^22.0.1",
@@ -136,10 +136,10 @@
     "zod": "^4.3.6",
   },
   "catalog": {
-    "@ai-sdk/anthropic": "^3.0.60",
-    "@ai-sdk/openai": "^3.0.45",
-    "@ai-sdk/react": "^3.0.129",
-    "ai": "^6.0.127",
+    "@ai-sdk/anthropic": "^3.0.64",
+    "@ai-sdk/openai": "^3.0.49",
+    "@ai-sdk/react": "^3.0.143",
+    "ai": "^6.0.141",
     "zod": "^4.3.6",
   },
   "packages": {
