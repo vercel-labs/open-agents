@@ -3,9 +3,7 @@ import { dedupeMessageReasoning } from "./dedupe-message-reasoning";
 import type { WebAgentUIMessage } from "@/app/types";
 
 /** Helper to build a minimal assistant message with the given parts. */
-function msg(
-  parts: WebAgentUIMessage["parts"],
-): WebAgentUIMessage {
+function msg(parts: WebAgentUIMessage["parts"]): WebAgentUIMessage {
   return {
     id: "msg_1",
     role: "assistant",
@@ -21,17 +19,13 @@ function reasoning(
   return {
     type: "reasoning" as const,
     text,
-    ...(itemId != null
-      ? { providerMetadata: { openai: { itemId } } }
-      : {}),
+    ...(itemId != null ? { providerMetadata: { openai: { itemId } } } : {}),
   };
 }
 
 describe("dedupeMessageReasoning", () => {
   test("returns same message when no reasoning parts exist", () => {
-    const message = msg([
-      { type: "text" as const, text: "hello" },
-    ]);
+    const message = msg([{ type: "text" as const, text: "hello" }]);
     const result = dedupeMessageReasoning(message);
     expect(result).toBe(message); // same reference
   });
@@ -109,7 +103,12 @@ describe("dedupeMessageReasoning", () => {
     ]);
     const result = dedupeMessageReasoning(message);
     expect(result.parts).toHaveLength(4);
-    expect(result.parts).toEqual([stepStart, reasoning("thought", "rs_abc"), textPart, textPart]);
+    expect(result.parts).toEqual([
+      stepStart,
+      reasoning("thought", "rs_abc"),
+      textPart,
+      textPart,
+    ]);
   });
 
   test("handles azure provider metadata", () => {
