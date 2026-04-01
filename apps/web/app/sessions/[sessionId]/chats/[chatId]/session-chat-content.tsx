@@ -1140,6 +1140,7 @@ export function SessionChatContent({
     : hasPendingResponse
       ? "streaming"
       : status;
+  const isChatReady = effectiveStatus === "ready";
   const showThinkingIndicator = useMemo(() => {
     // During the optimistic pending phase (user just clicked send but the
     // AI SDK status hasn't caught up yet due to throttling), always show
@@ -2582,6 +2583,7 @@ export function SessionChatContent({
                     <CommitActionHeaderButton
                       label={commitActionLabel}
                       isAutoCommitting={isAutoCommitting}
+                      isChatReady={isChatReady}
                       hasUncommittedChanges={hasUncommittedGitChanges}
                       onClick={() => setCommitDialogOpen(true)}
                     />
@@ -2626,6 +2628,7 @@ export function SessionChatContent({
                   <CommitActionHeaderButton
                     label={commitActionLabel}
                     isAutoCommitting={isAutoCommitting}
+                    isChatReady={isChatReady}
                     hasUncommittedChanges={hasUncommittedGitChanges}
                     onClick={() => setCommitDialogOpen(true)}
                   />
@@ -2793,6 +2796,7 @@ export function SessionChatContent({
                           <CommitActionMenuItem
                             label={commitActionLabel}
                             isAutoCommitting={isAutoCommitting}
+                            isChatReady={isChatReady}
                             onClick={() => setCommitDialogOpen(true)}
                           />
                         )}
@@ -2803,6 +2807,7 @@ export function SessionChatContent({
                           <CommitActionMenuItem
                             label={commitActionLabel}
                             isAutoCommitting={isAutoCommitting}
+                            isChatReady={isChatReady}
                             onClick={() => setCommitDialogOpen(true)}
                           />
                         )}

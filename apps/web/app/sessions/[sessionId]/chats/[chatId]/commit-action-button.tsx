@@ -7,6 +7,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 interface CommitActionButtonProps {
   label: string;
   isAutoCommitting: boolean;
+  isChatReady: boolean;
   hasUncommittedChanges: boolean;
   onClick: () => void;
 }
@@ -15,6 +16,7 @@ interface CommitActionButtonProps {
 export function CommitActionHeaderButton({
   label,
   isAutoCommitting,
+  isChatReady,
   hasUncommittedChanges,
   onClick,
 }: CommitActionButtonProps) {
@@ -23,7 +25,7 @@ export function CommitActionHeaderButton({
       variant="outline"
       size="sm"
       className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-      disabled={isAutoCommitting}
+      disabled={isAutoCommitting || !isChatReady}
       onClick={onClick}
     >
       {isAutoCommitting ? (
@@ -45,10 +47,14 @@ export function CommitActionHeaderButton({
 export function CommitActionMenuItem({
   label,
   isAutoCommitting,
+  isChatReady,
   onClick,
 }: Omit<CommitActionButtonProps, "hasUncommittedChanges">) {
   return (
-    <DropdownMenuItem disabled={isAutoCommitting} onClick={onClick}>
+    <DropdownMenuItem
+      disabled={isAutoCommitting || !isChatReady}
+      onClick={onClick}
+    >
       {isAutoCommitting ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
