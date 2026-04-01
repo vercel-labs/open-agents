@@ -24,6 +24,7 @@ interface ModelSelectorCompactProps {
   modelOptions: ModelOption[];
   onChange: (modelId: string) => void;
   disabled?: boolean;
+  onCloseAutoFocus?: () => void;
 }
 
 export function ModelSelectorCompact({
@@ -31,6 +32,7 @@ export function ModelSelectorCompact({
   modelOptions,
   onChange,
   disabled = false,
+  onCloseAutoFocus,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -119,6 +121,10 @@ export function ModelSelectorCompact({
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           focusSearchInput();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onCloseAutoFocus?.();
         }}
       >
         <Command>
