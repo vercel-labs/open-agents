@@ -6,6 +6,15 @@ import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultFileOptions } from "@/lib/diffs-config";
 import { ToolLayout } from "../tool-layout";
 
+const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
+
+function shouldWrapFileContent(filePath: string) {
+  const normalizedPath = filePath.toLowerCase();
+  return [...wrappedFileExtensions].some((extension) =>
+    normalizedPath.endsWith(extension),
+  );
+}
+
 export function WriteRenderer({
   part,
   state,
@@ -20,6 +29,9 @@ export function WriteRenderer({
   const content = input?.content ?? "";
 
   const totalLines = content.length === 0 ? 0 : content.split("\n").length;
+  const fileOptions = shouldWrapFileContent(rawFilePath)
+    ? { ...defaultFileOptions, overflow: "wrap" as const }
+    : defaultFileOptions;
 
   const output = part.state === "output-available" ? part.output : undefined;
   const outputError =
@@ -38,7 +50,7 @@ export function WriteRenderer({
       <div className="max-h-96 overflow-auto">
         <DiffsFile
           file={{ name: rawFilePath, contents: content }}
-          options={defaultFileOptions}
+          options={fileOptions}
         />
       </div>
     ) : undefined;

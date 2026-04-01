@@ -30,6 +30,15 @@ type WorkspaceFileViewerProps = {
   sessionId: string;
 };
 
+const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
+
+function shouldWrapFileContent(filePath: string) {
+  const normalizedPath = filePath.toLowerCase();
+  return [...wrappedFileExtensions].some((extension) =>
+    normalizedPath.endsWith(extension),
+  );
+}
+
 function useCopyAction() {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,6 +101,9 @@ function ViewerBody({
   response: WorkspaceFileContentResponse | undefined;
 }) {
   const hasContent = response != null && response.content.length > 0;
+  const fileOptions = shouldWrapFileContent(filePath)
+    ? { ...defaultFileOptions, overflow: "wrap" as const }
+    : defaultFileOptions;
 
   return (
     <>
@@ -142,7 +154,7 @@ function ViewerBody({
           ) : (
             <DiffsFile
               file={{ name: filePath, contents: response.content }}
-              options={defaultFileOptions}
+              options={fileOptions}
             />
           )
         ) : (
