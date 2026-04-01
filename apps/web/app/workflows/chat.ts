@@ -73,6 +73,149 @@ const generateId = async () => {
   return generateIdAi();
 };
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function compactRecord(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+  );
+}
+
+function summarizeContentTypes(content: unknown): unknown {
+  if (Array.isArray(content)) {
+    return content.slice(0, 8).map((part) => {
+      if (isObjectRecord(part) && typeof part.type === "string") {
+        return part.type;
+      }
+
+      return typeof part;
+    });
+  }
+
+  if (typeof content === "string") {
+    return ["text"];
+  }
+
+  if (content === undefined) {
+    return undefined;
+  }
+
+  return [typeof content];
+}
+
+function summarizeRequestTool(tool: unknown): unknown {
+  if (!isObjectRecord(tool)) {
+    return tool === undefined ? undefined : { type: typeof tool };
+  }
+
+  return compactRecord({
+    type: typeof tool.type === "string" ? tool.type : undefined,
+    name: typeof tool.name === "string" ? tool.name : undefined,
+    strict: typeof tool.strict === "boolean" ? tool.strict : undefined,
+  });
+}
+
+function summarizeRequestInputItem(item: unknown): unknown {
+  if (!isObjectRecord(item)) {
+    return { type: typeof item };
+  }
+
+  return compactRecord({
+    type:
+      typeof item.type === "string"
+        ? item.type
+        : typeof item.role === "string"
+          ? "message"
+          : undefined,
+    role: typeof item.role === "string" ? item.role : undefined,
+    contentTypes: summarizeContentTypes(item.content),
+  });
+}
+
+function summarizeRequestBody(body: unknown): unknown {
+  if (!isObjectRecord(body)) {
+    return body === undefined ? undefined : { type: typeof body };
+  }
+
+  const input = Array.isArray(body.input) ? body.input : undefined;
+  const tools = Array.isArray(body.tools) ? body.tools : undefined;
+
+  return compactRecord({
+    model: typeof body.model === "string" ? body.model : undefined,
+    stream: typeof body.stream === "boolean" ? body.stream : undefined,
+    store: typeof body.store === "boolean" ? body.store : undefined,
+    previousResponseId:
+      typeof body.previous_response_id === "string"
+        ? body.previous_response_id
+        : undefined,
+    maxOutputTokens:
+      typeof body.max_output_tokens === "number"
+        ? body.max_output_tokens
+        : undefined,
+    maxCompletionTokens:
+      typeof body.max_completion_tokens === "number"
+        ? body.max_completion_tokens
+        : undefined,
+    temperature:
+      typeof body.temperature === "number" ? body.temperature : undefined,
+    topP: typeof body.top_p === "number" ? body.top_p : undefined,
+    truncation:
+      typeof body.truncation === "string" ? body.truncation : undefined,
+    toolChoice: body.tool_choice,
+    parallelToolCalls:
+      typeof body.parallel_tool_calls === "boolean"
+        ? body.parallel_tool_calls
+        : undefined,
+    reasoning: isObjectRecord(body.reasoning) ? body.reasoning : undefined,
+    text: isObjectRecord(body.text) ? body.text : undefined,
+    include: Array.isArray(body.include) ? body.include : undefined,
+    inputCount: input?.length,
+    inputSummary: input?.slice(0, 6).map(summarizeRequestInputItem),
+    toolsCount: tools?.length,
+    tools: tools?.slice(0, 6).map(summarizeRequestTool),
+  });
+}
+
+function summarizeResponseOutputItem(item: unknown): unknown {
+  if (!isObjectRecord(item)) {
+    return { type: typeof item };
+  }
+
+  return compactRecord({
+    type: typeof item.type === "string" ? item.type : undefined,
+    status: typeof item.status === "string" ? item.status : undefined,
+    role: typeof item.role === "string" ? item.role : undefined,
+    id: typeof item.id === "string" ? item.id : undefined,
+    contentTypes: summarizeContentTypes(item.content),
+  });
+}
+
+function summarizeResponseBody(body: unknown): unknown {
+  if (!isObjectRecord(body)) {
+    return body === undefined ? undefined : { type: typeof body };
+  }
+
+  const output = Array.isArray(body.output) ? body.output : undefined;
+
+  return compactRecord({
+    id: typeof body.id === "string" ? body.id : undefined,
+    status: typeof body.status === "string" ? body.status : undefined,
+    incompleteDetails: isObjectRecord(body.incomplete_details)
+      ? body.incomplete_details
+      : undefined,
+    error: body.error,
+    outputCount: output?.length,
+    outputSummary: output?.slice(0, 8).map(summarizeResponseOutputItem),
+    usage: isObjectRecord(body.usage) ? body.usage : undefined,
+    serviceTier:
+      typeof body.service_tier === "string" ? body.service_tier : undefined,
+  });
+}
+
 export async function runAgentWorkflow(options: Options) {
   "use workflow";
 
@@ -127,6 +270,9 @@ export async function runAgentWorkflow(options: Options) {
         assistantId,
         writable,
         workflowRunId,
+        options.chatId,
+        options.sessionId,
+        options.modelId,
         options.agentOptions,
       );
 
@@ -253,6 +399,9 @@ const runAgentStep = async (
   messageId: string,
   writable: Writable,
   workflowRunId: string,
+  chatId: string,
+  sessionId: string,
+  selectedModelId: string,
   agentOptions: OpenHarnessAgentCallOptions,
 ) => {
   "use step";
@@ -316,23 +465,66 @@ const runAgentStep = async (
       throw new Error("Agent stream finished without a response message");
     }
 
-    const [stepUsage, finishReason, rawFinishReason, response] =
+    const [stepUsage, finishReason, rawFinishReason, response, steps] =
       await Promise.all([
         result.totalUsage,
         result.finishReason,
         result.rawFinishReason,
         result.response,
+        result.steps,
       ]);
 
     if (finishReason === "other") {
+      const stepDiagnostics = steps.map((step) => ({
+        stepNumber: step.stepNumber,
+        model: step.model,
+        finishReason: step.finishReason,
+        rawFinishReason: step.rawFinishReason,
+        usage: step.usage,
+        warnings: step.warnings,
+        contentTypes: step.content.map((contentPart) => contentPart.type),
+        toolCalls: step.toolCalls.map((toolCall) =>
+          compactRecord({
+            toolName: toolCall.toolName,
+            dynamic: toolCall.dynamic,
+            invalid: "invalid" in toolCall ? toolCall.invalid : undefined,
+            providerExecuted: toolCall.providerExecuted,
+          }),
+        ),
+        toolResults: step.toolResults.map((toolResult) =>
+          compactRecord({
+            toolName: toolResult.toolName,
+            dynamic: toolResult.dynamic,
+            preliminary: toolResult.preliminary,
+            providerExecuted: toolResult.providerExecuted,
+          }),
+        ),
+        request: compactRecord({
+          body: summarizeRequestBody(step.request.body),
+        }),
+        response: compactRecord({
+          id: step.response.id,
+          modelId: step.response.modelId,
+          timestamp: step.response.timestamp.toISOString(),
+          headers: step.response.headers,
+          body: summarizeResponseBody(step.response.body),
+          messageCount: step.response.messages.length,
+        }),
+        providerMetadata: step.providerMetadata,
+      }));
+
       console.warn("[workflow] Agent step finished with reason 'other':", {
         workflowRunId,
+        chatId,
+        sessionId,
         messageId,
+        selectedModelId,
         finishReason,
         rawFinishReason,
         stepUsage,
         response,
         responseMessage,
+        stepDiagnostics,
       });
     }
 

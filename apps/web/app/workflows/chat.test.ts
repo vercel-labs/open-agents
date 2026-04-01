@@ -30,6 +30,49 @@ let agentResponse: Record<string, unknown> = {
 let streamOnFinishCallback:
   | ((args: { responseMessage: unknown }) => void)
   | undefined;
+let agentWarnings: unknown[] | undefined;
+let agentRequestBody: unknown;
+let agentResponseHeaders: Record<string, string> | undefined;
+let agentResponseBody: unknown;
+let agentProviderMetadata: Record<string, unknown> | undefined;
+
+function buildAgentSteps() {
+  return [
+    {
+      stepNumber: 0,
+      model: {
+        provider: "openai",
+        modelId:
+          typeof agentResponse.modelId === "string"
+            ? agentResponse.modelId
+            : "test-model",
+      },
+      finishReason: agentFinishReason,
+      rawFinishReason: agentRawFinishReason,
+      usage: agentTotalUsage,
+      warnings: agentWarnings,
+      content: [{ type: "text" }],
+      toolCalls: [],
+      toolResults: [],
+      request: { body: agentRequestBody },
+      response: {
+        id:
+          typeof agentResponse.id === "string"
+            ? agentResponse.id
+            : "response-1",
+        modelId:
+          typeof agentResponse.modelId === "string"
+            ? agentResponse.modelId
+            : "test-model",
+        timestamp: new Date("2026-01-01T00:00:00.000Z"),
+        headers: agentResponseHeaders,
+        body: agentResponseBody,
+        messages: agentResponseMessages,
+      },
+      providerMetadata: agentProviderMetadata,
+    },
+  ];
+}
 
 // ── Module mocks ───────────────────────────────────────────────────
 
@@ -120,6 +163,7 @@ mock.module("@/app/config", () => ({
         finishReason: Promise.resolve(agentFinishReason),
         rawFinishReason: Promise.resolve(agentRawFinishReason),
         response: Promise.resolve(agentResponse),
+        steps: Promise.resolve(buildAgentSteps()),
       };
     },
   },
@@ -169,6 +213,11 @@ beforeEach(() => {
   agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
   agentResponseMessages = [];
   agentResponse = { messages: agentResponseMessages };
+  agentWarnings = undefined;
+  agentRequestBody = undefined;
+  agentResponseHeaders = undefined;
+  agentResponseBody = undefined;
+  agentProviderMetadata = undefined;
   streamOnFinishCallback = undefined;
   Object.values(spies).forEach((s) => s.mockClear());
 });
@@ -208,7 +257,7 @@ describe("runAgentWorkflow", () => {
     expect(rwCalls[0][1]).toBe("gpt-4");
   });
 
-  test("logs full step details when the agent finishes with reason other", async () => {
+  test("logs full step diagnostics when the agent finishes with reason other", async () => {
     agentFinishReason = "other";
     agentRawFinishReason = "provider_other";
     agentResponseMessages = [{ role: "assistant" }];
@@ -216,6 +265,46 @@ describe("runAgentWorkflow", () => {
       id: "response-1",
       messages: agentResponseMessages,
       modelId: "test-model",
+    };
+    agentWarnings = [
+      {
+        type: "unsupported-setting",
+        setting: "text.verbosity",
+        details: "Provider ignored the requested verbosity.",
+      },
+    ];
+    agentRequestBody = {
+      model: "openai/gpt-5",
+      store: false,
+      max_output_tokens: 512,
+      reasoning: { effort: "medium" },
+      input: [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: "Hello" }],
+        },
+      ],
+      tools: [{ type: "function", name: "read" }],
+    };
+    agentResponseHeaders = { "x-request-id": "req-123" };
+    agentResponseBody = {
+      id: "response-body-1",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [
+        {
+          id: "msg-1",
+          type: "message",
+          status: "completed",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Hi" }],
+        },
+      ],
+      usage: { total_tokens: 15 },
+      service_tier: "default",
+    };
+    agentProviderMetadata = {
+      openai: { responseId: "response-1", serviceTier: "default" },
     };
 
     const originalWarn = console.warn;
@@ -233,10 +322,47 @@ describe("runAgentWorkflow", () => {
       );
       expect(warnings[0]?.[1]).toMatchObject({
         workflowRunId: "wrun_test-123",
+        chatId: "chat-1",
+        sessionId: "session-1",
         messageId: "gen-id-1",
+        selectedModelId: "gpt-4",
         finishReason: "other",
         rawFinishReason: "provider_other",
         response: agentResponse,
+        stepDiagnostics: [
+          {
+            stepNumber: 0,
+            model: { provider: "openai", modelId: "test-model" },
+            finishReason: "other",
+            rawFinishReason: "provider_other",
+            warnings: agentWarnings,
+            request: {
+              body: {
+                model: "openai/gpt-5",
+                store: false,
+                maxOutputTokens: 512,
+                inputCount: 1,
+                toolsCount: 1,
+              },
+            },
+            response: {
+              id: "response-1",
+              modelId: "test-model",
+              headers: { "x-request-id": "req-123" },
+              body: {
+                id: "response-body-1",
+                status: "incomplete",
+                incompleteDetails: { reason: "max_output_tokens" },
+                outputCount: 1,
+                serviceTier: "default",
+              },
+              messageCount: 1,
+            },
+            providerMetadata: {
+              openai: { responseId: "response-1", serviceTier: "default" },
+            },
+          },
+        ],
       });
     } finally {
       console.warn = originalWarn;
