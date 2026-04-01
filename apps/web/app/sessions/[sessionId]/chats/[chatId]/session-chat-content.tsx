@@ -3642,6 +3642,11 @@ export function SessionChatContent({
                       <ModelSelectorCompact
                         value={chatInfo.modelId}
                         modelOptions={modelOptions}
+                        disabled={
+                          isChatInFlight ||
+                          isUpdatingModel ||
+                          modelOptionsLoading
+                        }
                         onChange={(modelId) => {
                           void handleModelChange(modelId);
                         }}
