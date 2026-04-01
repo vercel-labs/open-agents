@@ -578,10 +578,10 @@ export function CreatePRDialog({
                       </>
                     )}
                   </Button>
-                  <div className="flex">
+                  <div className="flex w-full sm:w-auto">
                     <Button
                       onClick={handleCreate}
-                      className="rounded-r-none"
+                      className="min-w-0 flex-1 rounded-r-none sm:flex-none"
                       disabled={
                         isDisabled || !title.trim() || hasUncommittedChanges
                       }
