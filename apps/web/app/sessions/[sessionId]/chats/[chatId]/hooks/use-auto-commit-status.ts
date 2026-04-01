@@ -5,7 +5,7 @@ import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import type { SessionPostTurnPhase } from "@/lib/session/post-turn-phase";
 
 const POST_TURN_REFRESH_DELAYS_MS = [1500, 4000, 8000] as const;
-const POST_TURN_OPTIMISTIC_TIMEOUT_MS = 30_000;
+const POST_TURN_OPTIMISTIC_TIMEOUT_MS = 10_000;
 
 type UseAutoCommitStatusParams = {
   autoCommitEnabled: boolean;

@@ -8,6 +8,10 @@ let isFirstChatMessageResult = false;
 let upsertChatMessageScopedResult: { status: string } = {
   status: "inserted",
 };
+let gitStatusResult = {
+  success: true,
+  stdout: " M file.ts\n",
+};
 
 const spies = {
   compareAndSetChatActiveStreamId: mock(() => Promise.resolve(true)),
@@ -33,6 +37,8 @@ const spies = {
   buildActiveLifecycleUpdate: mock(() => ({})),
   connectSandbox: mock(() =>
     Promise.resolve({
+      workingDirectory: "/workspace",
+      exec: () => Promise.resolve(gitStatusResult),
       getState: () => ({ type: "vercel", sandboxId: "sb-1" }),
     }),
   ),
@@ -88,6 +94,7 @@ const {
   persistSandboxState,
   clearActiveStream,
   refreshDiffCache,
+  hasPendingGitWorkStep,
   runAutoCommitStep,
   runAutoCreatePrStep,
   updateSessionPostTurnPhase,
@@ -124,6 +131,10 @@ beforeEach(() => {
   createChatMessageIfNotExistsResult = { id: "msg-1" };
   isFirstChatMessageResult = false;
   upsertChatMessageScopedResult = { status: "inserted" };
+  gitStatusResult = {
+    success: true,
+    stdout: " M file.ts\n",
+  };
 });
 
 // ─── persistUserMessage ────────────────────────────────────────────
@@ -343,6 +354,37 @@ describe("refreshDiffCache", () => {
     );
 
     await refreshDiffCache("session-1", { type: "vercel" } as never);
+  });
+});
+
+// ─── hasPendingGitWorkStep ─────────────────────────────────────────
+
+describe("hasPendingGitWorkStep", () => {
+  test("returns true when git status reports pending changes", async () => {
+    await expect(
+      hasPendingGitWorkStep({ type: "vercel" } as never),
+    ).resolves.toBe(true);
+  });
+
+  test("returns false when git status is clean", async () => {
+    gitStatusResult = {
+      success: true,
+      stdout: "",
+    };
+
+    await expect(
+      hasPendingGitWorkStep({ type: "vercel" } as never),
+    ).resolves.toBe(false);
+  });
+
+  test("returns false on sandbox errors", async () => {
+    spies.connectSandbox.mockImplementationOnce(() =>
+      Promise.reject(new Error("Sandbox unavailable")),
+    );
+
+    await expect(
+      hasPendingGitWorkStep({ type: "vercel" } as never),
+    ).resolves.toBe(false);
   });
 });
 

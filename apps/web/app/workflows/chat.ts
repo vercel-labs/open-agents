@@ -18,6 +18,7 @@ import type {
 } from "@/app/types";
 import {
   clearActiveStream,
+  hasPendingGitWorkStep,
   persistAssistantMessage,
   persistSandboxState,
   recordWorkflowUsage,
@@ -162,12 +163,16 @@ export async function runAgentWorkflow(options: Options) {
       finalFinishReason !== "tool-calls";
     const repoOwner = options.repoOwner;
     const repoName = options.repoName;
-    const shouldRunAutoCommit =
+    const canAttemptAutoCommit =
       finishedNaturally &&
       options.autoCommitEnabled === true &&
       sandboxState !== undefined &&
       repoOwner !== undefined &&
       repoName !== undefined;
+    const hasPendingGitWork = canAttemptAutoCommit
+      ? await hasPendingGitWorkStep(sandboxState)
+      : false;
+    const shouldRunAutoCommit = canAttemptAutoCommit && hasPendingGitWork;
 
     if (shouldRunAutoCommit) {
       await updateSessionPostTurnPhase(options.sessionId, "auto_commit");
@@ -218,7 +223,7 @@ export async function runAgentWorkflow(options: Options) {
     const canAutoCreatePr =
       autoCommitResult != null &&
       !autoCommitResult.error &&
-      (autoCommitResult.pushed || !autoCommitResult.committed);
+      autoCommitResult.pushed;
     const shouldRunAutoCreatePr =
       shouldRunAutoCommit &&
       options.autoCreatePrEnabled === true &&

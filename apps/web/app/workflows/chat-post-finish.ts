@@ -328,6 +328,27 @@ export async function refreshDiffCache(
   }
 }
 
+export async function hasPendingGitWorkStep(
+  sandboxState: SandboxState,
+): Promise<boolean> {
+  "use step";
+
+  try {
+    const { connectSandbox } = await import("@open-harness/sandbox");
+    const sandbox: Sandbox = await connectSandbox(sandboxState);
+    const result = await sandbox.exec(
+      "git status --porcelain",
+      sandbox.workingDirectory,
+      10_000,
+    );
+
+    return result.success && result.stdout.trim().length > 0;
+  } catch (error) {
+    console.error("[workflow] Failed to detect pending git work:", error);
+    return false;
+  }
+}
+
 export async function runAutoCommitStep(params: {
   userId: string;
   sessionId: string;

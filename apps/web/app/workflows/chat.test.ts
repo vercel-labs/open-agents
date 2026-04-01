@@ -13,8 +13,9 @@ const spies = {
   recordWorkflowUsage: mock(() => Promise.resolve()),
   refreshDiffCache: mock(() => Promise.resolve()),
   updateSessionPostTurnPhase: mock(() => Promise.resolve()),
+  hasPendingGitWorkStep: mock(() => Promise.resolve(true)),
   runAutoCommitStep: mock(() =>
-    Promise.resolve({ committed: false, pushed: false }),
+    Promise.resolve({ committed: true, pushed: true }),
   ),
   runAutoCreatePrStep: mock(() => Promise.resolve()),
 };
@@ -172,6 +173,10 @@ beforeEach(() => {
   agentResponse = { messages: agentResponseMessages };
   streamOnFinishCallback = undefined;
   Object.values(spies).forEach((s) => s.mockClear());
+  spies.hasPendingGitWorkStep.mockImplementation(() => Promise.resolve(true));
+  spies.runAutoCommitStep.mockImplementation(() =>
+    Promise.resolve({ committed: true, pushed: true }),
+  );
 });
 
 describe("runAgentWorkflow", () => {
@@ -332,6 +337,7 @@ describe("runAgentWorkflow", () => {
       }),
     );
 
+    expect(spies.hasPendingGitWorkStep).toHaveBeenCalledTimes(1);
     expect(spies.updateSessionPostTurnPhase).toHaveBeenNthCalledWith(
       1,
       "session-1",
@@ -384,6 +390,25 @@ describe("runAgentWorkflow", () => {
       "session-1",
       null,
     );
+  });
+
+  test("skips auto PR creation when there is no pending git work", async () => {
+    spies.hasPendingGitWorkStep.mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.updateSessionPostTurnPhase).not.toHaveBeenCalled();
+    expect(spies.runAutoCommitStep).not.toHaveBeenCalled();
+    expect(spies.runAutoCreatePrStep).not.toHaveBeenCalled();
   });
 
   test("skips auto PR creation when auto-commit does not push the latest commit", async () => {
