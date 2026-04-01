@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckIcon, ChevronDown } from "lucide-react";
 import { type ModelOption } from "@/lib/model-options";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
@@ -34,20 +34,18 @@ export function ModelSelectorCompact({
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const searchInputId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const focusSearchInput = useCallback(() => {
     window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>(
-        `#${CSS.escape(searchInputId)}`,
-      );
-      if (!(input instanceof HTMLInputElement)) {
+      const input = searchInputRef.current;
+      if (!input) {
         return;
       }
       input.focus();
       input.select();
     });
-  }, [searchInputId]);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -125,7 +123,7 @@ export function ModelSelectorCompact({
       >
         <Command>
           <CommandInput
-            id={searchInputId}
+            ref={searchInputRef}
             value={search}
             onValueChange={setSearch}
             placeholder="Search models..."
