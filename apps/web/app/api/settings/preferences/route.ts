@@ -5,6 +5,10 @@ import {
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
+import {
+  globalSkillRefsSchema,
+  type GlobalSkillRef,
+} from "@/lib/skills/global-skill-refs";
 
 interface UpdatePreferencesRequest {
   defaultModelId?: string;
@@ -13,6 +17,7 @@ interface UpdatePreferencesRequest {
   defaultDiffMode?: DiffMode;
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
+  globalSkillRefs?: GlobalSkillRef[];
 }
 
 export async function GET() {
@@ -76,6 +81,20 @@ export async function PATCH(req: Request) {
       { error: "Invalid autoCreatePr value" },
       { status: 400 },
     );
+  }
+
+  if (body.globalSkillRefs !== undefined) {
+    const parsedGlobalSkillRefs = globalSkillRefsSchema.safeParse(
+      body.globalSkillRefs,
+    );
+    if (!parsedGlobalSkillRefs.success) {
+      return Response.json(
+        { error: "Invalid globalSkillRefs value" },
+        { status: 400 },
+      );
+    }
+
+    body.globalSkillRefs = parsedGlobalSkillRefs.data;
   }
 
   try {

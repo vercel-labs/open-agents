@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
+import {
+  normalizeGlobalSkillRefs,
+  type GlobalSkillRef,
+} from "@/lib/skills/global-skill-refs";
 import { db } from "./client";
 import { userPreferences, type UserPreferences } from "./schema";
 
@@ -14,6 +18,7 @@ export interface UserPreferencesData {
   defaultDiffMode: DiffMode;
   autoCommitPush: boolean;
   autoCreatePr: boolean;
+  globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
 }
 
@@ -24,6 +29,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultDiffMode: "unified",
   autoCommitPush: false,
   autoCreatePr: false,
+  globalSkillRefs: [],
   modelVariants: [],
 };
 
@@ -65,6 +71,7 @@ export function toUserPreferencesData(
     | "defaultDiffMode"
     | "autoCommitPush"
     | "autoCreatePr"
+    | "globalSkillRefs"
     | "modelVariants"
   >,
 ): UserPreferencesData {
@@ -79,6 +86,7 @@ export function toUserPreferencesData(
     defaultDiffMode: normalizeDiffMode(row?.defaultDiffMode),
     autoCommitPush: row?.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
     autoCreatePr: row?.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
+    globalSkillRefs: normalizeGlobalSkillRefs(row?.globalSkillRefs),
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
   };
 }
@@ -140,6 +148,8 @@ export async function updateUserPreferences(
       autoCommitPush:
         updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
       autoCreatePr: updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
+      globalSkillRefs:
+        updates.globalSkillRefs ?? DEFAULT_PREFERENCES.globalSkillRefs,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
     })
     .returning();
