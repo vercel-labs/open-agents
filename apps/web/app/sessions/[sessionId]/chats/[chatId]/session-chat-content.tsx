@@ -1382,6 +1382,8 @@ export function SessionChatContent({
       return;
     }
 
+    tabResumeRefreshRef.current.pending = false;
+
     const now = Date.now();
     if (tabResumeRefreshRef.current.inFlight) {
       return;
@@ -1452,7 +1454,6 @@ export function SessionChatContent({
         return;
       }
 
-      tabResumeRefreshRef.current.pending = false;
       void refreshAfterTabResume();
     };
     const handleWindowBlur = () => {
@@ -1464,7 +1465,6 @@ export function SessionChatContent({
         return;
       }
 
-      tabResumeRefreshRef.current.pending = false;
       void refreshAfterTabResume();
     };
 
