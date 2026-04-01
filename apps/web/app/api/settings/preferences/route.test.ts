@@ -10,6 +10,7 @@ const preferencesState = {
   defaultSandboxType: "vercel" as const,
   autoCommitPush: false,
   autoCreatePr: false,
+  globalSkillRefs: [] as Array<{ source: string; skillName: string }>,
 };
 
 const updateCalls: Array<Record<string, unknown>> = [];
@@ -71,6 +72,7 @@ describe("/api/settings/preferences", () => {
     expect(body.preferences.autoCommitPush).toBe(false);
     expect(body.preferences.autoCreatePr).toBe(false);
     expect(body.preferences.defaultSandboxType).toBe("vercel");
+    expect(body.preferences.globalSkillRefs).toEqual([]);
   });
 
   test("PATCH rejects invalid sandbox types", async () => {
@@ -142,6 +144,46 @@ describe("/api/settings/preferences", () => {
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]).toEqual({ autoCreatePr: true });
     expect(body.preferences.autoCreatePr).toBe(true);
+  });
+
+  test("PATCH rejects invalid globalSkillRefs values", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", {
+        globalSkillRefs: [{ source: "vercel/ai", skillName: "bad name" }],
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid globalSkillRefs value");
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  test("PATCH updates globalSkillRefs when valid refs are provided", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", {
+        globalSkillRefs: [
+          { source: "vercel/ai", skillName: "ai-sdk" },
+          { source: "vercel/ai", skillName: "ai-sdk" },
+        ],
+      }),
+    );
+    const body = (await response.json()) as {
+      preferences: typeof preferencesState;
+    };
+
+    expect(response.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toEqual({
+      globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
+    });
+    expect(body.preferences.globalSkillRefs).toEqual([
+      { source: "vercel/ai", skillName: "ai-sdk" },
+    ]);
   });
 
   test("PATCH returns 400 for invalid JSON", async () => {

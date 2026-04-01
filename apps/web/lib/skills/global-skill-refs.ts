@@ -8,18 +8,12 @@ export const globalSkillRefSchema = z.object({
     .string()
     .trim()
     .min(1, "Source is required")
-    .regex(
-      GLOBAL_SKILL_SOURCE_PATTERN,
-      "Source must be in owner/repo format",
-    ),
+    .regex(GLOBAL_SKILL_SOURCE_PATTERN, "Source must be in owner/repo format"),
   skillName: z
     .string()
     .trim()
     .min(1, "Skill name is required")
-    .regex(
-      GLOBAL_SKILL_NAME_PATTERN,
-      "Skill name cannot contain spaces",
-    ),
+    .regex(GLOBAL_SKILL_NAME_PATTERN, "Skill name cannot contain spaces"),
 });
 
 export type GlobalSkillRef = z.infer<typeof globalSkillRefSchema>;
@@ -51,9 +45,7 @@ export const globalSkillRefsSchema = z
   .array(globalSkillRefSchema)
   .transform((refs) => dedupeGlobalSkillRefs(refs));
 
-export function parseGlobalSkillRefs(
-  value: unknown,
-): GlobalSkillRef[] | null {
+export function parseGlobalSkillRefs(value: unknown): GlobalSkillRef[] | null {
   const parsed = globalSkillRefsSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }

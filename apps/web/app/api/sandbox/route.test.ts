@@ -11,6 +11,7 @@ interface TestSessionRecord {
   vercelProjectId: string | null;
   vercelProjectName: string | null;
   vercelTeamId: string | null;
+  globalSkillRefs?: Array<{ source: string; skillName: string }>;
 }
 
 interface TestVercelAuthInfo {
@@ -177,6 +178,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       vercelProjectId: "project-1",
       vercelProjectName: "open-harness-web",
       vercelTeamId: "team-1",
+      globalSkillRefs: [],
     };
   });
 
@@ -313,6 +315,44 @@ describe("/api/sandbox lifecycle kicks", () => {
           '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
       },
     ]);
+  });
+
+  test("installs session global skills into the sandbox home directory", async () => {
+    const { POST } = await routeModulePromise;
+
+    sessionRecord.globalSkillRefs = [
+      { source: "vercel/ai", skillName: "ai-sdk" },
+    ];
+
+    const response = await POST(
+      new Request("http://localhost/api/sandbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "session-1",
+          sandboxType: "vercel",
+        }),
+      }),
+    );
+
+    expect(response.ok).toBe(true);
+    expect(execCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: 'printf %s "$HOME"' }),
+        expect.objectContaining({
+          command: "mkdir -p '/root/.open-harness/global-skills'",
+        }),
+        expect.objectContaining({
+          command:
+            "HOME='/root' npx skills add 'vercel/ai' --skill 'ai-sdk' --agent amp -g -y --copy",
+        }),
+      ]),
+    );
+    expect(writeFileCalls).toContainEqual({
+      path: "/root/.open-harness/global-skills/session-1.json",
+      content:
+        '{\n  "version": 1,\n  "globalSkillRefs": [\n    {\n      "source": "vercel/ai",\n      "skillName": "ai-sdk"\n    }\n  ]\n}\n',
+    });
   });
 
   test("rejects unsupported sandbox types", async () => {

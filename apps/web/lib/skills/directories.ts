@@ -18,7 +18,9 @@ export function getGlobalSkillsDirectory(homeDirectory: string): string {
   return path.posix.join(homeDirectory, GLOBAL_SKILLS_RELATIVE_DIRECTORY);
 }
 
-export function getGlobalSkillsManifestDirectory(homeDirectory: string): string {
+export function getGlobalSkillsManifestDirectory(
+  homeDirectory: string,
+): string {
   return path.posix.join(
     homeDirectory,
     GLOBAL_SKILLS_MANIFEST_RELATIVE_DIRECTORY,

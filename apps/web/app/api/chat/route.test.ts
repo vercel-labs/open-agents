@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 
+mock.module("server-only", () => ({}));
+
 interface TestSessionRecord {
   id: string;
   userId: string;

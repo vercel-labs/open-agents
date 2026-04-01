@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
   type SandboxType,
 } from "@/components/sandbox-selector-compact";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -29,6 +32,10 @@ import {
   type DiffMode,
   useUserPreferences,
 } from "@/hooks/use-user-preferences";
+import {
+  globalSkillRefSchema,
+  type GlobalSkillRef,
+} from "@/lib/skills/global-skill-refs";
 import {
   getDefaultModelOptionId,
   withMissingModelOption,
@@ -51,6 +58,29 @@ const DIFF_MODE_OPTIONS: Array<{ id: DiffMode; name: string }> = [
 
 function isThemePreference(value: string): value is ThemePreference {
   return THEME_OPTIONS.some((option) => option.id === value);
+}
+
+function getGlobalSkillRefError(params: {
+  source: string;
+  skillName: string;
+  existingRefs: GlobalSkillRef[];
+}): string | null {
+  const parsedRef = globalSkillRefSchema.safeParse({
+    source: params.source,
+    skillName: params.skillName,
+  });
+
+  if (!parsedRef.success) {
+    return parsedRef.error.issues[0]?.message ?? "Invalid global skill ref";
+  }
+
+  const duplicateExists = params.existingRefs.some(
+    (ref) =>
+      ref.source.toLowerCase() === parsedRef.data.source.toLowerCase() &&
+      ref.skillName.toLowerCase() === parsedRef.data.skillName.toLowerCase(),
+  );
+
+  return duplicateExists ? "That global skill has already been added" : null;
 }
 
 export function PreferencesSectionSkeleton() {
@@ -121,6 +151,11 @@ export function PreferencesSection() {
   const { preferences, loading, updatePreferences } = useUserPreferences();
   const { modelOptions, loading: modelOptionsLoading } = useModelOptions();
   const [isSaving, setIsSaving] = useState(false);
+  const [globalSkillSource, setGlobalSkillSource] = useState("");
+  const [globalSkillName, setGlobalSkillName] = useState("");
+  const [globalSkillsError, setGlobalSkillsError] = useState<string | null>(
+    null,
+  );
 
   const selectedDefaultModelId =
     preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
@@ -205,6 +240,58 @@ export function PreferencesSection() {
       await updatePreferences({ autoCreatePr: enabled });
     } catch (error) {
       console.error("Failed to update auto-PR preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddGlobalSkillRef = async () => {
+    const existingRefs = preferences?.globalSkillRefs ?? [];
+    const errorMessage = getGlobalSkillRefError({
+      source: globalSkillSource,
+      skillName: globalSkillName,
+      existingRefs,
+    });
+
+    if (errorMessage) {
+      setGlobalSkillsError(errorMessage);
+      return;
+    }
+
+    setIsSaving(true);
+    setGlobalSkillsError(null);
+    try {
+      const nextRef = globalSkillRefSchema.parse({
+        source: globalSkillSource,
+        skillName: globalSkillName,
+      });
+      await updatePreferences({
+        globalSkillRefs: [...existingRefs, nextRef],
+      });
+      setGlobalSkillSource("");
+      setGlobalSkillName("");
+    } catch (error) {
+      console.error("Failed to add global skill preference:", error);
+      setGlobalSkillsError("Failed to add global skill");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveGlobalSkillRef = async (index: number) => {
+    const existingRefs = preferences?.globalSkillRefs ?? [];
+
+    setIsSaving(true);
+    setGlobalSkillsError(null);
+    try {
+      await updatePreferences({
+        globalSkillRefs: existingRefs.filter(
+          (_, refIndex) => refIndex !== index,
+        ),
+      });
+    } catch (error) {
+      console.error("Failed to remove global skill preference:", error);
+      setGlobalSkillsError("Failed to remove global skill");
     } finally {
       setIsSaving(false);
     }
@@ -334,6 +421,106 @@ export function PreferencesSection() {
           <p className="text-xs text-muted-foreground">
             The diff layout used when opening the changes viewer.
           </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="space-y-1">
+            <Label>Global Skills</Label>
+            <p className="text-xs text-muted-foreground">
+              Add skills from GitHub that should be installed outside the repo
+              for new sessions. Repo skills with the same name still take
+              precedence.
+            </p>
+          </div>
+
+          {(preferences?.globalSkillRefs ?? []).length > 0 ? (
+            <div className="space-y-2">
+              {(preferences?.globalSkillRefs ?? []).map(
+                (globalSkillRef, index) => (
+                  <div
+                    key={`${globalSkillRef.source}-${globalSkillRef.skillName}`}
+                    className="flex flex-col gap-2 rounded-lg border border-border/70 p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="grid flex-1 gap-1">
+                      <span className="text-sm font-medium">
+                        {globalSkillRef.skillName}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {globalSkillRef.source}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRemoveGlobalSkillRef(index)}
+                      disabled={isSaving}
+                    >
+                      <Trash2 className="mr-2 size-4" />
+                      Remove
+                    </Button>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No global skills configured.
+            </p>
+          )}
+
+          <div className="grid gap-2 rounded-lg border border-dashed border-border/70 p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="global-skill-source"
+                  className="text-xs font-medium"
+                >
+                  Repository source
+                </Label>
+                <Input
+                  id="global-skill-source"
+                  value={globalSkillSource}
+                  onChange={(event) => setGlobalSkillSource(event.target.value)}
+                  placeholder="vercel/ai"
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="global-skill-name"
+                  className="text-xs font-medium"
+                >
+                  Skill name
+                </Label>
+                <Input
+                  id="global-skill-name"
+                  value={globalSkillName}
+                  onChange={(event) => setGlobalSkillName(event.target.value)}
+                  placeholder="ai-sdk"
+                  disabled={isSaving}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddGlobalSkillRef}
+                disabled={isSaving}
+              >
+                <Plus className="mr-2 size-4" />
+                Add global skill
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Uses source + skill name, like <code>vercel/ai</code> +{" "}
+                <code>ai-sdk</code>.
+              </p>
+            </div>
+            {globalSkillsError && (
+              <p className="text-xs text-destructive">{globalSkillsError}</p>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-2">

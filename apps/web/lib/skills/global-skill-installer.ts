@@ -2,7 +2,10 @@ import "server-only";
 
 import type { Sandbox } from "@open-harness/sandbox";
 import { z } from "zod";
-import { shellEscape, resolveSandboxHomeDirectory } from "@/lib/sandbox/home-directory";
+import {
+  shellEscape,
+  resolveSandboxHomeDirectory,
+} from "@/lib/sandbox/home-directory";
 import {
   areGlobalSkillRefsEqual,
   globalSkillRefsSchema,
@@ -64,7 +67,10 @@ export async function installGlobalSkills(params: {
   }
 
   const homeDirectory = await resolveSandboxHomeDirectory(params.sandbox);
-  const manifestPath = getGlobalSkillsManifestPath(homeDirectory, params.sessionId);
+  const manifestPath = getGlobalSkillsManifestPath(
+    homeDirectory,
+    params.sessionId,
+  );
   const installedGlobalSkillRefs = await readInstalledGlobalSkillRefs(
     params.sandbox,
     manifestPath,

@@ -33,6 +33,7 @@ mock.module("@/lib/db/user-preferences", () => ({
     defaultModelId: "anthropic/claude-haiku-4.5",
     autoCommitPush: false,
     autoCreatePr: false,
+    globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
   }),
 }));
 
@@ -257,6 +258,24 @@ describe("/api/sessions POST vercel project linking", () => {
       vercelTeamSlug: null,
     });
     expect(body.session.vercelProjectId).toBeNull();
+  });
+
+  test("new sessions snapshot the user global skill refs", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        branch: "main",
+        cloneUrl: "https://github.com/vercel/open-harness",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCalls[0]).toMatchObject({
+      globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
+    });
   });
 
   test("rejects invalid repository owners", async () => {
