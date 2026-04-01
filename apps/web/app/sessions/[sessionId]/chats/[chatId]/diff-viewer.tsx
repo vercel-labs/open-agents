@@ -34,6 +34,15 @@ type DiffViewerProps = {
 
 type DiffStyle = DiffMode;
 
+const wrappedDiffExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
+
+function shouldWrapDiffContent(filePath: string) {
+  const normalizedPath = filePath.toLowerCase();
+  return [...wrappedDiffExtensions].some((extension) =>
+    normalizedPath.endsWith(extension),
+  );
+}
+
 function formatTimestamp(date: Date) {
   return date.toLocaleString("en-US", {
     month: "short",
@@ -129,7 +138,11 @@ function FileEntry({
 }) {
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.slice(0, -fileName.length);
-  const options = diffStyle === "split" ? splitDiffOptions : defaultDiffOptions;
+  const baseOptions =
+    diffStyle === "split" ? splitDiffOptions : defaultDiffOptions;
+  const options = shouldWrapDiffContent(file.path)
+    ? { ...baseOptions, overflow: "wrap" as const }
+    : baseOptions;
   const isGenerated = file.generated === true;
 
   return (
