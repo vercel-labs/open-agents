@@ -40,6 +40,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import useSWR from "swr";
+import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[chatId]/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
@@ -1032,6 +1033,7 @@ export function SessionChatContent({
     refreshFiles,
     skills,
     skillsLoading,
+    refreshSkills,
   } = useSessionChatWorkspaceContext();
   const autoCommitEnabled = Boolean(
     session.cloneUrl &&
@@ -1052,6 +1054,7 @@ export function SessionChatContent({
   const {
     messages,
     error,
+    clearError,
     sendMessage,
     setMessages,
     status,
@@ -1345,6 +1348,74 @@ export function SessionChatContent({
     [chatInfo.id, markChatRead],
   );
   const requestMarkChatReadRef = useRef(requestMarkChatRead);
+  const tabResumeRefreshRef = useRef({
+    pending: false,
+    inFlight: false,
+    lastAt: 0,
+  });
+
+  const refreshCurrentChatSnapshot = useCallback(async (): Promise<void> => {
+    const response = await fetch(
+      `/api/sessions/${session.id}/chats/${chatInfo.id}`,
+      {
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) {
+      return;
+    }
+
+    const data = (await response.json()) as ChatRefreshResponse;
+    if (data.isStreaming) {
+      return;
+    }
+
+    clearError();
+    setMessages(data.messages);
+  }, [chatInfo.id, clearError, session.id, setMessages]);
+
+  const refreshAfterTabResume = useCallback(async (): Promise<void> => {
+    if (
+      typeof document !== "undefined" &&
+      (document.visibilityState !== "visible" || !document.hasFocus())
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    if (tabResumeRefreshRef.current.inFlight) {
+      return;
+    }
+    if (now - tabResumeRefreshRef.current.lastAt < 3_000) {
+      return;
+    }
+
+    tabResumeRefreshRef.current.inFlight = true;
+    try {
+      await Promise.allSettled([
+        requestStatusSync("force"),
+        refreshCurrentChatSnapshot(),
+        refreshChats(),
+        refreshGitStatus(),
+        refreshDiff(),
+        refreshFiles(),
+        refreshSkills(),
+        checkBranchAndPr(),
+      ]);
+    } finally {
+      tabResumeRefreshRef.current.lastAt = Date.now();
+      tabResumeRefreshRef.current.inFlight = false;
+    }
+  }, [
+    checkBranchAndPr,
+    refreshChats,
+    refreshCurrentChatSnapshot,
+    refreshDiff,
+    refreshFiles,
+    refreshGitStatus,
+    refreshSkills,
+    requestStatusSync,
+  ]);
 
   useEffect(() => {
     requestMarkChatReadRef.current = requestMarkChatRead;
@@ -1371,21 +1442,41 @@ export function SessionChatContent({
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void requestMarkChatRead("normal");
+      if (document.visibilityState !== "visible") {
+        tabResumeRefreshRef.current.pending = true;
+        return;
       }
+
+      void requestMarkChatRead("normal");
+      if (!tabResumeRefreshRef.current.pending) {
+        return;
+      }
+
+      tabResumeRefreshRef.current.pending = false;
+      void refreshAfterTabResume();
+    };
+    const handleWindowBlur = () => {
+      tabResumeRefreshRef.current.pending = true;
     };
     const handleWindowFocus = () => {
       void requestMarkChatRead("normal");
+      if (!tabResumeRefreshRef.current.pending) {
+        return;
+      }
+
+      tabResumeRefreshRef.current.pending = false;
+      void refreshAfterTabResume();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("focus", handleWindowFocus);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [requestMarkChatRead]);
+  }, [refreshAfterTabResume, requestMarkChatRead]);
 
   useStreamRecovery({
     sessionId: session.id,

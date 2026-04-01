@@ -2,7 +2,13 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
 } from "@/app/api/sessions/_lib/session-context";
-import { deleteChat, getChatsBySessionId, updateChat } from "@/lib/db/sessions";
+import type { WebAgentUIMessage } from "@/app/types";
+import {
+  deleteChat,
+  getChatMessages,
+  getChatsBySessionId,
+  updateChat,
+} from "@/lib/db/sessions";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
@@ -11,6 +17,46 @@ type RouteContext = {
 interface UpdateChatRequest {
   title?: string;
   modelId?: string;
+}
+
+export interface ChatRefreshResponse {
+  chat: {
+    id: string;
+    modelId: string | null;
+    activeStreamId: string | null;
+  };
+  isStreaming: boolean;
+  messages: WebAgentUIMessage[];
+}
+
+export async function GET(_req: Request, context: RouteContext) {
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { sessionId, chatId } = await context.params;
+
+  const chatContext = await requireOwnedSessionChat({
+    userId: authResult.userId,
+    sessionId,
+    chatId,
+  });
+  if (!chatContext.ok) {
+    return chatContext.response;
+  }
+
+  const messages = await getChatMessages(chatId);
+
+  return Response.json({
+    chat: {
+      id: chatContext.chat.id,
+      modelId: chatContext.chat.modelId,
+      activeStreamId: chatContext.chat.activeStreamId,
+    },
+    isStreaming: chatContext.chat.activeStreamId !== null,
+    messages: messages.map((message) => message.parts as WebAgentUIMessage),
+  } satisfies ChatRefreshResponse);
 }
 
 export async function PATCH(req: Request, context: RouteContext) {
