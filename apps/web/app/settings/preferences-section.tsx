@@ -427,50 +427,50 @@ export function PreferencesSection() {
           <div className="space-y-1">
             <Label>Global Skills</Label>
             <p className="text-xs text-muted-foreground">
-              Add skills from GitHub that should be installed outside the repo
-              for new sessions only. Repo skills with the same name still take
-              precedence.
+              Skills from GitHub installed outside the repo for every new
+              session. Repo skills with the same name take precedence.
             </p>
           </div>
 
           {(preferences?.globalSkillRefs ?? []).length > 0 ? (
-            <div className="space-y-2">
+            <div className="divide-y divide-border/60 rounded-lg border border-border/70">
               {(preferences?.globalSkillRefs ?? []).map(
                 (globalSkillRef, index) => (
                   <div
                     key={`${globalSkillRef.source}-${globalSkillRef.skillName}`}
-                    className="flex flex-col gap-2 rounded-lg border border-border/70 p-3 sm:flex-row sm:items-center"
+                    className="flex items-center gap-3 px-3 py-2.5"
                   >
-                    <div className="grid flex-1 gap-1">
-                      <span className="text-sm font-medium">
+                    <div className="grid min-w-0 flex-1 gap-0.5">
+                      <span className="truncate text-sm font-medium">
                         {globalSkillRef.skillName}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="truncate font-mono text-xs text-muted-foreground">
                         {globalSkillRef.source}
                       </span>
                     </div>
                     <Button
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => handleRemoveGlobalSkillRef(index)}
                       disabled={isSaving}
+                      aria-label={`Remove ${globalSkillRef.skillName}`}
                     >
-                      <Trash2 className="mr-2 size-4" />
-                      Remove
+                      <Trash2 />
                     </Button>
                   </div>
                 ),
               )}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              No global skills configured.
+            <p className="text-xs italic text-muted-foreground">
+              No global skills configured yet.
             </p>
           )}
 
-          <div className="grid gap-2 rounded-lg border border-dashed border-border/70 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2.5 rounded-lg border border-dashed border-border/60 p-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
               <div className="grid gap-1.5">
                 <Label
                   htmlFor="global-skill-source"
@@ -501,22 +501,20 @@ export function PreferencesSection() {
                   disabled={isSaving}
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
                 size="sm"
                 onClick={handleAddGlobalSkillRef}
                 disabled={isSaving}
               >
-                <Plus className="mr-2 size-4" />
-                Add global skill
+                <Plus />
+                Add
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Uses source + skill name, like <code>vercel/ai</code> +{" "}
-                <code>ai-sdk</code>.
-              </p>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Enter the GitHub <code>owner/repo</code> source and the skill
+              name, e.g. <code>vercel/ai</code> + <code>ai-sdk</code>.
+            </p>
             {globalSkillsError && (
               <p className="text-xs text-destructive">{globalSkillsError}</p>
             )}
