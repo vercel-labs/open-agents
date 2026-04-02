@@ -16,6 +16,8 @@ const spies = {
     Promise.resolve({ committed: false, pushed: false }),
   ),
   runAutoCreatePrStep: mock(() => Promise.resolve()),
+  updateSession: mock(() => Promise.resolve()),
+  buildLifecycleActivityUpdate: mock(() => ({})),
 };
 
 // Track what the agent stream yields
@@ -97,6 +99,14 @@ mock.module("workflow/api", () => ({
 }));
 
 mock.module("./chat-post-finish", () => spies);
+
+mock.module("@/lib/db/sessions", () => ({
+  updateSession: spies.updateSession,
+}));
+
+mock.module("@/lib/sandbox/lifecycle", () => ({
+  buildLifecycleActivityUpdate: spies.buildLifecycleActivityUpdate,
+}));
 
 mock.module("@/app/config", () => ({
   webAgent: {
@@ -425,6 +435,22 @@ describe("runAgentWorkflow", () => {
         rawFinishReason: "provider_tool_use",
       },
     ]);
+  });
+
+  test("refreshes lifecycle activity before clearing the active stream", async () => {
+    const callOrder: string[] = [];
+    spies.updateSession.mockImplementationOnce(async () => {
+      callOrder.push("update-session");
+    });
+    spies.clearActiveStream.mockImplementationOnce(async () => {
+      callOrder.push("clear-stream");
+    });
+
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.buildLifecycleActivityUpdate).toHaveBeenCalledTimes(1);
+    expect(spies.updateSession).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["update-session", "clear-stream"]);
   });
 
   test("persists sandbox state when sandbox is present", async () => {

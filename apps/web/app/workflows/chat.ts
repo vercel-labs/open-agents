@@ -10,6 +10,8 @@ import {
 import type { OpenHarnessAgentCallOptions } from "@open-harness/agent";
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
+import { updateSession } from "@/lib/db/sessions";
+import { buildLifecycleActivityUpdate } from "@/lib/sandbox/lifecycle";
 import { addLanguageModelUsage } from "./usage-utils";
 import type {
   WebAgentMessageMetadata,
@@ -283,6 +285,7 @@ export async function runAgentWorkflow(options: Options) {
   let totalUsage: LanguageModelUsage | undefined;
   let finalFinishReason: FinishReason | undefined;
   let streamClosed = false;
+  const sandboxState = options.agentOptions.sandbox?.state;
 
   try {
     for (
@@ -325,6 +328,13 @@ export async function runAgentWorkflow(options: Options) {
       }
     }
 
+    if (sandboxState) {
+      await updateSession(
+        options.sessionId,
+        buildLifecycleActivityUpdate(new Date()),
+      );
+    }
+
     // Close the stream immediately after generation so the UI is unblocked.
     await Promise.all([
       clearActiveStream(options.chatId, workflowRunId),
@@ -347,7 +357,6 @@ export async function runAgentWorkflow(options: Options) {
     );
 
     // Persist the sandbox state so lifecycle timers stay accurate.
-    const sandboxState = options.agentOptions.sandbox?.state;
     if (sandboxState) {
       await persistSandboxState(options.sessionId, sandboxState);
     }

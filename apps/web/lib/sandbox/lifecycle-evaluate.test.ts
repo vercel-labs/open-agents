@@ -137,6 +137,49 @@ describe("evaluateSandboxLifecycle", () => {
     expect(finalPatch).not.toHaveProperty("hibernateAfter");
   });
 
+  test("skips hibernation when lifecycle timing is refreshed before snapshotting", async () => {
+    spies.connectSandbox.mockImplementationOnce(async () => {
+      if (!sessionRecord) {
+        throw new Error("sessionRecord must be set");
+      }
+
+      const refreshedAt = new Date();
+      sessionRecord = {
+        ...sessionRecord,
+        lastActivityAt: refreshedAt,
+        hibernateAfter: new Date(refreshedAt.getTime() + 60_000),
+      };
+
+      return {
+        snapshot: snapshotSpy,
+      };
+    });
+
+    const result = await evaluateSandboxLifecycle(
+      "session-1",
+      "status-check-overdue",
+    );
+
+    expect(result).toEqual({ action: "skipped", reason: "not-due-yet" });
+    expect(spies.snapshot).not.toHaveBeenCalled();
+
+    const updateCalls = spies.updateSession.mock.calls as unknown[][];
+    const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
+    const finalPatch = updateCalls.at(-1)?.[1] as Record<string, unknown>;
+
+    expect(firstPatch).toEqual({
+      lifecycleState: "hibernating",
+      lifecycleError: null,
+    });
+    expect(finalPatch).toEqual({
+      lifecycleState: "active",
+      lifecycleError: null,
+      sandboxExpiresAt: null,
+    });
+    expect(finalPatch).not.toHaveProperty("lastActivityAt");
+    expect(finalPatch).not.toHaveProperty("hibernateAfter");
+  });
+
   test("does not extend lifecycle timers when snapshot is already in progress", async () => {
     snapshotError = new Error(
       "422 sandbox_snapshotting: creating a snapshot and will be stopped shortly",

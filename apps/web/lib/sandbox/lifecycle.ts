@@ -101,6 +101,26 @@ export function getSandboxExpiresAtDate(
   return expiresAtMs === undefined ? null : new Date(expiresAtMs);
 }
 
+export function buildLifecycleActivityUpdate(
+  activityAt: Date = new Date(),
+  lifecycleState: Extract<
+    SandboxLifecycleState,
+    "active" | "restoring"
+  > = "active",
+): Pick<
+  LifecycleUpdate,
+  "lifecycleState" | "lifecycleError" | "lastActivityAt" | "hibernateAfter"
+> {
+  return {
+    lifecycleState,
+    lifecycleError: null,
+    lastActivityAt: activityAt,
+    hibernateAfter: new Date(
+      activityAt.getTime() + SANDBOX_INACTIVITY_TIMEOUT_MS,
+    ),
+  };
+}
+
 export function buildActiveLifecycleUpdate(
   sandboxState: SandboxState | null | undefined,
   options?: {
@@ -111,11 +131,9 @@ export function buildActiveLifecycleUpdate(
   const activityAt = options?.activityAt ?? new Date();
 
   return {
-    lifecycleState: options?.lifecycleState ?? "active",
-    lifecycleError: null,
-    lastActivityAt: activityAt,
-    hibernateAfter: new Date(
-      activityAt.getTime() + SANDBOX_INACTIVITY_TIMEOUT_MS,
+    ...buildLifecycleActivityUpdate(
+      activityAt,
+      options?.lifecycleState ?? "active",
     ),
     sandboxExpiresAt: getSandboxExpiresAtDate(sandboxState),
   };
@@ -229,6 +247,31 @@ export async function evaluateSandboxLifecycle(
     if (await hasActiveStreamForSession(sessionId)) {
       await restoreActiveLifecycleState(sessionId, sandboxState);
       return { action: "skipped", reason: "active-workflow" };
+    }
+
+    const refreshedSession = await getSessionById(sessionId);
+    if (
+      refreshedSession?.sandboxState &&
+      canOperateOnSandbox(refreshedSession.sandboxState)
+    ) {
+      const lifecycleTimingChanged =
+        refreshedSession.lastActivityAt?.getTime() !==
+          session.lastActivityAt?.getTime() ||
+        refreshedSession.hibernateAfter?.getTime() !==
+          session.hibernateAfter?.getTime() ||
+        refreshedSession.sandboxExpiresAt?.getTime() !==
+          session.sandboxExpiresAt?.getTime();
+
+      if (
+        lifecycleTimingChanged &&
+        Date.now() < getLifecycleDueAtMs(refreshedSession)
+      ) {
+        await restoreActiveLifecycleState(
+          sessionId,
+          refreshedSession.sandboxState,
+        );
+        return { action: "skipped", reason: "not-due-yet" };
+      }
     }
 
     let snapshot: SnapshotResult;
