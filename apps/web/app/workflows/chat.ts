@@ -216,6 +216,32 @@ function summarizeResponseBody(body: unknown): unknown {
   });
 }
 
+function stringifyDebugPayload(value: unknown): string {
+  const seen = new WeakSet<object>();
+
+  return (
+    JSON.stringify(
+      value,
+      (_key, currentValue) => {
+        if (typeof currentValue === "bigint") {
+          return currentValue.toString();
+        }
+
+        if (typeof currentValue === "object" && currentValue !== null) {
+          if (seen.has(currentValue)) {
+            return "[Circular]";
+          }
+
+          seen.add(currentValue);
+        }
+
+        return currentValue;
+      },
+      2,
+    ) ?? "undefined"
+  );
+}
+
 export async function runAgentWorkflow(options: Options) {
   "use workflow";
 
@@ -513,7 +539,7 @@ const runAgentStep = async (
         providerMetadata: step.providerMetadata,
       }));
 
-      console.warn("[workflow] Agent step finished with reason 'other':", {
+      const debugPayload = stringifyDebugPayload({
         workflowRunId,
         chatId,
         sessionId,
@@ -526,6 +552,10 @@ const runAgentStep = async (
         responseMessage,
         stepDiagnostics,
       });
+
+      console.warn(
+        `[workflow] Agent step finished with reason 'other':\n${debugPayload}`,
+      );
     }
 
     return {

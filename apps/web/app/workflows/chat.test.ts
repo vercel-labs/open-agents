@@ -317,10 +317,21 @@ describe("runAgentWorkflow", () => {
       await runAgentWorkflow(makeOptions());
 
       expect(warnings).toHaveLength(1);
-      expect(warnings[0]?.[0]).toBe(
-        "[workflow] Agent step finished with reason 'other':",
+      expect(warnings[0]).toHaveLength(1);
+      const warning = warnings[0]?.[0];
+      expect(typeof warning).toBe("string");
+      expect(warning).toStartWith(
+        "[workflow] Agent step finished with reason 'other':\n",
       );
-      expect(warnings[0]?.[1]).toMatchObject({
+
+      const payload = JSON.parse(
+        (warning as string).replace(
+          "[workflow] Agent step finished with reason 'other':\n",
+          "",
+        ),
+      );
+
+      expect(payload).toMatchObject({
         workflowRunId: "wrun_test-123",
         chatId: "chat-1",
         sessionId: "session-1",
