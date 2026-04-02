@@ -5,6 +5,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
+import { getSandboxSkillDirectories } from "@/lib/skills/directories";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
@@ -74,10 +75,7 @@ export async function GET(req: Request, context: RouteContext) {
 
   try {
     const sandbox = await connectSandbox(sandboxState);
-    const skillBaseFolders = [".claude", ".agents"];
-    const skillDirs = skillBaseFolders.map(
-      (folder) => `${sandbox.workingDirectory}/${folder}/skills`,
-    );
+    const skillDirs = await getSandboxSkillDirectories(sandbox);
 
     const skills = await discoverSkills(sandbox, skillDirs);
     await setCachedSkills(sessionId, sandboxState, skills);

@@ -323,6 +323,7 @@ export async function POST(req: Request) {
         autoCreatePrOverride: effectiveAutoCommitPush
           ? effectiveAutoCreatePr
           : false,
+        globalSkillRefs: preferences.globalSkillRefs,
         sandboxState: { type: sandboxType },
         lifecycleState: "provisioning",
         lifecycleVersion: 0,

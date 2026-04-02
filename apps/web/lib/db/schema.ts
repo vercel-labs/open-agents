@@ -1,5 +1,6 @@
 import type { SandboxState } from "@open-harness/sandbox";
 import type { ModelVariant } from "@/lib/model-variants";
+import type { GlobalSkillRef } from "@/lib/skills/global-skill-refs";
 import {
   boolean,
   index,
@@ -152,6 +153,10 @@ export const sessions = pgTable(
     // Optional per-session override for auto PR creation after auto-commit.
     // null means "use the user's default preference".
     autoCreatePrOverride: boolean("auto_create_pr_override"),
+    globalSkillRefs: jsonb("global_skill_refs")
+      .$type<GlobalSkillRef[]>()
+      .notNull()
+      .default([]),
     // Unified sandbox state
     sandboxState: jsonb("sandbox_state").$type<SandboxState>(),
     // Lifecycle orchestration state for sandbox management
@@ -319,6 +324,10 @@ export const userPreferences = pgTable("user_preferences", {
   }).default("unified"),
   autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   autoCreatePr: boolean("auto_create_pr").notNull().default(false),
+  globalSkillRefs: jsonb("global_skill_refs")
+    .$type<GlobalSkillRef[]>()
+    .notNull()
+    .default([]),
   modelVariants: jsonb("model_variants")
     .$type<ModelVariant[]>()
     .notNull()

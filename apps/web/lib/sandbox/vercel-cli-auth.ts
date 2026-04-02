@@ -1,9 +1,11 @@
 import "server-only";
 import type { Sandbox } from "@open-harness/sandbox";
+import {
+  resolveSandboxHomeDirectory,
+  shellEscape,
+} from "@/lib/sandbox/home-directory";
 import { getUserVercelAuthInfo } from "@/lib/vercel/token";
 
-const DEFAULT_HOME_DIRECTORY = "/root";
-const HOME_RESOLUTION_TIMEOUT_MS = 5_000;
 const FILE_CLEANUP_TIMEOUT_MS = 5_000;
 const VERCEL_CLI_CONFIG_DIRECTORY = ".local/share/com.vercel.cli";
 
@@ -27,20 +29,6 @@ interface SessionVercelCliContext {
   vercelProjectId: string | null;
   vercelProjectName: string | null;
   vercelTeamId: string | null;
-}
-
-function shellEscape(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-async function resolveSandboxHomeDirectory(sandbox: Sandbox): Promise<string> {
-  const result = await sandbox.exec(
-    'printf %s "$HOME"',
-    sandbox.workingDirectory,
-    HOME_RESOLUTION_TIMEOUT_MS,
-  );
-  const homeDirectory = result.success ? result.stdout.trim() : "";
-  return homeDirectory || DEFAULT_HOME_DIRECTORY;
 }
 
 async function removeFileIfPresent(

@@ -134,6 +134,13 @@ function registerRouteMocks() {
       connectCalls.push(sandboxState);
       return {
         workingDirectory: "/workspace",
+        exec: async (command: string) => ({
+          success: command === 'printf %s "$HOME"',
+          exitCode: 0,
+          stdout: command === 'printf %s "$HOME"' ? "/root" : "",
+          stderr: "",
+          truncated: false,
+        }),
       };
     },
   }));
@@ -275,7 +282,11 @@ describe("/api/sessions/[sessionId]/skills", () => {
     ]);
     expect(discoverCalls).toEqual([
       {
-        skillDirs: ["/workspace/.claude/skills", "/workspace/.agents/skills"],
+        skillDirs: [
+          "/workspace/.claude/skills",
+          "/workspace/.agents/skills",
+          "/root/.agents/skills",
+        ],
       },
     ]);
     expect(cacheWriteCalls).toEqual([

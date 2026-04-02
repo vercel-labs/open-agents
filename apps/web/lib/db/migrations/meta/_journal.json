@@ -169,6 +169,13 @@
       "when": 1774310138902,
       "tag": "0023_colorful_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1775125857247,
+      "tag": "0024_curved_nightshade",
+      "breakpoints": true
     }
   ]
 }

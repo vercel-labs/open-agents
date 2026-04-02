@@ -17,6 +17,7 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
+      globalSkillRefs: [],
       modelVariants: [],
     });
   });
@@ -31,6 +32,7 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "invalid" as never,
       autoCommitPush: false,
       autoCreatePr: false,
+      globalSkillRefs: [],
       modelVariants: [],
     });
 
@@ -48,11 +50,53 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
+      globalSkillRefs: [],
       modelVariants: [],
     });
 
     expect(result.defaultSandboxType).toBe("vercel");
     expect(result.defaultDiffMode).toBe("unified");
+  });
+
+  test("drops invalid globalSkillRefs payloads", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultModelId: "openai/gpt-5",
+      defaultSubagentModelId: null,
+      defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: false,
+      autoCreatePr: false,
+      globalSkillRefs: [
+        { source: "vercel/ai", skillName: "bad name" },
+      ] as never,
+      modelVariants: [],
+    });
+
+    expect(result.globalSkillRefs).toEqual([]);
+  });
+
+  test("keeps valid globalSkillRefs payloads", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultModelId: "openai/gpt-5",
+      defaultSubagentModelId: null,
+      defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: false,
+      autoCreatePr: false,
+      globalSkillRefs: [
+        { source: "vercel/ai", skillName: "ai-sdk" },
+        { source: "vercel/ai", skillName: "ai-sdk" },
+      ],
+      modelVariants: [],
+    });
+
+    expect(result.globalSkillRefs).toEqual([
+      { source: "vercel/ai", skillName: "ai-sdk" },
+    ]);
   });
 
   test("drops invalid modelVariants payloads", async () => {
@@ -65,6 +109,7 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: false,
       autoCreatePr: false,
+      globalSkillRefs: [],
       modelVariants: [{ id: "bad-id" }] as never,
     });
 
@@ -81,6 +126,7 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: true,
       autoCreatePr: true,
+      globalSkillRefs: [],
       modelVariants: [
         {
           id: "variant:test",
@@ -98,6 +144,7 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: true,
       autoCreatePr: true,
+      globalSkillRefs: [],
       modelVariants: [
         {
           id: "variant:test",

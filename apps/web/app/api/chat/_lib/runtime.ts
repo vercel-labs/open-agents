@@ -9,6 +9,7 @@ import {
   getVercelCliSandboxSetup,
   syncVercelCliAuthToSandbox,
 } from "@/lib/sandbox/vercel-cli-auth";
+import { getSandboxSkillDirectories } from "@/lib/skills/directories";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
 import type { SessionRecord } from "./chat-context";
 
@@ -91,12 +92,10 @@ async function loadSessionSkills(
     return cachedSkills;
   }
 
-  // Discover project-level skills from the sandbox working directory.
+  // Discover project-level skills from the sandbox working directory plus
+  // global skills installed outside the repo working tree.
   // TODO: Optimize if this becomes a bottleneck (~20ms no skills, ~130ms with 5 skills)
-  const skillBaseFolders = [".claude", ".agents"];
-  const skillDirs = skillBaseFolders.map(
-    (folder) => `${sandbox.workingDirectory}/${folder}/skills`,
-  );
+  const skillDirs = await getSandboxSkillDirectories(sandbox);
 
   const discoveredSkills = await discoverSkills(sandbox, skillDirs);
   await setCachedSkills(sessionId, sandboxState, discoveredSkills);

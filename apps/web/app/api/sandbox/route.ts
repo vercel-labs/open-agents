@@ -23,6 +23,7 @@ import {
   getVercelCliSandboxSetup,
   syncVercelCliAuthToSandbox,
 } from "@/lib/sandbox/vercel-cli-auth";
+import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
 import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
@@ -80,6 +81,21 @@ async function syncVercelCliAuthForSandbox(params: {
   await syncVercelCliAuthToSandbox({
     sandbox: params.sandbox,
     setup,
+  });
+}
+
+async function installSessionGlobalSkills(params: {
+  sessionRecord: SessionRecord;
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+}): Promise<void> {
+  const globalSkillRefs = params.sessionRecord.globalSkillRefs ?? [];
+  if (globalSkillRefs.length === 0) {
+    return;
+  }
+
+  await installGlobalSkills({
+    sandbox: params.sandbox,
+    globalSkillRefs,
   });
 }
 
@@ -276,6 +292,18 @@ export async function POST(req: Request) {
       } catch (error) {
         console.error(
           `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
+          error,
+        );
+      }
+
+      try {
+        await installSessionGlobalSkills({
+          sessionRecord,
+          sandbox,
+        });
+      } catch (error) {
+        console.error(
+          `Failed to install global skills for session ${sessionRecord.id}:`,
           error,
         );
       }

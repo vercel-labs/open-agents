@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 
+mock.module("server-only", () => ({}));
+
 interface TestSessionRecord {
   id: string;
   userId: string;
@@ -36,6 +38,8 @@ let preferencesState = {
   autoCreatePr: false,
   modelVariants: [],
 };
+let cachedSkillsState: unknown = null;
+let discoverSkillDirsCalls: string[][] = [];
 
 const compareAndSetChatActiveStreamIdSpy = mock(async () => {
   const nextResult = compareAndSetResults.shift();
@@ -109,7 +113,10 @@ mock.module("@/lib/chat/create-cancelable-readable-stream", () => ({
 }));
 
 mock.module("@open-harness/agent", () => ({
-  discoverSkills: async () => [],
+  discoverSkills: async (_sandbox: unknown, skillDirs: string[]) => {
+    discoverSkillDirsCalls.push(skillDirs);
+    return [];
+  },
   gateway: () => "mock-model",
 }));
 
@@ -158,7 +165,7 @@ mock.module("@/lib/github/get-repo-token", () => ({
 }));
 
 mock.module("@/lib/skills-cache", () => ({
-  getCachedSkills: async () => [],
+  getCachedSkills: async () => cachedSkillsState,
   setCachedSkills: async () => {},
 }));
 
@@ -231,6 +238,8 @@ describe("/api/chat route", () => {
     compareAndSetDefaultResult = true;
     compareAndSetResults = [];
     startCalls = [];
+    cachedSkillsState = null;
+    discoverSkillDirsCalls = [];
     preferencesState = {
       autoCommitPush: true,
       autoCreatePr: false,
@@ -288,6 +297,21 @@ describe("/api/chat route", () => {
           customInstructions: assistantFileLinkPrompt,
         }),
       }),
+    ]);
+  });
+
+  test("discovers global sandbox skills after repo-local skill directories", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(discoverSkillDirsCalls).toEqual([
+      [
+        "/vercel/sandbox/.claude/skills",
+        "/vercel/sandbox/.agents/skills",
+        "/root/.agents/skills",
+      ],
     ]);
   });
 

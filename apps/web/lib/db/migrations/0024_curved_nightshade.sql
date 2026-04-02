@@ -1,0 +1,2 @@
+ALTER TABLE "sessions" ADD COLUMN "global_skill_refs" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "global_skill_refs" jsonb DEFAULT '[]'::jsonb NOT NULL;
