@@ -109,8 +109,11 @@ async function fetchInstallations(): Promise<Installation[]> {
 function SkeletonRow() {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <div className="h-4 w-[140px] animate-pulse rounded bg-muted-foreground/10" />
-      <div className="ml-auto h-4 w-[48px] animate-pulse rounded bg-muted-foreground/10" />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="h-5 w-[120px] animate-pulse rounded bg-muted-foreground/10" />
+        <div className="h-4 w-[48px] animate-pulse rounded bg-muted-foreground/10" />
+      </div>
+      <div className="h-[26px] w-[52px] shrink-0 animate-pulse rounded-md bg-muted-foreground/10" />
     </div>
   );
 }
