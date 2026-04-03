@@ -4,7 +4,6 @@ import {
   CheckIcon,
   ChevronDown,
   ExternalLink,
-  Loader2Icon,
   LockIcon,
   RefreshCw,
   SearchIcon,
@@ -273,9 +272,7 @@ export function RepoSelectorCompact({
 
   // Collapsed state: repo is selected
   if (hasSelection) {
-    const selectedRepoData = repos.find(
-      (r) => r.name === selectedRepo,
-    );
+    const selectedRepoData = repos.find((r) => r.name === selectedRepo);
 
     return (
       <div className="flex flex-col gap-0">
@@ -346,9 +343,7 @@ export function RepoSelectorCompact({
 
           {/* Selected repo display */}
           <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
-            <span className="truncate text-sm font-medium">
-              {selectedRepo}
-            </span>
+            <span className="truncate text-sm font-medium">{selectedRepo}</span>
             {selectedRepoData?.private && (
               <LockIcon className="size-3 shrink-0 text-muted-foreground" />
             )}
@@ -542,9 +537,7 @@ export function RepoSelectorCompact({
           disabled={isRefreshing}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
         >
-          <RefreshCw
-            className={cn("size-3", isRefreshing && "animate-spin")}
-          />
+          <RefreshCw className={cn("size-3", isRefreshing && "animate-spin")} />
           {isRefreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
