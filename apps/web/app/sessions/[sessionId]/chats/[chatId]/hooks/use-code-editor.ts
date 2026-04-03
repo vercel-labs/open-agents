@@ -111,11 +111,7 @@ export function useCodeEditor({
   }, [canRun, sessionId]);
 
   const openEditorPage = useCallback(() => {
-    window.open(
-      `/sessions/${sessionId}/editor`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    window.open(`/codespace/${sessionId}`, "_blank", "noopener,noreferrer");
   }, [sessionId]);
 
   const handleOpen = useCallback(async () => {

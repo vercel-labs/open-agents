@@ -24,7 +24,7 @@ function getErrorMessage(body: unknown, fallback: string): string {
   return body.error;
 }
 
-export default function EditorPage() {
+export default function CodespacePage() {
   const router = useRouter();
   const { sessionId } = useParams<{ sessionId: string }>();
   const [state, setState] = useState<EditorState>({ status: "loading" });
@@ -119,7 +119,7 @@ export default function EditorPage() {
   }, [startOrCheckEditor]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-dvh flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
         <Button
