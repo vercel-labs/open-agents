@@ -3,18 +3,7 @@
   "steps": {
     "node_modules/workflow/dist/stdlib.js": {
       "fetch": {
-        "stepId": "step//workflow@4.2.0-beta.72//fetch"
-      }
-    },
-    "app/workflows/sandbox-lifecycle.ts": {
-      "clearLifecycleRunIdIfOwned": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
-      },
-      "computeLifecycleWakeDecision": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//computeLifecycleWakeDecision"
-      },
-      "runLifecycleEvaluation": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//runLifecycleEvaluation"
+        "stepId": "step//workflow@4.2.0-beta.74//fetch"
       }
     },
     "node_modules/workflow/dist/internal/builtins.js": {
@@ -26,26 +15,6 @@
       },
       "__builtin_response_text": {
         "stepId": "__builtin_response_text"
-      }
-    },
-    "app/workflows/chat.ts": {
-      "closeStream": {
-        "stepId": "step//./app/workflows/chat//closeStream"
-      },
-      "convertMessages": {
-        "stepId": "step//./app/workflows/chat//convertMessages"
-      },
-      "generateId": {
-        "stepId": "step//./app/workflows/chat//generateId"
-      },
-      "runAgentStep": {
-        "stepId": "step//./app/workflows/chat//runAgentStep"
-      },
-      "sendFinish": {
-        "stepId": "step//./app/workflows/chat//sendFinish"
-      },
-      "sendStart": {
-        "stepId": "step//./app/workflows/chat//sendStart"
       }
     },
     "app/workflows/chat-post-finish.ts": {
@@ -72,6 +41,37 @@
       },
       "runAutoCreatePrStep": {
         "stepId": "step//./app/workflows/chat-post-finish//runAutoCreatePrStep"
+      }
+    },
+    "app/workflows/sandbox-lifecycle.ts": {
+      "clearLifecycleRunIdIfOwned": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
+      },
+      "computeLifecycleWakeDecision": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//computeLifecycleWakeDecision"
+      },
+      "runLifecycleEvaluation": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//runLifecycleEvaluation"
+      }
+    },
+    "app/workflows/chat.ts": {
+      "closeStream": {
+        "stepId": "step//./app/workflows/chat//closeStream"
+      },
+      "convertMessages": {
+        "stepId": "step//./app/workflows/chat//convertMessages"
+      },
+      "generateId": {
+        "stepId": "step//./app/workflows/chat//generateId"
+      },
+      "runAgentStep": {
+        "stepId": "step//./app/workflows/chat//runAgentStep"
+      },
+      "sendFinish": {
+        "stepId": "step//./app/workflows/chat//sendFinish"
+      },
+      "sendStart": {
+        "stepId": "step//./app/workflows/chat//sendStart"
       }
     }
   },

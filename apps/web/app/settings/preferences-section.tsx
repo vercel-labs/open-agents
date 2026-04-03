@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CheckIcon, Plus, Search, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
@@ -41,7 +41,6 @@ import {
   getDefaultModelOptionId,
   withMissingModelOption,
 } from "@/lib/model-options";
-import { cn } from "@/lib/utils";
 
 const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
   { id: "vercel", name: "Vercel" },
@@ -304,13 +303,43 @@ export function PreferencesSection() {
     [preferences?.enabledModelIds],
   );
 
-  const handleToggleModel = useCallback(
+  const handleAddModel = useCallback(
     async (modelId: string) => {
       const currentIds = preferences?.enabledModelIds ?? [];
-      const nextIds = currentIds.includes(modelId)
-        ? currentIds.filter((id) => id !== modelId)
-        : [...currentIds, modelId];
+      if (currentIds.includes(modelId)) return;
 
+      setIsSaving(true);
+      try {
+        await updatePreferences({ enabledModelIds: [...currentIds, modelId] });
+      } catch (error) {
+        console.error("Failed to update enabled models:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [preferences?.enabledModelIds, updatePreferences],
+  );
+
+  const handleRemoveModel = useCallback(
+    async (modelId: string) => {
+      const currentIds = preferences?.enabledModelIds ?? [];
+
+      setIsSaving(true);
+      try {
+        await updatePreferences({
+          enabledModelIds: currentIds.filter((id) => id !== modelId),
+        });
+      } catch (error) {
+        console.error("Failed to update enabled models:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [preferences?.enabledModelIds, updatePreferences],
+  );
+
+  const handleSetEnabledModels = useCallback(
+    async (nextIds: string[]) => {
       setIsSaving(true);
       try {
         await updatePreferences({ enabledModelIds: nextIds });
@@ -320,7 +349,7 @@ export function PreferencesSection() {
         setIsSaving(false);
       }
     },
-    [preferences?.enabledModelIds, updatePreferences],
+    [updatePreferences],
   );
 
   if (loading) {
@@ -407,7 +436,9 @@ export function PreferencesSection() {
           modelOptions={modelOptions}
           modelOptionsLoading={modelOptionsLoading}
           enabledModelIds={enabledModelIds}
-          onToggleModel={handleToggleModel}
+          onAddModel={handleAddModel}
+          onRemoveModel={handleRemoveModel}
+          onSetEnabledModels={handleSetEnabledModels}
           disabled={isSaving}
         />
 
@@ -599,31 +630,57 @@ function EnabledModelsSection({
   modelOptions,
   modelOptionsLoading,
   enabledModelIds,
-  onToggleModel,
+  onAddModel,
+  onRemoveModel,
+  onSetEnabledModels,
   disabled,
 }: {
   modelOptions: ModelOption[];
   modelOptionsLoading: boolean;
   enabledModelIds: Set<string>;
-  onToggleModel: (modelId: string) => void;
+  onAddModel: (modelId: string) => void;
+  onRemoveModel: (modelId: string) => void;
+  onSetEnabledModels: (ids: string[]) => void;
   disabled: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) {
-      return modelOptions;
-    }
+  const enabledCount = enabledModelIds.size;
+
+  const enabledOptions = useMemo(
+    () => modelOptions.filter((option) => enabledModelIds.has(option.id)),
+    [modelOptions, enabledModelIds],
+  );
+
+  const availableOptions = useMemo(() => {
+    const opts = modelOptions.filter(
+      (option) => !enabledModelIds.has(option.id),
+    );
+    if (!search.trim()) return opts;
     const lower = search.toLowerCase();
-    return modelOptions.filter(
+    return opts.filter(
       (option) =>
         option.label.toLowerCase().includes(lower) ||
         option.id.toLowerCase().includes(lower) ||
         (option.description?.toLowerCase().includes(lower) ?? false),
     );
-  }, [modelOptions, search]);
+  }, [modelOptions, enabledModelIds, search]);
 
-  const enabledCount = enabledModelIds.size;
+  const handleSelectAll = () => {
+    onSetEnabledModels(modelOptions.map((option) => option.id));
+  };
+
+  const handleDeselectAll = () => {
+    onSetEnabledModels([]);
+  };
+
+  const handleAdd = (modelId: string) => {
+    onAddModel(modelId);
+    setSearch("");
+    inputRef.current?.focus();
+  };
 
   if (modelOptionsLoading) {
     return (
@@ -637,7 +694,28 @@ function EnabledModelsSection({
   return (
     <div className="grid gap-2">
       <div className="space-y-1">
-        <Label>Enabled Models</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>Enabled Models</Label>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              disabled={disabled || enabledCount === modelOptions.length}
+              onClick={handleSelectAll}
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-40"
+            >
+              Select all
+            </button>
+            <span className="text-xs text-muted-foreground/40">·</span>
+            <button
+              type="button"
+              disabled={disabled || enabledCount === 0}
+              onClick={handleDeselectAll}
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-40"
+            >
+              Deselect all
+            </button>
+          </div>
+        </div>
         <p className="text-xs text-muted-foreground">
           Choose which models appear in the model selector.
           {enabledCount === 0
@@ -646,65 +724,108 @@ function EnabledModelsSection({
         </p>
       </div>
 
-      <div className="rounded-lg border border-border/70">
-        <div className="relative border-b border-border/60 px-3 py-2">
-          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      {enabledOptions.length > 0 && (
+        <div className="divide-y divide-border/60 rounded-lg border border-border/70">
+          {enabledOptions.map((option) => (
+            <div key={option.id} className="flex items-center gap-3 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">
+                    {option.label}
+                  </span>
+                  {option.isVariant && (
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                      variant
+                    </span>
+                  )}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {option.id}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onRemoveModel(option.id)}
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
+                aria-label={`Remove ${option.label}`}
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="relative">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={inputRef}
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search models..."
-            className="h-7 border-0 bg-transparent pl-5 text-sm shadow-none focus-visible:ring-0"
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setDropdownOpen(true);
+            }}
+            onFocus={() => setDropdownOpen(true)}
+            placeholder={
+              enabledCount === 0
+                ? "Search to add models..."
+                : "Add another model..."
+            }
+            disabled={disabled}
+            className="pl-9"
           />
         </div>
-        <div className="max-h-72 overflow-y-auto">
-          {filteredOptions.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No models found.
-            </p>
-          ) : (
-            filteredOptions.map((option) => {
-              const isEnabled = enabledModelIds.has(option.id);
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onToggleModel(option.id)}
-                  className={cn(
-                    "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-60",
-                    isEnabled && "bg-muted/30",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex size-4 shrink-0 items-center justify-center rounded border",
-                      isEnabled
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-muted-foreground/30",
-                    )}
-                  >
-                    {isEnabled && <CheckIcon className="size-3" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">
-                        {option.label}
-                      </span>
-                      {option.isVariant && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                          variant
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {option.description ?? option.id}
-                    </p>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
+        {dropdownOpen && (
+          <>
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- backdrop dismiss */}
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => {
+                setDropdownOpen(false);
+                setSearch("");
+              }}
+            />
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-popover shadow-md">
+              <div className="max-h-60 overflow-y-auto">
+                {availableOptions.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    {search.trim()
+                      ? "No matching models."
+                      : "All models are selected."}
+                  </p>
+                ) : (
+                  availableOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => handleAdd(option.id)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">
+                            {option.label}
+                          </span>
+                          {option.isVariant && (
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                              variant
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {option.description ?? option.id}
+                        </p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
