@@ -418,3 +418,53 @@ export async function findLatestPreviewDeploymentUrlForBranch(params: {
 
   return latestDeployment ? getDeploymentUrl(latestDeployment) : null;
 }
+
+const BUILDING_STATES = new Set(["BUILDING", "QUEUED", "INITIALIZING"]);
+
+export async function findLatestBuildingDeploymentUrlForBranch(params: {
+  token: string;
+  projectIdOrName: string;
+  branch: string;
+  teamId?: string | null;
+}): Promise<string | null> {
+  const branch = params.branch.trim();
+  if (!branch) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    projectId: params.projectIdOrName,
+    branch,
+    limit: "5",
+  });
+  if (params.teamId) {
+    query.set("teamId", params.teamId);
+  }
+
+  const response = await fetchVercelJson<VercelDeploymentsResponse>({
+    path: "/v6/deployments",
+    token: params.token,
+    query,
+  });
+
+  const latestBuilding = (response.deployments ?? [])
+    .filter((deployment) => {
+      if (!getDeploymentUrl(deployment)) {
+        return false;
+      }
+
+      const state = deployment.readyState ?? deployment.state ?? "";
+      if (!BUILDING_STATES.has(state)) {
+        return false;
+      }
+
+      return deployment.target !== "production";
+    })
+    .sort(
+      (left, right) =>
+        getDeploymentRecencyTimestamp(right) -
+        getDeploymentRecencyTimestamp(left),
+    )[0];
+
+  return latestBuilding ? getDeploymentUrl(latestBuilding) : null;
+}

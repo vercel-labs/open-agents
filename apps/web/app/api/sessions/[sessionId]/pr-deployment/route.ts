@@ -4,7 +4,10 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
-import { findLatestPreviewDeploymentUrlForBranch } from "@/lib/vercel/projects";
+import {
+  findLatestBuildingDeploymentUrlForBranch,
+  findLatestPreviewDeploymentUrlForBranch,
+} from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
 
 type RouteContext = {
@@ -13,6 +16,7 @@ type RouteContext = {
 
 export type PrDeploymentResponse = {
   deploymentUrl: string | null;
+  buildingDeploymentUrl?: string | null;
 };
 
 export async function GET(req: Request, context: RouteContext) {
@@ -65,16 +69,24 @@ export async function GET(req: Request, context: RouteContext) {
   ) {
     const vercelToken = await getUserVercelToken(authResult.userId);
     if (vercelToken) {
-      const deploymentUrl = await findLatestPreviewDeploymentUrlForBranch({
+      const lookupParams = {
         token: vercelToken,
         projectIdOrName: sessionRecord.vercelProjectId,
         branch: previewLookupBranch,
         teamId: sessionRecord.vercelTeamId,
-      }).catch(() => null);
+      };
 
-      if (deploymentUrl) {
+      const [deploymentUrl, buildingDeploymentUrl] = await Promise.all([
+        findLatestPreviewDeploymentUrlForBranch(lookupParams).catch(() => null),
+        findLatestBuildingDeploymentUrlForBranch(lookupParams).catch(
+          () => null,
+        ),
+      ]);
+
+      if (deploymentUrl || buildingDeploymentUrl) {
         return Response.json({
           deploymentUrl,
+          buildingDeploymentUrl,
         } satisfies PrDeploymentResponse);
       }
     }

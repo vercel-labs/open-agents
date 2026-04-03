@@ -12,6 +12,7 @@ const currentSessionRecord = {
 
 let currentVercelToken: string | null = "vercel-token";
 let currentBranchDeploymentUrl: string | null = null;
+let currentBuildingDeploymentUrl: string | null = null;
 let currentPullRequestDeploymentResult: {
   success: boolean;
   deploymentUrl?: string | null;
@@ -22,6 +23,9 @@ let currentPullRequestDeploymentResult: {
 const getUserVercelTokenMock = mock(async () => currentVercelToken);
 const findLatestPreviewDeploymentUrlForBranchMock = mock(
   async () => currentBranchDeploymentUrl,
+);
+const findLatestBuildingDeploymentUrlForBranchMock = mock(
+  async () => currentBuildingDeploymentUrl,
 );
 const getRepoTokenMock = mock(async () => ({ token: "repo-token" }));
 const findLatestVercelDeploymentUrlForPullRequestMock = mock(
@@ -46,6 +50,8 @@ mock.module("@/lib/vercel/token", () => ({
 mock.module("@/lib/vercel/projects", () => ({
   findLatestPreviewDeploymentUrlForBranch:
     findLatestPreviewDeploymentUrlForBranchMock,
+  findLatestBuildingDeploymentUrlForBranch:
+    findLatestBuildingDeploymentUrlForBranchMock,
 }));
 
 mock.module("@/lib/github/get-repo-token", () => ({
@@ -75,9 +81,11 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     currentSessionRecord.prNumber = null;
     currentVercelToken = "vercel-token";
     currentBranchDeploymentUrl = null;
+    currentBuildingDeploymentUrl = null;
     currentPullRequestDeploymentResult = { success: false };
     getUserVercelTokenMock.mockClear();
     findLatestPreviewDeploymentUrlForBranchMock.mockClear();
+    findLatestBuildingDeploymentUrlForBranchMock.mockClear();
     getRepoTokenMock.mockClear();
     findLatestVercelDeploymentUrlForPullRequestMock.mockClear();
   });
@@ -106,6 +114,50 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     expect(
       findLatestVercelDeploymentUrlForPullRequestMock,
     ).toHaveBeenCalledTimes(0);
+  });
+
+  test("returns buildingDeploymentUrl when a deployment is still building", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentBranchDeploymentUrl = "https://project-preview.vercel.app";
+    currentBuildingDeploymentUrl = "https://project-building.vercel.app";
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/session-1/pr-deployment"),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      deploymentUrl: string | null;
+      buildingDeploymentUrl: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBe("https://project-preview.vercel.app");
+    expect(body.buildingDeploymentUrl).toBe(
+      "https://project-building.vercel.app",
+    );
+  });
+
+  test("returns buildingDeploymentUrl even when no ready deployment exists yet", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentBranchDeploymentUrl = null;
+    currentBuildingDeploymentUrl = "https://project-building.vercel.app";
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/session-1/pr-deployment"),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      deploymentUrl: string | null;
+      buildingDeploymentUrl: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBeNull();
+    expect(body.buildingDeploymentUrl).toBe(
+      "https://project-building.vercel.app",
+    );
   });
 
   test("uses the requested branch for preview lookup so freshly-created branches resolve immediately", async () => {

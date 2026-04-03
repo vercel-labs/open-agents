@@ -2492,6 +2492,7 @@ export function SessionChatContent({
       },
     );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
+  const buildingDeploymentUrl = prDeploymentData?.buildingDeploymentUrl ?? null;
 
   useEffect(() => {
     if (!hasExistingPr && !hasBranchPreviewLookup) {
@@ -2571,6 +2572,13 @@ export function SessionChatContent({
     }
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
+  };
+  const openBuildingDeployment = () => {
+    if (!buildingDeploymentUrl) {
+      return;
+    }
+
+    window.open(buildingDeploymentUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleCommitted = useCallback(async () => {
@@ -2733,9 +2741,13 @@ export function SessionChatContent({
                         variant="outline"
                         size="sm"
                         className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                        onClick={openPreviewOrPr}
+                        onClick={
+                          isDeploymentStale && buildingDeploymentUrl
+                            ? openBuildingDeployment
+                            : openPreviewOrPr
+                        }
                         disabled={
-                          isDeploymentStale ||
+                          (isDeploymentStale && !buildingDeploymentUrl) ||
                           (!prDeploymentUrl && !existingPrUrl)
                         }
                       >
@@ -2789,8 +2801,12 @@ export function SessionChatContent({
                     variant="outline"
                     size="sm"
                     className="h-8 w-8 px-0 xl:w-auto xl:px-3"
-                    onClick={openPreviewOrPr}
-                    disabled={isDeploymentStale}
+                    onClick={
+                      isDeploymentStale && buildingDeploymentUrl
+                        ? openBuildingDeployment
+                        : openPreviewOrPr
+                    }
+                    disabled={isDeploymentStale && !buildingDeploymentUrl}
                   >
                     {isDeploymentStale ? (
                       <>
