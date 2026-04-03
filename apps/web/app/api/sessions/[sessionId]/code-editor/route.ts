@@ -97,20 +97,22 @@ async function getRunningCodeServerPid(
 }
 
 /**
- * Check if something is listening on the code-server port.
- * This catches cases where code-server is running but the PID file is missing
- * (e.g. after snapshot restore, or PID file was in old location).
+ * Check if something is listening on the code-server port by attempting
+ * a connection. Uses curl which is universally available in the sandbox
+ * (ss/fuser/lsof are not installed).
  */
 async function isPortInUse(
   sandbox: ConnectedSandbox,
   port: number,
 ): Promise<boolean> {
   const result = await sandbox.exec(
-    `ss -tlnp 2>/dev/null | grep -q ':${port} ' && echo yes || echo no`,
+    `curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:${port}/healthz 2>/dev/null || curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:${port}/ 2>/dev/null`,
     "/tmp",
-    5_000,
+    10_000,
   );
-  return result.success && result.stdout.trim() === "yes";
+  // Any HTTP response (even 302/404) means something is listening
+  const code = Number.parseInt(result.stdout.trim(), 10);
+  return result.success && !Number.isNaN(code) && code > 0;
 }
 
 /**
@@ -139,10 +141,10 @@ async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
     return true;
   }
 
-  // Fallback: kill whatever is on the port
+  // Fallback: kill by process name if port is in use
   if (await isPortInUse(sandbox, CODE_SERVER_PORT)) {
     await sandbox.exec(
-      `fuser -k ${CODE_SERVER_PORT}/tcp 2>/dev/null || true`,
+      `pkill -f 'code-server.*--port ${CODE_SERVER_PORT}' 2>/dev/null || killall code-server 2>/dev/null || true`,
       "/tmp",
       5_000,
     );
