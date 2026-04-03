@@ -668,10 +668,6 @@ function EnabledModelsSection({
     );
   }, [modelOptions, enabledModelIds, search]);
 
-  const handleSelectAll = () => {
-    onSetEnabledModels(modelOptions.map((option) => option.id));
-  };
-
   const handleDeselectAll = () => {
     onSetEnabledModels([]);
   };
@@ -696,31 +692,21 @@ function EnabledModelsSection({
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <Label>Enabled Models</Label>
-          <div className="flex gap-1.5">
+          {enabledCount > 0 && (
             <button
               type="button"
-              disabled={disabled || enabledCount === modelOptions.length}
-              onClick={handleSelectAll}
-              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-40"
-            >
-              Select all
-            </button>
-            <span className="text-xs text-muted-foreground/40">·</span>
-            <button
-              type="button"
-              disabled={disabled || enabledCount === 0}
+              disabled={disabled}
               onClick={handleDeselectAll}
               className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-40"
             >
-              Deselect all
+              Reset to default
             </button>
-          </div>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Choose which models appear in the model selector.
           {enabledCount === 0
-            ? " All models are shown when none are selected."
-            : ` ${enabledCount} model${enabledCount === 1 ? "" : "s"} selected.`}
+            ? "Showing all models in the selector. Add models here to narrow it down to just the ones you use."
+            : `Only ${enabledCount} model${enabledCount === 1 ? "" : "s"} shown in the selector.`}
         </p>
       </div>
 
@@ -768,11 +754,7 @@ function EnabledModelsSection({
               setDropdownOpen(true);
             }}
             onFocus={() => setDropdownOpen(true)}
-            placeholder={
-              enabledCount === 0
-                ? "Search to add models..."
-                : "Add another model..."
-            }
+            placeholder="Search to add a model..."
             disabled={disabled}
             className="pl-9"
           />
@@ -793,7 +775,7 @@ function EnabledModelsSection({
                   <p className="py-4 text-center text-sm text-muted-foreground">
                     {search.trim()
                       ? "No matching models."
-                      : "All models are selected."}
+                      : "All models have been added."}
                   </p>
                 ) : (
                   availableOptions.map((option) => (
