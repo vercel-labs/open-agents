@@ -133,7 +133,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   // Actively streaming / waiting for LLM
   if (session.hasStreaming) {
     return (
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-green-500" />
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
     );
   }
 
@@ -156,7 +156,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   const hasDiff = session.linesAdded || session.linesRemoved;
   if (session.branch && hasDiff) {
     return (
-      <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
     );
   }
 
