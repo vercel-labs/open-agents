@@ -58,6 +58,12 @@ export interface VercelSandboxConfig {
    */
   baseSnapshotId?: string;
   /**
+   * When true, do not run `git init` or an initial empty commit in the workspace.
+   * Use when building a new base snapshot so `/vercel/sandbox` stays empty for a
+   * later `git clone ... .` (a leftover `.git` breaks clone into that directory).
+   */
+  skipGitWorkspaceBootstrap?: boolean;
+  /**
    * Lifecycle hooks for setup and teardown.
    * afterStart is called after the sandbox is created and configured.
    * beforeStop is called before the sandbox is stopped.

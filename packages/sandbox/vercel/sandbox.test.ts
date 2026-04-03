@@ -243,6 +243,20 @@ describe("VercelSandbox.create", () => {
       cwd: "/vercel/sandbox",
     });
   });
+
+  test("skips git workspace bootstrap from base snapshot when requested", async () => {
+    await sandboxModule.VercelSandbox.create({
+      baseSnapshotId: "snap-base-1",
+      skipGitWorkspaceBootstrap: true,
+    });
+
+    expect(createCalls.length).toBe(1);
+    expect(createCalls[0]?.source).toEqual({
+      type: "snapshot",
+      snapshotId: "snap-base-1",
+    });
+    expect(runCommandCalls.filter((c) => c.cmd === "git")).toEqual([]);
+  });
 });
 
 describe("VercelSandbox.execDetached", () => {

@@ -331,6 +331,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    * Create a new Vercel Sandbox instance.
    * If `baseSnapshotId` is provided, sandbox bootstraps from that snapshot first.
    * If a source is provided with `baseSnapshotId`, the repo is cloned after bootstrap.
+   * Use `skipGitWorkspaceBootstrap` when preparing a new base snapshot so the workspace
+   * stays free of `.git` for subsequent clones.
    */
   static async create(
     config: VercelSandboxConfig = {},
@@ -345,6 +347,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       ports,
       baseSnapshotId,
       hooks,
+      skipGitWorkspaceBootstrap = false,
     } = config;
 
     // Clamp proactive timeout to stay under the SDK's hard max when buffer is applied.
@@ -423,7 +426,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
     // Initialize git repo for empty sandboxes (no source provided)
     // This ensures git commands work consistently (e.g., for diff viewing)
-    if (!source) {
+    if (!source && !skipGitWorkspaceBootstrap) {
       await sdk.runCommand({
         cmd: "git",
         args: ["init"],
@@ -449,8 +452,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       }
     }
 
-    // Configure git user for commits if provided
-    if (gitUser) {
+    // Configure git user for commits if provided (skip when no repo was created)
+    if (gitUser && (source || !skipGitWorkspaceBootstrap)) {
       await sdk.runCommand({
         cmd: "git",
         args: ["config", "user.name", gitUser.name],
@@ -466,7 +469,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Create initial empty commit for empty sandboxes so HEAD exists
     // This is required for git diff HEAD to work (e.g., diff viewer)
     // Must be done after gitUser config since git commit requires user info
-    if (!source && gitUser) {
+    if (!source && gitUser && !skipGitWorkspaceBootstrap) {
       await sdk.runCommand({
         cmd: "git",
         args: ["commit", "--allow-empty", "-m", "Initial commit"],

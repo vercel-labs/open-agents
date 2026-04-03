@@ -86,11 +86,14 @@ export async function refreshBaseSnapshot(
 
   try {
     log(`Creating sandbox from base snapshot ${options.baseSnapshotId}.`);
+    // Skip git init so the new base image does not ship `.git` in /vercel/sandbox
+    // (would break `git clone … .` for agent sandboxes).
     sandbox = await connectSnapshotSandbox({
       state: { type: "vercel" },
       options: {
         baseSnapshotId: options.baseSnapshotId,
         timeout: options.sandboxTimeoutMs,
+        skipGitWorkspaceBootstrap: true,
         ...(options.ports !== undefined && { ports: options.ports }),
         ...(options.env !== undefined && { env: options.env }),
       },
