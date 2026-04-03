@@ -25,6 +25,7 @@ export function CodeEditorMenuItems({
     <>
       <DropdownMenuItem
         disabled={isPrimaryBusy || !canRun}
+        onSelect={(e) => e.preventDefault()}
         onClick={() => {
           void codeEditor.handleOpen();
         }}
@@ -57,6 +58,7 @@ export function CodeEditorMenuItems({
       {codeEditor.showStopAction ? (
         <DropdownMenuItem
           disabled={codeEditor.state.status === "stopping"}
+          onSelect={(e) => e.preventDefault()}
           onClick={() => {
             void codeEditor.handleStop();
           }}

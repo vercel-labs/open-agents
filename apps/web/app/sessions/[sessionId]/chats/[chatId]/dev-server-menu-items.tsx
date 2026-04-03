@@ -25,6 +25,7 @@ export function DevServerMenuItems({
     <>
       <DropdownMenuItem
         disabled={isPrimaryBusy || !canRun}
+        onSelect={(e) => e.preventDefault()}
         onClick={() => {
           void devServer.handlePrimaryAction();
         }}
@@ -57,6 +58,7 @@ export function DevServerMenuItems({
       {devServer.showStopAction ? (
         <DropdownMenuItem
           disabled={devServer.state.status === "stopping"}
+          onSelect={(e) => e.preventDefault()}
           onClick={() => {
             void devServer.handleStopAction();
           }}
