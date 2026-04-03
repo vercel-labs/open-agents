@@ -96,15 +96,65 @@ async function getRunningCodeServerPid(
   }
 }
 
-async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
+/**
+ * Check if something is listening on the code-server port.
+ * This catches cases where code-server is running but the PID file is missing
+ * (e.g. after snapshot restore, or PID file was in old location).
+ */
+async function isPortInUse(
+  sandbox: ConnectedSandbox,
+  port: number,
+): Promise<boolean> {
+  const result = await sandbox.exec(
+    `ss -tlnp 2>/dev/null | grep -q ':${port} ' && echo yes || echo no`,
+    "/tmp",
+    5_000,
+  );
+  return result.success && result.stdout.trim() === "yes";
+}
+
+/**
+ * Check if code-server is running, using PID file first, then port check as fallback.
+ */
+async function isCodeServerRunning(
+  sandbox: ConnectedSandbox,
+): Promise<boolean> {
   const pid = await getRunningCodeServerPid(sandbox);
-  if (!pid) {
-    return false;
+  if (pid) {
+    return true;
+  }
+  return isPortInUse(sandbox, CODE_SERVER_PORT);
+}
+
+async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
+  // Try PID-based stop first
+  const pid = await getRunningCodeServerPid(sandbox);
+  if (pid) {
+    await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
+    await sandbox.exec(
+      `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+      "/tmp",
+      5_000,
+    );
+    return true;
   }
 
-  await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
-  await sandbox.exec(`rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`, "/tmp", 5_000);
-  return true;
+  // Fallback: kill whatever is on the port
+  if (await isPortInUse(sandbox, CODE_SERVER_PORT)) {
+    await sandbox.exec(
+      `fuser -k ${CODE_SERVER_PORT}/tcp 2>/dev/null || true`,
+      "/tmp",
+      5_000,
+    );
+    await sandbox.exec(
+      `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+      "/tmp",
+      5_000,
+    );
+    return true;
+  }
+
+  return false;
 }
 
 export async function GET(_req: Request, context: RouteContext) {
@@ -126,11 +176,11 @@ export async function GET(_req: Request, context: RouteContext) {
 
     const { sandbox } = sandboxResult;
     const port = CODE_SERVER_PORT;
-    const pid = await getRunningCodeServerPid(sandbox);
+    const running = await isCodeServerRunning(sandbox);
 
     return Response.json({
-      running: pid !== null,
-      url: pid !== null && sandbox.domain ? sandbox.domain(port) : null,
+      running,
+      url: running && sandbox.domain ? sandbox.domain(port) : null,
       port,
     } satisfies CodeEditorStatusResponse);
   } catch (error) {
@@ -177,9 +227,8 @@ export async function POST(_req: Request, context: RouteContext) {
     const port = CODE_SERVER_PORT;
     const workingDirectory = sandbox.workingDirectory;
 
-    // Check if code-server is already running
-    const existingPid = await getRunningCodeServerPid(sandbox);
-    if (existingPid) {
+    // Check if code-server is already running (PID file or port check)
+    if (await isCodeServerRunning(sandbox)) {
       return Response.json({
         url: sandbox.domain(port),
         port,
