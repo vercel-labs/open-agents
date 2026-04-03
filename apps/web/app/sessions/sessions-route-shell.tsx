@@ -158,17 +158,21 @@ export function SessionsRouteShell({
 
   const handleCreateSessionFromBranch = useCallback(
     async (repoOwner: string, repoName: string, branch: string) => {
-      const { session: created, chat } = await createSession({
-        repoOwner,
-        repoName,
-        branch,
-        cloneUrl: `https://github.com/${repoOwner}/${repoName}`,
-        isNewBranch: false,
-        sandboxType: preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE,
-        autoCommitPush: preferences?.autoCommitPush ?? false,
-        autoCreatePr: preferences?.autoCreatePr ?? false,
-      });
-      router.push(`/sessions/${created.id}/chats/${chat.id}`);
+      try {
+        const { session: created, chat } = await createSession({
+          repoOwner,
+          repoName,
+          branch,
+          cloneUrl: `https://github.com/${repoOwner}/${repoName}`,
+          isNewBranch: false,
+          sandboxType: preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE,
+          autoCommitPush: preferences?.autoCommitPush ?? false,
+          autoCreatePr: preferences?.autoCreatePr ?? false,
+        });
+        router.push(`/sessions/${created.id}/chats/${chat.id}`);
+      } catch (error) {
+        console.error("Failed to create session from branch:", error);
+      }
     },
     [createSession, preferences, router],
   );
