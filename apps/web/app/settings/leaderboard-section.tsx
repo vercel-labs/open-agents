@@ -119,7 +119,7 @@ function RangeFilter({
 export function LeaderboardSection() {
   const { session } = useSession();
   const userId = session?.user?.id;
-  const [range, setRange] = useState<LeaderboardRange>("all");
+  const [range, setRange] = useState<LeaderboardRange>("today");
 
   const usagePath = useMemo(() => buildUsagePath(range), [range]);
 

@@ -8,7 +8,9 @@
     ".": "./index.ts",
     "./interface.js": "./interface.ts",
     "./types.js": "./types.ts",
+    "./vercel": "./vercel/index.ts",
     "./vercel/index.js": "./vercel/index.ts",
+    "./vercel/snapshot-refresh.js": "./vercel/snapshot-refresh.ts",
     "./vercel/sandbox.js": "./vercel/sandbox.ts",
     "./vercel/config.js": "./vercel/config.ts"
   },
