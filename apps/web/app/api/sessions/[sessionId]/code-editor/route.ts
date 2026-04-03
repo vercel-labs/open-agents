@@ -15,6 +15,12 @@ export type CodeEditorLaunchResponse = {
   port: number;
 };
 
+export type CodeEditorStatusResponse = {
+  running: boolean;
+  url: string | null;
+  port: number;
+};
+
 export type CodeEditorStopResponse = {
   stopped: boolean;
 };
@@ -99,6 +105,41 @@ async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
   await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
   await sandbox.exec(`rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`, "/tmp", 5_000);
   return true;
+}
+
+export async function GET(_req: Request, context: RouteContext) {
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { sessionId } = await context.params;
+
+  try {
+    const sandboxResult = await connectCodeEditorSandbox(
+      sessionId,
+      authResult.userId,
+    );
+    if (!sandboxResult.ok) {
+      return sandboxResult.response;
+    }
+
+    const { sandbox } = sandboxResult;
+    const port = CODE_SERVER_PORT;
+    const pid = await getRunningCodeServerPid(sandbox);
+
+    return Response.json({
+      running: pid !== null,
+      url: pid !== null && sandbox.domain ? sandbox.domain(port) : null,
+      port,
+    } satisfies CodeEditorStatusResponse);
+  } catch (error) {
+    console.error("Failed to check code editor status:", error);
+    return Response.json(
+      { error: "Failed to check code editor status" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(_req: Request, context: RouteContext) {

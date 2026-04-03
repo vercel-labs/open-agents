@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { CodeEditorLaunchResponse } from "@/app/api/sessions/[sessionId]/code-editor/route";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+  CodeEditorLaunchResponse,
+  CodeEditorStatusResponse,
+} from "@/app/api/sessions/[sessionId]/code-editor/route";
 
 export type CodeEditorState =
   | { status: "idle" }
@@ -66,6 +69,46 @@ export function useCodeEditor({
       setState({ status: "idle" });
     }
   }, [canRun]);
+
+  // Check if code-server is already running on mount / session change
+  const hasCheckedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canRun || hasCheckedRef.current === sessionId) {
+      return;
+    }
+    hasCheckedRef.current = sessionId;
+
+    let cancelled = false;
+
+    async function checkStatus() {
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/code-editor`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const body = (await response.json()) as CodeEditorStatusResponse;
+        if (cancelled) {
+          return;
+        }
+
+        if (body.running && body.url) {
+          setState({
+            status: "ready",
+            info: { url: body.url, port: body.port },
+          });
+        }
+      } catch {
+        // Silently ignore — status check is best-effort
+      }
+    }
+
+    void checkStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canRun, sessionId]);
 
   const openEditorUrl = useCallback((url: string) => {
     window.open(url, "_blank", "noopener,noreferrer");
