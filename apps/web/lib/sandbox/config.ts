@@ -33,12 +33,6 @@ export const SANDBOX_LIFECYCLE_MIN_SLEEP_MS = 5 * 1000;
 export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321, 8000];
 export const CODE_SERVER_PORT = 8000;
 
-/** Base path passed to code-server via --base-path so all URLs use this prefix */
-export const CODESPACE_PROXY_BASE_PATH = "/codespace-proxy";
-
-/** Cookie name used to store the sandbox target URL for the codespace proxy */
-export const CODESPACE_TARGET_COOKIE = "codespace-target";
-
 /** Default working directory for sandboxes, used for path display */
 export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 

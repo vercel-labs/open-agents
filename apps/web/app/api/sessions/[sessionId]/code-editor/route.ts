@@ -3,12 +3,7 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionWithSandboxGuard,
 } from "@/app/api/sessions/_lib/session-context";
-import {
-  CODE_SERVER_PORT,
-  CODESPACE_PROXY_BASE_PATH,
-  CODESPACE_TARGET_COOKIE,
-  DEFAULT_SANDBOX_PORTS,
-} from "@/lib/sandbox/config";
+import { CODE_SERVER_PORT, DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 
 type RouteContext = {
@@ -36,48 +31,6 @@ type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-/**
- * Clone a Response and append a Set-Cookie header that stores the sandbox
- * domain for the codespace proxy.  The cookie is httpOnly and scoped to the
- * proxy path so client JS can never read the raw sandbox URL.
- */
-function withCodespaceCookie(response: Response, sandboxUrl: string): Response {
-  const headers = new Headers(response.headers);
-  const isSecure = process.env.NODE_ENV === "production";
-  headers.append(
-    "Set-Cookie",
-    [
-      `${CODESPACE_TARGET_COOKIE}=${encodeURIComponent(sandboxUrl)}`,
-      "HttpOnly",
-      isSecure ? "Secure" : "",
-      "SameSite=Strict",
-      `Path=${CODESPACE_PROXY_BASE_PATH}`,
-      "Max-Age=86400",
-    ]
-      .filter(Boolean)
-      .join("; "),
-  );
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
-
-/** Build a Set-Cookie header that clears the codespace-target cookie. */
-function clearCodespaceCookie(): string {
-  return [
-    `${CODESPACE_TARGET_COOKIE}=`,
-    "HttpOnly",
-    process.env.NODE_ENV === "production" ? "Secure" : "",
-    "SameSite=Strict",
-    `Path=${CODESPACE_PROXY_BASE_PATH}`,
-    "Max-Age=0",
-  ]
-    .filter(Boolean)
-    .join("; ");
 }
 
 async function connectCodeEditorSandbox(sessionId: string, userId: string) {
@@ -264,15 +217,12 @@ export async function GET(_req: Request, context: RouteContext) {
     const { sandbox } = sandboxResult;
     const port = CODE_SERVER_PORT;
     const running = await isCodeServerRunning(sandbox);
-    const sandboxUrl = running && sandbox.domain ? sandbox.domain(port) : null;
 
-    const response = Response.json({
+    return Response.json({
       running,
-      url: sandboxUrl,
+      url: running && sandbox.domain ? sandbox.domain(port) : null,
       port,
     } satisfies CodeEditorStatusResponse);
-
-    return sandboxUrl ? withCodespaceCookie(response, sandboxUrl) : response;
   } catch (error) {
     console.error("Failed to check code editor status:", error);
     return Response.json(
@@ -319,14 +269,10 @@ export async function POST(_req: Request, context: RouteContext) {
 
     // Reuse an existing code-server process when we can positively identify it.
     if (await isCodeServerRunning(sandbox)) {
-      const sandboxUrl = sandbox.domain(port);
-      return withCodespaceCookie(
-        Response.json({
-          url: sandboxUrl,
-          port,
-        } satisfies CodeEditorLaunchResponse),
-        sandboxUrl,
-      );
+      return Response.json({
+        url: sandbox.domain(port),
+        port,
+      } satisfies CodeEditorLaunchResponse);
     }
 
     if (await isPortInUse(sandbox, port)) {
@@ -339,7 +285,7 @@ export async function POST(_req: Request, context: RouteContext) {
     // Launch code-server in detached mode
     const launchCommand = [
       `printf '%s' "$$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
-      `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry --base-path ${CODESPACE_PROXY_BASE_PATH} ${shellQuote(workingDirectory)}`,
+      `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry ${shellQuote(workingDirectory)}`,
     ].join(" && ");
 
     try {
@@ -355,14 +301,10 @@ export async function POST(_req: Request, context: RouteContext) {
       throw error;
     }
 
-    const sandboxUrl = sandbox.domain(port);
-    return withCodespaceCookie(
-      Response.json({
-        url: sandboxUrl,
-        port,
-      } satisfies CodeEditorLaunchResponse),
-      sandboxUrl,
-    );
+    return Response.json({
+      url: sandbox.domain(port),
+      port,
+    } satisfies CodeEditorLaunchResponse);
   } catch (error) {
     console.error("Failed to launch code editor:", error);
     return Response.json(
@@ -391,15 +333,7 @@ export async function DELETE(_req: Request, context: RouteContext) {
 
     const stopped = await stopCodeServer(sandboxResult.sandbox);
 
-    const response = Response.json({
-      stopped,
-    } satisfies CodeEditorStopResponse);
-    const headers = new Headers(response.headers);
-    headers.append("Set-Cookie", clearCodespaceCookie());
-    return new Response(response.body, {
-      status: response.status,
-      headers,
-    });
+    return Response.json({ stopped } satisfies CodeEditorStopResponse);
   } catch (error) {
     console.error("Failed to stop code editor:", error);
     return Response.json(
