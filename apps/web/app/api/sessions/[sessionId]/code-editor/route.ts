@@ -30,7 +30,7 @@ const CODE_SERVER_PIDFILE = "/tmp/open-harness-code-server.pid";
 type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 
 function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'}`;
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 async function connectCodeEditorSandbox(sessionId: string, userId: string) {
