@@ -175,7 +175,7 @@ function getSessionStatusLabel(session: SessionWithUnread): string {
   if (session.prNumber && session.prStatus === "merged") return "Merged";
   if (session.prNumber && session.prStatus === "open") return "Open PR";
   if (session.prNumber && session.prStatus === "closed") return "Closed";
-  if (session.branch) return "In progress";
+  if (session.branch) return "Needs attention";
   if (session.status === "running") return "Setting up";
   if (session.status === "completed") return "Completed";
   if (session.status === "failed") return "Failed";
