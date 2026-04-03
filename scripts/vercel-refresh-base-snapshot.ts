@@ -1,5 +1,8 @@
 /**
  * Create a new sandbox base snapshot from the currently configured snapshot.
+ * Defaults (snapshot id, ports, timeouts) come from the web app sandbox config so
+ * this matches production; `refreshBaseSnapshot` skips workspace git bootstrap
+ * so the new image stays clone-ready (see `@open-harness/sandbox` snapshot-refresh).
  *
  * Usage:
  *   bun run scripts/vercel-refresh-base-snapshot.ts --command "apt-get update"
