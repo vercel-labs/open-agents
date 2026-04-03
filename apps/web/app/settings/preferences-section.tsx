@@ -681,7 +681,7 @@ function EnabledModelsSection({
   if (modelOptionsLoading) {
     return (
       <div className="grid gap-2">
-        <Label>Enabled Models</Label>
+        <Label>Custom Model Set</Label>
         <Skeleton className="h-48 w-full" />
       </div>
     );
@@ -691,7 +691,7 @@ function EnabledModelsSection({
     <div className="grid gap-2">
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
-          <Label>Enabled Models</Label>
+          <Label>Custom Model Set</Label>
           {enabledCount > 0 && (
             <button
               type="button"
@@ -699,14 +699,14 @@ function EnabledModelsSection({
               onClick={handleDeselectAll}
               className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-40"
             >
-              Reset to default
+              Clear all
             </button>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {enabledCount === 0
-            ? "Showing all models in the selector. Add models here to narrow it down to just the ones you use."
-            : `Only ${enabledCount} model${enabledCount === 1 ? "" : "s"} shown in the selector.`}
+            ? "By default, every available model is shown in the model selector. Add models here to create a shortlist of just the ones you use."
+            : `The model selector will only show ${enabledCount === 1 ? "this model" : `these ${enabledCount} models`}. Remove all to go back to showing every model.`}
         </p>
       </div>
 
