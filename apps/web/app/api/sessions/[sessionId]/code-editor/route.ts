@@ -15,10 +15,16 @@ export type CodeEditorLaunchResponse = {
   port: number;
 };
 
-const CODE_SERVER_PIDFILE = ".open-harness-code-server.pid";
+export type CodeEditorStopResponse = {
+  stopped: boolean;
+};
+
+const CODE_SERVER_PIDFILE = "/tmp/open-harness-code-server.pid";
+
+type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 
 function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
+  return `'${value.replaceAll("'", `'"'"'`)}'}`;
 }
 
 async function connectCodeEditorSandbox(sessionId: string, userId: string) {
@@ -55,31 +61,24 @@ async function connectCodeEditorSandbox(sessionId: string, userId: string) {
 }
 
 async function getRunningCodeServerPid(
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>,
-  workingDirectory: string,
+  sandbox: ConnectedSandbox,
 ): Promise<string | null> {
-  const pidFilePath = `${workingDirectory}/${CODE_SERVER_PIDFILE}`;
-
   try {
-    const pid = (await sandbox.readFile(pidFilePath, "utf-8")).trim();
+    const pid = (await sandbox.readFile(CODE_SERVER_PIDFILE, "utf-8")).trim();
     if (!/^[1-9][0-9]*$/.test(pid)) {
       await sandbox.exec(
-        `rm -f ${shellQuote(pidFilePath)}`,
-        workingDirectory,
+        `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+        "/tmp",
         5_000,
       );
       return null;
     }
 
-    const checkResult = await sandbox.exec(
-      `kill -0 ${pid}`,
-      workingDirectory,
-      5_000,
-    );
+    const checkResult = await sandbox.exec(`kill -0 ${pid}`, "/tmp", 5_000);
     if (!checkResult.success) {
       await sandbox.exec(
-        `rm -f ${shellQuote(pidFilePath)}`,
-        workingDirectory,
+        `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+        "/tmp",
         5_000,
       );
       return null;
@@ -89,6 +88,17 @@ async function getRunningCodeServerPid(
   } catch {
     return null;
   }
+}
+
+async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
+  const pid = await getRunningCodeServerPid(sandbox);
+  if (!pid) {
+    return false;
+  }
+
+  await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
+  await sandbox.exec(`rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`, "/tmp", 5_000);
+  return true;
 }
 
 export async function POST(_req: Request, context: RouteContext) {
@@ -125,13 +135,9 @@ export async function POST(_req: Request, context: RouteContext) {
 
     const port = CODE_SERVER_PORT;
     const workingDirectory = sandbox.workingDirectory;
-    const pidFilePath = `${workingDirectory}/${CODE_SERVER_PIDFILE}`;
 
     // Check if code-server is already running
-    const existingPid = await getRunningCodeServerPid(
-      sandbox,
-      workingDirectory,
-    );
+    const existingPid = await getRunningCodeServerPid(sandbox);
     if (existingPid) {
       return Response.json({
         url: sandbox.domain(port),
@@ -141,7 +147,7 @@ export async function POST(_req: Request, context: RouteContext) {
 
     // Launch code-server in detached mode
     const launchCommand = [
-      `printf '%s' "$$" > ${shellQuote(pidFilePath)}`,
+      `printf '%s' "$$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
       `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry ${shellQuote(workingDirectory)}`,
     ].join(" && ");
 
@@ -149,7 +155,11 @@ export async function POST(_req: Request, context: RouteContext) {
       await sandbox.execDetached(launchCommand, workingDirectory);
     } catch (error) {
       await sandbox
-        .exec(`rm -f ${shellQuote(pidFilePath)}`, workingDirectory, 5_000)
+        .exec(
+          `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+          workingDirectory,
+          5_000,
+        )
         .catch(() => undefined);
       throw error;
     }
@@ -162,6 +172,35 @@ export async function POST(_req: Request, context: RouteContext) {
     console.error("Failed to launch code editor:", error);
     return Response.json(
       { error: "Failed to launch code editor" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(_req: Request, context: RouteContext) {
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { sessionId } = await context.params;
+
+  try {
+    const sandboxResult = await connectCodeEditorSandbox(
+      sessionId,
+      authResult.userId,
+    );
+    if (!sandboxResult.ok) {
+      return sandboxResult.response;
+    }
+
+    const stopped = await stopCodeServer(sandboxResult.sandbox);
+
+    return Response.json({ stopped } satisfies CodeEditorStopResponse);
+  } catch (error) {
+    console.error("Failed to stop code editor:", error);
+    return Response.json(
+      { error: "Failed to stop code editor" },
       { status: 500 },
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { CodeXml, Loader2 } from "lucide-react";
+import { CodeXml, Loader2, Square } from "lucide-react";
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -17,12 +17,14 @@ export function CodeEditorMenuItems({
   canRun,
   codeEditor,
 }: CodeEditorMenuItemsProps) {
-  const isBusy = codeEditor.state.status === "starting";
+  const isPrimaryBusy =
+    codeEditor.state.status === "starting" ||
+    codeEditor.state.status === "stopping";
 
   return (
     <>
       <DropdownMenuItem
-        disabled={isBusy || !canRun}
+        disabled={isPrimaryBusy || !canRun}
         onClick={() => {
           void codeEditor.handleOpen();
         }}
@@ -31,7 +33,7 @@ export function CodeEditorMenuItems({
           codeEditor.menuDetail ? "items-start" : undefined,
         )}
       >
-        {isBusy ? (
+        {isPrimaryBusy ? (
           <Loader2 className="mt-0.5 h-4 w-4 animate-spin" />
         ) : (
           <CodeXml
@@ -52,6 +54,23 @@ export function CodeEditorMenuItems({
           <span>{codeEditor.menuLabel}</span>
         )}
       </DropdownMenuItem>
+      {codeEditor.showStopAction ? (
+        <DropdownMenuItem
+          disabled={codeEditor.state.status === "stopping"}
+          onClick={() => {
+            void codeEditor.handleStop();
+          }}
+        >
+          {codeEditor.state.status === "stopping" ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Square className="mr-2 h-3.5 w-3.5 fill-current" />
+          )}
+          {codeEditor.state.status === "stopping"
+            ? "Stopping Editor..."
+            : "Stop Editor"}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuSeparator />
     </>
   );
