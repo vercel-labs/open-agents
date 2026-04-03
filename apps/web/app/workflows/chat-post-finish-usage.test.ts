@@ -57,6 +57,7 @@ mock.module("@/lib/db/sessions", () => ({
 
 mock.module("@/lib/sandbox/lifecycle", () => ({
   buildActiveLifecycleUpdate: mock(() => ({})),
+  buildLifecycleActivityUpdate: mock(() => ({})),
 }));
 
 mock.module("@/lib/db/usage", () => ({
