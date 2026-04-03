@@ -173,7 +173,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
 function getSessionStatusLabel(session: SessionWithUnread): string {
   if (session.hasStreaming) return "Working";
   if (session.prNumber && session.prStatus === "merged") return "Merged";
-  if (session.prNumber && session.prStatus === "open") return "In review";
+  if (session.prNumber && session.prStatus === "open") return "Open PR";
   if (session.prNumber && session.prStatus === "closed") return "Closed";
   if (session.branch) return "In progress";
   if (session.status === "running") return "Setting up";
