@@ -155,9 +155,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   // Has a branch with code changes → needs human follow-up
   const hasDiff = session.linesAdded || session.linesRemoved;
   if (session.branch && hasDiff) {
-    return (
-      <GitBranch className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-    );
+    return <GitBranch className="h-3.5 w-3.5 shrink-0 text-amber-500" />;
   }
 
   // Has a branch but no changes yet → new session, still getting started
