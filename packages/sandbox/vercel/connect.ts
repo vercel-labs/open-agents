@@ -11,6 +11,7 @@ interface ConnectOptions {
   timeout?: number;
   ports?: number[];
   baseSnapshotId?: string;
+  skipGitWorkspaceBootstrap?: boolean;
 }
 
 function getRemainingTimeout(
@@ -93,6 +94,9 @@ export async function connectVercel(
       ...(options?.baseSnapshotId && {
         baseSnapshotId: options.baseSnapshotId,
       }),
+      ...(options?.skipGitWorkspaceBootstrap && {
+        skipGitWorkspaceBootstrap: true,
+      }),
     });
   }
 
@@ -105,6 +109,9 @@ export async function connectVercel(
     ...(options?.ports && { ports: options.ports }),
     ...(options?.baseSnapshotId && {
       baseSnapshotId: options.baseSnapshotId,
+    }),
+    ...(options?.skipGitWorkspaceBootstrap && {
+      skipGitWorkspaceBootstrap: true,
     }),
   });
 }

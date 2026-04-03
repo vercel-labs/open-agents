@@ -28,6 +28,10 @@ export interface ConnectOptions {
   ports?: number[];
   /** Snapshot ID used as the base image for new sandboxes */
   baseSnapshotId?: string;
+  /**
+   * Skip git init in an empty workspace (e.g. when refreshing a Vercel base snapshot).
+   */
+  skipGitWorkspaceBootstrap?: boolean;
 }
 
 /**
