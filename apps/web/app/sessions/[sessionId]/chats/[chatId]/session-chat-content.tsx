@@ -2578,6 +2578,7 @@ export function SessionChatContent({
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
+  const hasPreviewOrPrTarget = Boolean(prDeploymentUrl || existingPrUrl);
 
   const handleCommitted = useCallback(async () => {
     if (hasExistingPr || hasBranchPreviewLookup) {
@@ -2740,10 +2741,7 @@ export function SessionChatContent({
                         size="sm"
                         className="h-8 w-8 px-0 xl:w-auto xl:px-3"
                         onClick={openPreviewOrPr}
-                        disabled={
-                          isDeploymentStale ||
-                          (!prDeploymentUrl && !existingPrUrl)
-                        }
+                        disabled={!hasPreviewOrPrTarget}
                       >
                         {prDeploymentUrl ? (
                           isDeploymentStale ? (
@@ -2796,7 +2794,6 @@ export function SessionChatContent({
                     size="sm"
                     className="h-8 w-8 px-0 xl:w-auto xl:px-3"
                     onClick={openPreviewOrPr}
-                    disabled={isDeploymentStale}
                   >
                     {isDeploymentStale ? (
                       <>
