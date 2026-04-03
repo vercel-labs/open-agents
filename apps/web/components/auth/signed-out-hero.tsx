@@ -10,7 +10,7 @@ import { Stage } from "@/components/landing/stage";
 
 export function SignedOutHero() {
   return (
-    <div className="landing relative isolate min-h-screen bg-(--l-bg) text-(--l-fg) selection:bg-(--l-fg)/20">
+    <div className="landing relative isolate min-h-full bg-(--l-bg) text-(--l-fg) selection:bg-(--l-fg)/20">
       <div className="pointer-events-none absolute inset-y-0 left-0 right-0 hidden md:block">
         <div className="mx-auto h-full max-w-[1320px] border-x border-x-(--l-border)" />
       </div>
