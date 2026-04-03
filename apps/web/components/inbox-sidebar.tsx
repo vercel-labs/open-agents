@@ -144,7 +144,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
 
   // PR open → yellow-orange PR icon (awaiting review)
   if (session.prNumber && session.prStatus === "open") {
-    return <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-amber-500" />;
+    return <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-green-500" />;
   }
 
   // PR closed (not merged)
@@ -156,7 +156,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   const hasDiff = session.linesAdded || session.linesRemoved;
   if (session.branch && hasDiff) {
     return (
-      <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-amber-500" />
     );
   }
 
