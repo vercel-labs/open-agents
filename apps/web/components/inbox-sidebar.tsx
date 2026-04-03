@@ -133,7 +133,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   // Actively streaming / waiting for LLM
   if (session.hasStreaming) {
     return (
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
     );
   }
 
@@ -155,7 +155,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   // Has a branch → gray branch icon (sandbox ready, no active prompt)
   if (session.branch) {
     return (
-      <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-amber-500" />
     );
   }
 
