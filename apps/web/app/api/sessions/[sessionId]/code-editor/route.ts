@@ -96,6 +96,50 @@ async function getRunningCodeServerPid(
   }
 }
 
+function isCodeServerProcessCommand(command: string): boolean {
+  return (
+    command.includes("code-server") &&
+    (command.includes(`--port ${CODE_SERVER_PORT}`) ||
+      command.includes(`--bind-addr 0.0.0.0:${CODE_SERVER_PORT}`))
+  );
+}
+
+async function findCodeServerPidFromProcessList(
+  sandbox: ConnectedSandbox,
+): Promise<string | null> {
+  try {
+    const processListResult = await sandbox.exec(
+      "ps -eo pid=,args=",
+      "/tmp",
+      5_000,
+    );
+    if (!processListResult.success) {
+      return null;
+    }
+
+    for (const line of processListResult.stdout.split("\n")) {
+      const match = line.trim().match(/^([1-9][0-9]*)\s+(.*)$/);
+      if (!match) {
+        continue;
+      }
+
+      const [, pid, command] = match;
+      if (!isCodeServerProcessCommand(command)) {
+        continue;
+      }
+
+      const checkResult = await sandbox.exec(`kill -0 ${pid}`, "/tmp", 5_000);
+      if (checkResult.success) {
+        return pid;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 /**
  * Check if something is listening on the code-server port by attempting
  * a connection. Uses curl which is universally available in the sandbox
@@ -115,48 +159,42 @@ async function isPortInUse(
   return result.success && !Number.isNaN(code) && code > 0;
 }
 
+async function findRunningCodeServerPid(
+  sandbox: ConnectedSandbox,
+): Promise<string | null> {
+  const pid = await getRunningCodeServerPid(sandbox);
+  if (pid) {
+    return pid;
+  }
+
+  return findCodeServerPidFromProcessList(sandbox);
+}
+
 /**
- * Check if code-server is running, using PID file first, then port check as fallback.
+ * Check if code-server is running, using a tracked PID first and then
+ * a process-list lookup for code-server specifically.
  */
 async function isCodeServerRunning(
   sandbox: ConnectedSandbox,
 ): Promise<boolean> {
-  const pid = await getRunningCodeServerPid(sandbox);
-  if (pid) {
-    return true;
-  }
-  return isPortInUse(sandbox, CODE_SERVER_PORT);
+  const pid = await findRunningCodeServerPid(sandbox);
+  return pid !== null;
 }
 
 async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
-  // Try PID-based stop first
-  const pid = await getRunningCodeServerPid(sandbox);
-  if (pid) {
-    await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
-    await sandbox.exec(
-      `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
-      "/tmp",
-      5_000,
-    );
-    return true;
+  const pid = await findRunningCodeServerPid(sandbox);
+  if (!pid) {
+    await sandbox
+      .exec(`rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`, "/tmp", 5_000)
+      .catch(() => undefined);
+    return false;
   }
 
-  // Fallback: kill by process name if port is in use
-  if (await isPortInUse(sandbox, CODE_SERVER_PORT)) {
-    await sandbox.exec(
-      `pkill -f 'code-server.*--port ${CODE_SERVER_PORT}' 2>/dev/null || killall code-server 2>/dev/null || true`,
-      "/tmp",
-      5_000,
-    );
-    await sandbox.exec(
-      `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
-      "/tmp",
-      5_000,
-    );
-    return true;
-  }
+  await sandbox.exec(`kill ${pid} 2>/dev/null || true`, "/tmp", 5_000);
+  await sandbox.exec(`rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`, "/tmp", 5_000);
 
-  return false;
+  const checkResult = await sandbox.exec(`kill -0 ${pid}`, "/tmp", 5_000);
+  return !checkResult.success;
 }
 
 export async function GET(_req: Request, context: RouteContext) {
@@ -229,12 +267,19 @@ export async function POST(_req: Request, context: RouteContext) {
     const port = CODE_SERVER_PORT;
     const workingDirectory = sandbox.workingDirectory;
 
-    // Check if code-server is already running (PID file or port check)
+    // Reuse an existing code-server process when we can positively identify it.
     if (await isCodeServerRunning(sandbox)) {
       return Response.json({
         url: sandbox.domain(port),
         port,
       } satisfies CodeEditorLaunchResponse);
+    }
+
+    if (await isPortInUse(sandbox, port)) {
+      return Response.json(
+        { error: `Port ${port} is already in use by another process` },
+        { status: 409 },
+      );
     }
 
     // Launch code-server in detached mode
