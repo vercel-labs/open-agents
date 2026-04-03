@@ -775,7 +775,7 @@ export function InboxSidebar({
                             }`}
                           />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+                        <span className="min-w-0 truncate text-[12px] font-medium">
                           {group.label}
                         </span>
                       </button>
