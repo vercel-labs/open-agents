@@ -118,6 +118,7 @@ T=1:45  W1 wakes
 - **At chat start** - prevents hibernation during long-running AI responses
 - **At chat finish** - resets the inactivity window after each interaction
 - **On sandbox create/extend/restore** - resets after manual lifecycle events
+- **On textarea focus** - when the user focuses the chat input, a `POST /api/sandbox/activity` call resets the inactivity timer (throttled to once per 5 minutes) so composing a message doesn't trigger hibernation
 
 Activity refreshes do not start new workflow runs. The active workflow observes the updated timestamps on its next wake.
 

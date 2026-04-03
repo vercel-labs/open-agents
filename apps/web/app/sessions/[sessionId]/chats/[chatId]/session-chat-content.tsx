@@ -141,6 +141,9 @@ import { SandboxCreateErrorBanner } from "./sandbox-create-error-banner";
 import { WorkspaceFileViewer } from "./workspace-file-viewer";
 import "streamdown/styles.css";
 
+/** Minimum interval between textarea-focus activity pings (5 minutes). */
+const ACTIVITY_PING_THROTTLE_MS = 5 * 60 * 1000;
+
 const DiffViewer = dynamic(
   () => import("./diff-viewer").then((m) => m.DiffViewer),
   { ssr: false },
@@ -892,6 +895,7 @@ export function SessionChatContent({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isMountedRef = useRef(true);
   const copyResetTimeoutRef = useRef<number | null>(null);
+  const lastActivityPingRef = useRef(0);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1035,6 +1039,25 @@ export function SessionChatContent({
     skillsLoading,
     refreshSkills,
   } = useSessionChatWorkspaceContext();
+
+  // Ping the server to refresh the inactivity timer when the user focuses
+  // the textarea. Throttled to at most once every 5 minutes so we don't
+  // spam the endpoint on repeated focus/blur cycles.
+  const handleTextareaFocus = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActivityPingRef.current < ACTIVITY_PING_THROTTLE_MS) {
+      return;
+    }
+    lastActivityPingRef.current = now;
+    void fetch("/api/sandbox/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: session.id }),
+    }).catch(() => {
+      // Fire-and-forget – don't block the UI on failures.
+    });
+  }, [session.id]);
+
   const autoCommitEnabled = Boolean(
     session.cloneUrl &&
     session.repoOwner &&
@@ -3565,6 +3588,7 @@ export function SessionChatContent({
                   value={input}
                   placeholder="Request changes or ask a question..."
                   rows={1}
+                  onFocus={handleTextareaFocus}
                   onChange={(e) => {
                     setInput(e.currentTarget.value);
                     setCursorPosition(e.currentTarget.selectionStart ?? 0);
