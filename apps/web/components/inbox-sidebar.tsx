@@ -985,7 +985,7 @@ export function InboxSidebar({
               ) : null}
               {leaderboardRank ? (
                 <Link
-                  href="/settings/leaderboard"
+                  href="/settings/leaderboard?range=today"
                   className="mt-1 block truncate text-xs text-muted-foreground hover:text-foreground"
                 >
                   <span className="font-semibold tabular-nums text-foreground/70">

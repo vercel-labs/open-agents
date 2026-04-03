@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
@@ -116,10 +117,18 @@ function RangeFilter({
   );
 }
 
+function isLeaderboardRange(value: string | null): value is LeaderboardRange {
+  return value === "today" || value === "week" || value === "all";
+}
+
 export function LeaderboardSection() {
   const { session } = useSession();
   const userId = session?.user?.id;
-  const [range, setRange] = useState<LeaderboardRange>("all");
+  const searchParams = useSearchParams();
+  const rangeParam = searchParams.get("range");
+  const [range, setRange] = useState<LeaderboardRange>(
+    isLeaderboardRange(rangeParam) ? rangeParam : "all",
+  );
 
   const usagePath = useMemo(() => buildUsagePath(range), [range]);
 
