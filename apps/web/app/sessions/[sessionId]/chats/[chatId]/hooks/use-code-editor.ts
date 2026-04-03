@@ -110,13 +110,17 @@ export function useCodeEditor({
     };
   }, [canRun, sessionId]);
 
-  const openEditorUrl = useCallback((url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, []);
+  const openEditorPage = useCallback(() => {
+    window.open(
+      `/sessions/${sessionId}/editor`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }, [sessionId]);
 
   const handleOpen = useCallback(async () => {
     if (state.status === "ready") {
-      openEditorUrl(state.info.url);
+      openEditorPage();
       return;
     }
 
@@ -146,7 +150,7 @@ export function useCodeEditor({
         info: launchResponse,
       });
 
-      openEditorUrl(launchResponse.url);
+      openEditorPage();
     } catch (error) {
       console.error("Failed to launch code editor:", error);
       setState({
@@ -157,7 +161,7 @@ export function useCodeEditor({
             : "Failed to launch code editor",
       });
     }
-  }, [openEditorUrl, sessionId, state]);
+  }, [openEditorPage, sessionId, state]);
 
   const handleStop = useCallback(async () => {
     if (state.status !== "ready") {
@@ -200,7 +204,7 @@ export function useCodeEditor({
 
   const menuDetail =
     state.status === "ready" || state.status === "stopping"
-      ? state.info.url
+      ? "Running"
       : state.status === "error"
         ? state.message
         : null;
