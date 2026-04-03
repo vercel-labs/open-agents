@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { CodespaceProvider } from "./codespace-context";
 
 interface CodespaceLayoutProps {
   params: Promise<{ sessionId: string }>;
@@ -31,5 +32,9 @@ export default async function CodespaceLayout({
     redirect("/");
   }
 
-  return <>{children}</>;
+  return (
+    <CodespaceProvider sessionTitle={sessionRecord.title}>
+      {children}
+    </CodespaceProvider>
+  );
 }

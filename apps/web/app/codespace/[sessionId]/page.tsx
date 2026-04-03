@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { CodeEditorStatusResponse } from "@/app/api/sessions/[sessionId]/code-editor/route";
+import { useCodespaceContext } from "./codespace-context";
 
 type EditorState =
   | { status: "loading" }
@@ -27,6 +28,7 @@ function getErrorMessage(body: unknown, fallback: string): string {
 export default function CodespacePage() {
   const router = useRouter();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const { sessionTitle } = useCodespaceContext();
   const [state, setState] = useState<EditorState>({ status: "loading" });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const startedRef = useRef(false);
@@ -132,9 +134,9 @@ export default function CodespacePage() {
           Back
         </Button>
 
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <CodeXml className="h-4 w-4" />
-          <span>Code Editor</span>
+        <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+          <CodeXml className="h-4 w-4 shrink-0" />
+          <span className="truncate">{sessionTitle}</span>
         </div>
 
         <div className="flex-1" />
