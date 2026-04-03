@@ -18,6 +18,7 @@ interface UpdatePreferencesRequest {
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
   globalSkillRefs?: GlobalSkillRef[];
+  enabledModelIds?: string[];
 }
 
 export async function GET() {
@@ -95,6 +96,18 @@ export async function PATCH(req: Request) {
     }
 
     body.globalSkillRefs = parsedGlobalSkillRefs.data;
+  }
+
+  if (body.enabledModelIds !== undefined) {
+    if (
+      !Array.isArray(body.enabledModelIds) ||
+      !body.enabledModelIds.every((id) => typeof id === "string")
+    ) {
+      return Response.json(
+        { error: "Invalid enabledModelIds value" },
+        { status: 400 },
+      );
+    }
   }
 
   try {

@@ -20,6 +20,7 @@ export interface UserPreferencesData {
   autoCreatePr: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
+  enabledModelIds: string[];
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
@@ -31,6 +32,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   autoCreatePr: false,
   globalSkillRefs: [],
   modelVariants: [],
+  enabledModelIds: [],
 };
 
 const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel"];
@@ -62,6 +64,13 @@ function normalizeDiffMode(value: unknown): DiffMode {
   return DEFAULT_PREFERENCES.defaultDiffMode;
 }
 
+function normalizeEnabledModelIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 export function toUserPreferencesData(
   row?: Pick<
     UserPreferences,
@@ -73,6 +82,7 @@ export function toUserPreferencesData(
     | "autoCreatePr"
     | "globalSkillRefs"
     | "modelVariants"
+    | "enabledModelIds"
   >,
 ): UserPreferencesData {
   const parsedModelVariants = modelVariantsSchema.safeParse(
@@ -88,6 +98,7 @@ export function toUserPreferencesData(
     autoCreatePr: row?.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
     globalSkillRefs: normalizeGlobalSkillRefs(row?.globalSkillRefs),
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
+    enabledModelIds: normalizeEnabledModelIds(row?.enabledModelIds),
   };
 }
 
@@ -151,6 +162,8 @@ export async function updateUserPreferences(
       globalSkillRefs:
         updates.globalSkillRefs ?? DEFAULT_PREFERENCES.globalSkillRefs,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,
+      enabledModelIds:
+        updates.enabledModelIds ?? DEFAULT_PREFERENCES.enabledModelIds,
     })
     .returning();
 

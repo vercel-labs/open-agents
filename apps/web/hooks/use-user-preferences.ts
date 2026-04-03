@@ -17,6 +17,7 @@ export interface UserPreferences {
   autoCreatePr: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
+  enabledModelIds: string[];
 }
 
 interface PreferencesResponse {

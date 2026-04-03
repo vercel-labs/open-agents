@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { CheckIcon, Plus, Search, Trash2 } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
@@ -37,9 +37,11 @@ import {
   type GlobalSkillRef,
 } from "@/lib/skills/global-skill-refs";
 import {
+  type ModelOption,
   getDefaultModelOptionId,
   withMissingModelOption,
 } from "@/lib/model-options";
+import { cn } from "@/lib/utils";
 
 const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
   { id: "vercel", name: "Vercel" },
@@ -297,6 +299,30 @@ export function PreferencesSection() {
     }
   };
 
+  const enabledModelIds = useMemo(
+    () => new Set(preferences?.enabledModelIds),
+    [preferences?.enabledModelIds],
+  );
+
+  const handleToggleModel = useCallback(
+    async (modelId: string) => {
+      const currentIds = preferences?.enabledModelIds ?? [];
+      const nextIds = currentIds.includes(modelId)
+        ? currentIds.filter((id) => id !== modelId)
+        : [...currentIds, modelId];
+
+      setIsSaving(true);
+      try {
+        await updatePreferences({ enabledModelIds: nextIds });
+      } catch (error) {
+        console.error("Failed to update enabled models:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [preferences?.enabledModelIds, updatePreferences],
+  );
+
   if (loading) {
     return <PreferencesSectionSkeleton />;
   }
@@ -376,6 +402,14 @@ export function PreferencesSection() {
             the main model if not set.
           </p>
         </div>
+
+        <EnabledModelsSection
+          modelOptions={modelOptions}
+          modelOptionsLoading={modelOptionsLoading}
+          enabledModelIds={enabledModelIds}
+          onToggleModel={handleToggleModel}
+          disabled={isSaving}
+        />
 
         <div className="grid gap-2">
           <Label htmlFor="sandbox">Default Sandbox</Label>
@@ -558,5 +592,120 @@ export function PreferencesSection() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function EnabledModelsSection({
+  modelOptions,
+  modelOptionsLoading,
+  enabledModelIds,
+  onToggleModel,
+  disabled,
+}: {
+  modelOptions: ModelOption[];
+  modelOptionsLoading: boolean;
+  enabledModelIds: Set<string>;
+  onToggleModel: (modelId: string) => void;
+  disabled: boolean;
+}) {
+  const [search, setSearch] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) {
+      return modelOptions;
+    }
+    const lower = search.toLowerCase();
+    return modelOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(lower) ||
+        option.id.toLowerCase().includes(lower) ||
+        (option.description?.toLowerCase().includes(lower) ?? false),
+    );
+  }, [modelOptions, search]);
+
+  const enabledCount = enabledModelIds.size;
+
+  if (modelOptionsLoading) {
+    return (
+      <div className="grid gap-2">
+        <Label>Enabled Models</Label>
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <div className="space-y-1">
+        <Label>Enabled Models</Label>
+        <p className="text-xs text-muted-foreground">
+          Choose which models appear in the model selector.
+          {enabledCount === 0
+            ? " All models are shown when none are selected."
+            : ` ${enabledCount} model${enabledCount === 1 ? "" : "s"} selected.`}
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border/70">
+        <div className="relative border-b border-border/60 px-3 py-2">
+          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search models..."
+            className="h-7 border-0 bg-transparent pl-5 text-sm shadow-none focus-visible:ring-0"
+          />
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {filteredOptions.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No models found.
+            </p>
+          ) : (
+            filteredOptions.map((option) => {
+              const isEnabled = enabledModelIds.has(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onToggleModel(option.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-60",
+                    isEnabled && "bg-muted/30",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex size-4 shrink-0 items-center justify-center rounded border",
+                      isEnabled
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-muted-foreground/30",
+                    )}
+                  >
+                    {isEnabled && <CheckIcon className="size-3" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">
+                        {option.label}
+                      </span>
+                      {option.isVariant && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          variant
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {option.description ?? option.id}
+                    </p>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
