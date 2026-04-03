@@ -10,6 +10,7 @@ const installationRepoSchema = z.object({
   full_name: z.string(),
   description: z.string().nullable(),
   private: z.boolean(),
+  updated_at: z.string().optional(),
 });
 
 const installationReposSchema = z.array(installationRepoSchema);
