@@ -3945,6 +3945,9 @@ export function SessionChatContent({
             setSelectedWorkspaceFile(null);
           }
         }}
+        onOpenInEditor={(filePath) => {
+          void codeEditor.handleOpenFile(filePath);
+        }}
       />
     </>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { File as DiffsFile } from "@pierre/diffs/react";
-import { Check, Copy, Loader2, RefreshCw } from "lucide-react";
+import { Check, CodeXml, Copy, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import type { WorkspaceFileContentResponse } from "@/app/api/sessions/[sessionId]/files/content/route";
@@ -27,6 +27,7 @@ type WorkspaceFileViewerProps = {
   filePath: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenInEditor?: (filePath: string) => void;
   sessionId: string;
 };
 
@@ -90,6 +91,7 @@ function ViewerBody({
   filePath,
   isLoading,
   isRefreshing,
+  onOpenInEditor,
   onRefresh,
   response,
 }: {
@@ -97,6 +99,7 @@ function ViewerBody({
   filePath: string;
   isLoading: boolean;
   isRefreshing: boolean;
+  onOpenInEditor?: () => void;
   onRefresh: () => void;
   response: WorkspaceFileContentResponse | undefined;
 }) {
@@ -114,19 +117,34 @@ function ViewerBody({
           </p>
           <CopyButton text={filePath} title="Copy file path" />
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isLoading || isRefreshing}
-          className="h-7 shrink-0 px-2"
-          title="Refresh file contents"
-        >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
-          />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onOpenInEditor && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onOpenInEditor}
+              className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+              title="Open in code editor"
+            >
+              <CodeXml className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Open in Editor</span>
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isLoading || isRefreshing}
+            className="h-7 shrink-0 px-2"
+            title="Refresh file contents"
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+            />
+          </Button>
+        </div>
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-auto">
@@ -171,6 +189,7 @@ export function WorkspaceFileViewer({
   filePath,
   open,
   onOpenChange,
+  onOpenInEditor,
   sessionId,
 }: WorkspaceFileViewerProps) {
   const isMobile = useIsMobile();
@@ -201,6 +220,9 @@ export function WorkspaceFileViewer({
       filePath={filePath}
       isLoading={isLoading}
       isRefreshing={isRefreshing}
+      onOpenInEditor={
+        onOpenInEditor ? () => onOpenInEditor(filePath) : undefined
+      }
       onRefresh={() => {
         void mutate();
       }}
