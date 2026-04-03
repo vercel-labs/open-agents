@@ -115,6 +115,7 @@ function DiffStats({
   removed: number | null;
 }) {
   if (added === null && removed === null) return null;
+  if (added === 0 && removed === 0) return null;
 
   return (
     <span className="flex items-center gap-0.5 font-mono text-[10px]">
@@ -362,7 +363,7 @@ const SessionRow = memo(function SessionRow({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`group relative flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] cursor-pointer ${
+          className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] cursor-pointer ${
             isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
           } ${isPending ? "opacity-80" : "opacity-100"}`}
           style={sessionRowPerformanceStyle}
@@ -383,15 +384,15 @@ const SessionRow = memo(function SessionRow({
               className={`truncate text-[13px] leading-5 ${
                 session.hasUnread && !isActive
                   ? "font-semibold text-foreground"
-                  : "font-medium text-foreground/90"
+                  : "font-normal text-foreground/75"
               }`}
             >
               {session.title}
             </p>
           </span>
 
-          {/* Right side: fixed width so title truncation is consistent */}
-          <span className="flex w-10 shrink-0 items-center justify-end">
+          {/* Right side: shrink-to-fit so diff stats never overlap title */}
+          <span className="flex shrink-0 items-center justify-end">
             {showArchiveButton ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -917,7 +918,7 @@ export function InboxSidebar({
                       }`}
                     >
                       <div className="overflow-hidden">
-                        <div className="ml-5 space-y-1 border-l border-border/40 pl-2">
+                        <div className="ml-4 space-y-1 border-l border-border/40 pl-1.5">
                           {group.sessions.map((session) => (
                             <SessionRow
                               key={session.id}
