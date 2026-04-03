@@ -2734,7 +2734,10 @@ export function SessionChatContent({
                         size="sm"
                         className="h-8 w-8 px-0 xl:w-auto xl:px-3"
                         onClick={openPreviewOrPr}
-                        disabled={!prDeploymentUrl && !existingPrUrl}
+                        disabled={
+                          isDeploymentStale ||
+                          (!prDeploymentUrl && !existingPrUrl)
+                        }
                       >
                         {prDeploymentUrl ? (
                           isDeploymentStale ? (
@@ -2787,6 +2790,7 @@ export function SessionChatContent({
                     size="sm"
                     className="h-8 w-8 px-0 xl:w-auto xl:px-3"
                     onClick={openPreviewOrPr}
+                    disabled={isDeploymentStale}
                   >
                     {isDeploymentStale ? (
                       <>
