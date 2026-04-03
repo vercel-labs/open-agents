@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Check,
-  ExternalLink,
-  GitMerge,
-  Loader2,
-} from "lucide-react";
+import { AlertTriangle, Check, GitMerge, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
@@ -245,12 +239,6 @@ export function MergePrDialog({
     }
   };
 
-  const hasReadinessWarning =
-    readiness !== null &&
-    !readiness.canMerge &&
-    readiness.reasons.length > 0 &&
-    !error;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -342,8 +330,6 @@ export function MergePrDialog({
                   disabled={isSubmitting || isLoadingReadiness}
                 />
               </div>
-
-
             </>
           )}
 
