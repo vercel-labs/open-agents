@@ -152,18 +152,17 @@ function getSessionStatusIcon(session: SessionWithUnread) {
     return <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-red-500" />;
   }
 
-  // Creating / instantiating sandbox — check before branch so new sessions
-  // that already have a branch assigned don't prematurely show "Needs attention"
-  if (session.status === "running") {
-    return (
-      <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-    );
-  }
-
   // Has a branch → blue branch icon (work done, needs human follow-up)
   if (session.branch) {
     return (
       <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+    );
+  }
+
+  // Creating / instantiating sandbox (no branch yet)
+  if (session.status === "running") {
+    return (
+      <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
     );
   }
 
@@ -176,8 +175,8 @@ function getSessionStatusLabel(session: SessionWithUnread): string {
   if (session.prNumber && session.prStatus === "merged") return "Merged";
   if (session.prNumber && session.prStatus === "open") return "Open PR";
   if (session.prNumber && session.prStatus === "closed") return "Closed";
-  if (session.status === "running") return "Setting up";
   if (session.branch) return "Needs attention";
+  if (session.status === "running") return "Setting up";
   if (session.status === "completed") return "Completed";
   if (session.status === "failed") return "Failed";
   if (session.status === "archived") return "Archived";
