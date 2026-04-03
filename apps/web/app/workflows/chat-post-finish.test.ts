@@ -31,6 +31,7 @@ const spies = {
   ),
   recordUsage: mock(() => Promise.resolve()),
   buildActiveLifecycleUpdate: mock(() => ({})),
+  buildLifecycleActivityUpdate: mock(() => ({})),
   connectSandbox: mock(() =>
     Promise.resolve({
       getState: () => ({ type: "vercel", sandboxId: "sb-1" }),
@@ -64,6 +65,7 @@ mock.module("@/lib/db/usage", () => ({
 
 mock.module("@/lib/sandbox/lifecycle", () => ({
   buildActiveLifecycleUpdate: spies.buildActiveLifecycleUpdate,
+  buildLifecycleActivityUpdate: spies.buildLifecycleActivityUpdate,
 }));
 
 mock.module("@open-harness/sandbox", () => ({
@@ -85,6 +87,7 @@ mock.module("@/lib/chat/auto-pr-direct", () => ({
 const {
   persistUserMessage,
   persistAssistantMessage,
+  refreshLifecycleActivity,
   persistSandboxState,
   clearActiveStream,
   refreshDiffCache,
@@ -231,6 +234,26 @@ describe("persistAssistantMessage", () => {
     );
 
     await persistAssistantMessage("chat-1", makeAssistantMessage());
+  });
+});
+
+// ─── refreshLifecycleActivity ──────────────────────────────────────
+
+describe("refreshLifecycleActivity", () => {
+  test("updates session lifecycle timing", async () => {
+    await refreshLifecycleActivity("session-1");
+
+    expect(spies.buildLifecycleActivityUpdate).toHaveBeenCalledTimes(1);
+    expect(spies.updateSession).toHaveBeenCalledTimes(1);
+    expect(spies.updateSession).toHaveBeenCalledWith("session-1", {});
+  });
+
+  test("does not throw on update error", async () => {
+    spies.updateSession.mockImplementationOnce(() =>
+      Promise.reject(new Error("DB down")),
+    );
+
+    await refreshLifecycleActivity("session-1");
   });
 });
 

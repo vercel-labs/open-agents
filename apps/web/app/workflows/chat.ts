@@ -10,8 +10,6 @@ import {
 import type { OpenHarnessAgentCallOptions } from "@open-harness/agent";
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
-import { updateSession } from "@/lib/db/sessions";
-import { buildLifecycleActivityUpdate } from "@/lib/sandbox/lifecycle";
 import { addLanguageModelUsage } from "./usage-utils";
 import type {
   WebAgentMessageMetadata,
@@ -24,6 +22,7 @@ import {
   persistSandboxState,
   recordWorkflowUsage,
   refreshDiffCache,
+  refreshLifecycleActivity,
   runAutoCommitStep,
   runAutoCreatePrStep,
 } from "./chat-post-finish";
@@ -329,10 +328,7 @@ export async function runAgentWorkflow(options: Options) {
     }
 
     if (sandboxState) {
-      await updateSession(
-        options.sessionId,
-        buildLifecycleActivityUpdate(new Date()),
-      );
+      await refreshLifecycleActivity(options.sessionId);
     }
 
     // Close the stream immediately after generation so the UI is unblocked.

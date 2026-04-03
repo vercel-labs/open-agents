@@ -12,12 +12,11 @@ const spies = {
   clearActiveStream: mock(() => Promise.resolve()),
   recordWorkflowUsage: mock(() => Promise.resolve()),
   refreshDiffCache: mock(() => Promise.resolve()),
+  refreshLifecycleActivity: mock(() => Promise.resolve()),
   runAutoCommitStep: mock(() =>
     Promise.resolve({ committed: false, pushed: false }),
   ),
   runAutoCreatePrStep: mock(() => Promise.resolve()),
-  updateSession: mock(() => Promise.resolve()),
-  buildLifecycleActivityUpdate: mock(() => ({})),
 };
 
 // Track what the agent stream yields
@@ -99,14 +98,6 @@ mock.module("workflow/api", () => ({
 }));
 
 mock.module("./chat-post-finish", () => spies);
-
-mock.module("@/lib/db/sessions", () => ({
-  updateSession: spies.updateSession,
-}));
-
-mock.module("@/lib/sandbox/lifecycle", () => ({
-  buildLifecycleActivityUpdate: spies.buildLifecycleActivityUpdate,
-}));
 
 mock.module("@/app/config", () => ({
   webAgent: {
@@ -439,8 +430,8 @@ describe("runAgentWorkflow", () => {
 
   test("refreshes lifecycle activity before clearing the active stream", async () => {
     const callOrder: string[] = [];
-    spies.updateSession.mockImplementationOnce(async () => {
-      callOrder.push("update-session");
+    spies.refreshLifecycleActivity.mockImplementationOnce(async () => {
+      callOrder.push("refresh-lifecycle");
     });
     spies.clearActiveStream.mockImplementationOnce(async () => {
       callOrder.push("clear-stream");
@@ -448,9 +439,8 @@ describe("runAgentWorkflow", () => {
 
     await runAgentWorkflow(makeOptions());
 
-    expect(spies.buildLifecycleActivityUpdate).toHaveBeenCalledTimes(1);
-    expect(spies.updateSession).toHaveBeenCalledTimes(1);
-    expect(callOrder).toEqual(["update-session", "clear-stream"]);
+    expect(spies.refreshLifecycleActivity).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["refresh-lifecycle", "clear-stream"]);
   });
 
   test("persists sandbox state when sandbox is present", async () => {

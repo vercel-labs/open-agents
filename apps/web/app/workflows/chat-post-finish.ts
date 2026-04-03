@@ -12,7 +12,10 @@ import {
   upsertChatMessageScoped,
   updateChatAssistantActivity,
 } from "@/lib/db/sessions";
-import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
+import {
+  buildActiveLifecycleUpdate,
+  buildLifecycleActivityUpdate,
+} from "@/lib/sandbox/lifecycle";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { recordUsage } from "@/lib/db/usage";
 
@@ -146,6 +149,18 @@ export async function persistAssistantMessage(
     }
   } catch (error) {
     console.error("[workflow] Failed to persist assistant message:", error);
+  }
+}
+
+export async function refreshLifecycleActivity(
+  sessionId: string,
+): Promise<void> {
+  "use step";
+
+  try {
+    await updateSession(sessionId, buildLifecycleActivityUpdate(new Date()));
+  } catch (error) {
+    console.error("[workflow] Failed to refresh lifecycle activity:", error);
   }
 }
 
