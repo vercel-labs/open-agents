@@ -148,7 +148,7 @@ export function SharedChatContent({
     repoUrl && session.prNumber ? `${repoUrl}/pull/${session.prNumber}` : null;
 
   return (
-    <div className="flex min-h-full flex-col overflow-x-hidden bg-background text-foreground">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
       {/* Hero Header */}
       <header className="border-b border-border bg-background">
         <div className="mx-auto max-w-4xl px-4 py-6">
