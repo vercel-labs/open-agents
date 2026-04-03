@@ -133,7 +133,7 @@ function getSessionStatusIcon(session: SessionWithUnread) {
   // Actively streaming / waiting for LLM
   if (session.hasStreaming) {
     return (
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500" />
+      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-green-500" />
     );
   }
 
@@ -152,17 +152,18 @@ function getSessionStatusIcon(session: SessionWithUnread) {
     return <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-red-500" />;
   }
 
-  // Has a branch → gray branch icon (sandbox ready, no active prompt)
-  if (session.branch) {
-    return (
-      <GitBranch className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-    );
-  }
-
-  // Creating / instantiating sandbox
+  // Creating / instantiating sandbox — check before branch so new sessions
+  // that already have a branch assigned don't prematurely show "Needs attention"
   if (session.status === "running") {
     return (
       <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+    );
+  }
+
+  // Has a branch → blue branch icon (work done, needs human follow-up)
+  if (session.branch) {
+    return (
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-500" />
     );
   }
 
@@ -175,8 +176,8 @@ function getSessionStatusLabel(session: SessionWithUnread): string {
   if (session.prNumber && session.prStatus === "merged") return "Merged";
   if (session.prNumber && session.prStatus === "open") return "Open PR";
   if (session.prNumber && session.prStatus === "closed") return "Closed";
-  if (session.branch) return "Needs attention";
   if (session.status === "running") return "Setting up";
+  if (session.branch) return "Needs attention";
   if (session.status === "completed") return "Completed";
   if (session.status === "failed") return "Failed";
   if (session.status === "archived") return "Archived";
