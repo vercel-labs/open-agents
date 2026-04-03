@@ -813,13 +813,6 @@ export function InboxSidebar({
               {groupedSessions.map((group) => {
                 const isCollapsed = collapsedGroupIds[group.id] ?? false;
                 const groupHasActiveSession = group.id === activeGroupId;
-                const groupHasUnread = group.sessions.some(
-                  (session) =>
-                    session.hasUnread && session.id !== activeSessionId,
-                );
-                const groupHasStreaming = group.sessions.some(
-                  (session) => session.hasStreaming,
-                );
                 const groupContentId = getRepoGroupContentId(group.id);
 
                 const groupRepoOwner =
@@ -855,11 +848,6 @@ export function InboxSidebar({
                           {group.label}
                         </span>
                       </button>
-                      {groupHasStreaming ? (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
-                      ) : groupHasUnread ? (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
-                      ) : null}
                       {hasRepo ? (
                         <span className="hidden shrink-0 items-center gap-0.5 group-hover/repo:flex">
                           <Tooltip>
