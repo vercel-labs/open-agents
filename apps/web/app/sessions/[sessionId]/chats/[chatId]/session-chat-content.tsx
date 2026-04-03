@@ -2494,7 +2494,7 @@ export function SessionChatContent({
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
 
   useEffect(() => {
-    if (hasExistingPr || !hasBranchPreviewLookup) {
+    if (!hasExistingPr && !hasBranchPreviewLookup) {
       if (branchPreviewUrlChangeBaseline !== undefined) {
         setBranchPreviewUrlChangeBaseline(undefined);
       }
@@ -2514,6 +2514,8 @@ export function SessionChatContent({
     branchPreviewUrlChangeBaseline,
     prDeploymentUrl,
   ]);
+
+  const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
 
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -2548,7 +2550,7 @@ export function SessionChatContent({
   };
 
   const handleCommitted = useCallback(async () => {
-    if (!hasExistingPr && hasBranchPreviewLookup) {
+    if (hasExistingPr || hasBranchPreviewLookup) {
       setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
     }
 
@@ -2711,10 +2713,19 @@ export function SessionChatContent({
                         disabled={!prDeploymentUrl && !existingPrUrl}
                       >
                         {prDeploymentUrl ? (
-                          <>
-                            <ExternalLink className="h-4 w-4 xl:mr-2" />
-                            <span className="hidden xl:inline">Preview</span>
-                          </>
+                          isDeploymentStale ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                              <span className="hidden xl:inline">
+                                Deploying…
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="h-4 w-4 xl:mr-2" />
+                              <span className="hidden xl:inline">Preview</span>
+                            </>
+                          )
                         ) : (
                           <>
                             <GitPullRequest className="h-4 w-4 xl:mr-2" />
@@ -2753,8 +2764,17 @@ export function SessionChatContent({
                     className="h-8 w-8 px-0 xl:w-auto xl:px-3"
                     onClick={openPreviewOrPr}
                   >
-                    <ExternalLink className="h-4 w-4 xl:mr-2" />
-                    <span className="hidden xl:inline">Preview</span>
+                    {isDeploymentStale ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
+                        <span className="hidden xl:inline">Deploying…</span>
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 xl:mr-2" />
+                        <span className="hidden xl:inline">Preview</span>
+                      </>
+                    )}
                   </Button>
                 ) : canCreatePr && isCreatePrBranchReady ? (
                   <Button
