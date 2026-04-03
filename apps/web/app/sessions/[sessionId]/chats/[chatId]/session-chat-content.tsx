@@ -2517,6 +2517,30 @@ export function SessionChatContent({
 
   const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
 
+  // When auto-commit lands (transitions from committing to clean), mark the
+  // current preview deployment as stale so the UI shows "Deploying…" until
+  // the new Vercel build finishes.
+  const prevIsAutoCommittingRef = useRef(isAutoCommitting);
+  useEffect(() => {
+    const wasAutoCommitting = prevIsAutoCommittingRef.current;
+    prevIsAutoCommittingRef.current = isAutoCommitting;
+
+    if (
+      wasAutoCommitting &&
+      !isAutoCommitting &&
+      (hasExistingPr || hasBranchPreviewLookup)
+    ) {
+      setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
+      refreshPrDeployment().catch(() => undefined);
+    }
+  }, [
+    isAutoCommitting,
+    hasExistingPr,
+    hasBranchPreviewLookup,
+    prDeploymentUrl,
+    refreshPrDeployment,
+  ]);
+
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
   const hasBranchDiff =
