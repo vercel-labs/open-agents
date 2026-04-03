@@ -112,9 +112,9 @@ function SettingsLayout({
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="hidden w-64 border-r border-border md:flex">
-        <div className="flex h-full w-full flex-col">
+    <div className="flex h-screen bg-background text-foreground">
+      <aside className="hidden w-64 shrink-0 border-r border-border md:flex">
+        <div className="flex h-full w-full flex-col overflow-y-auto">
           <div className="flex items-center gap-4 px-6 py-4">
             <Link
               href="/sessions"
@@ -177,7 +177,7 @@ function SettingsLayout({
         </SheetContent>
       </Sheet>
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
           <button
             type="button"
