@@ -752,12 +752,12 @@ export function InboxSidebar({
                 const hasRepo = Boolean(groupRepoOwner && groupRepoName);
 
                 return (
-                  <section key={group.id} className="group/repo space-y-1.5">
+                  <section key={group.id} className="space-y-1.5">
                     <div
-                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                      className={`group/repo flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
                         groupHasActiveSession
-                          ? "bg-muted/35 text-foreground"
-                          : "text-muted-foreground hover:bg-muted/20 hover:text-foreground/85"
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground/85"
                       }`}
                     >
                       <button
@@ -765,9 +765,9 @@ export function InboxSidebar({
                         onClick={() => handleToggleRepoGroup(group.id)}
                         aria-controls={groupContentId}
                         aria-expanded={!isCollapsed}
-                        className="flex min-w-0 flex-1 items-center gap-2"
+                        className="flex min-w-0 flex-1 items-center gap-1.5"
                       >
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/70 text-muted-foreground/80">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground/80">
                           <FolderGit2 className="h-3.5 w-3.5 group-hover/repo:hidden" />
                           <ChevronDown
                             className={`hidden h-3.5 w-3.5 text-muted-foreground/70 transition-transform duration-200 group-hover/repo:block ${
@@ -784,16 +784,6 @@ export function InboxSidebar({
                       ) : groupHasUnread ? (
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
                       ) : null}
-                      {/* Default: show count. On hover: show create buttons */}
-                      <span
-                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium group-hover/repo:hidden ${
-                          groupHasActiveSession
-                            ? "bg-background/80 text-foreground/65"
-                            : "bg-muted/70 text-muted-foreground"
-                        }`}
-                      >
-                        {group.sessions.length}
-                      </span>
                       {hasRepo ? (
                         <span className="hidden shrink-0 items-center gap-0.5 group-hover/repo:flex">
                           <Tooltip>
@@ -807,7 +797,7 @@ export function InboxSidebar({
                                     groupRepoName,
                                   );
                                 }}
-                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-background/60 hover:text-foreground"
+                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:text-foreground"
                                 aria-label={`Create session from branch for ${group.label}`}
                               >
                                 <GitBranch className="h-3 w-3" />
@@ -828,7 +818,7 @@ export function InboxSidebar({
                                     groupRepoName,
                                   );
                                 }}
-                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-background/60 hover:text-foreground"
+                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:text-foreground"
                                 aria-label={`Create session for ${group.label}`}
                               >
                                 <Plus className="h-3 w-3" />
