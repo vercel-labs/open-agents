@@ -67,7 +67,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeInitializationScript }}
         />
         {isPreviewDeployment && (
-          <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-orange-100/70 backdrop-blur-sm px-4 py-1.5 text-center text-xs font-medium text-orange-600">
+          <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-orange-400/15 backdrop-blur-sm px-4 py-1.5 text-center text-xs font-medium text-orange-500 dark:text-orange-400">
             <span>⚠️</span>
             <span>Preview Deployment — this is not production</span>
             <span>⚠️</span>
