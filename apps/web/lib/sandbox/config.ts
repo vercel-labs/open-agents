@@ -22,13 +22,16 @@ export const SANDBOX_LIFECYCLE_STALE_RUN_GRACE_MS = 2 * 60 * 1000;
 export const SANDBOX_LIFECYCLE_MIN_SLEEP_MS = 5 * 1000;
 
 /**
- * Default ports to expose from cloud sandboxes for dev server previews.
- * Limited to 4 ports. Covers the most common framework defaults:
+ * Default ports to expose from cloud sandboxes.
+ * Limited to 5 ports. Covers the most common framework defaults
+ * plus the built-in code editor:
  * - 3000: Next.js, Express, Remix
  * - 5173: Vite, SvelteKit
  * - 4321: Astro
+ * - 8000: code-server (built-in editor)
  */
-export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321];
+export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321, 8000];
+export const CODE_SERVER_PORT = 8000;
 
 /** Default working directory for sandboxes, used for path display */
 export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";

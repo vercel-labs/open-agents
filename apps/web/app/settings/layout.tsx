@@ -112,7 +112,7 @@ function SettingsLayout({
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-full bg-background text-foreground">
       <aside className="hidden w-64 border-r border-border md:flex">
         <div className="flex h-full w-full flex-col">
           <div className="flex items-center gap-4 px-6 py-4">

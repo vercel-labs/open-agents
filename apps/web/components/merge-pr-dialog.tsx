@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Check,
-  ExternalLink,
-  GitMerge,
-  Loader2,
-} from "lucide-react";
+import { AlertTriangle, Check, GitMerge, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
@@ -245,12 +239,6 @@ export function MergePrDialog({
     }
   };
 
-  const hasReadinessWarning =
-    readiness !== null &&
-    !readiness.canMerge &&
-    readiness.reasons.length > 0 &&
-    !error;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -342,53 +330,6 @@ export function MergePrDialog({
                   disabled={isSubmitting || isLoadingReadiness}
                 />
               </div>
-
-              {hasReadinessWarning && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
-                  <p className="font-medium">
-                    This pull request is not ready to merge:
-                  </p>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                    {readiness.reasons.map((reason) => (
-                      <li key={reason}>{reason}</li>
-                    ))}
-                  </ul>
-                  {readiness.checkRuns.length > 0 &&
-                    readiness.checkRuns.some((cr) => cr.state !== "passed") && (
-                      <div className="mt-2 border-t border-amber-500/20 pt-2">
-                        <ul className="space-y-1">
-                          {readiness.checkRuns
-                            .filter((cr) => cr.state !== "passed")
-                            .map((cr, i) => (
-                              <li
-                                key={`${cr.name}-${i}`}
-                                className="flex items-center gap-1.5"
-                              >
-                                {cr.state === "pending" ? (
-                                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                                ) : (
-                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                )}
-                                <span className="truncate">{cr.name}</span>
-                                {cr.detailsUrl && (
-                                  /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-                                  <a
-                                    href={cr.detailsUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="ml-auto shrink-0 underline underline-offset-2 opacity-70 hover:opacity-100"
-                                    aria-label={`View details for ${cr.name}`}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-                    )}
-                </div>
-              )}
             </>
           )}
 
