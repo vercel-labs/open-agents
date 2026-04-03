@@ -152,10 +152,18 @@ function getSessionStatusIcon(session: SessionWithUnread) {
     return <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-red-500" />;
   }
 
-  // Has a branch → blue branch icon (work done, needs human follow-up)
-  if (session.branch) {
+  // Has a branch with code changes → needs human follow-up
+  const hasDiff = session.linesAdded || session.linesRemoved;
+  if (session.branch && hasDiff) {
     return (
       <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+    );
+  }
+
+  // Has a branch but no changes yet → new session, still getting started
+  if (session.branch) {
+    return (
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
     );
   }
 
@@ -175,7 +183,9 @@ function getSessionStatusLabel(session: SessionWithUnread): string {
   if (session.prNumber && session.prStatus === "merged") return "Merged";
   if (session.prNumber && session.prStatus === "open") return "Open PR";
   if (session.prNumber && session.prStatus === "closed") return "Closed";
-  if (session.branch) return "Needs attention";
+  const hasDiff = session.linesAdded || session.linesRemoved;
+  if (session.branch && hasDiff) return "Needs attention";
+  if (session.branch) return "New session";
   if (session.status === "running") return "Setting up";
   if (session.status === "completed") return "Completed";
   if (session.status === "failed") return "Failed";
