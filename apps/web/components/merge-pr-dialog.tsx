@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertTriangle, Check, ExternalLink, GitMerge, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ExternalLink,
+  GitMerge,
+  Loader2,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
@@ -348,9 +354,7 @@ export function MergePrDialog({
                     ))}
                   </ul>
                   {readiness.checkRuns.length > 0 &&
-                    readiness.checkRuns.some(
-                      (cr) => cr.state !== "passed",
-                    ) && (
+                    readiness.checkRuns.some((cr) => cr.state !== "passed") && (
                       <div className="mt-2 border-t border-amber-500/20 pt-2">
                         <ul className="space-y-1">
                           {readiness.checkRuns
