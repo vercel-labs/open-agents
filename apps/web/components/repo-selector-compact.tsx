@@ -4,29 +4,27 @@ import {
   CheckIcon,
   ChevronDown,
   ExternalLink,
-  Folder,
   Loader2Icon,
   LockIcon,
   RefreshCw,
+  SearchIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { z } from "zod";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   InstallationRepo,
   useInstallationRepos,
@@ -93,13 +91,12 @@ export function RepoSelectorCompact({
   onSelect,
 }: RepoSelectorCompactProps) {
   const { hasGitHub, loading: sessionLoading } = useSession();
-  const [open, setOpen] = useState(false);
+  const [ownerOpen, setOwnerOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
   const [repoSearch, setRepoSearch] = useState("");
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Track whether we've auto-selected an owner
   const hasAutoSelectedRef = useRef(false);
 
   const startGitHubInstall = useCallback(() => {
@@ -128,7 +125,6 @@ export function RepoSelectorCompact({
     limit: 50,
   });
 
-  // Revalidate cache and refetch repos
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -174,203 +170,241 @@ export function RepoSelectorCompact({
 
   const handleRepoSelect = (repo: InstallationRepo) => {
     onSelect(currentOwner, repo.name);
-    setOpen(false);
   };
-
-  const displayText = selectedRepo
-    ? `${selectedOwner}/${selectedRepo}`
-    : "Select repository...";
 
   const isInitialLoading = installationsLoading && installations.length === 0;
 
-  return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
-      <PopoverTrigger asChild>
+  // Not connected to GitHub
+  if (!sessionLoading && !hasGitHub) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
+        <GitHubIcon className="size-8 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Install GitHub App</p>
+          <p className="text-xs text-muted-foreground">
+            Continue on GitHub to choose which repositories are available.
+          </p>
+        </div>
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-md border border-input bg-background/80 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-400 dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-neutral-300"
+          onClick={startGitHubInstall}
+          className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
         >
-          {isInitialLoading ? (
-            <Loader2Icon className="h-4 w-4 shrink-0 animate-spin" />
-          ) : (
-            <Folder className="h-4 w-4 shrink-0" />
-          )}
-          <span className="flex-1 truncate text-left">
-            {isInitialLoading ? "Loading..." : displayText}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0" />
+          Choose repositories
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0"
-        align="start"
-      >
-        {!sessionLoading && !hasGitHub ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-            <GitHubIcon className="size-8 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Install GitHub App</p>
-              <p className="text-xs text-muted-foreground">
-                Continue on GitHub to choose which repositories are available.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={startGitHubInstall}
-              className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
-            >
-              Choose repositories
-            </button>
-          </div>
-        ) : !installationsLoading && installations.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-            <GitHubIcon className="size-8 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Install GitHub App</p>
-              <p className="text-xs text-muted-foreground">
-                Install the GitHub App to choose which repositories are
-                available.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={startGitHubInstall}
-              className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
-            >
-              Choose repositories
-            </button>
-          </div>
-        ) : (
-          <Command>
-            <CommandInput
-              placeholder="Search repositories..."
-              value={repoSearch}
-              onValueChange={setRepoSearch}
-            />
-            <CommandList>
-              <CommandEmpty>
-                {reposError
-                  ? reposError
-                  : installationsLoading || reposLoading
-                    ? "Loading..."
-                    : "No repositories found."}
-              </CommandEmpty>
+      </div>
+    );
+  }
 
-              {/* Owner selector */}
-              <CommandGroup heading="Account">
-                {installationsLoading && installations.length === 0 ? (
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-                    <Loader2Icon className="size-4 animate-spin" />
-                    <span>Loading accounts...</span>
-                  </div>
-                ) : (
-                  installations.map((installation) => (
+  // No installations
+  if (!installationsLoading && installations.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
+        <GitHubIcon className="size-8 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Install GitHub App</p>
+          <p className="text-xs text-muted-foreground">
+            Install the GitHub App to choose which repositories are available.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={startGitHubInstall}
+          className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+        >
+          Choose repositories
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-0">
+      {/* Top bar: org dropdown + search */}
+      <div className="flex items-stretch gap-0 overflow-hidden rounded-t-lg border border-border/70 dark:border-white/10">
+        {/* Org dropdown */}
+        <Popover open={ownerOpen} onOpenChange={setOwnerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex shrink-0 items-center gap-2 border-r border-border/70 bg-background/80 px-3 py-2 text-sm transition-colors hover:bg-accent dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+            >
+              <GitHubIcon className="size-4 shrink-0" />
+              {isInitialLoading ? (
+                <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+              ) : (
+                <span className="max-w-[140px] truncate font-medium">
+                  {currentOwner || "Select account"}
+                </span>
+              )}
+              <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[220px] p-0" align="start">
+            <Command>
+              <CommandList>
+                <CommandGroup>
+                  {installations.map((installation) => (
                     <CommandItem
                       key={installation.installationId}
-                      value={`owner:${installation.accountLogin}`}
-                      onSelect={() =>
-                        setCurrentOwner(installation.accountLogin)
-                      }
+                      value={installation.accountLogin}
+                      onSelect={() => {
+                        setCurrentOwner(installation.accountLogin);
+                        setOwnerOpen(false);
+                      }}
                     >
+                      <GitHubIcon className="size-3.5" />
+                      <span className="truncate">
+                        {installation.accountLogin}
+                      </span>
                       <CheckIcon
                         className={cn(
-                          "mr-2 size-4",
+                          "ml-auto size-3.5",
                           currentOwner === installation.accountLogin
                             ? "opacity-100"
                             : "opacity-0",
                         )}
                       />
-                      <span>{installation.accountLogin}</span>
                     </CommandItem>
-                  ))
-                )}
-              </CommandGroup>
-
-              <CommandSeparator />
-              <div className="flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground">
-                <span>
-                  Showing repos for{" "}
-                  <span className="text-foreground">{currentOwner}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={cn("size-3", isRefreshing && "animate-spin")}
-                  />
-                  {isRefreshing ? "Refreshing..." : "Refresh"}
-                </button>
-              </div>
-              <div className="flex items-center justify-between px-2 pb-1 text-xs">
-                {currentInstallation?.installationUrl ? (
-                  <Link
-                    href={currentInstallation.installationUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+                  ))}
+                </CommandGroup>
+                <div className="border-t border-border/70 p-1 dark:border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startGitHubInstall();
+                      setOwnerOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    Manage repository access
-                    <ExternalLink className="size-3" />
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground">&nbsp;</span>
-                )}
-                <button
-                  type="button"
-                  onClick={startGitHubInstall}
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Install to organization
-                </button>
-              </div>
+                    <ExternalLink className="size-3.5" />
+                    Add organization
+                  </button>
+                </div>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-              {/* Repos for current owner */}
-              <CommandGroup>
-                {reposLoading ? (
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-                    <Loader2Icon className="size-4 animate-spin" />
-                    <span>Loading repositories...</span>
+        {/* Search input */}
+        <div className="flex flex-1 items-center gap-2 bg-background/80 px-3 dark:bg-white/[0.03]">
+          <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search repositories..."
+            value={repoSearch}
+            onChange={(e) => setRepoSearch(e.target.value)}
+            className="h-full w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+          />
+          {repoSearch && (
+            <button
+              type="button"
+              onClick={() => setRepoSearch("")}
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Esc
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Repo list */}
+      <div className="max-h-[280px] overflow-y-auto rounded-b-lg border border-t-0 border-border/70 dark:border-white/10">
+        {reposLoading ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" />
+            <span>Loading repositories...</span>
+          </div>
+        ) : reposError ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+            {reposError}
+          </div>
+        ) : repos.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No repositories found.
+          </div>
+        ) : (
+          <div className="divide-y divide-border/50 dark:divide-white/[0.06]">
+            {repos.slice(0, 50).map((repo) => {
+              const isSelected =
+                selectedRepo === repo.name && selectedOwner === currentOwner;
+
+              return (
+                <div
+                  key={repo.full_name}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 transition-colors",
+                    isSelected
+                      ? "bg-accent/50 dark:bg-white/[0.04]"
+                      : "hover:bg-accent/30 dark:hover:bg-white/[0.03]",
+                  )}
+                >
+                  <GitHubIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {repo.name}
+                    </span>
+                    {repo.private && (
+                      <LockIcon className="size-3 shrink-0 text-muted-foreground" />
+                    )}
+                    {repo.description && (
+                      <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                        {repo.description}
+                      </span>
+                    )}
                   </div>
-                ) : repos.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    No repositories found.
-                  </div>
-                ) : (
-                  repos.slice(0, 50).map((repo) => (
-                    <CommandItem
-                      key={repo.full_name}
-                      value={repo.name}
-                      onSelect={() => handleRepoSelect(repo)}
+                  {isSelected ? (
+                    <span className="shrink-0 rounded-md border border-border/70 bg-accent px-3 py-1 text-xs font-medium text-foreground dark:border-white/10 dark:bg-white/10">
+                      Selected
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRepoSelect(repo)}
+                      className="shrink-0 rounded-md border border-border/70 bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent dark:border-white/20 dark:bg-white/[0.06] dark:hover:bg-white/10"
                     >
-                      <CheckIcon
-                        className={cn(
-                          "mr-2 size-4",
-                          selectedRepo === repo.name &&
-                            selectedOwner === currentOwner
-                            ? "opacity-100"
-                            : "opacity-0",
-                        )}
-                      />
-                      <span className="truncate">{repo.name}</span>
-                      {repo.private && (
-                        <LockIcon className="ml-auto size-3 text-muted-foreground" />
-                      )}
-                    </CommandItem>
-                  ))
-                )}
-                {repos.length === 50 && !debouncedRepoSearch && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    Showing first 50 results. Use search to narrow.
-                  </div>
-                )}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+                      Select
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {repos.length === 50 && !debouncedRepoSearch && (
+              <div className="px-4 py-2.5 text-center text-xs text-muted-foreground">
+                Showing first 50 results. Use search to narrow.
+              </div>
+            )}
+          </div>
         )}
-      </PopoverContent>
-    </Popover>
+      </div>
+
+      {/* Footer: manage access + refresh */}
+      <div className="mt-1.5 flex items-center justify-between px-1 text-xs">
+        <div className="flex items-center gap-3">
+          {currentInstallation?.installationUrl && (
+            <Link
+              href={currentInstallation.installationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Manage access
+              <ExternalLink className="size-3" />
+            </Link>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <RefreshCw
+            className={cn("size-3", isRefreshing && "animate-spin")}
+          />
+          {isRefreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+    </div>
   );
 }

@@ -7,7 +7,6 @@ import {
   GitCommitHorizontal,
   Loader2,
   Plus,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -239,24 +238,11 @@ export function SessionStarter({
 
         {mode === "repo" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <RepoSelectorCompact
-                  selectedOwner={selectedOwner}
-                  selectedRepo={selectedRepo}
-                  onSelect={handleRepoSelect}
-                />
-              </div>
-              {selectedOwner && selectedRepo && (
-                <button
-                  type="button"
-                  onClick={handleRepoClear}
-                  className="flex items-center justify-center self-stretch rounded-md border border-input bg-background/80 px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-500 dark:hover:border-white/20 dark:hover:bg-white/[0.06] dark:hover:text-neutral-300"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <RepoSelectorCompact
+              selectedOwner={selectedOwner}
+              selectedRepo={selectedRepo}
+              onSelect={handleRepoSelect}
+            />
             {selectedOwner && selectedRepo && (
               <BranchSelectorCompact
                 owner={selectedOwner}
