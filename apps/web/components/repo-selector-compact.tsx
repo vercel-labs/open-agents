@@ -220,7 +220,7 @@ export function RepoSelectorCompact({
   };
 
   const handleDeselect = () => {
-    onSelect("", "");
+    onSelect(selectedOwner, "");
   };
 
   const isInitialLoading = installationsLoading && installations.length === 0;
