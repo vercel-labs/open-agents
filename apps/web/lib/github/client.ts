@@ -551,6 +551,47 @@ export async function getPullRequestMergeReadiness(params: {
       }
     }
 
+    // When we have no check run details but the mergeable state indicates
+    // checks are required, try to fetch required status check names from
+    // branch protection so we can at least show which checks are expected.
+    if (
+      checkRuns.length === 0 &&
+      (pullRequest.mergeable_state === "unstable" ||
+        pullRequest.mergeable_state === "blocked")
+    ) {
+      try {
+        const protectionResponse =
+          await result.octokit.rest.repos.getStatusChecksProtection({
+            owner,
+            repo,
+            branch: pullRequest.base.ref,
+          });
+
+        const requiredContexts: string[] =
+          protectionResponse.data.contexts ?? [];
+
+        if (requiredContexts.length > 0) {
+          checkRuns = requiredContexts.map((context) => ({
+            name: context,
+            state: "pending" as PullRequestCheckState,
+            status: "expected",
+            conclusion: null,
+            detailsUrl: null,
+          }));
+
+          checksSummary = {
+            requiredTotal: requiredContexts.length,
+            passed: 0,
+            pending: requiredContexts.length,
+            failed: 0,
+          };
+        }
+      } catch {
+        // Branch protection endpoint may require admin access — ignore
+        // failures silently since this is a best-effort fallback.
+      }
+    }
+
     const reasons = new Set<string>();
 
     if (pullRequest.state !== "open") {
