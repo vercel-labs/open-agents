@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useBackgroundChatNotifications } from "@/hooks/use-background-chat-notifications";
 import { useSessions, type SessionWithUnread } from "@/hooks/use-sessions";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { DEFAULT_SANDBOX_TYPE } from "@/components/sandbox-selector-compact";
 import type { Session as AuthSession } from "@/lib/session/types";
 import { SessionsShellProvider } from "./sessions-shell-context";
 
@@ -84,6 +86,8 @@ export function SessionsRouteShell({
     return `/sessions/${targetSession.id}`;
   }, []);
 
+  const { preferences } = useUserPreferences();
+
   const openNewSessionDialog = useCallback(() => {
     setNewSessionOpen(true);
   }, []);
@@ -132,6 +136,43 @@ export function SessionsRouteShell({
     [archiveSession, routeSessionId, router, startNavigationTransition],
   );
 
+  const handleCreateSessionForRepo = useCallback(
+    async (repoOwner: string, repoName: string) => {
+      try {
+        const { session: created, chat } = await createSession({
+          repoOwner,
+          repoName,
+          cloneUrl: `https://github.com/${repoOwner}/${repoName}`,
+          isNewBranch: true,
+          sandboxType: preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE,
+          autoCommitPush: preferences?.autoCommitPush ?? false,
+          autoCreatePr: preferences?.autoCreatePr ?? false,
+        });
+        router.push(`/sessions/${created.id}/chats/${chat.id}`);
+      } catch (error) {
+        console.error("Failed to create session for repo:", error);
+      }
+    },
+    [createSession, preferences, router],
+  );
+
+  const handleCreateSessionFromBranch = useCallback(
+    async (repoOwner: string, repoName: string, branch: string) => {
+      const { session: created, chat } = await createSession({
+        repoOwner,
+        repoName,
+        branch,
+        cloneUrl: `https://github.com/${repoOwner}/${repoName}`,
+        isNewBranch: false,
+        sandboxType: preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE,
+        autoCommitPush: preferences?.autoCommitPush ?? false,
+        autoCreatePr: preferences?.autoCreatePr ?? false,
+      });
+      router.push(`/sessions/${created.id}/chats/${chat.id}`);
+    },
+    [createSession, preferences, router],
+  );
+
   useEffect(() => {
     if (
       optimisticActiveSessionId &&
@@ -176,6 +217,8 @@ export function SessionsRouteShell({
               onRenameSession={handleRenameSession}
               onArchiveSession={handleArchiveSession}
               onOpenNewSession={openNewSessionDialog}
+              onCreateSessionForRepo={handleCreateSessionForRepo}
+              onCreateSessionFromBranch={handleCreateSessionFromBranch}
               initialUser={currentUser}
             />
           </SidebarContent>

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   EllipsisVertical,
   FolderGit2,
+  GitBranch,
   GitMerge,
   Loader2,
   Pencil,
@@ -15,7 +16,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BranchPickerDialog } from "@/components/branch-picker-dialog";
 import { InboxSidebarRenameDialog } from "@/components/inbox-sidebar-rename-dialog";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +49,12 @@ type InboxSidebarProps = {
   onRenameSession: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (sessionId: string) => Promise<void>;
   onOpenNewSession: () => void;
+  onCreateSessionForRepo: (repoOwner: string, repoName: string) => void;
+  onCreateSessionFromBranch: (
+    repoOwner: string,
+    repoName: string,
+    branch: string,
+  ) => void;
   initialUser?: AuthSession["user"];
 };
 
@@ -362,6 +375,8 @@ export function InboxSidebar({
   onRenameSession,
   onArchiveSession,
   onOpenNewSession,
+  onCreateSessionForRepo,
+  onCreateSessionFromBranch,
   initialUser,
 }: InboxSidebarProps) {
   const router = useRouter();
@@ -382,6 +397,11 @@ export function InboxSidebar({
   const lastLoadedArchivedCountRef = useRef(0);
   const [renameDialogSession, setRenameDialogSession] =
     useState<SessionWithUnread | null>(null);
+  const [branchPickerRepo, setBranchPickerRepo] = useState<{
+    owner: string;
+    repo: string;
+  } | null>(null);
+  const [isCreatingFromBranch, setIsCreatingFromBranch] = useState(false);
 
   const fetchArchivedSessionsPage = useCallback(
     async ({ offset, replace }: { offset: number; replace: boolean }) => {
@@ -582,6 +602,40 @@ export function InboxSidebar({
     setRenameDialogSession(session);
   }, []);
 
+  const handleCreateForRepo = useCallback(
+    (owner: string, repo: string) => {
+      onCreateSessionForRepo(owner, repo);
+    },
+    [onCreateSessionForRepo],
+  );
+
+  const handleOpenBranchPicker = useCallback(
+    (owner: string, repo: string) => {
+      setBranchPickerRepo({ owner, repo });
+    },
+    [],
+  );
+
+  const handleBranchSelected = useCallback(
+    async (branch: string) => {
+      if (!branchPickerRepo) return;
+      setIsCreatingFromBranch(true);
+      try {
+        await onCreateSessionFromBranch(
+          branchPickerRepo.owner,
+          branchPickerRepo.repo,
+          branch,
+        );
+        setBranchPickerRepo(null);
+      } catch (error) {
+        console.error("Failed to create session from branch:", error);
+      } finally {
+        setIsCreatingFromBranch(false);
+      }
+    },
+    [branchPickerRepo, onCreateSessionFromBranch],
+  );
+
   const handleRenameArchivedSession = useCallback(
     (sessionId: string, title: string) => {
       setArchivedSessions((current) =>
@@ -691,32 +745,48 @@ export function InboxSidebar({
                 );
                 const groupContentId = getRepoGroupContentId(group.id);
 
+                const groupRepoOwner =
+                  group.sessions[0]?.repoOwner?.trim() ?? "";
+                const groupRepoName =
+                  group.sessions[0]?.repoName?.trim() ?? "";
+                const hasRepo = Boolean(groupRepoOwner && groupRepoName);
+
                 return (
-                  <section key={group.id} className="space-y-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleRepoGroup(group.id)}
-                      aria-controls={groupContentId}
-                      aria-expanded={!isCollapsed}
+                  <section key={group.id} className="group/repo space-y-1.5">
+                    <div
                       className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
                         groupHasActiveSession
                           ? "bg-muted/35 text-foreground"
                           : "text-muted-foreground hover:bg-muted/20 hover:text-foreground/85"
                       }`}
                     >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/70 text-muted-foreground/80">
-                        <FolderGit2 className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-                        {group.label}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRepoGroup(group.id)}
+                        aria-controls={groupContentId}
+                        aria-expanded={!isCollapsed}
+                        className="flex min-w-0 flex-1 items-center gap-2"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/70 text-muted-foreground/80">
+                          <FolderGit2 className="h-3.5 w-3.5 group-hover/repo:hidden" />
+                          <ChevronDown
+                            className={`hidden h-3.5 w-3.5 text-muted-foreground/70 transition-transform duration-200 group-hover/repo:block ${
+                              isCollapsed ? "-rotate-90" : "rotate-0"
+                            }`}
+                          />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+                          {group.label}
+                        </span>
+                      </button>
                       {groupHasStreaming ? (
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse" />
                       ) : groupHasUnread ? (
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
                       ) : null}
+                      {/* Default: show count. On hover: show create buttons */}
                       <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium group-hover/repo:hidden ${
                           groupHasActiveSession
                             ? "bg-background/80 text-foreground/65"
                             : "bg-muted/70 text-muted-foreground"
@@ -724,12 +794,53 @@ export function InboxSidebar({
                       >
                         {group.sessions.length}
                       </span>
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-200 ${
-                          isCollapsed ? "-rotate-90" : "rotate-0"
-                        }`}
-                      />
-                    </button>
+                      {hasRepo ? (
+                        <span className="hidden shrink-0 items-center gap-0.5 group-hover/repo:flex">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenBranchPicker(
+                                    groupRepoOwner,
+                                    groupRepoName,
+                                  );
+                                }}
+                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-background/60 hover:text-foreground"
+                                aria-label={`Create session from branch for ${group.label}`}
+                              >
+                                <GitBranch className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={4}>
+                              Create from branch
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCreateForRepo(
+                                    groupRepoOwner,
+                                    groupRepoName,
+                                  );
+                                }}
+                                className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-background/60 hover:text-foreground"
+                                aria-label={`Create session for ${group.label}`}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" sideOffset={4}>
+                              Create session
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      ) : null}
+                    </div>
                     <div
                       id={groupContentId}
                       aria-hidden={isCollapsed}
@@ -846,6 +957,19 @@ export function InboxSidebar({
         onRenameSession={onRenameSession}
         onRenamed={handleRenameArchivedSession}
       />
+
+      {branchPickerRepo ? (
+        <BranchPickerDialog
+          open={Boolean(branchPickerRepo)}
+          onOpenChange={(open) => {
+            if (!open) setBranchPickerRepo(null);
+          }}
+          owner={branchPickerRepo.owner}
+          repo={branchPickerRepo.repo}
+          isCreating={isCreatingFromBranch}
+          onSelectBranch={handleBranchSelected}
+        />
+      ) : null}
     </>
   );
 }
