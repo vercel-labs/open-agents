@@ -609,12 +609,9 @@ export function InboxSidebar({
     [onCreateSessionForRepo],
   );
 
-  const handleOpenBranchPicker = useCallback(
-    (owner: string, repo: string) => {
-      setBranchPickerRepo({ owner, repo });
-    },
-    [],
-  );
+  const handleOpenBranchPicker = useCallback((owner: string, repo: string) => {
+    setBranchPickerRepo({ owner, repo });
+  }, []);
 
   const handleBranchSelected = useCallback(
     async (branch: string) => {
@@ -747,8 +744,7 @@ export function InboxSidebar({
 
                 const groupRepoOwner =
                   group.sessions[0]?.repoOwner?.trim() ?? "";
-                const groupRepoName =
-                  group.sessions[0]?.repoName?.trim() ?? "";
+                const groupRepoName = group.sessions[0]?.repoName?.trim() ?? "";
                 const hasRepo = Boolean(groupRepoOwner && groupRepoName);
 
                 return (
