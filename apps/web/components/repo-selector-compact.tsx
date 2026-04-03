@@ -461,21 +461,23 @@ export function RepoSelectorCompact({
       </div>
 
       {/* Repo list */}
-      <div className="max-h-[280px] overflow-y-auto rounded-b-lg border border-t-0 border-border/70 dark:border-white/10">
+      <div className="h-[280px] overflow-y-auto rounded-b-lg border border-t-0 border-border/70 dark:border-white/10">
         {reposLoading ? (
-          <div className="divide-y divide-border/50 dark:divide-white/[0.06]">
+          <div className="flex h-full flex-col divide-y divide-border/50 dark:divide-white/[0.06]">
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
+            <SkeletonRow />
+            <div className="flex-1" />
           </div>
         ) : reposError ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
             {reposError}
           </div>
         ) : sortedRepos.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
             No repositories found.
           </div>
         ) : (
