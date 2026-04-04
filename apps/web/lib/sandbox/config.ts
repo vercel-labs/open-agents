@@ -33,6 +33,21 @@ export const SANDBOX_LIFECYCLE_MIN_SLEEP_MS = 5 * 1000;
 export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321, 8000];
 export const CODE_SERVER_PORT = 8000;
 
+/**
+ * Base path prefix used by the codespace proxy.
+ * Code-server is launched with `--base-path /codespace-proxy/{sessionId}` so
+ * every URL it generates stays within the proxy namespace.  Middleware rewrites
+ * these requests to the real sandbox origin.
+ */
+export const CODESPACE_PROXY_BASE_PATH = "/codespace-proxy";
+
+/**
+ * Cookie that maps session IDs to sandbox URLs for the codespace proxy.
+ * Value is a URL-encoded JSON object: `{ [sessionId]: sandboxUrl }`.
+ * HttpOnly + Secure + SameSite=Strict – client JS can never read it.
+ */
+export const CODESPACE_TARGETS_COOKIE = "codespace-targets";
+
 /** Default working directory for sandboxes, used for path display */
 export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 
