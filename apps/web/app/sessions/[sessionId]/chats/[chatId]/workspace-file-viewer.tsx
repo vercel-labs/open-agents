@@ -24,6 +24,7 @@ import { fetcherNoStore } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 
 type WorkspaceFileViewerProps = {
+  editorBusy?: boolean;
   filePath: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +88,7 @@ function CopyButton({
 }
 
 function ViewerBody({
+  editorBusy,
   errorMessage,
   filePath,
   isLoading,
@@ -95,6 +97,7 @@ function ViewerBody({
   onRefresh,
   response,
 }: {
+  editorBusy?: boolean;
   errorMessage: string | null;
   filePath: string;
   isLoading: boolean;
@@ -123,12 +126,19 @@ function ViewerBody({
               type="button"
               variant="ghost"
               size="sm"
+              disabled={editorBusy}
               onClick={onOpenInEditor}
               className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-              title="Open in code editor"
+              title={editorBusy ? "Starting editor…" : "Open in code editor"}
             >
-              <CodeXml className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Open in Editor</span>
+              {editorBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CodeXml className="h-3.5 w-3.5" />
+              )}
+              <span className="hidden sm:inline">
+                {editorBusy ? "Starting Editor…" : "Open in Editor"}
+              </span>
             </Button>
           )}
           <Button
@@ -186,6 +196,7 @@ function ViewerBody({
 }
 
 export function WorkspaceFileViewer({
+  editorBusy,
   filePath,
   open,
   onOpenChange,
@@ -216,6 +227,7 @@ export function WorkspaceFileViewer({
   const isRefreshing = isValidating && !isLoading;
   const body = (
     <ViewerBody
+      editorBusy={editorBusy}
       errorMessage={errorMessage}
       filePath={filePath}
       isLoading={isLoading}

@@ -3945,6 +3945,10 @@ export function SessionChatContent({
             setSelectedWorkspaceFile(null);
           }
         }}
+        editorBusy={
+          codeEditor.state.status === "starting" ||
+          codeEditor.state.status === "stopping"
+        }
         onOpenInEditor={(filePath) => {
           void codeEditor.handleOpenFile(filePath);
         }}
