@@ -5,6 +5,7 @@ import type {
   CodeEditorLaunchResponse,
   CodeEditorStatusResponse,
 } from "@/app/api/sessions/[sessionId]/code-editor/route";
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 
 export type CodeEditorState =
   | { status: "idle" }
@@ -117,13 +118,21 @@ export function useCodeEditor({
 
   /**
    * Build a code-server URL that opens a specific file.
-   * code-server supports the `?goto=file:line:column` query parameter.
+   * Uses the `payload` query parameter with an `openFile` command and
+   * `vscode-remote://` URI scheme that code-server understands.
    */
   const buildFileUrl = useCallback(
     (baseUrl: string, filePath: string): string => {
       try {
         const url = new URL(baseUrl);
-        url.searchParams.set("goto", filePath);
+        const absolutePath = filePath.startsWith("/")
+          ? filePath
+          : `${DEFAULT_WORKING_DIRECTORY}/${filePath}`;
+        const payload = JSON.stringify([
+          ["openFile", `vscode-remote://${absolutePath}`],
+        ]);
+        url.searchParams.set("folder", DEFAULT_WORKING_DIRECTORY);
+        url.searchParams.set("payload", payload);
         return url.toString();
       } catch {
         return baseUrl;
