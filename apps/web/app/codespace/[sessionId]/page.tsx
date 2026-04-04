@@ -5,15 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { CodeEditorStatusResponse } from "@/app/api/sessions/[sessionId]/code-editor/route";
-import { CODESPACE_PROXY_BASE_PATH } from "@/lib/sandbox/config";
 import { useCodespaceContext } from "./codespace-context";
 
 type EditorState =
   | { status: "loading" }
   | { status: "starting" }
-  | { status: "ready" }
+  | { status: "ready"; url: string; port: number }
   | { status: "error"; message: string }
-  | { status: "stopping" };
+  | { status: "stopping"; url: string; port: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -35,21 +34,23 @@ export default function CodespacePage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const startedRef = useRef(false);
 
-  const iframeSrc = `${CODESPACE_PROXY_BASE_PATH}/${sessionId}/`;
-
   const startOrCheckEditor = useCallback(async () => {
     try {
-      // First check if already running — the API also sets the proxy cookie
+      // First check if already running
       const statusRes = await fetch(`/api/sessions/${sessionId}/code-editor`);
       if (statusRes.ok) {
         const statusBody = (await statusRes.json()) as CodeEditorStatusResponse;
-        if (statusBody.running) {
-          setState({ status: "ready" });
+        if (statusBody.running && statusBody.url) {
+          setState({
+            status: "ready",
+            url: statusBody.url,
+            port: statusBody.port,
+          });
           return;
         }
       }
 
-      // Not running, start it — the API sets the proxy cookie on success
+      // Not running, start it
       setState({ status: "starting" });
       const launchRes = await fetch(`/api/sessions/${sessionId}/code-editor`, {
         method: "POST",
@@ -62,7 +63,19 @@ export default function CodespacePage() {
         );
       }
 
-      setState({ status: "ready" });
+      if (
+        !isRecord(launchBody) ||
+        typeof launchBody.url !== "string" ||
+        typeof launchBody.port !== "number"
+      ) {
+        throw new Error("Invalid code editor response");
+      }
+
+      setState({
+        status: "ready",
+        url: launchBody.url as string,
+        port: launchBody.port as number,
+      });
     } catch (error) {
       setState({
         status: "error",
@@ -82,7 +95,7 @@ export default function CodespacePage() {
 
   const handleStop = useCallback(async () => {
     if (state.status !== "ready") return;
-    setState({ status: "stopping" });
+    setState({ status: "stopping", url: state.url, port: state.port });
 
     try {
       const res = await fetch(`/api/sessions/${sessionId}/code-editor`, {
@@ -172,11 +185,11 @@ export default function CodespacePage() {
           </div>
         )}
 
-        {/* oxlint-disable react/iframe-missing-sandbox -- code-server requires allow-scripts + allow-same-origin to function */}
+        {/* oxlint-disable react/iframe-missing-sandbox -- code-server requires both allow-scripts and allow-same-origin; cross-origin so the combination is safe */}
         {(state.status === "ready" || state.status === "stopping") && (
           <iframe
             ref={iframeRef}
-            src={iframeSrc}
+            src={state.url}
             title="Code Editor"
             className="h-full w-full border-0"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"

@@ -3,12 +3,7 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionWithSandboxGuard,
 } from "@/app/api/sessions/_lib/session-context";
-import {
-  CODE_SERVER_PORT,
-  CODESPACE_PROXY_BASE_PATH,
-  CODESPACE_TARGETS_COOKIE,
-  DEFAULT_SANDBOX_PORTS,
-} from "@/lib/sandbox/config";
+import { CODE_SERVER_PORT, DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 
 type RouteContext = {
@@ -37,66 +32,6 @@ type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
-
-// ---------------------------------------------------------------------------
-// Codespace targets cookie helpers
-//
-// Uses the next/headers cookies() API.  The dynamic import + try/catch lets
-// the route remain testable outside a full Next.js request scope.
-// ---------------------------------------------------------------------------
-
-type CodespaceTargets = Record<string, string>;
-
-async function readTargetsCookie(): Promise<CodespaceTargets> {
-  try {
-    const { cookies } = await import("next/headers");
-    const cookieStore = await cookies();
-    const raw = cookieStore.get(CODESPACE_TARGETS_COOKIE)?.value;
-    if (!raw) return {};
-    return JSON.parse(decodeURIComponent(raw)) as CodespaceTargets;
-  } catch {
-    return {};
-  }
-}
-
-async function writeTargetsCookie(targets: CodespaceTargets): Promise<void> {
-  try {
-    const { cookies } = await import("next/headers");
-    const cookieStore = await cookies();
-    cookieStore.set(
-      CODESPACE_TARGETS_COOKIE,
-      encodeURIComponent(JSON.stringify(targets)),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: CODESPACE_PROXY_BASE_PATH,
-        maxAge: 60 * 60 * 24,
-      },
-    );
-  } catch {
-    // Silently fail outside a Next.js request scope (e.g. in tests)
-  }
-}
-
-async function setTargetEntry(
-  sessionId: string,
-  sandboxUrl: string,
-): Promise<void> {
-  const targets = await readTargetsCookie();
-  targets[sessionId] = sandboxUrl;
-  await writeTargetsCookie(targets);
-}
-
-async function removeTargetEntry(sessionId: string): Promise<void> {
-  const targets = await readTargetsCookie();
-  delete targets[sessionId];
-  await writeTargetsCookie(targets);
-}
-
-// ---------------------------------------------------------------------------
-// Sandbox helpers
-// ---------------------------------------------------------------------------
 
 async function connectCodeEditorSandbox(sessionId: string, userId: string) {
   const sessionContext = await requireOwnedSessionWithSandboxGuard({
@@ -262,10 +197,6 @@ async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
   return !checkResult.success;
 }
 
-// ---------------------------------------------------------------------------
-// Route handlers
-// ---------------------------------------------------------------------------
-
 export async function GET(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
@@ -286,15 +217,10 @@ export async function GET(_req: Request, context: RouteContext) {
     const { sandbox } = sandboxResult;
     const port = CODE_SERVER_PORT;
     const running = await isCodeServerRunning(sandbox);
-    const sandboxUrl = running && sandbox.domain ? sandbox.domain(port) : null;
-
-    if (sandboxUrl) {
-      await setTargetEntry(sessionId, sandboxUrl);
-    }
 
     return Response.json({
       running,
-      url: sandboxUrl,
+      url: running && sandbox.domain ? sandbox.domain(port) : null,
       port,
     } satisfies CodeEditorStatusResponse);
   } catch (error) {
@@ -343,10 +269,8 @@ export async function POST(_req: Request, context: RouteContext) {
 
     // Reuse an existing code-server process when we can positively identify it.
     if (await isCodeServerRunning(sandbox)) {
-      const sandboxUrl = sandbox.domain(port);
-      await setTargetEntry(sessionId, sandboxUrl);
       return Response.json({
-        url: sandboxUrl,
+        url: sandbox.domain(port),
         port,
       } satisfies CodeEditorLaunchResponse);
     }
@@ -377,11 +301,8 @@ export async function POST(_req: Request, context: RouteContext) {
       throw error;
     }
 
-    const sandboxUrl = sandbox.domain(port);
-    await setTargetEntry(sessionId, sandboxUrl);
-
     return Response.json({
-      url: sandboxUrl,
+      url: sandbox.domain(port),
       port,
     } satisfies CodeEditorLaunchResponse);
   } catch (error) {
@@ -411,7 +332,6 @@ export async function DELETE(_req: Request, context: RouteContext) {
     }
 
     const stopped = await stopCodeServer(sandboxResult.sandbox);
-    await removeTargetEntry(sessionId);
 
     return Response.json({ stopped } satisfies CodeEditorStopResponse);
   } catch (error) {
