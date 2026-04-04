@@ -30,6 +30,7 @@ export default function CodespacePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { sessionTitle } = useCodespaceContext();
   const [state, setState] = useState<EditorState>({ status: "loading" });
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const startedRef = useRef(false);
 
@@ -173,17 +174,6 @@ export default function CodespacePage() {
 
       {/* Content */}
       <div className="relative flex-1 overflow-hidden">
-        {(state.status === "loading" || state.status === "starting") && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <p className="text-sm">
-              {state.status === "loading"
-                ? "Checking editor status..."
-                : "Starting code editor..."}
-            </p>
-          </div>
-        )}
-
         {state.status === "error" && (
           <div className="flex h-full flex-col items-center justify-center gap-3">
             <p className="text-sm text-destructive">{state.message}</p>
@@ -203,9 +193,27 @@ export default function CodespacePage() {
             className="h-full w-full border-0"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
             allow="clipboard-read; clipboard-write"
+            onLoad={() => setIframeLoaded(true)}
           />
         )}
         {/* oxlint-enable react/iframe-missing-sandbox */}
+
+        {/* Loading overlay — shown while the API is working or while the iframe content is loading */}
+        {state.status !== "error" &&
+          (state.status === "loading" ||
+            state.status === "starting" ||
+            !iframeLoaded) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <p className="text-sm">
+                {state.status === "loading"
+                  ? "Checking editor status..."
+                  : state.status === "starting"
+                    ? "Starting code editor..."
+                    : "Loading editor..."}
+              </p>
+            </div>
+          )}
       </div>
     </div>
   );
