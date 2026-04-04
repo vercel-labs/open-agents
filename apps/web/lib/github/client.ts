@@ -769,6 +769,147 @@ export async function createPullRequest(params: {
   }
 }
 
+function toGitHubGraphqlMergeMethod(
+  mergeMethod: PullRequestMergeMethod,
+): "MERGE" | "SQUASH" | "REBASE" {
+  switch (mergeMethod) {
+    case "merge":
+      return "MERGE";
+    case "rebase":
+      return "REBASE";
+    default:
+      return "SQUASH";
+  }
+}
+
+export async function enablePullRequestAutoMerge(params: {
+  repoUrl: string;
+  prNumber: number;
+  mergeMethod?: PullRequestMergeMethod;
+  token?: string;
+}): Promise<{
+  success: boolean;
+  mergeMethod?: PullRequestMergeMethod;
+  error?: string;
+  statusCode?: number;
+}> {
+  const { repoUrl, prNumber, mergeMethod, token } = params;
+
+  try {
+    const result = await getOctokit(token);
+
+    if (!result.authenticated) {
+      return {
+        success: false,
+        error: "GitHub account not connected",
+        statusCode: 401,
+      };
+    }
+
+    const parsed = parseGitHubUrl(repoUrl);
+    if (!parsed) {
+      return {
+        success: false,
+        error: "Invalid GitHub repository URL",
+        statusCode: 400,
+      };
+    }
+
+    const { owner, repo } = parsed;
+    const [pullRequestResponse, repositoryResponse] = await Promise.all([
+      result.octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: prNumber,
+      }),
+      result.octokit.rest.repos.get({ owner, repo }),
+    ]);
+
+    const repository = repositoryResponse.data;
+    const allowedMethods: PullRequestMergeMethod[] = [];
+    if (repository.allow_squash_merge) {
+      allowedMethods.push("squash");
+    }
+    if (repository.allow_merge_commit) {
+      allowedMethods.push("merge");
+    }
+    if (repository.allow_rebase_merge) {
+      allowedMethods.push("rebase");
+    }
+
+    if (allowedMethods.length === 0) {
+      return {
+        success: false,
+        error: "This repository does not allow pull request merges",
+        statusCode: 409,
+      };
+    }
+
+    const resolvedMergeMethod =
+      mergeMethod && allowedMethods.includes(mergeMethod)
+        ? mergeMethod
+        : resolveDefaultMergeMethod(allowedMethods);
+
+    await result.octokit.graphql(
+      `mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+        enablePullRequestAutoMerge(
+          input: { pullRequestId: $pullRequestId, mergeMethod: $mergeMethod }
+        ) {
+          clientMutationId
+        }
+      }`,
+      {
+        pullRequestId: pullRequestResponse.data.node_id,
+        mergeMethod: toGitHubGraphqlMergeMethod(resolvedMergeMethod),
+      },
+    );
+
+    return {
+      success: true,
+      mergeMethod: resolvedMergeMethod,
+    };
+  } catch (error: unknown) {
+    console.error("Error enabling auto-merge:", error);
+
+    const statusCode = getGitHubHttpStatus(error);
+    if (statusCode === 403) {
+      return {
+        success: false,
+        error: "Permission denied",
+        statusCode,
+      };
+    }
+    if (statusCode === 404) {
+      return {
+        success: false,
+        error: "Pull request not found or no access",
+        statusCode,
+      };
+    }
+    if (statusCode === 422) {
+      return {
+        success: false,
+        error: "Auto-merge is not available for this pull request",
+        statusCode,
+      };
+    }
+
+    if (error instanceof Error && error.message) {
+      return {
+        success: false,
+        error: error.message,
+        statusCode: statusCode ?? undefined,
+      };
+    }
+
+    return {
+      success: false,
+      error: "Failed to enable auto-merge",
+      statusCode: statusCode ?? undefined,
+    };
+  }
+}
+
 export async function mergePullRequest(params: {
   repoUrl: string;
   prNumber: number;

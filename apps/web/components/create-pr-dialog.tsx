@@ -33,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
 import {
@@ -103,6 +104,8 @@ export function CreatePRDialog({
   const [result, setResult] = useState<{
     prUrl: string;
     requiresManualCreation?: boolean;
+    autoMergeEnabled?: boolean;
+    autoMergeError?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gitActions, setGitActions] = useState<GitActions | null>(null);
@@ -114,6 +117,7 @@ export function CreatePRDialog({
   const [hasGenerated, setHasGenerated] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
+  const [enableAutoMerge, setEnableAutoMerge] = useState(false);
   const isDraft = prCreationMode === "draft";
 
   // Reset state when dialog opens
@@ -132,6 +136,7 @@ export function CreatePRDialog({
       setHasGenerated(false);
       setPrHeadOwner(null);
       setPrCreationMode("ready");
+      setEnableAutoMerge(false);
     }
   }, [open]);
 
@@ -179,6 +184,13 @@ export function CreatePRDialog({
       normalizedHeadOwner &&
       normalizedHeadOwner !== normalizedRepoOwner),
   );
+  const canEnableAutoMerge = !isDraft && !shouldOpenCompareInsteadOfApi;
+
+  useEffect(() => {
+    if (!canEnableAutoMerge) {
+      setEnableAutoMerge(false);
+    }
+  }, [canEnableAutoMerge]);
 
   useEffect(() => {
     if (!isCheckingStatus && open) {
@@ -300,7 +312,14 @@ export function CreatePRDialog({
         });
 
         window.open(compareUrl, "_blank", "noopener,noreferrer");
-        setResult({ prUrl: compareUrl, requiresManualCreation: true });
+        setResult({
+          prUrl: compareUrl,
+          requiresManualCreation: true,
+          autoMergeEnabled: false,
+          autoMergeError: enableAutoMerge
+            ? "Auto-merge can only be enabled for pull requests created through the GitHub API."
+            : undefined,
+        });
         return;
       }
 
@@ -316,6 +335,7 @@ export function CreatePRDialog({
           baseBranch,
           headOwner: prHeadOwner ?? undefined,
           isDraft,
+          enableAutoMerge,
         }),
       });
 
@@ -328,6 +348,11 @@ export function CreatePRDialog({
       setResult({
         prUrl: data.prUrl,
         requiresManualCreation: Boolean(data.requiresManualCreation),
+        autoMergeEnabled: Boolean(data.autoMergeEnabled),
+        autoMergeError:
+          typeof data.autoMergeError === "string"
+            ? data.autoMergeError
+            : undefined,
       });
 
       if (typeof data.prNumber === "number") {
@@ -365,15 +390,17 @@ export function CreatePRDialog({
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
               <Check className="h-6 w-6 text-green-500" />
             </div>
-            <div className="text-center">
+            <div className="space-y-3 text-center">
               <p className="font-medium">
                 {result.requiresManualCreation
                   ? isDraft
                     ? "Open GitHub to create the draft pull request"
                     : "Open GitHub to create the pull request"
-                  : isDraft
-                    ? "Draft pull request created successfully!"
-                    : "Pull request created successfully!"}
+                  : result.autoMergeEnabled
+                    ? "Pull request created and auto-merge enabled!"
+                    : isDraft
+                      ? "Draft pull request created successfully!"
+                      : "Pull request created successfully!"}
               </p>
               {/* External link to GitHub - not internal navigation */}
               {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
@@ -381,13 +408,24 @@ export function CreatePRDialog({
                 href={result.prUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-sm text-blue-500 hover:underline"
+                className="inline-flex items-center gap-1 text-sm text-blue-500 hover:underline"
               >
                 {result.requiresManualCreation
                   ? "Open compare page"
                   : "View on GitHub"}
                 <ExternalLink className="h-3 w-3" />
               </a>
+              {result.autoMergeEnabled && (
+                <p className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-left text-sm text-green-700 dark:text-green-300">
+                  GitHub will merge this PR automatically once the required
+                  checks pass.
+                </p>
+              )}
+              {result.autoMergeError && (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-sm text-amber-700 dark:text-amber-400">
+                  {result.autoMergeError}
+                </p>
+              )}
             </div>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
@@ -512,6 +550,25 @@ export function CreatePRDialog({
                       disabled={isDisabled}
                       rows={6}
                       className="resize-y max-h-48 overflow-y-auto field-sizing-fixed"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+                    <div className="space-y-0.5 pr-4">
+                      <Label htmlFor="pr-auto-merge">Enable auto-merge</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {shouldOpenCompareInsteadOfApi
+                          ? "Unavailable when the pull request must be created from GitHub's compare page."
+                          : isDraft
+                            ? "Unavailable for draft pull requests."
+                            : "Automatically merge once required checks pass."}
+                      </p>
+                    </div>
+                    <Switch
+                      id="pr-auto-merge"
+                      checked={enableAutoMerge}
+                      onCheckedChange={setEnableAutoMerge}
+                      disabled={isDisabled || !canEnableAutoMerge}
                     />
                   </div>
                 </>

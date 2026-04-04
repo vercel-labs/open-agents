@@ -1,5 +1,9 @@
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { createPullRequest, parseGitHubUrl } from "@/lib/github/client";
+import {
+  createPullRequest,
+  enablePullRequestAutoMerge,
+  parseGitHubUrl,
+} from "@/lib/github/client";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -13,6 +17,7 @@ interface CreatePRRequest {
   baseBranch: string;
   headOwner?: string;
   isDraft?: boolean;
+  enableAutoMerge?: boolean;
 }
 
 function buildGitHubCompareUrl(params: {
@@ -66,6 +71,7 @@ export async function POST(req: Request) {
     baseBranch,
     headOwner,
     isDraft = false,
+    enableAutoMerge = false,
   } = body;
 
   if (!sessionId || !repoUrl || !title || !baseBranch) {
@@ -74,6 +80,17 @@ export async function POST(req: Request) {
 
   if (typeof isDraft !== "boolean") {
     return Response.json({ error: "Invalid draft flag" }, { status: 400 });
+  }
+
+  if (typeof enableAutoMerge !== "boolean") {
+    return Response.json({ error: "Invalid auto-merge flag" }, { status: 400 });
+  }
+
+  if (isDraft && enableAutoMerge) {
+    return Response.json(
+      { error: "Auto-merge is not available for draft pull requests" },
+      { status: 400 },
+    );
   }
 
   // Validate repoUrl format (GitHub URLs only)
@@ -163,18 +180,14 @@ export async function POST(req: Request) {
   }
 
   // 4. Create PR using existing function
-  let result = await createPullRequest({
-    repoUrl,
-    branchName: resolvedBranch,
-    headRef,
-    title,
-    body: prBody || "",
-    baseBranch,
-    isDraft,
-    token: dedupedTokenCandidates[0],
-  });
+  let result: Awaited<ReturnType<typeof createPullRequest>> = {
+    success: false,
+    error: "Failed to create pull request",
+  };
+  let tokenUsedForCreation = dedupedTokenCandidates[0];
 
-  if (!result.success && dedupedTokenCandidates.length > 1) {
+  for (const candidateToken of dedupedTokenCandidates) {
+    tokenUsedForCreation = candidateToken;
     result = await createPullRequest({
       repoUrl,
       branchName: resolvedBranch,
@@ -183,8 +196,12 @@ export async function POST(req: Request) {
       body: prBody || "",
       baseBranch,
       isDraft,
-      token: dedupedTokenCandidates[1],
+      token: candidateToken,
     });
+
+    if (result.success) {
+      break;
+    }
   }
 
   if (!result.success) {
@@ -204,6 +221,13 @@ export async function POST(req: Request) {
         success: true,
         prUrl: compareUrl,
         requiresManualCreation: true,
+        ...(enableAutoMerge
+          ? {
+              autoMergeEnabled: false,
+              autoMergeError:
+                "Auto-merge can only be enabled for pull requests created through the GitHub API.",
+            }
+          : {}),
       });
     }
 
@@ -217,6 +241,48 @@ export async function POST(req: Request) {
       error.includes("not connected");
 
     return Response.json({ error }, { status: isClientError ? 400 : 502 });
+  }
+
+  let autoMergeEnabled = false;
+  let autoMergeError: string | undefined;
+
+  if (enableAutoMerge) {
+    if (typeof result.prNumber !== "number") {
+      autoMergeError =
+        "The pull request was created, but auto-merge could not be enabled.";
+    } else {
+      const remainingTokens = dedupedTokenCandidates.filter(
+        (candidateToken) => candidateToken !== tokenUsedForCreation,
+      );
+      const autoMergeTokenCandidates = [
+        tokenUsedForCreation,
+        ...remainingTokens,
+      ];
+
+      let autoMergeResult: Awaited<
+        ReturnType<typeof enablePullRequestAutoMerge>
+      > = {
+        success: false,
+        error: "Failed to enable auto-merge",
+      };
+
+      for (const candidateToken of autoMergeTokenCandidates) {
+        autoMergeResult = await enablePullRequestAutoMerge({
+          repoUrl,
+          prNumber: result.prNumber,
+          token: candidateToken,
+        });
+
+        if (autoMergeResult.success) {
+          autoMergeEnabled = true;
+          break;
+        }
+      }
+
+      if (!autoMergeEnabled) {
+        autoMergeError = autoMergeResult.error || "Failed to enable auto-merge";
+      }
+    }
   }
 
   // 5. Update session with PR info
@@ -236,5 +302,6 @@ export async function POST(req: Request) {
     prUrl: result.prUrl,
     prNumber: result.prNumber,
     prStatus: "open",
+    ...(enableAutoMerge ? { autoMergeEnabled, autoMergeError } : {}),
   });
 }
