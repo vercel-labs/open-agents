@@ -41,79 +41,61 @@ function shellQuote(value: string): string {
 // ---------------------------------------------------------------------------
 // Codespace targets cookie helpers
 //
-// Read/write via raw Cookie / Set-Cookie headers so the route stays testable
-// outside a full Next.js request scope.
+// Uses the next/headers cookies() API.  The dynamic import + try/catch lets
+// the route remain testable outside a full Next.js request scope.
 // ---------------------------------------------------------------------------
 
 type CodespaceTargets = Record<string, string>;
 
-function parseTargetsCookie(cookieHeader: string | null): CodespaceTargets {
-  if (!cookieHeader) return {};
+async function readTargetsCookie(): Promise<CodespaceTargets> {
   try {
-    for (const part of cookieHeader.split(";")) {
-      const [key, ...rest] = part.split("=");
-      if (key.trim() === CODESPACE_TARGETS_COOKIE) {
-        return JSON.parse(
-          decodeURIComponent(rest.join("=").trim()),
-        ) as CodespaceTargets;
-      }
-    }
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(CODESPACE_TARGETS_COOKIE)?.value;
+    if (!raw) return {};
+    return JSON.parse(decodeURIComponent(raw)) as CodespaceTargets;
   } catch {
-    // Malformed cookie — start fresh
+    return {};
   }
-  return {};
 }
 
-function buildTargetsSetCookie(targets: CodespaceTargets): string {
-  const value = encodeURIComponent(JSON.stringify(targets));
-  const isSecure = process.env.NODE_ENV === "production";
-  return [
-    `${CODESPACE_TARGETS_COOKIE}=${value}`,
-    "HttpOnly",
-    isSecure ? "Secure" : "",
-    "SameSite=Strict",
-    `Path=${CODESPACE_PROXY_BASE_PATH}`,
-    "Max-Age=86400",
-  ]
-    .filter(Boolean)
-    .join("; ");
+async function writeTargetsCookie(targets: CodespaceTargets): Promise<void> {
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    cookieStore.set(
+      CODESPACE_TARGETS_COOKIE,
+      encodeURIComponent(JSON.stringify(targets)),
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: CODESPACE_PROXY_BASE_PATH,
+        maxAge: 60 * 60 * 24,
+      },
+    );
+  } catch {
+    // Silently fail outside a Next.js request scope (e.g. in tests)
+  }
 }
 
-/** Clone a Response and append a Set-Cookie that upserts a target entry. */
-function withTargetEntry(
-  response: Response,
-  cookieHeader: string | null,
+async function setTargetEntry(
   sessionId: string,
   sandboxUrl: string,
-): Response {
-  const targets = parseTargetsCookie(cookieHeader);
+): Promise<void> {
+  const targets = await readTargetsCookie();
   targets[sessionId] = sandboxUrl;
-  const headers = new Headers(response.headers);
-  headers.append("Set-Cookie", buildTargetsSetCookie(targets));
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  await writeTargetsCookie(targets);
 }
 
-/** Clone a Response and append a Set-Cookie that removes a target entry. */
-function withoutTargetEntry(
-  response: Response,
-  cookieHeader: string | null,
-  sessionId: string,
-): Response {
-  const targets = parseTargetsCookie(cookieHeader);
+async function removeTargetEntry(sessionId: string): Promise<void> {
+  const targets = await readTargetsCookie();
   delete targets[sessionId];
-  const headers = new Headers(response.headers);
-  headers.append("Set-Cookie", buildTargetsSetCookie(targets));
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  await writeTargetsCookie(targets);
 }
 
+// ---------------------------------------------------------------------------
+// Sandbox helpers
 // ---------------------------------------------------------------------------
 
 async function connectCodeEditorSandbox(sessionId: string, userId: string) {
@@ -280,14 +262,17 @@ async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
   return !checkResult.success;
 }
 
-export async function GET(req: Request, context: RouteContext) {
+// ---------------------------------------------------------------------------
+// Route handlers
+// ---------------------------------------------------------------------------
+
+export async function GET(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const cookieHeader = req.headers.get("cookie");
 
   try {
     const sandboxResult = await connectCodeEditorSandbox(
@@ -303,15 +288,15 @@ export async function GET(req: Request, context: RouteContext) {
     const running = await isCodeServerRunning(sandbox);
     const sandboxUrl = running && sandbox.domain ? sandbox.domain(port) : null;
 
-    const response = Response.json({
+    if (sandboxUrl) {
+      await setTargetEntry(sessionId, sandboxUrl);
+    }
+
+    return Response.json({
       running,
       url: sandboxUrl,
       port,
     } satisfies CodeEditorStatusResponse);
-
-    return sandboxUrl
-      ? withTargetEntry(response, cookieHeader, sessionId, sandboxUrl)
-      : response;
   } catch (error) {
     console.error("Failed to check code editor status:", error);
     return Response.json(
@@ -321,14 +306,13 @@ export async function GET(req: Request, context: RouteContext) {
   }
 }
 
-export async function POST(req: Request, context: RouteContext) {
+export async function POST(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const cookieHeader = req.headers.get("cookie");
 
   try {
     const sandboxResult = await connectCodeEditorSandbox(
@@ -360,15 +344,11 @@ export async function POST(req: Request, context: RouteContext) {
     // Reuse an existing code-server process when we can positively identify it.
     if (await isCodeServerRunning(sandbox)) {
       const sandboxUrl = sandbox.domain(port);
-      return withTargetEntry(
-        Response.json({
-          url: sandboxUrl,
-          port,
-        } satisfies CodeEditorLaunchResponse),
-        cookieHeader,
-        sessionId,
-        sandboxUrl,
-      );
+      await setTargetEntry(sessionId, sandboxUrl);
+      return Response.json({
+        url: sandboxUrl,
+        port,
+      } satisfies CodeEditorLaunchResponse);
     }
 
     if (await isPortInUse(sandbox, port)) {
@@ -380,7 +360,7 @@ export async function POST(req: Request, context: RouteContext) {
 
     // Launch code-server in detached mode
     const launchCommand = [
-      `printf '%s' "$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
+      `printf '%s' "$$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
       `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry ${shellQuote(workingDirectory)}`,
     ].join(" && ");
 
@@ -398,15 +378,12 @@ export async function POST(req: Request, context: RouteContext) {
     }
 
     const sandboxUrl = sandbox.domain(port);
-    return withTargetEntry(
-      Response.json({
-        url: sandboxUrl,
-        port,
-      } satisfies CodeEditorLaunchResponse),
-      cookieHeader,
-      sessionId,
-      sandboxUrl,
-    );
+    await setTargetEntry(sessionId, sandboxUrl);
+
+    return Response.json({
+      url: sandboxUrl,
+      port,
+    } satisfies CodeEditorLaunchResponse);
   } catch (error) {
     console.error("Failed to launch code editor:", error);
     return Response.json(
@@ -416,14 +393,13 @@ export async function POST(req: Request, context: RouteContext) {
   }
 }
 
-export async function DELETE(req: Request, context: RouteContext) {
+export async function DELETE(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
   }
 
   const { sessionId } = await context.params;
-  const cookieHeader = req.headers.get("cookie");
 
   try {
     const sandboxResult = await connectCodeEditorSandbox(
@@ -435,12 +411,9 @@ export async function DELETE(req: Request, context: RouteContext) {
     }
 
     const stopped = await stopCodeServer(sandboxResult.sandbox);
+    await removeTargetEntry(sessionId);
 
-    return withoutTargetEntry(
-      Response.json({ stopped } satisfies CodeEditorStopResponse),
-      cookieHeader,
-      sessionId,
-    );
+    return Response.json({ stopped } satisfies CodeEditorStopResponse);
   } catch (error) {
     console.error("Failed to stop code editor:", error);
     return Response.json(
