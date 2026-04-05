@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { isToolUIPart } from "ai";
@@ -56,26 +56,27 @@ function CompletedIcon({ className }: { className?: string }) {
   );
 }
 
-/** In-progress: solid filled circle with a hollow (cut-out) play triangle */
+/** In-progress: filled circle with arrow-right icon inside */
 function InProgressIcon({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      className={cn("h-4 w-4", className)}
-      aria-hidden="true"
+    <span
+      className={cn(
+        "relative inline-flex h-4 w-4 items-center justify-center",
+        className,
+      )}
     >
-      {/* Solid filled circle */}
-      <circle cx="8" cy="8" r="7.25" fill="currentColor" />
-      {/* Hollow play arrow — uses the parent bg color to "cut out" */}
-      <path
-        d="M6.5 4.5L11.5 8L6.5 11.5V4.5Z"
-        fill="var(--color-muted)"
-        stroke="var(--color-muted)"
-        strokeWidth="0.5"
-        strokeLinejoin="round"
-      />
-    </svg>
+      {/* Filled circle background */}
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        className="absolute inset-0 h-4 w-4"
+        aria-hidden="true"
+      >
+        <circle cx="8" cy="8" r="7.25" fill="currentColor" />
+      </svg>
+      {/* Arrow icon on top, colored to contrast */}
+      <ArrowRight className="relative h-2.5 w-2.5 text-muted" strokeWidth={3} />
+    </span>
   );
 }
 
@@ -116,7 +117,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
   const activeTask = todos.find((t) => t.status === "in_progress");
 
   return (
-    <div className="mx-3 mb-0.5 transition-all">
+    <div className="mb-1.5 overflow-hidden rounded-xl border border-border/60 bg-card transition-all">
       {/* Header bar — always visible */}
       <button
         type="button"
@@ -143,7 +144,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
 
       {/* Expanded todo list */}
       {!isMinimized && (
-        <div className="px-3 pb-2">
+        <div className="border-t border-border/40 px-3 py-2">
           <div className="space-y-1">
             {todos.map((todo, index) => {
               if (!todo) return null;
@@ -156,7 +157,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
                     {todo.status === "completed" ? (
                       <CompletedIcon className="text-muted-foreground/50" />
                     ) : todo.status === "in_progress" ? (
-                      <InProgressIcon className="text-muted-foreground" />
+                      <InProgressIcon className="text-muted-foreground/50" />
                     ) : (
                       <PendingIcon className="text-muted-foreground/30" />
                     )}

@@ -3535,11 +3535,12 @@ export function SessionChatContent({
                 isLoading={skillsLoading}
               />
             )}
-            {/* Pinned Todo Panel + Input form wrapper */}
+            {/* Pinned Todo Panel — sits above the input box */}
+            <PinnedTodoPanel todos={latestTodos} />
+            {/* Input form */}
             <div
               className={`overflow-hidden rounded-2xl bg-muted transition-colors ${isDragging ? "ring-2 ring-blue-500/50" : ""}`}
             >
-              <PinnedTodoPanel todos={latestTodos} />
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
