@@ -58,6 +58,10 @@ import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { AssistantMessageGroups } from "@/components/assistant-message-groups";
+import {
+  PinnedTodoPanel,
+  getLatestTodos,
+} from "@/components/pinned-todo-panel";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
@@ -1190,6 +1194,8 @@ export function SessionChatContent({
     hasPendingResponse,
     isChatInFlight,
   ]);
+  const latestTodos = useMemo(() => getLatestTodos(messages), [messages]);
+
   const groupedRenderMessages = useMemo<GroupedRenderMessage[]>(() => {
     return renderMessages.map((message, messageIndex) => {
       const groups: MessageRenderGroup[] = [];
@@ -3447,6 +3453,9 @@ export function SessionChatContent({
           onCancel={handleQuestionCancel}
         />
       )}
+
+      {/* Pinned Todo Panel */}
+      <PinnedTodoPanel todos={latestTodos} />
 
       {/* Input */}
       <div className="p-4 pb-2 sm:pb-8">
