@@ -1,9 +1,7 @@
 "use client";
 
-import { toRelativePath } from "@open-harness/shared";
 import { Zap } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
-import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ToolLayout } from "../tool-layout";
 
 function getDisplayString(value: unknown): string | undefined {
@@ -26,10 +24,6 @@ export function SkillRenderer({
   const rawArgs = getDisplayString(input?.args);
 
   const output = part.state === "output-available" ? part.output : undefined;
-  const skillPath = getDisplayString(output?.skillPath);
-  const displaySkillPath = skillPath
-    ? toRelativePath(skillPath, DEFAULT_WORKING_DIRECTORY)
-    : undefined;
   const outputError =
     output?.success === false ? (output?.error ?? "Skill failed") : undefined;
 
@@ -37,43 +31,11 @@ export function SkillRenderer({
     ? { ...state, error: state.error ?? outputError }
     : state;
 
-  const expandedContent =
-    rawArgs || displaySkillPath ? (
-      <div className="space-y-3 text-sm">
-        {skillName && (
-          <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Skill
-            </div>
-            <code className="inline-flex max-w-full rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
-              /{skillName}
-            </code>
-          </div>
-        )}
-
-        {rawArgs && (
-          <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Arguments
-            </div>
-            <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
-              {rawArgs}
-            </pre>
-          </div>
-        )}
-
-        {displaySkillPath && (
-          <div>
-            <div className="mb-1 text-xs font-medium text-muted-foreground">
-              Location
-            </div>
-            <code className="break-all text-sm text-foreground">
-              {displaySkillPath}
-            </code>
-          </div>
-        )}
-      </div>
-    ) : undefined;
+  const expandedContent = rawArgs ? (
+    <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+      {rawArgs}
+    </pre>
+  ) : undefined;
 
   return (
     <ToolLayout

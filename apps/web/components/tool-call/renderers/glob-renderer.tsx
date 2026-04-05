@@ -33,44 +33,30 @@ export function GlobRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const files = getGlobFiles(output);
 
+  const summary = path ? `in ${path}` : "";
+
   const hasExpandedContent = files.length > 0;
 
   const expandedContent = hasExpandedContent ? (
-    <div className="space-y-3">
-      <div className="space-y-1 text-sm">
-        <div>
-          <span className="text-muted-foreground">Pattern: </span>
-          <code className="text-foreground">{pattern}</code>
-        </div>
-        {path && (
-          <div>
-            <span className="text-muted-foreground">Path: </span>
-            <code className="text-foreground">{path}</code>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="mb-1 text-xs font-medium text-muted-foreground">
-          Files ({files.length})
-        </div>
-        <div className="max-h-64 overflow-auto rounded border border-border bg-muted p-2 font-mono text-xs">
-          {files.map((file) => (
-            <div key={file.path} className="text-foreground">
-              {file?.path}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+      Found {files.length} file{files.length !== 1 ? "s" : ""}
+      {"\n"}
+      {files.map((f) => f.path).join("\n")}
+    </pre>
   ) : undefined;
 
   return (
     <ToolLayout
       name="Glob"
       icon={<FolderSearch className="h-3.5 w-3.5" />}
-      summary={`"${pattern}"`}
-      summaryClassName="font-mono"
+      summary={
+        <>
+          <span className="font-mono">&apos;{pattern}&apos;</span>
+          {summary && (
+            <span className="ml-1.5 text-muted-foreground/60">{summary}</span>
+          )}
+        </>
+      }
       meta={files.length > 0 ? `${files.length} files` : undefined}
       state={state}
       expandedContent={expandedContent}

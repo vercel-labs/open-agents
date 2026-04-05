@@ -110,7 +110,7 @@ export function AssistantMessageGroups({
         startedAt={startedAt}
         statusWordSeed={message.id}
       />
-      {children(effectiveExpanded)}
+      <div className="space-y-0">{children(effectiveExpanded)}</div>
     </>
   );
 }

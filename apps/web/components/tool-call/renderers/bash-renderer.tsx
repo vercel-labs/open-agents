@@ -63,66 +63,14 @@ export function BashRenderer({
     ) : undefined;
 
   const expandedContent = hasExpandableContent ? (
-    <div className="space-y-3">
-      <div>
-        <div className="mb-1 text-xs font-medium text-muted-foreground">
-          Command
-        </div>
-        <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs text-foreground">
-          {command || "..."}
-        </pre>
-      </div>
-
-      {cwd && (
-        <div>
-          <div className="mb-1 text-xs font-medium text-muted-foreground">
-            Working Directory
-          </div>
-          <code className="text-sm text-foreground">{cwd}</code>
-        </div>
+    <pre
+      className={cn(
+        "max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed",
+        isError ? "text-red-400" : "text-muted-foreground",
       )}
-
-      {isDetached && (
-        <div>
-          <div className="mb-1 text-xs font-medium text-muted-foreground">
-            Mode
-          </div>
-          <span className="text-sm text-foreground">Detached (background)</span>
-        </div>
-      )}
-
-      {part.state === "output-available" && (
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <span>Output</span>
-            {typeof exitCode === "number" && (
-              <span
-                className={cn(
-                  "rounded px-1.5 py-0.5",
-                  isError
-                    ? "bg-red-500/20 text-red-500"
-                    : "bg-green-500/20 text-green-500",
-                )}
-              >
-                exit {exitCode}
-              </span>
-            )}
-          </div>
-          {hasOutput ? (
-            <pre
-              className={cn(
-                "max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs",
-                isError ? "text-red-400" : "text-foreground",
-              )}
-            >
-              {combinedOutput}
-            </pre>
-          ) : (
-            <div className="text-sm text-muted-foreground">(No output)</div>
-          )}
-        </div>
-      )}
-    </div>
+    >
+      {hasOutput ? combinedOutput : "(No output)"}
+    </pre>
   ) : undefined;
 
   return (

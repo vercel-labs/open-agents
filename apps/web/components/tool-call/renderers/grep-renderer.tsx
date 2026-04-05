@@ -25,6 +25,15 @@ function getGrepMatches(output: unknown): GrepMatch[] {
   );
 }
 
+/** Deduplicate file paths from matches */
+function getUniqueFiles(matches: GrepMatch[]): string[] {
+  const seen = new Set<string>();
+  for (const m of matches) {
+    seen.add(m.file);
+  }
+  return Array.from(seen);
+}
+
 export function GrepRenderer({
   part,
   state,
@@ -34,74 +43,42 @@ export function GrepRenderer({
   const input = part.input;
   const pattern = input?.pattern ?? "...";
   const path = input?.path;
-  const include = input?.glob;
 
   const output = part.state === "output-available" ? part.output : undefined;
   const matches = getGrepMatches(output);
+  const uniqueFiles = getUniqueFiles(matches);
+
+  // Natural summary: "grep for 'pattern' in path"
+  const summary = path ? `in ${path}` : "";
 
   const hasExpandedContent = output !== undefined;
 
   const expandedContent = hasExpandedContent ? (
-    <div className="space-y-2">
-      <div className="space-y-1 text-sm leading-5">
-        <div>
-          <span className="text-muted-foreground">Pattern: </span>
-          <code className="font-mono text-[13px] text-foreground">
-            {pattern}
-          </code>
-        </div>
-        {path && (
-          <div>
-            <span className="text-muted-foreground">Path: </span>
-            <code className="font-mono text-[13px] text-foreground">
-              {path}
-            </code>
-          </div>
-        )}
-        {include && (
-          <div>
-            <span className="text-muted-foreground">Include: </span>
-            <code className="font-mono text-[13px] text-foreground">
-              {include}
-            </code>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          Matches ({matches.length})
-        </div>
-        {matches.length > 0 ? (
-          <div className="max-h-64 space-y-1 overflow-auto font-mono text-xs leading-5">
-            {matches.map((match) => (
-              <div
-                key={`${match.file}:${match.line}:${match.content ?? ""}`}
-                className="text-foreground"
-              >
-                <span className="text-muted-foreground">{match.file}</span>
-                <span className="text-yellow-500">:{match.line}</span>
-                {match.content && (
-                  <span className="ml-2 text-foreground">
-                    {match.content.slice(0, 100)}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">No matches</div>
-        )}
-      </div>
-    </div>
+    <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+      {matches.length > 0 ? (
+        <>
+          Found {uniqueFiles.length} file{uniqueFiles.length !== 1 ? "s" : ""}
+          {"\n"}
+          {uniqueFiles.map((f) => f).join("\n")}
+        </>
+      ) : (
+        "No matches"
+      )}
+    </pre>
   ) : undefined;
 
   return (
     <ToolLayout
       name="Grep"
       icon={<Search className="h-3.5 w-3.5" />}
-      summary={`"${pattern}"`}
-      summaryClassName="font-mono"
+      summary={
+        <>
+          <span className="font-mono">&apos;{pattern}&apos;</span>
+          {summary && (
+            <span className="ml-1.5 text-muted-foreground/60">{summary}</span>
+          )}
+        </>
+      }
       meta={output ? `${matches.length} matches` : undefined}
       state={state}
       expandedContent={expandedContent}

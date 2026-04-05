@@ -2,7 +2,9 @@
 
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
 import { FileText } from "lucide-react";
+import { File as DiffsFile } from "@pierre/diffs/react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import { defaultFileOptions } from "@/lib/diffs-config";
 import { ToolLayout } from "../tool-layout";
 import { FileNamePill } from "../file-name-pill";
 
@@ -17,8 +19,6 @@ export function ReadRenderer({
   const rawFilePath = input?.filePath ?? "...";
   const filePath =
     rawFilePath === "..." ? rawFilePath : toRelativePath(rawFilePath, cwd);
-  const offset = input?.offset;
-  const limit = input?.limit;
 
   const output = part.state === "output-available" ? part.output : undefined;
   const totalLines = output?.totalLines;
@@ -37,33 +37,20 @@ export function ReadRenderer({
     ? { ...state, error: state.error ?? outputError }
     : state;
 
-  // Always show expanded content if we have file content
-  const hasExpandedContent =
-    fileContent !== undefined || offset !== undefined || limit !== undefined;
+  // Strip line number prefixes ("N: ") from content for the code viewer
+  const cleanContent = fileContent
+    ? fileContent
+        .split("\n")
+        .map((line) => line.replace(/^\d+: /, ""))
+        .join("\n")
+    : undefined;
 
-  const expandedContent = hasExpandedContent ? (
-    <div className="space-y-2">
-      {(offset !== undefined || limit !== undefined) && (
-        <div className="space-y-1 text-sm">
-          {offset !== undefined && (
-            <div>
-              <span className="text-muted-foreground">Offset: </span>
-              <span className="text-foreground">line {offset}</span>
-            </div>
-          )}
-          {limit !== undefined && (
-            <div>
-              <span className="text-muted-foreground">Limit: </span>
-              <span className="text-foreground">{limit} lines</span>
-            </div>
-          )}
-        </div>
-      )}
-      {fileContent && (
-        <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-foreground">
-          {fileContent}
-        </pre>
-      )}
+  const expandedContent = cleanContent ? (
+    <div className="max-h-96 overflow-auto rounded-md border border-border">
+      <DiffsFile
+        file={{ name: rawFilePath, contents: cleanContent }}
+        options={defaultFileOptions}
+      />
     </div>
   ) : undefined;
 

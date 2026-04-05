@@ -1,10 +1,12 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useOpenFile } from "./open-file-context";
 
 function getFileName(filePath: string): string {
   const parts = filePath.split("/");
@@ -18,11 +20,31 @@ export function FileNamePill({
   filePath: string;
   fullPath?: string;
 }) {
+  const onOpenFile = useOpenFile();
   const fileName = getFileName(filePath);
   const tooltipPath = fullPath ?? filePath;
   const showTooltip = tooltipPath !== fileName;
+  const isClickable = onOpenFile !== null;
 
-  const pill = (
+  const handleClick = (e: React.MouseEvent) => {
+    if (!onOpenFile) return;
+    e.stopPropagation(); // Don't trigger parent tool call expand
+    onOpenFile(filePath);
+  };
+
+  const pill = isClickable ? (
+    <button
+      type="button"
+      onClick={handleClick}
+      title={showTooltip ? undefined : `Open ${fileName}`}
+      className={cn(
+        "inline-flex max-w-[220px] cursor-pointer items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[12px] leading-tight text-muted-foreground transition-all",
+        "hover:border-foreground/20 hover:bg-muted hover:shadow-sm hover:ring-1 hover:ring-foreground/5",
+      )}
+    >
+      <span className="truncate">{fileName}</span>
+    </button>
+  ) : (
     <span className="inline-flex max-w-[220px] items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[12px] leading-tight text-muted-foreground">
       <span className="truncate">{fileName}</span>
     </span>

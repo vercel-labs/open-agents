@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
-import { ChevronRight, Loader2, Plus } from "lucide-react";
+import { ChevronRight, Loader2, Minus, Plus } from "lucide-react";
 import type React from "react";
 import { type ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -180,12 +180,16 @@ export function ToolLayout({
           "aria-expanded": isExpanded,
         })}
       >
-        {/* Icon area: shows tool icon, swaps to + on hover when expandable */}
+        {/* Icon area: shows tool icon, swaps to +/- on hover when expandable */}
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/70">
           {hasExpandedDetails && !isRunning ? (
             <>
               <span className="group-hover:hidden">{resolvedIcon}</span>
-              <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              {isExpandedPanelVisible ? (
+                <Minus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              ) : (
+                <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              )}
             </>
           ) : (
             resolvedIcon
@@ -217,7 +221,7 @@ export function ToolLayout({
           {hasTrailingMeta && (
             <span
               className={cn(
-                "inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-none text-muted-foreground",
+                "inline-flex min-w-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60",
                 errorPreview ? "shrink overflow-hidden" : "shrink-0",
               )}
             >
