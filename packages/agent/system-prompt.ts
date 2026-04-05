@@ -283,17 +283,43 @@ You MUST keep working until the problem is completely solved. Do not end your tu
 
 Follow existing code conventions strictly. Never assume a library is available -- verify its usage in the project before employing it.`;
 
-function getModelOverlay(family: ModelFamily): string {
+const GPT_5_4_OVERLAY = `
+# Conciseness (GPT-5.4-specific)
+
+You are extremely verbose by default. Actively fight this tendency. Your responses MUST be concise.
+
+- Aim for the shortest correct answer. If something can be said in 50 words, do NOT use 500.
+- Do not repeat back what the user said or restate the problem.
+- Do not explain what you are about to do before doing it -- just do it.
+- Do not narrate each step ("First, I will...", "Next, I'll..."). Use tool calls silently and report results briefly.
+- After making code changes, give a 1-3 sentence summary of what changed. Do not dump entire file contents or large diffs into your response text.
+- Do not add filler phrases, caveats, or "let me know if you need anything else" closers.
+- When answering questions, give the direct answer first. Only elaborate if the user asks for more detail.
+- Omit pleasantries, affirmations ("Great question!"), and transitional fluff.`;
+
+function getModelOverlay(family: ModelFamily, modelId?: string): string {
+  let overlay: string;
   switch (family) {
     case "claude":
-      return CLAUDE_OVERLAY;
+      overlay = CLAUDE_OVERLAY;
+      break;
     case "gpt":
-      return GPT_OVERLAY;
+      overlay = GPT_OVERLAY;
+      break;
     case "gemini":
-      return GEMINI_OVERLAY;
+      overlay = GEMINI_OVERLAY;
+      break;
     case "other":
-      return OTHER_OVERLAY;
+      overlay = OTHER_OVERLAY;
+      break;
   }
+
+  // Append GPT-5.4-specific conciseness instructions
+  if (modelId?.startsWith("openai/gpt-5.4")) {
+    overlay += GPT_5_4_OVERLAY;
+  }
+
+  return overlay;
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +426,7 @@ npx skills --help                      # all options
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const family = detectModelFamily(options.modelId);
 
-  const parts = [CORE_SYSTEM_PROMPT, getModelOverlay(family)];
+  const parts = [CORE_SYSTEM_PROMPT, getModelOverlay(family, options.modelId)];
 
   if (options.cwd) {
     parts.push(
