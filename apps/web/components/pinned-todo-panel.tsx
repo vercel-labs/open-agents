@@ -117,7 +117,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
   const activeTask = todos.find((t) => t.status === "in_progress");
 
   return (
-    <div className="mx-3 overflow-hidden rounded-t-xl border border-b-0 border-border/60 bg-card transition-all">
+    <div className="mx-4 overflow-hidden rounded-t-xl border border-b-0 border-border/60 bg-card transition-all">
       {/* Header bar — always visible */}
       <button
         type="button"
