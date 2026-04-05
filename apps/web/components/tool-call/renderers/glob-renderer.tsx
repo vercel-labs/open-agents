@@ -20,6 +20,13 @@ function getGlobFiles(output: unknown): GlobFile[] {
   );
 }
 
+/** Show at most the last 2 path segments */
+function truncatePath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join("/")}`;
+}
+
 export function GlobRenderer({
   part,
   state,
@@ -33,7 +40,7 @@ export function GlobRenderer({
   const output = part.state === "output-available" ? part.output : undefined;
   const files = getGlobFiles(output);
 
-  const summary = path ? `in ${path}` : "";
+  const summary = path ? `in ${truncatePath(path)}` : "";
 
   const hasExpandedContent = files.length > 0;
 

@@ -3239,6 +3239,10 @@ export function SessionChatContent({
                                 m.role === "user"
                                   ? "justify-end"
                                   : "justify-start",
+                                // Breathing room above final assistant text after tool calls
+                                isFinalAssistantTextPart &&
+                                  group.index > 0 &&
+                                  "mt-4",
                               )}
                             >
                               {m.role === "user" ? (

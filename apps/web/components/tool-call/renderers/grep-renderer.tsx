@@ -25,6 +25,13 @@ function getGrepMatches(output: unknown): GrepMatch[] {
   );
 }
 
+/** Show at most the last 2 path segments */
+function truncatePath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join("/")}`;
+}
+
 /** Deduplicate file paths from matches */
 function getUniqueFiles(matches: GrepMatch[]): string[] {
   const seen = new Set<string>();
@@ -48,8 +55,8 @@ export function GrepRenderer({
   const matches = getGrepMatches(output);
   const uniqueFiles = getUniqueFiles(matches);
 
-  // Natural summary: "grep for 'pattern' in path"
-  const summary = path ? `in ${path}` : "";
+  // Natural summary: "grep for 'pattern' in path" (truncated to last 2 segments)
+  const summary = path ? `in ${truncatePath(path)}` : "";
 
   const hasExpandedContent = output !== undefined;
 
