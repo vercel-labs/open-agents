@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Brain, ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -82,28 +82,28 @@ export function ThinkingBlock({
           setIsOpen((prev) => !prev);
         }}
         className={cn(
-          "flex min-h-5 items-center gap-1.5 p-0 text-sm font-medium leading-5 text-muted-foreground",
+          "flex min-h-5 items-center gap-2 p-0 text-sm font-medium leading-5 text-muted-foreground",
           hasContent
             ? "transition-colors hover:text-foreground"
             : "cursor-default",
         )}
       >
-        <span
-          className={cn("leading-5", isActivelyStreaming && "animate-pulse")}
-        >
-          {formatLabel()}
-        </span>
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-          {hasContent ? (
-            isOpen ? (
+        <Brain
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground/70",
+            isActivelyStreaming && "animate-pulse",
+          )}
+        />
+        <span className="leading-5">{formatLabel()}</span>
+        {hasContent && (
+          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+            {isOpen ? (
               <ChevronDown className="h-3.5 w-3.5" />
             ) : (
               <ChevronRight className="h-3.5 w-3.5" />
-            )
-          ) : (
-            <span className="h-3.5 w-3.5" aria-hidden />
-          )}
-        </span>
+            )}
+          </span>
+        )}
       </button>
       {isOpen && hasContent && (
         <div className="mt-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2">

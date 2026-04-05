@@ -187,7 +187,7 @@ function TaskItem({
   // Determine nested status line
   let nestedStatus = "";
   if (status === "complete") {
-    nestedStatus = "Done";
+    // No nested status for completed tasks — the header already indicates completion
   } else if (status === "interrupted") {
     nestedStatus = "Interrupted";
   } else if (denied) {

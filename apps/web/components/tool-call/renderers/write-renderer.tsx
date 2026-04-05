@@ -6,6 +6,7 @@ import { File as DiffsFile } from "@pierre/diffs/react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultFileOptions } from "@/lib/diffs-config";
 import { ToolLayout } from "../tool-layout";
+import { FileNamePill } from "../file-name-pill";
 
 const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
 
@@ -68,8 +69,13 @@ export function WriteRenderer({
     <ToolLayout
       name="Create"
       icon={<FilePlus className="h-3.5 w-3.5" />}
-      summary={filePath}
-      summaryClassName="font-mono"
+      summary={
+        filePath === "..." ? (
+          filePath
+        ) : (
+          <FileNamePill filePath={filePath} fullPath={rawFilePath} />
+        )
+      }
       meta={meta}
       state={mergedState}
       expandedContent={expandedContent}

@@ -9,7 +9,7 @@ import { ApprovalButtons } from "./approval-buttons";
 
 export type ToolLayoutProps = {
   name: string;
-  summary: string;
+  summary: ReactNode;
   summaryClassName?: string;
   meta?: ReactNode;
   state: ToolRenderState;
@@ -99,7 +99,8 @@ export function ToolLayout({
     hasRenderableContent(expandedContent) || hasErrorDetails;
   const hasOutput = hasRenderableContent(output);
   const hasMeta = hasRenderableContent(meta);
-  const hasSummary = summary.trim().length > 0;
+  const hasSummary =
+    typeof summary === "string" ? summary.trim().length > 0 : summary != null;
   const showRunningNotice =
     state.approvalRequested && !showApprovalButtons && !state.interrupted;
   const interruptedBadge = state.interrupted ? (
@@ -159,10 +160,10 @@ export function ToolLayout({
   );
 
   return (
-    <div className="my-0.5 rounded-md border border-transparent bg-transparent">
+    <div className="-mx-1.5 rounded-md border border-transparent bg-transparent">
       <div
         className={cn(
-          "group flex min-w-0 select-none items-center gap-2 rounded-md py-px pr-1 text-sm",
+          "group flex min-w-0 select-none items-center gap-2 rounded-md px-1.5 py-1 text-sm",
           hasExpandedDetails &&
             "cursor-pointer transition-colors hover:bg-muted/50",
         )}
@@ -193,7 +194,7 @@ export function ToolLayout({
 
         <span
           className={cn(
-            "shrink-0 font-medium leading-none",
+            "min-w-0 shrink truncate font-medium leading-none",
             state.denied || errorMessage ? "text-red-500" : "text-foreground",
             nameClassName,
           )}
@@ -291,13 +292,35 @@ export function ToolLayout({
             {shouldRenderExpandedContent && (
               <div className="space-y-2 pb-1">
                 {errorMessage && (
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">
-                      Error
+                  <div className="overflow-hidden rounded-md border border-red-500/20 bg-red-500/5">
+                    <div className="flex items-center gap-2 border-b border-red-500/20 px-3 py-1.5">
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="h-3.5 w-3.5 shrink-0 text-red-500"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          cx="8"
+                          cy="8"
+                          r="7"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        />
+                        <path
+                          d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <span className="text-xs font-medium text-red-500">
+                        Error
+                      </span>
                     </div>
-                    <p className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-red-600/90 dark:text-red-400/90">
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
                       {errorMessage}
-                    </p>
+                    </pre>
                   </div>
                 )}
                 {expandedContent}

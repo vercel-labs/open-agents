@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultDiffOptions } from "@/lib/diffs-config";
 import { ToolLayout } from "../tool-layout";
+import { FileNamePill } from "../file-name-pill";
 
 export function EditRenderer({
   part,
@@ -84,8 +85,13 @@ export function EditRenderer({
     <ToolLayout
       name="Update"
       icon={<Pencil className="h-3.5 w-3.5" />}
-      summary={filePath}
-      summaryClassName="font-mono"
+      summary={
+        filePath === "..." ? (
+          filePath
+        ) : (
+          <FileNamePill filePath={filePath} fullPath={rawFilePath} />
+        )
+      }
       meta={meta}
       state={mergedState}
       expandedContent={expandedContent}
