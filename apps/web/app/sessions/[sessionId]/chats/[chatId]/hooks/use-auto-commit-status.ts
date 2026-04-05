@@ -6,6 +6,13 @@ import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 const AUTO_COMMIT_REFRESH_DELAYS_MS = [3000, 8000, 16000] as const;
 const AUTO_COMMIT_UI_TIMEOUT_MS = 30_000;
 
+export function shouldStartOptimisticAutoCommit(
+  autoCommitEnabled: boolean,
+  gitStatus: SessionGitStatus | null,
+): boolean {
+  return autoCommitEnabled && gitStatus?.hasUncommittedChanges === true;
+}
+
 /**
  * Tracks optimistic auto-commit-in-progress state for the UI.
  *
@@ -34,13 +41,13 @@ export function useAutoCommitStatus(
   // Called by the stream-completion effect to optimistically mark auto-commit
   // as in progress and kick off the staggered refresh schedule.
   const markAutoCommitStarted = useCallback(() => {
-    if (!autoCommitEnabled) {
+    if (!shouldStartOptimisticAutoCommit(autoCommitEnabled, gitStatus)) {
       return;
     }
 
     setIsAutoCommitting(true);
     setAutoCommitCycle((current) => current + 1);
-  }, [autoCommitEnabled]);
+  }, [autoCommitEnabled, gitStatus]);
 
   // If auto-commit has been disabled for this session while the optimistic
   // spinner is active, immediately clear the loading state.
