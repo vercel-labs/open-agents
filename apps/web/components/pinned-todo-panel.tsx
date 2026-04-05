@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { isToolUIPart } from "ai";
@@ -56,7 +56,7 @@ function CompletedIcon({ className }: { className?: string }) {
   );
 }
 
-/** In-progress: filled circle with right arrow */
+/** In-progress: solid filled circle with a hollow (cut-out) play triangle */
 function InProgressIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -65,13 +65,14 @@ function InProgressIcon({ className }: { className?: string }) {
       className={cn("h-4 w-4", className)}
       aria-hidden="true"
     >
-      <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.15" />
-      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+      {/* Solid filled circle */}
+      <circle cx="8" cy="8" r="7.25" fill="currentColor" />
+      {/* Hollow play arrow — uses the parent bg color to "cut out" */}
       <path
-        d="M6.5 5L10.5 8L6.5 11"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
+        d="M6.5 4.5L11.5 8L6.5 11.5V4.5Z"
+        fill="var(--color-muted)"
+        stroke="var(--color-muted)"
+        strokeWidth="0.5"
         strokeLinejoin="round"
       />
     </svg>
@@ -113,34 +114,36 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
 
   // Find the active task name for the minimized summary
   const activeTask = todos.find((t) => t.status === "in_progress");
-  const summaryText = activeTask?.content
-    ? activeTask.content
-    : `${completedCount} of ${totalCount} tasks done`;
 
   return (
-    <div className="transition-all">
+    <div className="mx-3 mb-0.5 transition-all">
       {/* Header bar — always visible */}
       <button
         type="button"
         onClick={() => setIsMinimized((v) => !v)}
-        className="flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors hover:bg-muted-foreground/5"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted-foreground/5"
       >
-        <span className="text-xs font-medium text-muted-foreground/70">
-          {completedCount}/{totalCount}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/70">
-          {isMinimized ? summaryText : "Tasks"}
-        </span>
+        {/* Chevron on the left */}
         {isMinimized ? (
-          <ChevronUp className="h-3.5 w-3.5 text-muted-foreground/50" />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
         ) : (
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/50" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+        )}
+        {/* Counter + label — always visible */}
+        <span className="shrink-0 text-xs font-semibold text-muted-foreground/70">
+          {completedCount}/{totalCount} Tasks
+        </span>
+        {/* Active task name — only when minimized */}
+        {isMinimized && activeTask?.content && (
+          <span className="min-w-0 flex-1 truncate font-mono text-xs font-normal text-muted-foreground/50">
+            {activeTask.content}
+          </span>
         )}
       </button>
 
       {/* Expanded todo list */}
       {!isMinimized && (
-        <div className="px-4 pb-2">
+        <div className="px-3 pb-2">
           <div className="space-y-1">
             {todos.map((todo, index) => {
               if (!todo) return null;
