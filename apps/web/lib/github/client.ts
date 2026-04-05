@@ -709,6 +709,7 @@ export async function createPullRequest(params: {
   success: boolean;
   prUrl?: string;
   prNumber?: number;
+  nodeId?: string;
   error?: string;
 }> {
   const {
@@ -750,6 +751,7 @@ export async function createPullRequest(params: {
       success: true,
       prUrl: response.data.html_url,
       prNumber: response.data.number,
+      nodeId: response.data.node_id,
     };
   } catch (error: unknown) {
     console.error("Error creating PR:", error);
@@ -785,6 +787,7 @@ function toGitHubGraphqlMergeMethod(
 export async function enablePullRequestAutoMerge(params: {
   repoUrl: string;
   prNumber: number;
+  nodeId?: string;
   mergeMethod?: PullRequestMergeMethod;
   token?: string;
 }): Promise<{
@@ -793,7 +796,7 @@ export async function enablePullRequestAutoMerge(params: {
   error?: string;
   statusCode?: number;
 }> {
-  const { repoUrl, prNumber, mergeMethod, token } = params;
+  const { repoUrl, prNumber, nodeId, mergeMethod, token } = params;
 
   try {
     const result = await getOctokit(token);
@@ -816,16 +819,23 @@ export async function enablePullRequestAutoMerge(params: {
     }
 
     const { owner, repo } = parsed;
-    const [pullRequestResponse, repositoryResponse] = await Promise.all([
-      result.octokit.rest.pulls.get({
+
+    const repositoryResponse = await result.octokit.rest.repos.get({
+      owner,
+      repo,
+    });
+    const repository = repositoryResponse.data;
+
+    let resolvedNodeId = nodeId;
+    if (!resolvedNodeId) {
+      const pullRequestResponse = await result.octokit.rest.pulls.get({
         owner,
         repo,
         pull_number: prNumber,
-      }),
-      result.octokit.rest.repos.get({ owner, repo }),
-    ]);
+      });
+      resolvedNodeId = pullRequestResponse.data.node_id;
+    }
 
-    const repository = repositoryResponse.data;
     const allowedMethods: PullRequestMergeMethod[] = [];
     if (repository.allow_squash_merge) {
       allowedMethods.push("squash");
@@ -859,7 +869,7 @@ export async function enablePullRequestAutoMerge(params: {
         }
       }`,
       {
-        pullRequestId: pullRequestResponse.data.node_id,
+        pullRequestId: resolvedNodeId,
         mergeMethod: toGitHubGraphqlMergeMethod(resolvedMergeMethod),
       },
     );
@@ -871,6 +881,38 @@ export async function enablePullRequestAutoMerge(params: {
   } catch (error: unknown) {
     console.error("Error enabling auto-merge:", error);
 
+    // GraphQL errors return HTTP 200 with errors in the response body.
+    // Detect them by the `errors` array that Octokit's GraphqlResponseError
+    // exposes, and map known messages to user-friendly responses.
+    const graphqlErrors = (
+      error as { errors?: Array<{ message?: string; type?: string }> }
+    ).errors;
+    if (Array.isArray(graphqlErrors) && graphqlErrors.length > 0) {
+      const msg = graphqlErrors[0]?.message?.toLowerCase() ?? "";
+
+      if (msg.includes("not allowed") || msg.includes("auto merge")) {
+        return {
+          success: false,
+          error:
+            "Auto-merge is not available for this pull request. Ensure auto-merge is enabled in the repository settings.",
+          statusCode: 422,
+        };
+      }
+      if (msg.includes("not accessible") || msg.includes("permission")) {
+        return {
+          success: false,
+          error: "Permission denied",
+          statusCode: 403,
+        };
+      }
+
+      return {
+        success: false,
+        error: graphqlErrors[0]?.message ?? "Failed to enable auto-merge",
+      };
+    }
+
+    // REST API errors (from the pulls.get / repos.get calls above).
     const statusCode = getGitHubHttpStatus(error);
     if (statusCode === 403) {
       return {

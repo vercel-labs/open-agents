@@ -270,6 +270,7 @@ export async function POST(req: Request) {
         autoMergeResult = await enablePullRequestAutoMerge({
           repoUrl,
           prNumber: result.prNumber,
+          nodeId: result.nodeId,
           token: candidateToken,
         });
 
