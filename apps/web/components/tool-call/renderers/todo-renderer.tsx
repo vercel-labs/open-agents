@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  CheckCircle2,
-  Circle,
-  LayoutList,
-  ListChecks,
-  ListTodo,
-  Loader2,
-} from "lucide-react";
+import { ArrowRight, LayoutList, ListChecks, ListTodo } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
@@ -15,6 +8,70 @@ import { ToolLayout } from "../tool-layout";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Todo = Record<string, any>;
+
+/** Completed: check inside a circle */
+function CompletedIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className={cn("h-3.5 w-3.5", className)}
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M5 8.5L7 10.5L11 6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** In-progress: filled circle with arrow-right icon inside */
+function InProgressIcon({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "relative inline-flex h-3.5 w-3.5 items-center justify-center",
+        className,
+      )}
+    >
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        className="absolute inset-0 h-3.5 w-3.5"
+        aria-hidden="true"
+      >
+        <circle cx="8" cy="8" r="7.25" fill="currentColor" />
+      </svg>
+      <ArrowRight className="relative h-2 w-2 text-muted" strokeWidth={3} />
+    </span>
+  );
+}
+
+/** Pending: dashed circle */
+function PendingIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className={cn("h-3.5 w-3.5", className)}
+      aria-hidden="true"
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="7"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="3.5 2.5"
+      />
+    </svg>
+  );
+}
 
 function TodoItem({ todo }: { todo: Todo }) {
   const status = todo.status ?? "pending";
@@ -24,21 +81,21 @@ function TodoItem({ todo }: { todo: Todo }) {
     <div className="flex items-start gap-2 py-0.5">
       <span className="mt-0.5 flex shrink-0 items-center">
         {status === "completed" ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+          <CompletedIcon className="text-muted-foreground/50" />
         ) : status === "in_progress" ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-yellow-500" />
+          <InProgressIcon className="text-muted-foreground/50" />
         ) : (
-          <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+          <PendingIcon className="text-muted-foreground/30" />
         )}
       </span>
       <span
         className={cn(
           "text-xs leading-relaxed",
           status === "completed"
-            ? "text-muted-foreground line-through"
+            ? "text-muted-foreground/40 line-through"
             : status === "in_progress"
-              ? "text-foreground"
-              : "text-muted-foreground",
+              ? "text-muted-foreground"
+              : "text-muted-foreground/50",
         )}
       >
         {content}
@@ -87,7 +144,7 @@ export function TodoRenderer({
 
   const expandedContent =
     todos.length > 0 ? (
-      <div className="space-y-0.5 pl-1">
+      <div className="space-y-0.5 pl-6">
         {todos.map((todo, i) => (
           <TodoItem key={todo.id ?? i} todo={todo} />
         ))}

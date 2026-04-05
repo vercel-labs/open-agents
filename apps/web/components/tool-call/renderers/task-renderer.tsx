@@ -55,11 +55,11 @@ function getSubagentIcon(
 function getSubagentLabel(subagentType: string | undefined): string {
   switch (subagentType) {
     case "executor":
-      return "Executor";
+      return "Executor Subagent";
     case "design":
-      return "Design";
+      return "Design Subagent";
     default:
-      return "Explorer";
+      return "Explorer Subagent";
   }
 }
 
