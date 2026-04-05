@@ -259,8 +259,9 @@ export function ContributionChart({
 
             const messageCount = cell.data?.messageCount ?? 0;
             const intensity = getIntensity(messageCount, thresholds);
+            const hasActiveSelection = selectedBounds !== null;
             const isSelected =
-              selectedBounds !== null &&
+              hasActiveSelection &&
               cell.date >= selectedBounds.from &&
               cell.date <= selectedBounds.to;
             const totalTokens =
@@ -273,11 +274,14 @@ export function ContributionChart({
                 aria-label={`Usage for ${formatDate(cell.date)}`}
                 aria-pressed={isSelected}
                 className={cn(
-                  "block w-full rounded-[3px] transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
+                  "block w-full rounded-[3px] transition-[filter,opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
                   "hover:opacity-85",
                   INTENSITY_CLASSES[intensity],
+                  hasActiveSelection &&
+                    !isSelected &&
+                    "grayscale opacity-35 saturate-0",
                   isSelected &&
-                    "ring-2 ring-emerald-700/50 ring-offset-1 dark:ring-emerald-100/70",
+                    "ring-2 ring-emerald-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-emerald-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
                 )}
                 style={{
                   gridColumn: wi + 2,
@@ -289,10 +293,13 @@ export function ContributionChart({
             ) : (
               <div
                 className={cn(
-                  "rounded-[3px]",
+                  "rounded-[3px] transition-[filter,opacity,box-shadow]",
                   INTENSITY_CLASSES[intensity],
+                  hasActiveSelection &&
+                    !isSelected &&
+                    "grayscale opacity-35 saturate-0",
                   isSelected &&
-                    "ring-2 ring-emerald-700/50 ring-offset-1 dark:ring-emerald-100/70",
+                    "ring-2 ring-emerald-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-emerald-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
                 )}
                 style={{
                   gridColumn: wi + 2,
