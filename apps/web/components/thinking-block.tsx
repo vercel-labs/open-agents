@@ -1,8 +1,9 @@
 "use client";
 
-import { Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { Brain } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import { ToolLayout } from "./tool-call/tool-layout";
 
 interface ThinkingBlockProps {
   text: string;
@@ -10,19 +11,33 @@ interface ThinkingBlockProps {
   partCount?: number;
 }
 
+const COMPLETED_STATE: ToolRenderState = {
+  running: false,
+  interrupted: false,
+  denied: false,
+  approvalRequested: false,
+  isActiveApproval: false,
+};
+
+const STREAMING_STATE: ToolRenderState = {
+  running: true,
+  interrupted: false,
+  denied: false,
+  approvalRequested: false,
+  isActiveApproval: false,
+};
+
 export function ThinkingBlock({
   text,
   isStreaming = false,
   partCount = 1,
 }: ThinkingBlockProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isActivelyStreaming = isStreaming;
 
   useEffect(() => {
-    if (!isActivelyStreaming) {
+    if (!isStreaming) {
       if (startTimeRef.current !== null) {
         setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
@@ -54,7 +69,7 @@ export function ThinkingBlock({
         intervalRef.current = null;
       }
     };
-  }, [isActivelyStreaming]);
+  }, [isStreaming]);
 
   const hasContent = text.trim().length > 0;
   const thoughtLabel =
@@ -62,56 +77,28 @@ export function ThinkingBlock({
       ? "Thought"
       : `${partCount} thought${partCount !== 1 ? "s" : ""}`;
 
-  const formatLabel = () => {
-    if (isActivelyStreaming) {
-      return "Thinking...";
-    }
-    return elapsed > 0
-      ? `${thoughtLabel} for ${elapsed} second${elapsed !== 1 ? "s" : ""}`
-      : thoughtLabel;
-  };
+  const name = isStreaming ? "Thinking..." : thoughtLabel;
+
+  const summary =
+    !isStreaming && elapsed > 0
+      ? `${elapsed} second${elapsed !== 1 ? "s" : ""}`
+      : "";
+
+  const expandedContent = hasContent ? (
+    <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+      <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+        {text}
+      </p>
+    </div>
+  ) : undefined;
 
   return (
-    <div className="w-full min-h-5">
-      <button
-        type="button"
-        onClick={() => {
-          if (!hasContent) {
-            return;
-          }
-          setIsOpen((prev) => !prev);
-        }}
-        className={cn(
-          "flex min-h-5 items-center gap-2 p-0 text-sm font-medium leading-5 text-muted-foreground",
-          hasContent
-            ? "transition-colors hover:text-foreground"
-            : "cursor-default",
-        )}
-      >
-        <Brain
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground/70",
-            isActivelyStreaming && "animate-pulse",
-          )}
-        />
-        <span className="leading-5">{formatLabel()}</span>
-        {hasContent && (
-          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-            {isOpen ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
-            )}
-          </span>
-        )}
-      </button>
-      {isOpen && hasContent && (
-        <div className="mt-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
-            {text}
-          </p>
-        </div>
-      )}
-    </div>
+    <ToolLayout
+      name={name}
+      icon={<Brain className="h-3.5 w-3.5" />}
+      summary={summary}
+      state={isStreaming ? STREAMING_STATE : COMPLETED_STATE}
+      expandedContent={expandedContent}
+    />
   );
 }

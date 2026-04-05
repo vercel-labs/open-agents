@@ -158,7 +158,7 @@ export function TodoRenderer({
       summary={summary}
       state={state}
       expandedContent={expandedContent}
-      defaultExpanded={!allDone}
+      defaultExpanded={false}
     />
   );
 }
