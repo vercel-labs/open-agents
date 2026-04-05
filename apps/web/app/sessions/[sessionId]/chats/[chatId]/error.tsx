@@ -15,7 +15,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 bg-background">
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background">
       <p className="text-sm text-destructive">Something went wrong</p>
       <Button variant="outline" size="sm" onClick={reset}>
         Try again

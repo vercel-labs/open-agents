@@ -19,6 +19,7 @@ export interface CodeEditorControls {
   menuDetail: string | null;
   showStopAction: boolean;
   handleOpen: () => Promise<void>;
+  handleOpenFile: (filePath: string) => Promise<void>;
   handleStop: () => Promise<void>;
 }
 
@@ -114,50 +115,76 @@ export function useCodeEditor({
     window.open(`/codespace/${sessionId}`, "_blank", "noopener,noreferrer");
   }, [sessionId]);
 
+  /**
+   * Ensure code-server is running and return the launch response.
+   * Returns the existing info if already ready, otherwise launches.
+   */
+  const ensureRunning =
+    useCallback(async (): Promise<CodeEditorLaunchResponse | null> => {
+      if (state.status === "ready") {
+        return state.info;
+      }
+
+      if (state.status === "starting" || state.status === "stopping") {
+        return null;
+      }
+
+      setState({ status: "starting" });
+
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/code-editor`, {
+          method: "POST",
+        });
+        const body: unknown = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(body, "Failed to launch code editor"),
+          );
+        }
+
+        const launchResponse = parseLaunchResponse(body);
+        if (!launchResponse) {
+          throw new Error("Invalid code editor response");
+        }
+
+        setState({
+          status: "ready",
+          info: launchResponse,
+        });
+
+        return launchResponse;
+      } catch (error) {
+        console.error("Failed to launch code editor:", error);
+        setState({
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to launch code editor",
+        });
+        return null;
+      }
+    }, [sessionId, state]);
+
   const handleOpen = useCallback(async () => {
-    if (state.status === "ready") {
+    const info = await ensureRunning();
+    if (info) {
       openEditorPage();
-      return;
     }
+  }, [ensureRunning, openEditorPage]);
 
-    if (state.status === "starting" || state.status === "stopping") {
-      return;
-    }
-
-    setState({ status: "starting" });
-
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}/code-editor`, {
-        method: "POST",
-      });
-      const body: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(getErrorMessage(body, "Failed to launch code editor"));
+  const handleOpenFile = useCallback(
+    async (_filePath: string) => {
+      const info = await ensureRunning();
+      if (info) {
+        // Open the codespace page; file-specific deep linking can be added
+        // to the codespace route later via query parameters.
+        openEditorPage();
       }
-
-      const launchResponse = parseLaunchResponse(body);
-      if (!launchResponse) {
-        throw new Error("Invalid code editor response");
-      }
-
-      setState({
-        status: "ready",
-        info: launchResponse,
-      });
-
-      openEditorPage();
-    } catch (error) {
-      console.error("Failed to launch code editor:", error);
-      setState({
-        status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to launch code editor",
-      });
-    }
-  }, [openEditorPage, sessionId, state]);
+    },
+    [ensureRunning, openEditorPage],
+  );
 
   const handleStop = useCallback(async () => {
     if (state.status !== "ready") {
@@ -214,6 +241,7 @@ export function useCodeEditor({
     menuDetail,
     showStopAction,
     handleOpen,
+    handleOpenFile,
     handleStop,
   } as const;
 }

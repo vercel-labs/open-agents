@@ -32,7 +32,7 @@ export function RepoSelectionScreen({
   const canStart = selectedOwner && selectedRepo && !isLoading;
 
   return (
-    <div className="flex h-full flex-col items-center justify-center bg-background">
+    <div className="flex h-screen flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-6">
         <h1 className="text-3xl font-light text-foreground">
           Select a repository

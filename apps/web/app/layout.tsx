@@ -66,13 +66,6 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{ __html: themeInitializationScript }}
         />
-        {isPreviewDeployment && (
-          <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-orange-400/4 backdrop-blur-sm px-4 py-1.5 text-center text-xs font-medium text-orange-500 dark:text-orange-400">
-            <span>⚠️</span>
-            <span>Preview Deployment — this is not production</span>
-            <span>⚠️</span>
-          </div>
-        )}
         <Providers>{children}</Providers>
         <Analytics />
       </body>
