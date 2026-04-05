@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
+import type { DateRange } from "react-day-picker";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface DayData {
   date: string;
@@ -17,6 +19,8 @@ interface DayData {
 
 interface ContributionChartProps {
   data: DayData[];
+  selectedRange?: DateRange;
+  onSelectRange?: (range: DateRange | undefined) => void;
 }
 
 const DAYS_IN_WEEK = 7;
@@ -54,8 +58,12 @@ const INTENSITY_CLASSES = [
   "bg-emerald-700 dark:bg-emerald-300",
 ];
 
+function parseDateKey(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00`);
+}
+
 function formatDate(dateStr: string) {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+  return parseDateKey(dateStr).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -78,8 +86,12 @@ const CELL_GAP = 2;
 const LEGEND_CELL_SIZE = 12;
 const MIN_CELL_SIZE = 10;
 
-export function ContributionChart({ data }: ContributionChartProps) {
-  const { grid, monthLabels, thresholds } = useMemo(() => {
+export function ContributionChart({
+  data,
+  selectedRange,
+  onSelectRange,
+}: ContributionChartProps) {
+  const { grid, monthLabels, selectedBounds, thresholds } = useMemo(() => {
     const dataMap = new Map<string, DayData>();
     for (const d of data) {
       dataMap.set(d.date, d);
@@ -88,7 +100,6 @@ export function ContributionChart({ data }: ContributionChartProps) {
     const today = new Date();
     const todayStr = formatDateKey(today);
 
-    // End on the last Saturday (end of current week)
     const endDate = new Date(today);
     endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
     const startDate = new Date(endDate);
@@ -116,39 +127,80 @@ export function ContributionChart({ data }: ContributionChartProps) {
       .filter((v) => v > 0);
     const t = computeThresholds(values);
 
-    // Group into weeks (columns)
     const weeks: (typeof cells)[] = [];
     for (let i = 0; i < cells.length; i += DAYS_IN_WEEK) {
       weeks.push(cells.slice(i, i + DAYS_IN_WEEK));
     }
 
-    // Compute month labels
     const months: Array<{ label: string; weekIndex: number }> = [];
     let lastMonth = -1;
     for (let w = 0; w < weeks.length; w++) {
       const firstDay = weeks[w]?.[0];
       if (!firstDay) continue;
-      const d = new Date(firstDay.date + "T00:00:00");
-      const month = d.getMonth();
+      const month = parseDateKey(firstDay.date).getMonth();
       if (month !== lastMonth) {
         lastMonth = month;
         months.push({
-          label: d.toLocaleDateString("en-US", { month: "short" }),
+          label: parseDateKey(firstDay.date).toLocaleDateString("en-US", {
+            month: "short",
+          }),
           weekIndex: w,
         });
       }
     }
 
-    return { grid: weeks, monthLabels: months, thresholds: t };
-  }, [data]);
+    const rangeFrom = selectedRange?.from
+      ? formatDateKey(selectedRange.from)
+      : null;
+    const rangeTo = selectedRange?.to
+      ? formatDateKey(selectedRange.to)
+      : rangeFrom;
+    const bounds =
+      rangeFrom && rangeTo
+        ? rangeFrom <= rangeTo
+          ? { from: rangeFrom, to: rangeTo }
+          : { from: rangeTo, to: rangeFrom }
+        : null;
+
+    return {
+      grid: weeks,
+      monthLabels: months,
+      selectedBounds: bounds,
+      thresholds: t,
+    };
+  }, [data, selectedRange]);
 
   const weekCount = grid.length;
   const minGridWidth =
     DAY_LABEL_WIDTH + weekCount * MIN_CELL_SIZE + (weekCount - 1) * CELL_GAP;
 
+  function handleDateSelect(date: string) {
+    if (!onSelectRange) {
+      return;
+    }
+
+    const nextDate = parseDateKey(date);
+
+    if (!selectedRange?.from || selectedRange.to) {
+      onSelectRange({ from: nextDate, to: undefined });
+      return;
+    }
+
+    if (formatDateKey(selectedRange.from) === date) {
+      onSelectRange(undefined);
+      return;
+    }
+
+    if (nextDate < selectedRange.from) {
+      onSelectRange({ from: nextDate, to: selectedRange.from });
+      return;
+    }
+
+    onSelectRange({ from: selectedRange.from, to: nextDate });
+  }
+
   return (
     <div className="flex flex-col gap-1 overflow-x-auto">
-      {/* Month labels */}
       <div
         className="grid"
         style={{
@@ -171,7 +223,6 @@ export function ContributionChart({ data }: ContributionChartProps) {
         ))}
       </div>
 
-      {/* Chart grid */}
       <div
         className="grid"
         style={{
@@ -181,7 +232,6 @@ export function ContributionChart({ data }: ContributionChartProps) {
           minWidth: minGridWidth,
         }}
       >
-        {/* Day labels */}
         {DAY_LABELS.map((label, i) => (
           <span
             key={i}
@@ -192,7 +242,6 @@ export function ContributionChart({ data }: ContributionChartProps) {
           </span>
         ))}
 
-        {/* Week cells */}
         {grid.flatMap((week, wi) =>
           week.map((cell, di) => {
             if (cell.isFuture) {
@@ -210,19 +259,52 @@ export function ContributionChart({ data }: ContributionChartProps) {
 
             const messageCount = cell.data?.messageCount ?? 0;
             const intensity = getIntensity(messageCount, thresholds);
+            const isSelected =
+              selectedBounds !== null &&
+              cell.date >= selectedBounds.from &&
+              cell.date <= selectedBounds.to;
+            const totalTokens =
+              (cell.data?.inputTokens ?? 0) + (cell.data?.outputTokens ?? 0);
+            const isInteractive = typeof onSelectRange === "function";
+
+            const cellContent = isInteractive ? (
+              <button
+                type="button"
+                aria-label={`Usage for ${formatDate(cell.date)}`}
+                aria-pressed={isSelected}
+                className={cn(
+                  "block w-full rounded-[3px] transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
+                  "hover:opacity-85",
+                  INTENSITY_CLASSES[intensity],
+                  isSelected &&
+                    "ring-2 ring-emerald-700/50 ring-offset-1 dark:ring-emerald-100/70",
+                )}
+                style={{
+                  gridColumn: wi + 2,
+                  gridRow: di + 1,
+                  aspectRatio: "1 / 1",
+                }}
+                onClick={() => handleDateSelect(cell.date)}
+              />
+            ) : (
+              <div
+                className={cn(
+                  "rounded-[3px]",
+                  INTENSITY_CLASSES[intensity],
+                  isSelected &&
+                    "ring-2 ring-emerald-700/50 ring-offset-1 dark:ring-emerald-100/70",
+                )}
+                style={{
+                  gridColumn: wi + 2,
+                  gridRow: di + 1,
+                  aspectRatio: "1 / 1",
+                }}
+              />
+            );
 
             return (
               <Tooltip key={cell.date}>
-                <TooltipTrigger asChild>
-                  <div
-                    className={`rounded-[2px] ${INTENSITY_CLASSES[intensity]}`}
-                    style={{
-                      gridColumn: wi + 2,
-                      gridRow: di + 1,
-                      aspectRatio: "1 / 1",
-                    }}
-                  />
-                </TooltipTrigger>
+                <TooltipTrigger asChild>{cellContent}</TooltipTrigger>
                 <TooltipContent side="top">
                   <div className="text-xs">
                     <div className="font-medium">{formatDate(cell.date)}</div>
@@ -232,13 +314,7 @@ export function ContributionChart({ data }: ContributionChartProps) {
                           {messageCount} message
                           {messageCount !== 1 ? "s" : ""}
                         </div>
-                        <div>
-                          {formatTokens(
-                            (cell.data?.inputTokens ?? 0) +
-                              (cell.data?.outputTokens ?? 0),
-                          )}{" "}
-                          tokens
-                        </div>
+                        <div>{formatTokens(totalTokens)} tokens</div>
                         <div>
                           {cell.data?.toolCallCount ?? 0} tool call
                           {(cell.data?.toolCallCount ?? 0) !== 1 ? "s" : ""}
@@ -255,7 +331,6 @@ export function ContributionChart({ data }: ContributionChartProps) {
         )}
       </div>
 
-      {/* Legend */}
       <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
         <span>Less</span>
         {INTENSITY_CLASSES.map((cls, i) => (

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import type { DateRange } from "react-day-picker";
 import { ContributionChart } from "@/components/contribution-chart";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr";
 import { formatDateOnly } from "@/lib/usage/date-range";
@@ -68,6 +68,30 @@ function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function formatDateRangeLabel(range: DateRange | undefined) {
+  if (!range?.from) {
+    return "Token consumption and activity over the past 39 weeks. Click the chart to filter.";
+  }
+
+  const fromLabel = range.from.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const toDate = range.to ?? range.from;
+  const toLabel = toDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  if (fromLabel === toLabel) {
+    return `Showing activity for ${fromLabel}. Click another day to extend the range.`;
+  }
+
+  return `Showing activity from ${fromLabel} to ${toLabel}.`;
 }
 
 function sumRows(rows: DailyUsageRow[]) {
@@ -412,9 +436,9 @@ function StatBlock({
 export function UsageSection() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const usagePath = useMemo(() => {
+  const filteredUsagePath = useMemo(() => {
     if (!dateRange?.from) {
-      return "/api/usage";
+      return null;
     }
 
     const from = formatDateOnly(dateRange.from);
@@ -424,22 +448,37 @@ export function UsageSection() {
     return `/api/usage?${query.toString()}`;
   }, [dateRange]);
 
-  const { data, isLoading, error } = useSWR<UsageResponse>(usagePath, fetcher);
+  const {
+    data: fullData,
+    isLoading: isFullDataLoading,
+    error: fullDataError,
+  } = useSWR<UsageResponse>("/api/usage", fetcher);
+  const {
+    data: filteredData,
+    isLoading: isFilteredDataLoading,
+    error: filteredDataError,
+  } = useSWR<UsageResponse>(filteredUsagePath, fetcher);
+
+  const data = filteredUsagePath ? filteredData : fullData;
+  const isLoading =
+    isFullDataLoading || (filteredUsagePath !== null && isFilteredDataLoading);
+  const error = fullDataError ?? filteredDataError;
 
   const { totals, chartData, modelUsage, mainTotals, subagentTotals } =
     useMemo(() => {
-      const usage = data?.usage ?? [];
+      const selectedUsage = data?.usage ?? [];
+      const chartUsage = fullData?.usage ?? selectedUsage;
 
-      const main = usage.filter((r) => r.agentType === "main");
-      const subagent = usage.filter((r) => r.agentType === "subagent");
+      const main = selectedUsage.filter((r) => r.agentType === "main");
+      const subagent = selectedUsage.filter((r) => r.agentType === "subagent");
       return {
-        totals: sumRows(usage),
-        chartData: mergeDays(usage),
-        modelUsage: aggregateByModel(usage),
+        totals: sumRows(selectedUsage),
+        chartData: mergeDays(chartUsage),
+        modelUsage: aggregateByModel(selectedUsage),
         mainTotals: sumRows(main),
         subagentTotals: sumRows(subagent),
       };
-    }, [data]);
+    }, [data, fullData]);
 
   if (isLoading) return <UsageSectionSkeleton />;
 
@@ -513,20 +552,24 @@ export function UsageSection() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <CardTitle>Usage</CardTitle>
               <CardDescription>
-                {dateRange?.from
-                  ? "Showing filtered results."
-                  : "Token consumption and activity over the past 39 weeks."}
+                {formatDateRangeLabel(dateRange)}
               </CardDescription>
             </div>
-            <DateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
-              className="w-full justify-center sm:w-auto sm:justify-start"
-            />
+            {dateRange?.from ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start px-0 text-muted-foreground"
+                onClick={() => setDateRange(undefined)}
+              >
+                Clear filter
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -542,7 +585,11 @@ export function UsageSection() {
             />
           </div>
 
-          <ContributionChart data={chartData} />
+          <ContributionChart
+            data={chartData}
+            selectedRange={dateRange}
+            onSelectRange={setDateRange}
+          />
 
           <div className="grid gap-6 lg:grid-cols-2">
             {hasUsage && (
