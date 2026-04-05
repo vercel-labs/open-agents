@@ -5,15 +5,6 @@ import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
-function getLastOutputLine(output: string) {
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  return lines.at(-1);
-}
-
 export function BashRenderer({
   part,
   state,
@@ -35,32 +26,14 @@ export function BashRenderer({
     toolFailed || (typeof exitCode === "number" && exitCode !== 0);
 
   const combinedOutput = [stdout, stderr].filter(Boolean).join("\n").trim();
-  const lastOutputLine = combinedOutput
-    ? getLastOutputLine(combinedOutput)
-    : undefined;
   const hasExpandableContent =
     part.state === "output-available" || Boolean(cwd) || isDetached;
 
-  const meta =
-    lastOutputLine || isDetached ? (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        {lastOutputLine && (
-          <span
-            className={cn(
-              "max-w-56 truncate font-mono text-[12px] sm:max-w-72",
-              isError && "text-red-600/80 dark:text-red-400/90",
-            )}
-          >
-            {lastOutputLine}
-          </span>
-        )}
-        {isDetached && (
-          <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[11px] font-medium text-blue-500">
-            detached
-          </span>
-        )}
-      </span>
-    ) : undefined;
+  const meta = isDetached ? (
+    <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[11px] font-medium text-blue-500">
+      detached
+    </span>
+  ) : undefined;
 
   const expandedContent = hasExpandableContent ? (
     <pre

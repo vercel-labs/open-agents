@@ -100,7 +100,7 @@ export function ToolLayout({
     useState(defaultExpanded && hasExpandedDetails);
 
   // Error state flags
-  const showErrorHeader = hasError && !isExpandedPanelVisible;
+  const showErrorHeader = hasError;
   const showErrorExpanded = hasError && isExpandedPanelVisible;
   const hasTrailingMeta =
     !showErrorHeader && (hasMeta || interruptedBadge !== null);
@@ -175,7 +175,11 @@ export function ToolLayout({
           {showErrorHeader ? (
             <>
               <CircleX className="h-3.5 w-3.5 text-red-500 group-hover:hidden" />
-              <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              {isExpandedPanelVisible ? (
+                <Minus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              ) : (
+                <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              )}
             </>
           ) : hasExpandedDetails && !isRunning ? (
             <>
@@ -219,7 +223,7 @@ export function ToolLayout({
               {hasSummary && (
                 <span
                   className={cn(
-                    "min-w-0 flex-1 truncate font-mono text-[13px] leading-none text-muted-foreground",
+                    "min-w-0 shrink truncate font-mono text-[13px] leading-none text-muted-foreground",
                     summaryClassName,
                   )}
                 >
@@ -228,7 +232,7 @@ export function ToolLayout({
               )}
 
               {hasTrailingMeta && (
-                <span className="inline-flex min-w-0 shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
+                <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
                   {meta}
                   {interruptedBadge}
                 </span>

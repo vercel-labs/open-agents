@@ -3235,7 +3235,7 @@ export function SessionChatContent({
                             <div
                               key={`${m.id}-${group.renderKey}`}
                               className={cn(
-                                "flex min-w-0",
+                                "flex min-w-0 py-2",
                                 m.role === "user"
                                   ? "justify-end"
                                   : "justify-start",
