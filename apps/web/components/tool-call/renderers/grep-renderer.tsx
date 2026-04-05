@@ -1,5 +1,6 @@
 "use client";
 
+import { Search } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -98,6 +99,7 @@ export function GrepRenderer({
   return (
     <ToolLayout
       name="Grep"
+      icon={<Search className="h-3.5 w-3.5" />}
       summary={`"${pattern}"`}
       summaryClassName="font-mono"
       meta={output ? `${matches.length} matches` : undefined}

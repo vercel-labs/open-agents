@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Plus } from "lucide-react";
 import type React from "react";
 import { type ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,9 @@ export type ToolLayoutProps = {
   onApprove?: (id: string) => void;
   onDeny?: (id: string, reason?: string) => void;
   defaultExpanded?: boolean;
+  /** Tool-specific icon (Lucide element). Replaces the old status dot. */
+  icon?: ReactNode;
+  /** @deprecated Use `icon` instead. Falls back to status dot if neither is set. */
   indicator?: ReactNode;
   nameClassName?: string;
 };
@@ -78,6 +81,7 @@ export function ToolLayout({
   onApprove,
   onDeny,
   defaultExpanded = false,
+  icon,
   indicator,
   nameClassName,
 }: ToolLayoutProps) {
@@ -145,13 +149,20 @@ export function ToolLayout({
     setIsExpanded(nextExpanded);
   };
 
-  const headerIndicator = indicator ?? <StatusIndicator state={state} />;
+  // Resolve the icon to show in the header.
+  // Priority: running spinner > explicit icon > legacy indicator > status dot
+  const isRunning = state.running;
+  const resolvedIcon = isRunning ? (
+    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+  ) : (
+    (icon ?? indicator ?? <StatusIndicator state={state} />)
+  );
 
   return (
-    <div className="my-1.5 rounded-md border border-transparent bg-transparent py-0.5">
+    <div className="my-0.5 rounded-md border border-transparent bg-transparent">
       <div
         className={cn(
-          "flex min-w-0 select-none items-baseline gap-2 rounded-md py-0.5 pr-1 text-sm",
+          "group flex min-w-0 select-none items-center gap-2 rounded-md py-px pr-1 text-sm",
           hasExpandedDetails &&
             "cursor-pointer transition-colors hover:bg-muted/50",
         )}
@@ -168,9 +179,18 @@ export function ToolLayout({
           "aria-expanded": isExpanded,
         })}
       >
-        <span className="flex size-3.5 shrink-0 items-center justify-start self-center">
-          {headerIndicator}
+        {/* Icon area: shows tool icon, swaps to + on hover when expandable */}
+        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/70">
+          {hasExpandedDetails && !isRunning ? (
+            <>
+              <span className="group-hover:hidden">{resolvedIcon}</span>
+              <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+            </>
+          ) : (
+            resolvedIcon
+          )}
         </span>
+
         <span
           className={cn(
             "shrink-0 font-medium leading-none",
@@ -185,7 +205,7 @@ export function ToolLayout({
           {hasSummary && (
             <span
               className={cn(
-                "min-w-0 flex-1 truncate text-[13px] leading-none text-muted-foreground",
+                "min-w-0 flex-1 truncate font-mono text-[13px] leading-none text-muted-foreground",
                 summaryClassName,
               )}
             >

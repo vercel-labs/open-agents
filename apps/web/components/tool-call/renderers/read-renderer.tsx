@@ -1,6 +1,7 @@
 "use client";
 
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import { FileText } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -66,6 +67,7 @@ export function ReadRenderer({
   return (
     <ToolLayout
       name="Read"
+      icon={<FileText className="h-3.5 w-3.5" />}
       summary={filePath}
       summaryClassName="font-mono"
       meta={

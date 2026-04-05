@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Hammer, Loader2, Paintbrush, Telescope } from "lucide-react";
 import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import { cn } from "@/lib/utils";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ApprovalButtons } from "./tool-call/approval-buttons";
+import type { ReactNode } from "react";
 
 type TaskStatus =
   | "pending"
@@ -27,7 +28,6 @@ function getTaskStatus(part: TaskToolUIPart, isStreaming: boolean): TaskStatus {
     part.state === "input-available" ||
     (part.state === "output-available" && part.preliminary)
   ) {
-    // If streaming stopped but task is still in a running state, it was interrupted
     return isStreaming ? "running" : "interrupted";
   }
   return "pending";
@@ -102,28 +102,28 @@ function useTaskTiming(isRunning: boolean, startedAtMs?: number) {
   return Math.max(0, Math.floor((now - effectiveStart) / 1000));
 }
 
-function TaskStatusIndicator({ status }: { status: TaskStatus }) {
-  switch (status) {
-    case "running":
-    case "pending":
-      return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
-    case "approval-requested":
-      return <span className="inline-block h-2 w-2 rounded-full bg-white" />;
-    case "complete":
-      return (
-        <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-      );
-    case "interrupted":
-      return (
-        <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
-      );
-    case "error":
-    case "denied":
-      return <span className="inline-block h-2 w-2 rounded-full bg-red-500" />;
+function getSubagentIcon(
+  subagentType: string | undefined,
+  className: string,
+): ReactNode {
+  switch (subagentType) {
+    case "executor":
+      return <Hammer className={className} />;
+    case "design":
+      return <Paintbrush className={className} />;
     default:
-      return (
-        <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" />
-      );
+      return <Telescope className={className} />;
+  }
+}
+
+function getSubagentLabel(subagentType: string | undefined): string {
+  switch (subagentType) {
+    case "executor":
+      return "Executor";
+    case "design":
+      return "Design";
+    default:
+      return "Explorer";
   }
 }
 
@@ -159,10 +159,6 @@ function TaskItem({
 
   const desc = part.input?.task ?? "Task";
   const subagentType = part.input?.subagentType;
-  const typeBadgeColor =
-    subagentType === "executor"
-      ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
-      : "bg-blue-500/15 text-blue-600 dark:text-blue-400";
 
   // Handle approval state
   const approvalRequested = part.state === "approval-requested";
@@ -175,6 +171,18 @@ function TaskItem({
   const denialReason = denied ? part.approval?.reason : undefined;
 
   const treeChar = isLast ? "bg-transparent" : "border-l border-border";
+
+  // Build mono stats
+  const statParts: string[] = [];
+  if (toolCount > 0) {
+    statParts.push(`${toolCount} tool${toolCount !== 1 ? "s" : ""}`);
+  }
+  if (tokenCount !== null) {
+    statParts.push(`${formatTokens(tokenCount)} tokens`);
+  }
+  if (isRunning && elapsedSeconds > 0) {
+    statParts.push(formatTime(elapsedSeconds));
+  }
 
   // Determine nested status line
   let nestedStatus = "";
@@ -204,42 +212,38 @@ function TaskItem({
       {/* Tree line */}
       <div className={cn("ml-1.5 mr-3 w-px", treeChar)} />
 
-      <div className="flex-1 min-w-0 py-1">
+      <div className="min-w-0 flex-1 py-0.5">
         {/* Task row */}
-        <div className="flex items-center gap-2 min-w-0">
-          <TaskStatusIndicator status={status} />
-          {subagentType && (
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none",
-                typeBadgeColor,
-              )}
-            >
-              {subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}
-            </span>
-          )}
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Type-specific icon */}
+          <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/70">
+            {isRunning ? (
+              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            ) : (
+              getSubagentIcon(subagentType, "h-3.5 w-3.5")
+            )}
+          </span>
+          <span className="shrink-0 text-sm font-medium text-foreground">
+            {getSubagentLabel(subagentType)}
+          </span>
           <span
             className={cn(
-              "text-sm truncate",
+              "min-w-0 truncate text-sm",
               status === "error" || status === "denied"
                 ? "text-red-500"
-                : "text-foreground",
+                : "text-muted-foreground",
             )}
           >
             {desc}
           </span>
-          <span className="hidden text-xs text-muted-foreground sm:inline">
-            - {toolCount} tool{toolCount !== 1 ? "s" : ""}
-            {tokenCount !== null && ` - ${formatTokens(tokenCount)} tokens`}
-          </span>
-          {approvalRequested && (
-            <span className="text-xs text-yellow-500 shrink-0">
-              [NEEDS APPROVAL]
+          {statParts.length > 0 && (
+            <span className="hidden shrink-0 font-mono text-xs text-muted-foreground/60 sm:inline">
+              {statParts.join(" · ")}
             </span>
           )}
-          {isRunning && elapsedSeconds > 0 && (
-            <span className="hidden text-xs text-muted-foreground sm:inline shrink-0">
-              - {formatTime(elapsedSeconds)}
+          {approvalRequested && (
+            <span className="shrink-0 text-xs text-yellow-500">
+              [NEEDS APPROVAL]
             </span>
           )}
         </div>
@@ -263,16 +267,18 @@ function TaskItem({
 
         {/* Nested status line - only show if not showing approval buttons */}
         {nestedStatus && !isActiveApproval && (
-          <div className="mt-0.5 flex items-center gap-1.5 pl-5 min-w-0">
-            <span className="text-xs text-muted-foreground">-</span>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-5">
+            <span className="font-mono text-xs text-muted-foreground/50">
+              →
+            </span>
             <span
               className={cn(
-                "text-xs truncate",
+                "truncate font-mono text-xs",
                 denied
                   ? "text-red-500"
                   : status === "interrupted"
                     ? "text-yellow-500"
-                    : "text-muted-foreground",
+                    : "text-muted-foreground/60",
               )}
             >
               {nestedStatus}
@@ -301,7 +307,6 @@ export function TaskGroupView({
 }: TaskGroupViewProps) {
   if (taskParts.length === 0) return null;
 
-  // Count different states
   const hasApprovalPending = taskParts.some(
     (p) => getTaskStatus(p, isStreaming) === "approval-requested",
   );
@@ -316,21 +321,19 @@ export function TaskGroupView({
     runningCount === 0 && interruptedCount === 0 && !hasApprovalPending;
   const hasInterrupted = interruptedCount > 0;
 
-  // Determine header text
   let headerText: string;
-  const agentNoun = `Subagent${taskParts.length > 1 ? "s" : ""}`;
   if (allComplete) {
-    headerText = `Completed ${taskParts.length} ${agentNoun}`;
+    headerText = `${taskParts.length} subagent${taskParts.length > 1 ? "s" : ""} completed`;
   } else if (hasInterrupted && runningCount === 0) {
-    headerText = `Interrupted ${taskParts.length} ${agentNoun}`;
+    headerText = `${taskParts.length} subagent${taskParts.length > 1 ? "s" : ""} interrupted`;
   } else if (hasApprovalPending && runningCount === 0) {
-    headerText = `${taskParts.length} ${agentNoun} (approval needed)`;
+    headerText = `${taskParts.length} subagent${taskParts.length > 1 ? "s" : ""} (approval needed)`;
   } else {
-    headerText = `Running ${taskParts.length} ${agentNoun}...`;
+    headerText = `Running ${taskParts.length} subagent${taskParts.length > 1 ? "s" : ""}...`;
   }
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card p-3">
+    <div className="my-1 rounded-lg border border-border bg-card px-3 py-2">
       {/* Header */}
       <div className="flex items-center gap-2">
         {allComplete ? (
@@ -340,13 +343,15 @@ export function TaskGroupView({
         ) : hasApprovalPending && runningCount === 0 ? (
           <span className="inline-block h-2 w-2 rounded-full bg-white" />
         ) : (
-          <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
+          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
         )}
-        <span className="font-medium text-foreground">{headerText}</span>
+        <span className="text-sm font-medium text-foreground">
+          {headerText}
+        </span>
       </div>
 
       {/* Task list */}
-      <div className="mt-2">
+      <div className="mt-1">
         {taskParts.map((part, index) => (
           <TaskItem
             key={part.toolCallId}

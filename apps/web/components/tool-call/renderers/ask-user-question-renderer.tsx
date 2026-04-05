@@ -1,7 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { MessageCircleQuestion } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -20,23 +19,6 @@ export function AskUserQuestionRenderer({
     hasOutput && output && "declined" in output && output.declined;
   const hasAnswers =
     hasOutput && output && "answers" in output && output.answers !== null;
-
-  const dotColor = state.denied
-    ? "bg-red-500"
-    : isDeclined
-      ? "bg-red-500"
-      : isWaitingForInput
-        ? "bg-yellow-500"
-        : state.running
-          ? "bg-yellow-500"
-          : "bg-green-500";
-
-  const indicator =
-    state.running || isStreaming ? (
-      <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-    ) : (
-      <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
-    );
 
   const summary = isStreaming
     ? "Generating questions"
@@ -88,7 +70,7 @@ export function AskUserQuestionRenderer({
       summary={summary}
       meta={meta}
       state={displayState}
-      indicator={indicator}
+      icon={<MessageCircleQuestion className="h-3.5 w-3.5" />}
       nameClassName={state.denied || isDeclined ? "text-red-500" : undefined}
       expandedContent={expandedContent}
       defaultExpanded={false}

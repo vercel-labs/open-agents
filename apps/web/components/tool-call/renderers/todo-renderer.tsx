@@ -1,5 +1,6 @@
 "use client";
 
+import { ListTodo } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -10,39 +11,31 @@ export function TodoRenderer({
   const input = part.input;
   const todos = input?.todos ?? [];
 
+  const activeTodo = todos.find((todo) => todo?.status === "in_progress");
   const completedCount = todos.filter(
     (todo) => todo?.status === "completed",
   ).length;
-  const inProgressCount = todos.filter(
-    (todo) => todo?.status === "in_progress",
-  ).length;
-  const pendingCount = todos.filter(
-    (todo) => todo?.status === "pending",
-  ).length;
+  const allDone = completedCount === todos.length && todos.length > 0;
 
-  // Build a concise summary of what this update represents
-  const activeTodo = todos.find((todo) => todo?.status === "in_progress");
+  let name: string;
   let summary: string;
 
   if (activeTodo?.content) {
-    summary = `▶ ${activeTodo.content}`;
-  } else if (completedCount === todos.length && todos.length > 0) {
-    summary = "All tasks completed";
+    name = activeTodo.content;
+    summary = "→ in progress";
+  } else if (allDone) {
+    name = "All tasks completed";
+    summary = "✓";
   } else {
-    summary = `${todos.length} task${todos.length !== 1 ? "s" : ""}`;
+    name = `${todos.length} task${todos.length !== 1 ? "s" : ""} updated`;
+    summary = `${completedCount}/${todos.length} done`;
   }
-
-  const metaParts = [
-    completedCount > 0 ? `${completedCount} done` : null,
-    inProgressCount > 0 ? `${inProgressCount} active` : null,
-    pendingCount > 0 ? `${pendingCount} pending` : null,
-  ].filter(Boolean);
 
   return (
     <ToolLayout
-      name="Update tasks"
+      name={name}
+      icon={<ListTodo className="h-3.5 w-3.5" />}
       summary={summary}
-      meta={metaParts.length > 0 ? metaParts.join(" · ") : undefined}
       state={state}
     />
   );

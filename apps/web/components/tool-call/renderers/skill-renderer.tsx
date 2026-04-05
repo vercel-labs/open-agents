@@ -1,6 +1,7 @@
 "use client";
 
 import { toRelativePath } from "@open-harness/shared";
+import { Zap } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ToolLayout } from "../tool-layout";
@@ -77,6 +78,7 @@ export function SkillRenderer({
   return (
     <ToolLayout
       name="Skill"
+      icon={<Zap className="h-3.5 w-3.5" />}
       summary={skillName ? `/${skillName}` : "..."}
       summaryClassName="font-mono"
       state={mergedState}

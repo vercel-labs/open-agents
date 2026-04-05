@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
@@ -40,25 +40,6 @@ export function BashRenderer({
     : undefined;
   const hasExpandableContent =
     part.state === "output-available" || Boolean(cwd) || isDetached;
-
-  const indicator = state.interrupted ? (
-    <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
-  ) : state.running ? (
-    <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-  ) : (
-    <span
-      className={cn(
-        "inline-block h-2 w-2 rounded-full",
-        state.denied
-          ? "bg-red-500"
-          : state.approvalRequested
-            ? "bg-yellow-500"
-            : isError
-              ? "bg-red-500"
-              : "bg-green-500",
-      )}
-    />
-  );
 
   const meta =
     lastOutputLine || isDetached ? (
@@ -151,7 +132,7 @@ export function BashRenderer({
       summaryClassName="font-mono"
       meta={meta}
       state={state}
-      indicator={indicator}
+      icon={<Terminal className="h-3.5 w-3.5" />}
       nameClassName={isError ? "text-red-500" : undefined}
       expandedContent={expandedContent}
       onApprove={onApprove}

@@ -2,7 +2,8 @@
 
 import type { TaskPendingToolCall } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
-import { Loader2 } from "lucide-react";
+import { Hammer, Loader2, Paintbrush, Telescope } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
@@ -37,6 +38,31 @@ function countToolCalls(messages: unknown): number {
   ).length;
 }
 
+function getSubagentIcon(
+  subagentType: string | undefined,
+  className: string,
+): ReactNode {
+  switch (subagentType) {
+    case "executor":
+      return <Hammer className={className} />;
+    case "design":
+      return <Paintbrush className={className} />;
+    default:
+      return <Telescope className={className} />;
+  }
+}
+
+function getSubagentLabel(subagentType: string | undefined): string {
+  switch (subagentType) {
+    case "executor":
+      return "Executor";
+    case "design":
+      return "Design";
+    default:
+      return "Explorer";
+  }
+}
+
 function SubagentToolCall({
   toolCall,
   isRunning,
@@ -54,31 +80,27 @@ function SubagentToolCall({
     <div className="border-l-2 border-border py-1 pl-3">
       <div className="flex items-center gap-2">
         {isRunning ? (
-          <Loader2 className="h-2.5 w-2.5 animate-spin text-yellow-500" />
+          <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
         ) : (
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
         )}
         <span
           className={cn(
             "text-sm font-medium",
-            isRunning ? "text-yellow-500" : "text-foreground",
+            isRunning ? "text-muted-foreground" : "text-foreground",
           )}
         >
           {displayName}
         </span>
         {summary && (
-          <>
-            <span className="text-sm text-muted-foreground">(</span>
-            <span
-              className={cn(
-                "text-sm text-foreground",
-                expanded ? "" : "max-w-[200px] truncate",
-              )}
-            >
-              {summary}
-            </span>
-            <span className="text-sm text-muted-foreground">)</span>
-          </>
+          <span
+            className={cn(
+              "font-mono text-xs text-muted-foreground",
+              expanded ? "" : "max-w-[200px] truncate",
+            )}
+          >
+            {summary}
+          </span>
         )}
       </div>
       {expanded && (
@@ -111,79 +133,28 @@ export function TaskRenderer({
   const pendingToolCall = output?.pending ?? null;
   const toolCount =
     output?.toolCallCount ?? (isComplete ? countToolCalls(output?.final) : 0);
+  const tokenCount = output?.usage?.inputTokens ?? null;
 
-  const isTaskStreaming = hasOutput && isPreliminary;
-  const isRunningState =
-    part.state === "input-streaming" ||
-    part.state === "input-available" ||
-    isTaskStreaming;
-  const isActuallyRunning = isRunningState && !state.interrupted;
+  // Build mono stats for meta
+  const statParts: string[] = [];
+  if (toolCount > 0) {
+    statParts.push(`${toolCount} tool${toolCount !== 1 ? "s" : ""}`);
+  }
+  if (tokenCount !== null) {
+    statParts.push(`${formatTokens(tokenCount)} tokens`);
+  }
 
-  const dotColor = taskDenied
-    ? "bg-red-500"
-    : taskApprovalRequested
-      ? "bg-yellow-500"
-      : state.interrupted
-        ? "bg-yellow-500"
-        : isActuallyRunning
-          ? "bg-yellow-500"
-          : isComplete
-            ? "bg-green-500"
-            : "bg-yellow-500";
-
-  const subagentLabel = "Subagent";
-  const subagentTypeBadge = subagentType ? (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none",
-        subagentType === "executor"
-          ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
-          : "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-      )}
-    >
-      {subagentType.charAt(0).toUpperCase() + subagentType.slice(1)}
-    </span>
-  ) : null;
+  const meta =
+    statParts.length > 0 ? (
+      <span className="font-mono text-xs text-muted-foreground">
+        {statParts.join(" · ")}
+      </span>
+    ) : null;
 
   const hasExpandableContent =
     pendingToolCall !== null ||
     (fullPrompt && fullPrompt.length > 80) ||
     isComplete;
-
-  const indicator = state.interrupted ? (
-    <span className="inline-block h-2 w-2 rounded-full border border-yellow-500" />
-  ) : state.running || isActuallyRunning ? (
-    <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
-  ) : (
-    <span className={cn("inline-block h-2 w-2 rounded-full", dotColor)} />
-  );
-
-  const meta = (
-    <span className="inline-flex items-center gap-1.5">
-      {subagentTypeBadge}
-      {pendingToolCall ? (
-        <span className="inline-flex max-w-[220px] items-center gap-1.5 overflow-hidden">
-          <span className={cn(isPreliminary && "text-yellow-500")}>
-            {pendingToolCall.name}
-          </span>
-          {getToolSummary(pendingToolCall) && (
-            <span className="truncate text-muted-foreground">
-              {getToolSummary(pendingToolCall)}
-            </span>
-          )}
-        </span>
-      ) : isComplete ? (
-        <>
-          <span>
-            {toolCount} tool{toolCount === 1 ? "" : "s"}
-          </span>
-          {output?.usage?.inputTokens ? (
-            <span>{formatTokens(output.usage.inputTokens)} tokens</span>
-          ) : null}
-        </>
-      ) : null}
-    </span>
-  );
 
   const expandedContent = hasExpandableContent ? (
     <div className="space-y-3">
@@ -212,12 +183,9 @@ export function TaskRenderer({
       )}
 
       {isComplete && (
-        <div className="text-sm text-muted-foreground">
+        <div className="font-mono text-xs text-muted-foreground">
           Complete ({toolCount} tool calls
-          {output?.usage?.inputTokens
-            ? `, ${formatTokens(output.usage.inputTokens)} tokens`
-            : ""}
-          )
+          {tokenCount !== null ? `, ${formatTokens(tokenCount)} tokens` : ""})
         </div>
       )}
     </div>
@@ -233,11 +201,11 @@ export function TaskRenderer({
 
   return (
     <ToolLayout
-      name={subagentLabel}
+      name={getSubagentLabel(subagentType)}
       summary={desc}
       meta={meta}
       state={state}
-      indicator={indicator}
+      icon={getSubagentIcon(subagentType, "h-3.5 w-3.5")}
       nameClassName={taskDenied ? "text-red-500" : undefined}
       expandedContent={expandedContent}
       onApprove={onApprove}

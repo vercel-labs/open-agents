@@ -1,6 +1,7 @@
 "use client";
 
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import { Pencil } from "lucide-react";
 import { MultiFileDiff } from "@pierre/diffs/react";
 import { useMemo } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
@@ -82,6 +83,7 @@ export function EditRenderer({
   return (
     <ToolLayout
       name="Update"
+      icon={<Pencil className="h-3.5 w-3.5" />}
       summary={filePath}
       summaryClassName="font-mono"
       meta={meta}

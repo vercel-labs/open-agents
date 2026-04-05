@@ -1,6 +1,7 @@
 "use client";
 
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import { FilePlus } from "lucide-react";
 import { File as DiffsFile } from "@pierre/diffs/react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultFileOptions } from "@/lib/diffs-config";
@@ -66,6 +67,7 @@ export function WriteRenderer({
   return (
     <ToolLayout
       name="Create"
+      icon={<FilePlus className="h-3.5 w-3.5" />}
       summary={filePath}
       summaryClassName="font-mono"
       meta={meta}

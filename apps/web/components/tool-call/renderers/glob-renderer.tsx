@@ -1,5 +1,6 @@
 "use client";
 
+import { FolderSearch } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -67,6 +68,7 @@ export function GlobRenderer({
   return (
     <ToolLayout
       name="Glob"
+      icon={<FolderSearch className="h-3.5 w-3.5" />}
       summary={`"${pattern}"`}
       summaryClassName="font-mono"
       meta={files.length > 0 ? `${files.length} files` : undefined}
