@@ -117,7 +117,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
   const activeTask = todos.find((t) => t.status === "in_progress");
 
   return (
-    <div className="mb-1.5 overflow-hidden rounded-xl border border-border/60 bg-card transition-all">
+    <div className="mx-3 overflow-hidden rounded-t-xl border border-b-0 border-border/60 bg-card transition-all">
       {/* Header bar — always visible */}
       <button
         type="button"
@@ -151,9 +151,9 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
               return (
                 <div
                   key={`pinned-todo-${todo.id ?? index}`}
-                  className="flex items-start gap-2.5"
+                  className="flex items-center gap-2.5"
                 >
-                  <span className="mt-px shrink-0">
+                  <span className="shrink-0">
                     {todo.status === "completed" ? (
                       <CompletedIcon className="text-muted-foreground/50" />
                     ) : todo.status === "in_progress" ? (
