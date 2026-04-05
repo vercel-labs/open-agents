@@ -3454,9 +3454,6 @@ export function SessionChatContent({
         />
       )}
 
-      {/* Pinned Todo Panel */}
-      <PinnedTodoPanel todos={latestTodos} />
-
       {/* Input */}
       <div className="p-4 pb-2 sm:pb-8">
         <div className="mx-auto max-w-4xl space-y-2">
@@ -3538,337 +3535,350 @@ export function SessionChatContent({
                 isLoading={skillsLoading}
               />
             )}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (
-                  isArchived ||
-                  !isSandboxActive ||
-                  isChatInFlight ||
-                  hasPendingResponse
-                ) {
-                  return;
-                }
-                const hasContent = input.trim() || images.length > 0;
-                if (!hasContent) return;
-
-                const messageText = input;
-                const files = getFileParts();
-                setInput("");
-                clearImages();
-
-                const isFirstChatInSession = initialIsOnlyChatInSession;
-                const shouldSetOptimisticTitle =
-                  isFirstChatInSession &&
-                  !hadInitialMessages &&
-                  messages.length === 0;
-                const trimmedText = messageText.trim();
-                const shouldGenerateSessionTitle =
-                  shouldSetOptimisticTitle &&
-                  trimmedText.length > 0 &&
-                  !hasRequestedSessionTitleGenerationRef.current;
-                if (shouldSetOptimisticTitle && trimmedText.length > 0) {
-                  const nextTitle =
-                    trimmedText.length > 30
-                      ? `${trimmedText.slice(0, 30)}...`
-                      : trimmedText;
-                  pendingOptimisticTitleChatIdRef.current = chatInfo.id;
-                  void setChatTitle(chatInfo.id, nextTitle);
-
-                  if (shouldGenerateSessionTitle) {
-                    hasRequestedSessionTitleGenerationRef.current = true;
-                    // Generate a title in parallel and persist it as soon as it
-                    // resolves, without waiting for the assistant response.
-                    const generatedTitlePromise = fetch("/api/generate-title", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ message: trimmedText }),
-                    })
-                      .then(async (res) => {
-                        if (!res.ok) {
-                          return null;
-                        }
-
-                        const data = (await res.json().catch(() => null)) as {
-                          title?: unknown;
-                        } | null;
-                        if (typeof data?.title !== "string") {
-                          return null;
-                        }
-
-                        const title = data.title.trim();
-                        return title.length > 0 ? title : null;
-                      })
-                      .catch(() => null);
-
-                    void generatedTitlePromise
-                      .then((generatedTitle) => {
-                        if (!generatedTitle) {
-                          return;
-                        }
-                        return updateSessionTitle(generatedTitle);
-                      })
-                      .catch(() => {
-                        // Ignore failures and keep the existing session title.
-                      });
-                  }
-                }
-                try {
-                  await sendMessageWithPendingState({
-                    text: messageText,
-                    files,
-                  });
-                } catch (err) {
-                  if (pendingOptimisticTitleChatIdRef.current) {
-                    void clearChatTitle(
-                      pendingOptimisticTitleChatIdRef.current,
-                    );
-                    pendingOptimisticTitleChatIdRef.current = null;
-                  }
-                  console.error("Failed to send message:", err);
-                }
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                // Only set isDragging to false if we're leaving the form entirely
-                // (not just moving to a child element)
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  setIsDragging(false);
-                }
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragging(false);
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                  addImages(files);
-                }
-              }}
+            {/* Pinned Todo Panel + Input form wrapper */}
+            <div
               className={`overflow-hidden rounded-2xl bg-muted transition-colors ${isDragging ? "ring-2 ring-blue-500/50" : ""}`}
             >
-              {/* Sandbox overlay when inactive */}
-              <SandboxInputOverlay
-                isSandboxActive={isSandboxActive}
-                isCreating={isCreatingSandbox}
-                isRestoring={isRestoringSnapshot}
-                isReconnecting={isReconnectingSandbox && !isHibernatingUi}
-                isHibernating={isHibernatingUi}
-                isArchived={isArchived}
-                isInitializing={reconnectionStatus === "idle"}
-                snapshotPending={isArchiveSnapshotPending}
-                hasSnapshot={hasSnapshot}
-                onRestore={handleRestoreSnapshot}
-                onCreateNew={handleCreateNewSandbox}
-              />
+              <PinnedTodoPanel todos={latestTodos} />
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    isArchived ||
+                    !isSandboxActive ||
+                    isChatInFlight ||
+                    hasPendingResponse
+                  ) {
+                    return;
+                  }
+                  const hasContent = input.trim() || images.length > 0;
+                  if (!hasContent) return;
 
-              {/* Image attachments preview */}
-              <ImageAttachmentsPreview images={images} onRemove={removeImage} />
+                  const messageText = input;
+                  const files = getFileParts();
+                  setInput("");
+                  clearImages();
 
-              {/* Textarea area */}
-              <div className="px-4 pb-2 pt-3">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  placeholder="Request changes or ask a question..."
-                  rows={1}
-                  onFocus={handleTextareaFocus}
-                  onChange={(e) => {
-                    setInput(e.currentTarget.value);
-                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                  }}
-                  onKeyDown={(e) => {
-                    // Let suggestions handle keyboard events first
-                    if (handleSuggestionsKeyDown(e)) {
-                      return;
+                  const isFirstChatInSession = initialIsOnlyChatInSession;
+                  const shouldSetOptimisticTitle =
+                    isFirstChatInSession &&
+                    !hadInitialMessages &&
+                    messages.length === 0;
+                  const trimmedText = messageText.trim();
+                  const shouldGenerateSessionTitle =
+                    shouldSetOptimisticTitle &&
+                    trimmedText.length > 0 &&
+                    !hasRequestedSessionTitleGenerationRef.current;
+                  if (shouldSetOptimisticTitle && trimmedText.length > 0) {
+                    const nextTitle =
+                      trimmedText.length > 30
+                        ? `${trimmedText.slice(0, 30)}...`
+                        : trimmedText;
+                    pendingOptimisticTitleChatIdRef.current = chatInfo.id;
+                    void setChatTitle(chatInfo.id, nextTitle);
+
+                    if (shouldGenerateSessionTitle) {
+                      hasRequestedSessionTitleGenerationRef.current = true;
+                      // Generate a title in parallel and persist it as soon as it
+                      // resolves, without waiting for the assistant response.
+                      const generatedTitlePromise = fetch(
+                        "/api/generate-title",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: trimmedText }),
+                        },
+                      )
+                        .then(async (res) => {
+                          if (!res.ok) {
+                            return null;
+                          }
+
+                          const data = (await res.json().catch(() => null)) as {
+                            title?: unknown;
+                          } | null;
+                          if (typeof data?.title !== "string") {
+                            return null;
+                          }
+
+                          const title = data.title.trim();
+                          return title.length > 0 ? title : null;
+                        })
+                        .catch(() => null);
+
+                      void generatedTitlePromise
+                        .then((generatedTitle) => {
+                          if (!generatedTitle) {
+                            return;
+                          }
+                          return updateSessionTitle(generatedTitle);
+                        })
+                        .catch(() => {
+                          // Ignore failures and keep the existing session title.
+                        });
                     }
-                    if (handleSlashKeyDown(e)) {
-                      return;
+                  }
+                  try {
+                    await sendMessageWithPendingState({
+                      text: messageText,
+                      files,
+                    });
+                  } catch (err) {
+                    if (pendingOptimisticTitleChatIdRef.current) {
+                      void clearChatTitle(
+                        pendingOptimisticTitleChatIdRef.current,
+                      );
+                      pendingOptimisticTitleChatIdRef.current = null;
                     }
-                    // On iOS, Return should insert a newline (send via submit button)
-                    if (
-                      e.key === "Enter" &&
-                      !e.shiftKey &&
-                      !isIosDevice &&
-                      !isChatInFlight &&
-                      !hasPendingResponse
-                    ) {
-                      e.preventDefault();
-                      if (!isArchived && isSandboxActive) {
-                        e.currentTarget.form?.requestSubmit();
-                      }
-                    }
-                  }}
-                  onKeyUp={(e) => {
-                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                  }}
-                  onClick={(e) => {
-                    setCursorPosition(e.currentTarget.selectionStart ?? 0);
-                  }}
-                  onPaste={(e) => {
-                    const items = e.clipboardData?.items;
-                    if (!items) return;
-                    for (const item of items) {
-                      if (isValidImageType(item.type)) {
-                        const file = item.getAsFile();
-                        if (file) {
-                          e.preventDefault();
-                          addImage(file).catch(() => {
-                            // Silently ignore paste errors - rare edge case
-                          });
-                        }
-                      }
-                    }
-                  }}
-                  disabled={isArchived}
-                  className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  style={{ minHeight: "24px" }}
+                    console.error("Failed to send message:", err);
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  // Only set isDragging to false if we're leaving the form entirely
+                  // (not just moving to a child element)
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setIsDragging(false);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const files = e.dataTransfer.files;
+                  if (files.length > 0) {
+                    addImages(files);
+                  }
+                }}
+              >
+                {/* Sandbox overlay when inactive */}
+                <SandboxInputOverlay
+                  isSandboxActive={isSandboxActive}
+                  isCreating={isCreatingSandbox}
+                  isRestoring={isRestoringSnapshot}
+                  isReconnecting={isReconnectingSandbox && !isHibernatingUi}
+                  isHibernating={isHibernatingUi}
+                  isArchived={isArchived}
+                  isInitializing={reconnectionStatus === "idle"}
+                  snapshotPending={isArchiveSnapshotPending}
+                  hasSnapshot={hasSnapshot}
+                  onRestore={handleRestoreSnapshot}
+                  onCreateNew={handleCreateNewSandbox}
                 />
-              </div>
 
-              {/* Bottom toolbar */}
-              <div className="flex items-center justify-between px-3 pb-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={openFilePicker}
-                    disabled={isArchived}
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  {renderMessages.length === 0 && chatInfo.modelId ? (
-                    <div
-                      className={
-                        isChatInFlight || isUpdatingModel || modelOptionsLoading
-                          ? "pointer-events-none opacity-60"
-                          : undefined
+                {/* Image attachments preview */}
+                <ImageAttachmentsPreview
+                  images={images}
+                  onRemove={removeImage}
+                />
+
+                {/* Textarea area */}
+                <div className="px-4 pb-2 pt-3">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    placeholder="Request changes or ask a question..."
+                    rows={1}
+                    onFocus={handleTextareaFocus}
+                    onChange={(e) => {
+                      setInput(e.currentTarget.value);
+                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onKeyDown={(e) => {
+                      // Let suggestions handle keyboard events first
+                      if (handleSuggestionsKeyDown(e)) {
+                        return;
                       }
-                    >
-                      <ModelSelectorCompact
-                        value={chatInfo.modelId}
-                        modelOptions={modelOptions}
-                        disabled={
-                          isChatInFlight ||
-                          isUpdatingModel ||
-                          modelOptionsLoading
+                      if (handleSlashKeyDown(e)) {
+                        return;
+                      }
+                      // On iOS, Return should insert a newline (send via submit button)
+                      if (
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        !isIosDevice &&
+                        !isChatInFlight &&
+                        !hasPendingResponse
+                      ) {
+                        e.preventDefault();
+                        if (!isArchived && isSandboxActive) {
+                          e.currentTarget.form?.requestSubmit();
                         }
-                        onCloseAutoFocus={() => {
-                          window.requestAnimationFrame(() => {
-                            const textarea = inputRef.current;
-                            if (!textarea) {
-                              return;
-                            }
-
-                            textarea.focus();
-                            const nextCursorPosition = Math.min(
-                              cursorPosition,
-                              textarea.value.length,
-                            );
-                            textarea.setSelectionRange(
-                              nextCursorPosition,
-                              nextCursorPosition,
-                            );
-                          });
-                        }}
-                        onChange={(modelId) => {
-                          void handleModelChange(modelId);
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    chatInfo.modelId && (
-                      <span className="text-xs text-muted-foreground/60">
-                        {selectedModelOption?.label ?? chatInfo.modelId}
-                      </span>
-                    )
-                  )}
-                  <ContextUsageIndicator
-                    inputTokens={tokenUsage.inputTokens}
-                    outputTokens={tokenUsage.outputTokens}
-                    contextLimit={contextLimit ?? DEFAULT_CONTEXT_LIMIT}
+                      }
+                    }}
+                    onKeyUp={(e) => {
+                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onClick={(e) => {
+                      setCursorPosition(e.currentTarget.selectionStart ?? 0);
+                    }}
+                    onPaste={(e) => {
+                      const items = e.clipboardData?.items;
+                      if (!items) return;
+                      for (const item of items) {
+                        if (isValidImageType(item.type)) {
+                          const file = item.getAsFile();
+                          if (file) {
+                            e.preventDefault();
+                            addImage(file).catch(() => {
+                              // Silently ignore paste errors - rare edge case
+                            });
+                          }
+                        }
+                      }
+                    }}
+                    disabled={isArchived}
+                    className="w-full resize-none overflow-y-auto bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                    style={{ minHeight: "24px" }}
                   />
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleMicClick}
-                    disabled={isArchived || recordingState === "processing"}
-                    className={`relative h-8 w-8 rounded-full ${
-                      recordingState === "recording"
-                        ? "text-red-500"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {recordingState === "recording" && (
-                      <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
-                    )}
-                    {recordingState === "processing" ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Mic className="h-5 w-5" />
-                    )}
-                  </Button>
-
-                  {isChatInFlight || hasPendingResponse ? (
+                {/* Bottom toolbar */}
+                <div className="flex items-center justify-between px-3 pb-2">
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
+                      variant="ghost"
                       size="icon"
-                      onClick={() => {
-                        stopChatStream();
-                        setHasPendingResponse(false);
-                        setUserStopped(true);
-                        void setChatStreaming(chatInfo.id, false);
-                      }}
-                      className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      style={{ touchAction: "manipulation" }}
+                      onClick={openFilePicker}
+                      disabled={isArchived}
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
                     >
-                      <Square className="h-3 w-3 fill-current" />
+                      <Paperclip className="h-4 w-4" />
                     </Button>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button
-                            type="submit"
-                            size="icon"
-                            onTouchEnd={() => {
-                              // On iOS, tapping submit while the textarea is focused
-                              // causes the keyboard to briefly flash open then closed.
-                              // Blur the textarea immediately to prevent this.
-                              inputRef.current?.blur();
-                            }}
-                            disabled={
-                              isArchived ||
-                              isChatInFlight ||
-                              (!input.trim() && images.length === 0) ||
-                              isUpdatingModel ||
-                              !isSandboxActive
-                            }
-                            className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
+                    {renderMessages.length === 0 && chatInfo.modelId ? (
+                      <div
+                        className={
+                          isChatInFlight ||
+                          isUpdatingModel ||
+                          modelOptionsLoading
+                            ? "pointer-events-none opacity-60"
+                            : undefined
+                        }
+                      >
+                        <ModelSelectorCompact
+                          value={chatInfo.modelId}
+                          modelOptions={modelOptions}
+                          disabled={
+                            isChatInFlight ||
+                            isUpdatingModel ||
+                            modelOptionsLoading
+                          }
+                          onCloseAutoFocus={() => {
+                            window.requestAnimationFrame(() => {
+                              const textarea = inputRef.current;
+                              if (!textarea) {
+                                return;
+                              }
+
+                              textarea.focus();
+                              const nextCursorPosition = Math.min(
+                                cursorPosition,
+                                textarea.value.length,
+                              );
+                              textarea.setSelectionRange(
+                                nextCursorPosition,
+                                nextCursorPosition,
+                              );
+                            });
+                          }}
+                          onChange={(modelId) => {
+                            void handleModelChange(modelId);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      chatInfo.modelId && (
+                        <span className="text-xs text-muted-foreground/60">
+                          {selectedModelOption?.label ?? chatInfo.modelId}
                         </span>
-                      </TooltipTrigger>
-                      {!isSandboxActive && !isArchived && (
-                        <TooltipContent side="top" sideOffset={8}>
-                          Waiting for sandbox...
-                        </TooltipContent>
+                      )
+                    )}
+                    <ContextUsageIndicator
+                      inputTokens={tokenUsage.inputTokens}
+                      outputTokens={tokenUsage.outputTokens}
+                      contextLimit={contextLimit ?? DEFAULT_CONTEXT_LIMIT}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleMicClick}
+                      disabled={isArchived || recordingState === "processing"}
+                      className={`relative h-8 w-8 rounded-full ${
+                        recordingState === "recording"
+                          ? "text-red-500"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {recordingState === "recording" && (
+                        <span className="absolute inset-0 animate-pulse rounded-full bg-red-500/30" />
                       )}
-                    </Tooltip>
-                  )}
+                      {recordingState === "processing" ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Mic className="h-5 w-5" />
+                      )}
+                    </Button>
+
+                    {isChatInFlight || hasPendingResponse ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        onClick={() => {
+                          stopChatStream();
+                          setHasPendingResponse(false);
+                          setUserStopped(true);
+                          void setChatStreaming(chatInfo.id, false);
+                        }}
+                        className="h-8 w-8 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        style={{ touchAction: "manipulation" }}
+                      >
+                        <Square className="h-3 w-3 fill-current" />
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              type="submit"
+                              size="icon"
+                              onTouchEnd={() => {
+                                // On iOS, tapping submit while the textarea is focused
+                                // causes the keyboard to briefly flash open then closed.
+                                // Blur the textarea immediately to prevent this.
+                                inputRef.current?.blur();
+                              }}
+                              disabled={
+                                isArchived ||
+                                isChatInFlight ||
+                                (!input.trim() && images.length === 0) ||
+                                isUpdatingModel ||
+                                !isSandboxActive
+                              }
+                              className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!isSandboxActive && !isArchived && (
+                          <TooltipContent side="top" sideOffset={8}>
+                            Waiting for sandbox...
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
 
             {/* Recording error message */}
             {recordingError && (

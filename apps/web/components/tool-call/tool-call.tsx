@@ -18,7 +18,7 @@ import { EditRenderer } from "./renderers/edit-renderer";
 import { GlobRenderer } from "./renderers/glob-renderer";
 import { GrepRenderer } from "./renderers/grep-renderer";
 import { TaskRenderer } from "./renderers/task-renderer";
-// TodoRenderer is no longer used inline; todos are shown in PinnedTodoPanel
+import { TodoRenderer } from "./renderers/todo-renderer";
 import { AskUserQuestionRenderer } from "./renderers/ask-user-question-renderer";
 import { FetchRenderer } from "./renderers/fetch-renderer";
 import { SkillRenderer } from "./renderers/skill-renderer";
@@ -68,9 +68,7 @@ export function ToolCall({
     case "tool-task":
       return <TaskRenderer part={part} state={state} {...approvalProps} />;
     case "tool-todo_write":
-      // Todo list is rendered as a pinned panel at the bottom of the chat,
-      // so we skip inline rendering entirely.
-      return null;
+      return <TodoRenderer part={part} state={state} />;
     case "tool-ask_user_question":
       // AskUserQuestion tool doesn't require approval, handled separately
       return <AskUserQuestionRenderer part={part} state={state} />;

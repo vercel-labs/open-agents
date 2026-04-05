@@ -4,12 +4,6 @@ import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export interface TodoInfo {
-  total: number;
-  completed: number;
-  inProgress: number;
-}
-
 type StatusWordPair = {
   present: string;
   past: string;
@@ -66,7 +60,6 @@ export function ToolCallsSummaryBar({
   isStreaming,
   toolCallCount,
   changedFiles,
-  todoInfo,
   durationMs,
   startedAt,
   statusWordSeed,
@@ -77,7 +70,6 @@ export function ToolCallsSummaryBar({
   toolCallCount: number;
   /** Unique file paths modified by write/edit tool calls in this turn. */
   changedFiles: string[];
-  todoInfo: TodoInfo | null;
   /** Final generation duration in ms (for completed messages). */
   durationMs: number | null;
   /** ISO timestamp of when generation started — i.e. the preceding user
@@ -152,11 +144,7 @@ export function ToolCallsSummaryBar({
     desktopSegments.push(filesLabel);
   }
 
-  if (todoInfo && todoInfo.total > 0) {
-    const todoLabel = `Todo ${todoInfo.completed}/${todoInfo.total}`;
-    desktopSegments.push(todoLabel);
-    mobileSegments.push(todoLabel);
-  } else if (toolCallLabel) {
+  if (toolCallLabel) {
     mobileSegments.push(toolCallLabel);
   }
 

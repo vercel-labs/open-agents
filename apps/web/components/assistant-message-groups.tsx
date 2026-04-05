@@ -3,7 +3,7 @@
 import { isReasoningUIPart, isToolUIPart } from "ai";
 import { useMemo, useState, type ReactNode } from "react";
 import type { WebAgentUIMessage } from "@/app/types";
-import { ToolCallsSummaryBar, type TodoInfo } from "./tool-calls-summary-bar";
+import { ToolCallsSummaryBar } from "./tool-calls-summary-bar";
 
 /**
  * Determines if a message has any tool call or reasoning content
@@ -35,45 +35,6 @@ function getChangedFiles(message: WebAgentUIMessage): string[] {
     }
   }
   return Array.from(files);
-}
-
-function buildTodoInfo(todos: Array<{ status?: string }>): TodoInfo {
-  return {
-    total: todos.length,
-    completed: todos.filter((todo) => todo?.status === "completed").length,
-    inProgress: todos.filter((todo) => todo?.status === "in_progress").length,
-  };
-}
-
-function getLatestTodoInfo(message: WebAgentUIMessage): TodoInfo | null {
-  let latestStableTodo: TodoInfo | null = null;
-  let latestStreamingTodo: TodoInfo | null = null;
-
-  for (const part of message.parts) {
-    if (!isToolUIPart(part) || part.type !== "tool-todo_write") {
-      continue;
-    }
-
-    const input = part.input as
-      | { todos?: Array<{ status?: string }> }
-      | undefined;
-    const todos = input?.todos;
-
-    if (!Array.isArray(todos)) {
-      continue;
-    }
-
-    const nextTodoInfo = buildTodoInfo(todos);
-
-    if (part.state === "input-streaming") {
-      latestStreamingTodo = nextTodoInfo;
-      continue;
-    }
-
-    latestStableTodo = nextTodoInfo;
-  }
-
-  return latestStableTodo ?? latestStreamingTodo;
 }
 
 /**
@@ -124,8 +85,6 @@ export function AssistantMessageGroups({
 
   const changedFiles = useMemo(() => getChangedFiles(message), [message]);
 
-  const todoInfo = useMemo(() => getLatestTodoInfo(message), [message]);
-
   const hasActiveApproval = useMemo(
     () => messageHasActiveApproval(message),
     [message],
@@ -147,7 +106,6 @@ export function AssistantMessageGroups({
         isStreaming={isStreaming}
         toolCallCount={toolCallCount}
         changedFiles={changedFiles}
-        todoInfo={todoInfo}
         durationMs={durationMs}
         startedAt={startedAt}
         statusWordSeed={message.id}
