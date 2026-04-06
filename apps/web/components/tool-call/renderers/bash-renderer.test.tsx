@@ -58,9 +58,10 @@ describe("BashRenderer", () => {
       <BashRenderer part={part} state={baseState} />,
     );
 
-    // Error state: shows "Error" label and exit code in mono
-    expect(html).toContain(">Error</span>");
-    expect(html).toContain("Exit code 1");
+    // Error state: shows tool name in red and exit code right-aligned
+    expect(html).toContain(">Bash</span>");
+    expect(html).toContain("text-red-500");
+    expect(html).toContain("exit 1");
     // Error icon should be present
     expect(html).toContain("lucide-circle-x");
   });

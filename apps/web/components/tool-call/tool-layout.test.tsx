@@ -32,7 +32,7 @@ describe("ToolLayout interrupted state", () => {
 });
 
 describe("ToolLayout error state", () => {
-  test("renders failed tool calls with error icon and 'Error' label in minimized view", () => {
+  test("renders failed tool calls with error icon and tool name in red in minimized view", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Read"
@@ -45,11 +45,10 @@ describe("ToolLayout error state", () => {
     );
 
     expect(html).toContain("text-red-500");
-    // Error state shows "Error" as the name, not the tool name
-    expect(html).toContain(">Error</span>");
-    expect(html).toContain(
-      "Failed to read file: ENOENT: no such file or directory",
-    );
+    // Error state keeps the tool name (in red) instead of replacing with "Error"
+    expect(html).toContain(">Read</span>");
+    expect(html).toContain("node_modules/drizzle-orm/migrator/index.js");
+    expect(html).toContain("text-red-400/80");
     expect(html).toContain("bg-transparent");
     // Error icon (CircleX) should be present
     expect(html).toContain("lucide-circle-x");
@@ -70,12 +69,12 @@ describe("ToolLayout error state", () => {
     );
 
     expect(html).toContain('aria-expanded="true"');
-    // Error header persists in both minimized and expanded states
-    expect(html).toContain(">Error</span>");
+    // Error header keeps tool name in red
+    expect(html).toContain(">Read</span>");
     expect(html).toContain(
       "Failed to read file: ENOENT: no such file or directory, stat &#x27;/vercel/sandbox/nope&#x27;",
     );
-    // Expanded error card with tool name
+    // Expanded error output
     expect(html).toContain("border-red-500/20 bg-red-500/5");
     expect(html).toContain("text-red-400");
   });
