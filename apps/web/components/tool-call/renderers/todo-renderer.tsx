@@ -126,7 +126,7 @@ export function TodoRenderer({
 
   if (allDone) {
     name = "All tasks completed";
-    summary = "✓";
+    summary = "";
     icon = <ListChecks className="h-3.5 w-3.5" />;
   } else if (activeTodo?.content) {
     name = activeTodo.content;

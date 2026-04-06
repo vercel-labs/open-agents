@@ -3082,7 +3082,7 @@ export function SessionChatContent({
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}
-                              className="max-w-full"
+                              className="max-w-full pl-[22px]"
                             >
                               <ThinkingBlock
                                 text={getReasoningGroupText(group.parts)}
@@ -3112,7 +3112,7 @@ export function SessionChatContent({
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}
-                              className="max-w-full"
+                              className="max-w-full pl-[22px]"
                             >
                               <ThinkingBlock
                                 text={p.text}
@@ -3269,7 +3269,7 @@ export function SessionChatContent({
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}
-                              className="max-w-full"
+                              className="max-w-full pl-[22px]"
                             >
                               <ToolCall
                                 part={p as WebAgentUIToolPart}

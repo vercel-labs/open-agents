@@ -45,22 +45,33 @@ export function ReadRenderer({
         .join("\n")
     : undefined;
 
-  // Pad with empty lines so the file viewer shows correct line numbers
-  // for partial reads (e.g. lines 87-113 should start at 87, not 1)
-  const lineOffset =
-    isPartialRead && startLine !== undefined ? startLine - 1 : 0;
-  const paddedContent =
-    cleanContent && lineOffset > 0
-      ? "\n".repeat(lineOffset) + cleanContent
-      : cleanContent;
-
-  const expandedContent = paddedContent ? (
-    <div className="max-h-96 overflow-auto rounded-md border border-border">
-      <DiffsFile
-        file={{ name: rawFilePath, contents: paddedContent }}
-        options={defaultFileOptions}
-      />
-    </div>
+  const expandedContent = cleanContent ? (
+    isPartialRead && startLine !== undefined ? (
+      <div className="max-h-96 overflow-auto rounded-md border border-border bg-[var(--background)] font-mono text-[13px] leading-[20px]">
+        <div className="grid grid-cols-[auto_1fr]">
+          {cleanContent.split("\n").map((line, i) => {
+            const lineNum = startLine + i;
+            return (
+              <div key={lineNum} className="contents">
+                <span className="select-none px-[2ch] text-right text-[color:var(--diffs-fg-number,rgba(255,255,255,0.35))]">
+                  {lineNum}
+                </span>
+                <span className="whitespace-pre overflow-x-auto px-[1ch]">
+                  {line}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      <div className="max-h-96 overflow-auto rounded-md border border-border">
+        <DiffsFile
+          file={{ name: rawFilePath, contents: cleanContent }}
+          options={defaultFileOptions}
+        />
+      </div>
+    )
   ) : undefined;
 
   const meta = isPartialRead
