@@ -107,9 +107,9 @@ function extractToolCalls(messages: unknown): CompletedToolCall[] {
         part !== null &&
         (part as { type?: string }).type === "tool-call"
       ) {
-        const tc = part as { toolName?: string; args?: unknown };
+        const tc = part as { toolName?: string; input?: unknown };
         if (tc.toolName) {
-          calls.push({ name: tc.toolName, input: tc.args });
+          calls.push({ name: tc.toolName, input: tc.input });
         }
       }
     }
@@ -160,16 +160,8 @@ function getSubagentLabel(subagentType: string | undefined): string {
 // Mini tool call row (used for pending + completed tool list)
 // ---------------------------------------------------------------------------
 
-const COMPLETED_STATE: ToolRenderState = {
+const IDLE_STATE: ToolRenderState = {
   running: false,
-  interrupted: false,
-  denied: false,
-  approvalRequested: false,
-  isActiveApproval: false,
-};
-
-const RUNNING_STATE: ToolRenderState = {
-  running: true,
   interrupted: false,
   denied: false,
   approvalRequested: false,
@@ -179,11 +171,9 @@ const RUNNING_STATE: ToolRenderState = {
 function MiniToolCall({
   name,
   input,
-  isRunning,
 }: {
   name: string;
   input: unknown;
-  isRunning: boolean;
 }) {
   const meta = getToolMeta(name);
   const summary = getToolSummary(name, input);
@@ -194,7 +184,7 @@ function MiniToolCall({
       icon={meta.icon}
       summary={summary}
       summaryClassName="font-mono"
-      state={isRunning ? RUNNING_STATE : COMPLETED_STATE}
+      state={IDLE_STATE}
     />
   );
 }
@@ -260,7 +250,6 @@ export function TaskRenderer({
           <MiniToolCall
             name={pendingToolCall.name}
             input={pendingToolCall.input}
-            isRunning={isPreliminary}
           />
         </div>
       )}
@@ -271,7 +260,6 @@ export function TaskRenderer({
             key={i}
             name={tc.name}
             input={tc.input}
-            isRunning={false}
           />
         ))}
     </div>
