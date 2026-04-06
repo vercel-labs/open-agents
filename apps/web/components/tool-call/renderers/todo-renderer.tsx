@@ -123,6 +123,7 @@ export function TodoRenderer({
   let name: string;
   let summary: string;
   let icon: ReactNode;
+  let statusMeta: string | undefined;
 
   if (allDone) {
     name = "All tasks completed";
@@ -130,7 +131,8 @@ export function TodoRenderer({
     icon = <ListChecks className="h-3.5 w-3.5" />;
   } else if (activeTodo?.content) {
     name = activeTodo.content;
-    summary = "→ in progress";
+    summary = "";
+    statusMeta = "→ in progress";
     icon = <ListTodo className="h-3.5 w-3.5" />;
   } else if (noneStarted) {
     name = `${todos.length} task${todos.length !== 1 ? "s" : ""} created`;
@@ -138,7 +140,8 @@ export function TodoRenderer({
     icon = <LayoutList className="h-3.5 w-3.5" />;
   } else {
     name = `${todos.length} task${todos.length !== 1 ? "s" : ""} updated`;
-    summary = `${completedCount}/${todos.length} done`;
+    summary = "";
+    statusMeta = `${completedCount}/${todos.length} done`;
     icon = <ListTodo className="h-3.5 w-3.5" />;
   }
 
@@ -156,6 +159,7 @@ export function TodoRenderer({
       name={name}
       icon={icon}
       summary={summary}
+      meta={statusMeta}
       state={state}
       expandedContent={expandedContent}
       defaultExpanded={false}
