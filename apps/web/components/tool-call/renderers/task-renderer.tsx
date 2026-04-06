@@ -220,10 +220,21 @@ const IDLE_STATE: ToolRenderState = {
   isActiveApproval: false,
 };
 
+/** Unwrap AI SDK tool output envelope: { type: "json", value: { ... } } */
+function unwrapToolOutput(output: unknown): Record<string, unknown> | null {
+  if (!output || typeof output !== "object") return null;
+  const o = output as Record<string, unknown>;
+  // Unwrap { type: "json", value: { ... } } envelope
+  if (o.type === "json" && o.value && typeof o.value === "object") {
+    return o.value as Record<string, unknown>;
+  }
+  return o;
+}
+
 /** Build a short meta string from tool output (e.g. line count, match count). */
 function getToolOutputMeta(name: string, output: unknown): string | undefined {
-  if (!output || typeof output !== "object") return undefined;
-  const o = output as Record<string, unknown>;
+  const o = unwrapToolOutput(output);
+  if (!o) return undefined;
 
   switch (name) {
     case "read": {
@@ -266,8 +277,8 @@ function getToolExpandedContent(
   input: unknown,
   output: unknown,
 ): ReactNode | undefined {
-  if (!output || typeof output !== "object") return undefined;
-  const o = output as Record<string, unknown>;
+  const o = unwrapToolOutput(output);
+  if (!o) return undefined;
 
   switch (name) {
     case "bash": {
@@ -436,7 +447,7 @@ function getToolExpandedContent(
   }
 
   // Fallback: show raw output for any tool with data
-  const raw = JSON.stringify(output, null, 2);
+  const raw = JSON.stringify(o, null, 2);
   if (!raw || raw === "{}" || raw === "null") return undefined;
   return (
     <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
@@ -447,8 +458,8 @@ function getToolExpandedContent(
 
 /** Detect tool-level errors from output and return an error string, or undefined. */
 function getToolError(name: string, output: unknown): string | undefined {
-  if (!output || typeof output !== "object") return undefined;
-  const o = output as Record<string, unknown>;
+  const o = unwrapToolOutput(output);
+  if (!o) return undefined;
 
   switch (name) {
     case "bash": {
