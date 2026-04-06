@@ -13,8 +13,9 @@ export type TodoItem = {
 };
 
 /**
- * Extract the latest todo list from all messages across the entire conversation.
- * Looks at every message for tool-todo_write parts and returns the most recent one.
+ * Extract the latest committed todo list from the conversation.
+ * Ignores still-streaming todo tool inputs so the pinned panel only swaps once
+ * a full update is available.
  */
 export function getLatestTodos(messages: WebAgentUIMessage[]): TodoItem[] {
   let latestTodos: TodoItem[] = [];
@@ -24,6 +25,11 @@ export function getLatestTodos(messages: WebAgentUIMessage[]): TodoItem[] {
       if (!isToolUIPart(part) || part.type !== "tool-todo_write") {
         continue;
       }
+
+      if (part.state === "input-streaming") {
+        continue;
+      }
+
       const input = part.input as { todos?: TodoItem[] } | undefined;
       const todos = input?.todos;
       if (Array.isArray(todos) && todos.length > 0) {
