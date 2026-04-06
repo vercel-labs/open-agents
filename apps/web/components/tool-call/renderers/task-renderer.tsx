@@ -18,13 +18,14 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
+import type { WebAgentUIToolPart } from "@/app/types";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
+import { ToolCall } from "../tool-call";
 import { ToolLayout } from "../tool-layout";
 
 // ---------------------------------------------------------------------------
-// Tool name → icon / display name mapping
+// Tool name → icon / display name mapping (for pending tool call only)
 // ---------------------------------------------------------------------------
 
 type ToolMeta = { displayName: string; icon: ReactNode };
@@ -79,21 +80,25 @@ function getToolSummary(name: string, input: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Extract completed tool calls from final messages
+// Extract completed tool calls from final messages and synthesize UI parts
 // ---------------------------------------------------------------------------
 
-type CompletedToolCall = {
-  id: string;
-  name: string;
-  input: unknown;
-  output: unknown;
-};
+/** Unwrap AI SDK tool output envelope: { type: "json", value: { ... } } */
+function unwrapToolOutput(output: unknown): unknown {
+  if (!output || typeof output !== "object") return output;
+  const o = output as Record<string, unknown>;
+  if (o.type === "json" && o.value && typeof o.value === "object") {
+    return o.value;
+  }
+  return output;
+}
 
-function extractToolCalls(messages: unknown): CompletedToolCall[] {
+function extractToolParts(messages: unknown): WebAgentUIToolPart[] {
   if (!Array.isArray(messages)) return [];
 
   // First pass: collect tool-call parts from assistant messages
-  const calls: CompletedToolCall[] = [];
+  type CallInfo = { id: string; name: string; input: unknown };
+  const calls: CallInfo[] = [];
   for (const msg of messages) {
     if (
       typeof msg !== "object" ||
@@ -117,12 +122,7 @@ function extractToolCalls(messages: unknown): CompletedToolCall[] {
           input?: unknown;
         };
         if (tc.toolName && tc.toolCallId) {
-          calls.push({
-            id: tc.toolCallId,
-            name: tc.toolName,
-            input: tc.input,
-            output: undefined,
-          });
+          calls.push({ id: tc.toolCallId, name: tc.toolName, input: tc.input });
         }
       }
     }
@@ -155,12 +155,18 @@ function extractToolCalls(messages: unknown): CompletedToolCall[] {
     }
   }
 
-  // Merge results into calls
-  for (const call of calls) {
-    call.output = resultMap.get(call.id);
-  }
-
-  return calls;
+  // Synthesize WebAgentUIToolPart objects
+  return calls.map((call) => {
+    const rawOutput = resultMap.get(call.id);
+    const output = unwrapToolOutput(rawOutput);
+    return {
+      type: `tool-${call.name}`,
+      toolCallId: call.id,
+      state: "output-available",
+      input: call.input,
+      output,
+    } as unknown as WebAgentUIToolPart;
+  });
 }
 
 function countToolCalls(messages: unknown): number {
@@ -209,7 +215,7 @@ function getSubagentLabel(subagentType: string | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// Mini tool call row (used for pending + completed tool list)
+// Pending tool call (streaming only — no output yet)
 // ---------------------------------------------------------------------------
 
 const IDLE_STATE: ToolRenderState = {
@@ -220,290 +226,15 @@ const IDLE_STATE: ToolRenderState = {
   isActiveApproval: false,
 };
 
-/** Unwrap AI SDK tool output envelope: { type: "json", value: { ... } } */
-function unwrapToolOutput(output: unknown): Record<string, unknown> | null {
-  if (!output || typeof output !== "object") return null;
-  const o = output as Record<string, unknown>;
-  // Unwrap { type: "json", value: { ... } } envelope
-  if (o.type === "json" && o.value && typeof o.value === "object") {
-    return o.value as Record<string, unknown>;
-  }
-  return o;
-}
-
-/** Build a short meta string from tool output (e.g. line count, match count). */
-function getToolOutputMeta(name: string, output: unknown): string | undefined {
-  const o = unwrapToolOutput(output);
-  if (!o) return undefined;
-
-  switch (name) {
-    case "read": {
-      const total = o.totalLines;
-      if (typeof total === "number") return `${total} lines`;
-      return undefined;
-    }
-    case "grep": {
-      const matches = o.matches;
-      if (Array.isArray(matches)) return `${matches.length} matches`;
-      return undefined;
-    }
-    case "glob": {
-      const files = o.files;
-      if (Array.isArray(files)) return `${files.length} files`;
-      return undefined;
-    }
-    case "edit": {
-      if (o.success === false) return "failed";
-      return undefined;
-    }
-    case "write": {
-      if (o.success === false) return "failed";
-      return undefined;
-    }
-    case "bash": {
-      const exitCode = o.exitCode;
-      if (typeof exitCode === "number" && exitCode !== 0)
-        return `exit ${exitCode}`;
-      return undefined;
-    }
-    default:
-      return undefined;
-  }
-}
-
-/** Build expandable content from tool output. */
-function getToolExpandedContent(
-  name: string,
-  input: unknown,
-  output: unknown,
-): ReactNode | undefined {
-  const o = unwrapToolOutput(output);
-  if (!o) return undefined;
-
-  switch (name) {
-    case "bash": {
-      const stdout = typeof o.stdout === "string" ? o.stdout.trim() : "";
-      const stderr = typeof o.stderr === "string" ? o.stderr.trim() : "";
-      const combined = [stdout, stderr].filter(Boolean).join("\n");
-      const isError =
-        o.success === false ||
-        (typeof o.exitCode === "number" && o.exitCode !== 0);
-      const exitCode = o.exitCode;
-      const command =
-        typeof (input as Record<string, unknown> | undefined)?.command ===
-        "string"
-          ? ((input as Record<string, unknown>).command as string)
-          : "";
-      return (
-        <div
-          className={cn(
-            "overflow-hidden rounded-md border",
-            isError
-              ? "border-red-500/20 bg-red-500/5"
-              : "border-border bg-muted/50",
-          )}
-        >
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5",
-              combined && "border-b",
-              isError ? "border-red-500/20" : "border-border",
-            )}
-          >
-            <Terminal
-              className={cn(
-                "h-3.5 w-3.5 shrink-0",
-                isError ? "text-red-500" : "text-muted-foreground/50",
-              )}
-            />
-            <code
-              className={cn(
-                "min-w-0 flex-1 truncate font-mono text-xs",
-                isError ? "text-red-500" : "text-muted-foreground",
-              )}
-            >
-              {command}
-            </code>
-            {isError && exitCode !== undefined && (
-              <span className="shrink-0 font-mono text-[11px] text-red-400/70">
-                exit {String(exitCode)}
-              </span>
-            )}
-          </div>
-          {combined && (
-            <pre
-              className={cn(
-                "max-h-48 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed",
-                isError ? "text-red-400" : "text-muted-foreground",
-              )}
-            >
-              {combined}
-            </pre>
-          )}
-        </div>
-      );
-    }
-    case "grep": {
-      const matches = o.matches;
-      if (!Array.isArray(matches)) break;
-      if (matches.length === 0) {
-        return (
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-            No matches
-          </pre>
-        );
-      }
-      const files = new Set<string>();
-      for (const m of matches) {
-        if (typeof m === "object" && m !== null && typeof (m as Record<string, unknown>).file === "string")
-          files.add((m as Record<string, unknown>).file as string);
-      }
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {`Found ${files.size} file${files.size !== 1 ? "s" : ""}\n${Array.from(files).join("\n")}`}
-        </pre>
-      );
-    }
-    case "glob": {
-      const files = o.files;
-      if (!Array.isArray(files)) break;
-      if (files.length === 0) {
-        return (
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-            No files found
-          </pre>
-        );
-      }
-      const paths = files
-        .map((f) =>
-          typeof f === "object" && f !== null
-            ? (f as Record<string, unknown>).path
-            : undefined,
-        )
-        .filter((p): p is string => typeof p === "string");
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {`Found ${paths.length} file${paths.length !== 1 ? "s" : ""}\n${paths.join("\n")}`}
-        </pre>
-      );
-    }
-    case "read": {
-      const content = typeof o.content === "string" ? o.content.trim() : "";
-      if (!content) return undefined;
-      // Strip line number prefixes ("N: ")
-      const cleaned = content
-        .split("\n")
-        .map((line) => line.replace(/^\d+: /, ""))
-        .join("\n");
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {cleaned}
-        </pre>
-      );
-    }
-    case "write": {
-      const content = typeof (input as Record<string, unknown> | undefined)?.content === "string"
-        ? ((input as Record<string, unknown>).content as string).trim()
-        : "";
-      if (!content) return undefined;
-      const lineCount = content.split("\n").length;
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {`${lineCount} line${lineCount !== 1 ? "s" : ""} written`}
-        </pre>
-      );
-    }
-    case "edit": {
-      const oldStr = typeof (input as Record<string, unknown> | undefined)?.oldString === "string"
-        ? ((input as Record<string, unknown>).oldString as string)
-        : "";
-      const newStr = typeof (input as Record<string, unknown> | undefined)?.newString === "string"
-        ? ((input as Record<string, unknown>).newString as string)
-        : "";
-      if (!oldStr && !newStr) return undefined;
-      const removed = oldStr.split("\n").length;
-      const added = newStr.split("\n").length;
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {`-${removed} +${added} lines`}
-        </pre>
-      );
-    }
-    case "web_fetch": {
-      const status = o.status;
-      const statusText = typeof o.statusText === "string" ? o.statusText : "";
-      const body = typeof o.body === "string" ? o.body.trim() : "";
-      if (!status && !body) return undefined;
-      const header = status ? `${status}${statusText ? ` ${statusText}` : ""}` : "";
-      const preview = body.length > 500 ? body.slice(0, 500) + "…" : body;
-      return (
-        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-          {[header, preview].filter(Boolean).join("\n\n")}
-        </pre>
-      );
-    }
-    default:
-      break;
-  }
-
-  // Fallback: show raw output for any tool with data
-  const raw = JSON.stringify(o, null, 2);
-  if (!raw || raw === "{}" || raw === "null") return undefined;
-  return (
-    <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-      {raw}
-    </pre>
-  );
-}
-
-/** Detect tool-level errors from output and return an error string, or undefined. */
-function getToolError(name: string, output: unknown): string | undefined {
-  const o = unwrapToolOutput(output);
-  if (!o) return undefined;
-
-  switch (name) {
-    case "bash": {
-      const exitCode = o.exitCode;
-      const failed =
-        o.success === false ||
-        (typeof exitCode === "number" && exitCode !== 0);
-      if (failed) return `Exit code ${exitCode ?? "unknown"}`;
-      return undefined;
-    }
-    case "edit":
-    case "write":
-    case "read": {
-      if (o.success === false) {
-        const err = typeof o.error === "string" ? o.error : `${name} failed`;
-        return err;
-      }
-      return undefined;
-    }
-    default:
-      return undefined;
-  }
-}
-
-function MiniToolCall({
+function PendingMiniToolCall({
   name,
   input,
-  output,
 }: {
   name: string;
   input: unknown;
-  output?: unknown;
 }) {
   const meta = getToolMeta(name);
   const summary = getToolSummary(name, input);
-  const outputMeta = output ? getToolOutputMeta(name, output) : undefined;
-  const expandedContent = output
-    ? getToolExpandedContent(name, input, output)
-    : undefined;
-
-  const errorMsg = output ? getToolError(name, output) : undefined;
-  const toolState = errorMsg
-    ? { ...IDLE_STATE, error: errorMsg }
-    : IDLE_STATE;
 
   return (
     <ToolLayout
@@ -511,9 +242,7 @@ function MiniToolCall({
       icon={meta.icon}
       summary={summary}
       summaryClassName="font-mono"
-      meta={outputMeta}
-      state={toolState}
-      expandedContent={expandedContent}
+      state={IDLE_STATE}
     />
   );
 }
@@ -562,34 +291,33 @@ export function TaskRenderer({
 
   // --- Expanded content ---
   // While running: show the current pending tool call
-  // When complete: show all tool calls from the final messages
-  const completedCalls = isComplete ? extractToolCalls(output?.final) : [];
+  // When complete: show all tool calls using the real ToolCall component
+  const completedParts = isComplete ? extractToolParts(output?.final) : [];
 
   const hasExpandableContent =
-    pendingToolCall !== null || completedCalls.length > 0;
+    pendingToolCall !== null || completedParts.length > 0;
 
   const expandedContent = hasExpandableContent ? (
     <div className="space-y-0.5 pl-6">
-      {/* Live: show current pending tool call with slide-up animation on change */}
+      {/* Live: show current pending tool call with slide-up animation */}
       {pendingToolCall && !isComplete && (
         <div
           key={`pending-${toolCount}-${pendingToolCall.name}`}
           style={{ animation: "slide-up-fade 150ms ease-out both" }}
         >
-          <MiniToolCall
+          <PendingMiniToolCall
             name={pendingToolCall.name}
             input={pendingToolCall.input}
           />
         </div>
       )}
-      {/* Complete: show all tool calls */}
+      {/* Complete: render real ToolCall components */}
       {isComplete &&
-        completedCalls.map((tc, i) => (
-          <MiniToolCall
-            key={tc.id ?? i}
-            name={tc.name}
-            input={tc.input}
-            output={tc.output}
+        completedParts.map((toolPart) => (
+          <ToolCall
+            key={toolPart.toolCallId}
+            part={toolPart}
+            isStreaming={false}
           />
         ))}
     </div>
