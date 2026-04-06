@@ -297,11 +297,16 @@ export function ToolLayout({
                 {showErrorExpanded &&
                   !hasRenderableContent(expandedContent) && (
                     <div className="overflow-hidden rounded-md border border-red-500/20 bg-red-500/5">
-                      <div className="flex items-center gap-2 border-b border-red-500/20 px-3 py-1.5">
+                      <div className="flex min-w-0 items-center gap-2 border-b border-red-500/20 px-3 py-1.5">
                         {icon && <span className="text-red-500">{icon}</span>}
-                        <span className="text-xs font-medium text-red-500">
+                        <span className="shrink-0 text-xs font-medium text-red-500">
                           {name}
                         </span>
+                        {hasSummary && (
+                          <span className="min-w-0 truncate font-mono text-xs text-red-400/70">
+                            {summary}
+                          </span>
+                        )}
                       </div>
                       <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
                         {errorMessage}
