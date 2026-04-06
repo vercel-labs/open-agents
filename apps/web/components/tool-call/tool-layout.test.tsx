@@ -32,7 +32,7 @@ describe("ToolLayout interrupted state", () => {
 });
 
 describe("ToolLayout error state", () => {
-  test("renders failed tool calls as a compact row with inline error text but no badge", () => {
+  test("renders failed tool calls with error icon and 'Error' label in minimized view", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Read"
@@ -45,20 +45,17 @@ describe("ToolLayout error state", () => {
     );
 
     expect(html).toContain("text-red-500");
-    expect(html).toContain(">Read</span>");
+    // Error state shows "Error" as the name, not the tool name
+    expect(html).toContain(">Error</span>");
     expect(html).toContain(
       "Failed to read file: ENOENT: no such file or directory",
     );
     expect(html).toContain("bg-transparent");
-    expect(html).toContain("py-0.5");
-    expect(html).not.toContain("bg-card/60 p-3");
-    expect(html).not.toContain("rounded-full border border-red-500/20");
-    expect(html).not.toContain(
-      '<div class="mt-2 pl-5 text-sm text-red-500">Error:',
-    );
+    // Error icon (CircleX) should be present
+    expect(html).toContain("lucide-circle-x");
   });
 
-  test("shows the full error inside expanded details", () => {
+  test("shows error header and expanded details when defaultExpanded", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Read"
@@ -73,10 +70,14 @@ describe("ToolLayout error state", () => {
     );
 
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("text-red-600 dark:text-red-400");
+    // Error header persists in both minimized and expanded states
+    expect(html).toContain(">Error</span>");
     expect(html).toContain(
       "Failed to read file: ENOENT: no such file or directory, stat &#x27;/vercel/sandbox/nope&#x27;",
     );
+    // Expanded error card with tool name
+    expect(html).toContain("border-red-500/20 bg-red-500/5");
+    expect(html).toContain("text-red-400");
   });
 
   test("renders expanded details inline without muted background", () => {
@@ -93,7 +94,8 @@ describe("ToolLayout error state", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain("bg-transparent");
     expect(html).not.toContain("bg-muted/35");
-    expect(html).toContain("rotate-90");
+    // Uses +/- hover pattern instead of chevron
+    expect(html).toContain("lucide-minus");
     expect(html).toContain(
       "transition-[grid-template-rows,opacity,margin-top] motion-reduce:transition-none",
     );
@@ -123,6 +125,7 @@ describe("ToolLayout error state", () => {
       "transition-[grid-template-rows,opacity,margin-top] motion-reduce:transition-none",
     );
     expect(html).not.toContain("Pattern details");
+    // Uses +/- hover pattern instead of chevron
     expect(html).not.toContain("rotate-90");
   });
 });

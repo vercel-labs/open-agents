@@ -13,7 +13,7 @@ const baseState: ToolRenderState = {
 };
 
 describe("BashRenderer", () => {
-  test("shows the last stdout line instead of exit 0 in the header", () => {
+  test("shows the command in the minimized header for successful runs", () => {
     const part = {
       type: "tool-bash",
       state: "output-available",
@@ -33,11 +33,13 @@ describe("BashRenderer", () => {
       <BashRenderer part={part} state={baseState} />,
     );
 
-    expect(html).toContain("899 packages installed [6.02s]");
+    // Command is shown in the minimized summary
+    expect(html).toContain("bun install");
+    // Output is only in the expanded view, not the minimized meta
     expect(html).not.toContain("exit 0");
   });
 
-  test("shows the last stderr line instead of exit 1 in the header", () => {
+  test("shows error state with exit code for failed commands", () => {
     const part = {
       type: "tool-bash",
       state: "output-available",
@@ -56,7 +58,10 @@ describe("BashRenderer", () => {
       <BashRenderer part={part} state={baseState} />,
     );
 
-    expect(html).toContain("Found 2 errors.");
-    expect(html).not.toContain("exit 1");
+    // Error state: shows "Error" label and exit code in mono
+    expect(html).toContain(">Error</span>");
+    expect(html).toContain("Exit code 1");
+    // Error icon should be present
+    expect(html).toContain("lucide-circle-x");
   });
 });

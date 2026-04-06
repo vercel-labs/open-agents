@@ -109,21 +109,19 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const prevAllDoneRef = useRef(false);
 
-  if (todos.length === 0) return null;
-
   const completedCount = todos.filter((t) => t.status === "completed").length;
   const totalCount = todos.length;
   const allDone = completedCount === totalCount && totalCount > 0;
 
   // Auto-minimize when all tasks complete, auto-expand when work resumes
-  // Only override when the allDone state actually changes, not on every render
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (allDone !== prevAllDoneRef.current) {
       prevAllDoneRef.current = allDone;
       setIsMinimized(allDone);
     }
   }, [allDone]);
+
+  if (todos.length === 0) return null;
 
   // Find the active task name for the minimized summary
   const activeTask = todos.find((t) => t.status === "in_progress");
