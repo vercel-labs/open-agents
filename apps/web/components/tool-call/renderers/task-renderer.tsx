@@ -18,6 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ToolLayout } from "../tool-layout";
@@ -82,13 +83,16 @@ function getToolSummary(name: string, input: unknown): string {
 // ---------------------------------------------------------------------------
 
 type CompletedToolCall = {
+  id: string;
   name: string;
   input: unknown;
+  output: unknown;
 };
 
 function extractToolCalls(messages: unknown): CompletedToolCall[] {
   if (!Array.isArray(messages)) return [];
 
+  // First pass: collect tool-call parts from assistant messages
   const calls: CompletedToolCall[] = [];
   for (const msg of messages) {
     if (
@@ -107,13 +111,55 @@ function extractToolCalls(messages: unknown): CompletedToolCall[] {
         part !== null &&
         (part as { type?: string }).type === "tool-call"
       ) {
-        const tc = part as { toolName?: string; input?: unknown };
-        if (tc.toolName) {
-          calls.push({ name: tc.toolName, input: tc.input });
+        const tc = part as {
+          toolCallId?: string;
+          toolName?: string;
+          input?: unknown;
+        };
+        if (tc.toolName && tc.toolCallId) {
+          calls.push({
+            id: tc.toolCallId,
+            name: tc.toolName,
+            input: tc.input,
+            output: undefined,
+          });
         }
       }
     }
   }
+
+  // Second pass: match tool results from tool-role messages
+  const resultMap = new Map<string, unknown>();
+  for (const msg of messages) {
+    if (
+      typeof msg !== "object" ||
+      msg === null ||
+      (msg as { role?: string }).role !== "tool"
+    )
+      continue;
+
+    const content = (msg as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+
+    for (const part of content) {
+      if (
+        typeof part === "object" &&
+        part !== null &&
+        (part as { type?: string }).type === "tool-result"
+      ) {
+        const tr = part as { toolCallId?: string; output?: unknown };
+        if (tr.toolCallId) {
+          resultMap.set(tr.toolCallId, tr.output);
+        }
+      }
+    }
+  }
+
+  // Merge results into calls
+  for (const call of calls) {
+    call.output = resultMap.get(call.id);
+  }
+
   return calls;
 }
 
@@ -168,15 +214,157 @@ const IDLE_STATE: ToolRenderState = {
   isActiveApproval: false,
 };
 
+/** Build a short meta string from tool output (e.g. line count, match count). */
+function getToolOutputMeta(name: string, output: unknown): string | undefined {
+  if (!output || typeof output !== "object") return undefined;
+  const o = output as Record<string, unknown>;
+
+  switch (name) {
+    case "read": {
+      const total = o.totalLines;
+      if (typeof total === "number") return `${total} lines`;
+      return undefined;
+    }
+    case "grep": {
+      const matches = o.matches;
+      if (Array.isArray(matches)) return `${matches.length} matches`;
+      return undefined;
+    }
+    case "glob": {
+      const files = o.files;
+      if (Array.isArray(files)) return `${files.length} files`;
+      return undefined;
+    }
+    case "edit": {
+      if (o.success === false) return "failed";
+      return undefined;
+    }
+    case "write": {
+      if (o.success === false) return "failed";
+      return undefined;
+    }
+    case "bash": {
+      const exitCode = o.exitCode;
+      if (typeof exitCode === "number" && exitCode !== 0)
+        return `exit ${exitCode}`;
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Build expandable content from tool output. */
+function getToolExpandedContent(
+  name: string,
+  output: unknown,
+): ReactNode | undefined {
+  if (!output || typeof output !== "object") return undefined;
+  const o = output as Record<string, unknown>;
+
+  switch (name) {
+    case "bash": {
+      const stdout = typeof o.stdout === "string" ? o.stdout.trim() : "";
+      const stderr = typeof o.stderr === "string" ? o.stderr.trim() : "";
+      const combined = [stdout, stderr].filter(Boolean).join("\n");
+      if (!combined) return undefined;
+      const isError =
+        o.success === false ||
+        (typeof o.exitCode === "number" && o.exitCode !== 0);
+      return (
+        <pre
+          className={cn(
+            "max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed",
+            isError ? "text-red-400" : "text-muted-foreground",
+          )}
+        >
+          {combined}
+        </pre>
+      );
+    }
+    case "grep": {
+      const matches = o.matches;
+      if (!Array.isArray(matches) || matches.length === 0) return undefined;
+      const files = new Set<string>();
+      for (const m of matches) {
+        if (typeof m === "object" && m !== null && typeof (m as Record<string, unknown>).file === "string")
+          files.add((m as Record<string, unknown>).file as string);
+      }
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {`Found ${files.size} file${files.size !== 1 ? "s" : ""}\n${Array.from(files).join("\n")}`}
+        </pre>
+      );
+    }
+    case "glob": {
+      const files = o.files;
+      if (!Array.isArray(files) || files.length === 0) return undefined;
+      const paths = files
+        .map((f) =>
+          typeof f === "object" && f !== null
+            ? (f as Record<string, unknown>).path
+            : undefined,
+        )
+        .filter((p): p is string => typeof p === "string");
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {`Found ${paths.length} file${paths.length !== 1 ? "s" : ""}\n${paths.join("\n")}`}
+        </pre>
+      );
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Detect tool-level errors from output and return an error string, or undefined. */
+function getToolError(name: string, output: unknown): string | undefined {
+  if (!output || typeof output !== "object") return undefined;
+  const o = output as Record<string, unknown>;
+
+  switch (name) {
+    case "bash": {
+      const exitCode = o.exitCode;
+      const failed =
+        o.success === false ||
+        (typeof exitCode === "number" && exitCode !== 0);
+      if (failed) return `Exit code ${exitCode ?? "unknown"}`;
+      return undefined;
+    }
+    case "edit":
+    case "write":
+    case "read": {
+      if (o.success === false) {
+        const err = typeof o.error === "string" ? o.error : `${name} failed`;
+        return err;
+      }
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 function MiniToolCall({
   name,
   input,
+  output,
 }: {
   name: string;
   input: unknown;
+  output?: unknown;
 }) {
   const meta = getToolMeta(name);
   const summary = getToolSummary(name, input);
+  const outputMeta = output ? getToolOutputMeta(name, output) : undefined;
+  const expandedContent = output
+    ? getToolExpandedContent(name, output)
+    : undefined;
+
+  const errorMsg = output ? getToolError(name, output) : undefined;
+  const toolState = errorMsg
+    ? { ...IDLE_STATE, error: errorMsg }
+    : IDLE_STATE;
 
   return (
     <ToolLayout
@@ -184,7 +372,9 @@ function MiniToolCall({
       icon={meta.icon}
       summary={summary}
       summaryClassName="font-mono"
-      state={IDLE_STATE}
+      meta={outputMeta}
+      state={toolState}
+      expandedContent={expandedContent}
     />
   );
 }
@@ -257,9 +447,10 @@ export function TaskRenderer({
       {isComplete &&
         completedCalls.map((tc, i) => (
           <MiniToolCall
-            key={i}
+            key={tc.id ?? i}
             name={tc.name}
             input={tc.input}
+            output={tc.output}
           />
         ))}
     </div>
