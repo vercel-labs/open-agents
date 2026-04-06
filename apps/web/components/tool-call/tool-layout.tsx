@@ -12,6 +12,8 @@ export type ToolLayoutProps = {
   summary: ReactNode;
   summaryClassName?: string;
   meta?: ReactNode;
+  /** When true, push meta to the far right of the header row. */
+  rightAlignMeta?: boolean;
   state: ToolRenderState;
   output?: ReactNode;
   children?: ReactNode;
@@ -65,6 +67,7 @@ export function ToolLayout({
   summary,
   summaryClassName,
   meta,
+  rightAlignMeta = false,
   state,
   output,
   children,
@@ -230,6 +233,8 @@ export function ToolLayout({
                   {summary}
                 </span>
               )}
+
+              {rightAlignMeta && <span className="flex-1" />}
 
               {hasTrailingMeta && (
                 <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
