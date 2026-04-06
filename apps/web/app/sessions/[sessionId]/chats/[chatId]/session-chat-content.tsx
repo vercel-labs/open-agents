@@ -3170,6 +3170,10 @@ export function SessionChatContent({
                                 isFinalAssistantTextPart &&
                                   group.index > 0 &&
                                   "mt-4",
+                                // Indent non-final text parts (they're collapsible content)
+                                m.role === "assistant" &&
+                                  !isFinalAssistantTextPart &&
+                                  "pl-[22px]",
                               )}
                             >
                               {m.role === "user" ? (
