@@ -3,39 +3,16 @@
 import { toRelativePath } from "@open-harness/shared/lib/tool-state";
 import { FileText } from "lucide-react";
 import { File as DiffsFile } from "@pierre/diffs/react";
-import { useMemo } from "react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { defaultFileOptions } from "@/lib/diffs-config";
 import type { BaseCodeOptions } from "@pierre/diffs/react";
 import { ToolLayout } from "../tool-layout";
 import { FileNamePill } from "../file-name-pill";
 
-/**
- * Build file options that override line numbers via CSS counters
- * so a partial read starting at e.g. line 87 shows "87" instead of "1".
- */
-function makeOffsetFileOptions(offset: number): BaseCodeOptions {
-  const counterCSS = `
-    :host [data-code] {
-      counter-reset: line-number ${offset};
-    }
-    :host [data-column-number] [data-line-number-content] {
-      visibility: hidden;
-      position: relative;
-    }
-    :host [data-column-number] [data-line-number-content]::after {
-      visibility: visible;
-      position: absolute;
-      right: 0;
-      counter-increment: line-number;
-      content: counter(line-number);
-    }
-  `;
-  return {
-    ...defaultFileOptions,
-    unsafeCSS: (defaultFileOptions.unsafeCSS ?? "") + counterCSS,
-  };
-}
+const partialReadFileOptions: BaseCodeOptions = {
+  ...defaultFileOptions,
+  disableLineNumbers: true,
+};
 
 export function ReadRenderer({
   part,
@@ -74,13 +51,7 @@ export function ReadRenderer({
         .join("\n")
     : undefined;
 
-  const fileOptions = useMemo(
-    () =>
-      isPartialRead && startLine !== undefined && startLine > 1
-        ? makeOffsetFileOptions(startLine - 1)
-        : defaultFileOptions,
-    [isPartialRead, startLine],
-  );
+  const fileOptions = isPartialRead ? partialReadFileOptions : defaultFileOptions;
 
   const expandedContent = cleanContent ? (
     <div className="max-h-96 overflow-auto rounded-md border border-border">
