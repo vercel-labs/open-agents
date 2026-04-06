@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { isToolUIPart } from "ai";
 import type { WebAgentUIMessage } from "@/app/types";
@@ -107,21 +107,16 @@ export type PinnedTodoPanelProps = {
 
 export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
   const [isMinimized, setIsMinimized] = useState(false);
-  const prevAllDoneRef = useRef(false);
 
   const completedCount = todos.filter((t) => t.status === "completed").length;
   const totalCount = todos.length;
   const allDone = completedCount === totalCount && totalCount > 0;
+  const hasActiveWork = todos.some(
+    (t) => t.status === "in_progress" || t.status === "pending",
+  );
 
-  // Auto-minimize when all tasks complete, auto-expand when work resumes
-  useEffect(() => {
-    if (allDone !== prevAllDoneRef.current) {
-      prevAllDoneRef.current = allDone;
-      setIsMinimized(allDone);
-    }
-  }, [allDone]);
-
-  if (todos.length === 0) return null;
+  // Hide when: no todos, all done, or no work started yet (all pending, agent still building list)
+  if (totalCount === 0 || allDone || !hasActiveWork) return null;
 
   // Find the active task name for the minimized summary
   const activeTask = todos.find((t) => t.status === "in_progress");
