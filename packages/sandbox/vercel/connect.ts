@@ -29,12 +29,36 @@ function getSandboxName(state: VercelState): string | undefined {
   return state.sandboxName ?? state.sandboxId;
 }
 
+function shouldReconnectPersistentSandbox(
+  state: VercelState,
+  options: ConnectOptions | undefined,
+  sandboxName: string | undefined,
+): sandboxName is string {
+  if (!sandboxName) {
+    return false;
+  }
+
+  if (options?.resume) {
+    return true;
+  }
+
+  if (state.expiresAt !== undefined) {
+    return true;
+  }
+
+  if (state.sandboxId !== undefined && state.sandboxName === undefined) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Connect to the Vercel-backed cloud sandbox based on the provided state.
  *
  * - If `snapshotId` is present, creates a new named persistent sandbox from that legacy snapshot
- * - If `sandboxName` is present, reconnects to the named sandbox (optionally resuming it)
- * - If `source` is present, creates a new named sandbox and prepares the repo
+ * - If `source`, `baseSnapshotId`, or `skipGitWorkspaceBootstrap` are present, creates a new named sandbox
+ * - If `sandboxName` represents an active or explicitly resumed sandbox, reconnects to it
  * - Otherwise, creates an empty sandbox
  */
 export async function connectVercel(
@@ -54,20 +78,6 @@ export async function connectVercel(
       ...(options?.ports && { ports: options.ports }),
       baseSnapshotId: state.snapshotId,
       persistent: options?.persistent ?? true,
-    });
-  }
-
-  // Reconnect/resume named persistent sandbox
-  if (sandboxName) {
-    const remainingTimeout =
-      getRemainingTimeout(state.expiresAt) ?? options?.timeout;
-
-    return VercelSandbox.connect(sandboxName, {
-      env: options?.env,
-      hooks: options?.hooks,
-      remainingTimeout,
-      ports: options?.ports,
-      resume: options?.resume,
     });
   }
 
@@ -93,6 +103,20 @@ export async function connectVercel(
         skipGitWorkspaceBootstrap: true,
       }),
       persistent: options?.persistent ?? true,
+    });
+  }
+
+  // Reconnect/resume an existing persistent sandbox
+  if (shouldReconnectPersistentSandbox(state, options, sandboxName)) {
+    const remainingTimeout =
+      getRemainingTimeout(state.expiresAt) ?? options?.timeout;
+
+    return VercelSandbox.connect(sandboxName, {
+      env: options?.env,
+      hooks: options?.hooks,
+      remainingTimeout,
+      ports: options?.ports,
+      resume: options?.resume,
     });
   }
 
