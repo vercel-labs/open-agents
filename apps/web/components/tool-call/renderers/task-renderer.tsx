@@ -334,7 +334,14 @@ function getToolExpandedContent(
     }
     case "grep": {
       const matches = o.matches;
-      if (!Array.isArray(matches) || matches.length === 0) return undefined;
+      if (!Array.isArray(matches)) break;
+      if (matches.length === 0) {
+        return (
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+            No matches
+          </pre>
+        );
+      }
       const files = new Set<string>();
       for (const m of matches) {
         if (typeof m === "object" && m !== null && typeof (m as Record<string, unknown>).file === "string")
@@ -348,7 +355,14 @@ function getToolExpandedContent(
     }
     case "glob": {
       const files = o.files;
-      if (!Array.isArray(files) || files.length === 0) return undefined;
+      if (!Array.isArray(files)) break;
+      if (files.length === 0) {
+        return (
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+            No files found
+          </pre>
+        );
+      }
       const paths = files
         .map((f) =>
           typeof f === "object" && f !== null
@@ -418,8 +432,17 @@ function getToolExpandedContent(
       );
     }
     default:
-      return undefined;
+      break;
   }
+
+  // Fallback: show raw output for any tool with data
+  const raw = JSON.stringify(output, null, 2);
+  if (!raw || raw === "{}" || raw === "null") return undefined;
+  return (
+    <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+      {raw}
+    </pre>
+  );
 }
 
 /** Detect tool-level errors from output and return an error string, or undefined. */
