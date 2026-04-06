@@ -4,6 +4,7 @@ import type { TaskPendingToolCall } from "@open-harness/agent";
 import { formatTokens, toRelativePath } from "@open-harness/shared";
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
 import {
+  Bot,
   FileText,
   FilePlus,
   FolderSearch,
@@ -185,8 +186,10 @@ function getSubagentIcon(
       return <Hammer className={className} />;
     case "design":
       return <Paintbrush className={className} />;
-    default:
+    case "explorer":
       return <Telescope className={className} />;
+    default:
+      return <Bot className={className} />;
   }
 }
 
@@ -196,8 +199,12 @@ function getSubagentLabel(subagentType: string | undefined): string {
       return "Executor Subagent";
     case "design":
       return "Design Subagent";
-    default:
+    case "explorer":
       return "Explorer Subagent";
+    default:
+      return subagentType
+        ? `${subagentType.charAt(0).toUpperCase() + subagentType.slice(1)} Subagent`
+        : "Subagent";
   }
 }
 
@@ -352,6 +359,61 @@ function getToolExpandedContent(
       return (
         <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
           {`Found ${paths.length} file${paths.length !== 1 ? "s" : ""}\n${paths.join("\n")}`}
+        </pre>
+      );
+    }
+    case "read": {
+      const content = typeof o.content === "string" ? o.content.trim() : "";
+      if (!content) return undefined;
+      // Strip line number prefixes ("N: ")
+      const cleaned = content
+        .split("\n")
+        .map((line) => line.replace(/^\d+: /, ""))
+        .join("\n");
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {cleaned}
+        </pre>
+      );
+    }
+    case "write": {
+      const content = typeof (input as Record<string, unknown> | undefined)?.content === "string"
+        ? ((input as Record<string, unknown>).content as string).trim()
+        : "";
+      if (!content) return undefined;
+      const lineCount = content.split("\n").length;
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {`${lineCount} line${lineCount !== 1 ? "s" : ""} written`}
+        </pre>
+      );
+    }
+    case "edit": {
+      const oldStr = typeof (input as Record<string, unknown> | undefined)?.oldString === "string"
+        ? ((input as Record<string, unknown>).oldString as string)
+        : "";
+      const newStr = typeof (input as Record<string, unknown> | undefined)?.newString === "string"
+        ? ((input as Record<string, unknown>).newString as string)
+        : "";
+      if (!oldStr && !newStr) return undefined;
+      const removed = oldStr.split("\n").length;
+      const added = newStr.split("\n").length;
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {`-${removed} +${added} lines`}
+        </pre>
+      );
+    }
+    case "web_fetch": {
+      const status = o.status;
+      const statusText = typeof o.statusText === "string" ? o.statusText : "";
+      const body = typeof o.body === "string" ? o.body.trim() : "";
+      if (!status && !body) return undefined;
+      const header = status ? `${status}${statusText ? ` ${statusText}` : ""}` : "";
+      const preview = body.length > 500 ? body.slice(0, 500) + "…" : body;
+      return (
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+          {[header, preview].filter(Boolean).join("\n\n")}
         </pre>
       );
     }

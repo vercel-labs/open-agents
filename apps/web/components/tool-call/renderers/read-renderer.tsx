@@ -45,10 +45,19 @@ export function ReadRenderer({
         .join("\n")
     : undefined;
 
-  const expandedContent = cleanContent ? (
+  // Pad with empty lines so the file viewer shows correct line numbers
+  // for partial reads (e.g. lines 87-113 should start at 87, not 1)
+  const lineOffset =
+    isPartialRead && startLine !== undefined ? startLine - 1 : 0;
+  const paddedContent =
+    cleanContent && lineOffset > 0
+      ? "\n".repeat(lineOffset) + cleanContent
+      : cleanContent;
+
+  const expandedContent = paddedContent ? (
     <div className="max-h-96 overflow-auto rounded-md border border-border">
       <DiffsFile
-        file={{ name: rawFilePath, contents: cleanContent }}
+        file={{ name: rawFilePath, contents: paddedContent }}
         options={defaultFileOptions}
       />
     </div>
