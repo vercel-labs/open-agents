@@ -294,7 +294,7 @@ export function ToolLayout({
           <div className="min-h-0">
             {shouldRenderExpandedContent && (
               <div className="space-y-2 pb-1">
-                {showErrorExpanded && (
+                {showErrorExpanded && !hasRenderableContent(expandedContent) && (
                   <div className="overflow-hidden rounded-md border border-red-500/20 bg-red-500/5">
                     <div className="flex items-center gap-2 border-b border-red-500/20 px-3 py-1.5">
                       {icon && <span className="text-red-500">{icon}</span>}

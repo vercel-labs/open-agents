@@ -9,7 +9,6 @@ import {
   FolderSearch,
   Globe,
   Hammer,
-  Loader2,
   Paintbrush,
   Pencil,
   Search,
@@ -257,6 +256,7 @@ function getToolOutputMeta(name: string, output: unknown): string | undefined {
 /** Build expandable content from tool output. */
 function getToolExpandedContent(
   name: string,
+  input: unknown,
   output: unknown,
 ): ReactNode | undefined {
   if (!output || typeof output !== "object") return undefined;
@@ -267,19 +267,62 @@ function getToolExpandedContent(
       const stdout = typeof o.stdout === "string" ? o.stdout.trim() : "";
       const stderr = typeof o.stderr === "string" ? o.stderr.trim() : "";
       const combined = [stdout, stderr].filter(Boolean).join("\n");
-      if (!combined) return undefined;
       const isError =
         o.success === false ||
         (typeof o.exitCode === "number" && o.exitCode !== 0);
+      const exitCode = o.exitCode;
+      const command =
+        typeof (input as Record<string, unknown> | undefined)?.command ===
+        "string"
+          ? ((input as Record<string, unknown>).command as string)
+          : "";
       return (
-        <pre
+        <div
           className={cn(
-            "max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed",
-            isError ? "text-red-400" : "text-muted-foreground",
+            "overflow-hidden rounded-md border",
+            isError
+              ? "border-red-500/20 bg-red-500/5"
+              : "border-border bg-muted/50",
           )}
         >
-          {combined}
-        </pre>
+          <div
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5",
+              combined && "border-b",
+              isError ? "border-red-500/20" : "border-border",
+            )}
+          >
+            <Terminal
+              className={cn(
+                "h-3.5 w-3.5 shrink-0",
+                isError ? "text-red-500" : "text-muted-foreground/50",
+              )}
+            />
+            <code
+              className={cn(
+                "min-w-0 flex-1 truncate font-mono text-xs",
+                isError ? "text-red-500" : "text-muted-foreground",
+              )}
+            >
+              {command}
+            </code>
+            {isError && exitCode !== undefined && (
+              <span className="shrink-0 font-mono text-[11px] text-red-400/70">
+                exit {String(exitCode)}
+              </span>
+            )}
+          </div>
+          {combined && (
+            <pre
+              className={cn(
+                "max-h-48 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed",
+                isError ? "text-red-400" : "text-muted-foreground",
+              )}
+            >
+              {combined}
+            </pre>
+          )}
+        </div>
       );
     }
     case "grep": {
@@ -358,7 +401,7 @@ function MiniToolCall({
   const summary = getToolSummary(name, input);
   const outputMeta = output ? getToolOutputMeta(name, output) : undefined;
   const expandedContent = output
-    ? getToolExpandedContent(name, output)
+    ? getToolExpandedContent(name, input, output)
     : undefined;
 
   const errorMsg = output ? getToolError(name, output) : undefined;
