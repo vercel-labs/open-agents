@@ -39,16 +39,47 @@ function buildAuthenticatedGitHubUrl(
   return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
 }
 
+type VercelSandboxSession = ReturnType<
+  InstanceType<typeof VercelSandboxSDK>["currentSession"]
+>;
+
+function isStoppedSessionStatus(status: string | undefined): boolean {
+  return (
+    status === "stopped" ||
+    status === "stopping" ||
+    status === "snapshotting" ||
+    status === "aborted" ||
+    status === "failed"
+  );
+}
+
+function getRemainingTimeoutFromSession(
+  session: VercelSandboxSession,
+): number | undefined {
+  const timeout = session.timeout;
+  if (typeof timeout !== "number" || timeout <= 0) {
+    return undefined;
+  }
+
+  const startedAt =
+    session.startedAt?.getTime() ?? session.requestedAt?.getTime();
+  if (typeof startedAt !== "number") {
+    return undefined;
+  }
+
+  const remaining = startedAt + timeout - Date.now();
+  return remaining > 10_000 ? remaining : undefined;
+}
+
 /**
  * Vercel Sandbox implementation using the @vercel/sandbox SDK.
  * Runs code in isolated Firecracker MicroVMs.
  */
 export class VercelSandbox implements Sandbox {
   readonly type = "cloud" as const;
-  /**
-   * Unique identifier for this sandbox.
-   * Use this to reconnect to an existing sandbox via `connectVercelSandbox({ sandboxId })`.
-   */
+  /** Durable persistent sandbox name. */
+  readonly name: string;
+  /** Current runtime session identifier. */
   readonly id: string;
   readonly workingDirectory: string;
   readonly env?: Record<string, string>;
@@ -60,6 +91,7 @@ export class VercelSandbox implements Sandbox {
   readonly hooks?: SandboxHooks;
 
   private sdk: VercelSandboxSDK;
+  private session: VercelSandboxSession;
   private timeoutTimer?: ReturnType<typeof setTimeout>;
   private isStopped = false;
   private _expiresAt?: number;
@@ -85,6 +117,8 @@ export class VercelSandbox implements Sandbox {
 
   private constructor(
     sdk: VercelSandboxSDK,
+    session: VercelSandboxSession,
+    name: string,
     id: string,
     workingDirectory: string,
     env?: Record<string, string>,
@@ -95,15 +129,18 @@ export class VercelSandbox implements Sandbox {
     ports?: number[],
   ) {
     this.sdk = sdk;
+    this.session = session;
+    this.name = name;
     this.id = id;
     this.workingDirectory = workingDirectory;
     this.env = env;
     this.currentBranch = currentBranch;
     this.hooks = hooks;
     this._ports = ports;
+    this.isStopped = isStoppedSessionStatus(session.status);
 
     // Set timeout tracking for proactive stop
-    if (timeout !== undefined && startTime !== undefined) {
+    if (!this.isStopped && timeout !== undefined && startTime !== undefined) {
       this._timeout = timeout;
       this._expiresAt = startTime + timeout;
       this.scheduleProactiveStop();
@@ -174,15 +211,15 @@ export class VercelSandbox implements Sandbox {
       throw new Error("Timeout tracking not enabled for this sandbox");
     }
 
-    // Check if SDK supports extendTimeout
-    if (typeof this.sdk.extendTimeout !== "function") {
+    // Check if the current session supports timeout extension
+    if (typeof this.session.extendTimeout !== "function") {
       throw new Error(
         "extendTimeout is not supported by this version of @vercel/sandbox",
       );
     }
 
-    // Call Vercel SDK to extend
-    await this.sdk.extendTimeout(additionalMs);
+    // Call Vercel SDK to extend the current session
+    await this.session.extendTimeout(additionalMs);
 
     // Update internal state
     this._expiresAt += additionalMs;
@@ -260,7 +297,7 @@ export class VercelSandbox implements Sandbox {
         ? "\n- Runtime env vars for dev server URLs are injected into commands: SANDBOX_HOST and SANDBOX_URL_<PORT> (for routable ports)"
         : "";
 
-    return `- Sandbox VMs are temporary, but the sandbox can be hibernated and later restored from a snapshot when it is spun down
+    return `- Sandbox VMs are temporary, but named sandboxes can be hibernated and later resumed from their persisted filesystem state
 - All bash commands already run in the working directory by default — never prepend \`cd <working-directory> &&\`; just run the command directly
 - Do NOT prefix any bash command with a \`cd\` to the working directory — commands like \`cd <working-directory> && npm test\` are WRONG; just use \`npm test\`
 - Use workspace-relative paths for read/write/search/edit operations
@@ -338,7 +375,9 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     config: VercelSandboxConfig = {},
   ): Promise<VercelSandbox> {
     const {
+      name,
       source,
+      restoreSnapshotId,
       gitUser,
       env,
       vcpus = 4,
@@ -346,6 +385,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       runtime = "node22",
       ports,
       baseSnapshotId,
+      persistent = true,
+      snapshotExpiration,
       hooks,
       skipGitWorkspaceBootstrap = false,
     } = config;
@@ -362,14 +403,22 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     const sdkTimeout = effectiveTimeout + TIMEOUT_BUFFER_MS;
 
     const createBaseConfig = {
+      ...(name ? { name } : {}),
       resources: { vcpus },
       timeout: sdkTimeout,
       runtime,
+      persistent,
       ...(ports && { ports }),
+      ...(snapshotExpiration !== undefined && { snapshotExpiration }),
     };
 
     let sdk: VercelSandboxSDK;
-    if (baseSnapshotId) {
+    if (restoreSnapshotId) {
+      sdk = await VercelSandboxSDK.create({
+        ...createBaseConfig,
+        source: { type: "snapshot", snapshotId: restoreSnapshotId },
+      });
+    } else if (baseSnapshotId) {
       sdk = await VercelSandboxSDK.create({
         ...createBaseConfig,
         source: { type: "snapshot", snapshotId: baseSnapshotId },
@@ -426,7 +475,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
     // Initialize git repo for empty sandboxes (no source provided)
     // This ensures git commands work consistently (e.g., for diff viewing)
-    if (!source && !skipGitWorkspaceBootstrap) {
+    if (!source && !restoreSnapshotId && !skipGitWorkspaceBootstrap) {
       await sdk.runCommand({
         cmd: "git",
         args: ["init"],
@@ -469,7 +518,12 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Create initial empty commit for empty sandboxes so HEAD exists
     // This is required for git diff HEAD to work (e.g., diff viewer)
     // Must be done after gitUser config since git commit requires user info
-    if (!source && gitUser && !skipGitWorkspaceBootstrap) {
+    if (
+      !source &&
+      !restoreSnapshotId &&
+      gitUser &&
+      !skipGitWorkspaceBootstrap
+    ) {
       await sdk.runCommand({
         cmd: "git",
         args: ["commit", "--allow-empty", "-m", "Initial commit"],
@@ -499,12 +553,14 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       currentBranch = source.branch;
     }
 
-    // Capture startTime AFTER all setup operations so users get their full timeout duration
+    // Capture startTime AFTER all setup operations so users get their full timeout duration.
     const startTime = Date.now();
-
+    const session = sdk.currentSession();
     const sandbox = new VercelSandbox(
       sdk,
-      sdk.sandboxId,
+      session,
+      sdk.name,
+      session.sessionId,
       workingDirectory,
       env,
       currentBranch,
@@ -523,35 +579,46 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   }
 
   /**
-   * Connect to an existing Vercel Sandbox by ID.
+   * Connect to an existing Vercel Sandbox by persistent name.
    */
   static async connect(
-    sandboxId: string,
+    sandboxName: string,
     options: {
       env?: Record<string, string>;
       hooks?: SandboxHooks;
       /**
-       * Remaining timeout in ms for this sandbox.
-       * If not provided, defaults to DEFAULT_RECONNECT_TIMEOUT_MS (5 minutes).
-       * This ensures timeout tracking and proactive stop work correctly.
+       * Remaining timeout in ms for this sandbox session.
+       * If not provided, it is derived from the live session metadata when possible.
        */
       remainingTimeout?: number;
       /** Ports that were declared at creation time (for preview URL display) */
       ports?: number[];
+      /** Whether to explicitly resume a stopped sandbox */
+      resume?: boolean;
     } = {},
   ): Promise<VercelSandbox> {
-    const sdk = await VercelSandboxSDK.get({ sandboxId });
+    const sdk = await VercelSandboxSDK.get({
+      name: sandboxName,
+      resume: options.resume ?? false,
+    });
+    const session = sdk.currentSession();
 
-    // Use provided remainingTimeout or default to DEFAULT_RECONNECT_TIMEOUT_MS
-    // This ensures timeout tracking is always enabled for reconnected sandboxes,
-    // allowing beforeStop and onTimeout hooks to fire properly.
+    // Use provided remainingTimeout when available; otherwise derive it from the
+    // current live session. Fall back to the default reconnect timeout so active
+    // sessions still get proactive stop tracking even if metadata is missing.
     const remainingTimeout =
-      options.remainingTimeout ?? DEFAULT_RECONNECT_TIMEOUT_MS;
-    const startTime = Date.now();
+      options.remainingTimeout ??
+      getRemainingTimeoutFromSession(session) ??
+      (isStoppedSessionStatus(session.status)
+        ? undefined
+        : DEFAULT_RECONNECT_TIMEOUT_MS);
+    const startTime = remainingTimeout !== undefined ? Date.now() : undefined;
 
     const sandbox = new VercelSandbox(
       sdk,
-      sandboxId,
+      session,
+      sandboxName,
+      session.sessionId,
       DEFAULT_WORKING_DIRECTORY,
       options.env,
       undefined,
@@ -573,7 +640,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Use the SDK's native readFileToBuffer method which handles streaming
     // internally, avoiding the command output size limit that can occur with
     // large files when using `cat` via runCommand.
-    const buffer = await this.sdk.readFileToBuffer({ path });
+    const buffer = await this.session.readFileToBuffer({ path });
 
     if (buffer === null) {
       throw new Error(`Failed to read file: ${path}`);
@@ -596,7 +663,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Use the SDK's native writeFiles method which handles streaming internally,
     // avoiding the command argument size limit that causes "Expected a stream of
     // command data" errors with large files when using runCommand + base64.
-    await this.sdk.writeFiles([
+    await this.session.writeFiles([
       { path, content: Buffer.from(content, "utf-8") },
     ]);
   }
@@ -604,7 +671,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   async stat(path: string): Promise<SandboxStats> {
     // Use stat command to get file info
     // Use tab delimiter to avoid issues with file types containing spaces (e.g., "regular file")
-    const result = await this.sdk.runCommand({
+    const result = await this.session.runCommand({
       cmd: "stat",
       args: ["-c", "%F\t%s\t%Y", path],
       env: this.env,
@@ -630,7 +697,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   }
 
   async access(path: string): Promise<void> {
-    const result = await this.sdk.runCommand({
+    const result = await this.session.runCommand({
       cmd: "test",
       args: ["-e", path],
       env: this.env,
@@ -643,7 +710,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
   async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {
     const args = options?.recursive ? ["-p", path] : [path];
-    const result = await this.sdk.runCommand({
+    const result = await this.session.runCommand({
       cmd: "mkdir",
       args,
       env: this.env,
@@ -662,7 +729,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     _options: { withFileTypes: true },
   ): Promise<Dirent[]> {
     // List files with type info using find
-    const result = await this.sdk.runCommand({
+    const result = await this.session.runCommand({
       cmd: "bash",
       args: ["-c", `find "${path}" -maxdepth 1 -mindepth 1 -printf "%y %f\\n"`],
       env: this.env,
@@ -708,7 +775,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     timeoutMs: number,
   ): Promise<ExecResult> {
     try {
-      const result = await this.sdk.runCommand({
+      const result = await this.session.runCommand({
         cmd: "bash",
         args: ["-c", `cd "${cwd}" && ${command}`],
         env: this.getCommandEnv(),
@@ -759,7 +826,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     command: string,
     cwd: string,
   ): Promise<{ commandId: string }> {
-    const result = await this.sdk.runCommand({
+    const result = await this.session.runCommand({
       cmd: "bash",
       args: ["-c", `cd "${cwd}" && ${command}`],
       env: this.getCommandEnv(),
@@ -812,7 +879,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    * Get the public URL for an exposed port.
    */
   domain(port: number): string {
-    return this.sdk.domain(port);
+    return this.session.domain(port);
   }
 
   /**
@@ -820,11 +887,12 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    * IMPORTANT: This automatically stops the sandbox after snapshot creation.
    */
   async snapshot(): Promise<SnapshotResult> {
-    // Use native Vercel SDK snapshot method
-    const snapshot = await this.sdk.snapshot();
+    // Use the current session snapshot method to avoid implicitly resuming stopped sandboxes.
+    const snapshot = await this.session.snapshot();
 
     // Mark sandbox as stopped since native snapshot stops it automatically
     this.isStopped = true;
+    this._expiresAt = undefined;
 
     // Clear proactive timeout timer
     if (this.timeoutTimer) {
@@ -846,6 +914,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // Ensure stop() only runs once
     if (this.isStopped) return;
     this.isStopped = true;
+    this._expiresAt = undefined;
 
     // Clear proactive timeout timer
     if (this.timeoutTimer) {
@@ -883,8 +952,8 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   getState(): { type: "vercel" } & VercelState {
     return {
       type: "vercel",
-      sandboxId: this.id,
-      expiresAt: this.expiresAt,
+      sandboxName: this.name,
+      ...(this.expiresAt !== undefined ? { expiresAt: this.expiresAt } : {}),
     };
   }
 }
@@ -892,61 +961,47 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 /**
  * Connect to a Vercel Sandbox - either create a new one or reconnect to an existing one.
  *
- * @param config - Configuration options. Pass `sandboxId` to reconnect, or other options to create new.
+ * @param config - Configuration options. Pass `sandboxName` to reconnect, or other options to create new.
  *
  * @example
- * // Start empty sandbox
- * const sandbox = await connectVercelSandbox();
- * console.log(sandbox.id); // Save this ID for reconnection
+ * // Start a named persistent sandbox
+ * const sandbox = await connectVercelSandbox({ name: "session_123" });
+ * console.log(sandbox.name); // "session_123"
  *
  * @example
- * // Reconnect to an existing sandbox
- * const sandbox = await connectVercelSandbox({ sandboxId: "saved-sandbox-id" });
+ * // Reconnect to an existing sandbox without resuming it automatically
+ * const sandbox = await connectVercelSandbox({
+ *   sandboxName: "session_123",
+ *   resume: false,
+ * });
  *
  * @example
  * // Clone a repo into a new sandbox
  * const sandbox = await connectVercelSandbox({
+ *   name: "session_123",
  *   source: {
  *     url: "https://github.com/owner/repo",
  *     branch: "develop",
  *   },
  * });
- *
- * @example
- * // Clone with authentication, create a branch, and enable commits/push
- * const sandbox = await connectVercelSandbox({
- *   source: {
- *     url: "https://github.com/owner/repo",
- *     branch: "main",
- *     token: process.env.GITHUB_TOKEN,
- *     newBranch: "agent/feature-123",
- *   },
- *   gitUser: {
- *     name: "AI Agent",
- *     email: "agent@example.com",
- *   },
- *   env: {
- *     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
- *   },
- * });
- *
- * // The sandbox exposes the ID and current branch
- * console.log(sandbox.id); // "sandbox-abc123"
- * console.log(sandbox.currentBranch); // "agent/feature-123"
- *
- * // Now the agent can commit and push changes:
- * await sandbox.exec("git add . && git commit -m 'feat: add feature'", sandbox.workingDirectory, 30000);
- * await sandbox.exec("git push -u origin agent/feature-123", sandbox.workingDirectory, 60000);
  */
 export async function connectVercelSandbox(
   config: VercelSandboxConfig | VercelSandboxConnectConfig = {},
 ): Promise<VercelSandbox> {
-  if ("sandboxId" in config) {
-    return VercelSandbox.connect(config.sandboxId, {
-      env: config.env,
-      hooks: config.hooks,
-      remainingTimeout: config.remainingTimeout,
+  const connectConfig = config as VercelSandboxConnectConfig & {
+    sandboxId?: string;
+  };
+  const sandboxName = connectConfig.sandboxName ?? connectConfig.sandboxId;
+
+  if (sandboxName) {
+    return VercelSandbox.connect(sandboxName, {
+      env: connectConfig.env,
+      hooks: connectConfig.hooks,
+      remainingTimeout: connectConfig.remainingTimeout,
+      ports: connectConfig.ports,
+      resume: connectConfig.resume,
     });
   }
-  return VercelSandbox.create(config);
+
+  return VercelSandbox.create(config as VercelSandboxConfig);
 }

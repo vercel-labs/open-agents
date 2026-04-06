@@ -22,14 +22,34 @@ export function normalizeLegacySandboxState(
   }
 
   const state = sandboxState as Record<string, unknown>;
-  if (state.type !== "hybrid") {
+  const normalizedType = state.type === "hybrid" ? "vercel" : state.type;
+  const sandboxName =
+    typeof state.sandboxName === "string" && state.sandboxName.length > 0
+      ? state.sandboxName
+      : typeof state.sandboxId === "string" &&
+          state.sandboxId.startsWith("session_")
+        ? state.sandboxId
+        : undefined;
+
+  if (normalizedType !== "vercel") {
     return sandboxState as SandboxState;
   }
 
-  return {
+  if (normalizedType === state.type && sandboxName === undefined) {
+    return sandboxState as SandboxState;
+  }
+
+  const normalizedState: Record<string, unknown> = {
     ...state,
-    type: "vercel",
-  } as SandboxState;
+    type: normalizedType,
+  };
+
+  if (sandboxName !== undefined) {
+    normalizedState.sandboxName = sandboxName;
+    delete normalizedState.sandboxId;
+  }
+
+  return normalizedState as unknown as SandboxState;
 }
 
 function normalizeSessionRecord<T extends { sandboxState: unknown }>(

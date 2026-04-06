@@ -7,10 +7,15 @@ import type { Source } from "../types";
 export interface VercelState {
   /** Where to clone from (omit for empty sandbox or when reconnecting/restoring) */
   source?: Source;
-  /** Sandbox ID for reconnecting to a running VM (omit for fresh start) */
+  /** Durable persistent sandbox name used for reconnecting/resuming sessions */
+  sandboxName?: string;
+  /**
+   * Legacy runtime sandbox ID from the stable SDK.
+   * Kept only as a compatibility fallback during rollout.
+   */
   sandboxId?: string;
-  /** Snapshot ID for restoring when VM timed out (sandboxId will be undefined) */
+  /** Snapshot ID used only for legacy restore/migration flows */
   snapshotId?: string;
-  /** Timestamp (ms) when the sandbox expires */
+  /** Timestamp (ms) when the current runtime session expires */
   expiresAt?: number;
 }

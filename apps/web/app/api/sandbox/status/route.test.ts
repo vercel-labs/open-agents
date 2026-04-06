@@ -18,7 +18,7 @@ let sessionRecord: {
   userId: string;
   sandboxState: {
     type: "vercel";
-    sandboxId: string;
+    sandboxName: string;
     expiresAt: number;
   };
   lifecycleState: "active" | "failed";
@@ -66,7 +66,7 @@ describe("/api/sandbox/status lifecycle safety net", () => {
       userId: "user-1",
       sandboxState: {
         type: "vercel",
-        sandboxId: "sbx-1",
+        sandboxName: "session_session-1",
         expiresAt: Date.now() + 5 * 60_000,
       },
       lifecycleState: "active",

@@ -89,12 +89,28 @@ describe("normalizeLegacySandboxState", () => {
     });
   });
 
+  test("moves persisted session_<id> identifiers onto sandboxName", async () => {
+    const { normalizeLegacySandboxState } = await sessionsModulePromise;
+
+    expect(
+      normalizeLegacySandboxState({
+        type: "vercel",
+        sandboxId: "session_123",
+        expiresAt: 456,
+      }),
+    ).toEqual({
+      type: "vercel",
+      sandboxName: "session_123",
+      expiresAt: 456,
+    });
+  });
+
   test("leaves supported sandbox states unchanged", async () => {
     const { normalizeLegacySandboxState } = await sessionsModulePromise;
 
     const state = {
       type: "vercel",
-      sandboxId: "sbx-current-1",
+      sandboxName: "session_current-1",
       expiresAt: 456,
     } as const;
 

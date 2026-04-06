@@ -28,12 +28,21 @@ interface KickCall {
 interface ConnectConfig {
   state: {
     type: "vercel";
-    sandboxId?: string;
+    sandboxName?: string;
+    source?: {
+      repo?: string;
+      branch?: string;
+      newBranch?: string;
+      token?: string;
+    };
   };
   options?: {
     gitUser?: {
       email?: string;
     };
+    persistent?: boolean;
+    resume?: boolean;
+    createIfMissing?: boolean;
   };
 }
 
@@ -122,7 +131,7 @@ mock.module("@open-harness/sandbox", () => ({
       workingDirectory: "/vercel/sandbox",
       getState: () => ({
         type: "vercel" as const,
-        sandboxId: config.state.sandboxId ?? "sbx-vercel-1",
+        sandboxName: config.state.sandboxName ?? "session_session-1",
         expiresAt: Date.now() + 120_000,
       }),
       exec: async (command: string, cwd: string, timeoutMs: number) => {
@@ -182,15 +191,20 @@ describe("/api/sandbox lifecycle kicks", () => {
     };
   });
 
-  test("reconnect branch uses vercel sandbox and does not resync .env.local", async () => {
+  test("uses session_<sessionId> as the persistent sandbox name", async () => {
     const { POST } = await routeModulePromise;
+
+    currentDotenvContent = "";
+    sessionRecord.vercelProjectId = null;
+    sessionRecord.vercelProjectName = null;
+    sessionRecord.vercelTeamId = null;
 
     const request = new Request("http://localhost/api/sandbox", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId: "session-1",
-        sandboxId: "sbx-existing-1",
+        sandboxType: "vercel",
       }),
     });
 
@@ -203,26 +217,18 @@ describe("/api/sandbox lifecycle kicks", () => {
         reason: "sandbox-created",
       },
     ]);
-    expect(connectConfigs[0]?.state).toEqual({
-      type: "vercel",
-      sandboxId: "sbx-existing-1",
+    expect(connectConfigs[0]).toMatchObject({
+      state: {
+        type: "vercel",
+        sandboxName: "session_session-1",
+      },
+      options: {
+        persistent: true,
+        resume: true,
+        createIfMissing: true,
+      },
     });
     expect(dotenvSyncCalls).toHaveLength(0);
-    expect(
-      execCalls.some(({ command }) => command.includes("npx skills add")),
-    ).toBe(false);
-    expect(writeFileCalls).toEqual([
-      {
-        path: "/root/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
-      },
-      {
-        path: "/vercel/sandbox/.vercel/project.json",
-        content:
-          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
-      },
-    ]);
   });
 
   test("new vercel sandbox writes linked Development env vars to .env.local", async () => {

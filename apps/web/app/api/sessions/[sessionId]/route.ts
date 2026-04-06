@@ -81,7 +81,7 @@ export async function PATCH(
     return Response.json(
       {
         error:
-          "Snapshot is still being created for this archived session. Please try unarchiving again in a few seconds.",
+          "Sandbox is still being paused for this archived session. Please try unarchiving again in a few seconds.",
       },
       { status: 409 },
     );
@@ -97,7 +97,7 @@ export async function PATCH(
 
   if (shouldUnarchive) {
     // Reset lifecycle state so the session can be resumed normally.
-    // If there is a snapshot the client will auto-restore it on entry.
+    // If there is saved sandbox state, the client will surface Resume again.
     updatePayload.lifecycleState = null;
     updatePayload.lifecycleError = null;
   }

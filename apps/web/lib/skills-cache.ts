@@ -41,10 +41,10 @@ function getSharedRedisClient(): SkillsCacheRedisClient | null {
 }
 
 function getSandboxScope(state: SandboxState | null | undefined): string {
-  if (state && "sandboxId" in state) {
-    const sandboxId = state.sandboxId;
-    if (typeof sandboxId === "string" && sandboxId.length > 0) {
-      return sandboxId;
+  if (state && "sandboxName" in state) {
+    const sandboxName = state.sandboxName;
+    if (typeof sandboxName === "string" && sandboxName.length > 0) {
+      return sandboxName;
     }
   }
 

@@ -93,6 +93,7 @@ export async function refreshBaseSnapshot(
       options: {
         baseSnapshotId: options.baseSnapshotId,
         timeout: options.sandboxTimeoutMs,
+        persistent: false,
         skipGitWorkspaceBootstrap: true,
         ...(options.ports !== undefined && { ports: options.ports }),
         ...(options.env !== undefined && { env: options.env }),

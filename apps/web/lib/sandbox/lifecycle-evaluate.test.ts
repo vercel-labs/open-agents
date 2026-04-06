@@ -15,7 +15,8 @@ interface TestSessionRecord {
     | "failed";
   sandboxState: {
     type: "vercel";
-    sandboxId: string;
+    sandboxName: string;
+    expiresAt: number;
   };
   hibernateAfter: Date | null;
   lastActivityAt: Date | null;
@@ -25,15 +26,8 @@ interface TestSessionRecord {
 
 let sessionRecord: TestSessionRecord | null = null;
 let chatsInSession: Array<{ id: string; activeStreamId: string | null }> = [];
-let snapshotId = "snapshot-1";
-let snapshotError: Error | null = null;
 
-const snapshotSpy = mock(async () => {
-  if (snapshotError) {
-    throw snapshotError;
-  }
-  return { snapshotId };
-});
+const stopSpy = mock(async () => undefined);
 
 const spies = {
   getChatsBySessionId: mock(
@@ -44,9 +38,9 @@ const spies = {
     async (_sessionId: string, patch: Record<string, unknown>) => patch,
   ),
   connectSandbox: mock(async () => ({
-    snapshot: snapshotSpy,
+    stop: stopSpy,
   })),
-  snapshot: snapshotSpy,
+  stop: stopSpy,
 };
 
 mock.module("@/lib/db/sessions", () => ({
@@ -70,7 +64,8 @@ function makeDueSession(): TestSessionRecord {
     lifecycleState: "active",
     sandboxState: {
       type: "vercel",
-      sandboxId: "sandbox-1",
+      sandboxName: "session_session-1",
+      expiresAt: nowMs + 5 * 60_000,
     },
     hibernateAfter: new Date(nowMs - 1_000),
     lastActivityAt: new Date(nowMs - 60_000),
@@ -82,8 +77,6 @@ function makeDueSession(): TestSessionRecord {
 beforeEach(() => {
   sessionRecord = makeDueSession();
   chatsInSession = [];
-  snapshotId = "snapshot-1";
-  snapshotError = null;
 
   Object.values(spies).forEach((spy) => spy.mockClear());
 });
@@ -100,14 +93,14 @@ describe("evaluateSandboxLifecycle", () => {
     expect(result).toEqual({ action: "skipped", reason: "active-workflow" });
     expect(spies.connectSandbox).not.toHaveBeenCalled();
     expect(spies.updateSession).not.toHaveBeenCalled();
-    expect(spies.snapshot).not.toHaveBeenCalled();
+    expect(spies.stop).not.toHaveBeenCalled();
   });
 
-  test("rechecks for activeStreamId before snapshotting and restores active lifecycle state", async () => {
+  test("rechecks for activeStreamId before stopping and restores active lifecycle state", async () => {
     spies.connectSandbox.mockImplementationOnce(async () => {
       chatsInSession = [{ id: "chat-1", activeStreamId: "wrun-raced-in-1" }];
       return {
-        snapshot: snapshotSpy,
+        stop: stopSpy,
       };
     });
 
@@ -118,7 +111,7 @@ describe("evaluateSandboxLifecycle", () => {
 
     expect(result).toEqual({ action: "skipped", reason: "active-workflow" });
     expect(spies.getChatsBySessionId).toHaveBeenCalledTimes(2);
-    expect(spies.snapshot).not.toHaveBeenCalled();
+    expect(spies.stop).not.toHaveBeenCalled();
 
     const updateCalls = spies.updateSession.mock.calls as unknown[][];
     const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
@@ -128,16 +121,14 @@ describe("evaluateSandboxLifecycle", () => {
       lifecycleState: "hibernating",
       lifecycleError: null,
     });
-    expect(finalPatch).toEqual({
-      lifecycleState: "active",
-      lifecycleError: null,
-      sandboxExpiresAt: null,
-    });
+    expect(finalPatch.lifecycleState).toBe("active");
+    expect(finalPatch.lifecycleError).toBeNull();
+    expect(finalPatch.sandboxExpiresAt).toBeInstanceOf(Date);
     expect(finalPatch).not.toHaveProperty("lastActivityAt");
     expect(finalPatch).not.toHaveProperty("hibernateAfter");
   });
 
-  test("skips hibernation when lifecycle timing is refreshed before snapshotting", async () => {
+  test("skips hibernation when lifecycle timing is refreshed before stopping", async () => {
     spies.connectSandbox.mockImplementationOnce(async () => {
       if (!sessionRecord) {
         throw new Error("sessionRecord must be set");
@@ -151,7 +142,7 @@ describe("evaluateSandboxLifecycle", () => {
       };
 
       return {
-        snapshot: snapshotSpy,
+        stop: stopSpy,
       };
     });
 
@@ -161,7 +152,7 @@ describe("evaluateSandboxLifecycle", () => {
     );
 
     expect(result).toEqual({ action: "skipped", reason: "not-due-yet" });
-    expect(spies.snapshot).not.toHaveBeenCalled();
+    expect(spies.stop).not.toHaveBeenCalled();
 
     const updateCalls = spies.updateSession.mock.calls as unknown[][];
     const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
@@ -171,55 +162,14 @@ describe("evaluateSandboxLifecycle", () => {
       lifecycleState: "hibernating",
       lifecycleError: null,
     });
-    expect(finalPatch).toEqual({
-      lifecycleState: "active",
-      lifecycleError: null,
-      sandboxExpiresAt: null,
-    });
+    expect(finalPatch.lifecycleState).toBe("active");
+    expect(finalPatch.lifecycleError).toBeNull();
+    expect(finalPatch.sandboxExpiresAt).toBeInstanceOf(Date);
     expect(finalPatch).not.toHaveProperty("lastActivityAt");
     expect(finalPatch).not.toHaveProperty("hibernateAfter");
   });
 
-  test("does not extend lifecycle timers when snapshot is already in progress", async () => {
-    snapshotError = new Error(
-      "422 sandbox_snapshotting: creating a snapshot and will be stopped shortly",
-    );
-
-    const originalHibernateAfterMs = sessionRecord?.hibernateAfter?.getTime();
-    const originalLastActivityAtMs = sessionRecord?.lastActivityAt?.getTime();
-
-    const result = await evaluateSandboxLifecycle(
-      "session-1",
-      "status-check-overdue",
-    );
-
-    expect(result).toEqual({
-      action: "skipped",
-      reason: "snapshot-already-in-progress",
-    });
-
-    const updateCalls = spies.updateSession.mock.calls as unknown[][];
-    const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
-    const finalPatch = updateCalls.at(-1)?.[1] as Record<string, unknown>;
-
-    expect(firstPatch.lifecycleState).toBe("hibernating");
-    expect(finalPatch).toEqual({
-      lifecycleState: "active",
-      lifecycleError: null,
-      sandboxExpiresAt: null,
-    });
-    expect(finalPatch).not.toHaveProperty("lastActivityAt");
-    expect(finalPatch).not.toHaveProperty("hibernateAfter");
-
-    expect(sessionRecord?.hibernateAfter?.getTime()).toBe(
-      originalHibernateAfterMs,
-    );
-    expect(sessionRecord?.lastActivityAt?.getTime()).toBe(
-      originalLastActivityAtMs,
-    );
-  });
-
-  test("hibernates when no chat has an activeStreamId", async () => {
+  test("hibernates by stopping the persistent sandbox session", async () => {
     const result = await evaluateSandboxLifecycle(
       "session-1",
       "status-check-overdue",
@@ -227,14 +177,23 @@ describe("evaluateSandboxLifecycle", () => {
 
     expect(result).toEqual({ action: "hibernated" });
     expect(spies.connectSandbox).toHaveBeenCalledTimes(1);
-    expect(spies.snapshot).toHaveBeenCalledTimes(1);
+    expect(spies.stop).toHaveBeenCalledTimes(1);
 
     const updateCalls = spies.updateSession.mock.calls as unknown[][];
     const firstPatch = updateCalls[0]?.[1] as Record<string, unknown>;
     const finalPatch = updateCalls.at(-1)?.[1] as Record<string, unknown>;
 
     expect(firstPatch.lifecycleState).toBe("hibernating");
-    expect(finalPatch.lifecycleState).toBe("hibernated");
-    expect(finalPatch.snapshotUrl).toBe("snapshot-1");
+    expect(finalPatch).toEqual(
+      expect.objectContaining({
+        lifecycleState: "hibernated",
+        snapshotUrl: null,
+        snapshotCreatedAt: null,
+        sandboxState: {
+          type: "vercel",
+          sandboxName: "session_session-1",
+        },
+      }),
+    );
   });
 });

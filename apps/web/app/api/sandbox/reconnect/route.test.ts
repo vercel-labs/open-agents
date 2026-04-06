@@ -21,7 +21,7 @@ let sessionRecord: {
   lifecycleError: string | null;
   sandboxState: {
     type: "vercel";
-    sandboxId?: string;
+    sandboxName?: string;
     expiresAt?: number;
   };
   lastActivityAt: Date | null;
@@ -62,7 +62,7 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
 mock.module("@open-harness/sandbox", () => ({
   connectSandbox: async (state: {
     type: "vercel";
-    sandboxId?: string;
+    sandboxName?: string;
     expiresAt?: number;
   }) => {
     const expiresAt = Date.now() + 2 * 60_000;
@@ -72,7 +72,7 @@ mock.module("@open-harness/sandbox", () => ({
       exec: async () => probeResult,
       getState: () => ({
         ...state,
-        ...(state.sandboxId ? { sandboxId: state.sandboxId } : {}),
+        ...(state.sandboxName ? { sandboxName: state.sandboxName } : {}),
         expiresAt,
       }),
     };
@@ -99,7 +99,7 @@ describe("/api/sandbox/reconnect", () => {
       lifecycleError: "snapshot failed",
       sandboxState: {
         type: "vercel",
-        sandboxId: "sbx-1",
+        sandboxName: "session_session-1",
         expiresAt: now + 5 * 60_000,
       },
       lastActivityAt: new Date(now - 5_000),
@@ -156,7 +156,10 @@ describe("/api/sandbox/reconnect", () => {
     expect(updateCalls[0]?.sessionId).toBe("session-1");
     expect(updateCalls[0]?.patch.lifecycleState).toBe("hibernated");
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
-    expect(updateCalls[0]?.patch.sandboxState).toEqual({ type: "vercel" });
+    expect(updateCalls[0]?.patch.sandboxState).toEqual({
+      type: "vercel",
+      sandboxName: "session_session-1",
+    });
   });
 
   test("marks sandbox expired when the reconnect probe hits a 404", async () => {
@@ -184,6 +187,9 @@ describe("/api/sandbox/reconnect", () => {
     expect(updateCalls[0]?.sessionId).toBe("session-1");
     expect(updateCalls[0]?.patch.lifecycleState).toBe("hibernated");
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
-    expect(updateCalls[0]?.patch.sandboxState).toEqual({ type: "vercel" });
+    expect(updateCalls[0]?.patch.sandboxState).toEqual({
+      type: "vercel",
+      sandboxName: "session_session-1",
+    });
   });
 });

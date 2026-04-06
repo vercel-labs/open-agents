@@ -1,8 +1,7 @@
-import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Sandbox, SandboxHooks } from "../interface";
+import type { VercelSandboxConfig } from "./config";
 import { VercelSandbox } from "./sandbox";
 import type { VercelState } from "./state";
-import { configureGitUser } from "./utils";
 
 interface ConnectOptions {
   env?: Record<string, string>;
@@ -11,6 +10,10 @@ interface ConnectOptions {
   timeout?: number;
   ports?: number[];
   baseSnapshotId?: string;
+  resume?: boolean;
+  createIfMissing?: boolean;
+  persistent?: boolean;
+  snapshotExpiration?: number;
   skipGitWorkspaceBootstrap?: boolean;
 }
 
@@ -25,83 +28,50 @@ function getRemainingTimeout(
   return remaining > 10_000 ? remaining : undefined;
 }
 
-/**
- * Connect to the Vercel-backed cloud sandbox based on the provided state.
- *
- * - If `sandboxId` is present, reconnects to an existing running VM
- * - If `snapshotId` is present (without sandboxId), restores from native snapshot
- * - If `source` is present, creates a new VM and prepares the repo
- * - Otherwise, creates an empty sandbox
- */
-export async function connectVercel(
+function getSandboxName(state: VercelState): string | undefined {
+  if (typeof state.sandboxName === "string" && state.sandboxName.length > 0) {
+    return state.sandboxName;
+  }
+
+  if (typeof state.sandboxId === "string" && state.sandboxId.length > 0) {
+    return state.sandboxId;
+  }
+
+  return undefined;
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isSandboxNotFoundError(error: unknown): boolean {
+  const message = toErrorMessage(error).toLowerCase();
+  return message.includes("status code 404") || message.includes("not found");
+}
+
+function buildCreateConfig(
   state: VercelState,
   options?: ConnectOptions,
-): Promise<Sandbox> {
-  // Reconnect to existing VM
-  if (state.sandboxId) {
-    const remainingTimeout = getRemainingTimeout(state.expiresAt);
+): VercelSandboxConfig {
+  const sandboxName = getSandboxName(state);
 
-    const connectManagedSandbox = () =>
-      VercelSandbox.connect(state.sandboxId as string, {
-        env: options?.env,
-        hooks: options?.hooks,
-        remainingTimeout,
-        ports: options?.ports,
-      });
-
-    return connectManagedSandbox();
-  }
-
-  // Restore from snapshot (VM timed out, need to spin up new one)
-  if (state.snapshotId) {
-    const sdk = await VercelSandboxSDK.create({
-      source: { type: "snapshot", snapshotId: state.snapshotId },
-      ...(options?.timeout !== undefined && { timeout: options.timeout }),
-      ...(options?.ports && { ports: options.ports }),
-    });
-
-    // Wrap in VercelSandbox - use connect since SDK is already created
-    // Pass remainingTimeout so timeout tracking works correctly
-    const sandbox = await VercelSandbox.connect(sdk.sandboxId, {
-      env: options?.env,
-      hooks: options?.hooks,
-      remainingTimeout: options?.timeout,
-      ports: options?.ports,
-    });
-
-    // Configure git user if provided (not done automatically when restoring from snapshot)
-    if (options?.gitUser) {
-      await configureGitUser(sandbox, options.gitUser);
-    }
-
-    return sandbox;
-  }
-
-  // Create from source
-  if (state.source) {
-    return VercelSandbox.create({
-      source: {
-        url: state.source.repo,
-        branch: state.source.branch,
-        token: state.source.token,
-        newBranch: state.source.newBranch,
-      },
-      env: options?.env,
-      gitUser: options?.gitUser,
-      hooks: options?.hooks,
-      ...(options?.timeout !== undefined && { timeout: options.timeout }),
-      ...(options?.ports && { ports: options.ports }),
-      ...(options?.baseSnapshotId && {
-        baseSnapshotId: options.baseSnapshotId,
-      }),
-      ...(options?.skipGitWorkspaceBootstrap && {
-        skipGitWorkspaceBootstrap: true,
-      }),
-    });
-  }
-
-  // Create empty sandbox
-  return VercelSandbox.create({
+  return {
+    ...(sandboxName ? { name: sandboxName } : {}),
+    ...(state.source
+      ? {
+          source: {
+            url: state.source.repo,
+            branch: state.source.branch,
+            token: state.source.token,
+            newBranch: state.source.newBranch,
+          },
+        }
+      : {}),
+    ...(state.snapshotId ? { restoreSnapshotId: state.snapshotId } : {}),
     env: options?.env,
     gitUser: options?.gitUser,
     hooks: options?.hooks,
@@ -110,8 +80,63 @@ export async function connectVercel(
     ...(options?.baseSnapshotId && {
       baseSnapshotId: options.baseSnapshotId,
     }),
+    ...(options?.persistent !== undefined && {
+      persistent: options.persistent,
+    }),
+    ...(options?.snapshotExpiration !== undefined && {
+      snapshotExpiration: options.snapshotExpiration,
+    }),
     ...(options?.skipGitWorkspaceBootstrap && {
       skipGitWorkspaceBootstrap: true,
     }),
-  });
+  };
+}
+
+async function connectNamedSandbox(
+  state: VercelState,
+  options?: ConnectOptions,
+): Promise<Sandbox> {
+  const sandboxName = getSandboxName(state);
+  if (!sandboxName) {
+    throw new Error("Persistent sandbox name is required");
+  }
+
+  const remainingTimeout = getRemainingTimeout(state.expiresAt);
+
+  try {
+    return await VercelSandbox.connect(sandboxName, {
+      env: options?.env,
+      hooks: options?.hooks,
+      remainingTimeout,
+      ports: options?.ports,
+      resume: options?.resume,
+    });
+  } catch (error) {
+    if (!options?.createIfMissing || !isSandboxNotFoundError(error)) {
+      throw error;
+    }
+  }
+
+  return VercelSandbox.create(buildCreateConfig(state, options));
+}
+
+/**
+ * Connect to the Vercel-backed cloud sandbox based on the provided state.
+ *
+ * - If `sandboxName` is present, reconnects to the named persistent sandbox
+ * - If `snapshotId` is present without `sandboxName`, restores from a legacy snapshot
+ * - If `source` is present, creates a new sandbox and prepares the repo
+ * - Otherwise, creates an empty sandbox
+ */
+export async function connectVercel(
+  state: VercelState,
+  options?: ConnectOptions,
+): Promise<Sandbox> {
+  const sandboxName = getSandboxName(state);
+
+  if (sandboxName) {
+    return connectNamedSandbox(state, options);
+  }
+
+  return VercelSandbox.create(buildCreateConfig(state, options));
 }

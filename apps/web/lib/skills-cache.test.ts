@@ -13,14 +13,14 @@ const exampleSkills: SkillMetadata[] = [
 ];
 
 describe("skills cache", () => {
-  test("derives cache keys from sandbox id, snapshot id, or local scope", () => {
+  test("derives cache keys from sandbox name, legacy snapshot id, or local scope", () => {
     expect(
       getSkillsCacheKey("session-1", {
         type: "vercel",
-        sandboxId: "sbx-123",
+        sandboxName: "session_session-1",
         snapshotId: "snap-123",
       }),
-    ).toBe("skills:v1:session-1:sbx-123");
+    ).toBe("skills:v1:session-1:session_session-1");
 
     expect(
       getSkillsCacheKey("session-1", {
@@ -75,7 +75,10 @@ describe("skills cache", () => {
         },
       },
     });
-    const sandboxState = { type: "vercel" as const, sandboxId: "sbx-123" };
+    const sandboxState = {
+      type: "vercel" as const,
+      sandboxName: "session_session-1",
+    };
 
     await cache.set("session-1", sandboxState, exampleSkills);
     expect(await cache.get("session-1", sandboxState)).toEqual(exampleSkills);

@@ -161,34 +161,11 @@ async function finalizeArchivedSessionSandbox(
     }
 
     const sandbox = await connectSandbox(archivedSession.sandboxState);
-
-    // Snapshot before stopping so the sandbox can be restored on unarchive.
-    // snapshot() automatically stops the sandbox, so no separate stop() needed.
-    let snapshotFields: {
-      snapshotUrl?: string;
-      snapshotCreatedAt?: Date;
-    } = {};
-
-    if (sandbox.snapshot) {
-      try {
-        const result = await sandbox.snapshot();
-        snapshotFields = {
-          snapshotUrl: result.snapshotId,
-          snapshotCreatedAt: new Date(),
-        };
-      } catch (snapshotError) {
-        console.error(
-          `${logPrefix} Snapshot failed for session ${sessionId}, falling back to stop:`,
-          snapshotError,
-        );
-        await sandbox.stop();
-      }
-    } else {
-      await sandbox.stop();
-    }
+    await sandbox.stop();
 
     await updateSession(sessionId, {
-      ...snapshotFields,
+      snapshotUrl: null,
+      snapshotCreatedAt: null,
       sandboxState: clearSandboxState(archivedSession.sandboxState),
       lifecycleState: "archived",
       sandboxExpiresAt: null,

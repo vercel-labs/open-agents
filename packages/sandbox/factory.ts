@@ -28,6 +28,14 @@ export interface ConnectOptions {
   ports?: number[];
   /** Snapshot ID used as the base image for new sandboxes */
   baseSnapshotId?: string;
+  /** Whether to resume a stopped persistent sandbox session */
+  resume?: boolean;
+  /** Whether to create the named sandbox when it does not already exist */
+  createIfMissing?: boolean;
+  /** Whether new sandboxes should persist filesystem state between sessions */
+  persistent?: boolean;
+  /** Default expiration for automatic persistent-sandbox snapshots */
+  snapshotExpiration?: number;
   /**
    * Skip git init in an empty workspace (e.g. when refreshing a Vercel base snapshot).
    */

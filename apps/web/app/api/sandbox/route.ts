@@ -24,7 +24,12 @@ import {
   syncVercelCliAuthToSandbox,
 } from "@/lib/sandbox/vercel-cli-auth";
 import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
-import { canOperateOnSandbox, clearSandboxState } from "@/lib/sandbox/utils";
+import {
+  canOperateOnSandbox,
+  clearSandboxState,
+  getSessionSandboxName,
+  hasResumableSandboxState,
+} from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
@@ -34,7 +39,6 @@ interface CreateSandboxRequest {
   branch?: string;
   isNewBranch?: boolean;
   sessionId?: string;
-  sandboxId?: string;
   sandboxType?: "vercel";
 }
 
@@ -111,13 +115,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
-  const {
-    repoUrl,
-    branch = "main",
-    isNewBranch = false,
-    sessionId,
-    sandboxId: providedSandboxId,
-  } = body;
+  const { repoUrl, branch = "main", isNewBranch = false, sessionId } = body;
 
   // Get session for auth
   const session = await getServerSession();
@@ -163,6 +161,7 @@ export async function POST(req: Request) {
     sessionRecord = sessionContext.sessionRecord;
   }
 
+  const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
   const githubAccount = await getGitHubAccount(session.user.id);
   const githubNoreplyEmail =
     githubAccount?.externalUserId && githubAccount.username
@@ -183,56 +182,7 @@ export async function POST(req: Request) {
   }
 
   // ============================================
-  // RECONNECT: Existing sandbox
-  // ============================================
-  if (providedSandboxId) {
-    const sandbox = await connectSandbox({
-      state: { type: "vercel", sandboxId: providedSandboxId },
-      options: { env, ports: DEFAULT_SANDBOX_PORTS },
-    });
-
-    if (sessionId && sandbox.getState) {
-      const nextState = sandbox.getState() as SandboxState;
-      await updateSession(sessionId, {
-        sandboxState: nextState,
-        lifecycleVersion: getNextLifecycleVersion(
-          sessionRecord?.lifecycleVersion,
-        ),
-        ...buildActiveLifecycleUpdate(nextState),
-      });
-
-      if (sessionRecord) {
-        try {
-          await syncVercelCliAuthForSandbox({
-            userId: session.user.id,
-            sessionRecord,
-            sandbox,
-          });
-        } catch (error) {
-          console.error(
-            `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
-            error,
-          );
-        }
-      }
-
-      kickSandboxLifecycleWorkflow({
-        sessionId,
-        reason: "sandbox-created",
-      });
-    }
-
-    return Response.json({
-      sandboxId: providedSandboxId,
-      createdAt: Date.now(),
-      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      currentBranch: sandbox.currentBranch,
-      mode: "vercel",
-    });
-  }
-
-  // ============================================
-  // NEW SANDBOX: Create a Vercel sandbox
+  // CREATE OR RESUME: Create a named persistent sandbox for this session.
   // ============================================
   const startTime = Date.now();
 
@@ -248,6 +198,7 @@ export async function POST(req: Request) {
   const sandbox = await connectSandbox({
     state: {
       type: "vercel",
+      ...(sandboxName ? { sandboxName } : {}),
       source,
     },
     options: {
@@ -256,6 +207,9 @@ export async function POST(req: Request) {
       timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       ports: DEFAULT_SANDBOX_PORTS,
       baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+      persistent: !!sandboxName,
+      resume: !!sandboxName,
+      createIfMissing: !!sandboxName,
     },
   });
 
@@ -263,6 +217,8 @@ export async function POST(req: Request) {
     const nextState = sandbox.getState() as SandboxState;
     await updateSession(sessionId, {
       sandboxState: nextState,
+      snapshotUrl: null,
+      snapshotCreatedAt: null,
       lifecycleVersion: getNextLifecycleVersion(
         sessionRecord?.lifecycleVersion,
       ),
@@ -369,9 +325,15 @@ export async function DELETE(req: Request) {
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   await sandbox.stop();
 
+  const clearedState = clearSandboxState(sessionRecord.sandboxState);
   await updateSession(sessionId, {
-    sandboxState: clearSandboxState(sessionRecord.sandboxState),
-    lifecycleState: sessionRecord.snapshotUrl ? "hibernated" : "provisioning",
+    sandboxState: clearedState,
+    snapshotUrl: null,
+    snapshotCreatedAt: null,
+    lifecycleState:
+      hasResumableSandboxState(clearedState) || !!sessionRecord.snapshotUrl
+        ? "hibernated"
+        : "provisioning",
     sandboxExpiresAt: null,
     hibernateAfter: null,
     lifecycleRunId: null,

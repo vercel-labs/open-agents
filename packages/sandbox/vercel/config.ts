@@ -2,6 +2,11 @@ import type { SandboxHooks } from "../interface";
 
 export interface VercelSandboxConfig {
   /**
+   * Optional persistent sandbox name.
+   * When provided, repeated creates are expected to target the same durable sandbox.
+   */
+  name?: string;
+  /**
    * Optional GitHub repository source to clone into the sandbox.
    * If not provided, the sandbox starts empty.
    */
@@ -18,6 +23,11 @@ export interface VercelSandboxConfig {
      */
     newBranch?: string;
   };
+  /**
+   * Optional snapshot ID to restore this sandbox from.
+   * Used only for legacy snapshot-backed session migration.
+   */
+  restoreSnapshotId?: string;
   /**
    * Git user configuration for commits.
    * Required if you want the agent to make commits.
@@ -58,6 +68,16 @@ export interface VercelSandboxConfig {
    */
   baseSnapshotId?: string;
   /**
+   * Whether the sandbox should automatically persist filesystem state between sessions.
+   * @default true
+   */
+  persistent?: boolean;
+  /**
+   * Default expiration for automatically created snapshots in milliseconds.
+   * Use `0` to retain snapshots indefinitely.
+   */
+  snapshotExpiration?: number;
+  /**
    * When true, do not run `git init` or an initial empty commit in the workspace.
    * Use when building a new base snapshot so `/vercel/sandbox` stays empty for a
    * later `git clone ... .` (a leftover `.git` breaks clone into that directory).
@@ -72,20 +92,22 @@ export interface VercelSandboxConfig {
 }
 
 /**
- * Configuration for reconnecting to an existing sandbox.
+ * Configuration for reconnecting to an existing persistent sandbox.
  */
 export interface VercelSandboxConnectConfig {
-  /** The sandbox ID to reconnect to */
-  sandboxId: string;
+  /** The persistent sandbox name to reconnect to */
+  sandboxName: string;
   /** Environment variables to make available to commands */
   env?: Record<string, string>;
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;
   /**
-   * Remaining timeout in milliseconds for this sandbox.
-   * If not provided, defaults to 5 minutes (DEFAULT_RECONNECT_TIMEOUT_MS).
-   * This ensures proactive stop and hooks (beforeStop, onTimeout) work correctly.
-   * Provide an explicit value if you know the exact remaining time.
+   * Remaining timeout in milliseconds for the current session.
+   * When omitted, it is derived from the live session metadata when possible.
    */
   remainingTimeout?: number;
+  /** Ports that were declared at creation time (for preview URL display) */
+  ports?: number[];
+  /** Whether a stopped sandbox should be explicitly resumed */
+  resume?: boolean;
 }
