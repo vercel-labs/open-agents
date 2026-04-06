@@ -14,6 +14,8 @@ export type ToolLayoutProps = {
   meta?: ReactNode;
   /** When true, push meta to the far right of the header row. */
   rightAlignMeta?: boolean;
+  /** Short label shown right-aligned in the error header (e.g. "exit 1"). */
+  errorMeta?: ReactNode;
   state: ToolRenderState;
   output?: ReactNode;
   children?: ReactNode;
@@ -68,6 +70,7 @@ export function ToolLayout({
   summaryClassName,
   meta,
   rightAlignMeta = false,
+  errorMeta,
   state,
   output,
   children,
@@ -105,6 +108,7 @@ export function ToolLayout({
   // Error state flags
   const showErrorHeader = hasError;
   const showErrorExpanded = hasError && isExpandedPanelVisible;
+  const hasErrorMeta = hasRenderableContent(errorMeta);
   const hasTrailingMeta =
     !showErrorHeader && (hasMeta || interruptedBadge !== null);
 
@@ -199,52 +203,48 @@ export function ToolLayout({
         </span>
 
         {/* Name + summary */}
-        {showErrorHeader ? (
-          <>
-            <span className="shrink-0 font-medium leading-none text-red-500">
-              Error
-            </span>
-            <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] leading-none text-red-400/80">
-                {errorMessage}
-              </span>
-            </div>
-          </>
-        ) : (
-          <>
+        <span
+          className={cn(
+            "min-w-0 shrink truncate font-medium leading-none",
+            showErrorHeader
+              ? "text-red-500"
+              : state.denied
+                ? "text-red-500"
+                : "text-foreground",
+            nameClassName,
+          )}
+        >
+          {name}
+        </span>
+
+        <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
+          {hasSummary && (
             <span
               className={cn(
-                "min-w-0 shrink truncate font-medium leading-none",
-                state.denied ? "text-red-500" : "text-foreground",
-                nameClassName,
+                "min-w-0 shrink truncate font-mono text-[13px] leading-none",
+                showErrorHeader ? "text-red-400/80" : "text-muted-foreground",
+                summaryClassName,
               )}
             >
-              {name}
+              {summary}
             </span>
+          )}
 
-            <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
-              {hasSummary && (
-                <span
-                  className={cn(
-                    "min-w-0 shrink truncate font-mono text-[13px] leading-none text-muted-foreground",
-                    summaryClassName,
-                  )}
-                >
-                  {summary}
-                </span>
-              )}
+          {(rightAlignMeta || showErrorHeader) && <span className="flex-1" />}
 
-              {rightAlignMeta && <span className="flex-1" />}
+          {showErrorHeader && hasErrorMeta && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-red-400/70">
+              {errorMeta}
+            </span>
+          )}
 
-              {hasTrailingMeta && (
-                <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
-                  {meta}
-                  {interruptedBadge}
-                </span>
-              )}
-            </div>
-          </>
-        )}
+          {hasTrailingMeta && (
+            <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
+              {meta}
+              {interruptedBadge}
+            </span>
+          )}
+        </div>
       </div>
 
       {children}
@@ -296,22 +296,9 @@ export function ToolLayout({
               <div className="space-y-2 pb-1">
                 {showErrorExpanded &&
                   !hasRenderableContent(expandedContent) && (
-                    <div className="overflow-hidden rounded-md border border-red-500/20 bg-red-500/5">
-                      <div className="flex min-w-0 items-center gap-2 border-b border-red-500/20 px-3 py-1.5">
-                        {icon && <span className="text-red-500">{icon}</span>}
-                        <span className="shrink-0 text-xs font-medium text-red-500">
-                          {name}
-                        </span>
-                        {hasSummary && (
-                          <span className="min-w-0 truncate font-mono text-xs text-red-400/70">
-                            {summary}
-                          </span>
-                        )}
-                      </div>
-                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
-                        {errorMessage}
-                      </pre>
-                    </div>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
+                      {errorMessage}
+                    </pre>
                   )}
                 {expandedContent}
               </div>

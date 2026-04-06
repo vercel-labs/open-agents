@@ -1,7 +1,6 @@
 "use client";
 
 import { Terminal } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -43,32 +42,16 @@ export function BashRenderer({
     </span>
   ) : undefined;
 
+  const errorMetaContent =
+    isError && exitCode !== undefined ? `exit ${exitCode}` : undefined;
+
   const expandedContent = hasExpandableContent ? (
     isError ? (
-      <div className="overflow-hidden rounded-md border border-red-500/20 bg-red-500/5">
-        {/* Header: command + exit code */}
-        <div
-          className={cn(
-            "flex items-center gap-2 px-3 py-1.5",
-            hasOutput && "border-b border-red-500/20",
-          )}
-        >
-          <Terminal className="h-3.5 w-3.5 shrink-0 text-red-500" />
-          <code className="min-w-0 flex-1 truncate font-mono text-xs text-red-500">
-            {command}
-          </code>
-          {exitCode !== undefined && (
-            <span className="shrink-0 font-mono text-[11px] text-red-400/70">
-              exit {exitCode}
-            </span>
-          )}
-        </div>
-        {hasOutput && (
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
-            {combinedOutput}
-          </pre>
-        )}
-      </div>
+      hasOutput ? (
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 font-mono text-xs leading-relaxed text-red-400">
+          {combinedOutput}
+        </pre>
+      ) : undefined
     ) : (
       <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
         {hasOutput ? combinedOutput : "(No output)"}
@@ -82,6 +65,7 @@ export function BashRenderer({
       summary={command || "..."}
       summaryClassName="font-mono"
       meta={meta}
+      errorMeta={errorMetaContent}
       state={mergedState}
       icon={<Terminal className="h-3.5 w-3.5" />}
       expandedContent={expandedContent}

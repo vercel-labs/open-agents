@@ -16,9 +16,11 @@ function getFileName(filePath: string): string {
 export function FileNamePill({
   filePath,
   fullPath,
+  error = false,
 }: {
   filePath: string;
   fullPath?: string;
+  error?: boolean;
 }) {
   const onOpenFile = useOpenFile();
   const fileName = getFileName(filePath);
@@ -32,20 +34,38 @@ export function FileNamePill({
     onOpenFile(filePath);
   };
 
+  const errorStyles = error
+    ? "border-red-500/30 bg-red-500/10 text-red-400"
+    : "";
+  const normalStyles = error
+    ? ""
+    : "border-border/80 bg-muted/60 text-muted-foreground";
+  const hoverStyles = error
+    ? "hover:border-red-500/40 hover:bg-red-500/15"
+    : "hover:border-foreground/20 hover:bg-muted hover:shadow-sm hover:ring-1 hover:ring-foreground/5";
+
   const pill = isClickable ? (
     <button
       type="button"
       onClick={handleClick}
       title={showTooltip ? undefined : `Open ${fileName}`}
       className={cn(
-        "inline-flex max-w-[220px] cursor-pointer items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[12px] leading-tight text-muted-foreground transition-all",
-        "hover:border-foreground/20 hover:bg-muted hover:shadow-sm hover:ring-1 hover:ring-foreground/5",
+        "inline-flex max-w-[220px] cursor-pointer items-center rounded border px-1.5 py-0.5 font-mono text-[12px] leading-tight transition-all",
+        normalStyles,
+        errorStyles,
+        hoverStyles,
       )}
     >
       <span className="truncate">{fileName}</span>
     </button>
   ) : (
-    <span className="inline-flex max-w-[220px] items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 font-mono text-[12px] leading-tight text-muted-foreground">
+    <span
+      className={cn(
+        "inline-flex max-w-[220px] items-center rounded border px-1.5 py-0.5 font-mono text-[12px] leading-tight",
+        normalStyles,
+        errorStyles,
+      )}
+    >
       <span className="truncate">{fileName}</span>
     </span>
   );

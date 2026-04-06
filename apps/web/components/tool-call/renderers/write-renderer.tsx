@@ -73,10 +73,15 @@ export function WriteRenderer({
         filePath === "..." ? (
           filePath
         ) : (
-          <FileNamePill filePath={filePath} fullPath={rawFilePath} />
+          <FileNamePill
+            filePath={filePath}
+            fullPath={rawFilePath}
+            error={Boolean(mergedState.error)}
+          />
         )
       }
       meta={meta}
+      errorMeta={mergedState.error ? "failed" : undefined}
       state={mergedState}
       expandedContent={expandedContent}
       onApprove={onApprove}
