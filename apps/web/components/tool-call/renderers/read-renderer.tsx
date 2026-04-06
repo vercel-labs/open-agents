@@ -51,7 +51,9 @@ export function ReadRenderer({
         .join("\n")
     : undefined;
 
-  const fileOptions = isPartialRead ? partialReadFileOptions : defaultFileOptions;
+  const fileOptions = isPartialRead
+    ? partialReadFileOptions
+    : defaultFileOptions;
 
   const expandedContent = cleanContent ? (
     <div className="max-h-96 overflow-auto rounded-md border border-border">

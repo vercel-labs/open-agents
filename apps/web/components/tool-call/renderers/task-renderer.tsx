@@ -18,11 +18,24 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { ToolRendererProps } from "@/app/lib/render-tool";
+import {
+  extractRenderState,
+  getToolName,
+  type ToolRendererProps,
+} from "@/app/lib/render-tool";
 import type { WebAgentUIToolPart } from "@/app/types";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
-import { ToolCall } from "../tool-call";
 import { ToolLayout } from "../tool-layout";
+import { BashRenderer } from "./bash-renderer";
+import { ReadRenderer } from "./read-renderer";
+import { WriteRenderer } from "./write-renderer";
+import { EditRenderer } from "./edit-renderer";
+import { GlobRenderer } from "./glob-renderer";
+import { GrepRenderer } from "./grep-renderer";
+import { TodoRenderer } from "./todo-renderer";
+import { AskUserQuestionRenderer } from "./ask-user-question-renderer";
+import { FetchRenderer } from "./fetch-renderer";
+import { SkillRenderer } from "./skill-renderer";
 
 // ---------------------------------------------------------------------------
 // Tool name → icon / display name mapping (for pending tool call only)
@@ -35,23 +48,50 @@ const TOOL_ICON_CLASS = "h-3.5 w-3.5";
 function getToolMeta(toolName: string): ToolMeta {
   switch (toolName) {
     case "bash":
-      return { displayName: "Bash", icon: <Terminal className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Bash",
+        icon: <Terminal className={TOOL_ICON_CLASS} />,
+      };
     case "read":
-      return { displayName: "Read", icon: <FileText className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Read",
+        icon: <FileText className={TOOL_ICON_CLASS} />,
+      };
     case "write":
-      return { displayName: "Create", icon: <FilePlus className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Create",
+        icon: <FilePlus className={TOOL_ICON_CLASS} />,
+      };
     case "edit":
-      return { displayName: "Update", icon: <Pencil className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Update",
+        icon: <Pencil className={TOOL_ICON_CLASS} />,
+      };
     case "grep":
-      return { displayName: "Grep", icon: <Search className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Grep",
+        icon: <Search className={TOOL_ICON_CLASS} />,
+      };
     case "glob":
-      return { displayName: "Glob", icon: <FolderSearch className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Glob",
+        icon: <FolderSearch className={TOOL_ICON_CLASS} />,
+      };
     case "web_fetch":
-      return { displayName: "Fetch", icon: <Globe className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Fetch",
+        icon: <Globe className={TOOL_ICON_CLASS} />,
+      };
     case "skill":
-      return { displayName: "Skill", icon: <Zap className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Skill",
+        icon: <Zap className={TOOL_ICON_CLASS} />,
+      };
     case "task":
-      return { displayName: "Task", icon: <Telescope className={TOOL_ICON_CLASS} /> };
+      return {
+        displayName: "Task",
+        icon: <Telescope className={TOOL_ICON_CLASS} />,
+      };
     default: {
       const name = toolName.charAt(0).toUpperCase() + toolName.slice(1);
       return { displayName: name, icon: undefined };
@@ -226,6 +266,53 @@ const IDLE_STATE: ToolRenderState = {
   isActiveApproval: false,
 };
 
+/**
+ * Render a completed subagent tool call using the real renderers.
+ * This is a local dispatch to avoid circular imports with tool-call.tsx.
+ */
+function SubagentToolCall({ part }: { part: WebAgentUIToolPart }) {
+  const state = extractRenderState(part, null, false);
+  const cwd = DEFAULT_WORKING_DIRECTORY;
+
+  switch (part.type) {
+    case "tool-bash":
+      return <BashRenderer part={part} state={state} />;
+    case "tool-read":
+      return <ReadRenderer part={part} state={state} cwd={cwd} />;
+    case "tool-write":
+      return <WriteRenderer part={part} state={state} cwd={cwd} />;
+    case "tool-edit":
+      return <EditRenderer part={part} state={state} cwd={cwd} />;
+    case "tool-glob":
+      return <GlobRenderer part={part} state={state} />;
+    case "tool-grep":
+      return <GrepRenderer part={part} state={state} />;
+    case "tool-todo_write":
+      return <TodoRenderer part={part} state={state} />;
+    case "tool-ask_user_question":
+      return <AskUserQuestionRenderer part={part} state={state} />;
+    case "tool-web_fetch":
+      return <FetchRenderer part={part} state={state} />;
+    case "tool-skill":
+      return <SkillRenderer part={part} state={state} />;
+    default: {
+      const toolName = getToolName(part);
+      const name = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+      const input = part.input as Record<string, unknown> | undefined;
+      const summary = input ? JSON.stringify(input).slice(0, 40) : "...";
+      return (
+        <ToolLayout
+          name={name}
+          summary={summary}
+          summaryClassName="font-mono"
+          meta={part.state === "output-available" ? "Done" : undefined}
+          state={state}
+        />
+      );
+    }
+  }
+}
+
 function PendingMiniToolCall({
   name,
   input,
@@ -311,14 +398,10 @@ export function TaskRenderer({
           />
         </div>
       )}
-      {/* Complete: render real ToolCall components */}
+      {/* Complete: render real tool call components */}
       {isComplete &&
         completedParts.map((toolPart) => (
-          <ToolCall
-            key={toolPart.toolCallId}
-            part={toolPart}
-            isStreaming={false}
-          />
+          <SubagentToolCall key={toolPart.toolCallId} part={toolPart} />
         ))}
     </div>
   ) : undefined;
