@@ -80,7 +80,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2 sm:justify-self-start">
-          <span className="text-lg font-semibold">Open Harness</span>
+          <span className="text-lg font-semibold">Open Agents</span>
         </div>
         <div className="flex items-center gap-2 sm:justify-self-end">
           <button

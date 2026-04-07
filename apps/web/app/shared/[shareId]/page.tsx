@@ -49,7 +49,7 @@ export async function generateMetadata({
 
   return {
     title: sharedChat?.title ?? "Shared Chat",
-    description: "A shared Open Harness chat.",
+    description: "A shared Open Agents chat.",
   };
 }
 

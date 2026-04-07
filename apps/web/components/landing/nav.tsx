@@ -44,7 +44,7 @@ export function LandingNav() {
               />
             </svg>
             <span className="text-sm font-semibold tracking-tight">
-              Open Harness
+              Open Agents
             </span>
           </div>
 

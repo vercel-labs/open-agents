@@ -7,10 +7,10 @@ export function LandingFooter() {
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-3">
           <div>
             <div className="font-mono text-xs uppercase tracking-widest text-(--l-fg-4)">
-              Open Harness
+              Open Agents
             </div>
             <div className="mt-3 text-sm text-(--l-fg-3)">
-              Open cloud agents for
+              Open Agents for
               <br />
               shipping code.
             </div>

@@ -14,7 +14,7 @@ import { Toaster } from "sonner";
 import { SWRConfig } from "swr";
 import { FetchError } from "@/lib/swr";
 
-const THEME_STORAGE_KEY = "open-harness-theme";
+const THEME_STORAGE_KEY = "open-agents-theme";
 const DARK_MODE_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
 export type ThemePreference = "light" | "dark" | "system";

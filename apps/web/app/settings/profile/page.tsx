@@ -3,7 +3,7 @@ import { ProfileSection } from "../profile-section";
 
 export const metadata: Metadata = {
   title: "Profile",
-  description: "Update your Open Harness profile details.",
+  description: "Update your Open Agents profile details.",
 };
 
 export default function ProfilePage() {

@@ -25,7 +25,7 @@ export function SignedOutHero() {
                 className="landing-fade-up text-4xl font-semibold leading-[1.03] tracking-tighter sm:text-5xl md:text-7xl"
                 style={{ animationDelay: "30ms" }}
               >
-                Open cloud agents.
+                Open Agents.
               </h1>
               <p
                 className="landing-fade-up mt-4 text-base leading-relaxed text-(--l-fg-2) sm:mt-6 sm:text-lg sm:text-(--l-fg-3)"

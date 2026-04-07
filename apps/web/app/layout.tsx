@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 const themeInitializationScript = `
 (() => {
-  const storageKey = "open-harness-theme";
+  const storageKey = "open-agents-theme";
   const darkModeMediaQuery = "(prefers-color-scheme: dark)";
   const storedTheme = window.localStorage.getItem(storageKey);
 
@@ -43,10 +43,10 @@ const faviconPath = isPreviewDeployment
 
 export const metadata: Metadata = {
   title: {
-    default: "Open Harness",
-    template: "%s | Open Harness",
+    default: "Open Agents",
+    template: "%s | Open Agents",
   },
-  description: "Open Harness web app for managing AI coding sessions.",
+  description: "Open Agents web app for managing AI coding sessions.",
   icons: {
     icon: faviconPath,
     shortcut: faviconPath,

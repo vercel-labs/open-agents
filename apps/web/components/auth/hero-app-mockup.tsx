@@ -10,7 +10,7 @@ export function AppMockup() {
             <div className="h-2.5 w-2.5 rounded-full bg-black/10 dark:bg-white/10" />
           </div>
           <span className="ml-2 text-[11px] text-black/30 dark:text-white/25">
-            open-harness / feat/auth-flow
+            open-agents / feat/auth-flow
           </span>
         </div>
         <div className="flex items-center gap-1.5">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type Theme = "system" | "light" | "dark";
 
-const STORAGE_KEY = "open-harness-theme";
+const STORAGE_KEY = "open-agents-theme";
 
 function resolveTheme(theme: Theme): "light" | "dark" {
   if (theme !== "system") return theme;

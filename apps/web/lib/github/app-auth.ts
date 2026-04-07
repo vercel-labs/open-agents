@@ -46,7 +46,7 @@ export function isGitHubAppConfigured(): boolean {
 
 /**
  * Returns a git commit trailer for co-authoring with the GitHub App bot, e.g.:
- *   Co-Authored-By: open-harness[bot] <12345+open-harness[bot]@users.noreply.github.com>
+ *   Co-Authored-By: open-agents[bot] <12345+open-agents[bot]@users.noreply.github.com>
  *
  * GitHub uses this to display "user and bot committed" on commits.
  * Returns null if the app is not configured.
