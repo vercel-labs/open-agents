@@ -783,7 +783,12 @@ export function InboxSidebar({
             type="button"
             variant="ghost"
             size="icon"
-            onClick={onOpenNewSession}
+            onClick={() => {
+              if (isMobile) {
+                setOpenMobile(false);
+              }
+              onOpenNewSession();
+            }}
             className="h-7 w-7"
           >
             <Plus className="h-4 w-4" />
