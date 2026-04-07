@@ -292,102 +292,106 @@ function GitDataPartCard({
   } else {
     if (isPending) label = "Creating pull request…";
     else if (isSuccess) {
-      if (part.data.syncedExisting && prNumber) label = "Synced to existing PR";
-      else if (prNumber) label = "Opened pull request";
+      if (part.data.syncedExisting && prNumber)
+        label = `Synced to existing PR #${prNumber}`;
+      else if (prNumber) label = `Opened PR #${prNumber}`;
       else label = "Pull request ready";
     } else if (isError) label = part.data.error ?? "PR failed";
     else label = part.data.skipReason ?? "PR skipped";
   }
 
-  // Icon color
-  const iconColor = isError
-    ? "text-red-500"
-    : isSuccess
-      ? isCommit
-        ? "text-emerald-500 dark:text-emerald-400"
-        : "text-violet-500 dark:text-violet-400"
-      : "text-muted-foreground";
+  // Build the detail fragment shown after the dot separator
+  const detail = isCommit
+    ? shortSha ?? commitMessage
+    : undefined;
+
+  // The icon shown inline in the separator
+  const IconEl = isPending ? (
+    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />
+  ) : isError ? (
+    <X className="h-3 w-3 text-red-500/70" />
+  ) : isCommit ? (
+    <GitCommitHorizontal className="h-3 w-3 text-muted-foreground/50" />
+  ) : (
+    <GitPullRequest className="h-3 w-3 text-muted-foreground/50" />
+  );
+
+  // For commits with both a SHA and a message, show the message beneath
+  const subtitle =
+    isCommit && shortSha && commitMessage ? commitMessage : undefined;
+
+  const textColor = isError
+    ? "text-red-500/70 dark:text-red-400/70"
+    : "text-muted-foreground/70";
+
+  const Wrapper = url && !isPending ? "a" : "div";
+  const wrapperProps =
+    url && !isPending
+      ? ({
+          href: url,
+          target: "_blank",
+          rel: "noreferrer",
+        } as const)
+      : {};
 
   return (
-    <div
-      className={cn(
-        "-mx-1.5 flex items-start gap-2.5 rounded-lg px-2.5 py-1.5",
-        isPending && "animate-pulse",
-      )}
-    >
-      {/* Status icon */}
-      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
-        {isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        ) : isCommit ? (
-          <GitCommitHorizontal className={cn("h-3.5 w-3.5", iconColor)} />
-        ) : (
-          <GitPullRequest className={cn("h-3.5 w-3.5", iconColor)} />
-        )}
-      </span>
+    <div className="flex items-center gap-3 py-1">
+      {/* Left rule */}
+      <div className="h-px flex-1 bg-border/60" />
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span
+      {/* Center label */}
+      <Wrapper
+        {...wrapperProps}
+        className={cn(
+          "group/sep flex max-w-[80%] items-center gap-1.5",
+          url && !isPending && "cursor-pointer",
+        )}
+      >
+        {IconEl}
+        <span
+          className={cn(
+            "truncate text-xs font-medium",
+            textColor,
+            url &&
+              !isPending &&
+              "group-hover/sep:text-foreground transition-colors",
+          )}
+        >
+          {label}
+        </span>
+        {detail && (
+          <>
+            <span className="text-muted-foreground/30">·</span>
+            <span
+              className={cn(
+                "truncate font-mono text-[11px]",
+                textColor,
+                url &&
+                  !isPending &&
+                  "group-hover/sep:text-foreground transition-colors",
+              )}
+            >
+              {detail}
+            </span>
+          </>
+        )}
+        {url && !isPending && (
+          <ExternalLink
             className={cn(
-              "text-sm font-medium leading-5",
-              isError
-                ? "text-red-500 dark:text-red-400"
-                : isPending
-                  ? "text-muted-foreground"
-                  : "text-foreground",
+              "h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors",
+              "group-hover/sep:text-muted-foreground",
             )}
-          >
-            {label}
-          </span>
-
-          {/* Inline SHA chip for commits */}
-          {isCommit && shortSha && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {shortSha}
-            </a>
-          )}
-
-          {/* Inline PR number for PRs */}
-          {!isCommit && prNumber && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-mono text-xs leading-5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              #{prNumber}
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-
-          {/* Fallback view link when we have a URL but no SHA/PR number */}
-          {url && !shortSha && !prNumber && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              View
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-        </div>
-
-        {/* Commit message on secondary line */}
-        {commitMessage && (
-          <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
-            {commitMessage}
-          </p>
+          />
         )}
-      </div>
+      </Wrapper>
+
+      {/* Right rule */}
+      <div className="h-px flex-1 bg-border/60" />
+
+      {/* Subtitle (commit message when SHA is shown as detail) */}
+      {subtitle && (
+        <p className="sr-only">{subtitle}</p>
+      )}
     </div>
   );
 }
@@ -3393,7 +3397,7 @@ export function SessionChatContent({
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}
-                              className="max-w-full py-1"
+                              className="my-1 max-w-full"
                             >
                               <GitDataPartCard part={p} />
                             </div>
