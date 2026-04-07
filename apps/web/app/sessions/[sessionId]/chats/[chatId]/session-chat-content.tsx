@@ -1984,9 +1984,18 @@ export function SessionChatContent({
 
   // Track whether we've auto-attempted sandbox startup for this page load.
   const hasAutoStartedSandboxRef = useRef(false);
+  const hasHandledInitialSandboxEntryRef = useRef(false);
   const shouldRefreshRestoredWorkspaceRef = useRef(false);
 
   const isArchived = session.status === "archived";
+  const isAutoRestoringOnEntry =
+    !hasHandledInitialSandboxEntryRef.current &&
+    !isArchived &&
+    hasSnapshot &&
+    !sandboxInfo &&
+    !isCreatingSandbox &&
+    !isRestoringSnapshot &&
+    reconnectionStatus === "no_sandbox";
 
   // After a snapshot restore, wait for the live workspace hooks to be active
   // again before forcing refreshes. Calling the pre-restore callbacks inside
@@ -2024,6 +2033,29 @@ export function SessionChatContent({
     isRestoringSnapshot,
     reconnectionStatus,
     attemptReconnection,
+  ]);
+
+  useEffect(() => {
+    if (isArchived) {
+      return;
+    }
+    if (hasHandledInitialSandboxEntryRef.current) {
+      return;
+    }
+    if (reconnectionStatus === "idle" || reconnectionStatus === "checking") {
+      return;
+    }
+
+    hasHandledInitialSandboxEntryRef.current = true;
+
+    if (isAutoRestoringOnEntry) {
+      void handleRestoreSnapshot();
+    }
+  }, [
+    handleRestoreSnapshot,
+    isArchived,
+    isAutoRestoringOnEntry,
+    reconnectionStatus,
   ]);
 
   // Server-authoritative lifecycle state: lightweight status poll every 15s.
@@ -3553,7 +3585,9 @@ export function SessionChatContent({
                   isReconnecting={isReconnectingSandbox && !isHibernatingUi}
                   isHibernating={isHibernatingUi}
                   isArchived={isArchived}
-                  isInitializing={reconnectionStatus === "idle"}
+                  isInitializing={
+                    reconnectionStatus === "idle" || isAutoRestoringOnEntry
+                  }
                   snapshotPending={isArchiveSnapshotPending}
                   hasSnapshot={hasSnapshot}
                   onRestore={handleRestoreSnapshot}
