@@ -10,7 +10,7 @@ import {
 } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
-  hasResumableSandboxState,
+  hasPausedSandboxState,
   hasRuntimeSandboxState,
 } from "@/lib/sandbox/utils";
 
@@ -51,9 +51,10 @@ export async function GET(req: Request): Promise<Response> {
   const { sessionRecord } = sessionContext;
   let effectiveSessionRecord = sessionRecord;
   const hasRuntimeState = hasRuntimeSandboxState(sessionRecord.sandboxState);
-  const hasResumeState =
-    hasResumableSandboxState(sessionRecord.sandboxState) ||
-    !!sessionRecord.snapshotUrl;
+  const hasPausedState =
+    !hasRuntimeState &&
+    (hasPausedSandboxState(sessionRecord.sandboxState) ||
+      !!sessionRecord.snapshotUrl);
 
   // Check expiry: the DB may still have sandbox runtime metadata even though the
   // current session has already expired. Use the same 10s buffer as the chat
@@ -95,7 +96,7 @@ export async function GET(req: Request): Promise<Response> {
 
   return Response.json({
     status: isActive ? "active" : "no_sandbox",
-    hasSnapshot: hasResumeState,
+    hasSnapshot: hasPausedState,
     lifecycleVersion: effectiveSessionRecord.lifecycleVersion,
     lifecycle: {
       serverTime: Date.now(),

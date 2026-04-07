@@ -44,6 +44,10 @@ export function hasResumableSandboxState(state: unknown): boolean {
   return getResumableSandboxName(state) !== null;
 }
 
+export function hasPausedSandboxState(state: unknown): boolean {
+  return hasResumableSandboxState(state) && !hasRuntimeSandboxState(state);
+}
+
 /**
  * Type guard to check if a sandbox is active and ready to accept operations.
  */

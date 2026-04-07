@@ -33,7 +33,7 @@ import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 import {
   clearSandboxResumeState,
   clearSandboxState,
-  hasResumableSandboxState,
+  hasPausedSandboxState,
   hasRuntimeSandboxState as hasRuntimeSandboxStateValue,
 } from "@/lib/sandbox/utils";
 import {
@@ -301,8 +301,9 @@ export function SessionChatProvider({
   const [sessionRecord, setSessionRecord] = useState<Session>(initialSession);
   const [chatInfo, setChatInfo] = useState<Chat>(initialChat);
   const [hasSnapshotState, setHasSnapshotState] = useState<boolean>(
-    hasResumableSandboxState(initialSession.sandboxState) ||
-      !!initialSession.snapshotUrl,
+    !hasRuntimeSandboxStateValue(initialSession.sandboxState) &&
+      (hasPausedSandboxState(initialSession.sandboxState) ||
+        !!initialSession.snapshotUrl),
   );
   const { modelOptions: allModelOptions, loading: modelOptionsLoadingFromApi } =
     useModelOptions({
@@ -774,9 +775,10 @@ export function SessionChatProvider({
     sessionRecord.sandboxState,
   );
   const hasSnapshot =
-    hasSnapshotState ||
-    hasResumableSandboxState(sessionRecord.sandboxState) ||
-    !!sessionRecord.snapshotUrl;
+    !hasRuntimeSandboxState &&
+    (hasSnapshotState ||
+      hasPausedSandboxState(sessionRecord.sandboxState) ||
+      !!sessionRecord.snapshotUrl);
 
   // Use SWR hooks for diff and files
   const sandboxConnected = sandboxInfo !== null;

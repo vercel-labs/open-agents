@@ -116,12 +116,14 @@ describe("/api/sandbox/reconnect", () => {
     );
     const payload = (await response.json()) as {
       status: string;
+      hasSnapshot: boolean;
       expiresAt?: number;
       lifecycle: { state: string | null };
     };
 
     expect(response.ok).toBe(true);
     expect(payload.status).toBe("connected");
+    expect(payload.hasSnapshot).toBe(false);
     expect(payload.lifecycle.state).toBe("active");
     expect(typeof payload.expiresAt).toBe("number");
 

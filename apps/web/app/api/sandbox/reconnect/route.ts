@@ -11,6 +11,7 @@ import {
 } from "@/lib/sandbox/lifecycle";
 import {
   clearUnavailableSandboxState,
+  hasPausedSandboxState,
   hasResumableSandboxState,
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
@@ -76,18 +77,19 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const { sessionRecord } = sessionContext;
-  const hasResumeState =
-    hasResumableSandboxState(sessionRecord.sandboxState) ||
-    !!sessionRecord.snapshotUrl;
+  const hasPausedState =
+    !hasRuntimeSandboxState(sessionRecord.sandboxState) &&
+    (hasPausedSandboxState(sessionRecord.sandboxState) ||
+      !!sessionRecord.snapshotUrl);
 
   // No runtime sandbox state in DB
   if (!hasRuntimeSandboxState(sessionRecord.sandboxState)) {
     console.log(
-      `[Reconnect] session=${sessionId} status=no_sandbox hasSnapshot=${hasResumeState} runtimeState=false`,
+      `[Reconnect] session=${sessionId} status=no_sandbox hasSnapshot=${hasPausedState} runtimeState=false`,
     );
     return Response.json({
       status: "no_sandbox",
-      hasSnapshot: hasResumeState,
+      hasSnapshot: hasPausedState,
       lifecycle: buildLifecyclePayload(sessionRecord),
     } satisfies ReconnectResponse);
   }
@@ -95,11 +97,11 @@ export async function GET(req: Request): Promise<Response> {
   const state = sessionRecord.sandboxState;
   if (!state) {
     console.log(
-      `[Reconnect] session=${sessionId} status=no_sandbox hasSnapshot=${hasResumeState} runtimeState=false`,
+      `[Reconnect] session=${sessionId} status=no_sandbox hasSnapshot=${hasPausedState} runtimeState=false`,
     );
     return Response.json({
       status: "no_sandbox",
-      hasSnapshot: hasResumeState,
+      hasSnapshot: hasPausedState,
       lifecycle: buildLifecyclePayload(sessionRecord),
     } satisfies ReconnectResponse);
   }
@@ -142,11 +144,11 @@ export async function GET(req: Request): Promise<Response> {
     });
 
     console.log(
-      `[Reconnect] session=${sessionId} status=connected hasSnapshot=${hasResumeState} expiresAt=${sandbox.expiresAt ?? "null"}`,
+      `[Reconnect] session=${sessionId} status=connected hasSnapshot=${hasPausedState} expiresAt=${sandbox.expiresAt ?? "null"}`,
     );
     return Response.json({
       status: "connected",
-      hasSnapshot: hasResumeState,
+      hasSnapshot: hasPausedState,
       expiresAt: sandbox.expiresAt,
       lifecycle: buildLifecyclePayload(updatedSession ?? sessionRecord),
     } satisfies ReconnectResponse);
@@ -165,7 +167,7 @@ export async function GET(req: Request): Promise<Response> {
           : undefined;
       return Response.json({
         status: "connected",
-        hasSnapshot: hasResumeState,
+        hasSnapshot: hasPausedState,
         expiresAt: safeExpiresAt,
         lifecycle: buildLifecyclePayload(sessionRecord),
       } satisfies ReconnectResponse);
