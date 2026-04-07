@@ -75,7 +75,7 @@ export function SignInButton({
       ) : (
         <VercelIcon className="mr-2 h-4 w-4" />
       )}
-      {isLoading ? "Redirecting..." : "Sign in with Vercel"}
+      {isLoading ? "Signing in..." : "Sign in with Vercel"}
     </Button>
   );
 }
