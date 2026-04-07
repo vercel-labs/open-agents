@@ -46,6 +46,7 @@ export type WebAgentPrData = {
   url?: string;
   error?: string;
   skipReason?: string;
+  requiresManualCreation?: boolean;
 };
 
 export type WebAgentDataParts = {

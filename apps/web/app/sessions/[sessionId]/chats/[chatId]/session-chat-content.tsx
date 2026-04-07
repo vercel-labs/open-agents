@@ -285,25 +285,36 @@ function GitDataPartCard({
   let label: string;
   if (isCommit) {
     if (isPending) label = "Creating commit…";
-    else if (isSuccess)
-      label = part.data.pushed ? "Committed & pushed" : "Committed";
-    else if (isError) label = part.data.error ?? "Commit failed";
+    else if (isSuccess) {
+      if (part.data.committed && part.data.pushed) {
+        label = "Committed & pushed";
+      } else if (part.data.committed) {
+        label = "Committed";
+      } else if (part.data.pushed) {
+        label = "Pushed commits";
+      } else {
+        label = "Commit complete";
+      }
+    } else if (isError) label = part.data.error ?? "Commit failed";
     else label = "No changes to commit";
   } else {
     if (isPending) label = "Creating pull request…";
     else if (isSuccess) {
-      if (part.data.syncedExisting && prNumber)
+      if (part.data.requiresManualCreation) {
+        label = "Ready to create on GitHub";
+      } else if (part.data.syncedExisting && prNumber) {
         label = `Synced to existing PR #${prNumber}`;
-      else if (prNumber) label = `Opened PR #${prNumber}`;
-      else label = "Pull request ready";
+      } else if (prNumber) {
+        label = `Opened PR #${prNumber}`;
+      } else {
+        label = "Pull request ready";
+      }
     } else if (isError) label = part.data.error ?? "PR failed";
     else label = part.data.skipReason ?? "PR skipped";
   }
 
   // Build the detail fragment shown after the dot separator
-  const detail = isCommit
-    ? shortSha ?? commitMessage
-    : undefined;
+  const detail = isCommit ? (shortSha ?? commitMessage) : undefined;
 
   // The icon shown inline in the separator
   const IconEl = isPending ? (
@@ -389,9 +400,7 @@ function GitDataPartCard({
       <div className="h-px flex-1 bg-border/60" />
 
       {/* Subtitle (commit message when SHA is shown as detail) */}
-      {subtitle && (
-        <p className="sr-only">{subtitle}</p>
-      )}
+      {subtitle && <p className="sr-only">{subtitle}</p>}
     </div>
   );
 }
@@ -1225,6 +1234,52 @@ export function SessionChatContent({
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
+  const upsertSyntheticAssistantGitMessage = useCallback(
+    async (message: WebAgentUIMessage) => {
+      setMessages((currentMessages) => {
+        const existingIndex = currentMessages.findIndex(
+          (currentMessage) => currentMessage.id === message.id,
+        );
+
+        if (existingIndex < 0) {
+          return [...currentMessages, message];
+        }
+
+        const nextMessages = [...currentMessages];
+        nextMessages[existingIndex] = message;
+        return nextMessages;
+      });
+
+      try {
+        const response = await fetch(
+          `/api/sessions/${session.id}/chats/${chatInfo.id}/messages`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+          },
+        );
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(
+            body?.error ?? "Failed to persist synthetic assistant message",
+          );
+        }
+
+        await refreshChats().catch(() => undefined);
+        await markChatRead(chatInfo.id).catch(() => undefined);
+      } catch (error) {
+        console.error(
+          "Failed to persist synthetic assistant git message:",
+          error,
+        );
+      }
+    },
+    [chatInfo.id, markChatRead, refreshChats, session.id, setMessages],
+  );
   const renderMessages = useMemo(
     () => (hasMounted ? messages : initialMessages),
     [hasMounted, messages, initialMessages],
@@ -3982,6 +4037,7 @@ export function SessionChatContent({
           onOpenChange={setPrDialogOpen}
           session={session}
           hasSandbox={sandboxInfo !== null}
+          onGitMessage={upsertSyntheticAssistantGitMessage}
           onPrDetected={(pr) => {
             updateSessionPullRequest(pr);
             void refreshGitStatus().catch(() => {});
@@ -4048,6 +4104,7 @@ export function SessionChatContent({
           hasSandbox={sandboxInfo !== null}
           gitStatus={gitStatus}
           refreshGitStatus={refreshGitStatus}
+          onGitMessage={upsertSyntheticAssistantGitMessage}
           onOpenCreatePr={() => setPrDialogOpen(true)}
           onCommitted={handleCommitted}
         />

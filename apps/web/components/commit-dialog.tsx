@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { WebAgentUIMessage } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,6 +47,7 @@ interface CommitDialogProps {
   gitStatus: SessionGitStatus | null;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   onOpenCreatePr?: () => void;
 }
 
@@ -62,6 +64,7 @@ export function CommitDialog({
   gitStatus,
   refreshGitStatus,
   onCommitted,
+  onGitMessage,
   onOpenCreatePr,
 }: CommitDialogProps) {
   const [baseBranch, setBaseBranch] = useState("main");
@@ -246,7 +249,23 @@ export function CommitDialog({
     setIsSubmitting(true);
     setError(null);
 
+    const gitMessageId = crypto.randomUUID();
+    const commitPartId = `${gitMessageId}:commit`;
+
     try {
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: { status: "pending" },
+          },
+        ],
+      });
+
       const response = await commitAndPushSessionChanges({
         sessionId: session.id,
         sessionTitle: session.title,
@@ -270,15 +289,61 @@ export function CommitDialog({
         setPrHeadOwner(response.prHeadOwner);
       }
 
+      const commitOwner =
+        response.gitActions?.pushedToFork && response.prHeadOwner
+          ? response.prHeadOwner
+          : session.repoOwner;
+      const commitUrl =
+        response.gitActions?.commitSha && commitOwner && session.repoName
+          ? `https://github.com/${commitOwner}/${session.repoName}/commit/${response.gitActions.commitSha}`
+          : undefined;
+
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: {
+              status: "success",
+              committed: response.gitActions?.committed,
+              pushed: response.gitActions?.pushed,
+              commitMessage: response.gitActions?.commitMessage,
+              commitSha: response.gitActions?.commitSha,
+              url: commitUrl,
+            },
+          },
+        ],
+      });
+
       await syncGitStatus();
       setStep("success");
       onCommitted?.();
     } catch (err) {
-      setError(
+      const errorMessage =
         err instanceof Error
           ? err.message
-          : "Failed to commit and push changes",
-      );
+          : "Failed to commit and push changes";
+
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: {
+              status: "error",
+              error: errorMessage,
+            },
+          },
+        ],
+      });
+
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

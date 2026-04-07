@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import type { WebAgentUIMessage } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -48,6 +49,7 @@ interface CreatePRDialogProps {
   onOpenChange: (open: boolean) => void;
   session: Session;
   hasSandbox: boolean;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   onPrDetected?: (info: {
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
@@ -91,6 +93,7 @@ export function CreatePRDialog({
   onOpenChange,
   session,
   hasSandbox,
+  onGitMessage,
   onPrDetected,
 }: CreatePRDialogProps) {
   const [title, setTitle] = useState("");
@@ -290,7 +293,24 @@ export function CreatePRDialog({
   const handleCreate = async () => {
     setIsCreating(true);
     setError(null);
+
+    const gitMessageId = crypto.randomUUID();
+    const prPartId = `${gitMessageId}:pr`;
+
     try {
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: { status: "pending" },
+          },
+        ],
+      });
+
       if (
         shouldOpenCompareInsteadOfApi &&
         session.repoOwner &&
@@ -319,6 +339,22 @@ export function CreatePRDialog({
           autoMergeError: enableAutoMerge
             ? "Auto-merge can only be enabled for pull requests created through the GitHub API."
             : undefined,
+        });
+        await onGitMessage?.({
+          id: gitMessageId,
+          role: "assistant",
+          metadata: {},
+          parts: [
+            {
+              type: "data-pr",
+              id: prPartId,
+              data: {
+                status: "success",
+                url: compareUrl,
+                requiresManualCreation: true,
+              },
+            },
+          ],
         });
         return;
       }
@@ -355,6 +391,25 @@ export function CreatePRDialog({
             : undefined,
       });
 
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "success",
+              created: true,
+              prNumber:
+                typeof data.prNumber === "number" ? data.prNumber : undefined,
+              url: typeof data.prUrl === "string" ? data.prUrl : undefined,
+            },
+          },
+        ],
+      });
+
       if (typeof data.prNumber === "number") {
         onPrDetected?.({
           prNumber: data.prNumber,
@@ -365,7 +420,24 @@ export function CreatePRDialog({
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create PR");
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create PR";
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "error",
+              error: errorMessage,
+            },
+          },
+        ],
+      });
+      setError(errorMessage);
     } finally {
       setIsCreating(false);
     }
