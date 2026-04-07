@@ -21,6 +21,20 @@ type MockRunCommandParams = {
   env?: Record<string, string>;
 };
 
+type MockSessionState = {
+  sessionId?: string;
+  status?:
+    | "running"
+    | "stopped"
+    | "stopping"
+    | "snapshotting"
+    | "aborted"
+    | "failed";
+  timeout?: number;
+  requestedAt?: Date;
+  startedAt?: Date;
+};
+
 const createCalls: Array<Record<string, unknown>> = [];
 const getCalls: Array<Record<string, unknown>> = [];
 const runCommandCalls: MockRunCommandParams[] = [];
@@ -35,6 +49,7 @@ let runCommandMock = async (
   stdout: async () => "",
 });
 let lastRunCommandEnv: Record<string, string> | undefined;
+let currentSessionStateFactory = (_name: string): MockSessionState => ({});
 
 function domainForPort(port: number): string {
   if (missingPorts.has(port)) {
@@ -57,13 +72,13 @@ function buildRoutes() {
   });
 }
 
-function createMockSandboxSdk(name: string) {
-  const session = {
-    sessionId: `${name}-session`,
-    status: "running" as const,
-    timeout: 300_000,
-    requestedAt: new Date(),
-    startedAt: new Date(),
+function buildMockSession(name: string, state: MockSessionState = {}) {
+  return {
+    sessionId: state.sessionId ?? `${name}-session`,
+    status: state.status ?? "running",
+    timeout: state.timeout ?? 300_000,
+    requestedAt: state.requestedAt ?? new Date(),
+    startedAt: state.startedAt ?? new Date(),
     routes: buildRoutes(),
     domain: (port: number) => domainForPort(port),
     runCommand: async (params: MockRunCommandParams) => {
@@ -81,15 +96,32 @@ function createMockSandboxSdk(name: string) {
     stop: async () => {},
     extendTimeout: async () => {},
   };
+}
+
+function createMockSandboxSdk(name: string) {
+  let session = buildMockSession(name, currentSessionStateFactory(name));
 
   return {
     name,
-    routes: session.routes,
-    domain: session.domain,
-    currentSession: () => session,
-    runCommand: session.runCommand,
-    writeFiles: session.writeFiles,
-    readFileToBuffer: session.readFileToBuffer,
+    get routes() {
+      return buildRoutes();
+    },
+    domain: (port: number) => domainForPort(port),
+    currentSession: () => {
+      session = buildMockSession(name, currentSessionStateFactory(name));
+      return session;
+    },
+    runCommand: async (params: MockRunCommandParams) => {
+      runCommandCalls.push(params);
+      lastRunCommandEnv = params.env;
+      return runCommandMock(params);
+    },
+    writeFiles: async (files: { path: string; content: Buffer }[]) => {
+      writeFilesCalls.push(files);
+    },
+    readFileToBuffer: async (_opts: { path: string }) => {
+      return readFileToBufferResult;
+    },
     stop: async () => {},
   };
 }
@@ -132,6 +164,7 @@ beforeEach(() => {
     stdout: async () => "",
   });
   lastRunCommandEnv = undefined;
+  currentSessionStateFactory = () => ({});
 });
 
 describe("VercelSandbox.environmentDetails", () => {
@@ -243,6 +276,59 @@ describe("VercelSandbox persistence", () => {
         sandboxName: "session_123",
       }),
     );
+  });
+
+  test("derives resumed expiresAt without the provider stop buffer", async () => {
+    const startedAt = new Date();
+    currentSessionStateFactory = () => ({
+      timeout: 330_000,
+      requestedAt: startedAt,
+      startedAt,
+    });
+
+    const before = Date.now();
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123");
+    const remaining = (sandbox.expiresAt ?? 0) - before;
+
+    expect(remaining).toBeGreaterThan(298_000);
+    expect(remaining).toBeLessThanOrEqual(300_000);
+  });
+
+  test("refreshes state when the current session changes from stopped to running", async () => {
+    const stoppedAt = new Date(Date.now() - 60_000);
+    currentSessionStateFactory = () => ({
+      sessionId: "session_123-stopped",
+      status: "stopped",
+      timeout: 330_000,
+      requestedAt: stoppedAt,
+      startedAt: stoppedAt,
+    });
+
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123");
+    expect(sandbox.status).toBe("stopped");
+
+    const resumedAt = new Date();
+    currentSessionStateFactory = () => ({
+      sessionId: "session_123-running",
+      status: "running",
+      timeout: 330_000,
+      requestedAt: resumedAt,
+      startedAt: resumedAt,
+    });
+
+    const state = sandbox.getState();
+    const remaining = (state.expiresAt ?? 0) - Date.now();
+
+    expect(sandbox.status).toBe("ready");
+    expect(state).toEqual(
+      expect.objectContaining({
+        type: "vercel",
+        sandboxName: "session_123",
+        expiresAt: expect.any(Number),
+      }),
+    );
+    expect(remaining).toBeGreaterThan(298_000);
+    expect(remaining).toBeLessThanOrEqual(300_000);
   });
 });
 

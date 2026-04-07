@@ -67,7 +67,8 @@ function getRemainingTimeoutFromSession(
     return undefined;
   }
 
-  const remaining = startedAt + timeout - Date.now();
+  const proactiveTimeout = Math.max(timeout - TIMEOUT_BUFFER_MS, 0);
+  const remaining = startedAt + proactiveTimeout - Date.now();
   return remaining > 10_000 ? remaining : undefined;
 }
 
@@ -145,6 +146,40 @@ export class VercelSandbox implements Sandbox {
       this._expiresAt = startTime + timeout;
       this.scheduleProactiveStop();
     }
+  }
+
+  private refreshStateFromCurrentSession(): void {
+    const currentSession = this.sdk.currentSession();
+    const nextIsStopped = isStoppedSessionStatus(currentSession.status);
+    const shouldRefresh =
+      currentSession.sessionId !== this.session.sessionId ||
+      nextIsStopped !== this.isStopped ||
+      (!nextIsStopped && this._expiresAt === undefined);
+
+    if (!shouldRefresh) {
+      return;
+    }
+
+    this.session = currentSession;
+    this.isStopped = nextIsStopped;
+
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = undefined;
+    }
+
+    if (this.isStopped) {
+      this._timeout = undefined;
+      this._expiresAt = undefined;
+      return;
+    }
+
+    const remainingTimeout =
+      getRemainingTimeoutFromSession(currentSession) ??
+      DEFAULT_RECONNECT_TIMEOUT_MS;
+    this._timeout = remainingTimeout;
+    this._expiresAt = Date.now() + remainingTimeout;
+    this.scheduleProactiveStop();
   }
 
   /**
@@ -941,6 +976,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    * Get the current status of the sandbox.
    */
   get status(): SandboxStatus {
+    this.refreshStateFromCurrentSession();
     if (this.isStopped) return "stopped";
     return "ready";
   }
@@ -950,6 +986,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    * Returns state that can be passed to `connectSandbox()` to restore this sandbox.
    */
   getState(): { type: "vercel" } & VercelState {
+    this.refreshStateFromCurrentSession();
     return {
       type: "vercel",
       sandboxName: this.name,
