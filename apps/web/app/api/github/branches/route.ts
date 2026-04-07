@@ -11,6 +11,12 @@ interface PublicBranch {
   name: string;
 }
 
+function normalizeGitHubLimit(limit: number | undefined): number | undefined {
+  return typeof limit === "number" && Number.isFinite(limit)
+    ? Math.max(1, Math.min(limit, 100))
+    : undefined;
+}
+
 function parsePublicRepoInfo(value: unknown): PublicRepoInfo | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -49,6 +55,7 @@ function parsePublicBranches(value: unknown): PublicBranch[] | null {
 async function fetchPublicGitHubBranches(
   owner: string,
   repo: string,
+  limit?: number,
 ): Promise<{
   branches: string[];
   defaultBranch: string;
@@ -74,10 +81,11 @@ async function fetchPublicGitHubBranches(
     return null;
   }
   const defaultBranch = repoInfo.default_branch;
+  const normalizedLimit = normalizeGitHubLimit(limit);
   const branches: string[] = [];
 
-  const perPage = 100;
-  const maxPages = 10;
+  const perPage = normalizedLimit ?? 100;
+  const maxPages = normalizedLimit ? 1 : 10;
   for (let page = 1; page <= maxPages; page += 1) {
     const branchesResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
@@ -113,9 +121,17 @@ async function fetchPublicGitHubBranches(
       branches.push(branch.name);
     }
 
+    if (normalizedLimit && branches.length >= normalizedLimit) {
+      break;
+    }
+
     if (pageBranches.length < perPage) {
       break;
     }
+  }
+
+  if (normalizedLimit && !branches.includes(defaultBranch)) {
+    branches.push(defaultBranch);
   }
 
   branches.sort((a, b) => {
@@ -129,7 +145,7 @@ async function fetchPublicGitHubBranches(
   });
 
   return {
-    branches,
+    branches: normalizedLimit ? branches.slice(0, normalizedLimit) : branches,
     defaultBranch,
   };
 }
@@ -147,6 +163,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const owner = searchParams.get("owner");
   const repo = searchParams.get("repo");
+  const rawLimit = searchParams.get("limit");
+  const parsedLimit = rawLimit ? Number.parseInt(rawLimit, 10) : undefined;
+  const limit = normalizeGitHubLimit(parsedLimit);
 
   if (!owner || !repo) {
     return NextResponse.json(
@@ -170,6 +189,7 @@ export async function GET(request: NextRequest) {
         token,
         owner,
         repo,
+        limit,
       );
 
       if (result) {
@@ -177,7 +197,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const publicResult = await fetchPublicGitHubBranches(owner, repo);
+    const publicResult = await fetchPublicGitHubBranches(owner, repo, limit);
     if (publicResult) {
       return NextResponse.json(publicResult);
     }

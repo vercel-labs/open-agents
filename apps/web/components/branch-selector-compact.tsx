@@ -52,7 +52,7 @@ export function BranchSelectorCompact({
   // Conditional fetch based on owner and repo
   const { data, isLoading } = useSWR<BranchesResponse>(
     owner && repo
-      ? `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`
+      ? `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&limit=50`
       : null,
     fetcher,
   );

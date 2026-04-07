@@ -37,6 +37,12 @@ interface GitHubRepoOptions {
   query?: string;
 }
 
+function normalizeGitHubLimit(limit: number | undefined): number | undefined {
+  return typeof limit === "number" && Number.isFinite(limit)
+    ? Math.max(1, Math.min(limit, 100))
+    : undefined;
+}
+
 interface GitHubSearchResponse {
   items: GitHubRepo[];
 }
@@ -100,10 +106,7 @@ async function fetchGitHubReposInternal(
   owner: string,
   options?: GitHubRepoOptions,
 ) {
-  const normalizedLimit =
-    typeof options?.limit === "number" && Number.isFinite(options.limit)
-      ? Math.max(1, Math.min(options.limit, 100))
-      : undefined;
+  const normalizedLimit = normalizeGitHubLimit(options?.limit);
   const normalizedQuery = options?.query?.trim() || undefined;
   // Check if owner is the authenticated user
   const currentUser = await fetchGitHubAPI<{ login: string }>("/user", token);
@@ -217,7 +220,13 @@ export function getCachedGitHubRepos(
 }
 
 export const getCachedGitHubBranches = unstable_cache(
-  async (userId: string, token: string, owner: string, repo: string) => {
+  async (
+    userId: string,
+    token: string,
+    owner: string,
+    repo: string,
+    limit?: number,
+  ) => {
     // Fetch repo info for default branch
     const repoInfo = await fetchGitHubAPI<GitHubRepoInfo>(
       `/repos/${owner}/${repo}`,
@@ -226,12 +235,13 @@ export const getCachedGitHubBranches = unstable_cache(
     if (!repoInfo) return null;
 
     const defaultBranch = repoInfo.default_branch;
+    const normalizedLimit = normalizeGitHubLimit(limit);
 
-    // Fetch all branches with pagination
+    // Fetch branches with pagination only when needed
     const allBranches: string[] = [];
     let page = 1;
-    const perPage = 100;
-    const maxPages = 50;
+    const perPage = normalizedLimit ?? 100;
+    const maxPages = normalizedLimit ? 1 : 50;
 
     while (page <= maxPages) {
       const branches = await fetchGitHubAPI<GitHubBranch[]>(
@@ -247,8 +257,15 @@ export const getCachedGitHubBranches = unstable_cache(
       if (branches.length === 0) break;
 
       allBranches.push(...branches.map((b) => b.name));
+      if (normalizedLimit && allBranches.length >= normalizedLimit) {
+        break;
+      }
       if (branches.length < perPage) break;
       page++;
+    }
+
+    if (normalizedLimit && !allBranches.includes(defaultBranch)) {
+      allBranches.push(defaultBranch);
     }
 
     // Sort with default branch first
@@ -259,7 +276,9 @@ export const getCachedGitHubBranches = unstable_cache(
     });
 
     return {
-      branches: allBranches,
+      branches: normalizedLimit
+        ? allBranches.slice(0, normalizedLimit)
+        : allBranches,
       defaultBranch,
     };
   },
