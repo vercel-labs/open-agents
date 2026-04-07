@@ -26,8 +26,7 @@ export function normalizeLegacySandboxState(
   const sandboxName =
     typeof state.sandboxName === "string" && state.sandboxName.length > 0
       ? state.sandboxName
-      : typeof state.sandboxId === "string" &&
-          state.sandboxId.startsWith("session_")
+      : typeof state.sandboxId === "string" && state.sandboxId.length > 0
         ? state.sandboxId
         : undefined;
 

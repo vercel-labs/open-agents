@@ -10,7 +10,7 @@ import {
   getSandboxExpiresAtDate,
 } from "@/lib/sandbox/lifecycle";
 import {
-  clearSandboxState,
+  clearUnavailableSandboxState,
   hasResumableSandboxState,
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
@@ -171,17 +171,23 @@ export async function GET(req: Request): Promise<Response> {
       } satisfies ReconnectResponse);
     }
 
-    // Sandbox no longer exists (expired or stopped)
+    const clearedState = clearUnavailableSandboxState(
+      sessionRecord.sandboxState,
+      message,
+    );
+    const hasResumeStateAfterFailure =
+      hasResumableSandboxState(clearedState) || !!sessionRecord.snapshotUrl;
+
     await updateSession(sessionId, {
-      sandboxState: clearSandboxState(sessionRecord.sandboxState),
+      sandboxState: clearedState,
       ...buildHibernatedLifecycleUpdate(),
     });
     console.error(
-      `[Reconnect] session=${sessionId} status=expired hasSnapshot=${hasResumeState} error=${message}`,
+      `[Reconnect] session=${sessionId} status=expired hasSnapshot=${hasResumeStateAfterFailure} error=${message}`,
     );
     return Response.json({
       status: "expired",
-      hasSnapshot: hasResumeState,
+      hasSnapshot: hasResumeStateAfterFailure,
       lifecycle: {
         serverTime: Date.now(),
         state: "hibernated",

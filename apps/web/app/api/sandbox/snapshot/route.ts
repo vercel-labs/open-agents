@@ -17,10 +17,12 @@ import {
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
 import {
   canOperateOnSandbox,
+  clearSandboxResumeState,
   clearSandboxState,
-  getPersistentSandboxName,
+  getResumableSandboxName,
   getSessionSandboxName,
   hasRuntimeSandboxState,
+  isSandboxNotFoundError,
 } from "@/lib/sandbox/utils";
 
 interface CreateSnapshotRequest {
@@ -85,7 +87,7 @@ export async function POST(req: Request) {
 
     return Response.json({
       snapshotId:
-        getPersistentSandboxName(clearedState) ??
+        getResumableSandboxName(clearedState) ??
         sessionRecord.snapshotUrl ??
         null,
       createdAt: Date.now(),
@@ -145,7 +147,7 @@ export async function PUT(req: Request) {
 
   if (hasRuntimeSandboxState(sessionRecord.sandboxState)) {
     const restoredFrom =
-      getPersistentSandboxName(sessionRecord.sandboxState) ??
+      getResumableSandboxName(sessionRecord.sandboxState) ??
       sessionRecord.snapshotUrl ??
       undefined;
     console.log(
@@ -158,7 +160,7 @@ export async function PUT(req: Request) {
     });
   }
 
-  const persistentSandboxName = getPersistentSandboxName(
+  const persistentSandboxName = getResumableSandboxName(
     sessionRecord.sandboxState,
   );
   const legacySnapshotId = sessionRecord.snapshotUrl;
@@ -173,30 +175,49 @@ export async function PUT(req: Request) {
     );
   }
 
+  const restoreLegacySnapshot = () =>
+    connectSandbox(
+      {
+        type: sandboxType,
+        sandboxName: getSessionSandboxName(sessionId),
+        snapshotId: legacySnapshotId ?? undefined,
+      },
+      {
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+        ports: DEFAULT_SANDBOX_PORTS,
+        resume: true,
+        createIfMissing: true,
+        persistent: true,
+      },
+    );
+
   try {
+    let restoredFrom = legacySnapshotId ?? persistentSandboxName;
+
     const sandbox = persistentSandboxName
-      ? await connectSandbox(
-          { type: sandboxType, sandboxName: persistentSandboxName },
-          {
-            timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-            ports: DEFAULT_SANDBOX_PORTS,
-            resume: true,
-          },
-        )
-      : await connectSandbox(
-          {
-            type: sandboxType,
-            sandboxName: getSessionSandboxName(sessionId),
-            snapshotId: legacySnapshotId ?? undefined,
-          },
-          {
-            timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-            ports: DEFAULT_SANDBOX_PORTS,
-            resume: true,
-            createIfMissing: true,
-            persistent: true,
-          },
-        );
+      ? await (async () => {
+          try {
+            restoredFrom = persistentSandboxName;
+            return await connectSandbox(
+              { type: sandboxType, sandboxName: persistentSandboxName },
+              {
+                timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+                ports: DEFAULT_SANDBOX_PORTS,
+                resume: true,
+              },
+            );
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            if (!legacySnapshotId || !isSandboxNotFoundError(message)) {
+              throw error;
+            }
+
+            restoredFrom = legacySnapshotId;
+            return restoreLegacySnapshot();
+          }
+        })()
+      : await restoreLegacySnapshot();
 
     const newState = sandbox.getState?.();
     const restoredState = (newState ?? {
@@ -217,17 +238,41 @@ export async function PUT(req: Request) {
       reason: "snapshot-restored",
     });
 
+    const restoredSandboxName =
+      getResumableSandboxName(restoredState) ?? "unknown";
+    const restoredFromLabel = restoredFrom ?? "unknown";
     console.log(
-      `[Snapshot Restore] session=${sessionId} success=true sandboxType=${sandboxType} sandboxName=${getPersistentSandboxName(restoredState) ?? "unknown"} restoredFrom=${legacySnapshotId ?? persistentSandboxName}`,
+      `[Snapshot Restore] session=${sessionId} success=true sandboxType=${sandboxType} sandboxName=${restoredSandboxName} restoredFrom=${restoredFromLabel}`,
     );
 
     return Response.json({
       success: true,
-      restoredFrom: legacySnapshotId ?? persistentSandboxName,
+      restoredFrom,
       sandboxId: "id" in sandbox ? sandbox.id : undefined,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    if (
+      persistentSandboxName &&
+      !legacySnapshotId &&
+      isSandboxNotFoundError(message)
+    ) {
+      await updateSession(sessionId, {
+        sandboxState: clearSandboxResumeState(sessionRecord.sandboxState),
+        ...buildHibernatedLifecycleUpdate(),
+      });
+      console.error(
+        `[Snapshot Restore] session=${sessionId} success=false error=${message}`,
+      );
+      return Response.json(
+        {
+          error: "Saved sandbox is no longer available. Create a new sandbox.",
+        },
+        { status: 404 },
+      );
+    }
+
     console.error(
       `[Snapshot Restore] session=${sessionId} success=false error=${message}`,
     );

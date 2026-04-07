@@ -29,6 +29,7 @@ const updateCalls: Array<Record<string, unknown>> = [];
 const kickCalls: Array<{ sessionId: string; reason: string }> = [];
 
 let stopCallCount = 0;
+let connectSandboxResumeError: Error | null = null;
 let sessionRecord: TestSessionRecord;
 
 mock.module("@/app/api/sessions/_lib/session-context", () => ({
@@ -81,6 +82,16 @@ mock.module("@open-harness/sandbox", () => ({
     options?: Record<string, unknown>,
   ) => {
     connectCalls.push({ state, options });
+
+    if (
+      connectSandboxResumeError &&
+      options?.resume === true &&
+      typeof state.sandboxName === "string" &&
+      state.snapshotId === undefined
+    ) {
+      throw connectSandboxResumeError;
+    }
+
     const sandboxName =
       typeof state.sandboxName === "string"
         ? state.sandboxName
@@ -131,6 +142,7 @@ describe("/api/sandbox/snapshot", () => {
     updateCalls.length = 0;
     kickCalls.length = 0;
     stopCallCount = 0;
+    connectSandboxResumeError = null;
     sessionRecord = makeSessionRecord();
   });
 
@@ -216,6 +228,42 @@ describe("/api/sandbox/snapshot", () => {
     expect(kickCalls).toEqual([
       { sessionId: "session-1", reason: "snapshot-restored" },
     ]);
+  });
+
+  test("PUT clears a broken persistent sandbox handle after a 404", async () => {
+    const { PUT } = await routeModulePromise;
+
+    sessionRecord = makeSessionRecord({
+      sandboxState: {
+        type: "vercel",
+        sandboxName: "session_session-1",
+      },
+      snapshotUrl: null,
+      lifecycleState: "hibernated",
+      sandboxExpiresAt: null,
+      hibernateAfter: null,
+    });
+    connectSandboxResumeError = new Error("Status code 404 is not ok");
+
+    const response = await PUT(
+      new Request("http://localhost/api/sandbox/snapshot", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: "session-1" }),
+      }),
+    );
+    const payload = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(404);
+    expect(payload.error).toContain("Saved sandbox is no longer available");
+    expect(updateCalls[0]).toEqual(
+      expect.objectContaining({
+        sandboxState: {
+          type: "vercel",
+        },
+        lifecycleState: "hibernated",
+      }),
+    );
   });
 
   test("PUT lazily migrates a legacy snapshot-backed session on first resume", async () => {

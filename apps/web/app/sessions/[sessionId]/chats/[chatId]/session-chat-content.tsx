@@ -2279,8 +2279,7 @@ export function SessionChatContent({
     !isRestoringSnapshot;
   const isHibernatingTransition =
     isReconnectingSandbox && hasSnapshot && !hasRuntimeSandboxState;
-  const isArchiveSnapshotPending =
-    isArchived && !hasSnapshot && hasRuntimeSandboxState;
+  const isArchiveSnapshotPending = isArchived && hasRuntimeSandboxState;
   const isServerHibernating = lifecycleTiming.state === "hibernating";
   const isServerRestoring = lifecycleTiming.state === "restoring";
   const isServerHibernated = lifecycleTiming.state === "hibernated";
@@ -2814,7 +2813,7 @@ export function SessionChatContent({
                       {isUnarchiving
                         ? "Unarchiving..."
                         : isArchiveSnapshotPending
-                          ? "Snapshotting..."
+                          ? "Pausing..."
                           : "Unarchive"}
                     </DropdownMenuItem>
                   ) : (

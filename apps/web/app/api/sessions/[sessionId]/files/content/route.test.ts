@@ -102,6 +102,7 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
 
 mock.module("@/lib/sandbox/utils", () => ({
   clearSandboxState: () => null,
+  clearUnavailableSandboxState: () => null,
   hasRuntimeSandboxState: (state: TestSandboxState | null) =>
     Boolean(state?.sandboxId),
   isSandboxUnavailableError: (message: string) =>

@@ -116,6 +116,7 @@ function registerRouteMocks() {
 
   mock.module("@/lib/sandbox/utils", () => ({
     clearSandboxState: () => null,
+    clearUnavailableSandboxState: () => null,
     hasRuntimeSandboxState: (state: TestSandboxState | null) => {
       if (!state) {
         return false;

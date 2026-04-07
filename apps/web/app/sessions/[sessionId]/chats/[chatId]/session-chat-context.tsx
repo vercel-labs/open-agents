@@ -31,6 +31,7 @@ import { useSessionSkills } from "@/hooks/use-session-skills";
 import type { Chat, Session } from "@/lib/db/schema";
 import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 import {
+  clearSandboxResumeState,
   clearSandboxState,
   hasResumableSandboxState,
   hasRuntimeSandboxState as hasRuntimeSandboxStateValue,
@@ -477,7 +478,9 @@ export function SessionChatProvider({
           sandboxInfoCache.delete(sessionId);
           setSessionRecord((prev) => ({
             ...prev,
-            sandboxState: clearSandboxState(prev.sandboxState),
+            sandboxState: data.hasSnapshot
+              ? clearSandboxState(prev.sandboxState)
+              : clearSandboxResumeState(prev.sandboxState),
           }));
           setReconnectionStatus("no_sandbox");
           return "no_sandbox";
@@ -537,7 +540,9 @@ export function SessionChatProvider({
             sandboxInfoCache.delete(sessionId);
             setSessionRecord((prev) => ({
               ...prev,
-              sandboxState: clearSandboxState(prev.sandboxState),
+              sandboxState: data.hasSnapshot
+                ? clearSandboxState(prev.sandboxState)
+                : clearSandboxResumeState(prev.sandboxState),
             }));
             setReconnectionStatus((prev) =>
               prev === "checking" ? prev : "no_sandbox",

@@ -11,7 +11,7 @@ import {
 import { updateSession } from "@/lib/db/sessions";
 import { buildHibernatedLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
-  clearSandboxState,
+  clearUnavailableSandboxState,
   hasRuntimeSandboxState,
   isSandboxUnavailableError,
 } from "@/lib/sandbox/utils";
@@ -54,7 +54,10 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     const message = error instanceof Error ? error.message : String(error);
     if (isSandboxUnavailableError(message)) {
       await updateSession(sessionId, {
-        sandboxState: clearSandboxState(sessionRecord.sandboxState),
+        sandboxState: clearUnavailableSandboxState(
+          sessionRecord.sandboxState,
+          message,
+        ),
         ...buildHibernatedLifecycleUpdate(),
       });
       return Response.json(

@@ -162,9 +162,10 @@ describe("/api/sandbox/reconnect", () => {
     });
   });
 
-  test("marks sandbox expired when the reconnect probe hits a 404", async () => {
+  test("drops a missing sandbox resume handle when the reconnect probe hits a 404", async () => {
     const { GET } = await routeModulePromise;
 
+    sessionRecord.snapshotUrl = null;
     probeResult = {
       success: false,
       stdout: "",
@@ -176,11 +177,13 @@ describe("/api/sandbox/reconnect", () => {
     );
     const payload = (await response.json()) as {
       status: string;
+      hasSnapshot: boolean;
       lifecycle: { state: string | null };
     };
 
     expect(response.ok).toBe(true);
     expect(payload.status).toBe("expired");
+    expect(payload.hasSnapshot).toBe(false);
     expect(payload.lifecycle.state).toBe("hibernated");
 
     expect(updateCalls).toHaveLength(1);
@@ -189,7 +192,6 @@ describe("/api/sandbox/reconnect", () => {
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
     expect(updateCalls[0]?.patch.sandboxState).toEqual({
       type: "vercel",
-      sandboxName: "session_session-1",
     });
   });
 });

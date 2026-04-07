@@ -14,12 +14,13 @@ function getSandboxExpiresAt(state: unknown): number | undefined {
   return typeof expiresAt === "number" ? expiresAt : undefined;
 }
 
-function hasLegacySandboxId(state: unknown): boolean {
+function getLegacySandboxId(state: unknown): string | null {
   if (!state || typeof state !== "object") {
-    return false;
+    return null;
   }
 
-  return hasNonEmptyString((state as { sandboxId?: unknown }).sandboxId);
+  const sandboxId = (state as { sandboxId?: unknown }).sandboxId;
+  return hasNonEmptyString(sandboxId) ? sandboxId : null;
 }
 
 export function getSessionSandboxName(sessionId: string): string {
@@ -35,8 +36,12 @@ export function getPersistentSandboxName(state: unknown): string | null {
   return hasNonEmptyString(sandboxName) ? sandboxName : null;
 }
 
+export function getResumableSandboxName(state: unknown): string | null {
+  return getPersistentSandboxName(state) ?? getLegacySandboxId(state);
+}
+
 export function hasResumableSandboxState(state: unknown): boolean {
-  return getPersistentSandboxName(state) !== null;
+  return getResumableSandboxName(state) !== null;
 }
 
 /**
@@ -80,7 +85,15 @@ export function hasRuntimeSandboxState(state: unknown): boolean {
     return false;
   }
 
-  return hasResumableSandboxState(state) || hasLegacySandboxId(state);
+  return hasResumableSandboxState(state);
+}
+
+export function isSandboxNotFoundError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("status code 404") ||
+    normalized.includes("sandbox not found")
+  );
 }
 
 /**
@@ -104,7 +117,7 @@ function hasRuntimeState(state: SandboxState): boolean {
     return false;
   }
 
-  return hasResumableSandboxState(state) || hasLegacySandboxId(state);
+  return hasResumableSandboxState(state);
 }
 
 /**
@@ -116,8 +129,35 @@ export function clearSandboxState(
   if (!state) return null;
 
   const sandboxName = getPersistentSandboxName(state);
+  const sandboxId = sandboxName ? null : getLegacySandboxId(state);
+
   return {
     type: state.type,
     ...(sandboxName ? { sandboxName } : {}),
+    ...(sandboxId ? { sandboxId } : {}),
   } as SandboxState;
+}
+
+/**
+ * Clear both runtime state and any saved resume handle.
+ */
+export function clearSandboxResumeState(
+  state: SandboxState | null | undefined,
+): SandboxState | null {
+  if (!state) return null;
+
+  return { type: state.type } as SandboxState;
+}
+
+/**
+ * Clear sandbox state after an unavailable-sandbox error.
+ * Hard 404s wipe the saved resume handle; other unavailable errors preserve it.
+ */
+export function clearUnavailableSandboxState(
+  state: SandboxState | null | undefined,
+  message: string,
+): SandboxState | null {
+  return isSandboxNotFoundError(message)
+    ? clearSandboxResumeState(state)
+    : clearSandboxState(state);
 }
