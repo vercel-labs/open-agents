@@ -48,6 +48,10 @@ describe("chat streaming state", () => {
       text: "Planning the next step",
       state: "done",
     } as unknown as AssistantPart;
+    const gitDataPart = {
+      type: "data-commit",
+      data: { status: "pending" },
+    } as unknown as AssistantPart;
 
     expect(hasRenderableAssistantPart(emptyTextPart)).toBe(false);
     expect(hasRenderableAssistantPart(textPart)).toBe(true);
@@ -56,6 +60,7 @@ describe("chat streaming state", () => {
     expect(hasRenderableAssistantPart(completedReasoningWithTextPart)).toBe(
       true,
     );
+    expect(hasRenderableAssistantPart(gitDataPart)).toBe(true);
   });
 
   test("does not show thinking when submitted already has assistant output", () => {

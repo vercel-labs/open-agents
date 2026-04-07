@@ -12,7 +12,9 @@ import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
 import { addLanguageModelUsage } from "./usage-utils";
 import type {
+  WebAgentCommitData,
   WebAgentMessageMetadata,
+  WebAgentPrData,
   WebAgentStepFinishMetadata,
   WebAgentUIMessage,
 } from "@/app/types";
@@ -66,6 +68,7 @@ const convertMessages = async (
   return await convertToModelMessages(dedupedMessages, {
     ignoreIncompleteToolCalls: true,
     tools: webAgent.tools,
+    convertDataPart: () => undefined,
   });
 };
 
@@ -243,6 +246,144 @@ function stringifyDebugPayload(value: unknown): string {
   );
 }
 
+function buildGitHubCommitUrl(
+  repoOwner: string,
+  repoName: string,
+  commitSha: string,
+): string {
+  return `https://github.com/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/commit/${encodeURIComponent(commitSha)}`;
+}
+
+function buildCommitData(
+  result: Awaited<ReturnType<typeof runAutoCommitStep>>,
+  repoOwner: string,
+  repoName: string,
+): WebAgentCommitData {
+  if (result.error) {
+    return {
+      status: "error",
+      committed: result.committed,
+      pushed: result.pushed,
+      commitMessage: result.commitMessage,
+      commitSha: result.commitSha,
+      url:
+        result.pushed && result.commitSha
+          ? buildGitHubCommitUrl(repoOwner, repoName, result.commitSha)
+          : undefined,
+      error: result.error,
+    };
+  }
+
+  if (result.committed) {
+    return {
+      status: "success",
+      committed: result.committed,
+      pushed: result.pushed,
+      commitMessage: result.commitMessage,
+      commitSha: result.commitSha,
+      url:
+        result.pushed && result.commitSha
+          ? buildGitHubCommitUrl(repoOwner, repoName, result.commitSha)
+          : undefined,
+    };
+  }
+
+  return {
+    status: "skipped",
+    committed: false,
+    pushed: false,
+  };
+}
+
+function buildPrData(
+  result: Awaited<ReturnType<typeof runAutoCreatePrStep>>,
+): WebAgentPrData {
+  if (result.error) {
+    return {
+      status: "error",
+      created: result.created,
+      syncedExisting: result.syncedExisting,
+      prNumber: result.prNumber,
+      url: result.prUrl,
+      error: result.error,
+    };
+  }
+
+  if (result.skipped) {
+    return {
+      status: "skipped",
+      created: result.created,
+      syncedExisting: result.syncedExisting,
+      prNumber: result.prNumber,
+      url: result.prUrl,
+      skipReason: result.skipReason,
+    };
+  }
+
+  return {
+    status: "success",
+    created: result.created,
+    syncedExisting: result.syncedExisting,
+    prNumber: result.prNumber,
+    url: result.prUrl,
+  };
+}
+
+function upsertAssistantDataPart(
+  message: WebAgentUIMessage,
+  part:
+    | {
+        type: "data-commit";
+        id: string;
+        data: WebAgentCommitData;
+      }
+    | {
+        type: "data-pr";
+        id: string;
+        data: WebAgentPrData;
+      },
+): WebAgentUIMessage {
+  const nextParts = [...message.parts];
+  const existingIndex = nextParts.findIndex(
+    (messagePart) =>
+      messagePart.type === part.type && messagePart.id === part.id,
+  );
+
+  if (existingIndex >= 0) {
+    nextParts[existingIndex] = part;
+  } else {
+    nextParts.push(part);
+  }
+
+  return {
+    ...message,
+    parts: nextParts,
+  };
+}
+
+async function sendDataPart(
+  writable: Writable,
+  part:
+    | {
+        type: "data-commit";
+        id: string;
+        data: WebAgentCommitData;
+      }
+    | {
+        type: "data-pr";
+        id: string;
+        data: WebAgentPrData;
+      },
+) {
+  "use step";
+  const writer = writable.getWriter();
+  try {
+    await writer.write(part);
+  } finally {
+    writer.releaseLock();
+  }
+}
+
 export async function runAgentWorkflow(options: Options) {
   "use workflow";
 
@@ -331,17 +472,8 @@ export async function runAgentWorkflow(options: Options) {
       await refreshLifecycleActivity(options.sessionId);
     }
 
-    // Close the stream immediately after generation so the UI is unblocked.
-    await Promise.all([
-      clearActiveStream(options.chatId, workflowRunId),
-      sendFinish(writable).then(() => closeStream(writable)),
-    ]);
-    streamClosed = true;
-
-    // --- Post-stream persistence & background work ---
-
-    // Always persist the assistant message — even on abort, save content
-    // from completed steps so mid-stream output is not lost.
+    // Persist the assistant message immediately so completed model output is not
+    // lost if later post-finish work fails.
     await persistAssistantMessage(options.chatId, pendingAssistantResponse);
 
     await recordWorkflowUsage(
@@ -361,26 +493,54 @@ export async function runAgentWorkflow(options: Options) {
       !wasAborted &&
       finalFinishReason !== undefined &&
       finalFinishReason !== "tool-calls";
+    const commitPartId = `${assistantId}:commit`;
+    const prPartId = `${assistantId}:pr`;
+    const repoOwner = options.repoOwner;
+    const repoName = options.repoName;
+    let didUpdateGitData = false;
 
     let autoCommitResult: Awaited<ReturnType<typeof runAutoCommitStep>> | null =
       null;
 
-    // Auto-commit if enabled and the agent reached a terminal finish.
-    if (
+    const canAutoCommit =
       finishedNaturally &&
       options.autoCommitEnabled &&
-      sandboxState &&
-      options.repoOwner &&
-      options.repoName
-    ) {
+      sandboxState != null &&
+      repoOwner != null &&
+      repoName != null;
+
+    if (canAutoCommit) {
+      const pendingCommitPart = {
+        type: "data-commit" as const,
+        id: commitPartId,
+        data: { status: "pending" as const },
+      };
+      pendingAssistantResponse = upsertAssistantDataPart(
+        pendingAssistantResponse,
+        pendingCommitPart,
+      );
+      await sendDataPart(writable, pendingCommitPart);
+      didUpdateGitData = true;
+
       autoCommitResult = await runAutoCommitStep({
         userId: options.userId,
         sessionId: options.sessionId,
         sessionTitle: options.sessionTitle ?? "",
-        repoOwner: options.repoOwner,
-        repoName: options.repoName,
+        repoOwner,
+        repoName,
         sandboxState,
       });
+
+      const resolvedCommitPart = {
+        type: "data-commit" as const,
+        id: commitPartId,
+        data: buildCommitData(autoCommitResult, repoOwner, repoName),
+      };
+      pendingAssistantResponse = upsertAssistantDataPart(
+        pendingAssistantResponse,
+        resolvedCommitPart,
+      );
+      await sendDataPart(writable, resolvedCommitPart);
     }
 
     const canAutoCreatePr =
@@ -388,25 +548,68 @@ export async function runAgentWorkflow(options: Options) {
       !autoCommitResult.error &&
       (autoCommitResult.pushed || !autoCommitResult.committed);
 
-    // Auto-create a PR if auto-commit left origin in sync with the local HEAD.
-    if (
-      finishedNaturally &&
-      options.autoCommitEnabled &&
-      options.autoCreatePrEnabled &&
-      canAutoCreatePr &&
-      sandboxState &&
-      options.repoOwner &&
-      options.repoName
-    ) {
-      await runAutoCreatePrStep({
-        userId: options.userId,
-        sessionId: options.sessionId,
-        sessionTitle: options.sessionTitle ?? "",
-        repoOwner: options.repoOwner,
-        repoName: options.repoName,
-        sandboxState,
-      });
+    if (canAutoCommit && options.autoCreatePrEnabled) {
+      if (canAutoCreatePr) {
+        const pendingPrPart = {
+          type: "data-pr" as const,
+          id: prPartId,
+          data: { status: "pending" as const },
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          pendingPrPart,
+        );
+        await sendDataPart(writable, pendingPrPart);
+        didUpdateGitData = true;
+
+        const autoPrResult = await runAutoCreatePrStep({
+          userId: options.userId,
+          sessionId: options.sessionId,
+          sessionTitle: options.sessionTitle ?? "",
+          repoOwner,
+          repoName,
+          sandboxState,
+        });
+
+        const resolvedPrPart = {
+          type: "data-pr" as const,
+          id: prPartId,
+          data: buildPrData(autoPrResult),
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          resolvedPrPart,
+        );
+        await sendDataPart(writable, resolvedPrPart);
+      } else {
+        const skippedPrPart = {
+          type: "data-pr" as const,
+          id: prPartId,
+          data: {
+            status: "skipped" as const,
+            skipReason:
+              autoCommitResult?.error ??
+              "Auto-commit did not leave origin in sync with HEAD",
+          },
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          skippedPrPart,
+        );
+        await sendDataPart(writable, skippedPrPart);
+        didUpdateGitData = true;
+      }
     }
+
+    if (didUpdateGitData) {
+      await persistAssistantMessage(options.chatId, pendingAssistantResponse);
+    }
+
+    await Promise.all([
+      clearActiveStream(options.chatId, workflowRunId),
+      sendFinish(writable).then(() => closeStream(writable)),
+    ]);
+    streamClosed = true;
 
     // Refresh the diff cache so the UI shows current changes.
     if (sandboxState) {

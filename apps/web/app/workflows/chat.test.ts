@@ -16,7 +16,15 @@ const spies = {
   runAutoCommitStep: mock(() =>
     Promise.resolve({ committed: false, pushed: false }),
   ),
-  runAutoCreatePrStep: mock(() => Promise.resolve()),
+  runAutoCreatePrStep: mock(() =>
+    Promise.resolve({
+      created: true,
+      syncedExisting: false,
+      skipped: false,
+      prNumber: 42,
+      prUrl: "https://github.com/acme/repo/pull/42",
+    }),
+  ),
 };
 
 // Track what the agent stream yields
@@ -512,6 +520,109 @@ describe("runAgentWorkflow", () => {
         repoOwner: "acme",
         repoName: "repo",
       }),
+    );
+  });
+
+  test("streams and persists resolved git data parts", async () => {
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitMessage: "feat: add auto git status",
+        commitSha: "abc123",
+      }),
+    );
+    spies.runAutoCreatePrStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        created: true,
+        syncedExisting: false,
+        skipped: false,
+        prNumber: 101,
+        prUrl: "https://github.com/acme/repo/pull/101",
+      }),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(
+      writtenChunks.filter((chunk) => chunk.type === "data-commit"),
+    ).toEqual([
+      {
+        type: "data-commit",
+        id: "gen-id-1:commit",
+        data: { status: "pending" },
+      },
+      {
+        type: "data-commit",
+        id: "gen-id-1:commit",
+        data: {
+          status: "success",
+          committed: true,
+          pushed: true,
+          commitMessage: "feat: add auto git status",
+          commitSha: "abc123",
+          url: "https://github.com/acme/repo/commit/abc123",
+        },
+      },
+    ]);
+    expect(writtenChunks.filter((chunk) => chunk.type === "data-pr")).toEqual([
+      {
+        type: "data-pr",
+        id: "gen-id-1:pr",
+        data: { status: "pending" },
+      },
+      {
+        type: "data-pr",
+        id: "gen-id-1:pr",
+        data: {
+          status: "success",
+          created: true,
+          syncedExisting: false,
+          prNumber: 101,
+          url: "https://github.com/acme/repo/pull/101",
+        },
+      },
+    ]);
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      parts: Array<Record<string, unknown>>;
+    };
+
+    expect(persistedMessage.parts).toEqual(
+      expect.arrayContaining([
+        {
+          type: "data-commit",
+          id: "gen-id-1:commit",
+          data: {
+            status: "success",
+            committed: true,
+            pushed: true,
+            commitMessage: "feat: add auto git status",
+            commitSha: "abc123",
+            url: "https://github.com/acme/repo/commit/abc123",
+          },
+        },
+        {
+          type: "data-pr",
+          id: "gen-id-1:pr",
+          data: {
+            status: "success",
+            created: true,
+            syncedExisting: false,
+            prNumber: 101,
+            url: "https://github.com/acme/repo/pull/101",
+          },
+        },
+      ]),
     );
   });
 

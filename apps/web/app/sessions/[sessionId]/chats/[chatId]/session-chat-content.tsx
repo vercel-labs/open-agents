@@ -44,6 +44,8 @@ import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type {
+  WebAgentCommitDataPart,
+  WebAgentPrDataPart,
   WebAgentUIMessage,
   WebAgentUIMessagePart,
   WebAgentUIToolPart,
@@ -235,6 +237,10 @@ function getPartIdentity(part: WebAgentUIMessagePart): string {
     return "file";
   }
 
+  if (isGitDataPart(part)) {
+    return part.id ? `data:${part.type}:${part.id}` : `data:${part.type}`;
+  }
+
   return `part:${part.type}`;
 }
 
@@ -243,6 +249,99 @@ function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
     .map((part) => part.text)
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
+}
+
+function isGitDataPart(
+  part: WebAgentUIMessagePart,
+): part is WebAgentCommitDataPart | WebAgentPrDataPart {
+  return part.type === "data-commit" || part.type === "data-pr";
+}
+
+function getGitDataStatusLabel(
+  part: WebAgentCommitDataPart | WebAgentPrDataPart,
+): string {
+  if (part.type === "data-commit") {
+    if (part.data.status === "pending") return "Creating commit…";
+    if (part.data.status === "success") {
+      return part.data.pushed ? "Committed and pushed" : "Committed";
+    }
+    if (part.data.status === "error") {
+      return part.data.error ?? "Auto-commit failed";
+    }
+    return "No changes to commit";
+  }
+
+  if (part.data.status === "pending") return "Creating pull request…";
+  if (part.data.status === "success") {
+    if (part.data.syncedExisting && part.data.prNumber) {
+      return `Using existing PR #${part.data.prNumber}`;
+    }
+    if (part.data.prNumber) {
+      return `Created PR #${part.data.prNumber}`;
+    }
+    return "Pull request ready";
+  }
+  if (part.data.status === "error") {
+    return part.data.error ?? "Auto PR failed";
+  }
+  return part.data.skipReason ?? "Auto PR skipped";
+}
+
+function GitDataPartCard({
+  part,
+}: {
+  part: WebAgentCommitDataPart | WebAgentPrDataPart;
+}) {
+  const isCommit = part.type === "data-commit";
+  const title = isCommit ? "Auto commit" : "Auto PR";
+  const Icon = isCommit ? FolderGit2 : GitPullRequest;
+  const statusTone =
+    part.data.status === "success"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : part.data.status === "error"
+        ? "text-destructive"
+        : part.data.status === "pending"
+          ? "text-muted-foreground"
+          : "text-muted-foreground";
+  const linkLabel = isCommit ? "View commit" : "View PR";
+  const secondaryText =
+    part.type === "data-commit"
+      ? part.data.commitMessage
+      : part.data.url && part.data.prNumber
+        ? `#${part.data.prNumber}`
+        : undefined;
+
+  return (
+    <div className="w-full rounded-xl border bg-muted/25 px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>{title}</span>
+          </div>
+          <p className={cn("mt-1 text-sm", statusTone)}>
+            {getGitDataStatusLabel(part)}
+          </p>
+          {secondaryText ? (
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {secondaryText}
+            </p>
+          ) : null}
+        </div>
+        {part.data.url ? (
+          <a
+            href={part.data.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
+          >
+            {linkLabel}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
@@ -3238,6 +3337,17 @@ export function SessionChatContent({
                                   )}
                                 </div>
                               )}
+                            </div>
+                          );
+                        }
+
+                        if (isGitDataPart(p)) {
+                          return (
+                            <div
+                              key={`${m.id}-${group.renderKey}`}
+                              className="max-w-full py-1"
+                            >
+                              <GitDataPartCard part={p} />
                             </div>
                           );
                         }

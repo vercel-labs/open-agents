@@ -1,10 +1,10 @@
 import type {
   DynamicToolUIPart,
   FinishReason,
-  InferAgentUIMessage,
   InferUITools,
   LanguageModelUsage,
   ToolUIPart,
+  UIMessage,
 } from "ai";
 import type { webAgent } from "./config";
 
@@ -26,14 +26,50 @@ export type WebAgentMessageMetadata = {
   stepFinishReasons?: WebAgentStepFinishMetadata[];
 };
 
+export type WebAgentGitDataStatus = "pending" | "success" | "error" | "skipped";
+
+export type WebAgentCommitData = {
+  status: WebAgentGitDataStatus;
+  committed?: boolean;
+  pushed?: boolean;
+  commitMessage?: string;
+  commitSha?: string;
+  url?: string;
+  error?: string;
+};
+
+export type WebAgentPrData = {
+  status: WebAgentGitDataStatus;
+  created?: boolean;
+  syncedExisting?: boolean;
+  prNumber?: number;
+  url?: string;
+  error?: string;
+  skipReason?: string;
+};
+
+export type WebAgentDataParts = {
+  commit: WebAgentCommitData;
+  pr: WebAgentPrData;
+};
+
 // All types derived from the agent
-export type WebAgentUIMessage = InferAgentUIMessage<
-  WebAgent,
-  WebAgentMessageMetadata
->;
-export type WebAgentUIMessagePart = WebAgentUIMessage["parts"][number];
 export type WebAgentTools = WebAgent["tools"];
 export type WebAgentUITools = InferUITools<WebAgentTools>;
+export type WebAgentUIMessage = UIMessage<
+  WebAgentMessageMetadata,
+  WebAgentDataParts,
+  WebAgentUITools
+>;
+export type WebAgentUIMessagePart = WebAgentUIMessage["parts"][number];
+export type WebAgentCommitDataPart = Extract<
+  WebAgentUIMessagePart,
+  { type: "data-commit" }
+>;
+export type WebAgentPrDataPart = Extract<
+  WebAgentUIMessagePart,
+  { type: "data-pr" }
+>;
 export type WebAgentUIToolPart =
   | DynamicToolUIPart
   | ToolUIPart<WebAgentUITools>;

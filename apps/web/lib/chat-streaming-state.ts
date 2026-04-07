@@ -22,6 +22,10 @@ export function hasRenderableAssistantPart(
     return part.text.length > 0 || part.state === "streaming";
   }
 
+  if (part.type.startsWith("data-")) {
+    return true;
+  }
+
   return false;
 }
 

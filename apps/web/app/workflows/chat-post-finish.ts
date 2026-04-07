@@ -2,6 +2,7 @@ import type { LanguageModelUsage } from "ai";
 import type { SandboxState, Sandbox } from "@open-harness/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { AutoCommitResult } from "@/lib/chat/auto-commit-direct";
+import type { AutoCreatePrResult } from "@/lib/chat/auto-pr-direct";
 import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
@@ -364,7 +365,7 @@ export async function runAutoCreatePrStep(params: {
   repoOwner: string;
   repoName: string;
   sandboxState: SandboxState;
-}): Promise<void> {
+}): Promise<AutoCreatePrResult> {
   "use step";
   try {
     const { connectSandbox } = await import("@open-harness/sandbox");
@@ -382,7 +383,15 @@ export async function runAutoCreatePrStep(params: {
     if (result.error) {
       console.warn("[workflow] Auto-PR failed:", result.error);
     }
+
+    return result;
   } catch (error) {
     console.error("[workflow] Auto-PR failed:", error);
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: error instanceof Error ? error.message : "Auto-PR failed",
+    };
   }
 }
