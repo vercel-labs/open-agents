@@ -12,6 +12,7 @@ import {
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { redactSharedEnvContent } from "./redact-shared-env-content";
 import { SharedChatContent } from "./shared-chat-content";
 import type { MessageWithTiming } from "./shared-chat-content";
 
@@ -92,7 +93,7 @@ export default async function SharedPage({ params }: SharedPageProps) {
   // Build messages with timing: compute duration for each assistant message
   // based on the gap from the preceding user message's createdAt
   const messagesWithTiming: MessageWithTiming[] = dbMessages.map((m, idx) => {
-    const message = m.parts as WebAgentUIMessage;
+    const message = redactSharedEnvContent(m.parts as WebAgentUIMessage);
     let durationMs: number | null = null;
 
     if (m.role === "assistant" && idx > 0) {

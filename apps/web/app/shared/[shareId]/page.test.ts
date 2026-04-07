@@ -213,6 +213,207 @@ describe("/shared/[shareId] page", () => {
     expect(element.props.modelName).toBe("Gateway Usage Variant");
   });
 
+  test("redacts top-level .env tool content on shared pages", async () => {
+    messageRows = [
+      {
+        parts: {
+          id: "m1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-read",
+              state: "output-available",
+              input: { filePath: ".env.local" },
+              output: {
+                success: true,
+                content: "1: SECRET=shh\n2: TOKEN=abc",
+                totalLines: 2,
+                startLine: 1,
+                endLine: 2,
+              },
+            },
+            {
+              type: "tool-write",
+              state: "output-available",
+              input: {
+                filePath: "apps/web/.env.example",
+                content: "FOO=bar\nBAR=baz",
+              },
+              output: { success: true },
+            },
+            {
+              type: "tool-edit",
+              state: "output-available",
+              input: {
+                filePath: ".env",
+                oldString: "OLD_SECRET=one",
+                newString: "NEW_SECRET=two",
+              },
+              output: { success: true },
+            },
+            {
+              type: "tool-write",
+              state: "output-available",
+              input: {
+                filePath: "README.md",
+                content: "visible content",
+              },
+              output: { success: true },
+            },
+          ],
+        },
+        role: "assistant",
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+      },
+    ];
+
+    const { default: SharedPage } = await pageModulePromise;
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: {
+        chats: Array<{
+          messagesWithTiming: Array<{
+            message: { parts: Array<Record<string, unknown>> };
+          }>;
+        }>;
+      };
+    };
+
+    const parts = element.props.chats[0]?.messagesWithTiming[0]?.message.parts;
+
+    expect(parts?.[0]?.output).toEqual({
+      success: true,
+      content: "1: [redacted from shared page]\n2: [redacted from shared page]",
+      totalLines: 2,
+      startLine: 1,
+      endLine: 2,
+    });
+    expect(parts?.[1]?.input).toEqual({
+      filePath: "apps/web/.env.example",
+      content:
+        "[content redacted from shared page]\n[content redacted from shared page]",
+    });
+    expect(parts?.[2]?.input).toEqual({
+      filePath: ".env",
+      oldString: "[previous content redacted from shared page]",
+      newString: "[updated content redacted from shared page]",
+    });
+    expect(parts?.[3]?.input).toEqual({
+      filePath: "README.md",
+      content: "visible content",
+    });
+  });
+
+  test("redacts nested .env tool content inside shared task output", async () => {
+    messageRows = [
+      {
+        parts: {
+          id: "m1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-task",
+              state: "output-available",
+              preliminary: false,
+              input: {
+                task: "Inspect secrets",
+                subagentType: "executor",
+              },
+              output: {
+                final: [
+                  {
+                    role: "assistant",
+                    content: [
+                      {
+                        type: "tool-call",
+                        toolCallId: "call-read",
+                        toolName: "read",
+                        input: { filePath: ".env" },
+                      },
+                      {
+                        type: "tool-call",
+                        toolCallId: "call-edit",
+                        toolName: "edit",
+                        input: {
+                          filePath: ".env.local",
+                          oldString: "SECRET=old",
+                          newString: "SECRET=new",
+                        },
+                      },
+                    ],
+                  },
+                  {
+                    role: "tool",
+                    content: [
+                      {
+                        type: "tool-result",
+                        toolCallId: "call-read",
+                        output: {
+                          type: "json",
+                          value: {
+                            success: true,
+                            content: "1: SECRET=old",
+                            totalLines: 1,
+                            startLine: 1,
+                            endLine: 1,
+                          },
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        role: "assistant",
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+      },
+    ];
+
+    const { default: SharedPage } = await pageModulePromise;
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: {
+        chats: Array<{
+          messagesWithTiming: Array<{
+            message: { parts: Array<Record<string, unknown>> };
+          }>;
+        }>;
+      };
+    };
+
+    const taskPart = element.props.chats[0]?.messagesWithTiming[0]?.message
+      .parts[0] as Record<string, unknown>;
+    const taskOutput = taskPart.output as {
+      final: Array<Record<string, unknown>>;
+    };
+    const nestedAssistant = taskOutput.final[0]?.content as Array<
+      Record<string, unknown>
+    >;
+    const nestedTool = taskOutput.final[1]?.content as Array<
+      Record<string, unknown>
+    >;
+
+    expect(nestedAssistant[1]?.input).toEqual({
+      filePath: ".env.local",
+      oldString: "[previous content redacted from shared page]",
+      newString: "[updated content redacted from shared page]",
+    });
+    expect(nestedTool[0]?.output).toEqual({
+      type: "json",
+      value: {
+        success: true,
+        content: "1: [redacted from shared page]",
+        totalLines: 1,
+        startLine: 1,
+        endLine: 1,
+      },
+    });
+  });
+
   test("throws notFound when share mapping does not exist", async () => {
     shareRecord = null;
     const { default: SharedPage } = await pageModulePromise;
