@@ -12,6 +12,7 @@ import {
   EllipsisVertical,
   ExternalLink,
   FolderGit2,
+  GitCommitHorizontal,
   GitCompare,
   GitMerge,
   GitPullRequest,
@@ -257,88 +258,135 @@ function isGitDataPart(
   return part.type === "data-commit" || part.type === "data-pr";
 }
 
-function getGitDataStatusLabel(
-  part: WebAgentCommitDataPart | WebAgentPrDataPart,
-): string {
-  if (part.type === "data-commit") {
-    if (part.data.status === "pending") return "Creating commit…";
-    if (part.data.status === "success") {
-      return part.data.pushed ? "Committed and pushed" : "Committed";
-    }
-    if (part.data.status === "error") {
-      return part.data.error ?? "Auto-commit failed";
-    }
-    return "No changes to commit";
-  }
-
-  if (part.data.status === "pending") return "Creating pull request…";
-  if (part.data.status === "success") {
-    if (part.data.syncedExisting && part.data.prNumber) {
-      return `Using existing PR #${part.data.prNumber}`;
-    }
-    if (part.data.prNumber) {
-      return `Created PR #${part.data.prNumber}`;
-    }
-    return "Pull request ready";
-  }
-  if (part.data.status === "error") {
-    return part.data.error ?? "Auto PR failed";
-  }
-  return part.data.skipReason ?? "Auto PR skipped";
-}
-
 function GitDataPartCard({
   part,
 }: {
   part: WebAgentCommitDataPart | WebAgentPrDataPart;
 }) {
   const isCommit = part.type === "data-commit";
-  const title = isCommit ? "Auto commit" : "Auto PR";
-  const Icon = isCommit ? FolderGit2 : GitPullRequest;
-  const statusTone =
-    part.data.status === "success"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : part.data.status === "error"
-        ? "text-destructive"
-        : part.data.status === "pending"
-          ? "text-muted-foreground"
-          : "text-muted-foreground";
-  const linkLabel = isCommit ? "View commit" : "View PR";
-  const secondaryText =
-    part.type === "data-commit"
-      ? part.data.commitMessage
-      : part.data.url && part.data.prNumber
-        ? `#${part.data.prNumber}`
-        : undefined;
+  const { status } = part.data;
+  const isPending = status === "pending";
+  const isSuccess = status === "success";
+  const isError = status === "error";
+
+  const url = part.data.url;
+
+  // Commit-specific data
+  const shortSha =
+    isCommit && part.data.commitSha
+      ? part.data.commitSha.slice(0, 7)
+      : undefined;
+  const commitMessage = isCommit ? part.data.commitMessage : undefined;
+
+  // PR-specific data
+  const prNumber = !isCommit ? part.data.prNumber : undefined;
+
+  // Determine primary label
+  let label: string;
+  if (isCommit) {
+    if (isPending) label = "Creating commit…";
+    else if (isSuccess)
+      label = part.data.pushed ? "Committed & pushed" : "Committed";
+    else if (isError) label = part.data.error ?? "Commit failed";
+    else label = "No changes to commit";
+  } else {
+    if (isPending) label = "Creating pull request…";
+    else if (isSuccess) {
+      if (part.data.syncedExisting && prNumber) label = "Synced to existing PR";
+      else if (prNumber) label = "Opened pull request";
+      else label = "Pull request ready";
+    } else if (isError) label = part.data.error ?? "PR failed";
+    else label = part.data.skipReason ?? "PR skipped";
+  }
+
+  // Icon color
+  const iconColor = isError
+    ? "text-red-500"
+    : isSuccess
+      ? isCommit
+        ? "text-emerald-500 dark:text-emerald-400"
+        : "text-violet-500 dark:text-violet-400"
+      : "text-muted-foreground";
 
   return (
-    <div className="w-full rounded-xl border bg-muted/25 px-3 py-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>{title}</span>
-          </div>
-          <p className={cn("mt-1 text-sm", statusTone)}>
-            {getGitDataStatusLabel(part)}
-          </p>
-          {secondaryText ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              {secondaryText}
-            </p>
-          ) : null}
-        </div>
-        {part.data.url ? (
-          <a
-            href={part.data.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition hover:bg-background hover:text-foreground"
+    <div
+      className={cn(
+        "-mx-1.5 flex items-start gap-2.5 rounded-lg px-2.5 py-1.5",
+        isPending && "animate-pulse",
+      )}
+    >
+      {/* Status icon */}
+      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+        {isPending ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        ) : isCommit ? (
+          <GitCommitHorizontal className={cn("h-3.5 w-3.5", iconColor)} />
+        ) : (
+          <GitPullRequest className={cn("h-3.5 w-3.5", iconColor)} />
+        )}
+      </span>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              "text-sm font-medium leading-5",
+              isError
+                ? "text-red-500 dark:text-red-400"
+                : isPending
+                  ? "text-muted-foreground"
+                  : "text-foreground",
+            )}
           >
-            {linkLabel}
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        ) : null}
+            {label}
+          </span>
+
+          {/* Inline SHA chip for commits */}
+          {isCommit && shortSha && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {shortSha}
+            </a>
+          )}
+
+          {/* Inline PR number for PRs */}
+          {!isCommit && prNumber && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-mono text-xs leading-5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              #{prNumber}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+
+          {/* Fallback view link when we have a URL but no SHA/PR number */}
+          {url && !shortSha && !prNumber && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              View
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+
+        {/* Commit message on secondary line */}
+        {commitMessage && (
+          <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
+            {commitMessage}
+          </p>
+        )}
       </div>
     </div>
   );
