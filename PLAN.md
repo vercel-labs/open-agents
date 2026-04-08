@@ -1,35 +1,33 @@
-Summary: Add user-configured global skill refs that are saved in preferences, copied onto each new session, installed into the sandbox outside the repo working tree when a new sandbox is created, and merged with repo skills during discovery so repo-local skills still win on name conflicts.
+Summary: Derive chat-header git action state from persisted chat message git parts instead of local optimistic commit state, while keeping preview deployment freshness based on the existing preview-URL comparison.
 
 Context:
-- Skill discovery currently scans repo-local directories under `.claude/skills` and `.agents/skills`.
-- User preferences already persist agent defaults in `user_preferences` and are editable from settings.
-- New sessions inherit preference-backed defaults at creation time, which is the right place to snapshot global skill refs.
-- Sandbox creation/setup is centralized in the sandbox API.
-- `discoverSkills()` keeps the first skill found for a name, so repo-wins behavior depends on scanning repo directories before global directories.
+- The header in `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` currently mixes two local heuristics: `useAutoCommitStatus` for “Committing...” and `branchPreviewUrlChangeBaseline` for “Deploying…”.
+- Agent turns already stream and persist `data-commit` / `data-pr` parts from `apps/web/app/workflows/chat.ts`.
+- Manual commit and PR flows already write the same synthetic assistant git messages from `apps/web/components/commit-dialog.tsx` and `apps/web/components/create-pr-dialog.tsx`.
+- `apps/web/lib/chat-streaming-state.ts` already understands git parts for in-flight UI, so it is the natural place to centralize message-derived navbar state.
+- Confirmed requirements: state is chat-scoped, deployment freshness stays as-is, overflow menu should match the primary action, and terminal `error` / `skipped` states should fall back to normal actions.
+
+System Impact:
+- Source of truth for commit / PR progress in the navbar shifts from transient client-only optimistic state to persisted chat history.
+- Deployment freshness remains client-derived from preview URL polling, but the trigger for “a new deploy should be expected” can be tied to message-derived commit completion for the active chat.
+- No backend protocol changes are needed because the required git action state is already embedded in messages.
 
 Approach:
-- Store explicit `{ source, skillName }` refs in user preferences and snapshot them onto each new session.
-- During new sandbox creation for that session, install those refs globally inside the sandbox into `~/.agents/skills`.
-- Do not track install manifests or reinstall on reconnect; rely on sandbox persistence/snapshots.
-- Discover repo-local skills first and global skills last so project skills override globals with the same slash command.
+- Add a small helper that inspects the current chat’s latest assistant git parts and derives the active navbar git state (`creating-commit`, `creating-pr`, or idle).
+- Use that derived state in both the primary header button and the overflow menu so labels, icons, and disabled states stay aligned.
+- Keep preview polling and stale-preview detection intact, but trigger the stale-preview baseline off the message-derived commit completion transition instead of `isAutoCommitting`.
+- Treat only pending git parts as dynamic navbar states; once the latest git part resolves to `success`, `error`, or `skipped`, fall back to the normal action selection logic.
 
 Changes:
-- `apps/web/lib/db/schema.ts` - add `globalSkillRefs` JSONB to `user_preferences` and `sessions`.
-- `apps/web/lib/db/user-preferences.ts` - extend defaults/normalization to include `globalSkillRefs`.
-- `apps/web/app/api/settings/preferences/route.ts` - accept and validate `globalSkillRefs`.
-- `apps/web/hooks/use-user-preferences.ts` - expose `globalSkillRefs` in the client preferences type.
-- `apps/web/app/settings/preferences-section.tsx` - add a list editor for repository source + skill name.
-- `apps/web/app/api/sessions/route.ts` - copy `preferences.globalSkillRefs` onto `session.globalSkillRefs` when creating a new session.
-- `apps/web/lib/sandbox/home-directory.ts` - shared sandbox home-directory resolution helper.
-- `apps/web/lib/skills/global-skill-refs.ts` - shared schema/types for global skill refs.
-- `apps/web/lib/skills/global-skill-installer.ts` - install refs with `npx skills add <source> --skill <skillName> --agent amp -g -y --copy`.
-- `apps/web/app/api/sandbox/route.ts` - call the installer only for new sandbox creation.
-- `apps/web/app/api/chat/_lib/runtime.ts` and `apps/web/app/api/sessions/[sessionId]/skills/route.ts` - discover skills from repo-local dirs plus sandbox-global `~/.agents/skills`.
+- `apps/web/lib/chat-streaming-state.ts` - add helper(s) to derive the latest navbar git action state from chat messages / git parts.
+- `apps/web/lib/chat-streaming-state.test.ts` - add coverage for pending commit, pending PR, resolved states, and latest-message precedence.
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` - replace header/menu commit state usage with message-derived state and switch deploy-stale triggering to the derived commit completion transition.
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/commit-action-button.tsx` - generalize from auto-commit-specific copy to message-derived pending labels.
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-auto-commit-status.ts` and its test - remove if no longer needed after the message-derived flow is wired in.
 
 Verification:
-- Verify preferences GET/PATCH round-trip `globalSkillRefs`.
-- Verify session creation snapshots the current preference refs into the new session record.
-- Verify new sandbox creation runs `npx skills add ... --agent amp -g -y --copy` for each ref.
-- Verify discovery includes `~/.agents/skills` in addition to repo skill folders.
-- Verify duplicate names prefer repo-local skills over global skills.
 - Run `bun run ci`.
+- In a chat with auto-commit enabled, confirm the header and overflow menu show pending commit / PR labels from streamed git parts.
+- Confirm successful, skipped, or failed git parts return the navbar to normal actions.
+- Confirm manual commit and manual PR creation still update the navbar via their synthetic assistant git messages.
+- Confirm preview still shows “Deploying…” until the preview URL changes after a pushed commit.
