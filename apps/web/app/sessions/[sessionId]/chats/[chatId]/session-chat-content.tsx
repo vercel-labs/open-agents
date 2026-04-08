@@ -4322,6 +4322,19 @@ export function SessionChatContent({
         onOpenInEditor={(filePath) => {
           void codeEditor.handleOpenFile(filePath);
         }}
+        onAddToPrompt={(filePath, selectedText, comment) => {
+          // Build a snippet attachment with the file reference and selected text
+          const snippetContent = `File: ${filePath}\n\`\`\`\n${selectedText}\n\`\`\``;
+          addTextAttachment(snippetContent);
+          // If the user typed a comment, append it to the input
+          if (comment) {
+            setInput((prev) => (prev.trim() ? `${prev}\n${comment}` : comment));
+          }
+          // Focus the input after a brief delay (keep file viewer open)
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 100);
+        }}
       />
     </>
   );

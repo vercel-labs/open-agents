@@ -18,6 +18,7 @@ import {
   DrawerDescription,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { SelectionPopover } from "@/components/selection-popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultFileOptions } from "@/lib/diffs-config";
 import { fetcherNoStore } from "@/lib/swr";
@@ -29,6 +30,11 @@ type WorkspaceFileViewerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenInEditor?: (filePath: string) => void;
+  onAddToPrompt?: (
+    filePath: string,
+    selectedText: string,
+    comment: string,
+  ) => void;
   sessionId: string;
 };
 
@@ -95,6 +101,7 @@ function ViewerBody({
   isRefreshing,
   onOpenInEditor,
   onRefresh,
+  onAddToPrompt,
   response,
 }: {
   editorBusy?: boolean;
@@ -104,12 +111,14 @@ function ViewerBody({
   isRefreshing: boolean;
   onOpenInEditor?: () => void;
   onRefresh: () => void;
+  onAddToPrompt?: (selectedText: string, comment: string) => void;
   response: WorkspaceFileContentResponse | undefined;
 }) {
   const hasContent = response != null && response.content.length > 0;
   const fileOptions = shouldWrapFileContent(filePath)
     ? { ...defaultFileOptions, overflow: "wrap" as const }
     : defaultFileOptions;
+  const contentRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
@@ -157,7 +166,7 @@ function ViewerBody({
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-auto">
+      <div ref={contentRef} className="relative min-h-0 flex-1 overflow-auto">
         {hasContent && (
           <CopyButton
             text={response.content}
@@ -190,6 +199,12 @@ function ViewerBody({
             No file selected.
           </div>
         )}
+        {onAddToPrompt && hasContent && (
+          <SelectionPopover
+            containerRef={contentRef}
+            onAddToPrompt={onAddToPrompt}
+          />
+        )}
       </div>
     </>
   );
@@ -201,6 +216,7 @@ export function WorkspaceFileViewer({
   open,
   onOpenChange,
   onOpenInEditor,
+  onAddToPrompt,
   sessionId,
 }: WorkspaceFileViewerProps) {
   const isMobile = useIsMobile();
@@ -225,6 +241,13 @@ export function WorkspaceFileViewer({
 
   const errorMessage = error?.message ?? null;
   const isRefreshing = isValidating && !isLoading;
+
+  const handleAddToPrompt = onAddToPrompt
+    ? (selectedText: string, comment: string) => {
+        onAddToPrompt(filePath, selectedText, comment);
+      }
+    : undefined;
+
   const body = (
     <ViewerBody
       editorBusy={editorBusy}
@@ -238,6 +261,7 @@ export function WorkspaceFileViewer({
       onRefresh={() => {
         void mutate();
       }}
+      onAddToPrompt={handleAddToPrompt}
       response={data}
     />
   );
