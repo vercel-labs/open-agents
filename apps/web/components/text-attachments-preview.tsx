@@ -26,12 +26,12 @@ function TextAttachmentChip({
   const meta = `${attachment.lineCount} lines · ${formatByteSize(attachment.byteSize)}`;
 
   return (
-    <div className="group relative flex-shrink-0 p-1">
+    <div className="group relative min-w-0 max-w-full p-1">
       <button
         type="button"
         onClick={onPreview}
         className={cn(
-          "flex items-center gap-2 rounded-lg border border-border/60 bg-muted/60 px-3 py-2",
+          "flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-muted/60 px-3 py-2",
           "text-left font-mono text-sm leading-tight text-foreground",
           "transition-colors hover:border-foreground/20 hover:bg-muted",
         )}
@@ -39,7 +39,9 @@ function TextAttachmentChip({
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate">{attachment.filename}</span>
-          <span className="text-[11px] text-muted-foreground">{meta}</span>
+          <span className="truncate text-[11px] text-muted-foreground">
+            {meta}
+          </span>
         </div>
       </button>
       <button
@@ -112,7 +114,7 @@ export function TextAttachmentsPreview({
 
   return (
     <>
-      <div className={cn("flex gap-1 overflow-x-auto", className)}>
+      <div className={cn("flex min-w-0 flex-wrap gap-1", className)}>
         {attachments.map((attachment) => (
           <TextAttachmentChip
             key={attachment.id}
