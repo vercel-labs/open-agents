@@ -47,6 +47,7 @@ import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-dep
 import type {
   WebAgentCommitDataPart,
   WebAgentPrDataPart,
+  WebAgentSnippetDataPart,
   WebAgentUIMessage,
   WebAgentUIMessagePart,
   WebAgentUIToolPart,
@@ -1881,13 +1882,16 @@ export function SessionChatContent({
         return;
       }
 
-      const resendText = targetMessage.parts
+      const resendTextParts = targetMessage.parts
         .filter(
-          (part): part is { type: "text"; text: string } =>
+          (part): part is Extract<WebAgentUIMessagePart, { type: "text" }> =>
             part.type === "text",
         )
-        .map((part) => part.text)
-        .join("");
+        .map((part) => ({
+          type: "text" as const,
+          text: part.text,
+        }));
+      const resendText = resendTextParts.map((part) => part.text).join("");
       const resendFiles = targetMessage.parts
         .filter((part): part is FileUIPart => part.type === "file")
         .map((part) => ({
@@ -1896,8 +1900,25 @@ export function SessionChatContent({
           url: part.url,
           ...(part.filename ? { filename: part.filename } : {}),
         }));
+      const resendSnippets = targetMessage.parts
+        .filter(
+          (part): part is WebAgentSnippetDataPart =>
+            part.type === "data-snippet",
+        )
+        .map((part) => ({
+          type: "data-snippet" as const,
+          id: part.id,
+          data: {
+            content: part.data.content,
+            filename: part.data.filename,
+          },
+        }));
 
-      if (!resendText.trim() && resendFiles.length === 0) {
+      if (
+        !resendText.trim() &&
+        resendFiles.length === 0 &&
+        resendSnippets.length === 0
+      ) {
         return;
       }
 
@@ -1926,10 +1947,16 @@ export function SessionChatContent({
         }
 
         setMessages(messages.slice(0, targetMessageIndex));
-        await sendMessageWithPendingState({
-          text: resendText,
-          files: resendFiles.length > 0 ? resendFiles : undefined,
-        });
+        await sendMessageWithPendingState(
+          resendSnippets.length > 0
+            ? {
+                parts: [...resendTextParts, ...resendFiles, ...resendSnippets],
+              }
+            : {
+                text: resendText,
+                files: resendFiles.length > 0 ? resendFiles : undefined,
+              },
+        );
 
         await refreshChats();
       } catch (err) {
@@ -3298,6 +3325,41 @@ export function SessionChatContent({
                         }
 
                         const p = group.part;
+                        const userMessageActions =
+                          m.role === "user" && group.index === 0 ? (
+                            <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleResendUserMessage(m.id)
+                                }
+                                disabled={hasMessageActionInFlight}
+                                aria-label="Resend this message and delete everything after it"
+                                className="rounded p-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {resendingMessageId === m.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteUserMessage(m.id)
+                                }
+                                disabled={hasMessageActionInFlight}
+                                aria-label="Delete this message and everything after it"
+                                className="rounded p-1 transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {deletingMessageId === m.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          ) : null;
 
                         if (isReasoningUIPart(p)) {
                           if (!isToolCallsExpanded) return null;
@@ -3379,40 +3441,7 @@ export function SessionChatContent({
                                       {p.text}
                                     </p>
                                   </div>
-                                  {group.index === 0 && (
-                                    <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/80 p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          void handleResendUserMessage(m.id)
-                                        }
-                                        disabled={hasMessageActionInFlight}
-                                        aria-label="Resend this message and delete everything after it"
-                                        className="rounded p-1 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        {resendingMessageId === m.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <RotateCcw className="h-4 w-4" />
-                                        )}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          void handleDeleteUserMessage(m.id)
-                                        }
-                                        disabled={hasMessageActionInFlight}
-                                        aria-label="Delete this message and everything after it"
-                                        className="rounded p-1 transition hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        {deletingMessageId === m.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Trash2 className="h-4 w-4" />
-                                        )}
-                                      </button>
-                                    </div>
-                                  )}
+                                  {userMessageActions}
                                 </div>
                               ) : (
                                 <div className="group min-w-0 w-full overflow-hidden">
@@ -3523,23 +3552,7 @@ export function SessionChatContent({
                                   alt={p.filename ?? "Attached image"}
                                   className="max-h-64 rounded-lg"
                                 />
-                                {m.role === "user" && group.index === 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleDeleteUserMessage(m.id)
-                                    }
-                                    disabled={hasMessageActionInFlight}
-                                    aria-label="Delete this message and everything after it"
-                                    className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                  >
-                                    {deletingMessageId === m.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                )}
+                                {userMessageActions}
                               </div>
                             </div>
                           );
@@ -3552,10 +3565,13 @@ export function SessionChatContent({
                               key={`${m.id}-${group.renderKey}`}
                               className="flex justify-end"
                             >
-                              <SnippetChip
-                                filename={p.data.filename}
-                                content={p.data.content}
-                              />
+                              <div className="group relative w-fit min-w-0 max-w-[80%]">
+                                <SnippetChip
+                                  filename={p.data.filename}
+                                  content={p.data.content}
+                                />
+                                {userMessageActions}
+                              </div>
                             </div>
                           );
                         }
