@@ -2,6 +2,7 @@ import { isReasoningUIPart, isToolUIPart } from "ai";
 import type {
   WebAgentCommitDataPart,
   WebAgentPrDataPart,
+  WebAgentUIMessage,
   WebAgentUIMessagePart,
 } from "@/app/types";
 
@@ -78,6 +79,73 @@ export function shouldKeepCollapsedReasoningStreaming(options: {
   return !hasRenderableContentAfterGroup;
 }
 
+function getPendingGitActionLabel(action: "commit" | "pr"): string {
+  return action === "pr" ? "Creating pull request…" : "Creating commit…";
+}
+
+function getLatestAssistantGitMessage(messages: WebAgentUIMessage[]) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "assistant") {
+      continue;
+    }
+
+    if (message.parts.some(isGitDataPart)) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+export function getNavbarGitActionState(messages: WebAgentUIMessage[]): {
+  pendingAction: "commit" | "pr" | null;
+  label: string | null;
+  latestCommitPart: WebAgentCommitDataPart | null;
+  latestPrPart: WebAgentPrDataPart | null;
+} {
+  const latestGitMessage = getLatestAssistantGitMessage(messages);
+
+  if (!latestGitMessage) {
+    return {
+      pendingAction: null,
+      label: null,
+      latestCommitPart: null,
+      latestPrPart: null,
+    };
+  }
+
+  let latestCommitPart: WebAgentCommitDataPart | null = null;
+  let latestPrPart: WebAgentPrDataPart | null = null;
+  let pendingAction: "commit" | "pr" | null = null;
+
+  for (let i = latestGitMessage.parts.length - 1; i >= 0; i--) {
+    const part = latestGitMessage.parts[i];
+
+    if (part.type === "data-commit") {
+      latestCommitPart ??= part;
+      if (pendingAction === null && part.data.status === "pending") {
+        pendingAction = "commit";
+      }
+      continue;
+    }
+
+    if (part.type === "data-pr") {
+      latestPrPart ??= part;
+      if (pendingAction === null && part.data.status === "pending") {
+        pendingAction = "pr";
+      }
+    }
+  }
+
+  return {
+    pendingAction,
+    label: pendingAction ? getPendingGitActionLabel(pendingAction) : null,
+    latestCommitPart,
+    latestPrPart,
+  };
+}
+
 export function getGitFinalizationState(options: {
   status: ChatUiStatus;
   lastMessageRole: "assistant" | "user" | "system" | undefined;
@@ -106,7 +174,7 @@ export function getGitFinalizationState(options: {
       (part) => part.type === "data-pr" && part.data.status === "pending",
     )
   ) {
-    return { isFinalizing: true, label: "Creating pull request…" };
+    return { isFinalizing: true, label: getPendingGitActionLabel("pr") };
   }
 
   if (
@@ -114,7 +182,7 @@ export function getGitFinalizationState(options: {
       (part) => part.type === "data-commit" && part.data.status === "pending",
     )
   ) {
-    return { isFinalizing: true, label: "Creating commit…" };
+    return { isFinalizing: true, label: getPendingGitActionLabel("commit") };
   }
 
   return { isFinalizing: true, label: "Finalizing git actions…" };

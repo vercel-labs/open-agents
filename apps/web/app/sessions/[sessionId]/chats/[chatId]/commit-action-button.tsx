@@ -6,7 +6,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 interface CommitActionButtonProps {
   label: string;
-  isAutoCommitting: boolean;
+  pendingLabel: string | null;
   isChatReady: boolean;
   hasUncommittedChanges: boolean;
   onClick: () => void;
@@ -15,28 +15,28 @@ interface CommitActionButtonProps {
 /** Primary header button for commit actions (outline style, responsive). */
 export function CommitActionHeaderButton({
   label,
-  isAutoCommitting,
+  pendingLabel,
   isChatReady,
   hasUncommittedChanges,
   onClick,
 }: CommitActionButtonProps) {
+  const isPending = pendingLabel !== null;
+
   return (
     <Button
       variant="outline"
       size="sm"
       className="relative h-8 w-8 px-0 xl:w-auto xl:px-3"
-      disabled={isAutoCommitting || !isChatReady}
+      disabled={isPending || !isChatReady}
       onClick={onClick}
     >
-      {isAutoCommitting ? (
+      {isPending ? (
         <Loader2 className="h-4 w-4 animate-spin xl:mr-2" />
       ) : (
         <GitCommit className="h-4 w-4 xl:mr-2" />
       )}
-      <span className="hidden xl:inline">
-        {isAutoCommitting ? "Committing..." : label}
-      </span>
-      {hasUncommittedChanges && !isAutoCommitting && (
+      <span className="hidden xl:inline">{pendingLabel ?? label}</span>
+      {hasUncommittedChanges && !isPending && (
         <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-orange-500" />
       )}
     </Button>
@@ -46,21 +46,20 @@ export function CommitActionHeaderButton({
 /** Dropdown menu item for commit actions. */
 export function CommitActionMenuItem({
   label,
-  isAutoCommitting,
+  pendingLabel,
   isChatReady,
   onClick,
 }: Omit<CommitActionButtonProps, "hasUncommittedChanges">) {
+  const isPending = pendingLabel !== null;
+
   return (
-    <DropdownMenuItem
-      disabled={isAutoCommitting || !isChatReady}
-      onClick={onClick}
-    >
-      {isAutoCommitting ? (
+    <DropdownMenuItem disabled={isPending || !isChatReady} onClick={onClick}>
+      {isPending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
         <GitCommit className="mr-2 h-4 w-4" />
       )}
-      {isAutoCommitting ? "Committing..." : label}
+      {pendingLabel ?? label}
     </DropdownMenuItem>
   );
 }
