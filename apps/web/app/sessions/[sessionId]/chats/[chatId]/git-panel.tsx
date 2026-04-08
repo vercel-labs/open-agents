@@ -1229,7 +1229,7 @@ export function GitPanel(props: GitPanelProps) {
       </div>
 
       {/* Tab bar — matches chat tabs sub-header height */}
-      <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-1">
+      <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-1.5">
         {(
           [
             "code" as const,
@@ -1242,7 +1242,7 @@ export function GitPanel(props: GitPanelProps) {
             type="button"
             onClick={() => setGitPanelTab(tab)}
             className={cn(
-              "rounded-md px-2.5 py-2.5 text-xs font-medium transition-colors",
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
               gitPanelTab === tab
                 ? "bg-secondary text-secondary-foreground"
                 : "text-muted-foreground hover:bg-muted/50",

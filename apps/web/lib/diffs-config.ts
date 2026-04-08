@@ -40,26 +40,26 @@ function renderCustomSeparator(
   instance: FileDiff<undefined>,
 ) {
   const wrapper = document.createElement("div");
-  wrapper.style.position = "relative";
-
-  const root = document.createElement("div");
-  Object.assign(root.style, {
-    position: "absolute",
-    top: "0",
-    left: "0",
+  Object.assign(wrapper.style, {
     display: "flex",
     alignItems: "center",
     gap: "8px",
     paddingLeft: "22px",
+    paddingTop: "4px",
+    paddingBottom: "4px",
     fontSize: "0.75rem",
     fontFamily:
       "var(--diffs-header-font-family, var(--diffs-header-font-fallback))",
+    color: "var(--diffs-fg-number)",
+    background: "var(--diffs-bg-header, var(--diffs-bg))",
+    borderTop: "1px solid color-mix(in srgb, var(--diffs-fg) 10%, transparent)",
+    borderBottom:
+      "1px solid color-mix(in srgb, var(--diffs-fg) 10%, transparent)",
   });
 
   if (hunkData.type === "additions") {
-    const spacer = document.createElement("span");
-    spacer.textContent = " ";
-    wrapper.append(spacer, root);
+    // Collapsed additions — render a minimal spacer row
+    wrapper.textContent = "\u00A0";
     return wrapper;
   }
 
@@ -70,7 +70,6 @@ function renderCustomSeparator(
     const button = document.createElement("button");
     button.type = "button";
     Object.assign(button.style, {
-      position: "relative",
       margin: "0",
       display: "inline-flex",
       cursor: "pointer",
@@ -84,8 +83,7 @@ function renderCustomSeparator(
 
     const icon = document.createElement("span");
     Object.assign(icon.style, {
-      fontFamily:
-        "var(--diffs-font-family, var(--diffs-font-fallback))",
+      fontFamily: "var(--diffs-font-family, var(--diffs-font-fallback))",
       fontSize: "1rem",
       lineHeight: "1",
     });
@@ -96,9 +94,6 @@ function renderCustomSeparator(
     Object.assign(label.style, {
       marginLeft: "8px",
       whiteSpace: "nowrap",
-      color: "var(--diffs-fg-number)",
-      fontFamily:
-        "var(--diffs-header-font-family, var(--diffs-header-font-fallback))",
     });
     label.textContent = labelText;
 
@@ -121,11 +116,7 @@ function renderCustomSeparator(
     controls.append(createControl("down"));
   }
 
-  root.append(controls);
-
-  const spacer = document.createElement("span");
-  spacer.textContent = " ";
-  wrapper.append(spacer, root);
+  wrapper.append(controls);
   return wrapper;
 }
 
