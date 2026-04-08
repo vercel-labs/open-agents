@@ -5,6 +5,7 @@ import {
   isToolUIPart,
   type LanguageModelUsage,
   type ModelMessage,
+  pruneMessages,
   type UIMessageChunk,
 } from "ai";
 import type { OpenHarnessAgentCallOptions } from "@open-harness/agent";
@@ -65,11 +66,13 @@ const convertMessages = async (
   "use step";
   const { webAgent } = await import("@/app/config");
   const dedupedMessages = messages.map(dedupeMessageReasoning);
-  return await convertToModelMessages(dedupedMessages, {
+  const modelMessages = await convertToModelMessages(dedupedMessages, {
     ignoreIncompleteToolCalls: true,
     tools: webAgent.tools,
     convertDataPart: () => undefined,
   });
+
+  return pruneMessages({ messages: modelMessages });
 };
 
 const generateId = async () => {

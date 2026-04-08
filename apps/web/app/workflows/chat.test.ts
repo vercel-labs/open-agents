@@ -44,6 +44,7 @@ let agentRequestBody: unknown;
 let agentResponseHeaders: Record<string, string> | undefined;
 let agentResponseBody: unknown;
 let agentProviderMetadata: Record<string, unknown> | undefined;
+let agentInputMessages: unknown;
 
 function buildAgentSteps() {
   return [
@@ -110,7 +111,8 @@ mock.module("./chat-post-finish", () => spies);
 mock.module("@/app/config", () => ({
   webAgent: {
     tools: {},
-    stream: async () => {
+    stream: async ({ messages }: { messages: unknown }) => {
+      agentInputMessages = messages;
       return {
         toUIMessageStream: (opts: {
           sendStart?: boolean;
@@ -179,9 +181,47 @@ mock.module("@/app/config", () => ({
 }));
 
 mock.module("ai", () => ({
-  convertToModelMessages: async (msgs: unknown[]) => msgs,
+  convertToModelMessages: async (
+    msgs: Array<Record<string, unknown>>,
+    options?: { convertDataPart?: (part: Record<string, unknown>) => unknown },
+  ) =>
+    msgs.map((message) => {
+      const parts = Array.isArray(message.parts) ? message.parts : [];
+      const content = parts.flatMap((part) => {
+        if (typeof part !== "object" || part === null) {
+          return [];
+        }
+
+        if (part.type === "text" && typeof part.text === "string") {
+          return [{ type: "text", text: part.text }];
+        }
+
+        if (
+          typeof part.type === "string" &&
+          part.type.startsWith("data-") &&
+          options?.convertDataPart
+        ) {
+          const convertedPart = options.convertDataPart(
+            part as Record<string, unknown>,
+          );
+          return convertedPart === undefined ? [] : [convertedPart];
+        }
+
+        return [];
+      });
+
+      return {
+        role: message.role,
+        content,
+      };
+    }),
   generateId: () => "gen-id-1",
   isToolUIPart: (part: { type: string }) => part.type === "tool-invocation",
+  pruneMessages: ({ messages }: { messages: Array<Record<string, unknown>> }) =>
+    messages.filter((message) => {
+      const content = message.content;
+      return !Array.isArray(content) || content.length > 0;
+    }),
 }));
 
 mock.module("@open-harness/agent", () => ({}));
@@ -227,6 +267,7 @@ beforeEach(() => {
   agentResponseHeaders = undefined;
   agentResponseBody = undefined;
   agentProviderMetadata = undefined;
+  agentInputMessages = undefined;
   streamOnFinishCallback = undefined;
   Object.values(spies).forEach((s) => s.mockClear());
 });
@@ -624,6 +665,48 @@ describe("runAgentWorkflow", () => {
         },
       ]),
     );
+  });
+
+  test("prunes synthetic git-only assistant messages before the next model call", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        messages: [
+          {
+            id: "user-1",
+            role: "user",
+            parts: [{ type: "text", text: "Hello" }],
+          },
+          {
+            id: "assistant-git-1",
+            role: "assistant",
+            parts: [
+              {
+                type: "data-commit",
+                id: "assistant-git-1:commit",
+                data: { status: "success" },
+              },
+            ],
+            metadata: {},
+          },
+          {
+            id: "user-2",
+            role: "user",
+            parts: [{ type: "text", text: "What changed?" }],
+          },
+        ],
+      }),
+    );
+
+    expect(agentInputMessages).toEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "Hello" }],
+      },
+      {
+        role: "user",
+        content: [{ type: "text", text: "What changed?" }],
+      },
+    ]);
   });
 
   test("skips auto PR creation when auto-commit does not push the latest commit", async () => {
