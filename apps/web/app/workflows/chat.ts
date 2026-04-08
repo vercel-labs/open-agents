@@ -73,7 +73,11 @@ const convertMessages = async (
       tools: webAgent.tools,
       convertDataPart: (part) => {
         if (part.type === "data-snippet") {
-          return { type: "text", text: part.data.content };
+          const { filename, content } = part.data;
+          return {
+            type: "text",
+            text: `<snippet filename="${filename}">\n${content}\n</snippet>`,
+          };
         }
         return undefined;
       },
