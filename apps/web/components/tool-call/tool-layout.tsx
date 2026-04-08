@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
-import { CircleX, Loader2, Minus, Plus } from "lucide-react";
+import { CircleX, Loader2, Minus, OctagonPause, Plus } from "lucide-react";
 import type React from "react";
 import { type ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -89,28 +89,27 @@ export function ToolLayout({
   const errorMessage =
     state.error && !state.denied ? trimErrorPrefix(state.error) : undefined;
   const hasError = Boolean(errorMessage);
-  const hasExpandedDetails = hasRenderableContent(expandedContent) || hasError;
+  const isInterrupted = Boolean(state.interrupted);
+  const hasExpandedDetails =
+    hasRenderableContent(expandedContent) || hasError || isInterrupted;
   const hasOutput = hasRenderableContent(output);
   const hasMeta = hasRenderableContent(meta);
   const hasSummary =
     typeof summary === "string" ? summary.trim().length > 0 : summary != null;
   const showRunningNotice =
     state.approvalRequested && !showApprovalButtons && !state.interrupted;
-  const interruptedBadge = state.interrupted ? (
-    <span className="inline-flex items-center rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 text-[11px] font-medium leading-none text-yellow-600 dark:text-yellow-400">
-      Interrupted
-    </span>
-  ) : null;
   const isExpandedPanelVisible = isExpanded && hasExpandedDetails;
   const [shouldRenderExpandedContent, setShouldRenderExpandedContent] =
     useState(defaultExpanded && hasExpandedDetails);
 
-  // Error state flags
+  // Error & interrupted state flags
   const showErrorHeader = hasError;
+  const showInterruptedHeader = isInterrupted && !hasError;
   const showErrorExpanded = hasError && isExpandedPanelVisible;
+  const showInterruptedExpanded = isInterrupted && !hasError && isExpandedPanelVisible;
   const hasErrorMeta = hasRenderableContent(errorMeta);
   const hasTrailingMeta =
-    !showErrorHeader && (hasMeta || interruptedBadge !== null);
+    !showErrorHeader && !showInterruptedHeader && hasMeta;
 
   useEffect(() => {
     if (!hasExpandedDetails) {
@@ -188,6 +187,15 @@ export function ToolLayout({
                 <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
               )}
             </>
+          ) : showInterruptedHeader ? (
+            <>
+              <OctagonPause className="h-3.5 w-3.5 text-yellow-500 group-hover:hidden" />
+              {isExpandedPanelVisible ? (
+                <Minus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              ) : (
+                <Plus className="hidden h-3.5 w-3.5 text-muted-foreground group-hover:block" />
+              )}
+            </>
           ) : hasExpandedDetails && !isRunning ? (
             <>
               <span className="group-hover:hidden">{resolvedIcon}</span>
@@ -208,9 +216,11 @@ export function ToolLayout({
             "min-w-0 shrink truncate font-medium leading-none",
             showErrorHeader
               ? "text-red-500"
-              : state.denied
-                ? "text-red-500"
-                : "text-foreground",
+              : showInterruptedHeader
+                ? "text-yellow-500"
+                : state.denied
+                  ? "text-red-500"
+                  : "text-foreground",
             nameClassName,
           )}
         >
@@ -222,7 +232,11 @@ export function ToolLayout({
             <span
               className={cn(
                 "min-w-0 shrink truncate font-mono text-[13px] leading-none",
-                showErrorHeader ? "text-red-400/80" : "text-muted-foreground",
+                showErrorHeader
+                  ? "text-red-400/80"
+                  : showInterruptedHeader
+                    ? "text-yellow-400/80"
+                    : "text-muted-foreground",
                 summaryClassName,
               )}
             >
@@ -230,7 +244,7 @@ export function ToolLayout({
             </span>
           )}
 
-          {(rightAlignMeta || showErrorHeader) && <span className="flex-1" />}
+          {(rightAlignMeta || showErrorHeader || showInterruptedHeader) && <span className="flex-1" />}
 
           {showErrorHeader && hasErrorMeta && (
             <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-red-400/70">
@@ -241,7 +255,6 @@ export function ToolLayout({
           {hasTrailingMeta && (
             <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-muted-foreground/60">
               {meta}
-              {interruptedBadge}
             </span>
           )}
         </div>
@@ -300,6 +313,11 @@ export function ToolLayout({
                       {errorMessage}
                     </pre>
                   )}
+                {showInterruptedExpanded && (
+                  <pre className="rounded-md border border-yellow-500/20 bg-yellow-500/5 px-3 py-2 font-mono text-xs leading-relaxed text-yellow-500">
+                    interrupted
+                  </pre>
+                )}
                 {expandedContent}
               </div>
             )}
