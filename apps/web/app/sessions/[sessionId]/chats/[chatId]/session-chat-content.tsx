@@ -119,6 +119,7 @@ import {
   isChatInFlight as isChatInFlightStatus,
   isGitDataPart,
   shouldKeepCollapsedReasoningStreaming,
+  shouldRenderGitDataPart,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { formatRelativeTime } from "@/lib/format-relative-time";
@@ -3455,6 +3456,10 @@ export function SessionChatContent({
                         }
 
                         if (isGitDataPart(p)) {
+                          if (!shouldRenderGitDataPart(p)) {
+                            return null;
+                          }
+
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}

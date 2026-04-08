@@ -12,6 +12,7 @@ const {
   isChatInFlight,
   shouldKeepCollapsedReasoningStreaming,
   shouldRefreshAfterReadyTransition,
+  shouldRenderGitDataPart,
   shouldShowThinkingIndicator,
 } = await import("./chat-streaming-state");
 
@@ -53,6 +54,10 @@ describe("chat streaming state", () => {
       type: "data-commit",
       data: { status: "pending" },
     } as unknown as AssistantPart;
+    const skippedCommitPart = {
+      type: "data-commit",
+      data: { status: "skipped" },
+    } as unknown as AssistantPart;
 
     expect(hasRenderableAssistantPart(emptyTextPart)).toBe(false);
     expect(hasRenderableAssistantPart(textPart)).toBe(true);
@@ -62,6 +67,12 @@ describe("chat streaming state", () => {
       true,
     );
     expect(hasRenderableAssistantPart(gitDataPart)).toBe(true);
+    expect(hasRenderableAssistantPart(skippedCommitPart)).toBe(false);
+    expect(
+      shouldRenderGitDataPart(
+        skippedCommitPart as Parameters<typeof shouldRenderGitDataPart>[0],
+      ),
+    ).toBe(false);
   });
 
   test("does not show thinking when submitted already has assistant output", () => {

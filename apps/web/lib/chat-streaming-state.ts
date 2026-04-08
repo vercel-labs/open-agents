@@ -17,6 +17,16 @@ export function isGitDataPart(
   return part.type === "data-commit" || part.type === "data-pr";
 }
 
+export function shouldRenderGitDataPart(
+  part: WebAgentCommitDataPart | WebAgentPrDataPart,
+): boolean {
+  if (part.type === "data-commit" && part.data.status === "skipped") {
+    return false;
+  }
+
+  return true;
+}
+
 export function hasRenderableAssistantPart(
   part: WebAgentUIMessagePart,
 ): boolean {
@@ -33,7 +43,7 @@ export function hasRenderableAssistantPart(
   }
 
   if (isGitDataPart(part)) {
-    return true;
+    return shouldRenderGitDataPart(part);
   }
 
   return false;
