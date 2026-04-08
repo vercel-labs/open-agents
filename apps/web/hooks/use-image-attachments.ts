@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import type { FileUIPart } from "ai";
 import { nanoid } from "nanoid";
 import {
+  compressImageFile,
   type ImageAttachment,
   type ImageMediaType,
   imageAttachmentToFilePart,
@@ -18,21 +19,28 @@ export function useImageAttachments() {
   const addImage = useCallback(async (file: File) => {
     if (!isValidImageType(file.type)) return false;
 
-    const dataUrl = await fileToDataUrl(file);
-    const attachment: ImageAttachment = {
-      id: nanoid(),
-      dataUrl,
-      mediaType: file.type as ImageMediaType,
-      filename: file.name,
-    };
-    setImages((prev) => [...prev, attachment]);
-    return true;
+    try {
+      const processedFile = await compressImageFile(file);
+      const dataUrl = await fileToDataUrl(processedFile);
+      const attachment: ImageAttachment = {
+        id: nanoid(),
+        dataUrl,
+        mediaType: processedFile.type as ImageMediaType,
+        filename: processedFile.name,
+      };
+      setImages((prev) => [...prev, attachment]);
+      return true;
+    } catch (error) {
+      console.error("Failed to process image attachment:", error);
+      return false;
+    }
   }, []);
 
   const addImages = useCallback(
     async (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
-      await Promise.all(fileArray.map(addImage));
+      for (const file of Array.from(files)) {
+        await addImage(file);
+      }
     },
     [addImage],
   );
