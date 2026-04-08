@@ -3358,10 +3358,10 @@ export function SessionChatContent({
                             <div
                               key={`${m.id}-${group.renderKey}`}
                               className={cn(
-                                "flex min-w-0 py-2",
+                                "flex min-w-0",
                                 m.role === "user"
                                   ? "justify-end"
-                                  : "justify-start",
+                                  : "justify-start py-2",
                                 // Breathing room above final assistant text after tool calls
                                 isFinalAssistantTextPart &&
                                   group.index > 0 &&
@@ -3550,7 +3550,7 @@ export function SessionChatContent({
                           return (
                             <div
                               key={`${m.id}-${group.renderKey}`}
-                              className="flex justify-end py-1"
+                              className="flex justify-end"
                             >
                               <SnippetChip
                                 filename={p.data.filename}
@@ -3586,7 +3586,11 @@ export function SessionChatContent({
                       );
                     }
 
-                    return renderGroups(true);
+                    return (
+                      <div key={m.id} className="space-y-1">
+                        {renderGroups(true)}
+                      </div>
+                    );
                   },
                 )}
                 {showThinkingIndicator && (

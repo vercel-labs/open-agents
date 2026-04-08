@@ -13,7 +13,7 @@ import {
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Streamdown } from "streamdown";
 import type {
   WebAgentUIMessage,
@@ -466,8 +466,12 @@ function SharedMessage({
     [],
   );
 
+  const isUser = m.role === "user";
+  const Wrapper = isUser ? "div" : Fragment;
+  const wrapperProps = isUser ? { className: "space-y-1" } : {};
+
   return (
-    <>
+    <Wrapper {...wrapperProps}>
       {showSummary && (
         <ToolCallSummary
           toolCallCount={toolCallCount}
@@ -574,6 +578,6 @@ function SharedMessage({
 
         return null;
       })}
-    </>
+    </Wrapper>
   );
 }

@@ -32,18 +32,16 @@ export function SnippetChip({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex max-w-full items-center gap-2 rounded-2xl bg-secondary px-4 py-2",
-          "font-mono text-sm leading-tight text-foreground",
-          "transition-colors hover:bg-secondary/80",
+          "inline-flex max-w-full items-center gap-1.5 rounded-xl bg-secondary/70 px-3 py-1.5",
+          "font-mono text-xs leading-tight text-muted-foreground",
+          "transition-colors hover:bg-secondary hover:text-foreground",
           className,
         )}
         title={`${filename}\n${meta}`}
       >
-        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <FileText className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{filename}</span>
-        <span className="shrink-0 text-[11px] text-muted-foreground">
-          {meta}
-        </span>
+        <span className="shrink-0 text-[10px] opacity-60">{meta}</span>
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-2xl">
