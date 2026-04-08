@@ -106,10 +106,10 @@ export function ToolLayout({
   const showErrorHeader = hasError;
   const showInterruptedHeader = isInterrupted && !hasError;
   const showErrorExpanded = hasError && isExpandedPanelVisible;
-  const showInterruptedExpanded = isInterrupted && !hasError && isExpandedPanelVisible;
+  const showInterruptedExpanded =
+    isInterrupted && !hasError && isExpandedPanelVisible;
   const hasErrorMeta = hasRenderableContent(errorMeta);
-  const hasTrailingMeta =
-    !showErrorHeader && !showInterruptedHeader && hasMeta;
+  const hasTrailingMeta = !showErrorHeader && !showInterruptedHeader && hasMeta;
 
   useEffect(() => {
     if (!hasExpandedDetails) {
@@ -244,7 +244,9 @@ export function ToolLayout({
             </span>
           )}
 
-          {(rightAlignMeta || showErrorHeader || showInterruptedHeader) && <span className="flex-1" />}
+          {(rightAlignMeta || showErrorHeader || showInterruptedHeader) && (
+            <span className="flex-1" />
+          )}
 
           {showErrorHeader && hasErrorMeta && (
             <span className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[12px] leading-none text-red-400/70">

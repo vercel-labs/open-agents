@@ -12,7 +12,7 @@ const baseState: ToolRenderState = {
 };
 
 describe("ToolLayout interrupted state", () => {
-  test("renders interrupted tool calls as a compact row with an inline badge", () => {
+  test("renders interrupted tool calls with yellow header styling and OctagonPause icon", () => {
     const html = renderToStaticMarkup(
       <ToolLayout
         name="Bash"
@@ -21,13 +21,30 @@ describe("ToolLayout interrupted state", () => {
       />,
     );
 
-    expect(html).toContain("Interrupted");
-    expect(html).toContain("border-yellow-500/30 bg-yellow-500/10");
+    // Yellow styling on name and summary (like error uses red)
+    expect(html).toContain("text-yellow-500");
+    expect(html).toContain("text-yellow-400/80");
     expect(html).toContain("bg-transparent");
-    expect(html).toContain("py-0.5");
-    expect(html).not.toContain(
-      '<div class="mt-2 pl-5 text-sm text-yellow-500">Interrupted</div>',
+    // OctagonPause icon should be present
+    expect(html).toContain("lucide-octagon-pause");
+    // Should NOT have the old pill badge
+    expect(html).not.toContain("border-yellow-500/30 bg-yellow-500/10");
+    expect(html).not.toContain("py-0.5");
+  });
+
+  test("shows yellow interrupted box when expanded", () => {
+    const html = renderToStaticMarkup(
+      <ToolLayout
+        name="Bash"
+        summary="agent-browser snapshot"
+        state={{ ...baseState, interrupted: true }}
+        defaultExpanded
+      />,
     );
+
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("border-yellow-500/20 bg-yellow-500/5");
+    expect(html).toContain("interrupted");
   });
 });
 
