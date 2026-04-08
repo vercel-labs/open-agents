@@ -11,6 +11,7 @@ import {
   Copy,
   EllipsisVertical,
   ExternalLink,
+  FileText,
   FolderGit2,
   GitCommitHorizontal,
   GitCompare,
@@ -57,6 +58,7 @@ import {
 } from "@/components/assistant-file-link";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
+import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
@@ -109,6 +111,7 @@ import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { useFileSuggestions } from "@/hooks/use-file-suggestions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useImageAttachments } from "@/hooks/use-image-attachments";
+import { useTextAttachments } from "@/hooks/use-text-attachments";
 import { useScrollToBottom } from "@/hooks/use-scroll-to-bottom";
 import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
@@ -123,6 +126,7 @@ import {
 } from "@/lib/chat-streaming-state";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
+import { isLargeText } from "@/lib/text-attachment-utils";
 import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { fetcher } from "@/lib/swr";
@@ -1131,6 +1135,13 @@ export function SessionChatContent({
     fileInputRef,
     openFilePicker,
   } = useImageAttachments();
+  const {
+    textAttachments,
+    addTextAttachment,
+    removeTextAttachment,
+    clearTextAttachments,
+    getTextFileParts,
+  } = useTextAttachments();
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
   const {
@@ -3535,6 +3546,25 @@ export function SessionChatContent({
                           );
                         }
 
+                        // Render text file attachments
+                        if (p.type === "file" && p.mediaType === "text/plain") {
+                          return (
+                            <div
+                              key={`${m.id}-${group.renderKey}`}
+                              className="flex justify-end"
+                            >
+                              <div className="group relative w-fit max-w-[80%]">
+                                <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2 font-mono text-sm">
+                                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  <span className="truncate">
+                                    {p.filename ?? "pasted.txt"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return null;
                       });
 
@@ -3697,13 +3727,22 @@ export function SessionChatContent({
                   ) {
                     return;
                   }
-                  const hasContent = input.trim() || images.length > 0;
+                  const hasContent =
+                    input.trim() ||
+                    images.length > 0 ||
+                    textAttachments.length > 0;
                   if (!hasContent) return;
 
                   const messageText = input;
-                  const files = getFileParts();
+                  const imageFiles = getFileParts();
+                  const textFiles = getTextFileParts();
+                  const files =
+                    imageFiles || textFiles
+                      ? [...(imageFiles ?? []), ...(textFiles ?? [])]
+                      : undefined;
                   setInput("");
                   clearImages();
+                  clearTextAttachments();
 
                   const isFirstChatInSession = initialIsOnlyChatInSession;
                   const shouldSetOptimisticTitle =
@@ -3817,11 +3856,25 @@ export function SessionChatContent({
                   onCreateNew={handleCreateNewSandbox}
                 />
 
-                {/* Image attachments preview */}
-                <ImageAttachmentsPreview
-                  images={images}
-                  onRemove={removeImage}
-                />
+                {/* Attachments preview */}
+                {(images.length > 0 || textAttachments.length > 0) && (
+                  <div className="flex gap-2 overflow-x-auto px-3 pb-2 pt-3">
+                    {images.length > 0 && (
+                      <ImageAttachmentsPreview
+                        images={images}
+                        onRemove={removeImage}
+                        className="p-0"
+                      />
+                    )}
+                    {textAttachments.length > 0 && (
+                      <TextAttachmentsPreview
+                        attachments={textAttachments}
+                        onRemove={removeTextAttachment}
+                        className="p-0"
+                      />
+                    )}
+                  </div>
+                )}
 
                 {/* Textarea area */}
                 <div className="px-4 pb-2 pt-3">
@@ -3866,6 +3919,8 @@ export function SessionChatContent({
                     onPaste={(e) => {
                       const items = e.clipboardData?.items;
                       if (!items) return;
+
+                      // Handle image pastes
                       for (const item of items) {
                         if (isValidImageType(item.type)) {
                           const file = item.getAsFile();
@@ -3874,8 +3929,16 @@ export function SessionChatContent({
                             addImage(file).catch(() => {
                               // Silently ignore paste errors - rare edge case
                             });
+                            return;
                           }
                         }
+                      }
+
+                      // Handle large text pastes – convert to file attachment
+                      const pastedText = e.clipboardData?.getData("text/plain");
+                      if (pastedText && isLargeText(pastedText)) {
+                        e.preventDefault();
+                        addTextAttachment(pastedText);
                       }
                     }}
                     disabled={isArchived}
