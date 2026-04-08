@@ -11,7 +11,6 @@ import {
   Copy,
   EllipsisVertical,
   ExternalLink,
-  FileText,
   FolderGit2,
   GitCommitHorizontal,
   GitCompare,
@@ -1140,7 +1139,6 @@ export function SessionChatContent({
     addTextAttachment,
     removeTextAttachment,
     clearTextAttachments,
-    getTextFileParts,
   } = useTextAttachments();
   const { containerRef, isAtBottom, scrollToBottom } =
     useScrollToBottom<HTMLDivElement>();
@@ -3546,25 +3544,6 @@ export function SessionChatContent({
                           );
                         }
 
-                        // Render text file attachments
-                        if (p.type === "file" && p.mediaType === "text/plain") {
-                          return (
-                            <div
-                              key={`${m.id}-${group.renderKey}`}
-                              className="flex justify-end"
-                            >
-                              <div className="group relative w-fit max-w-[80%]">
-                                <div className="flex items-center gap-2 rounded-2xl bg-secondary px-4 py-2 font-mono text-sm">
-                                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                  <span className="truncate">
-                                    {p.filename ?? "pasted.txt"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-
                         return null;
                       });
 
@@ -3733,13 +3712,20 @@ export function SessionChatContent({
                     textAttachments.length > 0;
                   if (!hasContent) return;
 
-                  const messageText = input;
-                  const imageFiles = getFileParts();
-                  const textFiles = getTextFileParts();
-                  const files =
-                    imageFiles || textFiles
-                      ? [...(imageFiles ?? []), ...(textFiles ?? [])]
-                      : undefined;
+                  // Build message text: typed input + any text attachments
+                  let messageText = input;
+                  if (textAttachments.length > 0) {
+                    const attachmentBlock = textAttachments
+                      .map((a) => {
+                        const fence = "```";
+                        return `${fence}\n${a.content}\n${fence}`;
+                      })
+                      .join("\n\n");
+                    messageText = messageText.trim()
+                      ? `${messageText.trim()}\n\n${attachmentBlock}`
+                      : attachmentBlock;
+                  }
+                  const files = getFileParts();
                   setInput("");
                   clearImages();
                   clearTextAttachments();

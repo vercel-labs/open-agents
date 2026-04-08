@@ -1,5 +1,3 @@
-import type { FileUIPart } from "ai";
-
 export type TextAttachment = {
   id: string;
   content: string;
@@ -76,18 +74,6 @@ export function inferFilename(text: string): string {
   }
 
   return "pasted.txt";
-}
-
-export function textAttachmentToFilePart(
-  attachment: TextAttachment,
-): FileUIPart {
-  const dataUrl = `data:text/plain;base64,${btoa(unescape(encodeURIComponent(attachment.content)))}`;
-  return {
-    type: "file",
-    filename: attachment.filename,
-    mediaType: "text/plain",
-    url: dataUrl,
-  };
 }
 
 export function formatByteSize(bytes: number): string {

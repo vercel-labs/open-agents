@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { FileUIPart } from "ai";
 import { nanoid } from "nanoid";
 import {
   type TextAttachment,
   inferFilename,
-  textAttachmentToFilePart,
 } from "@/lib/text-attachment-utils";
 
 export function useTextAttachments() {
@@ -34,18 +32,11 @@ export function useTextAttachments() {
     setTextAttachments([]);
   }, []);
 
-  const getTextFileParts = useCallback((): FileUIPart[] | undefined => {
-    return textAttachments.length > 0
-      ? textAttachments.map(textAttachmentToFilePart)
-      : undefined;
-  }, [textAttachments]);
-
   return {
     textAttachments,
     addTextAttachment,
     removeTextAttachment,
     clearTextAttachments,
-    getTextFileParts,
     hasTextAttachments: textAttachments.length > 0,
   };
 }
