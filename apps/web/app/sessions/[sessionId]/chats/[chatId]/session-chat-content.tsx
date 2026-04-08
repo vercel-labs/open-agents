@@ -3858,7 +3858,7 @@ export function SessionChatContent({
 
                 {/* Attachments preview */}
                 {(images.length > 0 || textAttachments.length > 0) && (
-                  <div className="flex gap-2 overflow-x-auto px-3 pb-2 pt-3">
+                  <div className="flex items-start gap-2 overflow-x-auto px-2 pb-1 pt-2">
                     {images.length > 0 && (
                       <ImageAttachmentsPreview
                         images={images}

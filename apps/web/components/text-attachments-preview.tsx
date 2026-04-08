@@ -1,42 +1,96 @@
 "use client";
 
+import { useState } from "react";
 import { FileText, X } from "lucide-react";
 import type { TextAttachment } from "@/lib/text-attachment-utils";
 import { formatByteSize } from "@/lib/text-attachment-utils";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface TextAttachmentChipProps {
   attachment: TextAttachment;
   onRemove: () => void;
+  onPreview: () => void;
 }
 
-function TextAttachmentChip({ attachment, onRemove }: TextAttachmentChipProps) {
+function TextAttachmentChip({
+  attachment,
+  onRemove,
+  onPreview,
+}: TextAttachmentChipProps) {
   const meta = `${attachment.lineCount} lines · ${formatByteSize(attachment.byteSize)}`;
 
   return (
-    <div className="group relative flex-shrink-0">
-      <div
+    <div className="group relative flex-shrink-0 p-1">
+      <button
+        type="button"
+        onClick={onPreview}
         className={cn(
           "flex items-center gap-2 rounded-lg border border-border/60 bg-muted/60 px-3 py-2",
-          "font-mono text-sm leading-tight text-foreground",
+          "text-left font-mono text-sm leading-tight text-foreground",
+          "transition-colors hover:border-foreground/20 hover:bg-muted",
         )}
-        title={`${attachment.filename}\n${meta}`}
       >
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate">{attachment.filename}</span>
           <span className="text-[11px] text-muted-foreground">{meta}</span>
         </div>
-      </div>
+      </button>
       <button
         type="button"
-        onClick={onRemove}
-        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-700 text-neutral-300 opacity-0 transition-opacity hover:bg-neutral-600 group-hover:opacity-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-700 text-neutral-300 opacity-0 transition-opacity hover:bg-neutral-600 group-hover:opacity-100"
         aria-label="Remove text attachment"
       >
         <X className="h-3 w-3" />
       </button>
     </div>
+  );
+}
+
+interface TextAttachmentPreviewDialogProps {
+  attachment: TextAttachment | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function TextAttachmentPreviewDialog({
+  attachment,
+  open,
+  onOpenChange,
+}: TextAttachmentPreviewDialogProps) {
+  if (!attachment) return null;
+
+  const meta = `${attachment.lineCount} lines · ${formatByteSize(attachment.byteSize)}`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-mono text-sm">
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span>{attachment.filename}</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {meta}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-4">
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+            {attachment.content}
+          </pre>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -51,17 +105,30 @@ export function TextAttachmentsPreview({
   onRemove,
   className,
 }: TextAttachmentsPreviewProps) {
+  const [previewAttachment, setPreviewAttachment] =
+    useState<TextAttachment | null>(null);
+
   if (attachments.length === 0) return null;
 
   return (
-    <div className={cn("flex gap-2 overflow-x-auto px-3 pb-2 pt-3", className)}>
-      {attachments.map((attachment) => (
-        <TextAttachmentChip
-          key={attachment.id}
-          attachment={attachment}
-          onRemove={() => onRemove(attachment.id)}
-        />
-      ))}
-    </div>
+    <>
+      <div className={cn("flex gap-1 overflow-x-auto", className)}>
+        {attachments.map((attachment) => (
+          <TextAttachmentChip
+            key={attachment.id}
+            attachment={attachment}
+            onRemove={() => onRemove(attachment.id)}
+            onPreview={() => setPreviewAttachment(attachment)}
+          />
+        ))}
+      </div>
+      <TextAttachmentPreviewDialog
+        attachment={previewAttachment}
+        open={previewAttachment !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAttachment(null);
+        }}
+      />
+    </>
   );
 }
