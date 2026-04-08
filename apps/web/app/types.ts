@@ -49,9 +49,15 @@ export type WebAgentPrData = {
   requiresManualCreation?: boolean;
 };
 
+export type WebAgentSnippetData = {
+  content: string;
+  filename: string;
+};
+
 export type WebAgentDataParts = {
   commit: WebAgentCommitData;
   pr: WebAgentPrData;
+  snippet: WebAgentSnippetData;
 };
 
 // All types derived from the agent
@@ -70,6 +76,10 @@ export type WebAgentCommitDataPart = Extract<
 export type WebAgentPrDataPart = Extract<
   WebAgentUIMessagePart,
   { type: "data-pr" }
+>;
+export type WebAgentSnippetDataPart = Extract<
+  WebAgentUIMessagePart,
+  { type: "data-snippet" }
 >;
 export type WebAgentUIToolPart =
   | DynamicToolUIPart

@@ -61,6 +61,7 @@ import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
+import { SnippetChip } from "@/components/snippet-chip";
 import { AssistantMessageGroups } from "@/components/assistant-message-groups";
 import {
   PinnedTodoPanel,
@@ -3544,6 +3545,21 @@ export function SessionChatContent({
                           );
                         }
 
+                        // Render pasted text snippet attachments
+                        if (p.type === "data-snippet") {
+                          return (
+                            <div
+                              key={`${m.id}-${group.renderKey}`}
+                              className="flex justify-end py-1"
+                            >
+                              <SnippetChip
+                                filename={p.data.filename}
+                                content={p.data.content}
+                              />
+                            </div>
+                          );
+                        }
+
                         return null;
                       });
 
@@ -3713,19 +3729,48 @@ export function SessionChatContent({
                   if (!hasContent) return;
 
                   // Build message text: typed input + any text attachments
-                  let messageText = input;
-                  if (textAttachments.length > 0) {
-                    const attachmentBlock = textAttachments
-                      .map((a) => {
-                        const fence = "```";
-                        return `${fence}\n${a.content}\n${fence}`;
-                      })
-                      .join("\n\n");
-                    messageText = messageText.trim()
-                      ? `${messageText.trim()}\n\n${attachmentBlock}`
-                      : attachmentBlock;
-                  }
+                  const messageText = input;
                   const files = getFileParts();
+
+                  // Build the message payload. When text attachments are
+                  // present we use the parts-based form so we can include
+                  // data-snippet parts alongside text and file parts.
+                  const hasSnippets = textAttachments.length > 0;
+                  let messagePayload: Parameters<
+                    typeof sendMessageWithPendingState
+                  >[0];
+
+                  if (hasSnippets) {
+                    const parts: WebAgentUIMessage["parts"] = [];
+                    if (messageText.trim()) {
+                      parts.push({
+                        type: "text" as const,
+                        text: messageText,
+                      });
+                    }
+                    if (files) {
+                      for (const f of files) {
+                        parts.push(f);
+                      }
+                    }
+                    for (const attachment of textAttachments) {
+                      parts.push({
+                        type: "data-snippet" as const,
+                        id: attachment.id,
+                        data: {
+                          content: attachment.content,
+                          filename: attachment.filename,
+                        },
+                      });
+                    }
+                    messagePayload = { parts };
+                  } else {
+                    messagePayload = {
+                      text: messageText,
+                      files,
+                    };
+                  }
+
                   setInput("");
                   clearImages();
                   clearTextAttachments();
@@ -3790,10 +3835,7 @@ export function SessionChatContent({
                     }
                   }
                   try {
-                    await sendMessageWithPendingState({
-                      text: messageText,
-                      files,
-                    });
+                    await sendMessageWithPendingState(messagePayload);
                   } catch (err) {
                     if (pendingOptimisticTitleChatIdRef.current) {
                       void clearChatTitle(
