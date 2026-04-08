@@ -72,7 +72,10 @@ const convertMessages = async (
     convertDataPart: () => undefined,
   });
 
-  return pruneMessages({ messages: modelMessages });
+  return pruneMessages({
+    messages: modelMessages,
+    emptyMessages: "remove",
+  });
 };
 
 const generateId = async () => {
