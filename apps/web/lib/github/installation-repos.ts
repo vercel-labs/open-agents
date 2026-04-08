@@ -57,6 +57,26 @@ function normalizeLimit(limit?: number): number {
   return Math.max(1, Math.min(limit, 100));
 }
 
+function compareRepositoriesByRecentActivity(
+  a: Pick<InstallationRepository, "name" | "updated_at">,
+  b: Pick<InstallationRepository, "name" | "updated_at">,
+): number {
+  const updatedAtA = Date.parse(a.updated_at);
+  const updatedAtB = Date.parse(b.updated_at);
+  const hasValidUpdatedAtA = Number.isFinite(updatedAtA);
+  const hasValidUpdatedAtB = Number.isFinite(updatedAtB);
+
+  if (hasValidUpdatedAtA && hasValidUpdatedAtB && updatedAtA !== updatedAtB) {
+    return updatedAtB - updatedAtA;
+  }
+
+  if (hasValidUpdatedAtA !== hasValidUpdatedAtB) {
+    return hasValidUpdatedAtA ? -1 : 1;
+  }
+
+  return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+}
+
 export async function listInstallationRepositories(
   token: string,
   options?: ListInstallationRepositoriesOptions,
@@ -65,8 +85,8 @@ export async function listInstallationRepositories(
   const queryFilter = options?.query?.trim().toLowerCase();
   const limit = normalizeLimit(options?.limit);
 
-  const perPage = queryFilter ? 100 : limit;
-  const maxPages = queryFilter ? INSTALLATION_REPOS_MAX_PAGES : 5;
+  const perPage = 100;
+  const maxPages = INSTALLATION_REPOS_MAX_PAGES;
   const matchedRepos: z.infer<typeof installationRepoSchema>[] = [];
 
   for (let page = 1; page <= maxPages; page++) {
@@ -109,18 +129,12 @@ export async function listInstallationRepositories(
 
     matchedRepos.push(...pageMatches);
 
-    if (matchedRepos.length >= limit) {
-      break;
-    }
-
     if (parsed.data.repositories.length < perPage) {
       break;
     }
   }
 
-  matchedRepos.sort((a, b) =>
-    a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-  );
+  matchedRepos.sort(compareRepositoriesByRecentActivity);
 
   return matchedRepos.slice(0, limit).map((repo) => ({
     name: repo.name,

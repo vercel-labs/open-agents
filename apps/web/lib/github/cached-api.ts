@@ -43,6 +43,20 @@ function normalizeGitHubLimit(limit: number | undefined): number | undefined {
     : undefined;
 }
 
+function compareReposByRecentActivity(
+  a: Pick<GitHubRepo, "name" | "updated_at">,
+  b: Pick<GitHubRepo, "name" | "updated_at">,
+): number {
+  const updatedAtA = Date.parse(a.updated_at);
+  const updatedAtB = Date.parse(b.updated_at);
+
+  if (updatedAtA !== updatedAtB) {
+    return updatedAtB - updatedAtA;
+  }
+
+  return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+}
+
 interface GitHubSearchResponse {
   items: GitHubRepo[];
 }
@@ -129,7 +143,7 @@ async function fetchGitHubReposInternal(
     const perPage = normalizedLimit ?? 50;
     const ownerQualifier = apiEndpointType === "org" ? "org" : "user";
     const searchQuery = `${normalizedQuery} in:name ${ownerQualifier}:${owner}`;
-    const searchEndpoint = `/search/repositories?q=${encodeURIComponent(searchQuery)}&per_page=${perPage}`;
+    const searchEndpoint = `/search/repositories?q=${encodeURIComponent(searchQuery)}&sort=updated&order=desc&per_page=${perPage}`;
     const searchResult = await fetchGitHubAPI<GitHubSearchResponse>(
       searchEndpoint,
       token,
@@ -158,11 +172,11 @@ async function fetchGitHubReposInternal(
     let endpoint: string;
 
     if (apiEndpointType === "user") {
-      endpoint = `/user/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner`;
+      endpoint = `/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner`;
     } else if (apiEndpointType === "org") {
-      endpoint = `/orgs/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}&type=all&visibility=all`;
+      endpoint = `/orgs/${owner}/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&type=all&visibility=all`;
     } else {
-      endpoint = `/users/${owner}/repos?sort=name&direction=asc&per_page=${perPage}&page=${page}`;
+      endpoint = `/users/${owner}/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}`;
     }
 
     const repos = await fetchGitHubAPI<GitHubRepo[]>(endpoint, token);
@@ -183,9 +197,7 @@ async function fetchGitHubReposInternal(
     (repo, index, self) =>
       index === self.findIndex((r) => r.full_name === repo.full_name),
   );
-  uniqueRepos.sort((a, b) =>
-    a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-  );
+  uniqueRepos.sort(compareReposByRecentActivity);
 
   const mappedRepos = uniqueRepos.map((repo) => ({
     name: repo.name,
