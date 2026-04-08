@@ -114,8 +114,10 @@ import { useSessionChats } from "@/hooks/use-session-chats";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import {
+  getGitFinalizationState,
   hasRenderableAssistantPart,
   isChatInFlight as isChatInFlightStatus,
+  isGitDataPart,
   shouldKeepCollapsedReasoningStreaming,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
@@ -250,12 +252,6 @@ function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
     .map((part) => part.text)
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
-}
-
-function isGitDataPart(
-  part: WebAgentUIMessagePart,
-): part is WebAgentCommitDataPart | WebAgentPrDataPart {
-  return part.type === "data-commit" || part.type === "data-pr";
 }
 
 function GitDataPartCard({
@@ -1293,6 +1289,15 @@ export function SessionChatContent({
     () => renderMessages[renderMessages.length - 1],
     [renderMessages],
   );
+  const gitFinalizationState = useMemo(
+    () =>
+      getGitFinalizationState({
+        status,
+        lastMessageRole: lastMessage?.role,
+        lastMessageParts: lastMessage?.parts,
+      }),
+    [lastMessage, status],
+  );
   const hasAssistantRenderableContent = useMemo(
     () =>
       lastMessage?.role === "assistant"
@@ -1356,6 +1361,7 @@ export function SessionChatContent({
       ? "streaming"
       : status;
   const isChatReady = effectiveStatus === "ready";
+  const isFinalizingGitActions = gitFinalizationState.isFinalizing;
   const showThinkingIndicator = useMemo(() => {
     // During the optimistic pending phase (user just clicked send but the
     // AI SDK status hasn't caught up yet due to throttling), always show
@@ -3969,7 +3975,26 @@ export function SessionChatContent({
                       )}
                     </Button>
 
-                    {isChatInFlight || hasPendingResponse ? (
+                    {isFinalizingGitActions ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              type="button"
+                              size="icon"
+                              disabled
+                              className="h-8 w-8 rounded-full bg-muted text-muted-foreground"
+                            >
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={8}>
+                          {gitFinalizationState.label ??
+                            "Finalizing git actions…"}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : isChatInFlight || hasPendingResponse ? (
                       <Button
                         type="button"
                         size="icon"
