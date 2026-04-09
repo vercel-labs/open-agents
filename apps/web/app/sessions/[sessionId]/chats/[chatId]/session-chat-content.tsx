@@ -2744,6 +2744,7 @@ export function SessionChatContent({
       gitStatus={gitStatus}
       refreshGitStatus={refreshGitStatus}
       onCommitted={handleCommitted}
+      isAgentWorking={isChatInFlight}
       onPrDetected={(pr) => {
         updateSessionPullRequest(pr);
         void refreshGitStatus().catch(() => {});

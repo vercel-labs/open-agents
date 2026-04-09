@@ -104,6 +104,7 @@ type GitPanelProps = {
   gitStatus: SessionGitStatus | null;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
+  isAgentWorking: boolean;
 
   // For inline PR creation
   onPrDetected?: (info: {
@@ -210,12 +211,14 @@ function InlineCommitPanel({
   gitStatus,
   refreshGitStatus,
   onCommitted,
+  isAgentWorking,
 }: {
   session: Session;
   hasSandbox: boolean;
   gitStatus: SessionGitStatus | null;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
+  isAgentWorking: boolean;
 }) {
   const [commitTitle, setCommitTitle] = useState("");
   const [commitBody, setCommitBody] = useState("");
@@ -343,7 +346,7 @@ function InlineCommitPanel({
           size="sm"
           className="w-full text-xs"
           onClick={() => void handleCreateBranch()}
-          disabled={isCreatingBranch || !hasSandbox}
+          disabled={isAgentWorking || isCreatingBranch || !hasSandbox}
         >
           {isCreatingBranch ? (
             <>
@@ -357,6 +360,11 @@ function InlineCommitPanel({
             </>
           )}
         </Button>
+        {isAgentWorking && (
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+            Wait for the agent to finish before creating a branch.
+          </div>
+        )}
         {commitError && (
           <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
             {commitError}
@@ -385,14 +393,14 @@ function InlineCommitPanel({
         placeholder="Commit message (optional)"
         value={commitTitle}
         onChange={(e) => setCommitTitle(e.target.value)}
-        disabled={isCommitting || !hasPendingGitWork}
+        disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
         className="h-8 text-xs"
       />
       <Textarea
         placeholder="Description (optional)"
         value={commitBody}
         onChange={(e) => setCommitBody(e.target.value)}
-        disabled={isCommitting || !hasPendingGitWork}
+        disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
         rows={3}
         className="resize-none text-xs field-sizing-fixed"
       />
@@ -400,7 +408,7 @@ function InlineCommitPanel({
         size="sm"
         className="w-full text-xs"
         onClick={() => void handleCommit()}
-        disabled={isCommitting || !hasSandbox || !hasPendingGitWork}
+        disabled={isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork}
       >
         {isCommitting ? (
           <>
@@ -414,6 +422,11 @@ function InlineCommitPanel({
           </>
         )}
       </Button>
+      {isAgentWorking && (
+        <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+          Wait for the agent to finish before committing or pushing.
+        </div>
+      )}
       {commitError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {commitError}
@@ -434,6 +447,7 @@ function InlinePrCreatePanel({
   refreshGitStatus,
   hasUncommittedGitChanges,
   onPrDetected,
+  isAgentWorking,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -444,6 +458,7 @@ function InlinePrCreatePanel({
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  isAgentWorking: boolean;
 }) {
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
@@ -639,7 +654,7 @@ function InlinePrCreatePanel({
           size="sm"
           className="w-full text-xs"
           onClick={() => void handleCreateBranch()}
-          disabled={isCreatingBranch || !hasSandbox}
+          disabled={isAgentWorking || isCreatingBranch || !hasSandbox}
         >
           {isCreatingBranch ? (
             <>
@@ -653,6 +668,11 @@ function InlinePrCreatePanel({
             </>
           )}
         </Button>
+        {isAgentWorking && (
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+            Wait for the agent to finish before creating a branch.
+          </div>
+        )}
         {prError && (
           <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
             {prError}
@@ -678,14 +698,14 @@ function InlinePrCreatePanel({
         placeholder="PR title (optional)"
         value={prTitle}
         onChange={(e) => setPrTitle(e.target.value)}
-        disabled={isCreatingPr}
+        disabled={isAgentWorking || isCreatingPr}
         className="h-8 text-xs"
       />
       <Textarea
         placeholder="Description (optional)"
         value={prBody}
         onChange={(e) => setPrBody(e.target.value)}
-        disabled={isCreatingPr}
+        disabled={isAgentWorking || isCreatingPr}
         rows={3}
         className="resize-none text-xs field-sizing-fixed"
       />
@@ -693,7 +713,7 @@ function InlinePrCreatePanel({
         size="sm"
         className="w-full text-xs"
         onClick={() => void handleCreatePr()}
-        disabled={isCreatingPr || !hasSandbox}
+        disabled={isAgentWorking || isCreatingPr || !hasSandbox}
       >
         {isCreatingPr ? (
           <>
@@ -707,6 +727,11 @@ function InlinePrCreatePanel({
           </>
         )}
       </Button>
+      {isAgentWorking && (
+        <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+          Wait for the agent to finish before creating a pull request.
+        </div>
+      )}
       {prError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {prError}
@@ -1089,6 +1114,7 @@ export function GitPanel(props: GitPanelProps) {
     refreshGitStatus,
     onCommitted,
     onPrDetected,
+    isAgentWorking,
   } = props;
 
   const hasDiffChanges =
@@ -1221,6 +1247,7 @@ export function GitPanel(props: GitPanelProps) {
                     gitStatus={gitStatus}
                     refreshGitStatus={refreshGitStatus}
                     onCommitted={onCommitted}
+                    isAgentWorking={isAgentWorking}
                   />
                 </div>
               )}
@@ -1333,6 +1360,7 @@ export function GitPanel(props: GitPanelProps) {
                 refreshGitStatus={refreshGitStatus}
                 hasUncommittedGitChanges={hasUncommittedGitChanges}
                 onPrDetected={onPrDetected}
+                isAgentWorking={isAgentWorking}
               />
             ) : (
               <div className="text-center text-xs text-muted-foreground py-6">
