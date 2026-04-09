@@ -12,6 +12,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   Loader2,
+  RefreshCw,
   SquareDot,
   SquareMinus,
   SquarePlus,
@@ -92,9 +93,11 @@ type GitPanelProps = {
     totalAdditions: number;
     totalDeletions: number;
   } | null;
+  diffRefreshing: boolean;
 
   // Actions
   onCreateRepoClick: () => void;
+  refreshDiff: () => Promise<void>;
 
   // Merge
   onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
@@ -104,6 +107,7 @@ type GitPanelProps = {
   // For inline commit
   hasSandbox: boolean;
   gitStatus: SessionGitStatus | null;
+  gitStatusLoading: boolean;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
   isAgentWorking: boolean;
@@ -1130,12 +1134,15 @@ export function GitPanel(props: GitPanelProps) {
     canCloseAndArchive,
     diffFiles,
     diffSummary,
+    diffRefreshing,
     onCreateRepoClick,
+    refreshDiff,
     onMerged,
     onCloseAndArchiveClick,
     onFixChecks,
     hasSandbox,
     gitStatus,
+    gitStatusLoading,
     refreshGitStatus,
     onCommitted,
     onPrDetected,
@@ -1152,6 +1159,7 @@ export function GitPanel(props: GitPanelProps) {
 
   // Show the PR tab when there's a PR, or when the branch has diverged and changes are committed
   const showGitTab = hasExistingPr || (hasDiff && !hasUncommittedGitChanges);
+  const isRefreshingChanges = diffRefreshing || gitStatusLoading;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -1284,31 +1292,52 @@ export function GitPanel(props: GitPanelProps) {
 
               {/* Scope toggle */}
               {diffFiles && diffFiles.length > 0 && (
-                <div className="mb-2 flex items-center gap-1 px-1">
-                  <button
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDiffScope("uncommitted")}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        diffScope === "uncommitted"
+                          ? "bg-secondary text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
+                      )}
+                    >
+                      Uncommitted
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiffScope("branch")}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        diffScope === "branch"
+                          ? "bg-secondary text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
+                      )}
+                    >
+                      All Changes
+                    </button>
+                  </div>
+                  <Button
                     type="button"
-                    onClick={() => setDiffScope("uncommitted")}
-                    className={cn(
-                      "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
-                      diffScope === "uncommitted"
-                        ? "bg-secondary text-secondary-foreground"
-                        : "text-muted-foreground hover:bg-muted/50",
-                    )}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      void Promise.all([refreshDiff(), refreshGitStatus()]);
+                    }}
+                    disabled={!hasSandbox || isRefreshingChanges}
+                    className="h-6 w-6 shrink-0 px-0"
+                    title="Refresh changes"
+                    aria-label="Refresh changes"
                   >
-                    Uncommitted
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDiffScope("branch")}
-                    className={cn(
-                      "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
-                      diffScope === "branch"
-                        ? "bg-secondary text-secondary-foreground"
-                        : "text-muted-foreground hover:bg-muted/50",
-                    )}
-                  >
-                    All Changes
-                  </button>
+                    <RefreshCw
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        isRefreshingChanges && "animate-spin",
+                      )}
+                    />
+                  </Button>
                 </div>
               )}
 

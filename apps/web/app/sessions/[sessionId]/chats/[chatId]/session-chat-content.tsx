@@ -1042,8 +1042,10 @@ export function SessionChatContent({
   const {
     sandboxInfo,
     diff,
+    diffRefreshing,
     refreshDiff,
     gitStatus,
+    gitStatusLoading,
     refreshGitStatus,
     files,
     filesLoading,
@@ -2722,7 +2724,9 @@ export function SessionChatContent({
       canCloseAndArchive={canCloseAndArchive}
       diffFiles={diff?.files ?? null}
       diffSummary={diff?.summary ?? null}
+      diffRefreshing={diffRefreshing}
       onCreateRepoClick={() => setRepoDialogOpen(true)}
+      refreshDiff={refreshDiff}
       onMerged={handleMerged}
       onCloseAndArchiveClick={() => setCloseDialogOpen(true)}
       onFixChecks={async (failedRuns) => {
@@ -2750,6 +2754,7 @@ export function SessionChatContent({
       }}
       hasSandbox={sandboxInfo !== null}
       gitStatus={gitStatus}
+      gitStatusLoading={gitStatusLoading}
       refreshGitStatus={refreshGitStatus}
       onCommitted={handleCommitted}
       isAgentWorking={isChatInFlight}
