@@ -12,12 +12,10 @@ import {
   ExternalLink,
   GitCommitHorizontal,
   GitPullRequest,
-  Globe,
   Link2,
   Loader2,
   Mic,
   Paperclip,
-  Play,
   RefreshCw,
   RotateCcw,
   Share2,
@@ -117,7 +115,6 @@ import {
 import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
 import { useCodeEditor } from "./hooks/use-code-editor";
-import { useDevServer } from "./hooks/use-dev-server";
 
 import { useGitPanel } from "./git-panel-context";
 import { GitPanel } from "./git-panel";
@@ -2500,10 +2497,6 @@ export function SessionChatContent({
     !isRestoringSnapshot &&
     !isReconnectingSandbox &&
     !isHibernatingUi;
-  const devServer = useDevServer({
-    sessionId: session.id,
-    canRun: canRunDevServer,
-  });
   const codeEditor = useCodeEditor({
     sessionId: session.id,
     canRun: canRunDevServer,
@@ -2858,103 +2851,29 @@ export function SessionChatContent({
               </>
             )}
             {canRunDevServer && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void codeEditor.handleOpen()}
-                      disabled={
-                        codeEditor.state.status === "starting" ||
-                        codeEditor.state.status === "stopping"
-                      }
-                    >
-                      {codeEditor.state.status === "starting" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Code2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {codeEditor.menuLabel}
-                  </TooltipContent>
-                </Tooltip>
-                {/* Dev server — fixed h-7 wrapper prevents layout shift */}
-                <div className="flex h-7 items-center">
-                  {devServer.state.status === "ready" ? (
-                    <div className="flex items-center rounded-md border border-border px-0.5">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 rounded-sm"
-                            onClick={() => void devServer.handlePrimaryAction()}
-                          >
-                            <Globe className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          Open dev server
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 rounded-sm"
-                            onClick={() => void devServer.handleStopAction()}
-                          >
-                            <Square className="h-2.5 w-2.5 fill-current" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          Stop dev server
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  ) : devServer.state.status === "starting" ||
-                    devServer.state.status === "stopping" ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          disabled
-                        >
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        {devServer.state.status === "starting"
-                          ? "Starting dev server..."
-                          : "Stopping dev server..."}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => void devServer.handlePrimaryAction()}
-                        >
-                          <Play className="h-3.5 w-3.5 fill-current" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        Start dev server
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              </>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden h-7 w-7 sm:inline-flex"
+                    onClick={() => void codeEditor.handleOpen()}
+                    disabled={
+                      codeEditor.state.status === "starting" ||
+                      codeEditor.state.status === "stopping"
+                    }
+                  >
+                    {codeEditor.state.status === "starting" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Code2 className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {codeEditor.menuLabel}
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>,
           headerActionsRef.current,
