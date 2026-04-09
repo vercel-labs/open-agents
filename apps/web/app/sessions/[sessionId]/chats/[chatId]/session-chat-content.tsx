@@ -4326,7 +4326,7 @@ export function SessionChatContent({
           // Build a single snippet with file ref, selected text, and the user's comment
           const parts = [`File: ${filePath}`, "```", selectedText, "```"];
           if (comment) {
-            parts.push("", comment);
+            parts.push("", `> ${comment}`);
           }
           addTextAttachment(parts.join("\n"));
           // Focus the input after a brief delay (keep file viewer open)
