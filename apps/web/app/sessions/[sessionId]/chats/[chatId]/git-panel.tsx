@@ -754,7 +754,13 @@ function InlinePrCreatePanel({
 
   // Needs branch creation
   if (needsNewBranch) {
-    return (
+    const branchDisabledTooltip = isAgentWorking
+      ? "Wait for the agent to finish"
+      : !hasSandbox
+        ? "Waiting for sandbox to start"
+        : null;
+
+    const branchContent = (
       <div className="space-y-2">
         <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
           {isDetachedHead
@@ -779,11 +785,6 @@ function InlinePrCreatePanel({
             </>
           )}
         </Button>
-        {isAgentWorking && (
-          <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-            Wait for the agent to finish before creating a branch.
-          </div>
-        )}
         {prError && (
           <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
             {prError}
@@ -791,6 +792,19 @@ function InlinePrCreatePanel({
         )}
       </div>
     );
+
+    if (branchDisabledTooltip) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>{branchContent}</div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{branchDisabledTooltip}</TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return branchContent;
   }
 
   // Uncommitted changes warning
@@ -804,8 +818,14 @@ function InlinePrCreatePanel({
 
   const prDisabled = isAgentWorking || isCreatingPr || !hasSandbox;
 
+  const prDisabledTooltip = isAgentWorking
+    ? "Wait for the agent to finish"
+    : !hasSandbox
+      ? "Waiting for sandbox to start"
+      : null;
+
   // PR creation form
-  return (
+  const prForm = (
     <div className="space-y-2">
       <div className="relative">
         <Input
@@ -877,11 +897,6 @@ function InlinePrCreatePanel({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {isAgentWorking && (
-        <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-          Wait for the agent to finish before creating a pull request.
-        </div>
-      )}
       {prError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {prError}
@@ -889,6 +904,19 @@ function InlinePrCreatePanel({
       )}
     </div>
   );
+
+  if (prDisabledTooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>{prForm}</div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{prDisabledTooltip}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return prForm;
 }
 
 /* ------------------------------------------------------------------ */
