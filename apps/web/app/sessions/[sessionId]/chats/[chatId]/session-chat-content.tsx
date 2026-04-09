@@ -4328,7 +4328,8 @@ export function SessionChatContent({
           if (comment) {
             parts.push("", `> ${comment}`);
           }
-          addTextAttachment(parts.join("\n"));
+          const basename = filePath.split("/").pop() ?? filePath;
+          addTextAttachment(parts.join("\n"), `comment on ${basename}`);
           // Focus the input after a brief delay (keep file viewer open)
           setTimeout(() => {
             inputRef.current?.focus();

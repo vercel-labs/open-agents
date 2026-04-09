@@ -10,19 +10,22 @@ import {
 export function useTextAttachments() {
   const [textAttachments, setTextAttachments] = useState<TextAttachment[]>([]);
 
-  const addTextAttachment = useCallback((text: string): TextAttachment => {
-    const lineCount = text.split("\n").length;
-    const byteSize = new Blob([text]).size;
-    const attachment: TextAttachment = {
-      id: nanoid(),
-      content: text,
-      filename: inferFilename(text),
-      lineCount,
-      byteSize,
-    };
-    setTextAttachments((prev) => [...prev, attachment]);
-    return attachment;
-  }, []);
+  const addTextAttachment = useCallback(
+    (text: string, filename?: string): TextAttachment => {
+      const lineCount = text.split("\n").length;
+      const byteSize = new Blob([text]).size;
+      const attachment: TextAttachment = {
+        id: nanoid(),
+        content: text,
+        filename: filename ?? inferFilename(text),
+        lineCount,
+        byteSize,
+      };
+      setTextAttachments((prev) => [...prev, attachment]);
+      return attachment;
+    },
+    [],
+  );
 
   const removeTextAttachment = useCallback((id: string) => {
     setTextAttachments((prev) => prev.filter((a) => a.id !== id));
