@@ -84,6 +84,7 @@ type GitPanelProps = {
   hasUncommittedGitChanges: boolean;
   supportsRepoCreation: boolean;
   hasDiff: boolean;
+  canCloseAndArchive: boolean;
 
   // Diff data
   diffFiles: DiffFile[] | null;
@@ -97,6 +98,7 @@ type GitPanelProps = {
 
   // Merge
   onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
+  onCloseAndArchiveClick: () => void;
   onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
 
   // For inline commit
@@ -750,10 +752,14 @@ function InlinePrCreatePanel({
 function InlineMergePanel({
   session,
   onMerged,
+  onCloseAndArchiveClick,
+  canCloseAndArchive,
   onFixChecks,
 }: {
   session: Session;
   onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
+  onCloseAndArchiveClick: () => void;
+  canCloseAndArchive: boolean;
   onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
 }) {
   const [readiness, setReadiness] = useState<MergeReadinessResponse | null>(
@@ -991,96 +997,111 @@ function InlineMergePanel({
       )}
 
       {/* Merge action */}
-      {canMerge ? (
-        <div className="flex w-full">
+      <div className="space-y-2">
+        {canMerge ? (
+          <div className="flex w-full">
+            <Button
+              size="sm"
+              onClick={() => void handleMerge()}
+              disabled={mergeDisabled}
+              className={cn(
+                "min-w-0 flex-1",
+                hasMultipleMethods && "rounded-r-none",
+              )}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Merging...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  {mergeMethodButtonLabels[mergeMethod]}
+                </>
+              )}
+            </Button>
+            {hasMultipleMethods && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
+                    disabled={mergeDisabled}
+                    aria-label="Choose merge method"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {allowedMethods.map((method) => (
+                    <DropdownMenuItem
+                      key={method}
+                      className="items-start gap-3 py-2"
+                      onSelect={() => setMergeMethod(method)}
+                    >
+                      <Check
+                        className={
+                          mergeMethod === method
+                            ? "mt-0.5 h-4 w-4"
+                            : "mt-0.5 h-4 w-4 opacity-0"
+                        }
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium">
+                          {mergeMethodLabels[method]}
+                        </span>
+                        <span className="text-muted-foreground text-[10px]">
+                          {mergeMethodDescriptions[method]}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        ) : canForce ? (
           <Button
             size="sm"
-            onClick={() => void handleMerge()}
-            disabled={mergeDisabled}
-            className={cn(
-              "min-w-0 flex-1",
-              hasMultipleMethods && "rounded-r-none",
-            )}
+            variant="destructive"
+            className="w-full"
+            onClick={handleForceClick}
+            disabled={isSubmitting || isLoadingReadiness || !readiness?.pr}
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Merging...
               </>
+            ) : forceConfirming ? (
+              <>
+                <AlertTriangle className="mr-2 h-4 w-4" />
+                Click again to confirm
+              </>
             ) : (
               <>
-                <Check className="mr-2 h-4 w-4" />
-                {mergeMethodButtonLabels[mergeMethod]}
+                <AlertTriangle className="mr-2 h-4 w-4" />
+                Merge without passing checks
               </>
             )}
           </Button>
-          {hasMultipleMethods && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
-                  disabled={mergeDisabled}
-                  aria-label="Choose merge method"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {allowedMethods.map((method) => (
-                  <DropdownMenuItem
-                    key={method}
-                    className="items-start gap-3 py-2"
-                    onSelect={() => setMergeMethod(method)}
-                  >
-                    <Check
-                      className={
-                        mergeMethod === method
-                          ? "mt-0.5 h-4 w-4"
-                          : "mt-0.5 h-4 w-4 opacity-0"
-                      }
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-medium">
-                        {mergeMethodLabels[method]}
-                      </span>
-                      <span className="text-muted-foreground text-[10px]">
-                        {mergeMethodDescriptions[method]}
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      ) : canForce ? (
-        <Button
-          size="sm"
-          variant="destructive"
-          className="w-full"
-          onClick={handleForceClick}
-          disabled={isSubmitting || isLoadingReadiness || !readiness?.pr}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Merging...
-            </>
-          ) : forceConfirming ? (
-            <>
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Click again to confirm
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Merge without passing checks
-            </>
-          )}
-        </Button>
-      ) : null}
+        ) : null}
+
+        {canCloseAndArchive ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            className="w-full"
+            onClick={onCloseAndArchiveClick}
+            disabled={isSubmitting}
+          >
+            <GitPullRequestClosed className="mr-2 h-4 w-4" />
+            Close & Archive
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1106,10 +1127,12 @@ export function GitPanel(props: GitPanelProps) {
     hasUncommittedGitChanges,
     supportsRepoCreation,
     hasDiff,
+    canCloseAndArchive,
     diffFiles,
     diffSummary,
     onCreateRepoClick,
     onMerged,
+    onCloseAndArchiveClick,
     onFixChecks,
     hasSandbox,
     gitStatus,
@@ -1352,6 +1375,8 @@ export function GitPanel(props: GitPanelProps) {
               <InlineMergePanel
                 session={session}
                 onMerged={onMerged}
+                onCloseAndArchiveClick={onCloseAndArchiveClick}
+                canCloseAndArchive={canCloseAndArchive}
                 onFixChecks={onFixChecks}
               />
             ) : hasRepo ? (
