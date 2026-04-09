@@ -69,7 +69,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [focusedDiffFile, setFocusedDiffFile] = useState<string | null>(null);
   const [changesTabDismissed, setChangesTabDismissed] = useState(false);
-  const [diffScope, setDiffScope] = useState<DiffScope>("uncommitted");
+  const [diffScope, setDiffScope] = useState<DiffScope>("branch");
   const [hasActionNeeded, setHasActionNeeded] = useState(false);
   const [shareRequested, setShareRequested] = useState(false);
   const panelPortalRef = useRef<HTMLDivElement | null>(null);
