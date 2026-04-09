@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquarePlus, ArrowRight, X } from "lucide-react";
+import { ArrowRight, MessageSquarePlus, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -35,6 +35,9 @@ export function SelectionPopover({
   const [comment, setComment] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Track whether an interaction originated inside the popover so that
+  // container-level mouse handlers can bail out.
+  const interactingRef = useRef(false);
 
   const hide = useCallback(() => {
     setState({ type: "hidden" });
@@ -53,15 +56,9 @@ export function SelectionPopover({
     const selection = window.getSelection();
     if (selection && selection.toString().trim().length > 0) {
       const range = selection.getRangeAt(0);
-
-      // Check if selection is within or overlaps with our container.
-      // The DiffsFile component uses shadow DOM, so the selection
-      // anchor/focus nodes may be inside a shadow root that is a child
-      // of our container.
       const rangeRect = range.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
 
-      // Simple overlap check
       const overlaps =
         rangeRect.top < containerRect.bottom &&
         rangeRect.bottom > containerRect.top &&
@@ -95,15 +92,18 @@ export function SelectionPopover({
     return null;
   }, [containerRef]);
 
-  // Handle mouseup to detect selection
+  // Listen for mouse events on the container to detect text selection.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleMouseUp = () => {
+      // If the mouseup came from within the popover, skip entirely.
+      if (interactingRef.current) return;
+
       // Small delay to let the browser finalize selection
       requestAnimationFrame(() => {
-        // Don't dismiss if we're in input mode
+        // Never dismiss the expanded input form from a selection change
         if (state.type === "input") return;
 
         const result = getSelectionText();
@@ -119,19 +119,18 @@ export function SelectionPopover({
       });
     };
 
-    // Also listen for selection clearing
     const handleMouseDown = (e: MouseEvent) => {
-      // Don't hide if clicking inside the popover
+      // Clicks inside the popover are handled by the popover itself.
       if (popoverRef.current && popoverRef.current.contains(e.target as Node)) {
         return;
       }
 
-      // If we're in input mode, only hide if the selection would be cleared
-      if (state.type === "input") {
-        // Let the mouseup handler decide
-        return;
-      }
+      // In input mode, keep the form open regardless of where the user clicks
+      // inside the container (they might be re-selecting text, scrolling, etc.)
+      if (state.type === "input") return;
 
+      // In button mode a click elsewhere means the user is starting a new
+      // selection or clearing the current one – hide.
       hide();
     };
 
@@ -147,32 +146,25 @@ export function SelectionPopover({
   // Focus textarea when expanding to input mode
   useEffect(() => {
     if (state.type === "input") {
-      // Small delay to let the DOM update
       requestAnimationFrame(() => {
         textareaRef.current?.focus();
       });
     }
   }, [state.type]);
 
-  // Handle click outside popover to dismiss
+  // Dismiss on click outside the container entirely (e.g. the dialog backdrop).
   useEffect(() => {
     if (state.type === "hidden") return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
-        // Don't hide on mousedown inside the container (handled by selection logic)
-        const container = containerRef.current;
-        if (container && container.contains(e.target as Node)) {
-          return;
-        }
-        hide();
+      const container = containerRef.current;
+      if (container && container.contains(e.target as Node)) return;
+      if (popoverRef.current && popoverRef.current.contains(e.target as Node)) {
+        return;
       }
+      hide();
     };
 
-    // Use capture to catch events before they reach other handlers
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -192,7 +184,6 @@ export function SelectionPopover({
     if (state.type !== "input") return;
     onAddToPrompt(state.selectedText, comment.trim());
     hide();
-    // Clear the text selection
     window.getSelection()?.removeAllRanges();
   }, [state, comment, onAddToPrompt, hide]);
 
@@ -200,15 +191,15 @@ export function SelectionPopover({
     return null;
   }
 
-  // Position the popover relative to the container
   const container = containerRef.current;
   if (!container) return null;
 
   const containerRect = container.getBoundingClientRect();
   const selectionRect = state.rect;
 
-  // Position below the selection, centered horizontally
-  const top = selectionRect.bottom - containerRect.top + 8;
+  // Position below the selection, clamped within the container
+  const top =
+    selectionRect.bottom - containerRect.top + container.scrollTop + 8;
   const left = Math.max(
     8,
     Math.min(
@@ -232,9 +223,19 @@ export function SelectionPopover({
         top: `${top}px`,
         left: `${left}px`,
       }}
+      // Stop BOTH mousedown and mouseup from reaching the container so that
+      // the selection-detection logic never fires while the user interacts
+      // with the popover itself.
       onMouseDown={(e) => {
-        // Prevent selection clearing when interacting with the popover
         e.stopPropagation();
+        interactingRef.current = true;
+      }}
+      onMouseUp={(e) => {
+        e.stopPropagation();
+        // Reset on next tick so the flag is cleared after all handlers run
+        requestAnimationFrame(() => {
+          interactingRef.current = false;
+        });
       }}
     >
       {state.type === "button" ? (
