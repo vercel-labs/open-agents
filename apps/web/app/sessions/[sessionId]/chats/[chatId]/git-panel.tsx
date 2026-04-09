@@ -401,18 +401,6 @@ function InlineCommitPanel({
     );
   }
 
-  // Success state
-  if (commitSuccess) {
-    return (
-      <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 p-2 text-xs text-green-700 dark:text-green-300">
-        <Check className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 truncate">
-          {commitSuccess.commitMessage ?? "Changes committed & pushed"}
-        </span>
-      </div>
-    );
-  }
-
   const commitDisabled =
     isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork;
 
@@ -441,48 +429,55 @@ function InlineCommitPanel({
           )}
         </button>
       </div>
-      <div className="flex w-full">
-        <Button
-          size="sm"
-          className="min-w-0 flex-1 rounded-r-none text-xs"
-          onClick={() => void handleCommit()}
-          disabled={commitDisabled}
-        >
-          {isCommitting ? (
-            <>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              Committing...
-            </>
-          ) : (
-            <>
-              <GitCommit className="mr-1.5 h-3.5 w-3.5" />
-              Commit & Push
-            </>
-          )}
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="default"
-              size="icon"
-              className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
-              disabled={commitDisabled}
-              aria-label="Commit options"
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[10rem]">
-            <DropdownMenuItem
-              onSelect={() => void handleCommit(true)}
-              className="gap-2 text-xs"
-            >
-              <GitCommit className="h-3.5 w-3.5 text-muted-foreground" />
-              Commit only
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {commitSuccess ? (
+        <div className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-300">
+          <Check className="h-3.5 w-3.5" />
+          {commitSuccess.commitMessage ?? "Pushed"}
+        </div>
+      ) : (
+        <div className="flex w-full">
+          <Button
+            size="sm"
+            className="min-w-0 flex-1 rounded-r-none text-xs"
+            onClick={() => void handleCommit()}
+            disabled={commitDisabled}
+          >
+            {isCommitting ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Committing...
+              </>
+            ) : (
+              <>
+                <GitCommit className="mr-1.5 h-3.5 w-3.5" />
+                Commit & Push
+              </>
+            )}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="default"
+                size="icon"
+                className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
+                disabled={commitDisabled}
+                aria-label="Commit options"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[10rem]">
+              <DropdownMenuItem
+                onSelect={() => void handleCommit(true)}
+                className="gap-2 text-xs"
+              >
+                <GitCommit className="h-3.5 w-3.5 text-muted-foreground" />
+                Commit only
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
       {isAgentWorking && (
         <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
           Wait for the agent to finish before committing or pushing.
@@ -813,7 +808,7 @@ function InlinePrCreatePanel({
         onChange={(e) => setPrBody(e.target.value)}
         disabled={isAgentWorking || isCreatingPr}
         rows={3}
-        className="resize-none text-xs"
+        className="max-h-40 text-xs"
       />
       <div className="flex w-full">
         <Button
