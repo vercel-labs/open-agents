@@ -39,7 +39,7 @@ function SessionLayoutInner({
   const { panelPortalRef, gitPanelOpen } = useGitPanel();
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="relative flex h-full overflow-hidden">
       {/* Left column: header + tabs + page content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <SessionHeader />
@@ -47,15 +47,12 @@ function SessionLayoutInner({
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       </div>
 
-      {/* Portal target for the git panel — reserves space when panel is open
-          so the layout doesn't shift during chat navigation. */}
+      {/* Portal target for the git panel — slides over content from the right */}
       <div
         ref={panelPortalRef}
-        className={
-          gitPanelOpen
-            ? "flex h-full w-72 shrink-0 flex-col border-l border-border bg-background xl:w-80"
-            : "hidden"
-        }
+        className={`absolute right-0 top-0 z-30 flex h-full w-72 flex-col border-l border-border bg-background shadow-lg transition-transform duration-200 ease-in-out xl:w-80 ${
+          gitPanelOpen ? "translate-x-0" : "translate-x-full"
+        }`}
       />
     </div>
   );
