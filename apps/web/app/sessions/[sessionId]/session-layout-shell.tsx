@@ -36,7 +36,7 @@ function SessionLayoutInner({
   activeChatId: string;
   children: ReactNode;
 }) {
-  const { panelPortalRef, gitPanelOpen } = useGitPanel();
+  const { panelPortalRef, gitPanelOpen, setGitPanelOpen } = useGitPanel();
 
   return (
     <div className="relative flex h-full overflow-hidden">
@@ -46,6 +46,16 @@ function SessionLayoutInner({
         {activeChatId && <ChatTabs activeChatId={activeChatId} />}
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       </div>
+
+      {/* Mobile backdrop for outside-click dismissal */}
+      {gitPanelOpen && (
+        <button
+          type="button"
+          aria-label="Close right sidebar"
+          className="absolute inset-0 z-20 bg-background/20 sm:hidden"
+          onClick={() => setGitPanelOpen(false)}
+        />
+      )}
 
       {/* Portal target for the git panel — slideover on mobile, sidebar on larger screens */}
       <div
