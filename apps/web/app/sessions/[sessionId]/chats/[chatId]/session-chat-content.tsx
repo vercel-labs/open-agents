@@ -884,6 +884,7 @@ export function SessionChatContent({
     shareRequested,
     setShareRequested,
     setHasActionNeeded,
+    setChangesCount,
     panelPortalRef,
     headerActionsRef,
   } = useGitPanel();
@@ -2613,6 +2614,12 @@ export function SessionChatContent({
   useEffect(() => {
     setHasActionNeeded(showCommitAction);
   }, [showCommitAction, setHasActionNeeded]);
+
+  // Sync the file change count for the badge on the toggle button
+  const totalChangesCount = diff?.files?.length ?? 0;
+  useEffect(() => {
+    setChangesCount(totalChangesCount);
+  }, [totalChangesCount, setChangesCount]);
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const _canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const _canCloseAndArchive = hasOpenPr && !isArchived;

@@ -18,6 +18,7 @@ type SessionLayoutContextValue = {
     branch: string | null;
     status: string;
     prNumber: number | null;
+    prStatus: string | null;
     linesAdded: number | null;
     linesRemoved: number | null;
   };

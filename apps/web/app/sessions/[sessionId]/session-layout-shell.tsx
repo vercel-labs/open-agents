@@ -106,6 +106,7 @@ export function SessionLayoutShell({
         branch: initialSession.branch,
         status: initialSession.status,
         prNumber: initialSession.prNumber,
+        prStatus: initialSession.prStatus ?? null,
         linesAdded: initialSession.linesAdded,
         linesRemoved: initialSession.linesRemoved,
       },
