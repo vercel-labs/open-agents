@@ -78,6 +78,9 @@ type GitPanelProps = {
   hasRepo: boolean;
   hasExistingPr: boolean;
   existingPrUrl: string | null;
+  prDeploymentUrl: string | null;
+  buildingDeploymentUrl: string | null;
+  isDeploymentStale: boolean;
   hasUncommittedGitChanges: boolean;
   supportsRepoCreation: boolean;
   hasDiff: boolean;
@@ -1070,6 +1073,9 @@ export function GitPanel(props: GitPanelProps) {
     hasRepo,
     hasExistingPr,
     existingPrUrl,
+    prDeploymentUrl,
+    buildingDeploymentUrl,
+    isDeploymentStale,
     hasUncommittedGitChanges,
     supportsRepoCreation,
     hasDiff,
@@ -1088,6 +1094,10 @@ export function GitPanel(props: GitPanelProps) {
   const hasDiffChanges =
     diffSummary &&
     (diffSummary.totalAdditions > 0 || diffSummary.totalDeletions > 0);
+  const showPreviewButton = Boolean(prDeploymentUrl) || isDeploymentStale;
+  const previewTargetUrl = isDeploymentStale
+    ? buildingDeploymentUrl
+    : prDeploymentUrl;
 
   // Show the PR tab when there's a PR, or when the branch has diverged and changes are committed
   const showGitTab = hasExistingPr || (hasDiff && !hasUncommittedGitChanges);
@@ -1123,8 +1133,35 @@ export function GitPanel(props: GitPanelProps) {
           ) : null}
         </div>
 
-        {/* Right: Create repo button if no repo */}
-        <div className="shrink-0">
+        {/* Right: preview / create-repo actions */}
+        <div className="flex shrink-0 items-center gap-2">
+          {showPreviewButton && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => {
+                if (!previewTargetUrl) {
+                  return;
+                }
+
+                window.open(previewTargetUrl, "_blank", "noopener,noreferrer");
+              }}
+              disabled={isDeploymentStale && !buildingDeploymentUrl}
+            >
+              {isDeploymentStale ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Deploying…
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  Preview
+                </>
+              )}
+            </Button>
+          )}
           {!hasRepo && supportsRepoCreation && (
             <Button
               size="sm"

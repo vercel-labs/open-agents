@@ -2609,30 +2609,6 @@ export function SessionChatContent({
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const _canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const _canCloseAndArchive = hasOpenPr && !isArchived;
-  const hasPreviewOrPrTarget = Boolean(prDeploymentUrl || existingPrUrl);
-  const openExistingPr = () => {
-    if (!existingPrUrl) {
-      return;
-    }
-
-    window.open(existingPrUrl, "_blank", "noopener,noreferrer");
-  };
-  const openPreviewOrPr = () => {
-    const targetUrl = prDeploymentUrl ?? existingPrUrl;
-    if (!targetUrl) {
-      return;
-    }
-
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
-  };
-  const openBuildingDeployment = () => {
-    if (!buildingDeploymentUrl) {
-      return;
-    }
-
-    window.open(buildingDeploymentUrl, "_blank", "noopener,noreferrer");
-  };
-
   const handleCommitted = useCallback(async () => {
     if (hasExistingPr || hasBranchPreviewLookup) {
       setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
@@ -2724,6 +2700,9 @@ export function SessionChatContent({
       hasRepo={hasRepo}
       hasExistingPr={hasExistingPr}
       existingPrUrl={existingPrUrl}
+      prDeploymentUrl={prDeploymentUrl}
+      buildingDeploymentUrl={buildingDeploymentUrl}
+      isDeploymentStale={isDeploymentStale}
       hasUncommittedGitChanges={hasUncommittedGitChanges}
       supportsRepoCreation={supportsRepoCreation}
       hasDiff={Boolean(diff || session.cachedDiff)}
@@ -2773,108 +2752,32 @@ export function SessionChatContent({
 
       {/* Header actions portaled from chat-level state */}
       {headerActionsRef.current &&
-        (hasPreviewOrPrTarget || canRunDevServer) &&
+        canRunDevServer &&
         createPortal(
           <div className="flex items-center gap-1">
-            {hasPreviewOrPrTarget && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-7 px-0 xl:w-auto xl:px-2.5"
-                      onClick={
-                        isDeploymentStale && buildingDeploymentUrl
-                          ? openBuildingDeployment
-                          : openPreviewOrPr
-                      }
-                      disabled={
-                        (isDeploymentStale && !buildingDeploymentUrl) ||
-                        !hasPreviewOrPrTarget
-                      }
-                    >
-                      {prDeploymentUrl ? (
-                        isDeploymentStale ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin xl:mr-1.5" />
-                            <span className="hidden xl:inline">Deploying…</span>
-                          </>
-                        ) : (
-                          <>
-                            <ExternalLink className="h-3.5 w-3.5 xl:mr-1.5" />
-                            <span className="hidden xl:inline">Preview</span>
-                          </>
-                        )
-                      ) : (
-                        <>
-                          <GitPullRequest className="h-3.5 w-3.5 xl:mr-1.5" />
-                          <span className="hidden xl:inline">
-                            {session.prNumber
-                              ? `PR #${session.prNumber}`
-                              : "View PR"}
-                          </span>
-                        </>
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {prDeploymentUrl
-                      ? isDeploymentStale
-                        ? "Preview deployment is updating"
-                        : "Open preview deployment"
-                      : session.prNumber
-                        ? `Open PR #${session.prNumber}`
-                        : "Open pull request"}
-                  </TooltipContent>
-                </Tooltip>
-                {prDeploymentUrl && existingPrUrl && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="hidden h-7 px-2.5 xl:inline-flex"
-                        onClick={openExistingPr}
-                      >
-                        <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
-                        {session.prNumber
-                          ? `PR #${session.prNumber}`
-                          : "View PR"}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Open pull request
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </>
-            )}
-            {canRunDevServer && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="hidden h-7 w-7 sm:inline-flex"
-                    onClick={() => void codeEditor.handleOpen()}
-                    disabled={
-                      codeEditor.state.status === "starting" ||
-                      codeEditor.state.status === "stopping"
-                    }
-                  >
-                    {codeEditor.state.status === "starting" ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Code2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {codeEditor.menuLabel}
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-7 w-7 sm:inline-flex"
+                  onClick={() => void codeEditor.handleOpen()}
+                  disabled={
+                    codeEditor.state.status === "starting" ||
+                    codeEditor.state.status === "stopping"
+                  }
+                >
+                  {codeEditor.state.status === "starting" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Code2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {codeEditor.menuLabel}
+              </TooltipContent>
+            </Tooltip>
           </div>,
           headerActionsRef.current,
         )}
