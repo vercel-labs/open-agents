@@ -52,6 +52,10 @@ type GitPanelContextValue = {
   changesCount: number;
   setChangesCount: (count: number) => void;
 
+  /** Whether there are committed (pushed) changes on the branch */
+  hasCommittedChanges: boolean;
+  setHasCommittedChanges: (has: boolean) => void;
+
   /** Share dialog trigger (set by per-chat page, called by header) */
   shareRequested: boolean;
   setShareRequested: (requested: boolean) => void;
@@ -76,6 +80,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const [diffScope, setDiffScope] = useState<DiffScope>("branch");
   const [hasActionNeeded, setHasActionNeeded] = useState(false);
   const [changesCount, setChangesCount] = useState(0);
+  const [hasCommittedChanges, setHasCommittedChanges] = useState(false);
   const [shareRequested, setShareRequested] = useState(false);
   const panelPortalRef = useRef<HTMLDivElement | null>(null);
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
@@ -110,6 +115,8 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
       setHasActionNeeded,
       changesCount,
       setChangesCount,
+      hasCommittedChanges,
+      setHasCommittedChanges,
       shareRequested,
       setShareRequested,
       panelPortalRef,
@@ -126,6 +133,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
       diffScope,
       hasActionNeeded,
       changesCount,
+      hasCommittedChanges,
       shareRequested,
     ],
   );

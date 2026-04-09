@@ -32,6 +32,7 @@ export function SessionHeader() {
     toggleGitPanel,
     hasActionNeeded,
     changesCount,
+    hasCommittedChanges,
     setShareRequested,
     headerActionsRef,
   } = useGitPanel();
@@ -162,20 +163,11 @@ export function SessionHeader() {
                 <GitIcon
                   className={cn("h-4 w-4", !gitPanelOpen && iconColor)}
                 />
-                {/* Numeric badge for file changes (when panel is closed) */}
-                {changesCount > 0 && !gitPanelOpen && (
-                  <span
-                    className={cn(
-                      "absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-0.5 text-[10px] font-semibold leading-none text-white",
-                      hasActionNeeded ? "bg-amber-500" : "bg-blue-500",
-                    )}
-                  >
-                    {changesCount > 99 ? "99+" : changesCount}
-                  </span>
-                )}
-                {/* Dot indicator when action needed but no file count to show */}
-                {hasActionNeeded && changesCount === 0 && !gitPanelOpen && (
+                {!gitPanelOpen && hasActionNeeded && (
                   <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-amber-500" />
+                )}
+                {!gitPanelOpen && !hasActionNeeded && hasCommittedChanges && (
+                  <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-blue-500" />
                 )}
               </Button>
             </TooltipTrigger>

@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleDotDashed,
   List,
   ArrowUpDown,
   Loader2,
@@ -150,9 +151,9 @@ function CheckStateIcon({
   }
   if (state === "pending") {
     return (
-      <Loader2
+      <CircleDotDashed
         className={cn(
-          "h-4 w-4 shrink-0 animate-spin text-amber-600 dark:text-amber-500",
+          "h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500",
           className,
         )}
       />
