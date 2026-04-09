@@ -41,6 +41,7 @@ interface MergePrDialogProps {
   onMerged?: (result: MergePullRequestResponse) => Promise<void> | void;
   onViewDiff?: () => void;
   canViewDiff?: boolean;
+  isAgentWorking?: boolean;
   /** Called when the user clicks "Fix errors" — receives all failing check runs */
   onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
 }
@@ -70,6 +71,7 @@ export function MergePrDialog({
   onMerged,
   onViewDiff,
   canViewDiff = false,
+  isAgentWorking = false,
   onFixChecks,
 }: MergePrDialogProps) {
   const [readiness, setReadiness] = useState<MergeReadinessResponse | null>(
@@ -299,6 +301,7 @@ export function MergePrDialog({
             }}
             isRefreshing={isLoadingReadiness}
             isLoading={isLoadingReadiness && !readiness}
+            fixChecksDisabled={isAgentWorking}
             onFixChecks={onFixChecks}
           />
 

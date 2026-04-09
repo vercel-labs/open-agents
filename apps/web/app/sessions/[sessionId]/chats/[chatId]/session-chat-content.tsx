@@ -3938,6 +3938,7 @@ export function SessionChatContent({
           onMerged={handleMerged}
           onViewDiff={() => setShowDiffPanel(true)}
           canViewDiff={supportsDiff && Boolean(diff || session.cachedDiff)}
+          isAgentWorking={hasPendingResponse || isChatInFlight}
           onFixChecks={async (failedRuns) => {
             setMergeDialogOpen(false);
 
