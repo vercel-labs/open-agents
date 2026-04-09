@@ -1162,6 +1162,11 @@ function InlineMergePanel({
             <p className="text-sm font-medium text-foreground leading-snug">
               {prTitle}
             </p>
+            {prBody && (
+              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4 whitespace-pre-line">
+                {prBody}
+              </p>
+            )}
           </div>
         )}
         <div className="relative overflow-hidden rounded-md border border-purple-500/30 bg-purple-500/10">
