@@ -2965,7 +2965,11 @@ export function SessionChatContent({
                             const renderGroups = (
                               isToolCallsExpanded: boolean,
                             ) =>
-                              groups.map((group) => {
+                              groups.map((group, groupRenderIndex) => {
+                                const previousGroup =
+                                  groupRenderIndex > 0
+                                    ? groups[groupRenderIndex - 1]
+                                    : null;
                                 if (group.type === "reasoning-group") {
                                   if (!isToolCallsExpanded) return null;
                                   const hasRenderableContentAfterGroup = m.parts
@@ -3277,6 +3281,10 @@ export function SessionChatContent({
                                   ) {
                                     return null;
                                   }
+                                  const followsUserTextPart =
+                                    m.role === "user" &&
+                                    previousGroup?.type === "part" &&
+                                    previousGroup.part.type === "text";
                                   return (
                                     <div
                                       key={`${m.id}-${group.renderKey}`}
@@ -3285,6 +3293,7 @@ export function SessionChatContent({
                                         m.role === "user"
                                           ? "justify-end"
                                           : "justify-start",
+                                        followsUserTextPart && "-mt-2",
                                       )}
                                     >
                                       <div className="group relative w-fit max-w-[80%]">
