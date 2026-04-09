@@ -1,65 +1,218 @@
 # Open Harness
 
-## Setup
+Open Harness is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
 
-```bash
-bun install
-vc link
-./scripts/setup.sh
+The repo is meant to be forked and adapted, not treated as a black box.
+
+## What it is
+
+Open Harness is a three-layer system:
+
+```text
+Web -> Agent workflow -> Sandbox VM
 ```
 
-When `vc link` prompts you, use team `vercel-labs` and project `open-harness-web`.
+- The web app handles auth, sessions, chat, and streaming UI.
+- The agent runs as a durable workflow on Vercel.
+- The sandbox is the execution environment: filesystem, shell, git, dev servers, and preview ports.
 
-`scripts/setup.sh` will:
-- Copy `apps/web/.env.example` to `.env` if missing
-- Pull Vercel env into `.env.local`, then sync the relevant values into `apps/web/.env`
+### The key architectural decision: the agent is not the sandbox
 
-### Credentials
+The agent does not run inside the VM. It runs outside the sandbox and interacts with it through tools like file reads, edits, search, and shell commands.
 
-Web (`apps/web/.env`):
-- `POSTGRES_URL`
-- `JWE_SECRET` (example: `openssl rand -base64 32`)
-- `ENCRYPTION_KEY` (example: `openssl rand -hex 32`)
-- `NEXT_PUBLIC_AUTH_PROVIDERS` (`vercel`, `github`, or `vercel,github`)
-- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` + `VERCEL_APP_CLIENT_SECRET`
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`
-- `ELEVENLABS_API_KEY` (optional)
-- `VERCEL_OIDC_TOKEN` + `BLOB_READ_WRITE_TOKEN` (auto-filled by setup after `vc link`)
+That separation is the main point of the project:
 
-### Setting up Vercel OAuth (primary sign-in)
+- agent execution is not tied to a single request lifecycle
+- sandbox lifecycle can hibernate and resume independently
+- model/provider choices and sandbox implementation can evolve separately
+- the VM stays a plain execution environment instead of becoming the control plane
 
-1. Go to [Apps Settings](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings%2Fapps&title=Go+to+Apps+Settings) and create a new OAuth app
-2. Set the redirect URI to `http://localhost:3000/api/auth/vercel/callback` (for local dev)
-3. Copy the **Client ID** and **Client Secret** into your `apps/web/.env`:
+## Current capabilities
+
+- chat-driven coding agent with file, search, shell, task, skill, and web tools
+- durable multi-step execution with Workflow DevKit-backed runs
+- isolated Vercel sandboxes with snapshot-based resume
+- repo cloning and branch work inside the sandbox
+- optional auto-commit, push, and PR creation after a successful run
+- session sharing via read-only links
+- optional voice input via ElevenLabs transcription
+
+## Runtime notes
+
+A few details that matter for understanding the current implementation:
+
+- Chat requests start a workflow run instead of executing the agent inline.
+- Each agent turn can continue across many persisted workflow steps.
+- Active runs can be resumed by reconnecting to the stream for the existing workflow.
+- Sandboxes use a base snapshot, expose ports `3000`, `5173`, `4321`, and `8000`, and hibernate after inactivity.
+- Auto-commit and auto-PR are supported, but they are preference-driven features, not always-on behavior.
+
+## What is required to run it
+
+### Required to boot the app locally
+
+- [Bun](https://bun.com) `1.2+`
+- a PostgreSQL database
+- a Vercel OAuth app for sign-in
+- app secrets for session/JWE encryption
+
+Required `apps/web/.env` values:
+
+```env
+POSTGRES_URL=
+JWE_SECRET=
+ENCRYPTION_KEY=
+NEXT_PUBLIC_AUTH_PROVIDERS=vercel
+NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
+VERCEL_APP_CLIENT_SECRET=
+```
+
+### Required for the full coding-agent flow
+
+To use the actual background-agent workflow, not just render the UI, you also need:
+
+- a Vercel project/environment with sandbox access enabled
+- workflow execution available in that project
+- model access configured for the gateway-backed models you want the agent to use
+
+In practice, most people get the project-managed env they need by linking a Vercel project locally and pulling env vars.
+
+### Required for GitHub repo access, pushes, and PRs
+
+If you want users to connect repos, clone private repos, push branches, or open PRs, configure both GitHub OAuth and a GitHub App.
+
+Required env vars:
+
+```env
+NEXT_PUBLIC_GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GITHUB_APP_ID=
+GITHUB_APP_PRIVATE_KEY=
+NEXT_PUBLIC_GITHUB_APP_SLUG=
+GITHUB_WEBHOOK_SECRET=
+```
+
+### Recommended
+
+```env
+REDIS_URL=
+```
+
+Redis is used for resumable streams and stop signaling. The app can start without it, but some realtime/resume behavior is degraded.
+
+### Optional
+
+```env
+ELEVENLABS_API_KEY=
+```
+
+This enables voice transcription.
+
+## Local setup
+
+1. Install dependencies:
+
+   ```bash
+   bun install
    ```
-   NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=your_client_id_here
-   VERCEL_APP_CLIENT_SECRET=your_client_secret_here
-   ```
-4. Make sure `NEXT_PUBLIC_AUTH_PROVIDERS` includes `vercel`
 
-### Setting up GitHub OAuth (linked account for repo access)
+2. Create your local env file:
 
-GitHub is used as a linked account so users can access their repositories. It is not required for sign-in.
-
-1. Go to [github.com/settings/developers](https://github.com/settings/developers) and create a new OAuth App
-2. Set the **Homepage URL** to `http://localhost:3000` (for local dev)
-3. Set the **Authorization callback URL** to `http://localhost:3000/api/auth/github/callback`
-4. If you also want GitHub account linking (connecting GitHub after signing in with Vercel), add a second callback URL: `http://localhost:3000/api/auth/github/link/callback`
-5. Copy the **Client ID** and **Client Secret** into your `apps/web/.env`:
-   ```
-   NEXT_PUBLIC_GITHUB_CLIENT_ID=your_client_id_here
-   GITHUB_CLIENT_SECRET=your_client_secret_here
+   ```bash
+   cp apps/web/.env.example apps/web/.env
    ```
 
-> **Note:** GitHub OAuth apps only support one callback URL. To support both `/api/auth/github/callback` (sign-in) and `/api/auth/github/link/callback` (account linking), create two separate OAuth apps, or use the same app and update the callback URL depending on the flow you need. In production, these are typically configured as separate apps.
+3. Fill in the required values in `apps/web/.env`.
 
-If you update Vercel env vars later, re-run `scripts/refresh-vercel-token.sh`.
-`scripts/refresh-vercel-token.sh` refreshes `VERCEL_OIDC_TOKEN` in `apps/web/.env`.
+4. If you want to sync project-managed env vars from Vercel instead of entering them all manually:
 
-## Run
+   ```bash
+   vc link
+   ./scripts/setup.sh
+   ```
+
+   `scripts/setup.sh` will:
+   - install dependencies
+   - create `apps/web/.env` from `.env.example` if needed
+   - pull Vercel env into `.env.local`
+   - sync supported values into `apps/web/.env`
+
+5. Start the app:
+
+   ```bash
+   bun run web
+   ```
+
+## OAuth and integration setup
+
+### Vercel OAuth
+
+Create a Vercel OAuth app and use this callback for local development:
+
+```text
+http://localhost:3000/api/auth/vercel/callback
+```
+
+Then set:
+
+```env
+NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
+VERCEL_APP_CLIENT_SECRET=...
+```
+
+### GitHub OAuth
+
+Create a GitHub OAuth app for account linking and use:
+
+- Homepage URL: `http://localhost:3000`
+- Authorization callback URL: `http://localhost:3000/api/github/app/callback`
+
+Then set:
+
+```env
+NEXT_PUBLIC_GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+### GitHub App
+
+Create a GitHub App for installation-based repo access and configure:
+
+- Callback URL: `http://localhost:3000/api/github/app/callback`
+- Setup URL: `http://localhost:3000/api/github/app/callback`
+- enable "Request user authorization (OAuth) during installation"
+- make the app public if you want org installs to work cleanly
+
+Then set:
+
+```env
+GITHUB_APP_ID=...
+GITHUB_APP_PRIVATE_KEY=...
+NEXT_PUBLIC_GITHUB_APP_SLUG=...
+GITHUB_WEBHOOK_SECRET=...
+```
+
+## Useful commands
 
 ```bash
 bun run web
+bun run check
+bun run typecheck
+bun run ci
+bun run sandbox:snapshot-base
 ```
 
-This project was created using `bun init` in bun v1.2.23. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+If you update project env vars later, re-run:
+
+```bash
+scripts/refresh-vercel-token.sh
+```
+
+## Repo layout
+
+```text
+apps/web         Next.js app, workflows, auth, chat UI
+packages/agent   agent implementation, tools, subagents, skills
+packages/sandbox sandbox abstraction and Vercel sandbox integration
+packages/shared  shared utilities
+```
