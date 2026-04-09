@@ -958,6 +958,35 @@ function InlineMergePanel({
         </div>
       )}
 
+      {/* Diff stats */}
+      {readiness?.pr &&
+        (readiness.pr.changedFiles > 0 ||
+          readiness.pr.additions > 0 ||
+          readiness.pr.deletions > 0) && (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+            <span>
+              {readiness.pr.changedFiles} file
+              {readiness.pr.changedFiles !== 1 ? "s" : ""} changed
+            </span>
+            {readiness.pr.additions > 0 && (
+              <span className="text-green-600 dark:text-green-500">
+                +{readiness.pr.additions}
+              </span>
+            )}
+            {readiness.pr.deletions > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                -{readiness.pr.deletions}
+              </span>
+            )}
+            {readiness.pr.commits > 0 && (
+              <span className="ml-auto flex items-center gap-1 text-muted-foreground">
+                <GitCommit className="h-3 w-3" />
+                {readiness.pr.commits}
+              </span>
+            )}
+          </div>
+        )}
+
       {/* Check runs */}
       <CheckRunsList
         checkRuns={readiness?.checkRuns ?? []}
