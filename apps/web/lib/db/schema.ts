@@ -324,6 +324,8 @@ export const userPreferences = pgTable("user_preferences", {
   }).default("unified"),
   autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   autoCreatePr: boolean("auto_create_pr").notNull().default(false),
+  alertsEnabled: boolean("alerts_enabled").notNull().default(true),
+  alertSoundEnabled: boolean("alert_sound_enabled").notNull().default(true),
   globalSkillRefs: jsonb("global_skill_refs")
     .$type<GlobalSkillRef[]>()
     .notNull()

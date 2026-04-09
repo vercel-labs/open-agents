@@ -18,6 +18,8 @@ export interface UserPreferencesData {
   defaultDiffMode: DiffMode;
   autoCommitPush: boolean;
   autoCreatePr: boolean;
+  alertsEnabled: boolean;
+  alertSoundEnabled: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
   enabledModelIds: string[];
@@ -30,6 +32,8 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultDiffMode: "unified",
   autoCommitPush: false,
   autoCreatePr: false,
+  alertsEnabled: true,
+  alertSoundEnabled: true,
   globalSkillRefs: [],
   modelVariants: [],
   enabledModelIds: [],
@@ -80,6 +84,8 @@ export function toUserPreferencesData(
     | "defaultDiffMode"
     | "autoCommitPush"
     | "autoCreatePr"
+    | "alertsEnabled"
+    | "alertSoundEnabled"
     | "globalSkillRefs"
     | "modelVariants"
     | "enabledModelIds"
@@ -96,6 +102,9 @@ export function toUserPreferencesData(
     defaultDiffMode: normalizeDiffMode(row?.defaultDiffMode),
     autoCommitPush: row?.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
     autoCreatePr: row?.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
+    alertsEnabled: row?.alertsEnabled ?? DEFAULT_PREFERENCES.alertsEnabled,
+    alertSoundEnabled:
+      row?.alertSoundEnabled ?? DEFAULT_PREFERENCES.alertSoundEnabled,
     globalSkillRefs: normalizeGlobalSkillRefs(row?.globalSkillRefs),
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
     enabledModelIds: normalizeEnabledModelIds(row?.enabledModelIds),
@@ -159,6 +168,9 @@ export async function updateUserPreferences(
       autoCommitPush:
         updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
       autoCreatePr: updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
+      alertsEnabled: updates.alertsEnabled ?? DEFAULT_PREFERENCES.alertsEnabled,
+      alertSoundEnabled:
+        updates.alertSoundEnabled ?? DEFAULT_PREFERENCES.alertSoundEnabled,
       globalSkillRefs:
         updates.globalSkillRefs ?? DEFAULT_PREFERENCES.globalSkillRefs,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,

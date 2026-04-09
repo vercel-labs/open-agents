@@ -1,0 +1,2 @@
+ALTER TABLE "user_preferences" ADD COLUMN "alerts_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "alert_sound_enabled" boolean DEFAULT true NOT NULL;

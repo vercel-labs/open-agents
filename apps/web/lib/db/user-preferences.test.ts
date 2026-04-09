@@ -17,6 +17,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -33,6 +35,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "invalid" as never,
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -52,6 +56,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -71,6 +77,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [
         { source: "vercel/ai", skillName: "bad name" },
       ] as never,
@@ -91,6 +99,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [
         { source: "vercel/ai", skillName: "ai-sdk" },
         { source: "vercel/ai", skillName: "ai-sdk" },
@@ -114,6 +124,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: false,
       autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [{ id: "bad-id" }] as never,
       enabledModelIds: [],
@@ -132,6 +144,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: true,
       autoCreatePr: true,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [
         {
@@ -151,6 +165,8 @@ describe("toUserPreferencesData", () => {
       defaultDiffMode: "split",
       autoCommitPush: true,
       autoCreatePr: true,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
       globalSkillRefs: [],
       modelVariants: [
         {

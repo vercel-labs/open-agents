@@ -183,6 +183,13 @@
       "when": 1775216632004,
       "tag": "0025_zippy_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1775687505858,
+      "tag": "0026_rapid_prima",
+      "breakpoints": true
     }
   ]
 }

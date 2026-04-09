@@ -55,7 +55,10 @@ export function useBackgroundChatNotifications(
   sessions: SessionWithUnread[],
   activeSessionId: string | null,
   onNavigateToSession: (session: SessionWithUnread) => void,
+  options?: { alertsEnabled?: boolean; alertSoundEnabled?: boolean },
 ) {
+  const alertsEnabled = options?.alertsEnabled ?? true;
+  const alertSoundEnabled = options?.alertSoundEnabled ?? true;
   // Track which session IDs were streaming on the previous render.
   const prevStreamingRef = useRef<Set<string>>(new Set());
   // Skip the very first render so we don't toast for sessions that were
@@ -86,25 +89,28 @@ export function useBackgroundChatNotifications(
         if (!session) continue;
 
         hasCompleted = true;
-        const title = session.title || "A session";
 
-        toast("Agent finished", {
-          description: title,
-          position: "top-center",
-          duration: 8000,
-          action: {
-            label: "Go to chat",
-            onClick: () => navigateRef.current(session),
-          },
-        });
+        if (alertsEnabled) {
+          const title = session.title || "A session";
+
+          toast("Agent finished", {
+            description: title,
+            position: "top-center",
+            duration: 8000,
+            action: {
+              label: "Go to chat",
+              onClick: () => navigateRef.current(session),
+            },
+          });
+        }
       }
 
-      if (hasCompleted) {
+      if (hasCompleted && alertsEnabled && alertSoundEnabled) {
         playFinishedChatSound();
       }
     }
 
     hasMountedRef.current = true;
     prevStreamingRef.current = getStreamingIds(items);
-  }, [sessions, activeSessionId]);
+  }, [sessions, activeSessionId, alertsEnabled, alertSoundEnabled]);
 }

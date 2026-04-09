@@ -189,7 +189,10 @@ export function SessionsRouteShell({
   const activeSessionId = optimisticActiveSessionId ?? routeSessionId ?? "";
   const pendingSessionId = isNavigating ? optimisticActiveSessionId : null;
 
-  useBackgroundChatNotifications(sessions, routeSessionId, handleSessionClick);
+  useBackgroundChatNotifications(sessions, routeSessionId, handleSessionClick, {
+    alertsEnabled: preferences?.alertsEnabled ?? true,
+    alertSoundEnabled: preferences?.alertSoundEnabled ?? true,
+  });
 
   const shellContextValue = useMemo(
     () => ({

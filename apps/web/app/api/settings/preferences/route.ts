@@ -17,6 +17,8 @@ interface UpdatePreferencesRequest {
   defaultDiffMode?: DiffMode;
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
+  alertsEnabled?: boolean;
+  alertSoundEnabled?: boolean;
   globalSkillRefs?: GlobalSkillRef[];
   enabledModelIds?: string[];
 }
@@ -80,6 +82,26 @@ export async function PATCH(req: Request) {
   ) {
     return Response.json(
       { error: "Invalid autoCreatePr value" },
+      { status: 400 },
+    );
+  }
+
+  if (
+    body.alertsEnabled !== undefined &&
+    typeof body.alertsEnabled !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid alertsEnabled value" },
+      { status: 400 },
+    );
+  }
+
+  if (
+    body.alertSoundEnabled !== undefined &&
+    typeof body.alertSoundEnabled !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid alertSoundEnabled value" },
       { status: 400 },
     );
   }

@@ -15,6 +15,8 @@ export interface UserPreferences {
   defaultDiffMode: DiffMode;
   autoCommitPush: boolean;
   autoCreatePr: boolean;
+  alertsEnabled: boolean;
+  alertSoundEnabled: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
   enabledModelIds: string[];

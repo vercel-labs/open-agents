@@ -246,6 +246,28 @@ export function PreferencesSection() {
     }
   };
 
+  const handleAlertsEnabledChange = async (enabled: boolean) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({ alertsEnabled: enabled });
+    } catch (error) {
+      console.error("Failed to update alerts preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAlertSoundEnabledChange = async (enabled: boolean) => {
+    setIsSaving(true);
+    try {
+      await updatePreferences({ alertSoundEnabled: enabled });
+    } catch (error) {
+      console.error("Failed to update alert sound preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddGlobalSkillRef = async () => {
     const existingRefs = preferences?.globalSkillRefs ?? [];
     const errorMessage = getGlobalSkillRefError({
@@ -618,6 +640,46 @@ export function PreferencesSection() {
               checked={preferences?.autoCreatePr ?? false}
               onCheckedChange={handleAutoCreatePrChange}
               disabled={isSaving || !(preferences?.autoCommitPush ?? false)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="alerts-enabled">Alerts</Label>
+              <p className="text-xs text-muted-foreground">
+                Show a notification when a background agent finishes.
+              </p>
+            </div>
+            <Switch
+              id="alerts-enabled"
+              checked={preferences?.alertsEnabled ?? true}
+              onCheckedChange={handleAlertsEnabledChange}
+              disabled={isSaving}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 pl-4">
+            <div className="space-y-1">
+              <Label
+                htmlFor="alert-sound-enabled"
+                className={
+                  !(preferences?.alertsEnabled ?? true)
+                    ? "text-muted-foreground"
+                    : undefined
+                }
+              >
+                Alert sound
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Play a sound when an alert is shown.
+              </p>
+            </div>
+            <Switch
+              id="alert-sound-enabled"
+              checked={preferences?.alertSoundEnabled ?? true}
+              onCheckedChange={handleAlertSoundEnabledChange}
+              disabled={isSaving || !(preferences?.alertsEnabled ?? true)}
             />
           </div>
         </div>
