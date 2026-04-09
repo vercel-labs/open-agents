@@ -440,7 +440,7 @@ function InlineCommitPanel({
       {commitSuccess ? (
         <div className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-300">
           <Check className="h-3.5 w-3.5" />
-          {commitSuccess.commitMessage ?? "Pushed"}
+          Committed
         </div>
       ) : (
         <div className="flex w-full">
@@ -1108,6 +1108,34 @@ function InlineMergePanel({
 
   const prTitle = readiness?.pr?.title ?? null;
   const prBody = readiness?.pr?.body ?? null;
+
+  if (session.prStatus === "merged") {
+    return (
+      <div className="space-y-3">
+        {prTitle && (
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-foreground leading-snug">
+              {prTitle}
+            </p>
+          </div>
+        )}
+        <div className="relative overflow-hidden rounded-md border border-purple-500/30 bg-purple-500/10">
+          <div className="absolute inset-y-0 left-0 w-1 bg-purple-500" />
+          <div className="flex items-center gap-2.5 py-3 pr-3 pl-4">
+            <GitMerge className="h-4 w-4 shrink-0 text-purple-500" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-medium text-foreground">
+                Pull request merged
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                The branch has been merged and can be safely deleted.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
