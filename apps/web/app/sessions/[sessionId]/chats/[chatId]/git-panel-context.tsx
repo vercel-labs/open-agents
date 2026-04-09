@@ -77,7 +77,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [focusedDiffFile, setFocusedDiffFile] = useState<string | null>(null);
   const [changesTabDismissed, setChangesTabDismissed] = useState(false);
-  const [diffScope, setDiffScope] = useState<DiffScope>("branch");
+  const [diffScope, setDiffScope] = useState<DiffScope>("uncommitted");
   const [hasActionNeeded, setHasActionNeeded] = useState(false);
   const [changesCount, setChangesCount] = useState(0);
   const [hasCommittedChanges, setHasCommittedChanges] = useState(false);

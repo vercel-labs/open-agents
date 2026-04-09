@@ -2664,12 +2664,22 @@ export function SessionChatContent({
     setChangesCount(totalChangesCount);
   }, [totalChangesCount, setChangesCount]);
 
-  // Sync the "committed changes" indicator (blue dot) — branch has diverged
-  // and there are no uncommitted changes left to deal with
-  const hasDiffData = Boolean(diff || session.cachedDiff);
+  // Sync the "committed changes" indicator (blue dot) — branch has committed
+  // changes, no PR created yet, and no uncommitted changes to deal with
   useEffect(() => {
-    setHasCommittedChanges(hasRepo && hasDiffData && !hasUncommittedGitChanges);
-  }, [hasRepo, hasDiffData, hasUncommittedGitChanges, setHasCommittedChanges]);
+    setHasCommittedChanges(
+      hasRepo &&
+        totalChangesCount > 0 &&
+        !hasExistingPr &&
+        !hasUncommittedGitChanges,
+    );
+  }, [
+    hasRepo,
+    totalChangesCount,
+    hasExistingPr,
+    hasUncommittedGitChanges,
+    setHasCommittedChanges,
+  ]);
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canCloseAndArchive = hasOpenPr && !isArchived;
   const handleCommitted = useCallback(async () => {

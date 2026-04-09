@@ -484,7 +484,6 @@ function InlineCommitPanel({
                 onSelect={() => void handleCommit(true)}
                 className="gap-2 text-xs"
               >
-                <GitCommit className="h-3.5 w-3.5 text-muted-foreground" />
                 Commit only
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -499,15 +498,19 @@ function InlineCommitPanel({
     </div>
   );
 
-  if (isAgentWorking) {
+  const disabledTooltip = isAgentWorking
+    ? "Wait for the agent to finish"
+    : !hasSandbox
+      ? "Waiting for sandbox to start"
+      : null;
+
+  if (disabledTooltip) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <div>{commitForm}</div>
         </TooltipTrigger>
-        <TooltipContent side="bottom">
-          Wait for the agent to finish
-        </TooltipContent>
+        <TooltipContent side="bottom">{disabledTooltip}</TooltipContent>
       </Tooltip>
     );
   }
@@ -869,7 +872,6 @@ function InlinePrCreatePanel({
               onSelect={() => void handleCreatePr(true)}
               className="gap-2 text-xs"
             >
-              <GitPullRequest className="h-3.5 w-3.5 text-muted-foreground" />
               Create Draft PR
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -1450,22 +1452,15 @@ export function GitPanel(props: GitPanelProps) {
               #{session.prNumber}
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
-          ) : hasRepo && session.branch ? (
-            <>
-              <span className="truncate text-xs font-medium text-muted-foreground font-mono">
-                {session.branch}
-              </span>
-              {showCreatePrShortcut && (
-                <button
-                  type="button"
-                  onClick={() => setGitPanelTab("pr")}
-                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-                >
-                  <GitPullRequest className="h-3.5 w-3.5 text-green-500" />
-                  Create PR
-                </button>
-              )}
-            </>
+          ) : hasRepo && showCreatePrShortcut ? (
+            <button
+              type="button"
+              onClick={() => setGitPanelTab("pr")}
+              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            >
+              <GitPullRequest className="h-3.5 w-3.5" />
+              Create PR
+            </button>
           ) : null}
 
           {/* Preview deployment button */}
