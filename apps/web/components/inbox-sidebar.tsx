@@ -485,7 +485,7 @@ const SessionRow = memo(function SessionRow({
           }}
           disabled={renamePending}
           maxLength={120}
-          className="h-5 w-full rounded bg-transparent text-[13px] leading-5 text-foreground outline-none"
+          className="h-5 w-full rounded border-0 bg-transparent p-0 text-[13px] leading-5 text-foreground outline-none"
         />
       </span>
     </div>

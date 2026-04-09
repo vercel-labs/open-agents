@@ -34,6 +34,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -413,7 +418,7 @@ function InlineCommitPanel({
     isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork;
 
   // Commit form
-  return (
+  const commitForm = (
     <div className="space-y-2">
       <div className="relative">
         <Textarea
@@ -486,11 +491,6 @@ function InlineCommitPanel({
           </DropdownMenu>
         </div>
       )}
-      {isAgentWorking && (
-        <div className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-          Wait for the agent to finish before committing or pushing.
-        </div>
-      )}
       {commitError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {commitError}
@@ -498,6 +498,21 @@ function InlineCommitPanel({
       )}
     </div>
   );
+
+  if (isAgentWorking) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div>{commitForm}</div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          Wait for the agent to finish
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return commitForm;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1436,9 +1451,21 @@ export function GitPanel(props: GitPanelProps) {
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           ) : hasRepo && session.branch ? (
-            <span className="truncate text-xs font-medium text-muted-foreground font-mono">
-              {session.branch}
-            </span>
+            <>
+              <span className="truncate text-xs font-medium text-muted-foreground font-mono">
+                {session.branch}
+              </span>
+              {showCreatePrShortcut && (
+                <button
+                  type="button"
+                  onClick={() => setGitPanelTab("pr")}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                >
+                  <GitPullRequest className="h-3.5 w-3.5 text-green-500" />
+                  Create PR
+                </button>
+              )}
+            </>
           ) : null}
 
           {/* Preview deployment button */}
@@ -1620,17 +1647,6 @@ export function GitPanel(props: GitPanelProps) {
                           </span>
                         )}
                       </div>
-                      {showCreatePrShortcut && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 shrink-0 text-xs"
-                          onClick={() => setGitPanelTab("pr")}
-                        >
-                          <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
-                          Create PR
-                        </Button>
-                      )}
                     </div>
                   );
                 })()}
