@@ -51,6 +51,7 @@ describe("model options", () => {
         description: "Base model",
         isVariant: false,
         contextWindow: 400_000,
+        provider: "openai",
       },
       {
         id: "variant:gpt-5-medium",
@@ -58,6 +59,7 @@ describe("model options", () => {
         description: "Variant of GPT-5",
         isVariant: true,
         contextWindow: 400_000,
+        provider: "openai",
       },
     ]);
   });
@@ -72,6 +74,7 @@ describe("model options", () => {
       description: "Variant no longer exists",
       isVariant: true,
       contextWindow: undefined,
+      provider: "unknown",
     });
   });
 
@@ -81,6 +84,7 @@ describe("model options", () => {
         id: "openai/gpt-5",
         label: "GPT-5",
         isVariant: false,
+        provider: "openai",
       },
     ];
 
@@ -95,6 +99,7 @@ describe("model options", () => {
         id: "variant:existing",
         label: "Existing Variant",
         isVariant: true,
+        provider: "openai",
       },
     ];
 
@@ -107,11 +112,13 @@ describe("model options", () => {
         id: "openai/gpt-5.4",
         label: "GPT-5.4",
         isVariant: false,
+        provider: "anthropic",
       },
       {
         id: "openai/gpt-5",
         label: "GPT-5",
         isVariant: false,
+        provider: "openai",
       },
     ];
 
@@ -124,6 +131,7 @@ describe("model options", () => {
         id: "openai/gpt-5",
         label: "GPT-5",
         isVariant: false,
+        provider: "openai",
       },
     ];
 

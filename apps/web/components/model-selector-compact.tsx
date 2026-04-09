@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, ChevronDown } from "lucide-react";
 import { type ModelOption } from "@/lib/model-options";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
@@ -18,6 +18,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  ProviderIcon,
+  getProviderDisplayName,
+} from "@/components/provider-icons";
 
 interface ModelSelectorCompactProps {
   value: string;
@@ -25,6 +29,24 @@ interface ModelSelectorCompactProps {
   onChange: (modelId: string) => void;
   disabled?: boolean;
   onCloseAutoFocus?: () => void;
+}
+
+function groupByProvider(options: ModelOption[]) {
+  const groups: Record<string, ModelOption[]> = {};
+  const order: string[] = [];
+  for (const option of options) {
+    const provider = option.provider;
+    if (!groups[provider]) {
+      groups[provider] = [];
+      order.push(provider);
+    }
+    groups[provider].push(option);
+  }
+  return order.map((provider) => ({
+    provider,
+    label: getProviderDisplayName(provider),
+    options: groups[provider],
+  }));
 }
 
 export function ModelSelectorCompact({
@@ -92,6 +114,8 @@ export function ModelSelectorCompact({
   const selectedOption = modelOptions.find((option) => option.id === value);
   const displayText = selectedOption?.label ?? value;
 
+  const groups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
+
   return (
     <Popover
       open={open}
@@ -111,6 +135,12 @@ export function ModelSelectorCompact({
           title="Change model (⌘⌥/)"
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300 disabled:pointer-events-none disabled:opacity-60"
         >
+          {selectedOption && (
+            <ProviderIcon
+              provider={selectedOption.provider}
+              className="size-3.5 shrink-0"
+            />
+          )}
           <span className="max-w-[140px] truncate">{displayText}</span>
           <ChevronDown className="h-3 w-3" />
         </button>
@@ -136,40 +166,53 @@ export function ModelSelectorCompact({
           />
           <CommandList>
             <CommandEmpty>No models found.</CommandEmpty>
-            <CommandGroup>
-              {modelOptions.map((option) => (
-                <CommandItem
-                  key={option.id}
-                  value={`${option.label} ${option.id} ${option.description ?? ""}`}
-                  onSelect={() => handleSelect(option.id)}
-                >
-                  <CheckIcon
-                    className={cn(
-                      "mr-2 size-4",
-                      value === option.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate">{option.label}</span>
-                      {option.isVariant && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                          variant
-                        </span>
+            {groups.map((group) => (
+              <CommandGroup
+                key={group.provider}
+                heading={
+                  <span className="flex items-center gap-1.5">
+                    <ProviderIcon
+                      provider={group.provider}
+                      className="size-3 opacity-60"
+                    />
+                    {group.label}
+                  </span>
+                }
+              >
+                {group.options.map((option) => (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.label} ${option.id} ${option.description ?? ""}`}
+                    onSelect={() => handleSelect(option.id)}
+                  >
+                    <CheckIcon
+                      className={cn(
+                        "mr-2 size-4 shrink-0",
+                        value === option.id ? "opacity-100" : "opacity-0",
                       )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{option.label}</span>
+                        {option.isVariant && (
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                            variant
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {option.description ?? option.id}
+                      </p>
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {option.description ?? option.id}
-                    </p>
-                  </div>
-                  {option.id === APP_DEFAULT_MODEL_ID && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      default
-                    </span>
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+                    {option.id === APP_DEFAULT_MODEL_ID && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        default
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>

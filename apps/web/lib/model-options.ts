@@ -8,6 +8,7 @@ import {
   MODEL_VARIANT_ID_PREFIX,
   type ModelVariant,
 } from "@/lib/model-variants";
+import { getProviderFromModelId } from "@/components/provider-icons";
 
 export interface ModelOption {
   id: string;
@@ -16,6 +17,7 @@ export interface ModelOption {
   isVariant: boolean;
   contextWindow?: number;
   cost?: AvailableModelCost;
+  provider: string;
 }
 
 function toBaseModelOption(model: AvailableModel): ModelOption {
@@ -26,6 +28,7 @@ function toBaseModelOption(model: AvailableModel): ModelOption {
     isVariant: false,
     contextWindow: model.context_window,
     ...(model.cost ? { cost: model.cost } : {}),
+    provider: getProviderFromModelId(model.id),
   };
 }
 
@@ -44,6 +47,7 @@ function toVariantOption(
     isVariant: true,
     contextWindow: baseModel?.context_window,
     ...(baseModel?.cost ? { cost: baseModel.cost } : {}),
+    provider: getProviderFromModelId(variant.baseModelId),
   };
 }
 
@@ -90,6 +94,7 @@ export function withMissingModelOption(
       description: "Variant no longer exists",
       isVariant: true,
       contextWindow: undefined,
+      provider: "unknown",
     },
   ];
 }
