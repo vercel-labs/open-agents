@@ -4013,7 +4013,7 @@ export function SessionChatContent({
             parts.push("", `> ${comment}`);
           }
           const basename = filePath.split("/").pop() ?? filePath;
-          addTextAttachment(parts.join("\n"), `comment on ${basename}`);
+          addTextAttachment(parts.join("\n"), `comment-on-${basename}`);
           // Focus the input after a brief delay (keep file viewer open)
           setTimeout(() => {
             inputRef.current?.focus();
