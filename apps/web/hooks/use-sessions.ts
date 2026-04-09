@@ -110,7 +110,9 @@ export function useSessions(options?: {
         );
         // Poll quickly while any session is streaming so we detect
         // completion promptly for background-chat notifications.
-        return hasStreamingSession ? 3_000 : 0;
+        // Otherwise poll every 30s to pick up external changes like
+        // PR merges delivered via GitHub webhooks.
+        return hasStreamingSession ? 3_000 : 30_000;
       },
     },
   );
