@@ -408,7 +408,9 @@ function InlineCommitPanel({
         size="sm"
         className="w-full text-xs"
         onClick={() => void handleCommit()}
-        disabled={isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork}
+        disabled={
+          isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork
+        }
       >
         {isCommitting ? (
           <>
