@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   Loader2,
   Monitor,
+  Pencil,
   Plus,
   Settings,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BranchPickerDialog } from "@/components/branch-picker-dialog";
+import { getValidRenameTitle } from "@/components/inbox-sidebar-rename";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -341,6 +343,7 @@ type SessionRowProps = {
   isPending: boolean;
   onSessionClick: (session: SessionWithUnread) => void;
   onSessionPrefetch: (session: SessionWithUnread) => void;
+  onRenameSession?: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (session: SessionWithUnread) => void;
 };
 
@@ -350,16 +353,37 @@ const SessionRow = memo(function SessionRow({
   isPending,
   onSessionClick,
   onSessionPrefetch,
+  onRenameSession,
   onArchiveSession,
 }: SessionRowProps) {
   const isMobile = useIsMobile();
   const [isHovered, setIsHovered] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(session.title);
+  const [renamePending, setRenamePending] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!isRenaming) {
+      setRenameValue(session.title);
+    }
+  }, [isRenaming, session.title]);
+
+  useEffect(() => {
+    if (!isRenaming || !renameInputRef.current) {
+      return;
+    }
+
+    renameInputRef.current.focus();
+    renameInputRef.current.select();
+  }, [isRenaming]);
+
   const hasDiff = session.linesAdded !== null || session.linesRemoved !== null;
-  const showArchiveButton = isHovered && session.status !== "archived";
+  const showActionButtons =
+    isHovered && (Boolean(onRenameSession) || session.status !== "archived");
 
   const handleMouseEnter = useCallback(() => {
     if (leaveTimeoutRef.current) {
@@ -367,25 +391,61 @@ const SessionRow = memo(function SessionRow({
       leaveTimeoutRef.current = null;
     }
     setIsHovered(true);
-    if (!isMobile) {
+    if (!isMobile && !isRenaming) {
       hoverTimeoutRef.current = setTimeout(() => {
         setPopoverOpen(true);
       }, 500);
     }
-  }, [isMobile]);
+  }, [isMobile, isRenaming]);
 
   const handleMouseLeave = useCallback(() => {
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
-    // Immediately hide archive button
     setIsHovered(false);
-    // Delay popover close so user can move mouse to it
     leaveTimeoutRef.current = setTimeout(() => {
       setPopoverOpen(false);
     }, 200);
   }, []);
+
+  const handleCancelRename = useCallback(() => {
+    setRenameValue(session.title);
+    setRenamePending(false);
+    setIsRenaming(false);
+  }, [session.title]);
+
+  const handleFinishRename = useCallback(async () => {
+    if (!onRenameSession) {
+      handleCancelRename();
+      return;
+    }
+
+    const nextTitle = getValidRenameTitle({
+      draftTitle: renameValue,
+      originalTitle: session.title,
+    });
+    if (!nextTitle) {
+      handleCancelRename();
+      return;
+    }
+
+    setRenamePending(true);
+    try {
+      await onRenameSession(session.id, nextTitle);
+    } catch (error) {
+      console.error("Failed to rename session:", error);
+    } finally {
+      setRenamePending(false);
+      setIsRenaming(false);
+    }
+  }, [
+    handleCancelRename,
+    onRenameSession,
+    renameValue,
+    session.id,
+    session.title,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -394,7 +454,42 @@ const SessionRow = memo(function SessionRow({
     };
   }, []);
 
-  const rowButton = (
+  const rowButton = isRenaming ? (
+    <div
+      className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] ${
+        isActive ? "bg-sidebar-active" : "bg-muted/50"
+      } ${renamePending ? "opacity-80" : "opacity-100"}`}
+      style={sessionRowPerformanceStyle}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+        {getSessionStatusIcon(session)}
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <input
+          ref={renameInputRef}
+          value={renameValue}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onBlur={() => {
+            void handleFinishRename();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void handleFinishRename();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              handleCancelRename();
+            }
+          }}
+          disabled={renamePending}
+          maxLength={120}
+          className="h-5 w-full rounded bg-transparent text-[13px] leading-5 text-foreground outline-none"
+        />
+      </span>
+    </div>
+  ) : (
     <button
       type="button"
       className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] cursor-pointer ${
@@ -407,12 +502,9 @@ const SessionRow = memo(function SessionRow({
       onFocus={() => onSessionPrefetch(session)}
       aria-busy={isPending}
     >
-      {/* Status icon */}
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">
         {getSessionStatusIcon(session)}
       </span>
-
-      {/* Session name */}
       <span className="min-w-0 flex-1 text-left">
         <p
           className={`truncate text-[13px] leading-5 ${
@@ -424,28 +516,56 @@ const SessionRow = memo(function SessionRow({
           {session.title}
         </p>
       </span>
-
-      {/* Right side: shrink-to-fit so diff stats never overlap title */}
-      <span className="flex shrink-0 items-center justify-end">
-        {showArchiveButton ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="rounded p-0.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                aria-label="Archive session"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onArchiveSession(session);
-                }}
-              >
-                <Archive className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              Archive session
-            </TooltipContent>
-          </Tooltip>
+      <span className="flex shrink-0 items-center justify-end gap-0.5">
+        {showActionButtons ? (
+          <>
+            {onRenameSession ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                    aria-label="Rename session"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (hoverTimeoutRef.current) {
+                        clearTimeout(hoverTimeoutRef.current);
+                        hoverTimeoutRef.current = null;
+                      }
+                      setPopoverOpen(false);
+                      setRenameValue(session.title);
+                      setIsRenaming(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  Rename session
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {session.status !== "archived" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                    aria-label="Archive session"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onArchiveSession(session);
+                    }}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  Archive session
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </>
         ) : hasDiff ? (
           <DiffStats
             added={session.linesAdded}
@@ -456,7 +576,7 @@ const SessionRow = memo(function SessionRow({
     </button>
   );
 
-  if (isMobile) {
+  if (isMobile || isRenaming) {
     return rowButton;
   }
 
@@ -515,7 +635,7 @@ export function InboxSidebar({
   pendingSessionId,
   onSessionClick,
   onSessionPrefetch,
-  onRenameSession: _onRenameSession,
+  onRenameSession,
   onArchiveSession,
   onOpenNewSession,
   onCreateSessionForRepo,
@@ -968,6 +1088,7 @@ export function InboxSidebar({
                               isPending={session.id === pendingSessionId}
                               onSessionClick={handleSessionClick}
                               onSessionPrefetch={handleSessionPrefetch}
+                              onRenameSession={onRenameSession}
                               onArchiveSession={handleArchiveSession}
                             />
                           ))}
