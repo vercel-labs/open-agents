@@ -98,6 +98,7 @@ import {
   isChatInFlight as isChatInFlightStatus,
   isGitDataPart,
   shouldKeepCollapsedReasoningStreaming,
+  shouldRenderGitDataPart,
   shouldShowThinkingIndicator,
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
@@ -228,7 +229,7 @@ function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
     .join("\n\n");
 }
 
-function _GitDataPartCard({
+function GitDataPartCard({
   part,
 }: {
   part: WebAgentCommitDataPart | WebAgentPrDataPart;
@@ -2576,7 +2577,7 @@ export function SessionChatContent({
     prDeploymentUrl,
   ]);
 
-  const _isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
+  const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
 
   // When auto-commit lands (transitions from committing to clean), mark the
   // current preview deployment as stale so the UI shows "Deploying…" until
@@ -2615,14 +2616,15 @@ export function SessionChatContent({
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const _canMergeAndArchive = hasOpenPr && !showCommitAction && !isArchived;
   const _canCloseAndArchive = hasOpenPr && !isArchived;
-  const _openExistingPr = () => {
+  const hasPreviewOrPrTarget = Boolean(prDeploymentUrl || existingPrUrl);
+  const openExistingPr = () => {
     if (!existingPrUrl) {
       return;
     }
 
     window.open(existingPrUrl, "_blank", "noopener,noreferrer");
   };
-  const _openPreviewOrPr = () => {
+  const openPreviewOrPr = () => {
     const targetUrl = prDeploymentUrl ?? existingPrUrl;
     if (!targetUrl) {
       return;
@@ -2630,7 +2632,7 @@ export function SessionChatContent({
 
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
-  const _openBuildingDeployment = () => {
+  const openBuildingDeployment = () => {
     if (!buildingDeploymentUrl) {
       return;
     }
@@ -2776,107 +2778,185 @@ export function SessionChatContent({
       {panelPortalRef.current &&
         createPortal(gitPanelElement, panelPortalRef.current)}
 
-      {/* Dev server / code editor buttons portaled to header */}
+      {/* Header actions portaled from chat-level state */}
       {headerActionsRef.current &&
-        canRunDevServer &&
+        (hasPreviewOrPrTarget || canRunDevServer) &&
         createPortal(
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => void codeEditor.handleOpen()}
-                  disabled={
-                    codeEditor.state.status === "starting" ||
-                    codeEditor.state.status === "stopping"
-                  }
-                >
-                  {codeEditor.state.status === "starting" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <div className="flex items-center gap-1">
+            {hasPreviewOrPrTarget && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 px-0 xl:w-auto xl:px-2.5"
+                      onClick={
+                        isDeploymentStale && buildingDeploymentUrl
+                          ? openBuildingDeployment
+                          : openPreviewOrPr
+                      }
+                      disabled={
+                        (isDeploymentStale && !buildingDeploymentUrl) ||
+                        !hasPreviewOrPrTarget
+                      }
+                    >
+                      {prDeploymentUrl ? (
+                        isDeploymentStale ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin xl:mr-1.5" />
+                            <span className="hidden xl:inline">Deploying…</span>
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="h-3.5 w-3.5 xl:mr-1.5" />
+                            <span className="hidden xl:inline">Preview</span>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <GitPullRequest className="h-3.5 w-3.5 xl:mr-1.5" />
+                          <span className="hidden xl:inline">
+                            {session.prNumber
+                              ? `PR #${session.prNumber}`
+                              : "View PR"}
+                          </span>
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {prDeploymentUrl
+                      ? isDeploymentStale
+                        ? "Preview deployment is updating"
+                        : "Open preview deployment"
+                      : session.prNumber
+                        ? `Open PR #${session.prNumber}`
+                        : "Open pull request"}
+                  </TooltipContent>
+                </Tooltip>
+                {prDeploymentUrl && existingPrUrl && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="hidden h-7 px-2.5 xl:inline-flex"
+                        onClick={openExistingPr}
+                      >
+                        <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+                        {session.prNumber
+                          ? `PR #${session.prNumber}`
+                          : "View PR"}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Open pull request
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </>
+            )}
+            {canRunDevServer && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => void codeEditor.handleOpen()}
+                      disabled={
+                        codeEditor.state.status === "starting" ||
+                        codeEditor.state.status === "stopping"
+                      }
+                    >
+                      {codeEditor.state.status === "starting" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Code2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {codeEditor.menuLabel}
+                  </TooltipContent>
+                </Tooltip>
+                {/* Dev server — fixed h-7 wrapper prevents layout shift */}
+                <div className="flex h-7 items-center">
+                  {devServer.state.status === "ready" ? (
+                    <div className="flex items-center rounded-md border border-border px-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handlePrimaryAction()}
+                          >
+                            <Globe className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Open dev server
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handleStopAction()}
+                          >
+                            <Square className="h-2.5 w-2.5 fill-current" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Stop dev server
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  ) : devServer.state.status === "starting" ||
+                    devServer.state.status === "stopping" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled
+                        >
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {devServer.state.status === "starting"
+                          ? "Starting dev server..."
+                          : "Stopping dev server..."}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : (
-                    <Code2 className="h-3.5 w-3.5" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => void devServer.handlePrimaryAction()}
+                        >
+                          <Play className="h-3.5 w-3.5 fill-current" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Start dev server
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {codeEditor.menuLabel}
-              </TooltipContent>
-            </Tooltip>
-            {/* Dev server — fixed h-7 wrapper prevents layout shift */}
-            <div className="flex h-7 items-center">
-              {devServer.state.status === "ready" ? (
-                <div className="flex items-center rounded-md border border-border px-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handlePrimaryAction()}
-                      >
-                        <Globe className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Open dev server
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handleStopAction()}
-                      >
-                        <Square className="h-2.5 w-2.5 fill-current" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Stop dev server
-                    </TooltipContent>
-                  </Tooltip>
                 </div>
-              ) : devServer.state.status === "starting" ||
-                devServer.state.status === "stopping" ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled
-                    >
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {devServer.state.status === "starting"
-                      ? "Starting dev server..."
-                      : "Stopping dev server..."}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void devServer.handlePrimaryAction()}
-                    >
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    Start dev server
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </>,
+              </>
+            )}
+          </div>,
           headerActionsRef.current,
         )}
       <div className="flex h-full flex-col overflow-hidden">
@@ -3221,6 +3301,21 @@ export function SessionChatContent({
                                           })
                                         }
                                       />
+                                    </div>
+                                  );
+                                }
+
+                                if (isGitDataPart(p)) {
+                                  if (!shouldRenderGitDataPart(p)) {
+                                    return null;
+                                  }
+
+                                  return (
+                                    <div
+                                      key={`${m.id}-${group.renderKey}`}
+                                      className="max-w-full"
+                                    >
+                                      <GitDataPartCard part={p} />
                                     </div>
                                   );
                                 }

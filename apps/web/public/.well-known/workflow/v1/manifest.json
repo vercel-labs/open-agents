@@ -6,6 +6,17 @@
         "stepId": "step//workflow@4.2.0-beta.74//fetch"
       }
     },
+    "app/workflows/sandbox-lifecycle.ts": {
+      "clearLifecycleRunIdIfOwned": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
+      },
+      "computeLifecycleWakeDecision": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//computeLifecycleWakeDecision"
+      },
+      "runLifecycleEvaluation": {
+        "stepId": "step//./app/workflows/sandbox-lifecycle//runLifecycleEvaluation"
+      }
+    },
     "node_modules/workflow/dist/internal/builtins.js": {
       "__builtin_response_array_buffer": {
         "stepId": "__builtin_response_array_buffer"
@@ -59,59 +70,18 @@
       "runAgentStep": {
         "stepId": "step//./app/workflows/chat//runAgentStep"
       },
+      "sendDataPart": {
+        "stepId": "step//./app/workflows/chat//sendDataPart"
+      },
       "sendFinish": {
         "stepId": "step//./app/workflows/chat//sendFinish"
       },
       "sendStart": {
         "stepId": "step//./app/workflows/chat//sendStart"
       }
-    },
-    "app/workflows/sandbox-lifecycle.ts": {
-      "clearLifecycleRunIdIfOwned": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
-      },
-      "computeLifecycleWakeDecision": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//computeLifecycleWakeDecision"
-      },
-      "runLifecycleEvaluation": {
-        "stepId": "step//./app/workflows/sandbox-lifecycle//runLifecycleEvaluation"
-      }
     }
   },
   "workflows": {
-    "app/workflows/chat.ts": {
-      "runAgentWorkflow": {
-        "workflowId": "workflow//./app/workflows/chat//runAgentWorkflow",
-        "graph": {
-          "nodes": [
-            {
-              "id": "start",
-              "type": "workflowStart",
-              "data": {
-                "label": "Start: runAgentWorkflow",
-                "nodeKind": "workflow_start"
-              }
-            },
-            {
-              "id": "end",
-              "type": "workflowEnd",
-              "data": {
-                "label": "Return",
-                "nodeKind": "workflow_end"
-              }
-            }
-          ],
-          "edges": [
-            {
-              "id": "e_start_end",
-              "source": "start",
-              "target": "end",
-              "type": "default"
-            }
-          ]
-        }
-      }
-    },
     "app/workflows/sandbox-lifecycle.ts": {
       "sandboxLifecycleWorkflow": {
         "workflowId": "workflow//./app/workflows/sandbox-lifecycle//sandboxLifecycleWorkflow",
@@ -161,6 +131,39 @@
             {
               "id": "e_node_0_end",
               "source": "node_0",
+              "target": "end",
+              "type": "default"
+            }
+          ]
+        }
+      }
+    },
+    "app/workflows/chat.ts": {
+      "runAgentWorkflow": {
+        "workflowId": "workflow//./app/workflows/chat//runAgentWorkflow",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "workflowStart",
+              "data": {
+                "label": "Start: runAgentWorkflow",
+                "nodeKind": "workflow_start"
+              }
+            },
+            {
+              "id": "end",
+              "type": "workflowEnd",
+              "data": {
+                "label": "Return",
+                "nodeKind": "workflow_end"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e_start_end",
+              "source": "start",
               "target": "end",
               "type": "default"
             }
