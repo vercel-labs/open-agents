@@ -58,7 +58,7 @@ import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { QuestionPanel } from "@/components/question-panel";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
-import { SnippetChip as _SnippetChip } from "@/components/snippet-chip";
+import { SnippetChip } from "@/components/snippet-chip";
 import { AssistantMessageGroups } from "@/components/assistant-message-groups";
 import {
   PinnedTodoPanel,
@@ -3242,6 +3242,55 @@ export function SessionChatContent({
                                           src={p.url}
                                           alt={p.filename ?? "Attached image"}
                                           className="max-h-64 rounded-lg"
+                                        />
+                                        {m.role === "user" &&
+                                          group.index === 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                void handleDeleteUserMessage(
+                                                  m.id,
+                                                )
+                                              }
+                                              disabled={
+                                                hasMessageActionInFlight
+                                              }
+                                              aria-label="Delete this message and everything after it"
+                                              className="absolute -left-10 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                              {deletingMessageId === m.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                              ) : (
+                                                <Trash2 className="h-4 w-4" />
+                                              )}
+                                            </button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                if (p.type === "data-snippet") {
+                                  if (
+                                    !isToolCallsExpanded &&
+                                    m.role === "assistant"
+                                  ) {
+                                    return null;
+                                  }
+                                  return (
+                                    <div
+                                      key={`${m.id}-${group.renderKey}`}
+                                      className={cn(
+                                        "flex",
+                                        m.role === "user"
+                                          ? "justify-end"
+                                          : "justify-start",
+                                      )}
+                                    >
+                                      <div className="group relative w-fit max-w-[80%]">
+                                        <SnippetChip
+                                          filename={p.data.filename}
+                                          content={p.data.content}
                                         />
                                         {m.role === "user" &&
                                           group.index === 0 && (
