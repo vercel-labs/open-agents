@@ -3037,11 +3037,7 @@ export function SessionChatContent({
                             const renderGroups = (
                               isToolCallsExpanded: boolean,
                             ) =>
-                              groups.map((group, groupRenderIndex) => {
-                                const previousGroup =
-                                  groupRenderIndex > 0
-                                    ? groups[groupRenderIndex - 1]
-                                    : null;
+                              groups.map((group) => {
                                 if (group.type === "reasoning-group") {
                                   if (!isToolCallsExpanded) return null;
                                   const hasRenderableContentAfterGroup = m.parts
@@ -3353,10 +3349,6 @@ export function SessionChatContent({
                                   ) {
                                     return null;
                                   }
-                                  const followsUserTextPart =
-                                    m.role === "user" &&
-                                    previousGroup?.type === "part" &&
-                                    previousGroup.part.type === "text";
                                   return (
                                     <div
                                       key={`${m.id}-${group.renderKey}`}
@@ -3365,7 +3357,6 @@ export function SessionChatContent({
                                         m.role === "user"
                                           ? "justify-end"
                                           : "justify-start",
-                                        followsUserTextPart && "-mt-2",
                                       )}
                                     >
                                       <div className="group relative w-fit max-w-[80%]">
@@ -3426,7 +3417,11 @@ export function SessionChatContent({
                               );
                             }
 
-                            return renderGroups(true);
+                            return (
+                              <div key={m.id} className="flex flex-col gap-1">
+                                {renderGroups(true)}
+                              </div>
+                            );
                           },
                         )}
                         {showThinkingIndicator && (
