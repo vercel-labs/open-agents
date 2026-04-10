@@ -131,7 +131,6 @@ import "streamdown/styles.css";
 
 /** Minimum interval between textarea-focus activity pings (5 minutes). */
 const ACTIVITY_PING_THROTTLE_MS = 5 * 60 * 1000;
-const COMMIT_PENDING_RENDER_DELAY_MS = 400;
 
 const DiffViewer = dynamic(
   () => import("./diff-viewer").then((m) => m.DiffViewer),
@@ -242,27 +241,6 @@ function GitDataPartCard({
   const isPending = status === "pending";
   const isSuccess = status === "success";
   const isError = status === "error";
-  const [showPendingCommit, setShowPendingCommit] = useState(
-    !isCommit || !isPending,
-  );
-
-  useEffect(() => {
-    if (!isCommit || !isPending) {
-      setShowPendingCommit(true);
-      return;
-    }
-
-    setShowPendingCommit(false);
-    const timeout = setTimeout(() => {
-      setShowPendingCommit(true);
-    }, COMMIT_PENDING_RENDER_DELAY_MS);
-
-    return () => clearTimeout(timeout);
-  }, [isCommit, isPending, part.id]);
-
-  if (isCommit && isPending && !showPendingCommit) {
-    return null;
-  }
 
   const url = part.data.url;
 
