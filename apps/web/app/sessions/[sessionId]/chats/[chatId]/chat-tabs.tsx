@@ -1,5 +1,6 @@
 "use client";
 
+import { useParams, useRouter } from "next/navigation";
 import { GitCompare, Pencil, Plus, X } from "lucide-react";
 import {
   type ReactNode,
@@ -32,6 +33,9 @@ type ChatTabsProps = {
 };
 
 export function ChatTabs({ activeChatId }: ChatTabsProps) {
+  const router = useRouter();
+  const params = useParams<{ sessionId?: string }>();
+  const sessionId = params.sessionId ?? "";
   const { chats, createChat, switchChat, deleteChat, renameChat } =
     useSessionLayout();
   const {
@@ -48,6 +52,24 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prefetchedChatHrefsRef = useRef(new Set<string>());
+
+  const prefetchChat = useCallback(
+    (chatId: string) => {
+      if (!sessionId) {
+        return;
+      }
+
+      const href = `/sessions/${sessionId}/chats/${chatId}`;
+      if (prefetchedChatHrefsRef.current.has(href)) {
+        return;
+      }
+
+      prefetchedChatHrefsRef.current.add(href);
+      router.prefetch(href);
+    },
+    [router, sessionId],
+  );
 
   // Track the position where the Changes tab should appear in the tab list.
   // When a diff file is first opened, record the current chat count so the
@@ -204,6 +226,8 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
           ) : (
             <button
               type="button"
+              onMouseEnter={() => prefetchChat(chat.id)}
+              onFocus={() => prefetchChat(chat.id)}
               onClick={() => {
                 if (chat.id !== activeChatId) {
                   switchChat(chat.id);
@@ -268,6 +292,7 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     handleStartRename,
     insertAt,
     renamingChatId,
+    prefetchChat,
     renameValue,
     setActiveView,
     showChangesTab,

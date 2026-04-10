@@ -94,12 +94,24 @@ export function SessionsRouteShell({
 
   const handleSessionClick = useCallback(
     (targetSession: SessionWithUnread) => {
+      if (targetSession.id === (optimisticActiveSessionId ?? routeSessionId)) {
+        return;
+      }
+
+      const href = getSessionHref(targetSession);
+      prefetchedSessionHrefsRef.current.add(href);
       setOptimisticActiveSessionId(targetSession.id);
       startNavigationTransition(() => {
-        router.push(getSessionHref(targetSession));
+        router.push(href, { scroll: false });
       });
     },
-    [getSessionHref, router, startNavigationTransition],
+    [
+      getSessionHref,
+      optimisticActiveSessionId,
+      routeSessionId,
+      router,
+      startNavigationTransition,
+    ],
   );
 
   const handleSessionPrefetch = useCallback(
@@ -115,6 +127,24 @@ export function SessionsRouteShell({
     [getSessionHref, router],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const session of sessions.slice(0, 6)) {
+        const href = getSessionHref(session);
+        if (prefetchedSessionHrefsRef.current.has(href)) {
+          continue;
+        }
+
+        prefetchedSessionHrefsRef.current.add(href);
+        router.prefetch(href);
+      }
+    }, 150);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [getSessionHref, router, sessions]);
+
   const handleRenameSession = useCallback(
     async (targetSessionId: string, title: string) => {
       await renameSession(targetSessionId, title);
@@ -129,7 +159,7 @@ export function SessionsRouteShell({
       if (targetSessionId === routeSessionId) {
         setOptimisticActiveSessionId(null);
         startNavigationTransition(() => {
-          router.push("/sessions");
+          router.push("/sessions", { scroll: false });
         });
       }
     },
@@ -148,7 +178,9 @@ export function SessionsRouteShell({
           autoCommitPush: preferences?.autoCommitPush ?? false,
           autoCreatePr: preferences?.autoCreatePr ?? false,
         });
-        router.push(`/sessions/${created.id}/chats/${chat.id}`);
+        router.push(`/sessions/${created.id}/chats/${chat.id}`, {
+          scroll: false,
+        });
       } catch (error) {
         console.error("Failed to create session for repo:", error);
       }
@@ -169,7 +201,9 @@ export function SessionsRouteShell({
           autoCommitPush: preferences?.autoCommitPush ?? false,
           autoCreatePr: preferences?.autoCreatePr ?? false,
         });
-        router.push(`/sessions/${created.id}/chats/${chat.id}`);
+        router.push(`/sessions/${created.id}/chats/${chat.id}`, {
+          scroll: false,
+        });
       } catch (error) {
         console.error("Failed to create session from branch:", error);
       }
