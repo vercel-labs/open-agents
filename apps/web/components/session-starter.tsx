@@ -63,9 +63,10 @@ export function SessionStarter({
   >(undefined);
 
   const { session, loading: sessionLoading, hasGitHub } = useSession();
-  const { reconnectRequired } = useGitHubConnectionStatus({
-    enabled: hasGitHub,
-  });
+  const { reconnectRequired, isLoading: githubConnectionLoading } =
+    useGitHubConnectionStatus({
+      enabled: hasGitHub,
+    });
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const defaultAutoCreatePr = preferences?.autoCreatePr ?? false;
@@ -78,6 +79,8 @@ export function SessionStarter({
 
   const shouldLoadVercelProjects =
     mode === "repo" &&
+    !githubConnectionLoading &&
+    !reconnectRequired &&
     !!selectedOwner &&
     !!selectedRepo &&
     session?.authProvider === "vercel";
@@ -152,7 +155,7 @@ export function SessionStarter({
   const controlsDisabled = isLoading || preferencesLoading;
   const isSubmitDisabled =
     controlsDisabled ||
-    (mode === "repo" && reconnectRequired) ||
+    (mode === "repo" && (githubConnectionLoading || reconnectRequired)) ||
     !isRepoSelectionComplete ||
     isVercelLookupPending ||
     requiresVercelChoice;
@@ -160,6 +163,7 @@ export function SessionStarter({
   const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
   const showVercelProjectSection =
     mode === "repo" &&
+    !githubConnectionLoading &&
     !reconnectRequired &&
     !!selectedOwner &&
     !!selectedRepo &&
@@ -249,15 +253,18 @@ export function SessionStarter({
               selectedRepo={selectedRepo}
               onSelect={handleRepoSelect}
             />
-            {selectedOwner && selectedRepo && !reconnectRequired && (
-              <BranchSelectorCompact
-                owner={selectedOwner}
-                repo={selectedRepo}
-                value={selectedBranch}
-                isNewBranch={isNewBranch}
-                onChange={handleBranchChange}
-              />
-            )}
+            {selectedOwner &&
+              selectedRepo &&
+              !githubConnectionLoading &&
+              !reconnectRequired && (
+                <BranchSelectorCompact
+                  owner={selectedOwner}
+                  repo={selectedRepo}
+                  value={selectedBranch}
+                  isNewBranch={isNewBranch}
+                  onChange={handleBranchChange}
+                />
+              )}
 
             {showVercelProjectSection && (
               <SessionStarterVercelSyncSection
