@@ -2,17 +2,20 @@
 
 import {
   AlertCircle,
+  Check,
   ChevronDown,
   ExternalLink,
   Loader2,
   RefreshCw,
+  TriangleAlert,
+  X,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -174,44 +177,64 @@ export function AccountsSectionSkeleton() {
   );
 }
 
+// ── Install status badge ───────────────────────────────────────────────────
+
+function InstallBadge({
+  status,
+  repositorySelection,
+}: {
+  status: "installed" | "not_installed";
+  repositorySelection: "all" | "selected" | null;
+}) {
+  if (status === "installed" && repositorySelection === "all") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
+        <Check className="size-2.5" />
+        All Repositories
+      </span>
+    );
+  }
+  if (status === "installed") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
+        <TriangleAlert className="size-2.5" />
+        Select Repositories
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-red-600 dark:text-red-400">
+      <X className="size-2.5" />
+      Not Installed
+    </span>
+  );
+}
+
 // ── Org row ────────────────────────────────────────────────────────────────
 
 function OrgRow({ org }: { org: OrgInstallStatus }) {
   const isInstalled = org.installStatus === "installed";
-  // GitHub CDN avatar works for any org by login, even without an avatar_url
+  // Use login-based GitHub avatar which always works, even for DB-only entries
   const avatarSrc =
-    org.avatarUrl ||
-    (org.githubId
-      ? `https://avatars.githubusercontent.com/u/${org.githubId}?s=40&v=4`
-      : "");
+    org.avatarUrl || `https://avatars.githubusercontent.com/${org.login}?s=40&v=4`;
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
       <div className="flex items-center gap-2 min-w-0">
-        {avatarSrc ? (
-          <Image
-            src={avatarSrc}
-            alt={org.login}
-            width={20}
-            height={20}
-            className="h-5 w-5 rounded-full"
-          />
-        ) : (
-          <div className="h-5 w-5 rounded-full bg-muted" />
-        )}
+        <Avatar className="size-5 rounded-sm text-[8px]">
+          <AvatarImage src={avatarSrc} alt={org.login} />
+          <AvatarFallback className="rounded-sm text-[8px]">
+            {org.login.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
         <span className="text-xs font-medium truncate">{org.login}</span>
-        {isInstalled ? (
-          <span className="inline-flex shrink-0 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
-            {org.repositorySelection === "all" ? "all repos" : "selected repos"}
-          </span>
-        ) : (
-          <span className="inline-flex shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
-            not installed
-          </span>
-        )}
       </div>
 
-      <div className="shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
+        <InstallBadge
+          status={org.installStatus}
+          repositorySelection={org.repositorySelection}
+        />
         {isInstalled && org.installationUrl ? (
           <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" asChild>
             <Link href={org.installationUrl} target="_blank" rel="noreferrer">
@@ -412,39 +435,22 @@ function ConnectedState({
       {/* ── User identity ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          {data.user.avatarUrl ? (
-            <Image
-              src={data.user.avatarUrl}
-              alt={data.user.login}
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-full"
-            />
-          ) : (
-            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-              <GitHubIcon className="h-5 w-5 text-muted-foreground" />
-            </div>
-          )}
+          <Avatar className="size-9 rounded-sm">
+            <AvatarImage src={data.user.avatarUrl} alt={data.user.login} />
+            <AvatarFallback className="rounded-sm">
+              {data.user.login.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">{data.user.login}</p>
-            <p className="text-xs text-muted-foreground">
-              {tokenExpired ? (
+            {tokenExpired && (
+              <p className="text-xs">
                 <span className="inline-flex items-center gap-1 text-amber-500">
                   <AlertCircle className="size-3" />
                   Session expired
                 </span>
-              ) : data.personalInstallStatus === "installed" ? (
-                <span className="inline-flex rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
-                  {data.personalRepositorySelection === "all"
-                    ? "all repos"
-                    : "selected repos"}
-                </span>
-              ) : (
-                <span className="inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
-                  not installed
-                </span>
-              )}
-            </p>
+              </p>
+            )}
           </div>
         </div>
 
@@ -460,6 +466,12 @@ function ConnectedState({
             </Button>
           ) : (
             <>
+              {!tokenExpired && (
+                <InstallBadge
+                  status={data.personalInstallStatus}
+                  repositorySelection={data.personalRepositorySelection}
+                />
+              )}
               {data.personalInstallationUrl && (
                 <Button
                   variant="ghost"
@@ -519,11 +531,11 @@ function ConnectedState({
               ))}
 
               {/* Add organization */}
-              <div className="pt-2.5">
+              <div className="flex items-center py-1.5">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-xs text-muted-foreground"
+                  className="h-6 text-[11px] px-2 text-muted-foreground"
                   onClick={startGitHubInstallFromSettings}
                 >
                   + Add an organization
