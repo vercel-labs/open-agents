@@ -77,11 +77,22 @@ export function SessionHeader() {
   }, [session.prNumber, session.prStatus, changesCount, hasActionNeeded]);
 
   const openGitPanel = useCallback(() => {
-    if (session.prNumber) {
-      setGitPanelTab("pr");
-    }
+    const defaultTab = session.prNumber
+      ? "pr"
+      : hasActionNeeded || hasCommittedChanges || changesCount > 0
+        ? "diff"
+        : "files";
+
+    setGitPanelTab(defaultTab);
     setGitPanelOpen(true);
-  }, [session.prNumber, setGitPanelOpen, setGitPanelTab]);
+  }, [
+    session.prNumber,
+    hasActionNeeded,
+    hasCommittedChanges,
+    changesCount,
+    setGitPanelOpen,
+    setGitPanelTab,
+  ]);
 
   const handleGitPanelToggle = useCallback(() => {
     if (gitPanelOpen) {
