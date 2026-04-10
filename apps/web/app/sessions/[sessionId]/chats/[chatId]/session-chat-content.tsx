@@ -22,7 +22,6 @@ import {
   Link2,
   Loader2,
   Mic,
-  Paperclip,
   Play,
   RefreshCw,
   RotateCcw,
@@ -62,7 +61,7 @@ import {
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
-import { McpSessionPicker } from "@/components/mcp-session-picker";
+import { ComposerAttachMenu } from "@/components/composer-attach-menu";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
 import { useInlineQuestion } from "@/components/inline-question-input";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
@@ -4084,18 +4083,16 @@ export function SessionChatContent({
                         </div>
 
                         {/* Bottom toolbar */}
-                        <div className="flex items-center justify-between gap-2 px-3 pb-2">
-                          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={openFilePicker}
+                        <div className="flex items-center justify-between px-3 pb-2">
+                          <div className="flex items-center gap-2">
+                            <ComposerAttachMenu
+                              sessionId={session.id}
+                              enabledMcpConnectionIds={
+                                session.enabledMcpConnectionIds ?? []
+                              }
+                              onUploadFile={openFilePicker}
                               disabled={isArchived}
-                              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
-                            >
-                              <Paperclip className="h-4 w-4" />
-                            </Button>
+                            />
                             {renderMessages.length === 0 && chatInfo.modelId ? (
                               <div
                                 className={
@@ -4161,12 +4158,6 @@ export function SessionChatContent({
                               }
                               contextLimit={
                                 contextLimit ?? DEFAULT_CONTEXT_LIMIT
-                              }
-                            />
-                            <McpSessionPicker
-                              sessionId={session.id}
-                              enabledMcpConnectionIds={
-                                session.enabledMcpConnectionIds ?? []
                               }
                             />
                           </div>

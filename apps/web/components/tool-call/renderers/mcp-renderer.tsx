@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import { Globe } from "lucide-react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { McpProviderIcon } from "@/components/mcp-icons";
 import { ToolLayout } from "../tool-layout";
@@ -95,10 +97,10 @@ function getProviderIcon(provider: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Format MCP output content
+// Extract text content from MCP output
 // ---------------------------------------------------------------------------
 
-function formatMcpOutput(output: unknown): string | null {
+function extractOutputText(output: unknown): string | null {
   if (output == null) return null;
 
   // MCP CallToolResult has a `content` array
@@ -122,6 +124,220 @@ function formatMcpOutput(output: unknown): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Search result types & parsing
+// ---------------------------------------------------------------------------
+
+interface SearchResult {
+  title: string;
+  url: string;
+  type: string;
+  highlight?: string;
+  timestamp?: string;
+  id?: string;
+}
+
+function tryParseSearchResults(
+  output: unknown,
+): { results: SearchResult[] } | null {
+  const text = extractOutputText(output);
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (
+      parsed?.results &&
+      Array.isArray(parsed.results) &&
+      parsed.results.length > 0
+    ) {
+      const first = parsed.results[0] as Record<string, unknown>;
+      if (first.title && first.url) {
+        return { results: parsed.results as SearchResult[] };
+      }
+    }
+  } catch {
+    // not JSON or not search results
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Source type SVG logos
+// ---------------------------------------------------------------------------
+
+function LinearLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="none">
+      <path
+        fill="#5E6AD2"
+        d="M1.225 61.523c-.222-.949.908-1.546 1.597-.857l36.512 36.512c.69.69.092 1.82-.857 1.597-18.425-4.323-32.93-18.827-37.252-37.252ZM.002 46.889a.99.99 0 0 0 .29.76L52.35 99.71c.201.2.478.307.76.29 2.37-.149 4.695-.46 6.963-.927.765-.157 1.03-1.096.478-1.648L2.576 39.448c-.552-.551-1.491-.286-1.648.479a50.067 50.067 0 0 0-.926 6.962ZM4.21 29.705a.988.988 0 0 0 .208 1.1l64.776 64.776c.289.29.726.375 1.1.208a49.908 49.908 0 0 0 5.185-2.684.981.981 0 0 0 .183-1.54L8.436 24.336a.981.981 0 0 0-1.541.183 49.896 49.896 0 0 0-2.684 5.185Zm8.448-11.631a.986.986 0 0 1-.045-1.354C21.78 6.46 35.111 0 49.952 0 77.592 0 100 22.407 100 50.048c0 14.84-6.46 28.172-16.72 37.338a.986.986 0 0 1-1.354-.045L12.659 18.074Z"
+      />
+    </svg>
+  );
+}
+
+function SlackLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 2447.6 2452.5">
+      <g clipRule="evenodd" fillRule="evenodd">
+        <path
+          d="m897.4 0c-135.3.1-244.8 109.9-244.7 245.2-.1 135.3 109.5 245.1 244.8 245.2h244.8v-245.1c.1-135.3-109.5-245.1-244.9-245.3.1 0 .1 0 0 0m0 654h-652.6c-135.3.1-244.9 109.9-244.8 245.2-.2 135.3 109.4 245.1 244.7 245.3h652.7c135.3-.1 244.9-109.9 244.8-245.2.1-135.4-109.5-245.2-244.8-245.3z"
+          fill="#36c5f0"
+        />
+        <path
+          d="m2447.6 899.2c.1-135.3-109.5-245.1-244.8-245.2-135.3.1-244.9 109.9-244.8 245.2v245.3h244.8c135.3-.1 244.9-109.9 244.8-245.3zm-652.7 0v-654c.1-135.2-109.4-245-244.7-245.2-135.3.1-244.9 109.9-244.8 245.2v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.3z"
+          fill="#2eb67d"
+        />
+        <path
+          d="m1550.1 2452.5c135.3-.1 244.9-109.9 244.8-245.2.1-135.3-109.5-245.1-244.8-245.2h-244.8v245.2c-.1 135.2 109.5 245 244.8 245.2zm0-654.1h652.7c135.3-.1 244.9-109.9 244.8-245.2.2-135.3-109.4-245.1-244.7-245.3h-652.7c-135.3.1-244.9 109.9-244.8 245.2-.1 135.4 109.4 245.2 244.7 245.3z"
+          fill="#ecb22e"
+        />
+        <path
+          d="m0 1553.2c-.1 135.3 109.5 245.1 244.8 245.2 135.3-.1 244.9-109.9 244.8-245.2v-245.2h-244.8c-135.3.1-244.9 109.9-244.8 245.2zm652.7 0v654c-.2 135.3 109.4 245.1 244.7 245.3 135.3-.1 244.9-109.9 244.8-245.2v-653.9c.2-135.3-109.4-245.1-244.7-245.3-135.4 0-244.9 109.8-244.8 245.1 0 0 0 .1 0 0"
+          fill="#e01e5a"
+        />
+      </g>
+    </svg>
+  );
+}
+
+function SalesforceLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox=".5 .5 999 699.242">
+      <path
+        fill="#00A1E0"
+        d="M416.224 76.763c32.219-33.57 77.074-54.391 126.682-54.391 65.946 0 123.48 36.772 154.12 91.361 26.626-11.896 56.098-18.514 87.106-18.514 118.94 0 215.368 97.268 215.368 217.247 0 119.993-96.428 217.261-215.368 217.261a213.735 213.735 0 0 1-42.422-4.227c-26.981 48.128-78.397 80.646-137.412 80.646-24.705 0-48.072-5.706-68.877-15.853-27.352 64.337-91.077 109.448-165.348 109.448-77.344 0-143.261-48.939-168.563-117.574-11.057 2.348-22.513 3.572-34.268 3.572C75.155 585.74.5 510.317.5 417.262c0-62.359 33.542-116.807 83.378-145.937-10.26-23.608-15.967-49.665-15.967-77.06C67.911 87.25 154.79.5 261.948.5c62.914 0 118.827 29.913 154.276 76.263"
+      />
+    </svg>
+  );
+}
+
+function NotionLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="none">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M61.35 0.227l-55.333 4.087C1.553 4.7 0 7.617 0 11.113v60.66c0 2.723 0.967 5.053 3.3 8.167l13.007 16.913c2.137 2.723 4.08 3.307 8.16 3.113l64.257-3.89c5.433-.387 6.99-2.917 6.99-7.193V20.64c0-2.21-.873-2.847-3.443-4.733L74.167 3.143c-4.273-3.107-6.02-3.5-12.817-2.917zM25.92 19.523c-5.247.353-6.437.433-9.417-1.99L8.927 11.507c-.77-.78-.383-1.753 1.557-1.947l53.193-3.887c4.467-.39 6.793 1.167 8.54 2.527l9.123 6.61c.39.197 1.36 1.36.193 1.36l-54.933 3.307-.68.047zM19.803 88.3V30.367c0-2.53.777-3.697 3.103-3.893L86 22.78c2.14-.193 3.107 1.167 3.107 3.693v57.547c0 2.53-.39 4.67-3.883 4.863l-60.377 3.5c-3.493.193-5.043-.97-5.043-4.083zm59.6-54.827c.387 1.75 0 3.5-1.75 3.7l-2.91.577v42.773c-2.527 1.36-4.853 2.137-6.797 2.137-3.107 0-3.883-.973-6.21-3.887l-19.03-29.94v28.967l6.02 1.363s0 3.5-4.857 3.5l-13.39.777c-.39-.78 0-2.723 1.357-3.11l3.497-.97v-38.3L30.48 40.667c-.39-1.75.58-4.277 3.3-4.473l14.367-.967 19.8 30.327v-26.83l-5.047-.58c-.39-2.143 1.163-3.7 3.103-3.89l13.4-.78z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function GitHubLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
+    </svg>
+  );
+}
+
+function GoogleLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function JiraLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="#0052CC">
+      <path d="M11.571 11.513H0a5.218 5.218 0 005.232 5.215h2.13v2.057A5.215 5.215 0 0012.575 24V12.518a1.005 1.005 0 00-1.005-1.005z" />
+      <path
+        d="M6.348 6.257H.015a5.218 5.218 0 005.232 5.215h2.13v2.057a5.215 5.215 0 005.215 5.215V7.262a1.005 1.005 0 00-1.005-1.005z"
+        opacity=".65"
+      />
+      <path
+        d="M1.125 1H11.57A5.218 5.218 0 006.34 6.215h-2.13v2.057A5.215 5.215 0 01-1.005 13.49V2.005A1.005 1.005 0 01.001 1z"
+        opacity=".3"
+      />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Source type icon
+// ---------------------------------------------------------------------------
+
+function SourceTypeIcon({
+  type,
+  className = "size-3.5",
+}: {
+  type: string;
+  className?: string;
+}) {
+  switch (type) {
+    case "linear":
+      return <LinearLogo className={className} />;
+    case "slack":
+      return <SlackLogo className={className} />;
+    case "salesforce":
+      return <SalesforceLogo className={className} />;
+    case "notion":
+      return <NotionLogo className={className} />;
+    case "github":
+      return <GitHubLogo className={className} />;
+    case "google_docs":
+    case "google_drive":
+    case "google":
+      return <GoogleLogo className={className} />;
+    case "jira":
+      return <JiraLogo className={className} />;
+    default:
+      return <Globe className="size-3.5 text-muted-foreground" />;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search result item
+// ---------------------------------------------------------------------------
+
+function SearchResultItem({ result }: { result: SearchResult }) {
+  return (
+    <a
+      href={result.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/50 transition-colors"
+    >
+      <SourceTypeIcon type={result.type} className="size-4 mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-medium text-foreground truncate">
+            {result.title}
+          </span>
+          {result.timestamp && (
+            <span className="text-[10px] text-muted-foreground/60 shrink-0">
+              {result.timestamp}
+            </span>
+          )}
+        </div>
+        {result.highlight && (
+          <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
+            {result.highlight.split("\n")[0]}
+          </p>
+        )}
+      </div>
+    </a>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // McpRenderer
 // ---------------------------------------------------------------------------
 
@@ -142,14 +358,31 @@ export function McpRenderer({
 
   const rawOutput =
     part.state === "output-available" ? (part.output as unknown) : undefined;
-  const outputText = formatMcpOutput(rawOutput);
-  const hasOutput = outputText != null && outputText.length > 0;
 
-  const expandedContent = hasOutput ? (
-    <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-      {outputText}
-    </pre>
-  ) : undefined;
+  const expandedContent = useMemo(() => {
+    if (rawOutput == null) return undefined;
+
+    // Try to parse structured search results
+    const parsed = tryParseSearchResults(rawOutput);
+    if (parsed) {
+      return (
+        <div className="space-y-0.5">
+          {parsed.results.map((result, i) => (
+            <SearchResultItem key={result.id ?? i} result={result} />
+          ))}
+        </div>
+      );
+    }
+
+    // Fallback: formatted text
+    const text = extractOutputText(rawOutput);
+    if (!text || text.length === 0) return undefined;
+    return (
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border/50 bg-muted/20 px-3 py-2 font-mono text-xs leading-relaxed text-foreground/80">
+        {text}
+      </pre>
+    );
+  }, [rawOutput]);
 
   const meta = part.state === "output-available" ? "Done" : undefined;
 
