@@ -2703,6 +2703,10 @@ export function SessionChatContent({
   ]);
 
   const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
+  const previewDeploymentTargetUrl =
+    (isDeploymentStale ? buildingDeploymentUrl : null) ?? prDeploymentUrl;
+  const showHeaderActions =
+    canRunDevServer || Boolean(previewDeploymentTargetUrl);
 
   // When auto-commit lands (transitions from committing to clean), mark the
   // current preview deployment as stale so the UI shows "Deploying…" until
@@ -2892,103 +2896,143 @@ export function SessionChatContent({
 
       {/* Header actions portaled from chat-level state */}
       {headerActionsRef.current &&
-        canRunDevServer &&
+        showHeaderActions &&
         createPortal(
           <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hidden h-7 w-7 sm:inline-flex"
-                  onClick={() => void codeEditor.handleOpen()}
-                  disabled={
-                    codeEditor.state.status === "starting" ||
-                    codeEditor.state.status === "stopping"
-                  }
-                >
-                  {codeEditor.state.status === "starting" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {canRunDevServer && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden h-7 w-7 sm:inline-flex"
+                      onClick={() => void codeEditor.handleOpen()}
+                      disabled={
+                        codeEditor.state.status === "starting" ||
+                        codeEditor.state.status === "stopping"
+                      }
+                    >
+                      {codeEditor.state.status === "starting" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Code2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {codeEditor.menuLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <div className="hidden h-7 items-center sm:flex">
+                  {devServer.state.status === "ready" ? (
+                    <div className="flex items-center rounded-md border border-border px-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handlePrimaryAction()}
+                          >
+                            <Globe className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Open dev server
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handleStopAction()}
+                          >
+                            <Square className="h-2.5 w-2.5 fill-current" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Stop dev server
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  ) : devServer.state.status === "starting" ||
+                    devServer.state.status === "stopping" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled
+                        >
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {devServer.state.status === "starting"
+                          ? "Starting dev server..."
+                          : "Stopping dev server..."}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : (
-                    <Code2 className="h-3.5 w-3.5" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => void devServer.handlePrimaryAction()}
+                        >
+                          <Play className="h-3.5 w-3.5 fill-current" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Start dev server
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {codeEditor.menuLabel}
-              </TooltipContent>
-            </Tooltip>
-            <div className="hidden h-7 items-center sm:flex">
-              {devServer.state.status === "ready" ? (
-                <div className="flex items-center rounded-md border border-border px-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handlePrimaryAction()}
-                      >
-                        <Globe className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Open dev server
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handleStopAction()}
-                      >
-                        <Square className="h-2.5 w-2.5 fill-current" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Stop dev server
-                    </TooltipContent>
-                  </Tooltip>
                 </div>
-              ) : devServer.state.status === "starting" ||
-                devServer.state.status === "stopping" ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled
+              </>
+            )}
+            {previewDeploymentTargetUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="hidden h-7 w-7 sm:inline-flex"
+                  >
+                    <a
+                      href={previewDeploymentTargetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={
+                        isDeploymentStale
+                          ? "Open latest preview deployment (building)"
+                          : "Open latest preview deployment"
+                      }
                     >
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {devServer.state.status === "starting"
-                      ? "Starting dev server..."
-                      : "Stopping dev server..."}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void devServer.handlePrimaryAction()}
-                    >
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    Start dev server
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+                      <Globe
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          !isDeploymentStale && "text-green-500",
+                          isDeploymentStale && "animate-pulse text-amber-500",
+                        )}
+                      />
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {isDeploymentStale
+                    ? "Open latest preview deployment (building)"
+                    : "Open latest preview deployment"}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>,
           headerActionsRef.current,
         )}
