@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   useMemo,
   useRef,
@@ -90,6 +91,26 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const toggleGitPanel = useCallback(() => {
     setGitPanelOpen((prev) => !prev);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isGitPanelShortcut =
+        event.code === "KeyB" &&
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        !event.altKey;
+
+      if (!isGitPanelShortcut || event.repeat) {
+        return;
+      }
+
+      event.preventDefault();
+      toggleGitPanel();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleGitPanel]);
 
   const openDiffToFile = useCallback((filePath: string) => {
     setFocusedDiffFile(filePath);

@@ -171,7 +171,9 @@ export function SessionHeader() {
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{tooltipText}</TooltipContent>
+            <TooltipContent side="bottom">
+              {`${tooltipText} · ⌘⇧B / Ctrl+Shift+B`}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>
