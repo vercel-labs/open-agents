@@ -229,6 +229,7 @@ function InlineCommitPanel({
   refreshGitStatus,
   onCommitted,
   isAgentWorking,
+  baseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -236,6 +237,7 @@ function InlineCommitPanel({
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
   isAgentWorking: boolean;
+  baseBranch: string;
 }) {
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -245,7 +247,6 @@ function InlineCommitPanel({
     commitSha?: string;
     commitMessage?: string;
   } | null>(null);
-  const [baseBranch, setBaseBranch] = useState("main");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -263,16 +264,6 @@ function InlineCommitPanel({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isDetachedHead = gitStatus?.isDetachedHead ?? false;
   const needsNewBranch = displayBranch === baseBranch || isDetachedHead;
-
-  // Fetch branches on mount
-  useEffect(() => {
-    if (!session.repoOwner || !session.repoName) return;
-    void fetchRepoBranches(session.repoOwner, session.repoName)
-      .then((data) => {
-        setBaseBranch(data.defaultBranch);
-      })
-      .catch(() => {});
-  }, [session.repoOwner, session.repoName]);
 
   // Cleanup timeout
   useEffect(() => {
@@ -530,6 +521,7 @@ function InlinePrCreatePanel({
   hasUncommittedGitChanges,
   onPrDetected,
   isAgentWorking,
+  baseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -541,6 +533,7 @@ function InlinePrCreatePanel({
     prStatus: "open" | "merged" | "closed";
   }) => void;
   isAgentWorking: boolean;
+  baseBranch: string;
 }) {
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
@@ -551,7 +544,6 @@ function InlinePrCreatePanel({
     requiresManualCreation?: boolean;
     isDraft?: boolean;
   } | null>(null);
-  const [baseBranch, setBaseBranch] = useState("main");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -566,16 +558,6 @@ function InlinePrCreatePanel({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isDetachedHead = gitStatus?.isDetachedHead ?? false;
   const needsNewBranch = displayBranch === baseBranch || isDetachedHead;
-
-  // Fetch branches on mount
-  useEffect(() => {
-    if (!session.repoOwner || !session.repoName) return;
-    void fetchRepoBranches(session.repoOwner, session.repoName)
-      .then((data) => {
-        setBaseBranch(data.defaultBranch);
-      })
-      .catch(() => {});
-  }, [session.repoOwner, session.repoName]);
 
   const handleCreateBranch = async () => {
     if (!hasSandbox) return;
@@ -1472,6 +1454,27 @@ export function GitPanel(props: GitPanelProps) {
     onPrDetected,
     isAgentWorking,
   } = props;
+  const [baseBranch, setBaseBranch] = useState("main");
+
+  useEffect(() => {
+    if (!session.repoOwner || !session.repoName) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetchRepoBranches(session.repoOwner, session.repoName)
+      .then((data) => {
+        if (!cancelled) {
+          setBaseBranch(data.defaultBranch);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.repoOwner, session.repoName]);
 
   const hasDiffChanges =
     diffSummary &&
@@ -1609,6 +1612,7 @@ export function GitPanel(props: GitPanelProps) {
                     refreshGitStatus={refreshGitStatus}
                     onCommitted={onCommitted}
                     isAgentWorking={isAgentWorking}
+                    baseBranch={baseBranch}
                   />
                 </div>
               )}
@@ -1749,6 +1753,7 @@ export function GitPanel(props: GitPanelProps) {
                 hasUncommittedGitChanges={hasUncommittedGitChanges}
                 onPrDetected={onPrDetected}
                 isAgentWorking={isAgentWorking}
+                baseBranch={baseBranch}
               />
             ) : (
               <div className="text-center text-xs text-muted-foreground py-6">

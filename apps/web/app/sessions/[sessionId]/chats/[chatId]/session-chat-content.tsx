@@ -120,7 +120,6 @@ import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
 import { useCodeEditor } from "./hooks/use-code-editor";
 import { useDevServer } from "./hooks/use-dev-server";
 import { useGitPanel } from "./git-panel-context";
-import { GitPanel } from "./git-panel";
 import {
   createSandbox,
   getSandboxCreateErrorDetails,
@@ -160,6 +159,9 @@ const DiffTabView = dynamic(
   () => import("./diff-tab-view").then((m) => m.DiffTabView),
   { ssr: false },
 );
+const GitPanel = dynamic(() => import("./git-panel").then((m) => m.GitPanel), {
+  ssr: false,
+});
 
 const emptySubscribe = () => () => {};
 
@@ -881,6 +883,7 @@ export function SessionChatContent({
   const hasMounted = useHasMounted();
   const {
     activeView,
+    gitPanelOpen,
     shareRequested,
     setShareRequested,
     setHasActionNeeded,
@@ -2767,7 +2770,7 @@ export function SessionChatContent({
     [archiveSession, router, updateSessionPullRequest],
   );
 
-  const gitPanelElement = (
+  const gitPanelElement = gitPanelOpen ? (
     <GitPanel
       session={session}
       hasRepo={hasRepo}
@@ -2800,12 +2803,13 @@ export function SessionChatContent({
         void refreshGitStatus().catch(() => {});
       }}
     />
-  );
+  ) : null;
 
   return (
     <>
       {/* Git panel portaled to layout-level for full page height */}
-      {panelPortalRef.current &&
+      {gitPanelOpen &&
+        panelPortalRef.current &&
         createPortal(gitPanelElement, panelPortalRef.current)}
 
       {/* Header actions portaled from chat-level state */}
