@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTokens } from "@open-harness/shared";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import useSWR from "swr";
@@ -54,12 +55,6 @@ interface UsageResponse {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatTokens(n: number) {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
 
 function sumRows(rows: DailyUsageRow[]) {
   return rows.reduce(

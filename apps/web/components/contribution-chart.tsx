@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTokens } from "@open-harness/shared";
 import { useMemo } from "react";
 import type { DateRange } from "react-day-picker";
 import {
@@ -71,11 +72,6 @@ function formatDate(dateStr: string) {
   });
 }
 
-function formatTokens(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
 
 function formatDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

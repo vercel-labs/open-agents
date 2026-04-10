@@ -1,6 +1,7 @@
 "use client";
 
 import type { AskUserQuestionInput } from "@open-harness/agent";
+import { formatTokens } from "@open-harness/shared";
 import { isReasoningUIPart, isToolUIPart, type FileUIPart } from "ai";
 import {
   Archive,
@@ -383,12 +384,6 @@ function isSandboxValid(sandboxInfo: SandboxInfo | null): boolean {
   return Date.now() < expiresAt;
 }
 
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(1)}k`;
-  }
-  return tokens.toString();
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

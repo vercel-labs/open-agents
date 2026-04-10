@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTokens } from "@open-harness/shared";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -49,12 +50,6 @@ function buildUsagePath(range: LeaderboardRange): string {
   return `/api/usage?${query.toString()}`;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
 
 function displayModelId(modelId: string | null): string {
   if (!modelId) {

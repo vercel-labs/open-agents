@@ -1,14 +1,8 @@
+import { formatTokens } from "@open-harness/shared";
 import type { UsageInsights } from "@/lib/usage/types";
 
 interface UsageInsightsSectionProps {
   insights: UsageInsights;
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
 }
 
 function formatPercent(ratio: number): string {
