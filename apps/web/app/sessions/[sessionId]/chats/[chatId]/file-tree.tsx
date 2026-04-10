@@ -1,8 +1,9 @@
 "use client";
 
-import { ChevronRight, File, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
+import { FolderIcon, FolderOpenIcon, getFileIcon } from "@/components/file-type-icons";
 import { cn } from "@/lib/utils";
 
 type TreeNode = {
@@ -103,9 +104,9 @@ function FileTreeNode({
             )}
           />
           {isOpen ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+            <FolderOpenIcon className="h-3.5 w-3.5 shrink-0" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+            <FolderIcon className="h-3.5 w-3.5 shrink-0" />
           )}
           <span className="truncate">{node.name}</span>
         </button>
@@ -137,7 +138,7 @@ function FileTreeNode({
       )}
       style={{ paddingLeft: `${depth * 12 + 4 + 14}px` }}
     >
-      <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+      {getFileIcon(node.name, { className: "h-3.5 w-3.5 shrink-0" })}
       <span className="truncate">{node.name}</span>
     </button>
   );

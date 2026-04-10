@@ -6,6 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { getFileIcon } from "@/components/file-type-icons";
 import { useOpenFile } from "./open-file-context";
 
 function getFileName(filePath: string): string {
@@ -44,6 +45,10 @@ export function FileNamePill({
     ? "hover:border-red-500/40 hover:bg-red-500/15"
     : "hover:border-foreground/20 hover:bg-muted hover:shadow-sm hover:ring-1 hover:ring-foreground/5";
 
+  const icon = getFileIcon(fileName, {
+    className: "h-3.5 w-3.5 shrink-0 mr-1",
+  });
+
   const pill = isClickable ? (
     <button
       type="button"
@@ -56,6 +61,7 @@ export function FileNamePill({
         hoverStyles,
       )}
     >
+      {icon}
       <span className="truncate">{fileName}</span>
     </button>
   ) : (
@@ -66,6 +72,7 @@ export function FileNamePill({
         errorStyles,
       )}
     >
+      {icon}
       <span className="truncate">{fileName}</span>
     </span>
   );
