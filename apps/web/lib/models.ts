@@ -8,10 +8,14 @@ type GatewayAvailableModel = Awaited<
   ReturnType<typeof gateway.getAvailableModels>
 >["models"][number];
 
-export interface AvailableModelCost {
+export interface AvailableModelCostTier {
   input?: number;
   output?: number;
   cache_read?: number;
+}
+
+export interface AvailableModelCost extends AvailableModelCostTier {
+  context_over_200k?: AvailableModelCostTier;
 }
 
 export type AvailableModel = GatewayAvailableModel & {
@@ -38,6 +42,29 @@ export function getModelContextLimit(
   return directMatch.context_window;
 }
 
+function resolveCostTier(
+  usage: { inputTokens: number },
+  cost: AvailableModelCost | undefined,
+): AvailableModelCostTier | undefined {
+  if (!cost) {
+    return undefined;
+  }
+
+  if (
+    usage.inputTokens > 200_000 &&
+    (typeof cost.context_over_200k?.input === "number" ||
+      typeof cost.context_over_200k?.output === "number")
+  ) {
+    return {
+      input: cost.context_over_200k.input ?? cost.input,
+      output: cost.context_over_200k.output ?? cost.output,
+      cache_read: cost.context_over_200k.cache_read ?? cost.cache_read,
+    };
+  }
+
+  return cost;
+}
+
 export function estimateModelUsageCost(
   usage: {
     inputTokens: number;
@@ -46,8 +73,9 @@ export function estimateModelUsageCost(
   },
   cost: AvailableModelCost | undefined,
 ): number | undefined {
-  const inputPrice = cost?.input;
-  const outputPrice = cost?.output;
+  const costTier = resolveCostTier(usage, cost);
+  const inputPrice = costTier?.input;
+  const outputPrice = costTier?.output;
   if (typeof inputPrice !== "number" || typeof outputPrice !== "number") {
     return undefined;
   }
@@ -57,7 +85,7 @@ export function estimateModelUsageCost(
     0,
     usage.inputTokens - cachedInputTokens,
   );
-  const cacheReadPrice = cost?.cache_read ?? inputPrice;
+  const cacheReadPrice = costTier?.cache_read ?? inputPrice;
 
   return (
     (uncachedInputTokens * inputPrice) / TOKENS_PER_MILLION +

@@ -25,7 +25,9 @@ function toOptionalNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-function getModelsDevCost(value: unknown): AvailableModelCost | undefined {
+function getModelsDevCostTier(
+  value: unknown,
+): AvailableModelCost | AvailableModelCost["context_over_200k"] | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -46,6 +48,24 @@ function getModelsDevCost(value: unknown): AvailableModelCost | undefined {
     input,
     output,
     cache_read: cacheRead,
+  };
+}
+
+function getModelsDevCost(value: unknown): AvailableModelCost | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const baseCost = getModelsDevCostTier(value);
+  const contextOver200k = getModelsDevCostTier(value.context_over_200k);
+
+  if (!baseCost && !contextOver200k) {
+    return undefined;
+  }
+
+  return {
+    ...baseCost,
+    ...(contextOver200k ? { context_over_200k: contextOver200k } : {}),
   };
 }
 

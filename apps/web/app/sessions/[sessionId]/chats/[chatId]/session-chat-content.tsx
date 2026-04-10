@@ -491,6 +491,39 @@ function getConversationUsage(
   }, getUsageTotals(undefined));
 }
 
+function getConversationEstimatedCost(
+  messages: WebAgentUIMessage[],
+  modelCost: AvailableModelCost | undefined,
+): number | undefined {
+  let totalCost = 0;
+  let hasUsage = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    const usage =
+      message.metadata?.totalMessageUsage ?? message.metadata?.lastStepUsage;
+    if (!usage) {
+      continue;
+    }
+
+    const estimatedCost = estimateModelUsageCost(
+      getUsageTotals(usage),
+      modelCost,
+    );
+    if (estimatedCost === undefined) {
+      return undefined;
+    }
+
+    totalCost += estimatedCost;
+    hasUsage = true;
+  }
+
+  return hasUsage ? totalCost : undefined;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -542,15 +575,15 @@ function ContextUsageIndicator({
   conversationInputTokens,
   conversationCachedInputTokens,
   conversationOutputTokens,
+  estimatedConversationCost,
   contextLimit,
-  modelCost,
 }: {
   inputTokens: number;
   conversationInputTokens: number;
   conversationCachedInputTokens: number;
   conversationOutputTokens: number;
+  estimatedConversationCost?: number;
   contextLimit: number;
-  modelCost?: AvailableModelCost;
 }) {
   if (inputTokens === 0) {
     return null;
@@ -558,13 +591,9 @@ function ContextUsageIndicator({
 
   const percentage =
     contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
-  const estimatedCost = estimateModelUsageCost(
-    {
-      inputTokens: conversationInputTokens,
-      cachedInputTokens: conversationCachedInputTokens,
-      outputTokens: conversationOutputTokens,
-    },
-    modelCost,
+  const uncachedConversationInputTokens = Math.max(
+    0,
+    conversationInputTokens - conversationCachedInputTokens,
   );
 
   return (
@@ -596,13 +625,21 @@ function ContextUsageIndicator({
             <span>{formatTokens(conversationInputTokens)}</span>
           </div>
           <div className="flex justify-between gap-6">
+            <span className="opacity-60">Cached input</span>
+            <span>{formatTokens(conversationCachedInputTokens)}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Uncached input</span>
+            <span>{formatTokens(uncachedConversationInputTokens)}</span>
+          </div>
+          <div className="flex justify-between gap-6">
             <span className="opacity-60">Conversation output</span>
             <span>{formatTokens(conversationOutputTokens)}</span>
           </div>
-          {estimatedCost !== undefined ? (
+          {estimatedConversationCost !== undefined ? (
             <div className="flex justify-between gap-6">
               <span className="opacity-60">Est. cost</span>
-              <span>{formatUsd(estimatedCost)}</span>
+              <span>{formatUsd(estimatedConversationCost)}</span>
             </div>
           ) : null}
         </div>
@@ -2542,6 +2579,11 @@ export function SessionChatContent({
     () => getConversationUsage(renderMessages),
     [renderMessages],
   );
+  const conversationEstimatedCost = useMemo(
+    () =>
+      getConversationEstimatedCost(renderMessages, selectedModelOption?.cost),
+    [renderMessages, selectedModelOption?.cost],
+  );
 
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
@@ -4023,10 +4065,12 @@ export function SessionChatContent({
                               conversationOutputTokens={
                                 conversationUsage.outputTokens
                               }
+                              estimatedConversationCost={
+                                conversationEstimatedCost
+                              }
                               contextLimit={
                                 contextLimit ?? DEFAULT_CONTEXT_LIMIT
                               }
-                              modelCost={selectedModelOption?.cost}
                             />
                           </div>
 
