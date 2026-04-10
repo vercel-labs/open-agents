@@ -885,7 +885,6 @@ export function SessionChatContent({
     activeView,
     gitPanelOpen,
     shareRequested,
-    setGitPanelOpen,
     setShareRequested,
     setHasActionNeeded,
     setChangesCount,
@@ -2667,22 +2666,6 @@ export function SessionChatContent({
   useEffect(() => {
     setChangesCount(totalChangesCount);
   }, [totalChangesCount, setChangesCount]);
-
-  const previousChangesCountRef = useRef<number | null>(null);
-  useEffect(() => {
-    const previousChangesCount = previousChangesCountRef.current;
-    previousChangesCountRef.current = totalChangesCount;
-
-    if (totalChangesCount === 0) {
-      return;
-    }
-
-    if (previousChangesCount === totalChangesCount) {
-      return;
-    }
-
-    setGitPanelOpen(true);
-  }, [totalChangesCount, setGitPanelOpen]);
 
   // Sync the "committed changes" indicator (blue dot) — branch has committed
   // changes, no PR created yet, and no uncommitted changes to deal with
