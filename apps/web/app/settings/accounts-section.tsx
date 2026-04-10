@@ -2,10 +2,7 @@
 
 import {
   AlertCircle,
-  Building2,
-  CheckCircle2,
   ChevronDown,
-  Circle,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -181,54 +178,52 @@ export function AccountsSectionSkeleton() {
 
 function OrgRow({ org }: { org: OrgInstallStatus }) {
   const isInstalled = org.installStatus === "installed";
+  // GitHub CDN avatar works for any org by login, even without an avatar_url
+  const avatarSrc =
+    org.avatarUrl ||
+    (org.githubId
+      ? `https://avatars.githubusercontent.com/u/${org.githubId}?s=40&v=4`
+      : "");
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-      <div className="flex items-center gap-3 min-w-0">
-        {org.avatarUrl ? (
+    <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-2 min-w-0">
+        {avatarSrc ? (
           <Image
-            src={org.avatarUrl}
+            src={avatarSrc}
             alt={org.login}
-            width={28}
-            height={28}
-            className="h-7 w-7 rounded-full"
+            width={20}
+            height={20}
+            className="h-5 w-5 rounded-full"
           />
         ) : (
-          <Building2 className="h-7 w-7 text-muted-foreground p-0.5" />
+          <div className="h-5 w-5 rounded-full bg-muted" />
         )}
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{org.login}</p>
-          <p className="text-xs text-muted-foreground">
-            {isInstalled ? (
-              <span className="inline-flex items-center gap-1">
-                <CheckCircle2 className="size-3 text-green-500" />
-                {org.repositorySelection === "all"
-                  ? "All repositories"
-                  : "Selected repositories"}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1">
-                <Circle className="size-3" />
-                Not installed
-              </span>
-            )}
-          </p>
-        </div>
+        <span className="text-xs font-medium truncate">{org.login}</span>
+        {isInstalled ? (
+          <span className="inline-flex shrink-0 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
+            {org.repositorySelection === "all" ? "all repos" : "selected repos"}
+          </span>
+        ) : (
+          <span className="inline-flex shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
+            not installed
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="shrink-0">
         {isInstalled && org.installationUrl ? (
-          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+          <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" asChild>
             <Link href={org.installationUrl} target="_blank" rel="noreferrer">
               Configure
-              <ExternalLink className="ml-1 size-3" />
+              <ExternalLink className="ml-1 size-2.5" />
             </Link>
           </Button>
         ) : !isInstalled ? (
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs"
+            className="h-6 text-[11px] px-2"
             onClick={startGitHubInstallFromSettings}
           >
             Install
@@ -439,16 +434,14 @@ function ConnectedState({
                   Session expired
                 </span>
               ) : data.personalInstallStatus === "installed" ? (
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle2 className="size-3 text-green-500" />
+                <span className="inline-flex rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
                   {data.personalRepositorySelection === "all"
-                    ? "All repositories"
-                    : "Selected repositories"}
+                    ? "all repos"
+                    : "selected repos"}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1">
-                  <Circle className="size-3" />
-                  App not installed on personal account
+                <span className="inline-flex rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
+                  not installed
                 </span>
               )}
             </p>
@@ -511,14 +504,8 @@ function ConnectedState({
             className="flex w-full items-center justify-between py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <span>
-              {data.orgs.length} organization
+              Installed in {installedOrgCount}/{data.orgs.length} organization
               {data.orgs.length !== 1 ? "s" : ""}
-              {installedOrgCount > 0 && (
-                <span>
-                  {" "}
-                  · {installedOrgCount} with app installed
-                </span>
-              )}
             </span>
             <ChevronDown
               className={`size-3.5 transition-transform ${orgsExpanded ? "rotate-180" : ""}`}
