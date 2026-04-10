@@ -1504,13 +1504,19 @@ export function GitPanel(props: GitPanelProps) {
     ? buildingDeploymentUrl
     : prDeploymentUrl;
 
-  // Show the PR tab when there's a PR, or when the branch has diverged and
-  // changes are committed.  Gate on gitStatus being loaded so the tab doesn't
-  // flicker while async data resolves.
-  const showGitTab =
+  const canOpenPrTab =
     hasExistingPr ||
-    (gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
-  const showCreatePrShortcut = hasRepo && !hasExistingPr && showGitTab;
+    (hasRepo && gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
+  const prTabDisabledReason = canOpenPrTab
+    ? null
+    : !hasRepo
+      ? "Create a repo first"
+      : gitStatus === null
+        ? "Loading git status..."
+        : hasUncommittedGitChanges
+          ? "Commit your changes before creating a pull request."
+          : "Commit changes to your branch before creating a pull request.";
+  const showCreatePrShortcut = hasRepo && !hasExistingPr && canOpenPrTab;
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
   const previousGitPanelOpenRef = useRef(gitPanelOpen);
 
@@ -1521,6 +1527,12 @@ export function GitPanel(props: GitPanelProps) {
 
     previousGitPanelOpenRef.current = gitPanelOpen;
   }, [gitPanelOpen, hasUnstagedChanges, setDiffScope]);
+
+  useEffect(() => {
+    if (gitPanelTab === "pr" && prTabDisabledReason) {
+      setGitPanelTab("diff");
+    }
+  }, [gitPanelTab, prTabDisabledReason, setGitPanelTab]);
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -1595,27 +1607,50 @@ export function GitPanel(props: GitPanelProps) {
 
       {/* Tab bar — matches chat tabs sub-header height */}
       <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-[7px]">
-        {["diff" as const, ...(showGitTab ? (["pr"] as const) : [])].map(
-          (tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setGitPanelTab(tab)}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                gitPanelTab === tab
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted/50",
-              )}
-            >
-              {tab === "diff" ? "Changes" : "PR"}
-              {tab === "diff" && hasDiffChanges && (
-                <span className="ml-1 text-[10px] text-muted-foreground font-mono">
-                  {diffFiles?.length ?? 0}
-                </span>
-              )}
-            </button>
-          ),
+        <button
+          type="button"
+          onClick={() => setGitPanelTab("diff")}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+            gitPanelTab === "diff"
+              ? "bg-secondary text-secondary-foreground"
+              : "text-muted-foreground hover:bg-muted/50",
+          )}
+        >
+          Changes
+          {hasDiffChanges && (
+            <span className="ml-1 text-[10px] text-muted-foreground font-mono">
+              {diffFiles?.length ?? 0}
+            </span>
+          )}
+        </button>
+
+        {prTabDisabledReason ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-disabled="true"
+                className="cursor-not-allowed rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground opacity-50"
+              >
+                PR
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{prTabDisabledReason}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setGitPanelTab("pr")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              gitPanelTab === "pr"
+                ? "bg-secondary text-secondary-foreground"
+                : "text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            PR
+          </button>
         )}
       </div>
 
