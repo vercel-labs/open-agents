@@ -326,6 +326,7 @@ export const userPreferences = pgTable("user_preferences", {
   autoCreatePr: boolean("auto_create_pr").notNull().default(false),
   alertsEnabled: boolean("alerts_enabled").notNull().default(true),
   alertSoundEnabled: boolean("alert_sound_enabled").notNull().default(true),
+  publicUsageEnabled: boolean("public_usage_enabled").notNull().default(false),
   globalSkillRefs: jsonb("global_skill_refs")
     .$type<GlobalSkillRef[]>()
     .notNull()

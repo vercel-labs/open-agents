@@ -1,0 +1,212 @@
+import { cache } from "react";
+import { eq } from "drizzle-orm";
+import type { UsageInsights, UsageRepositoryInsight } from "@/lib/usage/types";
+import {
+  parsePublicUsageDate,
+  type PublicUsageDateSelection,
+} from "@/lib/usage/date-range";
+import { db } from "./client";
+import { userPreferences, users } from "./schema";
+import { getUsageInsights } from "./usage-insights";
+import { getUsageHistory, type DailyUsage } from "./usage";
+
+export interface PublicUsageModelSummary {
+  modelId: string;
+  provider: string;
+  label: string;
+  totalTokens: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  messageCount: number;
+  toolCallCount: number;
+}
+
+export interface PublicUsageTotals {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  messageCount: number;
+  toolCallCount: number;
+  totalTokens: number;
+}
+
+export interface PublicUsageProfile {
+  user: {
+    id: string;
+    username: string;
+    name: string | null;
+    avatarUrl: string | null;
+  };
+  dateSelection: PublicUsageDateSelection;
+  invalidDateError: string | null;
+  totals: PublicUsageTotals;
+  agentSplit: {
+    mainTokens: number;
+    subagentTokens: number;
+  };
+  topModels: PublicUsageModelSummary[];
+  topRepositories: UsageRepositoryInsight[];
+  insights: UsageInsights;
+  hasUsage: boolean;
+}
+
+export function displayModelId(modelId: string): string {
+  const slashIndex = modelId.indexOf("/");
+  return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
+}
+
+function sumRows(rows: DailyUsage[]): PublicUsageTotals {
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.inputTokens += row.inputTokens;
+      acc.cachedInputTokens += row.cachedInputTokens;
+      acc.outputTokens += row.outputTokens;
+      acc.messageCount += row.messageCount;
+      acc.toolCallCount += row.toolCallCount;
+      return acc;
+    },
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      totalTokens: 0,
+    },
+  );
+
+  totals.totalTokens = totals.inputTokens + totals.outputTokens;
+  return totals;
+}
+
+export function buildPublicUsageProfileData(params: {
+  usage: DailyUsage[];
+  insights: UsageInsights;
+}): Pick<
+  PublicUsageProfile,
+  "totals" | "agentSplit" | "topModels" | "topRepositories" | "hasUsage"
+> {
+  const modelUsage = new Map<string, PublicUsageModelSummary>();
+  let mainTokens = 0;
+  let subagentTokens = 0;
+
+  for (const row of params.usage) {
+    const rowTokens = row.inputTokens + row.outputTokens;
+
+    if (row.agentType === "main") {
+      mainTokens += rowTokens;
+    } else {
+      subagentTokens += rowTokens;
+    }
+
+    if (!row.modelId) {
+      continue;
+    }
+
+    const existing = modelUsage.get(row.modelId);
+    if (existing) {
+      existing.totalTokens += rowTokens;
+      existing.inputTokens += row.inputTokens;
+      existing.cachedInputTokens += row.cachedInputTokens;
+      existing.outputTokens += row.outputTokens;
+      existing.messageCount += row.messageCount;
+      existing.toolCallCount += row.toolCallCount;
+      continue;
+    }
+
+    modelUsage.set(row.modelId, {
+      modelId: row.modelId,
+      provider: row.provider ?? "unknown",
+      label: displayModelId(row.modelId),
+      totalTokens: rowTokens,
+      inputTokens: row.inputTokens,
+      cachedInputTokens: row.cachedInputTokens,
+      outputTokens: row.outputTokens,
+      messageCount: row.messageCount,
+      toolCallCount: row.toolCallCount,
+    });
+  }
+
+  return {
+    totals: sumRows(params.usage),
+    agentSplit: {
+      mainTokens,
+      subagentTokens,
+    },
+    topModels: [...modelUsage.values()].toSorted((a, b) => {
+      if (b.totalTokens !== a.totalTokens) {
+        return b.totalTokens - a.totalTokens;
+      }
+
+      return a.modelId.localeCompare(b.modelId);
+    }),
+    topRepositories: params.insights.topRepositories,
+    hasUsage: params.usage.length > 0,
+  };
+}
+
+const ALL_TIME_DATE_SELECTION: PublicUsageDateSelection = {
+  kind: "all",
+  value: null,
+  label: "All time",
+  range: null,
+};
+
+export const getPublicUsageProfile = cache(
+  async (
+    username: string,
+    dateValue: string | null,
+  ): Promise<PublicUsageProfile | null> => {
+    const user = await db.query.users.findFirst({
+      where: eq(users.username, username),
+      columns: {
+        id: true,
+        username: true,
+        name: true,
+        avatarUrl: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    const preferences = await db.query.userPreferences.findFirst({
+      where: eq(userPreferences.userId, user.id),
+      columns: {
+        publicUsageEnabled: true,
+      },
+    });
+
+    if (!preferences?.publicUsageEnabled) {
+      return null;
+    }
+
+    const parsedDate = parsePublicUsageDate(dateValue);
+    const dateSelection = parsedDate.ok
+      ? parsedDate.selection
+      : ALL_TIME_DATE_SELECTION;
+    const queryOptions = dateSelection.range
+      ? { range: dateSelection.range }
+      : { allTime: true };
+
+    const [usage, insights] = await Promise.all([
+      getUsageHistory(user.id, queryOptions),
+      getUsageInsights(user.id, queryOptions),
+    ]);
+    const derived = buildPublicUsageProfileData({ usage, insights });
+
+    return {
+      user,
+      dateSelection,
+      invalidDateError: parsedDate.ok ? null : parsedDate.error,
+      totals: derived.totals,
+      agentSplit: derived.agentSplit,
+      topModels: derived.topModels,
+      topRepositories: derived.topRepositories,
+      insights,
+      hasUsage: derived.hasUsage,
+    };
+  },
+);

@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "public_usage_enabled" boolean DEFAULT false NOT NULL;

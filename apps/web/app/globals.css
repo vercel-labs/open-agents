@@ -388,3 +388,51 @@
     transform: translateY(0);
   }
 }
+
+/* Wrapped profile page */
+@keyframes wrapped-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(0.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.wrapped-enter {
+  opacity: 0;
+  animation: wrapped-enter 650ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrapped-enter {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@keyframes wrapped-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.wrapped-bar-fill {
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: wrapped-bar-fill 800ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrapped-bar-fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+}

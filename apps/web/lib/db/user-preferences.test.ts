@@ -19,6 +19,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -37,6 +38,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -58,6 +60,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [],
       enabledModelIds: [],
@@ -79,6 +82,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [
         { source: "vercel/ai", skillName: "bad name" },
       ] as never,
@@ -101,6 +105,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [
         { source: "vercel/ai", skillName: "ai-sdk" },
         { source: "vercel/ai", skillName: "ai-sdk" },
@@ -126,6 +131,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: false,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [{ id: "bad-id" }] as never,
       enabledModelIds: [],
@@ -146,6 +152,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: true,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [
         {
@@ -167,6 +174,7 @@ describe("toUserPreferencesData", () => {
       autoCreatePr: true,
       alertsEnabled: true,
       alertSoundEnabled: true,
+      publicUsageEnabled: false,
       globalSkillRefs: [],
       modelVariants: [
         {
@@ -178,5 +186,26 @@ describe("toUserPreferencesData", () => {
       ],
       enabledModelIds: [],
     });
+  });
+
+  test("keeps publicUsageEnabled when provided", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultModelId: "openai/gpt-5",
+      defaultSubagentModelId: null,
+      defaultSandboxType: "vercel",
+      defaultDiffMode: "split",
+      autoCommitPush: false,
+      autoCreatePr: false,
+      alertsEnabled: true,
+      alertSoundEnabled: true,
+      publicUsageEnabled: true,
+      globalSkillRefs: [],
+      modelVariants: [],
+      enabledModelIds: [],
+    });
+
+    expect(result.publicUsageEnabled).toBe(true);
   });
 });

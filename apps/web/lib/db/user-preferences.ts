@@ -20,6 +20,7 @@ export interface UserPreferencesData {
   autoCreatePr: boolean;
   alertsEnabled: boolean;
   alertSoundEnabled: boolean;
+  publicUsageEnabled: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
   enabledModelIds: string[];
@@ -34,6 +35,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   autoCreatePr: false,
   alertsEnabled: true,
   alertSoundEnabled: true,
+  publicUsageEnabled: false,
   globalSkillRefs: [],
   modelVariants: [],
   enabledModelIds: [],
@@ -86,6 +88,7 @@ export function toUserPreferencesData(
     | "autoCreatePr"
     | "alertsEnabled"
     | "alertSoundEnabled"
+    | "publicUsageEnabled"
     | "globalSkillRefs"
     | "modelVariants"
     | "enabledModelIds"
@@ -105,6 +108,8 @@ export function toUserPreferencesData(
     alertsEnabled: row?.alertsEnabled ?? DEFAULT_PREFERENCES.alertsEnabled,
     alertSoundEnabled:
       row?.alertSoundEnabled ?? DEFAULT_PREFERENCES.alertSoundEnabled,
+    publicUsageEnabled:
+      row?.publicUsageEnabled ?? DEFAULT_PREFERENCES.publicUsageEnabled,
     globalSkillRefs: normalizeGlobalSkillRefs(row?.globalSkillRefs),
     modelVariants: parsedModelVariants.success ? parsedModelVariants.data : [],
     enabledModelIds: normalizeEnabledModelIds(row?.enabledModelIds),
@@ -171,6 +176,8 @@ export async function updateUserPreferences(
       alertsEnabled: updates.alertsEnabled ?? DEFAULT_PREFERENCES.alertsEnabled,
       alertSoundEnabled:
         updates.alertSoundEnabled ?? DEFAULT_PREFERENCES.alertSoundEnabled,
+      publicUsageEnabled:
+        updates.publicUsageEnabled ?? DEFAULT_PREFERENCES.publicUsageEnabled,
       globalSkillRefs:
         updates.globalSkillRefs ?? DEFAULT_PREFERENCES.globalSkillRefs,
       modelVariants: updates.modelVariants ?? DEFAULT_PREFERENCES.modelVariants,

@@ -32,6 +32,9 @@
       "clearActiveStream": {
         "stepId": "step//./app/workflows/chat-post-finish//clearActiveStream"
       },
+      "hasAutoCommitChangesStep": {
+        "stepId": "step//./app/workflows/chat-post-finish//hasAutoCommitChangesStep"
+      },
       "persistAssistantMessage": {
         "stepId": "step//./app/workflows/chat-post-finish//persistAssistantMessage"
       },

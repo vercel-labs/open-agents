@@ -8,9 +8,15 @@ const preferencesState = {
   defaultModelId: "anthropic/claude-haiku-4.5",
   defaultSubagentModelId: null as string | null,
   defaultSandboxType: "vercel" as const,
+  defaultDiffMode: "unified" as const,
   autoCommitPush: false,
   autoCreatePr: false,
+  alertsEnabled: true,
+  alertSoundEnabled: true,
+  publicUsageEnabled: false,
   globalSkillRefs: [] as Array<{ source: string; skillName: string }>,
+  modelVariants: [] as Array<Record<string, unknown>>,
+  enabledModelIds: [] as string[],
 };
 
 const updateCalls: Array<Record<string, unknown>> = [];
@@ -144,6 +150,35 @@ describe("/api/settings/preferences", () => {
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]).toEqual({ autoCreatePr: true });
     expect(body.preferences.autoCreatePr).toBe(true);
+  });
+
+  test("PATCH rejects invalid publicUsageEnabled values", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { publicUsageEnabled: "yes" }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid publicUsageEnabled value");
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  test("PATCH updates publicUsageEnabled when boolean is provided", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { publicUsageEnabled: true }),
+    );
+    const body = (await response.json()) as {
+      preferences: typeof preferencesState;
+    };
+
+    expect(response.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toEqual({ publicUsageEnabled: true });
+    expect(body.preferences.publicUsageEnabled).toBe(true);
   });
 
   test("PATCH rejects invalid globalSkillRefs values", async () => {

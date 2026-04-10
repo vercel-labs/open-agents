@@ -17,6 +17,7 @@ export interface UserPreferences {
   autoCreatePr: boolean;
   alertsEnabled: boolean;
   alertSoundEnabled: boolean;
+  publicUsageEnabled: boolean;
   globalSkillRefs: GlobalSkillRef[];
   modelVariants: ModelVariant[];
   enabledModelIds: string[];
