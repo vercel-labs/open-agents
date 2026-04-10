@@ -1536,18 +1536,24 @@ export function GitPanel(props: GitPanelProps) {
         ...(discardTarget ? { filePath: discardTarget.filePath } : {}),
         ...(discardTarget?.oldPath ? { oldPath: discardTarget.oldPath } : {}),
       });
-      await Promise.all([refreshDiff(), refreshGitStatus(), refreshFiles()]);
-      setDiscardDialogOpen(false);
-      setDiscardTarget(null);
     } catch (error) {
       setDiscardError(
         error instanceof Error
           ? error.message
           : "Failed to discard uncommitted changes",
       );
-    } finally {
       setIsDiscardingChanges(false);
+      return;
     }
+
+    await Promise.allSettled([
+      refreshDiff(),
+      refreshGitStatus(),
+      refreshFiles(),
+    ]);
+    setDiscardDialogOpen(false);
+    setDiscardTarget(null);
+    setIsDiscardingChanges(false);
   }, [discardTarget, refreshDiff, refreshFiles, refreshGitStatus, session.id]);
 
   useEffect(() => {

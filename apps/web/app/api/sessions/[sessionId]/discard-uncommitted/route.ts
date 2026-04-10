@@ -46,9 +46,44 @@ function isValidRepoRelativePath(value: string): boolean {
     return false;
   }
 
-  return value
-    .split("/")
-    .every((segment) => segment !== "" && segment !== "." && segment !== "..");
+  return value.split("/").every((segment) => {
+    return (
+      segment !== "" &&
+      segment !== "." &&
+      segment !== ".." &&
+      segment !== ".git"
+    );
+  });
+}
+
+async function ensurePathHasUncommittedChanges(params: {
+  cwd: string;
+  path: string;
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const { cwd, path, sandbox } = params;
+  const statusResult = await sandbox.exec(
+    `git status --porcelain=v1 -- ${shellQuote(path)}`,
+    cwd,
+    10000,
+  );
+  if (!statusResult.success) {
+    return {
+      ok: false,
+      error: toGitErrorMessage(statusResult),
+      status: 500,
+    };
+  }
+
+  if (statusResult.stdout.trim().length === 0) {
+    return {
+      ok: false,
+      error: "Path has no uncommitted changes",
+      status: 404,
+    };
+  }
+
+  return { ok: true };
 }
 
 async function discardPathChanges(params: {
@@ -193,6 +228,18 @@ export async function POST(req: Request, context: RouteContext) {
 
     if (filePath) {
       for (const targetPath of targetPaths) {
+        const statusCheck = await ensurePathHasUncommittedChanges({
+          cwd,
+          path: targetPath,
+          sandbox,
+        });
+        if (!statusCheck.ok) {
+          return Response.json(
+            { error: statusCheck.error },
+            { status: statusCheck.status },
+          );
+        }
+
         const result = await discardPathChanges({
           cwd,
           path: targetPath,

@@ -55,6 +55,10 @@ const execMock = mock(async (command: string) => {
     return successResult("abc123\n");
   }
 
+  if (command === "git status --porcelain=v1 -- 'tracked-file.txt'") {
+    return successResult(" M tracked-file.txt\n");
+  }
+
   if (command === "git ls-files --error-unmatch -- 'tracked-file.txt'") {
     return successResult("tracked-file.txt\n");
   }
@@ -70,6 +74,10 @@ const execMock = mock(async (command: string) => {
     return successResult();
   }
 
+  if (command === "git status --porcelain=v1 -- 'new-file.txt'") {
+    return successResult("?? new-file.txt\n");
+  }
+
   if (command === "git ls-files --error-unmatch -- 'new-file.txt'") {
     return failureResult(
       "error: pathspec 'new-file.txt' did not match any file(s) known to git",
@@ -81,6 +89,10 @@ const execMock = mock(async (command: string) => {
   }
 
   if (command === "git status --porcelain -- 'new-file.txt'") {
+    return successResult();
+  }
+
+  if (command === "git status --porcelain=v1 -- 'clean-file.txt'") {
     return successResult();
   }
 
@@ -150,6 +162,7 @@ describe("/api/sessions/[sessionId]/discard-uncommitted", () => {
     expect(execCalls).toEqual([
       "git rev-parse --show-toplevel",
       "git rev-parse --verify HEAD",
+      "git status --porcelain=v1 -- 'tracked-file.txt'",
       "git ls-files --error-unmatch -- 'tracked-file.txt'",
       "git restore --source=HEAD --staged --worktree -- 'tracked-file.txt'",
       "git status --porcelain -- 'tracked-file.txt'",
@@ -184,6 +197,7 @@ describe("/api/sessions/[sessionId]/discard-uncommitted", () => {
     expect(execCalls).toEqual([
       "git rev-parse --show-toplevel",
       "git rev-parse --verify HEAD",
+      "git status --porcelain=v1 -- 'new-file.txt'",
       "git ls-files --error-unmatch -- 'new-file.txt'",
       "rm -rf -- 'new-file.txt'",
       "git status --porcelain -- 'new-file.txt'",
@@ -230,6 +244,53 @@ describe("/api/sessions/[sessionId]/discard-uncommitted", () => {
     expect(await response.json()).toEqual({ error: "Invalid file path" });
     expect(execCalls).toEqual([]);
     expect(connectSandboxMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects git internals for file-scoped requests", async () => {
+    const { POST } = await loadRouteModule();
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/sessions/session-1/discard-uncommitted",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: ".git/config" }),
+        },
+      ),
+      createContext(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid file path" });
+    expect(execCalls).toEqual([]);
+    expect(connectSandboxMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects file-scoped requests for paths without uncommitted changes", async () => {
+    const { POST } = await loadRouteModule();
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/sessions/session-1/discard-uncommitted",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: "clean-file.txt" }),
+        },
+      ),
+      createContext(),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: "Path has no uncommitted changes",
+    });
+    expect(execCalls).toEqual([
+      "git rev-parse --show-toplevel",
+      "git rev-parse --verify HEAD",
+      "git status --porcelain=v1 -- 'clean-file.txt'",
+    ]);
   });
 
   test("rejects oldPath without filePath instead of discarding the whole repo", async () => {
