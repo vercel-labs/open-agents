@@ -120,7 +120,6 @@ import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
 import { useCodeEditor } from "./hooks/use-code-editor";
 import { useDevServer } from "./hooks/use-dev-server";
 import { useGitPanel } from "./git-panel-context";
-import { GitPanel } from "./git-panel";
 import {
   createSandbox,
   getSandboxCreateErrorDetails,
@@ -164,6 +163,9 @@ const FileTabView = dynamic(
   () => import("./file-tab-view").then((m) => m.FileTabView),
   { ssr: false },
 );
+const GitPanel = dynamic(() => import("./git-panel").then((m) => m.GitPanel), {
+  ssr: false,
+});
 
 const emptySubscribe = () => () => {};
 
@@ -885,6 +887,7 @@ export function SessionChatContent({
   const hasMounted = useHasMounted();
   const {
     activeView,
+    gitPanelOpen,
     shareRequested,
     setShareRequested,
     setHasActionNeeded,
@@ -1679,7 +1682,12 @@ export function SessionChatContent({
 
   const handleFixChecks = useCallback(
     async (failedRuns: PullRequestCheckRun[]) => {
-      let text = "";
+      const names = failedRuns.map((run) => run.name).join(", ");
+      const fallbackPrompt = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
+      let messagePayload: Parameters<typeof sendMessageWithPendingState>[0] = {
+        text: fallbackPrompt,
+      };
+
       try {
         const res = await fetch(`/api/sessions/${session.id}/checks/fix`, {
           method: "POST",
@@ -1687,19 +1695,37 @@ export function SessionChatContent({
           body: JSON.stringify({ checkRuns: failedRuns }),
         });
         if (res.ok) {
-          const data = (await res.json()) as { message: string };
-          text = data.message;
+          const data = (await res.json()) as {
+            prompt?: string;
+            snippets?: Array<{ filename: string; content: string }>;
+            message?: string;
+          };
+          const prompt = data.prompt?.trim() || data.message?.trim();
+          const snippets = Array.isArray(data.snippets) ? data.snippets : [];
+
+          if (prompt && snippets.length > 0) {
+            messagePayload = {
+              parts: [
+                {
+                  type: "text" as const,
+                  text: prompt,
+                },
+                ...snippets.map((snippet, index) => ({
+                  type: "data-snippet" as const,
+                  id: `fix-check-${index}`,
+                  data: snippet,
+                })),
+              ],
+            };
+          } else if (prompt) {
+            messagePayload = { text: prompt };
+          }
         }
       } catch {
         // Fall through to fallback
       }
 
-      if (!text) {
-        const names = failedRuns.map((run) => run.name).join(", ");
-        text = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
-      }
-
-      await sendMessageWithPendingState({ text });
+      await sendMessageWithPendingState(messagePayload);
     },
     [sendMessageWithPendingState, session.id],
   );
@@ -2771,7 +2797,7 @@ export function SessionChatContent({
     [archiveSession, router, updateSessionPullRequest],
   );
 
-  const gitPanelElement = (
+  const gitPanelElement = gitPanelOpen ? (
     <GitPanel
       session={session}
       hasRepo={hasRepo}
@@ -2804,12 +2830,13 @@ export function SessionChatContent({
         void refreshGitStatus().catch(() => {});
       }}
     />
-  );
+  ) : null;
 
   return (
     <>
       {/* Git panel portaled to layout-level for full page height */}
-      {panelPortalRef.current &&
+      {gitPanelOpen &&
+        panelPortalRef.current &&
         createPortal(gitPanelElement, panelPortalRef.current)}
 
       {/* Header actions portaled from chat-level state */}
@@ -3022,11 +3049,7 @@ export function SessionChatContent({
                             const renderGroups = (
                               isToolCallsExpanded: boolean,
                             ) =>
-                              groups.map((group, groupRenderIndex) => {
-                                const previousGroup =
-                                  groupRenderIndex > 0
-                                    ? groups[groupRenderIndex - 1]
-                                    : null;
+                              groups.map((group) => {
                                 if (group.type === "reasoning-group") {
                                   if (!isToolCallsExpanded) return null;
                                   const hasRenderableContentAfterGroup = m.parts
@@ -3338,10 +3361,6 @@ export function SessionChatContent({
                                   ) {
                                     return null;
                                   }
-                                  const followsUserTextPart =
-                                    m.role === "user" &&
-                                    previousGroup?.type === "part" &&
-                                    previousGroup.part.type === "text";
                                   return (
                                     <div
                                       key={`${m.id}-${group.renderKey}`}
@@ -3350,7 +3369,6 @@ export function SessionChatContent({
                                         m.role === "user"
                                           ? "justify-end"
                                           : "justify-start",
-                                        followsUserTextPart && "-mt-2",
                                       )}
                                     >
                                       <div className="group relative w-fit max-w-[80%]">
@@ -3411,7 +3429,11 @@ export function SessionChatContent({
                               );
                             }
 
-                            return renderGroups(true);
+                            return (
+                              <div key={m.id} className="flex flex-col gap-1">
+                                {renderGroups(true)}
+                              </div>
+                            );
                           },
                         )}
                         {showThinkingIndicator && (

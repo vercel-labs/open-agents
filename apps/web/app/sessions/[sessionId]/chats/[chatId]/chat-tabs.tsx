@@ -1,7 +1,15 @@
 "use client";
 
+import { useParams, useRouter } from "next/navigation";
 import { FileText, GitCompare, Pencil, Plus, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSessionLayout } from "@/app/sessions/[sessionId]/session-layout-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +33,9 @@ type ChatTabsProps = {
 };
 
 export function ChatTabs({ activeChatId }: ChatTabsProps) {
+  const router = useRouter();
+  const params = useParams<{ sessionId?: string }>();
+  const sessionId = params.sessionId ?? "";
   const { chats, createChat, switchChat, deleteChat, renameChat } =
     useSessionLayout();
   const {
@@ -46,9 +57,41 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Track the position where the Changes tab should appear in the tab list.
-  // When a diff file is first opened, record the current chat count so the
-  // Changes tab is inserted at that position (like any other tab).
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (container.scrollWidth <= container.clientWidth) return;
+
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, []);
+  const prefetchedChatHrefsRef = useRef(new Set<string>());
+
+  const prefetchChat = useCallback(
+    (chatId: string) => {
+      if (!sessionId) {
+        return;
+      }
+
+      const href = `/sessions/${sessionId}/chats/${chatId}`;
+      if (prefetchedChatHrefsRef.current.has(href)) {
+        return;
+      }
+
+      prefetchedChatHrefsRef.current.add(href);
+      router.prefetch(href);
+    },
+    [router, sessionId],
+  );
+
   const [changesTabIndex, setChangesTabIndex] = useState<number | null>(null);
   useEffect(() => {
     const isChangesVisible = !changesTabDismissed && !!focusedDiffFile;
@@ -59,20 +102,6 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     }
   }, [focusedDiffFile, changesTabDismissed, chats.length, changesTabIndex]);
 
-  const handleNewChat = () => {
-    const { chat } = createChat();
-    switchChat(chat.id);
-    setActiveView("chat");
-    // Scroll to the rightmost tab after the new chat is added
-    requestAnimationFrame(() => {
-      scrollContainerRef.current?.scrollTo({
-        left: scrollContainerRef.current.scrollWidth,
-        behavior: "smooth",
-      });
-    });
-  };
-
-  // Track the position where the File tab should appear
   const [fileTabIndex, setFileTabIndex] = useState<number | null>(null);
   useEffect(() => {
     const isFileVisible = !fileTabDismissed && !!focusedFilePath;
@@ -92,26 +121,46 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     focusedDiffFile,
   ]);
 
-  const handleCloseChanges = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleNewChat = () => {
+    const { chat } = createChat();
+    switchChat(chat.id);
     setActiveView("chat");
-    setFocusedDiffFile(null);
-    setChangesTabDismissed(true);
+    requestAnimationFrame(() => {
+      scrollContainerRef.current?.scrollTo({
+        left: scrollContainerRef.current.scrollWidth,
+        behavior: "smooth",
+      });
+    });
   };
 
-  const handleCloseFile = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setActiveView("chat");
-    setFocusedFilePath(null);
-    setFileTabDismissed(true);
-  };
+  const handleCloseChanges = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setActiveView("chat");
+      setFocusedDiffFile(null);
+      setChangesTabDismissed(true);
+    },
+    [setActiveView, setFocusedDiffFile, setChangesTabDismissed],
+  );
 
-  const handleStartRename = (chatId: string, currentTitle: string) => {
-    setRenamingChatId(chatId);
-    setRenameValue(currentTitle || "");
-    // Focus happens via useEffect-like behavior after render
-    setTimeout(() => renameInputRef.current?.select(), 0);
-  };
+  const handleCloseFile = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setActiveView("chat");
+      setFocusedFilePath(null);
+      setFileTabDismissed(true);
+    },
+    [setActiveView, setFocusedFilePath, setFileTabDismissed],
+  );
+
+  const handleStartRename = useCallback(
+    (chatId: string, currentTitle: string) => {
+      setRenamingChatId(chatId);
+      setRenameValue(currentTitle || "");
+      setTimeout(() => renameInputRef.current?.select(), 0);
+    },
+    [],
+  );
 
   const handleFinishRename = useCallback(async () => {
     if (!renamingChatId) return;
@@ -131,14 +180,12 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     const idToDelete = deletingChatId;
     setDeletingChatId(null);
 
-    // Delete first, then navigate if needed
     try {
       await deleteChat(idToDelete);
     } catch (err) {
       console.error("Failed to delete chat:", err);
     }
 
-    // If we deleted the active chat, switch to another one
     if (idToDelete === activeChatId) {
       const remaining = chats.filter((c) => c.id !== idToDelete);
       if (remaining.length > 0) {
@@ -148,6 +195,197 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   }, [deletingChatId, activeChatId, chats, deleteChat, switchChat]);
 
   const canDelete = chats.length > 1;
+  const showChangesTab = !changesTabDismissed && !!focusedDiffFile;
+  const insertAt = showChangesTab ? (changesTabIndex ?? chats.length) : null;
+  const showFileTab = !fileTabDismissed && !!focusedFilePath;
+  const fileInsertAt = showFileTab
+    ? (fileTabIndex ?? chats.length + (showChangesTab ? 1 : 0))
+    : null;
+  const fileTabFileName =
+    focusedFilePath?.split("/").pop() ?? focusedFilePath ?? "";
+
+  const tabElements = useMemo(() => {
+    const changesTabEl = showChangesTab ? (
+      <div
+        key="__changes__"
+        className={cn(
+          "group relative flex shrink-0 items-center border-b-2 transition-colors",
+          activeView === "diff"
+            ? "border-foreground text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveView("diff")}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        >
+          <GitCompare className="h-3.5 w-3.5" />
+          <span>Changes</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleCloseChanges}
+          className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    ) : null;
+
+    const fileTabEl = showFileTab ? (
+      <div
+        key="__file__"
+        className={cn(
+          "group relative flex shrink-0 items-center border-b-2 transition-colors",
+          activeView === "file"
+            ? "border-foreground text-foreground"
+            : "border-transparent text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveView("file")}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          <span className="max-w-[120px] truncate">{fileTabFileName}</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleCloseFile}
+          className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    ) : null;
+
+    const elements: ReactNode[] = [];
+
+    chats.forEach((chat, index) => {
+      if (insertAt === index) {
+        elements.push(changesTabEl);
+      }
+      if (fileInsertAt === index) {
+        elements.push(fileTabEl);
+      }
+
+      const isActive = chat.id === activeChatId && activeView === "chat";
+      const isRenaming = renamingChatId === chat.id;
+
+      elements.push(
+        <div
+          key={chat.id}
+          className={cn(
+            "group relative flex shrink-0 items-center border-b-2 transition-colors",
+            isActive
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {isRenaming ? (
+            <div className="flex items-center px-2 py-[7px]">
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => void handleFinishRename()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void handleFinishRename();
+                  }
+                  if (e.key === "Escape") {
+                    setRenamingChatId(null);
+                  }
+                }}
+                className="max-w-[130px] rounded border border-border bg-background px-1.5 py-0 text-sm font-medium outline-none focus:ring-1 focus:ring-ring"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onMouseEnter={() => prefetchChat(chat.id)}
+              onFocus={() => prefetchChat(chat.id)}
+              onClick={() => {
+                if (chat.id !== activeChatId) {
+                  switchChat(chat.id);
+                }
+                setActiveView("chat");
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+            >
+              <span className="max-w-[120px] truncate">
+                {chat.title || "New Chat"}
+              </span>
+              {chat.hasUnread && (
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              )}
+            </button>
+          )}
+
+          {!isRenaming && (
+            <div className="flex items-center gap-0.5 pr-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStartRename(chat.id, chat.title || "");
+                }}
+                className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Rename chat"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingChatId(chat.id);
+                  }}
+                  className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Close chat"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>,
+      );
+    });
+
+    if (insertAt !== null && insertAt >= chats.length) {
+      elements.push(changesTabEl);
+    }
+
+    if (fileInsertAt !== null && fileInsertAt >= chats.length) {
+      elements.push(fileTabEl);
+    }
+
+    return elements;
+  }, [
+    activeChatId,
+    activeView,
+    canDelete,
+    chats,
+    fileInsertAt,
+    fileTabFileName,
+    handleCloseChanges,
+    handleCloseFile,
+    handleFinishRename,
+    handleStartRename,
+    insertAt,
+    prefetchChat,
+    renameValue,
+    renamingChatId,
+    setActiveView,
+    showChangesTab,
+    showFileTab,
+    switchChat,
+  ]);
 
   return (
     <>
@@ -156,190 +394,8 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
           ref={scrollContainerRef}
           className="flex min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {(() => {
-            const showChangesTab = !changesTabDismissed && !!focusedDiffFile;
-            const insertAt = showChangesTab
-              ? (changesTabIndex ?? chats.length)
-              : null;
+          {tabElements}
 
-            const showFileTab = !fileTabDismissed && !!focusedFilePath;
-            const fileInsertAt = showFileTab
-              ? (fileTabIndex ?? chats.length + (showChangesTab ? 1 : 0))
-              : null;
-
-            const fileTabFileName =
-              focusedFilePath?.split("/").pop() ?? focusedFilePath ?? "";
-
-            const changesTabEl = showChangesTab ? (
-              <div
-                key="__changes__"
-                className={cn(
-                  "group relative flex shrink-0 items-center border-b-2 transition-colors",
-                  activeView === "diff"
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveView("diff")}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-                >
-                  <GitCompare className="h-3.5 w-3.5" />
-                  <span>Changes</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCloseChanges}
-                  className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : null;
-
-            const fileTabEl = showFileTab ? (
-              <div
-                key="__file__"
-                className={cn(
-                  "group relative flex shrink-0 items-center border-b-2 transition-colors",
-                  activeView === "file"
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveView("file")}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  <span className="max-w-[120px] truncate">
-                    {fileTabFileName}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCloseFile}
-                  className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : null;
-
-            const elements: React.ReactNode[] = [];
-
-            chats.forEach((chat, index) => {
-              // Insert Changes tab at the recorded position
-              if (insertAt === index) {
-                elements.push(changesTabEl);
-              }
-              // Insert File tab at the recorded position
-              if (fileInsertAt === index) {
-                elements.push(fileTabEl);
-              }
-
-              const isActive =
-                chat.id === activeChatId && activeView === "chat";
-              const isRenaming = renamingChatId === chat.id;
-
-              elements.push(
-                <div
-                  key={chat.id}
-                  className={cn(
-                    "group relative flex shrink-0 items-center border-b-2 transition-colors",
-                    isActive
-                      ? "border-foreground text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {isRenaming ? (
-                    <div className="flex items-center px-2 py-[7px]">
-                      <input
-                        ref={renameInputRef}
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => void handleFinishRename()}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            void handleFinishRename();
-                          }
-                          if (e.key === "Escape") {
-                            setRenamingChatId(null);
-                          }
-                        }}
-                        className="max-w-[130px] rounded border border-border bg-background px-1.5 py-0 text-sm font-medium outline-none focus:ring-1 focus:ring-ring"
-                        autoFocus
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (chat.id !== activeChatId) {
-                          switchChat(chat.id);
-                        }
-                        setActiveView("chat");
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-                    >
-                      <span className="max-w-[120px] truncate">
-                        {chat.title || "New Chat"}
-                      </span>
-                      {chat.hasUnread && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                      )}
-                    </button>
-                  )}
-
-                  {/* Hover actions: rename + close */}
-                  {!isRenaming && (
-                    <div className="flex items-center gap-0.5 pr-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartRename(chat.id, chat.title || "");
-                        }}
-                        className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                        aria-label="Rename chat"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      {canDelete && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingChatId(chat.id);
-                          }}
-                          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                          aria-label="Close chat"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>,
-              );
-            });
-
-            // If Changes tab index is at or past the end, append after all chats
-            if (insertAt !== null && insertAt >= chats.length) {
-              elements.push(changesTabEl);
-            }
-
-            // If File tab index is at or past the end, append after all chats
-            if (fileInsertAt !== null && fileInsertAt >= chats.length) {
-              elements.push(fileTabEl);
-            }
-
-            return elements;
-          })()}
-
-          {/* New chat button — always last */}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -355,7 +411,6 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
         </div>
       </div>
 
-      {/* Delete confirmation dialog */}
       <Dialog
         open={deletingChatId !== null}
         onOpenChange={(open) => {

@@ -3,6 +3,7 @@
 import { PatchDiff } from "@pierre/diffs/react";
 import {
   AlignJustify,
+  ChevronRight,
   Columns2,
   FileText,
   Loader2,
@@ -11,7 +12,7 @@ import {
   SquareMinus,
   SquarePlus,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import { useGitPanel } from "./git-panel-context";
 import { Button } from "@/components/ui/button";
@@ -77,9 +78,121 @@ function FileStatusIcon({ status }: { status: DiffFile["status"] }) {
   return <SquareDot className="h-4 w-4 shrink-0 text-yellow-500" />;
 }
 
+function isUncommittedFile(file: DiffFile): boolean {
+  return file.stagingStatus === "unstaged" || file.stagingStatus === "partial";
+}
+
+/* ------------------------------------------------------------------ */
+/* Individual collapsible file diff section                            */
+/* ------------------------------------------------------------------ */
+
+function FileDiffSection({
+  file,
+  isExpanded,
+  onToggle,
+  diffStyle,
+  diffScope,
+  sectionRef,
+}: {
+  file: DiffFile;
+  isExpanded: boolean;
+  onToggle: () => void;
+  diffStyle: DiffStyle;
+  diffScope: string;
+  sectionRef?: React.Ref<HTMLDivElement>;
+}) {
+  const baseOptions =
+    diffStyle === "split" ? splitDiffOptions : defaultDiffOptions;
+  const fileName = file.path.split("/").pop() ?? file.path;
+  const dirPath = file.path.slice(0, -fileName.length);
+
+  const isLocalScope = diffScope === "uncommitted";
+  const hasLocalChanges =
+    file.stagingStatus === "unstaged" || file.stagingStatus === "partial";
+
+  // In local scope, prefer the localDiff (uncommitted changes vs HEAD)
+  const patchContent =
+    isLocalScope && file.localDiff ? file.localDiff : file.diff;
+
+  return (
+    <div ref={sectionRef} className="border-b border-border last:border-b-0">
+      {/* Collapsible header */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-accent/50"
+      >
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+            isExpanded && "rotate-90",
+          )}
+        />
+        <FileStatusIcon status={file.status} />
+        <span className="shrink-0 text-xs font-medium text-foreground font-mono">
+          {fileName}
+        </span>
+        {dirPath && (
+          <span
+            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-muted-foreground"
+            dir="rtl"
+          >
+            <bdi>{dirPath.replace(/\/$/, "")}</bdi>
+          </span>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 text-xs">
+          {file.additions > 0 && (
+            <span className="text-green-600 dark:text-green-500">
+              +{file.additions}
+            </span>
+          )}
+          {file.deletions > 0 && (
+            <span className="text-red-600 dark:text-red-400">
+              -{file.deletions}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Diff content */}
+      {isExpanded && (
+        <div>
+          {isLocalScope && !hasLocalChanges ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-6 text-muted-foreground/50">
+              <p className="text-sm">No uncommitted changes to display</p>
+            </div>
+          ) : file.generated ? (
+            <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+              Generated file — diff content hidden
+            </div>
+          ) : patchContent ? (
+            <PatchDiff
+              key={`${file.path}-${diffStyle}-${diffScope}`}
+              patch={patchContent}
+              options={
+                shouldWrapDiffContent(file.path)
+                  ? { ...baseOptions, overflow: "wrap" as const }
+                  : baseOptions
+              }
+            />
+          ) : (
+            <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+              No diff content available
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Main DiffTabView — all files inline                                 */
+/* ------------------------------------------------------------------ */
+
 /**
- * Shows a single file's diff, opened from the git panel's diff file list.
- * No multi-file view, no collapse — just the file header + patch.
+ * Shows all changed files inline with collapsible diffs.
+ * When a file is clicked in the git panel sidebar, it is expanded and scrolled into view.
  */
 export function DiffTabView() {
   const {
@@ -91,34 +204,40 @@ export function DiffTabView() {
     sandboxInfo,
     refreshDiff,
   } = useSessionChatWorkspaceContext();
-  const { focusedDiffFile, setFocusedDiffFile, diffScope } = useGitPanel();
+  const { focusedDiffFile, focusedDiffRequestId, diffScope } = useGitPanel();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
 
-  // Find the focused file in the diff data
-  const file = useMemo(() => {
-    if (!diff || !focusedDiffFile) return null;
-    return diff.files.find((f) => f.path === focusedDiffFile) ?? null;
-  }, [diff, focusedDiffFile]);
+  // Track which files are expanded (by path)
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  // When in uncommitted scope and the focused file has no local changes,
-  // auto-switch to the first file that does have uncommitted changes.
+  // Refs for scrolling to specific file sections
+  const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Filter files based on scope
+  const visibleFiles = useMemo(() => {
+    if (!diff) return [];
+    if (diffScope === "branch") return diff.files;
+    return diff.files.filter(isUncommittedFile);
+  }, [diff, diffScope]);
+
+  // When a file is requested from the sidebar, expand it and scroll to it.
   useEffect(() => {
-    if (diffScope !== "uncommitted" || !diff || !file) return;
-    const hasLocalChanges =
-      file.stagingStatus === "unstaged" || file.stagingStatus === "partial";
-    if (hasLocalChanges) return;
+    if (!focusedDiffFile) return;
 
-    const firstUncommitted = diff.files.find(
-      (f) => f.stagingStatus === "unstaged" || f.stagingStatus === "partial",
-    );
-    if (firstUncommitted) {
-      setFocusedDiffFile(firstUncommitted.path);
-    }
-    // If no uncommitted files exist, keep the current file selected
-    // so the Changes tab stays open — the empty state renders inline.
-  }, [diffScope, diff, file, setFocusedDiffFile]);
+    setExpandedFiles((prev) => {
+      if (prev.has(focusedDiffFile)) return prev;
+      return new Set([...prev, focusedDiffFile]);
+    });
+
+    requestAnimationFrame(() => {
+      const el = sectionRefs.current.get(focusedDiffFile);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }, [focusedDiffFile, focusedDiffRequestId]);
 
   const showStaleIndicator = !sandboxInfo && diff !== null;
 
@@ -130,66 +249,54 @@ export function DiffTabView() {
     setDiffStyle(preferences?.defaultDiffMode ?? "unified");
   }, [isMobile, preferences?.defaultDiffMode]);
 
-  const baseOptions =
-    diffStyle === "split" ? splitDiffOptions : defaultDiffOptions;
+  const toggleFile = useCallback((filePath: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
+      return next;
+    });
+  }, []);
 
-  // If there's no focused file yet, show an empty state
-  if (!focusedDiffFile) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex shrink-0 items-center border-b border-border px-4 py-2">
-          <span className="text-sm font-medium text-muted-foreground font-mono">
-            No file selected
-          </span>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground/50">
-          <FileText className="h-8 w-8" />
-          <p className="text-sm">
-            Select a file from the Changes panel to view its diff
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const setSectionRef = useCallback(
+    (filePath: string, el: HTMLDivElement | null) => {
+      if (el) {
+        sectionRefs.current.set(filePath, el);
+      } else {
+        sectionRefs.current.delete(filePath);
+      }
+    },
+    [],
+  );
 
-  const fileName = file ? (file.path.split("/").pop() ?? file.path) : "";
-
-  // Don't show file info in toolbar when the file has no local changes in uncommitted scope
-  const isFileVisibleInScope =
-    file &&
-    (diffScope === "branch" ||
-      file.stagingStatus === "unstaged" ||
-      file.stagingStatus === "partial");
+  // Summary stats
+  const summaryAdds = visibleFiles.reduce((sum, f) => sum + f.additions, 0);
+  const summaryDels = visibleFiles.reduce((sum, f) => sum + f.deletions, 0);
 
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          {isFileVisibleInScope ? (
-            <>
-              <FileStatusIcon status={file.status} />
-              <span className="shrink-0 text-sm font-medium font-mono">
-                {fileName}
+          <span className="text-sm font-medium font-mono">
+            {visibleFiles.length} file{visibleFiles.length !== 1 ? "s" : ""}{" "}
+            changed
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5 text-xs">
+            {summaryAdds > 0 && (
+              <span className="text-green-600 dark:text-green-500">
+                +{summaryAdds}
               </span>
-              <div className="flex shrink-0 items-center gap-1.5 text-xs">
-                {file.additions > 0 && (
-                  <span className="text-green-600 dark:text-green-500">
-                    +{file.additions}
-                  </span>
-                )}
-                {file.deletions > 0 && (
-                  <span className="text-red-600 dark:text-red-400">
-                    -{file.deletions}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <span className="text-sm font-medium text-muted-foreground font-mono">
-              No file selected
-            </span>
-          )}
+            )}
+            {summaryDels > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                -{summaryDels}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Tooltip>
@@ -211,6 +318,37 @@ export function DiffTabView() {
             </TooltipTrigger>
             <TooltipContent side="bottom">Refresh</TooltipContent>
           </Tooltip>
+          {/* Expand / Collapse all */}
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setExpandedFiles(new Set(visibleFiles.map((f) => f.path)))
+                  }
+                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                >
+                  Expand all
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Expand all files</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedFiles(new Set())}
+                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                >
+                  Collapse all
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Collapse all files</TooltipContent>
+            </Tooltip>
+          </div>
           {/* Unified / Split icon toggle */}
           <div className="hidden items-center rounded-md border border-border md:flex">
             <Tooltip>
@@ -274,61 +412,31 @@ export function DiffTabView() {
           </div>
         )}
 
-        {!diffLoading && !diffError && !file && (
-          <div className="px-4 py-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              File not found in diff
+        {!diffLoading && !diffError && visibleFiles.length === 0 && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-muted-foreground/50">
+            <FileText className="h-8 w-8" />
+            <p className="text-sm">
+              {diffScope === "uncommitted"
+                ? "No uncommitted changes to display"
+                : "No file changes yet"}
             </p>
           </div>
         )}
 
         {!diffLoading &&
           !diffError &&
-          file &&
-          (() => {
-            const isLocalScope = diffScope === "uncommitted";
-            const hasLocalChanges =
-              file.stagingStatus === "unstaged" ||
-              file.stagingStatus === "partial";
-
-            // The effect above will auto-redirect or clear; show empty state while pending.
-            if (isLocalScope && !hasLocalChanges) {
-              return (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground/50">
-                  <FileText className="h-8 w-8" />
-                  <p className="text-sm">No uncommitted changes to display</p>
-                </div>
-              );
-            }
-
-            // In local scope, prefer the localDiff (uncommitted changes vs HEAD)
-            const patchContent =
-              isLocalScope && file.localDiff ? file.localDiff : file.diff;
-
-            return (
-              <div>
-                {file.generated ? (
-                  <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-                    Generated file — diff content hidden
-                  </div>
-                ) : patchContent ? (
-                  <PatchDiff
-                    key={`${file.path}-${diffStyle}-${diffScope}`}
-                    patch={patchContent}
-                    options={
-                      shouldWrapDiffContent(file.path)
-                        ? { ...baseOptions, overflow: "wrap" as const }
-                        : baseOptions
-                    }
-                  />
-                ) : (
-                  <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-                    No diff content available
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          visibleFiles.length > 0 &&
+          visibleFiles.map((file) => (
+            <FileDiffSection
+              key={file.path}
+              file={file}
+              isExpanded={expandedFiles.has(file.path)}
+              onToggle={() => toggleFile(file.path)}
+              diffStyle={diffStyle}
+              diffScope={diffScope}
+              sectionRef={(el) => setSectionRef(file.path, el)}
+            />
+          ))}
       </div>
     </div>
   );

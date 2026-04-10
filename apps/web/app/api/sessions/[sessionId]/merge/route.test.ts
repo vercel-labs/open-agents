@@ -55,6 +55,10 @@ let readinessResult: PullRequestMergeReadiness = {
     headOwner: "acme",
     mergeable: true,
     mergeableState: "clean",
+    additions: 10,
+    deletions: 3,
+    changedFiles: 2,
+    commits: 1,
   },
 };
 
@@ -195,6 +199,10 @@ describe("/api/sessions/[sessionId]/merge", () => {
         headOwner: "acme",
         mergeable: true,
         mergeableState: "clean",
+        additions: 10,
+        deletions: 3,
+        changedFiles: 2,
+        commits: 1,
       },
     };
 

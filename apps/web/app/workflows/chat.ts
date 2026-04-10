@@ -21,6 +21,7 @@ import type {
 } from "@/app/types";
 import {
   clearActiveStream,
+  hasAutoCommitChangesStep,
   persistAssistantMessage,
   persistSandboxState,
   recordWorkflowUsage,
@@ -528,37 +529,50 @@ export async function runAgentWorkflow(options: Options) {
       repoName != null;
 
     if (canAutoCommit) {
-      const pendingCommitPart = {
-        type: "data-commit" as const,
-        id: commitPartId,
-        data: { status: "pending" as const },
-      };
-      pendingAssistantResponse = upsertAssistantDataPart(
-        pendingAssistantResponse,
-        pendingCommitPart,
-      );
-      await sendDataPart(writable, pendingCommitPart);
-      didUpdateGitData = true;
-
-      autoCommitResult = await runAutoCommitStep({
-        userId: options.userId,
-        sessionId: options.sessionId,
-        sessionTitle: options.sessionTitle ?? "",
-        repoOwner,
-        repoName,
+      const hasAutoCommitChanges = await hasAutoCommitChangesStep({
         sandboxState,
       });
 
-      const resolvedCommitPart = {
-        type: "data-commit" as const,
-        id: commitPartId,
-        data: buildCommitData(autoCommitResult, repoOwner, repoName),
-      };
-      pendingAssistantResponse = upsertAssistantDataPart(
-        pendingAssistantResponse,
-        resolvedCommitPart,
-      );
-      await sendDataPart(writable, resolvedCommitPart);
+      if (hasAutoCommitChanges) {
+        const pendingCommitPart = {
+          type: "data-commit" as const,
+          id: commitPartId,
+          data: { status: "pending" as const },
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          pendingCommitPart,
+        );
+        await sendDataPart(writable, pendingCommitPart);
+        didUpdateGitData = true;
+      }
+
+      autoCommitResult = hasAutoCommitChanges
+        ? await runAutoCommitStep({
+            userId: options.userId,
+            sessionId: options.sessionId,
+            sessionTitle: options.sessionTitle ?? "",
+            repoOwner,
+            repoName,
+            sandboxState,
+          })
+        : {
+            committed: false,
+            pushed: false,
+          };
+
+      if (hasAutoCommitChanges) {
+        const resolvedCommitPart = {
+          type: "data-commit" as const,
+          id: commitPartId,
+          data: buildCommitData(autoCommitResult, repoOwner, repoName),
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          resolvedCommitPart,
+        );
+        await sendDataPart(writable, resolvedCommitPart);
+      }
     }
 
     const canAutoCreatePr =

@@ -40,6 +40,10 @@ export type MergeReadinessResponse = {
     baseBranch: string | null;
     headBranch: string | null;
     headSha: string | null;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commits: number;
   } | null;
   allowedMethods: PullRequestMergeMethod[];
   defaultMethod: PullRequestMergeMethod;
@@ -65,6 +69,10 @@ function buildUnavailableResponse(
             baseBranch: null,
             headBranch: null,
             headSha: null,
+            additions: 0,
+            deletions: 0,
+            changedFiles: 0,
+            commits: 0,
           }
         : null,
     allowedMethods: [DEFAULT_METHOD],
@@ -184,6 +192,10 @@ export async function GET(_req: Request, context: RouteContext) {
       baseBranch: readiness.pr?.baseBranch ?? null,
       headBranch: readiness.pr?.headBranch ?? null,
       headSha: readiness.pr?.headSha ?? null,
+      additions: readiness.pr?.additions ?? 0,
+      deletions: readiness.pr?.deletions ?? 0,
+      changedFiles: readiness.pr?.changedFiles ?? 0,
+      commits: readiness.pr?.commits ?? 0,
     },
     allowedMethods,
     defaultMethod,
