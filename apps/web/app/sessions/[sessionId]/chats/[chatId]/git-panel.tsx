@@ -252,6 +252,8 @@ function InlineCommitPanel({
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   const hasUncommittedChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -297,6 +299,19 @@ function InlineCommitPanel({
       );
     } finally {
       setIsCreatingBranch(false);
+    }
+  };
+
+  const handleExpandCommit = () => {
+    setIsExpanded(true);
+    // Auto-generate message when expanding for the first time
+    if (
+      !hasGeneratedRef.current &&
+      !commitMessage.trim() &&
+      hasPendingGitWork
+    ) {
+      hasGeneratedRef.current = true;
+      void handleGenerateMessage();
     }
   };
 
@@ -413,75 +428,93 @@ function InlineCommitPanel({
   // Commit form
   const commitForm = (
     <div className="space-y-2">
-      <div className="relative">
-        <Textarea
-          placeholder="Commit message"
-          value={commitMessage}
-          onChange={(e) => setCommitMessage(e.target.value)}
-          disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
-          rows={2}
-          className="resize-none pb-7 text-xs"
-        />
-        <button
-          type="button"
-          className="absolute bottom-1.5 left-1.5 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
-          onClick={() => void handleGenerateMessage()}
-          disabled={isGeneratingMessage || !hasPendingGitWork}
-        >
-          {isGeneratingMessage ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <WandSparkles className="h-3 w-3" />
-          )}
-        </button>
-      </div>
+      {isExpanded && (
+        <div className="relative">
+          <Textarea
+            placeholder="Commit message"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
+            rows={2}
+            className="resize-none pb-7 text-xs"
+          />
+          <button
+            type="button"
+            className="absolute bottom-1.5 left-1.5 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
+            onClick={() => void handleGenerateMessage()}
+            disabled={isGeneratingMessage || !hasPendingGitWork}
+          >
+            {isGeneratingMessage ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <WandSparkles className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      )}
       {commitSuccess ? (
         <div className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-300">
           <Check className="h-3.5 w-3.5" />
           Committed
         </div>
       ) : (
-        <div className="flex w-full">
-          <Button
-            size="sm"
-            className="min-w-0 flex-1 rounded-r-none text-xs"
-            onClick={() => void handleCommit()}
-            disabled={commitDisabled}
-          >
-            {isCommitting ? (
-              <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Committing...
-              </>
-            ) : (
-              <>
-                <GitCommit className="mr-1.5 h-3.5 w-3.5" />
-                Commit & Push
-              </>
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="default"
-                size="icon"
-                className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
-                disabled={commitDisabled}
-                aria-label="Commit options"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[10rem]">
-              <DropdownMenuItem
-                onSelect={() => void handleCommit(true)}
-                className="gap-2 text-xs"
-              >
-                Commit only
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <>
+          <div className="flex w-full">
+            <Button
+              size="sm"
+              className="min-w-0 flex-1 rounded-r-none text-xs"
+              onClick={() => void handleCommit()}
+              disabled={commitDisabled}
+            >
+              {isCommitting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Committing...
+                </>
+              ) : (
+                <>
+                  {isExpanded ? (
+                    <GitCommit className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Commit & Push
+                </>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
+                  disabled={commitDisabled}
+                  aria-label="Commit options"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                <DropdownMenuItem
+                  onSelect={() => void handleCommit(true)}
+                  className="gap-2 text-xs"
+                >
+                  Commit only
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {!isExpanded && (
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+              onClick={handleExpandCommit}
+              disabled={!hasPendingGitWork}
+            >
+              Edit message
+            </button>
+          )}
+        </>
       )}
       {commitError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
@@ -550,6 +583,8 @@ function InlinePrCreatePanel({
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   const branchFromStatus =
     resolvedBranch ??
@@ -582,6 +617,15 @@ function InlinePrCreatePanel({
       );
     } finally {
       setIsCreatingBranch(false);
+    }
+  };
+
+  const handleExpand = () => {
+    setIsExpanded(true);
+    // Auto-generate content when expanding for the first time
+    if (!hasGeneratedRef.current && !prTitle.trim() && !prBody.trim()) {
+      hasGeneratedRef.current = true;
+      void handleGenerateContent();
     }
   };
 
@@ -811,35 +855,39 @@ function InlinePrCreatePanel({
   // PR creation form
   const prForm = (
     <div className="space-y-2">
-      <div className="relative">
-        <Input
-          placeholder="PR title"
-          value={prTitle}
-          onChange={(e) => setPrTitle(e.target.value)}
-          disabled={isAgentWorking || isCreatingPr}
-          className="h-8 pr-7 text-xs"
-        />
-        <button
-          type="button"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
-          onClick={() => void handleGenerateContent()}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <WandSparkles className="h-3 w-3" />
-          )}
-        </button>
-      </div>
-      <Textarea
-        placeholder="Description"
-        value={prBody}
-        onChange={(e) => setPrBody(e.target.value)}
-        disabled={isAgentWorking || isCreatingPr}
-        rows={3}
-        className="max-h-40 text-xs"
-      />
+      {isExpanded && (
+        <>
+          <div className="relative">
+            <Input
+              placeholder="PR title"
+              value={prTitle}
+              onChange={(e) => setPrTitle(e.target.value)}
+              disabled={isAgentWorking || isCreatingPr}
+              className="h-8 pr-7 text-xs"
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => void handleGenerateContent()}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <WandSparkles className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+          <Textarea
+            placeholder="Description"
+            value={prBody}
+            onChange={(e) => setPrBody(e.target.value)}
+            disabled={isAgentWorking || isCreatingPr}
+            rows={3}
+            className="max-h-40 text-xs"
+          />
+        </>
+      )}
       <div className="flex w-full">
         <Button
           size="sm"
@@ -854,7 +902,11 @@ function InlinePrCreatePanel({
             </>
           ) : (
             <>
-              <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+              {isExpanded ? (
+                <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              )}
               Create Pull Request
             </>
           )}
@@ -881,6 +933,15 @@ function InlinePrCreatePanel({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {!isExpanded && (
+        <button
+          type="button"
+          className="w-full text-center text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+          onClick={handleExpand}
+        >
+          Edit title & description
+        </button>
+      )}
       {prError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {prError}
