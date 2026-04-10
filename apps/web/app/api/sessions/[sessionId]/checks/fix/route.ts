@@ -14,39 +14,83 @@ type FixChecksRequest = {
   checkRuns: PullRequestCheckRun[];
 };
 
+type FixCheckSnippet = {
+  filename: string;
+  content: string;
+};
+
+type FixChecksResponse = {
+  prompt: string;
+  snippets: FixCheckSnippet[];
+};
+
 const MAX_LOG_LENGTH = 8000;
 const MAX_CHECK_RUNS = 10;
+const UNABLE_TO_FETCH_LOGS = "(Unable to fetch logs)";
 
-function formatFixMessage(
+function formatSnippetFilename(
+  run: PullRequestCheckRun,
+  index: number,
+): string {
+  const slug = run.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${String(index + 1).padStart(2, "0")}-${slug || "failing-check"}.log`;
+}
+
+function formatSnippetContent(
+  run: PullRequestCheckRun,
+  logText: string | undefined,
+): string {
+  const lines = [`Check: ${run.name}`];
+
+  if (run.detailsUrl) {
+    lines.push(`Details: ${run.detailsUrl}`);
+  }
+
+  if (!logText) {
+    return lines.join("\n");
+  }
+
+  lines.push("");
+
+  if (logText === UNABLE_TO_FETCH_LOGS) {
+    lines.push(logText);
+    return lines.join("\n");
+  }
+
+  const truncated =
+    logText.length > MAX_LOG_LENGTH
+      ? `${logText.slice(0, MAX_LOG_LENGTH)}\n\n... (truncated, ${logText.length - MAX_LOG_LENGTH} more characters)`
+      : logText;
+
+  lines.push(truncated);
+  return lines.join("\n");
+}
+
+function formatFixResponse(
   checkRuns: PullRequestCheckRun[],
   logs: Record<string, string>,
-): string {
-  const sections = checkRuns.map((run) => {
-    let section = `## ${run.name}`;
-    if (run.detailsUrl) {
-      section += `\n[View details](${run.detailsUrl})`;
-    }
-
-    const logText = run.id > 0 ? logs[String(run.id)] : undefined;
-    if (logText && logText !== "(Unable to fetch logs)") {
-      const truncated =
-        logText.length > MAX_LOG_LENGTH
-          ? `${logText.slice(0, MAX_LOG_LENGTH)}\n\n... (truncated, ${logText.length - MAX_LOG_LENGTH} more characters)`
-          : logText;
-      section += `\n\n\`\`\`\n${truncated}\n\`\`\``;
-    }
-
-    return section;
-  });
-
+): FixChecksResponse {
   const noun = checkRuns.length === 1 ? "check is" : "checks are";
-  const failNoun = checkRuns.length === 1 ? "failure" : "failures";
+  const names = checkRuns.map((run) => run.name).join(", ");
 
-  return `# Fix Failing Checks\n\nThe following ${noun} failing on this pull request. Please investigate the ${failNoun}, identify the root cause, and push a fix.\n\n${sections.join("\n\n---\n\n")}`;
+  return {
+    prompt: `# Fix Failing Checks\n\nThe following ${noun} failing on this pull request: ${names}. Review the attached snippets, identify the root cause, and push a fix.`,
+    snippets: checkRuns.map((run, index) => ({
+      filename: formatSnippetFilename(run, index),
+      content: formatSnippetContent(
+        run,
+        run.id > 0 ? logs[String(run.id)] : undefined,
+      ),
+    })),
+  };
 }
 
 /**
- * Builds a fully formatted "fix failing checks" message including CI logs.
+ * Builds a "fix failing checks" prompt plus native snippet attachments.
  *
  * Requires the GitHub App to have `actions: read` permission.
  *
@@ -54,7 +98,7 @@ function formatFixMessage(
  *   { checkRuns: PullRequestCheckRun[] } — the failing check runs
  *
  * Returns:
- *   { message: string } — the formatted message ready to send to the chat
+ *   { prompt: string, snippets: { filename: string, content: string }[] }
  */
 export async function POST(req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
@@ -99,8 +143,7 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
-  // Fetch logs for check runs that have valid IDs
-  const runsWithIds = checkRuns.filter((r) => r.id > 0);
+  const runsWithIds = checkRuns.filter((run) => run.id > 0);
   const logs: Record<string, string> = {};
 
   if (runsWithIds.length > 0) {
@@ -112,8 +155,7 @@ export async function POST(req: Request, context: RouteContext) {
       );
       token = tokenResult.token;
     } catch {
-      // Continue without logs if we can't get a token
-      return Response.json({ message: formatFixMessage(checkRuns, logs) });
+      return Response.json(formatFixResponse(checkRuns, logs));
     }
 
     const octokit = new Octokit({ auth: token });
@@ -134,11 +176,11 @@ export async function POST(req: Request, context: RouteContext) {
               ? response.data
               : String(response.data);
         } catch {
-          logs[String(run.id)] = "(Unable to fetch logs)";
+          logs[String(run.id)] = UNABLE_TO_FETCH_LOGS;
         }
       }),
     );
   }
 
-  return Response.json({ message: formatFixMessage(checkRuns, logs) });
+  return Response.json(formatFixResponse(checkRuns, logs));
 }

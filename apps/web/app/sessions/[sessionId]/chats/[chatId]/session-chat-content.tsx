@@ -1678,7 +1678,12 @@ export function SessionChatContent({
 
   const handleFixChecks = useCallback(
     async (failedRuns: PullRequestCheckRun[]) => {
-      let text = "";
+      const names = failedRuns.map((run) => run.name).join(", ");
+      const fallbackPrompt = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
+      let messagePayload: Parameters<typeof sendMessageWithPendingState>[0] = {
+        text: fallbackPrompt,
+      };
+
       try {
         const res = await fetch(`/api/sessions/${session.id}/checks/fix`, {
           method: "POST",
@@ -1686,19 +1691,37 @@ export function SessionChatContent({
           body: JSON.stringify({ checkRuns: failedRuns }),
         });
         if (res.ok) {
-          const data = (await res.json()) as { message: string };
-          text = data.message;
+          const data = (await res.json()) as {
+            prompt?: string;
+            snippets?: Array<{ filename: string; content: string }>;
+            message?: string;
+          };
+          const prompt = data.prompt?.trim() || data.message?.trim();
+          const snippets = Array.isArray(data.snippets) ? data.snippets : [];
+
+          if (prompt && snippets.length > 0) {
+            messagePayload = {
+              parts: [
+                {
+                  type: "text" as const,
+                  text: prompt,
+                },
+                ...snippets.map((snippet, index) => ({
+                  type: "data-snippet" as const,
+                  id: `fix-check-${index}`,
+                  data: snippet,
+                })),
+              ],
+            };
+          } else if (prompt) {
+            messagePayload = { text: prompt };
+          }
         }
       } catch {
         // Fall through to fallback
       }
 
-      if (!text) {
-        const names = failedRuns.map((run) => run.name).join(", ");
-        text = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
-      }
-
-      await sendMessageWithPendingState({ text });
+      await sendMessageWithPendingState(messagePayload);
     },
     [sendMessageWithPendingState, session.id],
   );
