@@ -36,6 +36,7 @@ type GitPanelContextValue = {
   /** File path to scroll to in the diff tab view */
   focusedDiffFile: string | null;
   setFocusedDiffFile: (file: string | null) => void;
+  focusedDiffRequestId: number;
 
   /** Open the diff tab in the main content area, optionally focused on a file */
   openDiffToFile: (filePath: string) => void;
@@ -68,6 +69,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const [gitPanelTab, setGitPanelTab] = useState<GitPanelTab>("diff");
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [focusedDiffFile, setFocusedDiffFile] = useState<string | null>(null);
+  const [focusedDiffRequestId, setFocusedDiffRequestId] = useState(0);
   const [changesTabDismissed, setChangesTabDismissed] = useState(false);
   const [diffScope, setDiffScope] = useState<DiffScope>("branch");
   const [hasActionNeeded, setHasActionNeeded] = useState(false);
@@ -81,6 +83,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
 
   const openDiffToFile = useCallback((filePath: string) => {
     setFocusedDiffFile(filePath);
+    setFocusedDiffRequestId((prev) => prev + 1);
     setActiveView("diff");
     setChangesTabDismissed(false);
   }, []);
@@ -98,6 +101,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
       setChangesTabDismissed,
       focusedDiffFile,
       setFocusedDiffFile,
+      focusedDiffRequestId,
       openDiffToFile,
       diffScope,
       setDiffScope,
@@ -115,6 +119,7 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
       activeView,
       changesTabDismissed,
       focusedDiffFile,
+      focusedDiffRequestId,
       openDiffToFile,
       diffScope,
       hasActionNeeded,

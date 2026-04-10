@@ -204,7 +204,7 @@ export function DiffTabView() {
     sandboxInfo,
     refreshDiff,
   } = useSessionChatWorkspaceContext();
-  const { focusedDiffFile, diffScope } = useGitPanel();
+  const { focusedDiffFile, focusedDiffRequestId, diffScope } = useGitPanel();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
@@ -222,24 +222,22 @@ export function DiffTabView() {
     return diff.files.filter(isUncommittedFile);
   }, [diff, diffScope]);
 
-  // When focusedDiffFile changes (from sidebar click), expand it and scroll to it
+  // When a file is requested from the sidebar, expand it and scroll to it.
   useEffect(() => {
     if (!focusedDiffFile) return;
 
-    // Expand the focused file
     setExpandedFiles((prev) => {
       if (prev.has(focusedDiffFile)) return prev;
       return new Set([...prev, focusedDiffFile]);
     });
 
-    // Scroll to the focused file after a short delay (to allow expand render)
     requestAnimationFrame(() => {
       const el = sectionRefs.current.get(focusedDiffFile);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     });
-  }, [focusedDiffFile]);
+  }, [focusedDiffFile, focusedDiffRequestId]);
 
   const showStaleIndicator = !sandboxInfo && diff !== null;
 
