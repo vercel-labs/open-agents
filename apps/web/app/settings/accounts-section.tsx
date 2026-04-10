@@ -216,7 +216,8 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
   const isInstalled = org.installStatus === "installed";
   // Use login-based GitHub avatar which always works, even for DB-only entries
   const avatarSrc =
-    org.avatarUrl || `https://avatars.githubusercontent.com/${org.login}?s=40&v=4`;
+    org.avatarUrl ||
+    `https://avatars.githubusercontent.com/${org.login}?s=40&v=4`;
 
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
@@ -236,7 +237,12 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
           repositorySelection={org.repositorySelection}
         />
         {isInstalled && org.installationUrl ? (
-          <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[11px] px-2"
+            asChild
+          >
             <Link href={org.installationUrl} target="_blank" rel="noreferrer">
               Configure
               <ExternalLink className="ml-1 size-2.5" />
@@ -387,7 +393,12 @@ function ConnectionErrorState({ onRetry }: { onRetry: () => void }) {
         <AlertCircle className="size-4 shrink-0 text-destructive" />
         <span>Failed to load GitHub connection info.</span>
       </div>
-      <Button variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={onRetry}
+      >
         Retry
       </Button>
     </div>
@@ -552,9 +563,9 @@ function ConnectedState({
                     </p>
                     <p className="mt-0.5">
                       If an organization is not listed, you may not have
-                      membership, or the org restricts third-party access. Ask an
-                      org owner to install the GitHub App, or request access from
-                      your organization&apos;s settings page on GitHub.
+                      membership, or the org restricts third-party access. Ask
+                      an org owner to install the GitHub App, or request access
+                      from your organization&apos;s settings page on GitHub.
                     </p>
                   </div>
                 </div>

@@ -80,8 +80,7 @@ export async function GET() {
     }
 
     const personalInstallation = installations.find(
-      (i) =>
-        i.accountLogin.toLowerCase() === ghAccount.username.toLowerCase(),
+      (i) => i.accountLogin.toLowerCase() === ghAccount.username.toLowerCase(),
     );
 
     const orgs: OrgInstallStatus[] = installations
