@@ -1,7 +1,12 @@
 "use client";
 
 import type { AskUserQuestionInput } from "@open-harness/agent";
-import { isReasoningUIPart, isToolUIPart, type FileUIPart } from "ai";
+import {
+  isReasoningUIPart,
+  isToolUIPart,
+  type FileUIPart,
+  type LanguageModelUsage,
+} from "ai";
 import {
   Archive,
   ArrowDown,
@@ -427,6 +432,65 @@ function formatUsd(amount: number): string {
   );
 }
 
+type MessageUsageTotals = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+};
+
+function getCachedInputTokens(usage: LanguageModelUsage | undefined): number {
+  return (
+    usage?.inputTokenDetails?.cacheReadTokens ?? usage?.cachedInputTokens ?? 0
+  );
+}
+
+function getUsageTotals(
+  usage: LanguageModelUsage | undefined,
+): MessageUsageTotals {
+  return {
+    inputTokens: usage?.inputTokens ?? 0,
+    cachedInputTokens: getCachedInputTokens(usage),
+    outputTokens: usage?.outputTokens ?? 0,
+  };
+}
+
+function getLatestContextUsage(
+  messages: WebAgentUIMessage[],
+): MessageUsageTotals {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
+      return getUsageTotals(message.metadata.lastStepUsage);
+    }
+  }
+
+  return getUsageTotals(undefined);
+}
+
+function getConversationUsage(
+  messages: WebAgentUIMessage[],
+): MessageUsageTotals {
+  return messages.reduce<MessageUsageTotals>((total, message) => {
+    if (message.role !== "assistant") {
+      return total;
+    }
+
+    const usage =
+      message.metadata?.totalMessageUsage ?? message.metadata?.lastStepUsage;
+    if (!usage) {
+      return total;
+    }
+
+    const usageTotals = getUsageTotals(usage);
+    return {
+      inputTokens: total.inputTokens + usageTotals.inputTokens,
+      cachedInputTokens:
+        total.cachedInputTokens + usageTotals.cachedInputTokens,
+      outputTokens: total.outputTokens + usageTotals.outputTokens,
+    };
+  }, getUsageTotals(undefined));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -475,14 +539,16 @@ function CircularProgress({
 
 function ContextUsageIndicator({
   inputTokens,
-  cachedInputTokens,
-  outputTokens,
+  conversationInputTokens,
+  conversationCachedInputTokens,
+  conversationOutputTokens,
   contextLimit,
   modelCost,
 }: {
   inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
+  conversationInputTokens: number;
+  conversationCachedInputTokens: number;
+  conversationOutputTokens: number;
   contextLimit: number;
   modelCost?: AvailableModelCost;
 }) {
@@ -494,9 +560,9 @@ function ContextUsageIndicator({
     contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
   const estimatedCost = estimateModelUsageCost(
     {
-      inputTokens,
-      cachedInputTokens,
-      outputTokens,
+      inputTokens: conversationInputTokens,
+      cachedInputTokens: conversationCachedInputTokens,
+      outputTokens: conversationOutputTokens,
     },
     modelCost,
   );
@@ -526,12 +592,12 @@ function ContextUsageIndicator({
         {/* Breakdown */}
         <div className="space-y-1 p-3 text-xs">
           <div className="flex justify-between gap-6">
-            <span className="opacity-60">Input</span>
-            <span>{formatTokens(inputTokens)}</span>
+            <span className="opacity-60">Conversation input</span>
+            <span>{formatTokens(conversationInputTokens)}</span>
           </div>
           <div className="flex justify-between gap-6">
-            <span className="opacity-60">Output</span>
-            <span>{formatTokens(outputTokens)}</span>
+            <span className="opacity-60">Conversation output</span>
+            <span>{formatTokens(conversationOutputTokens)}</span>
           </div>
           {estimatedCost !== undefined ? (
             <div className="flex justify-between gap-6">
@@ -2468,22 +2534,14 @@ export function SessionChatContent({
   // Note: SWR handles automatic fetching when sandbox becomes available
   // and caching/deduplication of requests
 
-  // Get token usage from the most recent assistant message (current context usage)
-  const tokenUsage = useMemo(() => {
-    // Find the last assistant message with usage metadata
-    for (let i = renderMessages.length - 1; i >= 0; i--) {
-      const message = renderMessages[i];
-      if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
-        return {
-          inputTokens: message.metadata.lastStepUsage.inputTokens ?? 0,
-          cachedInputTokens:
-            message.metadata.lastStepUsage.cachedInputTokens ?? 0,
-          outputTokens: message.metadata.lastStepUsage.outputTokens ?? 0,
-        };
-      }
-    }
-    return { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
-  }, [renderMessages]);
+  const tokenUsage = useMemo(
+    () => getLatestContextUsage(renderMessages),
+    [renderMessages],
+  );
+  const conversationUsage = useMemo(
+    () => getConversationUsage(renderMessages),
+    [renderMessages],
+  );
 
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
@@ -3956,8 +4014,15 @@ export function SessionChatContent({
                             )}
                             <ContextUsageIndicator
                               inputTokens={tokenUsage.inputTokens}
-                              cachedInputTokens={tokenUsage.cachedInputTokens}
-                              outputTokens={tokenUsage.outputTokens}
+                              conversationInputTokens={
+                                conversationUsage.inputTokens
+                              }
+                              conversationCachedInputTokens={
+                                conversationUsage.cachedInputTokens
+                              }
+                              conversationOutputTokens={
+                                conversationUsage.outputTokens
+                              }
                               contextLimit={
                                 contextLimit ?? DEFAULT_CONTEXT_LIMIT
                               }
