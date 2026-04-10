@@ -327,6 +327,30 @@ export async function refreshDiffCache(
   }
 }
 
+export async function hasAutoCommitChangesStep(params: {
+  sandboxState: SandboxState;
+}): Promise<boolean> {
+  "use step";
+  try {
+    const { connectSandbox } = await import("@open-harness/sandbox");
+    const sandbox: Sandbox = await connectSandbox(params.sandboxState);
+    const statusResult = await sandbox.exec(
+      "git status --porcelain",
+      sandbox.workingDirectory,
+      10000,
+    );
+
+    if (!statusResult.success) {
+      return true;
+    }
+
+    return statusResult.stdout.trim().length > 0;
+  } catch (error) {
+    console.error("[workflow] Failed to preflight auto-commit changes:", error);
+    return true;
+  }
+}
+
 export async function runAutoCommitStep(params: {
   userId: string;
   sessionId: string;

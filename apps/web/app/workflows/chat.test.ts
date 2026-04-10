@@ -13,6 +13,7 @@ const spies = {
   recordWorkflowUsage: mock(() => Promise.resolve()),
   refreshDiffCache: mock(() => Promise.resolve()),
   refreshLifecycleActivity: mock(() => Promise.resolve()),
+  hasAutoCommitChangesStep: mock(() => Promise.resolve(true)),
   runAutoCommitStep: mock(() =>
     Promise.resolve({ committed: false, pushed: false }),
   ),
@@ -562,6 +563,27 @@ describe("runAgentWorkflow", () => {
         repoName: "repo",
       }),
     );
+  });
+
+  test("skips optimistic commit streaming when preflight finds no changes", async () => {
+    spies.hasAutoCommitChangesStep.mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCommitStep).not.toHaveBeenCalled();
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledTimes(1);
+    expect(
+      writtenChunks.filter((chunk) => chunk.type === "data-commit"),
+    ).toEqual([]);
   });
 
   test("streams and persists resolved git data parts", async () => {
