@@ -92,10 +92,7 @@ export function FileTabView() {
                 className="h-7 w-7 px-0"
               >
                 <RefreshCw
-                  className={cn(
-                    "h-3.5 w-3.5",
-                    isRefreshing && "animate-spin",
-                  )}
+                  className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
                 />
               </Button>
             </TooltipTrigger>

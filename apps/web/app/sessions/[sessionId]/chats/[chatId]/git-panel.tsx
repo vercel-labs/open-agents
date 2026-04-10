@@ -1543,28 +1543,30 @@ export function GitPanel(props: GitPanelProps) {
 
       {/* Tab bar — matches chat tabs sub-header height */}
       <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-[7px]">
-        {["files" as const, "diff" as const, ...(showGitTab ? (["pr"] as const) : [])].map(
-          (tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setGitPanelTab(tab)}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                gitPanelTab === tab
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted/50",
-              )}
-            >
-              {tab === "files" ? "Files" : tab === "diff" ? "Changes" : "PR"}
-              {tab === "diff" && hasDiffChanges && (
-                <span className="ml-1 text-[10px] text-muted-foreground font-mono">
-                  {diffFiles?.length ?? 0}
-                </span>
-              )}
-            </button>
-          ),
-        )}
+        {[
+          "files" as const,
+          "diff" as const,
+          ...(showGitTab ? (["pr"] as const) : []),
+        ].map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setGitPanelTab(tab)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              gitPanelTab === tab
+                ? "bg-secondary text-secondary-foreground"
+                : "text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            {tab === "files" ? "Files" : tab === "diff" ? "Changes" : "PR"}
+            {tab === "diff" && hasDiffChanges && (
+              <span className="ml-1 text-[10px] text-muted-foreground font-mono">
+                {diffFiles?.length ?? 0}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Panel content */}
@@ -1590,9 +1592,7 @@ export function GitPanel(props: GitPanelProps) {
             ) : (
               <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
                 <p className="text-xs text-muted-foreground">
-                  {!hasSandbox
-                    ? "Waiting for sandbox…"
-                    : "No files found"}
+                  {!hasSandbox ? "Waiting for sandbox…" : "No files found"}
                 </p>
               </div>
             )}

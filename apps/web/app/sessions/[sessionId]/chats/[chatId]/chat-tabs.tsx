@@ -77,11 +77,20 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   useEffect(() => {
     const isFileVisible = !fileTabDismissed && !!focusedFilePath;
     if (isFileVisible && fileTabIndex === null) {
-      setFileTabIndex(chats.length + ((!changesTabDismissed && !!focusedDiffFile) ? 1 : 0));
+      setFileTabIndex(
+        chats.length + (!changesTabDismissed && !!focusedDiffFile ? 1 : 0),
+      );
     } else if (!isFileVisible) {
       setFileTabIndex(null);
     }
-  }, [focusedFilePath, fileTabDismissed, chats.length, fileTabIndex, changesTabDismissed, focusedDiffFile]);
+  }, [
+    focusedFilePath,
+    fileTabDismissed,
+    chats.length,
+    fileTabIndex,
+    changesTabDismissed,
+    focusedDiffFile,
+  ]);
 
   const handleCloseChanges = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -158,7 +167,8 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
               ? (fileTabIndex ?? chats.length + (showChangesTab ? 1 : 0))
               : null;
 
-            const fileTabFileName = focusedFilePath?.split("/").pop() ?? focusedFilePath ?? "";
+            const fileTabFileName =
+              focusedFilePath?.split("/").pop() ?? focusedFilePath ?? "";
 
             const changesTabEl = showChangesTab ? (
               <div
@@ -204,7 +214,9 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
                   className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
                 >
                   <FileText className="h-3.5 w-3.5" />
-                  <span className="max-w-[120px] truncate">{fileTabFileName}</span>
+                  <span className="max-w-[120px] truncate">
+                    {fileTabFileName}
+                  </span>
                 </button>
                 <button
                   type="button"

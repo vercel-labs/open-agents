@@ -3,7 +3,11 @@
 import { ChevronRight } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
-import { FolderIcon, FolderOpenIcon, getFileIcon } from "@/components/file-type-icons";
+import {
+  FolderIcon,
+  FolderOpenIcon,
+  getFileIcon,
+} from "@/components/file-type-icons";
 import { cn } from "@/lib/utils";
 
 type TreeNode = {
@@ -24,9 +28,7 @@ function buildTree(files: FileSuggestion[]): TreeNode[] {
   });
 
   for (const file of sorted) {
-    const path = file.isDirectory
-      ? file.value.replace(/\/$/, "")
-      : file.value;
+    const path = file.isDirectory ? file.value.replace(/\/$/, "") : file.value;
     const parts = path.split("/");
 
     let current = root;
