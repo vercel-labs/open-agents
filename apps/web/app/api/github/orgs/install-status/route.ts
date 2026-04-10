@@ -59,6 +59,10 @@ export async function GET() {
   }
 
   const token = await getUserGitHubToken();
+  console.log("install-status: token resolved", {
+    userId: session.user.id,
+    hasToken: !!token,
+  });
 
   // When the token is expired/invalid, fall back to DB-cached data so the UI
   // can still show the connected user and prompt to reconnect.
@@ -139,6 +143,23 @@ export async function GET() {
     ]);
 
     if (!userResponse.ok || !orgsResponse.ok) {
+      const [userBody, orgsBody] = await Promise.all([
+        userResponse.ok
+          ? Promise.resolve("OK")
+          : userResponse.text().catch(() => "unreadable"),
+        orgsResponse.ok
+          ? Promise.resolve("OK")
+          : orgsResponse.text().catch(() => "unreadable"),
+      ]);
+      console.error("GitHub API error in install-status:", {
+        userId: session.user.id,
+        userStatus: userResponse.status,
+        userBody: userResponse.ok ? "(ok)" : userBody,
+        orgsStatus: orgsResponse.status,
+        orgsBody: orgsResponse.ok ? "(ok)" : orgsBody,
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 8) + "...",
+      });
       return NextResponse.json(
         { error: "Failed to fetch GitHub data" },
         { status: 502 },
