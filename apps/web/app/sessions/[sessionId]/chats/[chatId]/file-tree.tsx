@@ -92,21 +92,21 @@ function FileTreeNode({
           type="button"
           onClick={() => onToggle(node.path)}
           className={cn(
-            "flex w-full items-center gap-1 rounded-sm px-1 py-[3px] text-left text-xs hover:bg-muted/80 transition-colors",
+            "flex w-full items-center gap-1.5 rounded-sm px-1 py-[3px] text-left text-[13px] hover:bg-muted/80 transition-colors",
             "text-foreground",
           )}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
           <ChevronRight
             className={cn(
-              "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-150",
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
               isOpen && "rotate-90",
             )}
           />
           {isOpen ? (
-            <FolderOpenIcon className="h-3.5 w-3.5 shrink-0" />
+            <FolderOpenIcon className="h-4 w-4 shrink-0" />
           ) : (
-            <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+            <FolderIcon className="h-4 w-4 shrink-0" />
           )}
           <span className="truncate">{node.name}</span>
         </button>
@@ -133,12 +133,12 @@ function FileTreeNode({
       type="button"
       onClick={() => onFileClick(node.path)}
       className={cn(
-        "flex w-full items-center gap-1 rounded-sm px-1 py-[3px] text-left text-xs hover:bg-muted/80 transition-colors",
+        "flex w-full items-center gap-1.5 rounded-sm px-1 py-[3px] text-left text-[13px] hover:bg-muted/80 transition-colors",
         "text-muted-foreground hover:text-foreground",
       )}
-      style={{ paddingLeft: `${depth * 12 + 4 + 14}px` }}
+      style={{ paddingLeft: `${depth * 12 + 4 + 16}px` }}
     >
-      {getFileIcon(node.name, { className: "h-3.5 w-3.5 shrink-0" })}
+      {getFileIcon(node.name, { className: "h-4 w-4 shrink-0" })}
       <span className="truncate">{node.name}</span>
     </button>
   );
