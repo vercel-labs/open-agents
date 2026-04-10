@@ -3,11 +3,11 @@ import { getCachedGitHubBranches } from "@/lib/github/cached-api";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
-interface PublicRepoInfo {
+interface RepoInfo {
   default_branch: string;
 }
 
-interface PublicBranch {
+interface Branch {
   name: string;
 }
 
@@ -17,7 +17,7 @@ function normalizeGitHubLimit(limit: number | undefined): number | undefined {
     : undefined;
 }
 
-function parsePublicRepoInfo(value: unknown): PublicRepoInfo | null {
+function parseRepoInfo(value: unknown): RepoInfo | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -30,12 +30,12 @@ function parsePublicRepoInfo(value: unknown): PublicRepoInfo | null {
   return { default_branch: defaultBranch };
 }
 
-function parsePublicBranches(value: unknown): PublicBranch[] | null {
+function parseBranches(value: unknown): Branch[] | null {
   if (!Array.isArray(value)) {
     return null;
   }
 
-  const branches: PublicBranch[] = [];
+  const branches: Branch[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object") {
       return null;
@@ -52,35 +52,132 @@ function parsePublicBranches(value: unknown): PublicBranch[] | null {
   return branches;
 }
 
-async function fetchPublicGitHubBranches(
+function parseMatchingRefs(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const branches: string[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+
+    const ref = Reflect.get(item, "ref");
+    if (typeof ref !== "string") {
+      return null;
+    }
+
+    if (ref.startsWith("refs/heads/")) {
+      branches.push(ref.slice("refs/heads/".length));
+    }
+  }
+
+  return branches;
+}
+
+function sortBranches(branches: string[], defaultBranch: string) {
+  branches.sort((a, b) => {
+    if (a === defaultBranch) {
+      return -1;
+    }
+    if (b === defaultBranch) {
+      return 1;
+    }
+    return a.toLowerCase().localeCompare(b.toLowerCase());
+  });
+}
+
+function getGitHubHeaders(token?: string): HeadersInit {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function fetchGitHubRepoInfo(
   owner: string,
   repo: string,
-  limit?: number,
-): Promise<{
-  branches: string[];
-  defaultBranch: string;
-} | null> {
-  const repoInfoResponse = await fetch(
+  token?: string,
+): Promise<RepoInfo | null> {
+  const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}`,
     {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: getGitHubHeaders(token),
       cache: "no-store",
     },
   );
 
-  if (!repoInfoResponse.ok) {
+  if (!response.ok) {
     return null;
   }
 
-  const repoInfoJson: unknown = await repoInfoResponse.json();
-  const repoInfo = parsePublicRepoInfo(repoInfoJson);
+  const repoInfoJson: unknown = await response.json();
+  return parseRepoInfo(repoInfoJson);
+}
+
+async function fetchMatchingBranches(
+  owner: string,
+  repo: string,
+  defaultBranch: string,
+  query: string,
+  limit?: number,
+  token?: string,
+): Promise<{
+  branches: string[];
+  defaultBranch: string;
+} | null> {
+  const normalizedLimit = normalizeGitHubLimit(limit);
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/matching-refs/heads/${encodeURIComponent(query)}`,
+    {
+      headers: getGitHubHeaders(token),
+      cache: "no-store",
+    },
+  );
+
+  if (response.status === 404) {
+    return { branches: [], defaultBranch };
+  }
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const refsJson: unknown = await response.json();
+  const branches = parseMatchingRefs(refsJson);
+  if (!branches) {
+    return null;
+  }
+
+  sortBranches(branches, defaultBranch);
+
+  return {
+    branches: normalizedLimit ? branches.slice(0, normalizedLimit) : branches,
+    defaultBranch,
+  };
+}
+
+async function fetchPublicGitHubBranches(
+  owner: string,
+  repo: string,
+  limit?: number,
+  query?: string,
+): Promise<{
+  branches: string[];
+  defaultBranch: string;
+} | null> {
+  const repoInfo = await fetchGitHubRepoInfo(owner, repo);
   if (!repoInfo) {
     return null;
   }
+
   const defaultBranch = repoInfo.default_branch;
+  if (query) {
+    return fetchMatchingBranches(owner, repo, defaultBranch, query, limit);
+  }
+
   const normalizedLimit = normalizeGitHubLimit(limit);
   const branches: string[] = [];
 
@@ -90,10 +187,7 @@ async function fetchPublicGitHubBranches(
     const branchesResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
       {
-        headers: {
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: getGitHubHeaders(),
         cache: "no-store",
       },
     );
@@ -106,7 +200,7 @@ async function fetchPublicGitHubBranches(
     }
 
     const pageBranchesJson: unknown = await branchesResponse.json();
-    const pageBranches = parsePublicBranches(pageBranchesJson);
+    const pageBranches = parseBranches(pageBranchesJson);
     if (!pageBranches) {
       if (page === 1) {
         return null;
@@ -134,20 +228,37 @@ async function fetchPublicGitHubBranches(
     branches.push(defaultBranch);
   }
 
-  branches.sort((a, b) => {
-    if (a === defaultBranch) {
-      return -1;
-    }
-    if (b === defaultBranch) {
-      return 1;
-    }
-    return a.toLowerCase().localeCompare(b.toLowerCase());
-  });
+  sortBranches(branches, defaultBranch);
 
   return {
     branches: normalizedLimit ? branches.slice(0, normalizedLimit) : branches,
     defaultBranch,
   };
+}
+
+async function fetchAuthenticatedGitHubBranchMatches(
+  owner: string,
+  repo: string,
+  token: string,
+  query: string,
+  limit?: number,
+): Promise<{
+  branches: string[];
+  defaultBranch: string;
+} | null> {
+  const repoInfo = await fetchGitHubRepoInfo(owner, repo, token);
+  if (!repoInfo) {
+    return null;
+  }
+
+  return fetchMatchingBranches(
+    owner,
+    repo,
+    repoInfo.default_branch,
+    query,
+    limit,
+    token,
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -166,6 +277,7 @@ export async function GET(request: NextRequest) {
   const rawLimit = searchParams.get("limit");
   const parsedLimit = rawLimit ? Number.parseInt(rawLimit, 10) : undefined;
   const limit = normalizeGitHubLimit(parsedLimit);
+  const query = searchParams.get("query")?.trim() || undefined;
 
   if (!owner || !repo) {
     return NextResponse.json(
@@ -184,20 +296,33 @@ export async function GET(request: NextRequest) {
 
   try {
     if (token) {
-      const result = await getCachedGitHubBranches(
-        session.user.id,
-        token,
-        owner,
-        repo,
-        limit,
-      );
+      const result = query
+        ? await fetchAuthenticatedGitHubBranchMatches(
+            owner,
+            repo,
+            token,
+            query,
+            limit,
+          )
+        : await getCachedGitHubBranches(
+            session.user.id,
+            token,
+            owner,
+            repo,
+            limit,
+          );
 
       if (result) {
         return NextResponse.json(result);
       }
     }
 
-    const publicResult = await fetchPublicGitHubBranches(owner, repo, limit);
+    const publicResult = await fetchPublicGitHubBranches(
+      owner,
+      repo,
+      limit,
+      query,
+    );
     if (publicResult) {
       return NextResponse.json(publicResult);
     }
