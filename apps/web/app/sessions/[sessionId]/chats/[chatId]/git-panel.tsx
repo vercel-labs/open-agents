@@ -1512,14 +1512,17 @@ export function GitPanel(props: GitPanelProps) {
     (gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
   const showCreatePrShortcut = hasRepo && !hasExistingPr && showGitTab;
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
-  const previousGitPanelOpenRef = useRef(gitPanelOpen);
+  const diffScopeManuallySetRef = useRef(false);
 
   useEffect(() => {
-    if (!previousGitPanelOpenRef.current && gitPanelOpen) {
-      setDiffScope(hasUnstagedChanges ? "uncommitted" : "branch");
+    if (!gitPanelOpen) {
+      diffScopeManuallySetRef.current = false;
+      return;
     }
 
-    previousGitPanelOpenRef.current = gitPanelOpen;
+    if (!diffScopeManuallySetRef.current) {
+      setDiffScope(hasUnstagedChanges ? "uncommitted" : "branch");
+    }
   }, [gitPanelOpen, hasUnstagedChanges, setDiffScope]);
 
   return (
@@ -1655,19 +1658,10 @@ export function GitPanel(props: GitPanelProps) {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setDiffScope("uncommitted")}
-                      className={cn(
-                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
-                        diffScope === "uncommitted"
-                          ? "bg-secondary text-secondary-foreground"
-                          : "text-muted-foreground hover:bg-muted/50",
-                      )}
-                    >
-                      Uncommitted
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDiffScope("branch")}
+                      onClick={() => {
+                        diffScopeManuallySetRef.current = true;
+                        setDiffScope("branch");
+                      }}
                       className={cn(
                         "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
                         diffScope === "branch"
@@ -1676,6 +1670,21 @@ export function GitPanel(props: GitPanelProps) {
                       )}
                     >
                       All Changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        diffScopeManuallySetRef.current = true;
+                        setDiffScope("uncommitted");
+                      }}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        diffScope === "uncommitted"
+                          ? "bg-secondary text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
+                      )}
+                    >
+                      Uncommitted
                     </button>
                   </div>
                   <Button
