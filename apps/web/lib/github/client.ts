@@ -45,6 +45,10 @@ export type PullRequestMergeReadiness = {
     headOwner: string | null;
     mergeable: boolean | null;
     mergeableState: string | null;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    commits: number;
   };
   error?: string;
 };
@@ -674,6 +678,10 @@ export async function getPullRequestMergeReadiness(params: {
         headOwner: pullRequest.head.repo?.owner.login ?? null,
         mergeable: pullRequest.mergeable,
         mergeableState: pullRequest.mergeable_state,
+        additions: pullRequest.additions ?? 0,
+        deletions: pullRequest.deletions ?? 0,
+        changedFiles: pullRequest.changed_files ?? 0,
+        commits: pullRequest.commits ?? 0,
       },
     };
   } catch (error: unknown) {

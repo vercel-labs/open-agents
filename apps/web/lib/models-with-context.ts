@@ -1,7 +1,7 @@
 import "server-only";
 
 import { gateway } from "ai";
-import type { AvailableModel } from "./models";
+import type { AvailableModel, AvailableModelCost } from "./models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 750;
@@ -10,14 +10,71 @@ type GatewayModel = Awaited<
   ReturnType<typeof gateway.getAvailableModels>
 >["models"][number];
 
+interface ModelsDevMetadata {
+  contextWindow?: number;
+  cost?: AvailableModelCost;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function getModelsDevContextMap(data: unknown): Map<string, number> {
-  const contextMap = new Map<string, number>();
+function toOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function getModelsDevCostTier(
+  value: unknown,
+): AvailableModelCost | AvailableModelCost["context_over_200k"] | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const input = toOptionalNumber(value.input);
+  const output = toOptionalNumber(value.output);
+  const cacheRead = toOptionalNumber(value.cache_read);
+
+  if (
+    typeof input !== "number" &&
+    typeof output !== "number" &&
+    typeof cacheRead !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    input,
+    output,
+    cache_read: cacheRead,
+  };
+}
+
+function getModelsDevCost(value: unknown): AvailableModelCost | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const baseCost = getModelsDevCostTier(value);
+  const contextOver200k = getModelsDevCostTier(value.context_over_200k);
+
+  if (!baseCost && !contextOver200k) {
+    return undefined;
+  }
+
+  return {
+    ...baseCost,
+    ...(contextOver200k ? { context_over_200k: contextOver200k } : {}),
+  };
+}
+
+function getModelsDevMetadataMap(
+  data: unknown,
+): Map<string, ModelsDevMetadata> {
+  const metadataMap = new Map<string, ModelsDevMetadata>();
   if (!isRecord(data)) {
-    return contextMap;
+    return metadataMap;
   }
 
   for (const [providerKey, providerValue] of Object.entries(data)) {
@@ -40,23 +97,34 @@ function getModelsDevContextMap(data: unknown): Map<string, number> {
       const modelId = rawId.includes("/") ? rawId : `${providerKey}/${rawId}`;
 
       const limitValue = modelValue.limit;
-      if (!isRecord(limitValue)) {
+      const contextWindow = isRecord(limitValue)
+        ? toOptionalNumber(limitValue.context)
+        : undefined;
+      const cost = getModelsDevCost(modelValue.cost);
+
+      if (
+        (typeof contextWindow !== "number" || contextWindow <= 0) &&
+        cost === undefined
+      ) {
         continue;
       }
 
-      const contextValue = limitValue.context;
-      if (typeof contextValue !== "number" || contextValue <= 0) {
-        continue;
-      }
-
-      contextMap.set(modelId, contextValue);
+      metadataMap.set(modelId, {
+        contextWindow:
+          typeof contextWindow === "number" && contextWindow > 0
+            ? contextWindow
+            : undefined,
+        cost,
+      });
     }
   }
 
-  return contextMap;
+  return metadataMap;
 }
 
-async function fetchModelsDevContextMap(): Promise<Map<string, number>> {
+async function fetchModelsDevMetadataMap(): Promise<
+  Map<string, ModelsDevMetadata>
+> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), MODELS_DEV_TIMEOUT_MS);
 
@@ -68,7 +136,7 @@ async function fetchModelsDevContextMap(): Promise<Map<string, number>> {
       return new Map();
     }
     const data: unknown = await response.json();
-    return getModelsDevContextMap(data);
+    return getModelsDevMetadataMap(data);
   } catch {
     return new Map();
   } finally {
@@ -76,33 +144,29 @@ async function fetchModelsDevContextMap(): Promise<Map<string, number>> {
   }
 }
 
-function resolveContextLimit(
-  modelId: string,
-  contextMap: Map<string, number>,
-): number | undefined {
-  const directMatch = contextMap.get(modelId);
-  if (typeof directMatch !== "number" || directMatch <= 0) {
-    return undefined;
-  }
-
-  return directMatch;
-}
-
-function addContextWindow(
+function addModelsDevMetadata(
   model: GatewayModel,
-  contextMap: Map<string, number>,
+  metadataMap: Map<string, ModelsDevMetadata>,
 ): AvailableModel {
-  const contextLimit = resolveContextLimit(model.id, contextMap);
-  if (contextLimit == null) {
+  const metadata = metadataMap.get(model.id);
+  if (!metadata) {
     return model;
   }
 
-  const existingContext = Reflect.get(model, "context_window");
-  if (existingContext === contextLimit) {
-    return model;
+  const nextModel: AvailableModel = { ...model };
+
+  if (
+    typeof metadata.contextWindow === "number" &&
+    metadata.contextWindow > 0
+  ) {
+    nextModel.context_window = metadata.contextWindow;
   }
 
-  return { ...model, context_window: contextLimit };
+  if (metadata.cost) {
+    nextModel.cost = metadata.cost;
+  }
+
+  return nextModel;
 }
 
 export async function fetchAvailableLanguageModels(): Promise<
@@ -115,10 +179,12 @@ export async function fetchAvailableLanguageModels(): Promise<
 export async function fetchAvailableLanguageModelsWithContext(): Promise<
   AvailableModel[]
 > {
-  const [models, modelsDevContextMap] = await Promise.all([
+  const [models, modelsDevMetadataMap] = await Promise.all([
     fetchAvailableLanguageModels(),
-    fetchModelsDevContextMap(),
+    fetchModelsDevMetadataMap(),
   ]);
 
-  return models.map((model) => addContextWindow(model, modelsDevContextMap));
+  return models.map((model) =>
+    addModelsDevMetadata(model, modelsDevMetadataMap),
+  );
 }

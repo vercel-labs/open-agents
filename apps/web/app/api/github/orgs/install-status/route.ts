@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { isGitHubAppConfigured } from "@/lib/github/app-auth";
 import { getInstallationManageUrl } from "@/lib/github/installation-url";
@@ -17,16 +18,31 @@ interface GitHubUser {
   avatar_url: string;
 }
 
-export interface OrgInstallStatus {
-  /** Numeric GitHub account/org ID, used for target_id in install URLs */
+export interface GitHubUserProfile {
   githubId: number;
   login: string;
   avatarUrl: string;
-  type: "User" | "Organization";
+}
+
+export interface OrgInstallStatus {
+  githubId: number;
+  login: string;
+  avatarUrl: string;
   installStatus: "installed" | "not_installed";
   installationId: number | null;
   installationUrl: string | null;
   repositorySelection: "all" | "selected" | null;
+}
+
+export interface ConnectionStatusResponse {
+  user: GitHubUserProfile;
+  /** Whether the user's personal account has the app installed */
+  personalInstallStatus: "installed" | "not_installed";
+  personalInstallationUrl: string | null;
+  personalRepositorySelection: "all" | "selected" | null;
+  orgs: OrgInstallStatus[];
+  /** True when the GitHub token is expired and the data is from the DB cache */
+  tokenExpired?: boolean;
 }
 
 export async function GET() {
@@ -35,19 +51,77 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const token = await getUserGitHubToken();
-  if (!token) {
-    return NextResponse.json(
-      { error: "GitHub not connected" },
-      { status: 401 },
-    );
-  }
-
   if (!isGitHubAppConfigured()) {
     return NextResponse.json(
       { error: "GitHub App not configured" },
       { status: 500 },
     );
+  }
+
+  const token = await getUserGitHubToken();
+  console.log("install-status: token resolved", {
+    userId: session.user.id,
+    hasToken: !!token,
+  });
+
+  // When the token is expired/invalid, fall back to DB-cached data so the UI
+  // can still show the connected user and prompt to reconnect.
+  if (!token) {
+    const [ghAccount, installations] = await Promise.all([
+      getGitHubAccount(session.user.id),
+      getInstallationsByUserId(session.user.id),
+    ]);
+
+    if (!ghAccount) {
+      return NextResponse.json(
+        { error: "GitHub not connected" },
+        { status: 401 },
+      );
+    }
+
+    const personalInstallation = installations.find(
+      (i) => i.accountLogin.toLowerCase() === ghAccount.username.toLowerCase(),
+    );
+
+    const orgs: OrgInstallStatus[] = installations
+      .filter(
+        (i) =>
+          i.accountLogin.toLowerCase() !== ghAccount.username.toLowerCase(),
+      )
+      .map((i) => ({
+        githubId: 0,
+        login: i.accountLogin,
+        avatarUrl: "",
+        installStatus: "installed" as const,
+        installationId: i.installationId,
+        installationUrl: getInstallationManageUrl(
+          i.installationId,
+          i.installationUrl,
+        ),
+        repositorySelection: i.repositorySelection,
+      }));
+
+    const response: ConnectionStatusResponse = {
+      user: {
+        githubId: Number(ghAccount.externalUserId) || 0,
+        login: ghAccount.username,
+        avatarUrl: `https://avatars.githubusercontent.com/u/${ghAccount.externalUserId}?v=4`,
+      },
+      personalInstallStatus: personalInstallation
+        ? "installed"
+        : "not_installed",
+      personalInstallationUrl: personalInstallation
+        ? getInstallationManageUrl(
+            personalInstallation.installationId,
+            personalInstallation.installationUrl,
+          )
+        : null,
+      personalRepositorySelection:
+        personalInstallation?.repositorySelection ?? null,
+      orgs,
+      tokenExpired: true,
+    };
+    return NextResponse.json(response);
   }
 
   try {
@@ -67,14 +141,31 @@ export async function GET() {
       }),
     ]);
 
-    if (!orgsResponse.ok || !userResponse.ok) {
+    if (!userResponse.ok || !orgsResponse.ok) {
+      const [userBody, orgsBody] = await Promise.all([
+        userResponse.ok
+          ? Promise.resolve("OK")
+          : userResponse.text().catch(() => "unreadable"),
+        orgsResponse.ok
+          ? Promise.resolve("OK")
+          : orgsResponse.text().catch(() => "unreadable"),
+      ]);
+      console.error("GitHub API error in install-status:", {
+        userId: session.user.id,
+        userStatus: userResponse.status,
+        userBody: userResponse.ok ? "(ok)" : userBody,
+        orgsStatus: orgsResponse.status,
+        orgsBody: orgsResponse.ok ? "(ok)" : orgsBody,
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 8) + "...",
+      });
       return NextResponse.json(
         { error: "Failed to fetch GitHub data" },
         { status: 502 },
       );
     }
 
-    const [orgs, user] = (await Promise.all([
+    const [githubOrgs, user] = (await Promise.all([
       orgsResponse.json(),
       userResponse.json(),
     ])) as [GitHubOrg[], GitHubUser];
@@ -85,36 +176,23 @@ export async function GET() {
       installations.map((i) => [i.accountLogin.toLowerCase(), i]),
     );
 
-    // Build status for the personal account
+    // Personal account install status
     const personalInstallation = installationsByLogin.get(
       user.login.toLowerCase(),
     );
-    const results: OrgInstallStatus[] = [
-      {
-        githubId: user.id,
-        login: user.login,
-        avatarUrl: user.avatar_url,
-        type: "User",
-        installStatus: personalInstallation ? "installed" : "not_installed",
-        installationId: personalInstallation?.installationId ?? null,
-        installationUrl: personalInstallation
-          ? getInstallationManageUrl(
-              personalInstallation.installationId,
-              personalInstallation.installationUrl,
-            )
-          : null,
-        repositorySelection: personalInstallation?.repositorySelection ?? null,
-      },
-    ];
 
-    // Build status for each org
-    for (const org of orgs) {
-      const installation = installationsByLogin.get(org.login.toLowerCase());
-      results.push({
+    // Build org list: merge GitHub orgs + DB installations
+    const seenLogins = new Set<string>();
+    const orgs: OrgInstallStatus[] = [];
+
+    for (const org of githubOrgs) {
+      const lowerLogin = org.login.toLowerCase();
+      seenLogins.add(lowerLogin);
+      const installation = installationsByLogin.get(lowerLogin);
+      orgs.push({
         githubId: org.id,
         login: org.login,
         avatarUrl: org.avatar_url,
-        type: "Organization",
         installStatus: installation ? "installed" : "not_installed",
         installationId: installation?.installationId ?? null,
         installationUrl: installation
@@ -127,7 +205,49 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json(results);
+    // Add any installed orgs not in the GitHub orgs list
+    for (const installation of installations) {
+      const lowerLogin = installation.accountLogin.toLowerCase();
+      if (
+        lowerLogin === user.login.toLowerCase() ||
+        seenLogins.has(lowerLogin)
+      ) {
+        continue;
+      }
+      orgs.push({
+        githubId: 0,
+        login: installation.accountLogin,
+        avatarUrl: "",
+        installStatus: "installed",
+        installationId: installation.installationId,
+        installationUrl: getInstallationManageUrl(
+          installation.installationId,
+          installation.installationUrl,
+        ),
+        repositorySelection: installation.repositorySelection,
+      });
+    }
+
+    const response: ConnectionStatusResponse = {
+      user: {
+        githubId: user.id,
+        login: user.login,
+        avatarUrl: user.avatar_url,
+      },
+      personalInstallStatus: personalInstallation
+        ? "installed"
+        : "not_installed",
+      personalInstallationUrl: personalInstallation
+        ? getInstallationManageUrl(
+            personalInstallation.installationId,
+            personalInstallation.installationUrl,
+          )
+        : null,
+      personalRepositorySelection:
+        personalInstallation?.repositorySelection ?? null,
+      orgs,
+    };
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Failed to fetch org install status:", error);
     return NextResponse.json(

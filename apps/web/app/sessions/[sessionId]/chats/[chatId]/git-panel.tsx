@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
+import type { WebAgentUIMessage } from "@/app/types";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { Session } from "@/lib/db/schema";
@@ -45,6 +46,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CheckRunsList } from "@/components/merge-check-runs";
+import {
+  MERGE_READINESS_POLL_INTERVAL_MS,
+  shouldPollMergeReadiness,
+} from "@/lib/merge-readiness-polling";
 import { cn } from "@/lib/utils";
 import {
   commitAndPushSessionChanges,
@@ -76,8 +81,6 @@ const mergeMethodDescriptions: Record<PullRequestMergeMethod, string> = {
   merge: "All commits will be added to the base branch via a merge commit.",
   rebase: "All commits will be rebased and added to the base branch.",
 };
-
-const MERGE_READINESS_POLL_INTERVAL_MS = 5_000;
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -128,6 +131,7 @@ type GitPanelProps = {
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
 };
 
 /* ------------------------------------------------------------------ */
@@ -229,6 +233,7 @@ function InlineCommitPanel({
   refreshGitStatus,
   onCommitted,
   isAgentWorking,
+  baseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -236,6 +241,7 @@ function InlineCommitPanel({
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
   onCommitted?: () => void;
   isAgentWorking: boolean;
+  baseBranch: string;
 }) {
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -245,10 +251,11 @@ function InlineCommitPanel({
     commitSha?: string;
     commitMessage?: string;
   } | null>(null);
-  const [baseBranch, setBaseBranch] = useState("main");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   const hasUncommittedChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -263,16 +270,6 @@ function InlineCommitPanel({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isDetachedHead = gitStatus?.isDetachedHead ?? false;
   const needsNewBranch = displayBranch === baseBranch || isDetachedHead;
-
-  // Fetch branches on mount
-  useEffect(() => {
-    if (!session.repoOwner || !session.repoName) return;
-    void fetchRepoBranches(session.repoOwner, session.repoName)
-      .then((data) => {
-        setBaseBranch(data.defaultBranch);
-      })
-      .catch(() => {});
-  }, [session.repoOwner, session.repoName]);
 
   // Cleanup timeout
   useEffect(() => {
@@ -304,6 +301,19 @@ function InlineCommitPanel({
       );
     } finally {
       setIsCreatingBranch(false);
+    }
+  };
+
+  const handleExpandCommit = () => {
+    setIsExpanded(true);
+    // Auto-generate message when expanding for the first time
+    if (
+      !hasGeneratedRef.current &&
+      !commitMessage.trim() &&
+      hasPendingGitWork
+    ) {
+      hasGeneratedRef.current = true;
+      void handleGenerateMessage();
     }
   };
 
@@ -420,75 +430,93 @@ function InlineCommitPanel({
   // Commit form
   const commitForm = (
     <div className="space-y-2">
-      <div className="relative">
-        <Textarea
-          placeholder="Commit message"
-          value={commitMessage}
-          onChange={(e) => setCommitMessage(e.target.value)}
-          disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
-          rows={2}
-          className="resize-none pb-7 text-xs"
-        />
-        <button
-          type="button"
-          className="absolute bottom-1.5 left-1.5 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
-          onClick={() => void handleGenerateMessage()}
-          disabled={isGeneratingMessage || !hasPendingGitWork}
-        >
-          {isGeneratingMessage ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <WandSparkles className="h-3 w-3" />
-          )}
-        </button>
-      </div>
+      {isExpanded && (
+        <div className="relative">
+          <Textarea
+            placeholder="Commit message"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            disabled={isAgentWorking || isCommitting || !hasPendingGitWork}
+            rows={2}
+            className="resize-none pb-7 text-xs"
+          />
+          <button
+            type="button"
+            className="absolute bottom-1.5 left-1.5 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
+            onClick={() => void handleGenerateMessage()}
+            disabled={isGeneratingMessage || !hasPendingGitWork}
+          >
+            {isGeneratingMessage ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <WandSparkles className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      )}
       {commitSuccess ? (
         <div className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-green-500/30 bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-300">
           <Check className="h-3.5 w-3.5" />
           Committed
         </div>
       ) : (
-        <div className="flex w-full">
-          <Button
-            size="sm"
-            className="min-w-0 flex-1 rounded-r-none text-xs"
-            onClick={() => void handleCommit()}
-            disabled={commitDisabled}
-          >
-            {isCommitting ? (
-              <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Committing...
-              </>
-            ) : (
-              <>
-                <GitCommit className="mr-1.5 h-3.5 w-3.5" />
-                Commit & Push
-              </>
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="default"
-                size="icon"
-                className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
-                disabled={commitDisabled}
-                aria-label="Commit options"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[10rem]">
-              <DropdownMenuItem
-                onSelect={() => void handleCommit(true)}
-                className="gap-2 text-xs"
-              >
-                Commit only
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <>
+          <div className="flex w-full">
+            <Button
+              size="sm"
+              className="min-w-0 flex-1 rounded-r-none text-xs"
+              onClick={() => void handleCommit()}
+              disabled={commitDisabled}
+            >
+              {isCommitting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Committing...
+                </>
+              ) : (
+                <>
+                  {isExpanded ? (
+                    <GitCommit className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Commit & Push
+                </>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
+                  disabled={commitDisabled}
+                  aria-label="Commit options"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                <DropdownMenuItem
+                  onSelect={() => void handleCommit(true)}
+                  className="gap-2 text-xs"
+                >
+                  Commit only
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {!isExpanded && (
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+              onClick={handleExpandCommit}
+              disabled={!hasPendingGitWork}
+            >
+              Edit message
+            </button>
+          )}
+        </>
       )}
       {commitError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
@@ -529,7 +557,9 @@ function InlinePrCreatePanel({
   refreshGitStatus,
   hasUncommittedGitChanges,
   onPrDetected,
+  onGitMessage,
   isAgentWorking,
+  baseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -540,7 +570,9 @@ function InlinePrCreatePanel({
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   isAgentWorking: boolean;
+  baseBranch: string;
 }) {
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
@@ -550,12 +582,16 @@ function InlinePrCreatePanel({
     prUrl: string;
     requiresManualCreation?: boolean;
     isDraft?: boolean;
+    autoMergeEnabled?: boolean;
+    autoMergeError?: string;
   } | null>(null);
-  const [baseBranch, setBaseBranch] = useState("main");
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [enableAutoMerge, setEnableAutoMerge] = useState(false);
+  const hasGeneratedRef = useRef(false);
 
   const branchFromStatus =
     resolvedBranch ??
@@ -567,15 +603,20 @@ function InlinePrCreatePanel({
   const isDetachedHead = gitStatus?.isDetachedHead ?? false;
   const needsNewBranch = displayBranch === baseBranch || isDetachedHead;
 
-  // Fetch branches on mount
+  const normalizedRepoOwner = session.repoOwner?.toLowerCase() ?? null;
+  const normalizedHeadOwner = prHeadOwner?.toLowerCase() ?? null;
+  const shouldOpenCompareInsteadOfApi = Boolean(
+    normalizedRepoOwner &&
+    normalizedHeadOwner &&
+    normalizedHeadOwner !== normalizedRepoOwner,
+  );
+  const canEnableAutoMerge = !shouldOpenCompareInsteadOfApi;
+
   useEffect(() => {
-    if (!session.repoOwner || !session.repoName) return;
-    void fetchRepoBranches(session.repoOwner, session.repoName)
-      .then((data) => {
-        setBaseBranch(data.defaultBranch);
-      })
-      .catch(() => {});
-  }, [session.repoOwner, session.repoName]);
+    if (!canEnableAutoMerge) {
+      setEnableAutoMerge(false);
+    }
+  }, [canEnableAutoMerge]);
 
   const handleCreateBranch = async () => {
     if (!hasSandbox) return;
@@ -598,6 +639,15 @@ function InlinePrCreatePanel({
       );
     } finally {
       setIsCreatingBranch(false);
+    }
+  };
+
+  const handleExpand = () => {
+    setIsExpanded(true);
+    // Auto-generate content when expanding for the first time
+    if (!hasGeneratedRef.current && !prTitle.trim() && !prBody.trim()) {
+      hasGeneratedRef.current = true;
+      void handleGenerateContent();
     }
   };
 
@@ -629,6 +679,9 @@ function InlinePrCreatePanel({
     setIsCreatingPr(true);
     setPrError(null);
 
+    const gitMessageId = crypto.randomUUID();
+    const prPartId = `${gitMessageId}:pr`;
+
     try {
       let finalTitle = prTitle.trim();
       let finalBody = prBody.trim();
@@ -656,6 +709,20 @@ function InlinePrCreatePanel({
         }
       }
 
+      // Emit pending data-pr part
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: { status: "pending" },
+          },
+        ],
+      });
+
       // Check if we need to open compare page instead
       const headOwner = prHeadOwner?.trim() || session.repoOwner;
       const ownerMismatch =
@@ -676,6 +743,22 @@ function InlinePrCreatePanel({
           prUrl: compareUrl.toString(),
           requiresManualCreation: true,
         });
+        await onGitMessage?.({
+          id: gitMessageId,
+          role: "assistant",
+          metadata: {},
+          parts: [
+            {
+              type: "data-pr",
+              id: prPartId,
+              data: {
+                status: "success",
+                url: compareUrl.toString(),
+                requiresManualCreation: true,
+              },
+            },
+          ],
+        });
         return;
       }
 
@@ -691,6 +774,7 @@ function InlinePrCreatePanel({
           baseBranch,
           headOwner: prHeadOwner ?? undefined,
           isDraft,
+          enableAutoMerge: !isDraft && enableAutoMerge,
         }),
       });
 
@@ -704,6 +788,30 @@ function InlinePrCreatePanel({
         prUrl: data.prUrl,
         requiresManualCreation: Boolean(data.requiresManualCreation),
         isDraft,
+        autoMergeEnabled: Boolean(data.autoMergeEnabled),
+        autoMergeError:
+          typeof data.autoMergeError === "string"
+            ? data.autoMergeError
+            : undefined,
+      });
+
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "success",
+              created: true,
+              prNumber:
+                typeof data.prNumber === "number" ? data.prNumber : undefined,
+              url: typeof data.prUrl === "string" ? data.prUrl : undefined,
+            },
+          },
+        ],
       });
 
       if (typeof data.prNumber === "number") {
@@ -716,7 +824,24 @@ function InlinePrCreatePanel({
         });
       }
     } catch (err) {
-      setPrError(err instanceof Error ? err.message : "Failed to create PR");
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create PR";
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "error",
+              error: errorMessage,
+            },
+          },
+        ],
+      });
+      setPrError(errorMessage);
     } finally {
       setIsCreatingPr(false);
     }
@@ -731,11 +856,18 @@ function InlinePrCreatePanel({
           <span>
             {prSuccess.requiresManualCreation
               ? "Compare page opened"
-              : prSuccess.isDraft
-                ? "Draft pull request created!"
-                : "Pull request created!"}
+              : prSuccess.autoMergeEnabled
+                ? "PR created — auto-merge enabled!"
+                : prSuccess.isDraft
+                  ? "Draft pull request created!"
+                  : "Pull request created!"}
           </span>
         </div>
+        {prSuccess.autoMergeError && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+            {prSuccess.autoMergeError}
+          </div>
+        )}
         {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
         <a
           href={prSuccess.prUrl}
@@ -827,35 +959,54 @@ function InlinePrCreatePanel({
   // PR creation form
   const prForm = (
     <div className="space-y-2">
-      <div className="relative">
-        <Input
-          placeholder="PR title"
-          value={prTitle}
-          onChange={(e) => setPrTitle(e.target.value)}
-          disabled={isAgentWorking || isCreatingPr}
-          className="h-8 pr-7 text-xs"
-        />
-        <button
-          type="button"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
-          onClick={() => void handleGenerateContent()}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <WandSparkles className="h-3 w-3" />
-          )}
-        </button>
-      </div>
-      <Textarea
-        placeholder="Description"
-        value={prBody}
-        onChange={(e) => setPrBody(e.target.value)}
-        disabled={isAgentWorking || isCreatingPr}
-        rows={3}
-        className="max-h-40 text-xs"
-      />
+      {isExpanded && (
+        <>
+          <div className="relative">
+            <Input
+              placeholder="PR title"
+              value={prTitle}
+              onChange={(e) => setPrTitle(e.target.value)}
+              disabled={isAgentWorking || isCreatingPr}
+              className="h-8 pr-7 text-xs"
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => void handleGenerateContent()}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <WandSparkles className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+          <Textarea
+            placeholder="Description"
+            value={prBody}
+            onChange={(e) => setPrBody(e.target.value)}
+            disabled={isAgentWorking || isCreatingPr}
+            rows={3}
+            className="max-h-40 text-xs"
+          />
+          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-2">
+            <div className="space-y-0.5 pr-3">
+              <p className="text-xs font-medium">Auto-merge</p>
+              <p className="text-[10px] text-muted-foreground">
+                {shouldOpenCompareInsteadOfApi
+                  ? "Unavailable for compare page flow."
+                  : "Merge automatically once checks pass."}
+              </p>
+            </div>
+            <Switch
+              checked={enableAutoMerge}
+              onCheckedChange={setEnableAutoMerge}
+              disabled={isAgentWorking || isCreatingPr || !canEnableAutoMerge}
+            />
+          </div>
+        </>
+      )}
       <div className="flex w-full">
         <Button
           size="sm"
@@ -870,7 +1021,11 @@ function InlinePrCreatePanel({
             </>
           ) : (
             <>
-              <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+              {isExpanded ? (
+                <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              )}
               Create Pull Request
             </>
           )}
@@ -897,6 +1052,15 @@ function InlinePrCreatePanel({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {!isExpanded && (
+        <button
+          type="button"
+          className="w-full text-center text-xs text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+          onClick={handleExpand}
+        >
+          Edit title & description
+        </button>
+      )}
       {prError && (
         <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
           {prError}
@@ -950,6 +1114,7 @@ function InlineMergePanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forceConfirming, setForceConfirming] = useState(false);
+  const [emptyChecksPollCount, setEmptyChecksPollCount] = useState(0);
 
   const readinessRequestIdRef = useRef(0);
   const forceConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -1009,6 +1174,10 @@ function InlineMergePanel({
     }
   }, [session.id]);
 
+  useEffect(() => {
+    setEmptyChecksPollCount(0);
+  }, [session.prNumber]);
+
   // Load readiness on mount
   useEffect(() => {
     if (!hasLoadedRef.current) {
@@ -1018,18 +1187,29 @@ function InlineMergePanel({
   }, [loadReadiness]);
 
   useEffect(() => {
-    if (isLoadingReadiness || (readiness?.checks.pending ?? 0) <= 0) {
+    if (
+      isLoadingReadiness ||
+      !shouldPollMergeReadiness({ readiness, emptyChecksPollCount })
+    ) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (
+        readiness &&
+        readiness.checks.pending === 0 &&
+        readiness.checks.requiredTotal === 0 &&
+        readiness.checkRuns.length === 0
+      ) {
+        setEmptyChecksPollCount((currentCount) => currentCount + 1);
+      }
       void loadReadiness();
     }, MERGE_READINESS_POLL_INTERVAL_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [isLoadingReadiness, loadReadiness, readiness?.checks.pending]);
+  }, [emptyChecksPollCount, isLoadingReadiness, loadReadiness, readiness]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -1126,7 +1306,6 @@ function InlineMergePanel({
     readiness !== null &&
     !readiness.canMerge &&
     readiness.pr !== null &&
-    !isLoadingReadiness &&
     nonBypassableReasons.length === 0;
 
   const handleForceClick = () => {
@@ -1202,6 +1381,35 @@ function InlineMergePanel({
           )}
         </div>
       )}
+
+      {/* Diff stats */}
+      {readiness?.pr &&
+        (readiness.pr.changedFiles > 0 ||
+          readiness.pr.additions > 0 ||
+          readiness.pr.deletions > 0) && (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+            <span>
+              {readiness.pr.changedFiles} file
+              {readiness.pr.changedFiles !== 1 ? "s" : ""} changed
+            </span>
+            {readiness.pr.additions > 0 && (
+              <span className="text-green-600 dark:text-green-500">
+                +{readiness.pr.additions}
+              </span>
+            )}
+            {readiness.pr.deletions > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                -{readiness.pr.deletions}
+              </span>
+            )}
+            {readiness.pr.commits > 0 && (
+              <span className="ml-auto flex items-center gap-1 text-muted-foreground">
+                <GitCommit className="h-3 w-3" />
+                {readiness.pr.commits}
+              </span>
+            )}
+          </div>
+        )}
 
       {/* Check runs */}
       <CheckRunsList
@@ -1411,7 +1619,7 @@ function InlineMergePanel({
 /* ------------------------------------------------------------------ */
 
 export function GitPanel(props: GitPanelProps) {
-  const { gitPanelTab, setGitPanelTab, diffScope, setDiffScope } =
+  const { gitPanelOpen, gitPanelTab, setGitPanelTab, diffScope, setDiffScope } =
     useGitPanel();
 
   const {
@@ -1441,32 +1649,81 @@ export function GitPanel(props: GitPanelProps) {
     refreshGitStatus,
     onCommitted,
     onPrDetected,
+    onGitMessage,
     isAgentWorking,
   } = props;
+  const [baseBranch, setBaseBranch] = useState("main");
+
+  useEffect(() => {
+    if (!session.repoOwner || !session.repoName) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetchRepoBranches(session.repoOwner, session.repoName)
+      .then((data) => {
+        if (!cancelled) {
+          setBaseBranch(data.defaultBranch);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.repoOwner, session.repoName]);
 
   const hasDiffChanges =
     diffSummary &&
     (diffSummary.totalAdditions > 0 || diffSummary.totalDeletions > 0);
+  const hasUnstagedChanges =
+    (gitStatus?.unstagedCount ?? 0) > 0 ||
+    Boolean(diffFiles?.some(isUncommittedFile));
   const showPreviewButton = Boolean(prDeploymentUrl) || isDeploymentStale;
   const previewTargetUrl = isDeploymentStale
     ? buildingDeploymentUrl
     : prDeploymentUrl;
 
-  // Show the PR tab when there's a PR, or when the branch has diverged and
-  // changes are committed.  Gate on gitStatus being loaded so the tab doesn't
-  // flicker while async data resolves.
-  const showGitTab =
+  const canOpenPrTab =
     hasExistingPr ||
-    (gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
-  const showCreatePrShortcut = hasRepo && !hasExistingPr && showGitTab;
+    (hasRepo && gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
+  const prTabDisabledReason = canOpenPrTab
+    ? null
+    : !hasRepo
+      ? "Create a repo first"
+      : gitStatus === null
+        ? "Loading git status..."
+        : hasUncommittedGitChanges
+          ? "Commit your changes before creating a pull request."
+          : "Commit changes to your branch before creating a pull request.";
+  const showCreatePrShortcut = hasRepo && !hasExistingPr && canOpenPrTab;
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
+  const diffScopeManuallySetRef = useRef(false);
+
+  useEffect(() => {
+    if (!gitPanelOpen) {
+      diffScopeManuallySetRef.current = false;
+      return;
+    }
+
+    if (!diffScopeManuallySetRef.current) {
+      setDiffScope(hasUnstagedChanges ? "uncommitted" : "branch");
+    }
+  }, [gitPanelOpen, hasUnstagedChanges, setDiffScope]);
+
+  useEffect(() => {
+    if (gitPanelTab === "pr" && prTabDisabledReason) {
+      setGitPanelTab("diff");
+    }
+  }, [gitPanelTab, prTabDisabledReason, setGitPanelTab]);
 
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Panel top bar: PR link or branch name — matches session header height */}
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         {/* Left: PR link or repo info */}
-        <div className="flex min-w-0 items-center gap-2 min-h-7">
+        <div className="flex min-h-7 min-w-0 items-center gap-2">
           {hasExistingPr && existingPrUrl ? (
             /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
             <a
@@ -1495,8 +1752,9 @@ export function GitPanel(props: GitPanelProps) {
               Create PR
             </button>
           ) : null}
+        </div>
 
-          {/* Preview deployment button */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {showPreviewButton && previewTargetUrl && (
             /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
             <a
@@ -1516,10 +1774,7 @@ export function GitPanel(props: GitPanelProps) {
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           )}
-        </div>
 
-        {/* Right: Create repo button if no repo */}
-        <div className="shrink-0">
           {!hasRepo && supportsRepoCreation && (
             <Button
               size="sm"
@@ -1536,27 +1791,50 @@ export function GitPanel(props: GitPanelProps) {
 
       {/* Tab bar — matches chat tabs sub-header height */}
       <div className="flex items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-[7px]">
-        {["diff" as const, ...(showGitTab ? (["pr"] as const) : [])].map(
-          (tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setGitPanelTab(tab)}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                gitPanelTab === tab
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-muted/50",
-              )}
-            >
-              {tab === "diff" ? "Changes" : "PR"}
-              {tab === "diff" && hasDiffChanges && (
-                <span className="ml-1 text-[10px] text-muted-foreground font-mono">
-                  {diffFiles?.length ?? 0}
-                </span>
-              )}
-            </button>
-          ),
+        <button
+          type="button"
+          onClick={() => setGitPanelTab("diff")}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+            gitPanelTab === "diff"
+              ? "bg-secondary text-secondary-foreground"
+              : "text-muted-foreground hover:bg-muted/50",
+          )}
+        >
+          Changes
+          {hasDiffChanges && (
+            <span className="ml-1 text-[10px] text-muted-foreground font-mono">
+              {diffFiles?.length ?? 0}
+            </span>
+          )}
+        </button>
+
+        {prTabDisabledReason ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-disabled="true"
+                className="cursor-not-allowed rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground opacity-50"
+              >
+                PR
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{prTabDisabledReason}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setGitPanelTab("pr")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              gitPanelTab === "pr"
+                ? "bg-secondary text-secondary-foreground"
+                : "text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            PR
+          </button>
         )}
       </div>
 
@@ -1580,6 +1858,7 @@ export function GitPanel(props: GitPanelProps) {
                     refreshGitStatus={refreshGitStatus}
                     onCommitted={onCommitted}
                     isAgentWorking={isAgentWorking}
+                    baseBranch={baseBranch}
                   />
                 </div>
               )}
@@ -1595,19 +1874,10 @@ export function GitPanel(props: GitPanelProps) {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setDiffScope("uncommitted")}
-                      className={cn(
-                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
-                        diffScope === "uncommitted"
-                          ? "bg-secondary text-secondary-foreground"
-                          : "text-muted-foreground hover:bg-muted/50",
-                      )}
-                    >
-                      Uncommitted
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDiffScope("branch")}
+                      onClick={() => {
+                        diffScopeManuallySetRef.current = true;
+                        setDiffScope("branch");
+                      }}
                       className={cn(
                         "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
                         diffScope === "branch"
@@ -1616,6 +1886,21 @@ export function GitPanel(props: GitPanelProps) {
                       )}
                     >
                       All Changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        diffScopeManuallySetRef.current = true;
+                        setDiffScope("uncommitted");
+                      }}
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        diffScope === "uncommitted"
+                          ? "bg-secondary text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
+                      )}
+                    >
+                      Uncommitted
                     </button>
                   </div>
                   <Button
@@ -1719,7 +2004,9 @@ export function GitPanel(props: GitPanelProps) {
                 refreshGitStatus={refreshGitStatus}
                 hasUncommittedGitChanges={hasUncommittedGitChanges}
                 onPrDetected={onPrDetected}
+                onGitMessage={onGitMessage}
                 isAgentWorking={isAgentWorking}
+                baseBranch={baseBranch}
               />
             ) : (
               <div className="text-center text-xs text-muted-foreground py-6">

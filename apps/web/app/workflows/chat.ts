@@ -21,6 +21,7 @@ import type {
 } from "@/app/types";
 import {
   clearActiveStream,
+  hasAutoCommitChangesStep,
   persistAssistantMessage,
   persistSandboxState,
   recordWorkflowUsage,
@@ -490,6 +491,16 @@ export async function runAgentWorkflow(options: Options) {
       await refreshLifecycleActivity(options.sessionId);
     }
 
+    if (totalUsage) {
+      pendingAssistantResponse = {
+        ...pendingAssistantResponse,
+        metadata: {
+          ...pendingAssistantResponse.metadata,
+          totalMessageUsage: totalUsage,
+        },
+      };
+    }
+
     // Persist the assistant message immediately so completed model output is not
     // lost if later post-finish work fails.
     await persistAssistantMessage(options.chatId, pendingAssistantResponse);
@@ -528,37 +539,50 @@ export async function runAgentWorkflow(options: Options) {
       repoName != null;
 
     if (canAutoCommit) {
-      const pendingCommitPart = {
-        type: "data-commit" as const,
-        id: commitPartId,
-        data: { status: "pending" as const },
-      };
-      pendingAssistantResponse = upsertAssistantDataPart(
-        pendingAssistantResponse,
-        pendingCommitPart,
-      );
-      await sendDataPart(writable, pendingCommitPart);
-      didUpdateGitData = true;
-
-      autoCommitResult = await runAutoCommitStep({
-        userId: options.userId,
-        sessionId: options.sessionId,
-        sessionTitle: options.sessionTitle ?? "",
-        repoOwner,
-        repoName,
+      const hasAutoCommitChanges = await hasAutoCommitChangesStep({
         sandboxState,
       });
 
-      const resolvedCommitPart = {
-        type: "data-commit" as const,
-        id: commitPartId,
-        data: buildCommitData(autoCommitResult, repoOwner, repoName),
-      };
-      pendingAssistantResponse = upsertAssistantDataPart(
-        pendingAssistantResponse,
-        resolvedCommitPart,
-      );
-      await sendDataPart(writable, resolvedCommitPart);
+      if (hasAutoCommitChanges) {
+        const pendingCommitPart = {
+          type: "data-commit" as const,
+          id: commitPartId,
+          data: { status: "pending" as const },
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          pendingCommitPart,
+        );
+        await sendDataPart(writable, pendingCommitPart);
+        didUpdateGitData = true;
+      }
+
+      autoCommitResult = hasAutoCommitChanges
+        ? await runAutoCommitStep({
+            userId: options.userId,
+            sessionId: options.sessionId,
+            sessionTitle: options.sessionTitle ?? "",
+            repoOwner,
+            repoName,
+            sandboxState,
+          })
+        : {
+            committed: false,
+            pushed: false,
+          };
+
+      if (hasAutoCommitChanges) {
+        const resolvedCommitPart = {
+          type: "data-commit" as const,
+          id: commitPartId,
+          data: buildCommitData(autoCommitResult, repoOwner, repoName),
+        };
+        pendingAssistantResponse = upsertAssistantDataPart(
+          pendingAssistantResponse,
+          resolvedCommitPart,
+        );
+        await sendDataPart(writable, resolvedCommitPart);
+      }
     }
 
     const canAutoCreatePr =
@@ -671,7 +695,12 @@ const runAgentStep = async (
       lastOriginalMessage?.role === "assistant"
         ? [...(lastOriginalMessage.metadata?.stepFinishReasons ?? [])]
         : [];
+    const existingTotalMessageUsage =
+      lastOriginalMessage?.role === "assistant"
+        ? lastOriginalMessage.metadata?.totalMessageUsage
+        : undefined;
     let stepFinishReasons = existingStepFinishReasons;
+    let totalMessageUsage = existingTotalMessageUsage;
 
     const result = await webAgent.stream({
       messages,
@@ -687,6 +716,11 @@ const runAgentStep = async (
       messageMetadata: ({ part: streamPart }) => {
         if (streamPart.type === "finish-step") {
           lastStepUsage = streamPart.usage;
+          if (streamPart.usage) {
+            totalMessageUsage = totalMessageUsage
+              ? addLanguageModelUsage(totalMessageUsage, streamPart.usage)
+              : streamPart.usage;
+          }
           stepFinishReasons = [
             ...stepFinishReasons,
             {
@@ -696,7 +730,7 @@ const runAgentStep = async (
           ];
           return {
             lastStepUsage,
-            totalMessageUsage: undefined,
+            totalMessageUsage,
             lastStepFinishReason: streamPart.finishReason,
             lastStepRawFinishReason: streamPart.rawFinishReason,
             stepFinishReasons,
@@ -725,6 +759,18 @@ const runAgentStep = async (
         result.response,
         result.steps,
       ]);
+
+    if (stepUsage) {
+      responseMessage = {
+        ...responseMessage,
+        metadata: {
+          ...responseMessage.metadata,
+          totalMessageUsage: existingTotalMessageUsage
+            ? addLanguageModelUsage(existingTotalMessageUsage, stepUsage)
+            : stepUsage,
+        },
+      };
+    }
 
     if (finishReason === "other") {
       const stepDiagnostics = steps.map((step) => ({

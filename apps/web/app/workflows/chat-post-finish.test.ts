@@ -9,6 +9,10 @@ let upsertChatMessageScopedResult: { status: string } = {
   status: "inserted",
 };
 
+const sandboxExec = mock(() =>
+  Promise.resolve({ success: true, stdout: " M file.ts\n" }),
+);
+
 const spies = {
   compareAndSetChatActiveStreamId: mock(() => Promise.resolve(true)),
   createChatMessageIfNotExists: mock(
@@ -34,6 +38,8 @@ const spies = {
   buildLifecycleActivityUpdate: mock(() => ({})),
   connectSandbox: mock(() =>
     Promise.resolve({
+      workingDirectory: "/vercel/sandbox",
+      exec: sandboxExec,
       getState: () => ({ type: "vercel", sandboxId: "sb-1" }),
     }),
   ),
@@ -91,6 +97,7 @@ const {
   persistSandboxState,
   clearActiveStream,
   refreshDiffCache,
+  hasAutoCommitChangesStep,
   runAutoCommitStep,
   runAutoCreatePrStep,
 } = await import("./chat-post-finish");
@@ -122,6 +129,10 @@ function makeAssistantMessage(
 // ── Tests ──────────────────────────────────────────────────────────
 
 beforeEach(() => {
+  sandboxExec.mockClear();
+  sandboxExec.mockImplementation(() =>
+    Promise.resolve({ success: true, stdout: " M file.ts\n" }),
+  );
   Object.values(spies).forEach((s) => s.mockClear());
   createChatMessageIfNotExistsResult = { id: "msg-1" };
   isFirstChatMessageResult = false;
@@ -347,6 +358,34 @@ describe("refreshDiffCache", () => {
     );
 
     await refreshDiffCache("session-1", { type: "vercel" } as never);
+  });
+});
+
+// ─── hasAutoCommitChangesStep ───────────────────────────────────────
+
+describe("hasAutoCommitChangesStep", () => {
+  test("returns false when git status is clean", async () => {
+    sandboxExec.mockImplementationOnce(() =>
+      Promise.resolve({ success: true, stdout: "" }),
+    );
+
+    await expect(
+      hasAutoCommitChangesStep({
+        sandboxState: { type: "vercel" } as never,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test("falls back to true when preflight fails", async () => {
+    sandboxExec.mockImplementationOnce(() =>
+      Promise.resolve({ success: false, stdout: "" }),
+    );
+
+    await expect(
+      hasAutoCommitChangesStep({
+        sandboxState: { type: "vercel" } as never,
+      }),
+    ).resolves.toBe(true);
   });
 });
 

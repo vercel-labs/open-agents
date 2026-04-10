@@ -2,20 +2,20 @@
 
 import {
   AlertCircle,
-  Building2,
-  CheckCircle2,
-  Circle,
+  Check,
+  ChevronDown,
   ExternalLink,
   Loader2,
   RefreshCw,
-  User as UserIcon,
+  TriangleAlert,
+  X,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,15 +32,29 @@ import { fetcher } from "@/lib/swr";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+interface GitHubUserProfile {
+  githubId: number;
+  login: string;
+  avatarUrl: string;
+}
+
 interface OrgInstallStatus {
   githubId: number;
   login: string;
   avatarUrl: string;
-  type: "User" | "Organization";
   installStatus: "installed" | "not_installed";
   installationId: number | null;
   installationUrl: string | null;
   repositorySelection: "all" | "selected" | null;
+}
+
+interface ConnectionStatusResponse {
+  user: GitHubUserProfile;
+  personalInstallStatus: "installed" | "not_installed";
+  personalInstallationUrl: string | null;
+  personalRepositorySelection: "all" | "selected" | null;
+  orgs: OrgInstallStatus[];
+  tokenExpired?: boolean;
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -60,15 +74,6 @@ function GitHubIcon({ className }: { className?: string }) {
 
 // ── Navigation helpers ─────────────────────────────────────────────────────
 
-function startGitHubInstallForOrg(githubId: number) {
-  const params = new URLSearchParams({
-    next: "/settings/connections",
-    target_id: String(githubId),
-  });
-
-  window.location.href = `/api/github/app/install?${params.toString()}`;
-}
-
 function startGitHubInstallFromSettings() {
   const params = new URLSearchParams({
     next: "/settings/connections",
@@ -87,7 +92,6 @@ function useGitHubReturnToast() {
 
     if (!githubParam) return;
 
-    // Clean up URL params without navigation
     const url = new URL(window.location.href);
     url.searchParams.delete("github");
     url.searchParams.delete("missing_installation_id");
@@ -148,7 +152,6 @@ function useGitHubReturnToast() {
 export function AccountsSectionSkeleton() {
   return (
     <div className="space-y-6">
-      {/* GitHub section skeleton */}
       <div className="rounded-lg border border-border/50 bg-muted/10">
         <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -157,25 +160,53 @@ export function AccountsSectionSkeleton() {
           </div>
           <Skeleton className="h-8 w-20" />
         </div>
-        <div className="space-y-2 p-4">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between rounded-lg border border-border/50 p-3"
-            >
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="space-y-1">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-full" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-32" />
               </div>
-              <Skeleton className="h-8 w-20" />
             </div>
-          ))}
+            <Skeleton className="h-8 w-20" />
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Install status badge ───────────────────────────────────────────────────
+
+function InstallBadge({
+  status,
+  repositorySelection,
+}: {
+  status: "installed" | "not_installed";
+  repositorySelection: "all" | "selected" | null;
+}) {
+  if (status === "installed" && repositorySelection === "all") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
+        <Check className="size-2.5" />
+        All Repositories
+      </span>
+    );
+  }
+  if (status === "installed") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
+        <TriangleAlert className="size-2.5" />
+        Select Repositories
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-red-600 dark:text-red-400">
+      <X className="size-2.5" />
+      Not Installed
+    </span>
   );
 }
 
@@ -183,98 +214,50 @@ export function AccountsSectionSkeleton() {
 
 function OrgRow({ org }: { org: OrgInstallStatus }) {
   const isInstalled = org.installStatus === "installed";
-  const isOrg = org.type === "Organization";
+  // Use login-based GitHub avatar which always works, even for DB-only entries
+  const avatarSrc =
+    org.avatarUrl ||
+    `https://avatars.githubusercontent.com/${org.login}?s=40&v=4`;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-4 py-3.5">
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Avatar */}
-        {org.avatarUrl ? (
-          <Image
-            src={org.avatarUrl}
-            alt={org.login}
-            width={36}
-            height={36}
-            className="h-9 w-9 rounded-full"
-          />
-        ) : isOrg ? (
-          <Building2 className="h-9 w-9 text-muted-foreground" />
-        ) : (
-          <UserIcon className="h-9 w-9 text-muted-foreground" />
-        )}
-
-        {/* Info */}
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium truncate">{org.login}</p>
-            {isOrg && (
-              <span className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 leading-none">
-                org
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {isInstalled ? (
-              <span className="inline-flex items-center gap-1">
-                <CheckCircle2 className="size-3 text-green-500" />
-                Installed
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1">
-                <Circle className="size-3 text-muted-foreground" />
-                Not installed
-              </span>
-            )}
-          </p>
-        </div>
+    <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <Avatar className="size-5 rounded-sm text-[8px]">
+          <AvatarImage src={avatarSrc} alt={org.login} />
+          <AvatarFallback className="rounded-sm text-[8px]">
+            {org.login.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <span className="text-xs font-medium truncate">{org.login}</span>
       </div>
 
-      {/* Right side: repo selection + action */}
-      <div className="flex items-center gap-3 shrink-0">
-        {isInstalled && (
-          <span className="hidden text-xs font-mono tabular-nums text-muted-foreground sm:inline">
-            {org.repositorySelection === "all"
-              ? "all repositories"
-              : "selected repositories"}
-          </span>
-        )}
-        {isInstalled ? (
-          org.installationUrl ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={org.installationUrl} target="_blank" rel="noreferrer">
-                Configure
-                <ExternalLink className="ml-1.5 size-3" />
-              </Link>
-            </Button>
-          ) : null
-        ) : (
+      <div className="flex items-center gap-1.5 shrink-0">
+        <InstallBadge
+          status={org.installStatus}
+          repositorySelection={org.repositorySelection}
+        />
+        {isInstalled && org.installationUrl ? (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            onClick={() => startGitHubInstallForOrg(org.githubId)}
+            className="h-6 text-[11px] px-2"
+            asChild
+          >
+            <Link href={org.installationUrl} target="_blank" rel="noreferrer">
+              Configure
+              <ExternalLink className="ml-1 size-2.5" />
+            </Link>
+          </Button>
+        ) : !isInstalled ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[11px] px-2"
+            onClick={startGitHubInstallFromSettings}
           >
             Install
           </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Request access guidance ────────────────────────────────────────────────
-
-function RequestAccessGuidance() {
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-      <AlertCircle className="size-4 mt-0.5 shrink-0 text-amber-500" />
-      <div>
-        <p className="font-medium text-foreground">Missing an organization?</p>
-        <p className="mt-0.5">
-          If an organization is not listed, you may not have membership, or the
-          org restricts third-party access. Ask an org owner to install the
-          GitHub App, or request access from your organization&apos;s settings
-          page on GitHub.
-        </p>
+        ) : null}
       </div>
     </div>
   );
@@ -289,26 +272,28 @@ export function AccountsSection() {
 
   useGitHubReturnToast();
 
-  // Fetch org install status only when a GitHub account is linked
   const {
-    data: orgs,
-    isLoading: orgsLoading,
-    mutate: mutateOrgs,
-  } = useSWR<OrgInstallStatus[]>(
+    data: connectionData,
+    error: connectionError,
+    isLoading: connectionLoading,
+    mutate: mutateConnection,
+  } = useSWR<ConnectionStatusResponse>(
     hasGitHubAccount ? "/api/github/orgs/install-status" : null,
     fetcher,
   );
+
+  const tokenExpired = connectionData?.tokenExpired ?? false;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await mutateOrgs();
+      await mutateConnection();
     } finally {
       setIsRefreshing(false);
     }
-  }, [mutateOrgs]);
+  }, [mutateConnection]);
 
   async function handleUnlink() {
     setUnlinking(true);
@@ -316,6 +301,7 @@ export function AccountsSection() {
       const res = await fetch("/api/auth/github/unlink", { method: "POST" });
       if (res.ok) {
         await mutate("/api/auth/info");
+        await mutateConnection();
         toast.success("GitHub disconnected");
       }
     } catch (error) {
@@ -332,84 +318,188 @@ export function AccountsSection() {
 
   return (
     <div className="space-y-6">
-      {/* ── GitHub connection ── */}
-      <GitHubConnection
-        hasGitHub={hasGitHub}
-        orgs={orgs ?? null}
-        orgsLoading={orgsLoading}
-        isRefreshing={isRefreshing}
-        unlinking={unlinking}
-        onRefresh={handleRefresh}
-        onUnlink={handleUnlink}
-      />
+      <div className="rounded-lg border border-border/50 bg-muted/10">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <GitHubIcon className="h-5 w-5" />
+            <span className="text-sm font-medium">GitHub</span>
+          </div>
+          {hasGitHub && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing || connectionLoading}
+              className="h-7 w-7 p-0"
+            >
+              <RefreshCw
+                className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+            </Button>
+          )}
+        </div>
 
-      {/* ── Future: MCP connections would go here ── */}
-      {/* <McpConnectionsSection /> */}
+        {/* Body */}
+        <div className="p-4 space-y-4">
+          {!hasGitHub ? (
+            <NotConnectedState />
+          ) : connectionLoading && !connectionData ? (
+            <ConnectionLoadingSkeleton />
+          ) : connectionError && !connectionData ? (
+            <ConnectionErrorState onRetry={handleRefresh} />
+          ) : connectionData ? (
+            <ConnectedState
+              data={connectionData}
+              tokenExpired={tokenExpired}
+              unlinking={unlinking}
+              onUnlink={handleUnlink}
+            />
+          ) : (
+            <NotConnectedState />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── GitHub connection block ────────────────────────────────────────────────
+// ── Not connected ──────────────────────────────────────────────────────────
 
-function GitHubConnection({
-  hasGitHub,
-  orgs,
-  orgsLoading,
-  isRefreshing,
+function NotConnectedState() {
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-sm text-muted-foreground">
+        Connect your GitHub account to access repositories.
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={startGitHubInstallFromSettings}
+      >
+        Connect
+      </Button>
+    </div>
+  );
+}
+
+// ── Error state ────────────────────────────────────────────────────────────
+
+function ConnectionErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <AlertCircle className="size-4 shrink-0 text-destructive" />
+        <span>Failed to load GitHub connection info.</span>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={onRetry}
+      >
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+// ── Loading skeleton for connection data ───────────────────────────────────
+
+function ConnectionLoadingSkeleton() {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-9 w-9 rounded-full" />
+        <div className="space-y-1">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+      </div>
+      <Skeleton className="h-8 w-20" />
+    </div>
+  );
+}
+
+// ── Connected state ────────────────────────────────────────────────────────
+
+function ConnectedState({
+  data,
+  tokenExpired,
   unlinking,
-  onRefresh,
   onUnlink,
 }: {
-  hasGitHub: boolean;
-  orgs: OrgInstallStatus[] | null;
-  orgsLoading: boolean;
-  isRefreshing: boolean;
+  data: ConnectionStatusResponse;
+  tokenExpired: boolean;
   unlinking: boolean;
-  onRefresh: () => void;
   onUnlink: () => void;
 }) {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
-  const installedCount =
-    orgs?.filter((o) => o.installStatus === "installed").length ?? 0;
+  const [orgsExpanded, setOrgsExpanded] = useState(false);
+  const installedOrgCount = data.orgs.filter(
+    (o) => o.installStatus === "installed",
+  ).length;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/10">
-      {/* Header: GitHub branding + actions */}
-      <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <GitHubIcon className="h-5 w-5" />
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">GitHub</span>
-            {hasGitHub && (
-              <span className="text-xs text-muted-foreground">
-                · {installedCount}{" "}
-                {installedCount === 1 ? "account" : "accounts"} configured
-              </span>
+    <>
+      {/* ── User identity ── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Avatar className="size-9 rounded-sm">
+            <AvatarImage src={data.user.avatarUrl} alt={data.user.login} />
+            <AvatarFallback className="rounded-sm">
+              {data.user.login.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{data.user.login}</p>
+            {tokenExpired && (
+              <p className="text-xs">
+                <span className="inline-flex items-center gap-1 text-amber-500">
+                  <AlertCircle className="size-3" />
+                  Session expired
+                </span>
+              </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {hasGitHub && (
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {tokenExpired ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={startGitHubInstallFromSettings}
+            >
+              Reconnect
+            </Button>
+          ) : (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRefresh}
-                disabled={isRefreshing || orgsLoading}
-                className="h-7 w-7 p-0"
-              >
-                <RefreshCw
-                  className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+              {!tokenExpired && (
+                <InstallBadge
+                  status={data.personalInstallStatus}
+                  repositorySelection={data.personalRepositorySelection}
                 />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={startGitHubInstallFromSettings}
-                className="h-7 text-xs"
-              >
-                Add account
-              </Button>
+              )}
+              {data.personalInstallationUrl && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  asChild
+                >
+                  <Link
+                    href={data.personalInstallationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Configure
+                    <ExternalLink className="ml-1 size-3" />
+                  </Link>
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -418,28 +508,72 @@ function GitHubConnection({
                 className="h-7 text-xs text-destructive hover:text-destructive"
               >
                 {unlinking ? (
-                  <>
-                    <Loader2 className="mr-1 size-3 animate-spin" />
-                    Disconnecting…
-                  </>
+                  <Loader2 className="size-3 animate-spin" />
                 ) : (
                   "Disconnect"
                 )}
               </Button>
             </>
           )}
-          {!hasGitHub && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startGitHubInstallFromSettings}
-              className="h-7 text-xs"
-            >
-              Connect
-            </Button>
-          )}
         </div>
       </div>
+
+      {/* ── Organizations accordion ── */}
+      {data.orgs.length > 0 && !tokenExpired && (
+        <div className="border-t border-border/50 pt-3 -mx-4 px-4">
+          <button
+            type="button"
+            onClick={() => setOrgsExpanded((prev) => !prev)}
+            className="flex w-full items-center justify-between py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>
+              Installed in {installedOrgCount}/{data.orgs.length} organization
+              {data.orgs.length !== 1 ? "s" : ""}
+            </span>
+            <ChevronDown
+              className={`size-3.5 transition-transform ${orgsExpanded ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {orgsExpanded && (
+            <div className="mt-2 space-y-0 divide-y divide-border/30">
+              {data.orgs.map((org) => (
+                <OrgRow key={org.login} org={org} />
+              ))}
+
+              {/* Add organization */}
+              <div className="flex items-center py-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[11px] px-2 text-muted-foreground"
+                  onClick={startGitHubInstallFromSettings}
+                >
+                  + Add an organization
+                </Button>
+              </div>
+
+              {/* Guidance */}
+              <div className="pt-2.5">
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+                  <AlertCircle className="size-4 mt-0.5 shrink-0 text-amber-500" />
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Missing an organization?
+                    </p>
+                    <p className="mt-0.5">
+                      If an organization is not listed, you may not have
+                      membership, or the org restricts third-party access. Ask
+                      an org owner to install the GitHub App, or request access
+                      from your organization&apos;s settings page on GitHub.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Disconnect confirmation dialog */}
       <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
@@ -467,49 +601,6 @@ function GitHubConnection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Body */}
-      <div className="p-4">
-        {!hasGitHub ? (
-          <p className="text-sm text-muted-foreground">
-            Connect GitHub to access private repositories and enable
-            installations for your accounts and organizations.
-          </p>
-        ) : orgsLoading && !orgs ? (
-          <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-lg border border-border/50 p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                  <div className="space-y-1">
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                </div>
-                <Skeleton className="h-8 w-20" />
-              </div>
-            ))}
-          </div>
-        ) : orgs && orgs.length > 0 ? (
-          <div className="space-y-2">
-            {orgs.map((org) => (
-              <OrgRow key={org.login} org={org} />
-            ))}
-            <RequestAccessGuidance />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              No accounts found. Install the GitHub App to an account or
-              organization.
-            </p>
-            <RequestAccessGuidance />
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

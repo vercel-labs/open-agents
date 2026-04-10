@@ -10,7 +10,6 @@ export function useSession() {
     fetcher,
     {
       revalidateOnFocus: true,
-      fallbackData: { user: undefined },
     },
   );
 

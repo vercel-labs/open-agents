@@ -9,7 +9,7 @@ import {
   Link2,
   PanelLeft,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -29,7 +29,8 @@ export function SessionHeader() {
   const { toggleSidebar } = useSidebar();
   const {
     gitPanelOpen,
-    toggleGitPanel,
+    setGitPanelOpen,
+    setGitPanelTab,
     hasActionNeeded,
     changesCount,
     hasCommittedChanges,
@@ -74,6 +75,42 @@ export function SessionHeader() {
     }
     return parts.length > 0 ? parts.join(" · ") : "Git panel";
   }, [session.prNumber, session.prStatus, changesCount, hasActionNeeded]);
+
+  const openGitPanel = useCallback(() => {
+    if (session.prNumber) {
+      setGitPanelTab("pr");
+    }
+    setGitPanelOpen(true);
+  }, [session.prNumber, setGitPanelOpen, setGitPanelTab]);
+
+  const handleGitPanelToggle = useCallback(() => {
+    if (gitPanelOpen) {
+      setGitPanelOpen(false);
+      return;
+    }
+
+    openGitPanel();
+  }, [gitPanelOpen, openGitPanel, setGitPanelOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isGitPanelShortcut =
+        event.code === "KeyB" &&
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        !event.altKey;
+
+      if (!isGitPanelShortcut || event.repeat) {
+        return;
+      }
+
+      event.preventDefault();
+      handleGitPanelToggle();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleGitPanelToggle]);
 
   return (
     <header className="border-b border-border px-3 py-1.5">
@@ -158,7 +195,7 @@ export function SessionHeader() {
                   "relative h-7 w-7 shrink-0",
                   gitPanelOpen && "bg-accent text-accent-foreground",
                 )}
-                onClick={toggleGitPanel}
+                onClick={handleGitPanelToggle}
               >
                 <GitIcon
                   className={cn("h-4 w-4", !gitPanelOpen && iconColor)}
@@ -171,7 +208,9 @@ export function SessionHeader() {
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{tooltipText}</TooltipContent>
+            <TooltipContent side="bottom">
+              {`${tooltipText} · ⌘⇧B / Ctrl+Shift+B`}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>

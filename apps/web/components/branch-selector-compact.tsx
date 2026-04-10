@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
-import { GitBranch, ChevronDown, CheckIcon, PlusIcon } from "lucide-react";
+import { CheckIcon, ChevronDown, GitBranch, PlusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetcher } from "@/lib/swr";
 import {
@@ -41,28 +41,30 @@ export function BranchSelectorCompact({
   onChange,
 }: BranchSelectorCompactProps) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim());
 
-  // Track which owner/repo combo we've auto-selected for.
-  // This prevents re-triggering auto-selection when switching between repos,
-  // but intentionally does NOT reset when returning to a previously visited repo.
-  // This means if a user manually clears their selection and switches back,
-  // auto-selection won't re-trigger - treating it as an intentional user action.
   const autoSelectedKeyRef = useRef<string | null>(null);
 
-  // Conditional fetch based on owner and repo
-  const { data, isLoading } = useSWR<BranchesResponse>(
+  const branchesUrl =
     owner && repo
-      ? `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&limit=50`
-      : null,
+      ? `/api/github/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&limit=50${
+          deferredSearchQuery
+            ? `&query=${encodeURIComponent(deferredSearchQuery)}`
+            : ""
+        }`
+      : null;
+
+  const { data, isLoading, isValidating } = useSWR<BranchesResponse>(
+    branchesUrl,
     fetcher,
   );
 
   const branches = data?.branches ?? [];
   const defaultBranch = data?.defaultBranch ?? "main";
+  const isBranchLoading = isLoading || isValidating;
 
-  // Auto-select "new branch" when data loads (only once per owner/repo combo)
   useEffect(() => {
-    // Guard against undefined owner/repo to prevent matching "undefined/undefined"
     if (!owner || !repo) return;
 
     const key = `${owner}/${repo}`;
@@ -72,24 +74,37 @@ export function BranchSelectorCompact({
     }
   }, [data, value, isNewBranch, onChange, owner, repo]);
 
+  useEffect(() => {
+    setSearchQuery("");
+  }, [owner, repo]);
+
   const handleSelectBranch = (branch: string) => {
     onChange(branch, false);
+    setSearchQuery("");
     setOpen(false);
   };
 
   const handleSelectNewBranch = () => {
     onChange(null, true);
+    setSearchQuery("");
     setOpen(false);
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setSearchQuery("");
+    }
+  };
+
   const getDisplayText = () => {
-    if (isLoading) return "Loading...";
+    if (isBranchLoading) return "Loading...";
     if (isNewBranch) return "New branch (auto)";
     return value || defaultBranch || "main";
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -105,10 +120,18 @@ export function BranchSelectorCompact({
         align="start"
       >
         <Command>
-          <CommandInput placeholder="Search branches..." />
+          <CommandInput
+            placeholder="Search branches..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
           <CommandList>
             <CommandEmpty>
-              {isLoading ? "Loading..." : "No branches found."}
+              {isBranchLoading
+                ? "Loading..."
+                : deferredSearchQuery
+                  ? "No matching branches found."
+                  : "No branches found."}
             </CommandEmpty>
             <CommandGroup>
               {branches.map((branch) => (
