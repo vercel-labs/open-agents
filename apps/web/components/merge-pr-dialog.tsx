@@ -281,7 +281,6 @@ export function MergePrDialog({
     readiness !== null &&
     !readiness.canMerge &&
     readiness.pr !== null &&
-    !isLoadingReadiness &&
     nonBypassableReasons.length === 0;
 
   const handleForceClick = () => {
