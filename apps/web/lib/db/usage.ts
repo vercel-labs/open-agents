@@ -65,6 +65,7 @@ export interface DailyUsage {
 export interface UsageHistoryOptions {
   days?: number;
   range?: UsageDateRange;
+  allTime?: boolean;
 }
 
 function buildUsageHistoryWhereClause(
@@ -73,6 +74,10 @@ function buildUsageHistoryWhereClause(
 ) {
   if (options?.range) {
     return sql`${usageEvents.userId} = ${userId} and date(${usageEvents.createdAt}) >= ${options.range.from} and date(${usageEvents.createdAt}) <= ${options.range.to}`;
+  }
+
+  if (options?.allTime) {
+    return sql`${usageEvents.userId} = ${userId}`;
   }
 
   const days = options?.days ?? 280;

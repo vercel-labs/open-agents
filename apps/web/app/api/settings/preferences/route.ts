@@ -19,6 +19,7 @@ interface UpdatePreferencesRequest {
   autoCreatePr?: boolean;
   alertsEnabled?: boolean;
   alertSoundEnabled?: boolean;
+  publicUsageEnabled?: boolean;
   globalSkillRefs?: GlobalSkillRef[];
   enabledModelIds?: string[];
 }
@@ -102,6 +103,16 @@ export async function PATCH(req: Request) {
   ) {
     return Response.json(
       { error: "Invalid alertSoundEnabled value" },
+      { status: 400 },
+    );
+  }
+
+  if (
+    body.publicUsageEnabled !== undefined &&
+    typeof body.publicUsageEnabled !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Invalid publicUsageEnabled value" },
       { status: 400 },
     );
   }

@@ -26,6 +26,7 @@ const EMPTY_USAGE_AGGREGATE: UsageAggregateRow = {
 export interface UsageInsightsOptions {
   days?: number;
   range?: UsageDateRange;
+  allTime?: boolean;
 }
 
 function buildUsageEventsWhereClause(
@@ -34,6 +35,10 @@ function buildUsageEventsWhereClause(
 ) {
   if (options?.range) {
     return sql`${usageEvents.userId} = ${userId} and date(${usageEvents.createdAt}) >= ${options.range.from} and date(${usageEvents.createdAt}) <= ${options.range.to}`;
+  }
+
+  if (options?.allTime) {
+    return sql`${usageEvents.userId} = ${userId}`;
   }
 
   const days = options?.days ?? 280;
@@ -55,6 +60,10 @@ function buildSessionsWhereClause(
     );
   }
 
+  if (options?.allTime) {
+    return eq(sessions.userId, userId);
+  }
+
   const days = options?.days ?? 280;
   const since = new Date();
   since.setDate(since.getDate() - days);
@@ -68,6 +77,10 @@ function buildSessionsWhereClause(
 function getLookbackDays(options?: UsageInsightsOptions): number {
   if (options?.range) {
     return getDateRangeDaysInclusive(options.range);
+  }
+
+  if (options?.allTime) {
+    return 0;
   }
 
   return options?.days ?? 280;
