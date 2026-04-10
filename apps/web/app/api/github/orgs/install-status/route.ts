@@ -12,12 +12,6 @@ interface GitHubOrg {
   avatar_url: string;
 }
 
-interface GitHubMembership {
-  organization: GitHubOrg;
-  role: "admin" | "member";
-  state: "active" | "pending";
-}
-
 interface GitHubUser {
   id: number;
   login: string;
@@ -38,7 +32,6 @@ export interface OrgInstallStatus {
   installationId: number | null;
   installationUrl: string | null;
   repositorySelection: "all" | "selected" | null;
-  role: "admin" | "member" | null;
 }
 
 export interface ConnectionStatusResponse {
@@ -103,7 +96,6 @@ export async function GET() {
           i.installationUrl,
         ),
         repositorySelection: i.repositorySelection,
-        role: null,
       }));
 
     const response: ConnectionStatusResponse = {
@@ -112,7 +104,9 @@ export async function GET() {
         login: ghAccount.username,
         avatarUrl: `https://avatars.githubusercontent.com/u/${ghAccount.externalUserId}?v=4`,
       },
-      personalInstallStatus: personalInstallation ? "installed" : "not_installed",
+      personalInstallStatus: personalInstallation
+        ? "installed"
+        : "not_installed",
       personalInstallationUrl: personalInstallation
         ? getInstallationManageUrl(
             personalInstallation.installationId,
@@ -128,18 +122,14 @@ export async function GET() {
   }
 
   try {
-    // Fetch memberships and user profile in parallel.
-    // /user/memberships/orgs gives us role info (admin vs member).
-    const [membershipsResponse, userResponse] = await Promise.all([
-      fetch(
-        "https://api.github.com/user/memberships/orgs?per_page=100&state=active",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github.v3+json",
-          },
+    // Fetch orgs and user profile in parallel
+    const [orgsResponse, userResponse] = await Promise.all([
+      fetch("https://api.github.com/user/orgs?per_page=100", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3+json",
         },
-      ),
+      }),
       fetch("https://api.github.com/user", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -148,22 +138,17 @@ export async function GET() {
       }),
     ]);
 
-    if (!userResponse.ok) {
+    if (!userResponse.ok || !orgsResponse.ok) {
       return NextResponse.json(
         { error: "Failed to fetch GitHub data" },
         { status: 502 },
       );
     }
 
-    const user = (await userResponse.json()) as GitHubUser;
-
-    // Memberships may 403 if the user has restricted org visibility; fall back
-    // to empty list and we'll still show installations from the DB.
-    let memberships: GitHubMembership[] = [];
-    if (membershipsResponse.ok) {
-      memberships =
-        (await membershipsResponse.json()) as GitHubMembership[];
-    }
+    const [githubOrgs, user] = (await Promise.all([
+      orgsResponse.json(),
+      userResponse.json(),
+    ])) as [GitHubOrg[], GitHubUser];
 
     // Get all installations from DB
     const installations = await getInstallationsByUserId(session.user.id);
@@ -176,22 +161,18 @@ export async function GET() {
       user.login.toLowerCase(),
     );
 
-    // Build org list: merge memberships + installations (some orgs may be
-    // installed but not in memberships if visibility is restricted, or
-    // vice versa).
+    // Build org list: merge GitHub orgs + DB installations
     const seenLogins = new Set<string>();
     const orgs: OrgInstallStatus[] = [];
 
-    // First, add all orgs from memberships
-    for (const membership of memberships) {
-      const login = membership.organization.login;
-      const lowerLogin = login.toLowerCase();
+    for (const org of githubOrgs) {
+      const lowerLogin = org.login.toLowerCase();
       seenLogins.add(lowerLogin);
       const installation = installationsByLogin.get(lowerLogin);
       orgs.push({
-        githubId: membership.organization.id,
-        login,
-        avatarUrl: membership.organization.avatar_url,
+        githubId: org.id,
+        login: org.login,
+        avatarUrl: org.avatar_url,
         installStatus: installation ? "installed" : "not_installed",
         installationId: installation?.installationId ?? null,
         installationUrl: installation
@@ -201,12 +182,10 @@ export async function GET() {
             )
           : null,
         repositorySelection: installation?.repositorySelection ?? null,
-        role: membership.role,
       });
     }
 
-    // Then, add any installed orgs not in memberships (can happen with
-    // restricted org visibility)
+    // Add any installed orgs not in the GitHub orgs list
     for (const installation of installations) {
       const lowerLogin = installation.accountLogin.toLowerCase();
       if (
@@ -226,7 +205,6 @@ export async function GET() {
           installation.installationUrl,
         ),
         repositorySelection: installation.repositorySelection,
-        role: null,
       });
     }
 

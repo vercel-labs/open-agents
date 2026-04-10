@@ -46,7 +46,6 @@ interface OrgInstallStatus {
   installationId: number | null;
   installationUrl: string | null;
   repositorySelection: "all" | "selected" | null;
-  role: "admin" | "member" | null;
 }
 
 interface ConnectionStatusResponse {
@@ -251,6 +250,7 @@ export function AccountsSection() {
 
   const {
     data: connectionData,
+    error: connectionError,
     isLoading: connectionLoading,
     mutate: mutateConnection,
   } = useSWR<ConnectionStatusResponse>(
@@ -322,6 +322,8 @@ export function AccountsSection() {
             <NotConnectedState />
           ) : connectionLoading && !connectionData ? (
             <ConnectionLoadingSkeleton />
+          ) : connectionError && !connectionData ? (
+            <ConnectionErrorState onRetry={handleRefresh} />
           ) : connectionData ? (
             <ConnectedState
               data={connectionData}
@@ -353,6 +355,22 @@ function NotConnectedState() {
         onClick={startGitHubInstallFromSettings}
       >
         Connect
+      </Button>
+    </div>
+  );
+}
+
+// ── Error state ────────────────────────────────────────────────────────────
+
+function ConnectionErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <AlertCircle className="size-4 shrink-0 text-destructive" />
+        <span>Failed to load GitHub connection info.</span>
+      </div>
+      <Button variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
+        Retry
       </Button>
     </div>
   );
