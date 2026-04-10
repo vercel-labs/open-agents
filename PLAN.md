@@ -1,33 +1,50 @@
-Summary: Derive chat-header git action state from persisted chat message git parts instead of local optimistic commit state, while keeping preview deployment freshness based on the existing preview-URL comparison.
+Summary: Ship a shareable public usage profile at `/[username]` backed by existing usage data, gated by an opt-in setting, with `?date=` filtering for both presets and explicit ranges, plus a dynamic OG image generated from the same derived stats.
 
 Context:
-- The header in `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` currently mixes two local heuristics: `useAutoCommitStatus` for “Committing...” and `branchPreviewUrlChangeBaseline` for “Deploying…”.
-- Agent turns already stream and persist `data-commit` / `data-pr` parts from `apps/web/app/workflows/chat.ts`.
-- Manual commit and PR flows already write the same synthetic assistant git messages from `apps/web/components/commit-dialog.tsx` and `apps/web/components/create-pr-dialog.tsx`.
-- `apps/web/lib/chat-streaming-state.ts` already understands git parts for in-flight UI, so it is the natural place to centralize message-derived navbar state.
-- Confirmed requirements: state is chat-scoped, deployment freshness stays as-is, overflow menu should match the primary action, and terminal `error` / `skipped` states should fall back to normal actions.
+- `apps/web/app/settings/profile/page.tsx` already contains the closest “wrapped” content model: totals, top models, agent split, code churn, repositories, and usage insights.
+- Usage source of truth already exists in `usage_events` and `sessions`, exposed through `apps/web/lib/db/usage.ts` and `apps/web/lib/db/usage-insights.ts`.
+- Existing filtering is `from`/`to` only via `apps/web/lib/usage/date-range.ts` and `apps/web/app/api/usage/_lib/query-range.ts`; there is no `?date=` parser yet.
+- Usernames already live on `users.username` in `apps/web/lib/db/schema.ts`, so `/[username]` can resolve a profile without inventing new slugs.
+- `apps/web/app/[username]/[repo]/page.tsx` means root-level username routing already exists; adding `apps/web/app/[username]/page.tsx` is compatible, though static top-level routes remain reserved.
+- There is no existing OG image implementation in `apps/web`, so the image route will be new.
+- Confirmed product decisions:
+  - public pages are opt-in
+  - `?date=` should support both presets and explicit ranges
+  - the public page should be a share-focused wrapped summary, not the full internal profile screen
 
 System Impact:
-- Source of truth for commit / PR progress in the navbar shifts from transient client-only optimistic state to persisted chat history.
-- Deployment freshness remains client-derived from preview URL polling, but the trigger for “a new deploy should be expected” can be tied to message-derived commit completion for the active chat.
-- No backend protocol changes are needed because the required git action state is already embedded in messages.
+- Source of truth stays the same: `users` for identity, `user_preferences` for publishability, `usage_events` / `sessions` for stats.
+- New state introduced: a single persisted opt-in flag (`publicUsageEnabled`) stored with user preferences.
+- Public page rendering, metadata, and OG image all depend on one shared server-side “public usage profile” derivation so the page and image cannot drift.
+- `/[username]` becomes a public read surface; users with usernames colliding with static app routes are implicitly reserved unless we later add aliases.
+- No new dependency is required; the OG image can use Next’s built-in image response support.
 
 Approach:
-- Add a small helper that inspects the current chat’s latest assistant git parts and derives the active navbar git state (`creating-commit`, `creating-pr`, or idle).
-- Use that derived state in both the primary header button and the overflow menu so labels, icons, and disabled states stay aligned.
-- Keep preview polling and stale-preview detection intact, but trigger the stale-preview baseline off the message-derived commit completion transition instead of `isAutoCommitting`.
-- Treat only pending git parts as dynamic navbar states; once the latest git part resolves to `success`, `error`, or `skipped`, fall back to the normal action selection logic.
+- Add an opt-in preference on `user_preferences`, expose it in settings with the resulting public URL, and keep the route hard-disabled unless enabled.
+- Add a small date parsing helper for public share URLs that accepts both preset windows (`7d`, `30d`, `90d`) and explicit ranges (`YYYY-MM-DD..YYYY-MM-DD`), then converts them into the existing `UsageDateRange` shape.
+- Create one server-side public-profile query/helper that resolves a user by username, verifies opt-in, fetches usage + insights for the requested range, and derives the wrapped-summary data needed by both the HTML page and the OG image.
+- Implement `/[username]` as a server-rendered page with `generateMetadata`, and point metadata at a dedicated dynamic image route that mirrors the same date filter.
 
 Changes:
-- `apps/web/lib/chat-streaming-state.ts` - add helper(s) to derive the latest navbar git action state from chat messages / git parts.
-- `apps/web/lib/chat-streaming-state.test.ts` - add coverage for pending commit, pending PR, resolved states, and latest-message precedence.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` - replace header/menu commit state usage with message-derived state and switch deploy-stale triggering to the derived commit completion transition.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/commit-action-button.tsx` - generalize from auto-commit-specific copy to message-derived pending labels.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-auto-commit-status.ts` and its test - remove if no longer needed after the message-derived flow is wired in.
+- `apps/web/lib/db/schema.ts` - add `public_usage_enabled` to `user_preferences` so publishability is persisted with other user-configurable settings.
+- `apps/web/lib/db/migrations/*.sql` - add the generated migration for the new preference column.
+- `apps/web/lib/db/user-preferences.ts` - include `publicUsageEnabled` in defaults, normalization, reads, and updates.
+- `apps/web/hooks/use-user-preferences.ts` - expose `publicUsageEnabled` to the client settings UI.
+- `apps/web/app/api/settings/preferences/route.ts` - validate and persist the new boolean preference.
+- `apps/web/lib/usage/date-range.ts` and `apps/web/lib/usage/date-range.test.ts` - add shared parsing for public `?date=` values while keeping existing `from`/`to` helpers intact.
+- `apps/web/lib/db/public-usage-profile.ts` (new) - resolve username + opt-in state, fetch usage/insights for a range, and derive share-card stats like totals, top models, agent split, code churn, and date label.
+- `apps/web/lib/db/public-usage-profile.test.ts` (new) - cover opt-in gating, username lookup, empty usage, preset/range filtering handoff, and derived top-model ordering.
+- `apps/web/app/[username]/page.tsx` - render the new public wrapped-style page and return `notFound()` when the user does not exist or is not public.
+- `apps/web/app/[username]/og/route.tsx` (new) - generate the dynamic OG image from the same public-profile helper and date filter.
+- `apps/web/app/settings/profile/page.tsx` or a colocated extracted child component - add the opt-in toggle and share URL preview/copy affordance in the existing profile/settings surface.
 
 Verification:
+- Run `bun run --cwd apps/web db:generate` after the schema change.
 - Run `bun run ci`.
-- In a chat with auto-commit enabled, confirm the header and overflow menu show pending commit / PR labels from streamed git parts.
-- Confirm successful, skipped, or failed git parts return the navbar to normal actions.
-- Confirm manual commit and manual PR creation still update the navbar via their synthetic assistant git messages.
-- Confirm preview still shows “Deploying…” until the preview URL changes after a pushed commit.
+- Manually verify:
+  - opt-in off => `/[username]` 404s
+  - opt-in on => `/[username]` renders public stats
+  - `?date=30d` and `?date=2026-01-01..2026-01-31` both filter correctly
+  - invalid `?date=` returns a safe fallback or 400-style handling on the public surface, depending on final implementation choice
+  - social metadata points at the generated image and the image reflects the selected date filter
+  - existing `/[username]/[repo]` onboarding still works unchanged
