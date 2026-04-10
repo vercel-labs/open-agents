@@ -3,7 +3,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { formatTokens } from "@open-harness/shared";
+import { ContributionChart } from "@/components/contribution-chart";
+import type { UsageRepositoryInsight } from "@/lib/usage/types";
 import { getPublicUsageProfile } from "@/lib/db/public-usage-profile";
+import { UsageInsightsSection } from "../settings/usage/usage-insights-section";
 
 interface PublicUsagePageProps {
   params: Promise<{ username: string }>;
@@ -36,10 +40,6 @@ function formatCompactNumber(value: number): string {
   }
 
   return value.toLocaleString();
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`;
 }
 
 async function getBaseUrl(): Promise<string> {
@@ -95,6 +95,112 @@ export async function generateMetadata({
   };
 }
 
+// ── Gray-scale dot classes: brightest first (top rank), darkest last ────────
+
+const RANK_DOT_CLASSES = [
+  "bg-neutral-100 dark:bg-neutral-200",
+  "bg-neutral-300 dark:bg-neutral-400",
+  "bg-neutral-400 dark:bg-neutral-500",
+  "bg-neutral-500 dark:bg-neutral-600",
+  "bg-neutral-600 dark:bg-neutral-700",
+];
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function StatItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="py-2">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm text-muted-foreground">{label}</span>
+        <span className="text-sm font-semibold font-mono tabular-nums">
+          {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RankedList({
+  title,
+  items,
+}: {
+  title: string;
+  items: { label: string; value: string }[];
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <div className="space-y-1.5">
+        {items.map((item, i) => (
+          <div key={item.label} className="flex items-center gap-2.5 text-sm">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${RANK_DOT_CLASSES[i % RANK_DOT_CLASSES.length]}`}
+            />
+            <span className="min-w-0 truncate">{item.label}</span>
+            <span className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopRepos({ repos }: { repos: UsageRepositoryInsight[] }) {
+  const top3 = repos.slice(0, 3);
+  if (top3.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Top repositories
+      </h3>
+      <div className="space-y-2">
+        {top3.map((repo) => (
+          <a
+            key={`${repo.repoOwner}/${repo.repoName}`}
+            href={`https://github.com/${repo.repoOwner}/${repo.repoName}`}
+            target="_blank"
+            rel="noreferrer"
+            className="block rounded-lg border border-border/50 bg-muted/10 px-3 py-2 transition-colors hover:bg-muted/20"
+          >
+            <div className="flex items-center gap-1.5">
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
+              </svg>
+              <p className="truncate text-sm font-medium">
+                {repo.repoOwner}/{repo.repoName}
+              </p>
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="font-mono tabular-nums">
+                {repo.sessionCount.toLocaleString()} sessions
+              </span>
+              <span className="font-mono tabular-nums">
+                {repo.totalLinesChanged.toLocaleString()} lines
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function displayModelId(modelId: string): string {
+  const slashIndex = modelId.indexOf("/");
+  return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
+
 export default async function PublicUsagePage({
   params,
   searchParams,
@@ -110,36 +216,57 @@ export default async function PublicUsagePage({
 
   const displayName = profile.user.name?.trim() || profile.user.username;
   const publicProfilePath = `/u/${profile.user.username}`;
-  const topModel = profile.topModels[0] ?? null;
-  const topModels = profile.topModels.slice(0, 5);
-  const maxModelTokens = topModel?.totalTokens ?? 1;
+  const totalTokens = profile.totals.totalTokens;
+
   const presets = [
     { label: "All time", value: null },
     { label: "7d", value: "7d" },
     { label: "30d", value: "30d" },
     { label: "90d", value: "90d" },
   ];
-  const totalRepos = profile.topRepositories.length;
-  const topRepos = profile.topRepositories.slice(0, 3);
+
+  // Agent split ranked list
+  const agentItems = [
+    { label: "Main agent", value: formatTokens(profile.agentSplit.mainTokens) },
+    {
+      label: "Subagents",
+      value: formatTokens(profile.agentSplit.subagentTokens),
+    },
+  ].filter((i) => i.value !== "0");
+
+  // Top models ranked list (top 5)
+  const modelItems = profile.topModels.slice(0, 5).map((m) => ({
+    label: displayModelId(m.modelId),
+    value: formatTokens(m.totalTokens),
+  }));
+
+  // Code churn ranked list
+  const codeChurnItems = [
+    {
+      label: "Lines added",
+      value: profile.insights.code.linesAdded.toLocaleString(),
+    },
+    {
+      label: "Lines removed",
+      value: profile.insights.code.linesRemoved.toLocaleString(),
+    },
+    {
+      label: "Total changed",
+      value: profile.insights.code.totalLinesChanged.toLocaleString(),
+    },
+  ];
+
+  const hasUsage = profile.hasUsage;
+  const hasRankedData =
+    hasUsage || modelItems.length > 0 || codeChurnItems.length > 0;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#060608] text-[#e8e8e8] selection:bg-white/20">
-      {/* Background atmosphere */}
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute top-[10%] left-[50%] h-[800px] w-[800px] -translate-x-1/2 rounded-full bg-white/[0.015] blur-[200px]" />
-      </div>
-      <div className="grain pointer-events-none fixed inset-0 z-[1]" />
-
-      <div className="relative z-10 mx-auto max-w-[700px] px-6 pb-20 pt-12 sm:pt-16">
-        {/* ── Header ── */}
-        <header
-          className="wrapped-enter flex items-center justify-between"
-          style={{ animationDelay: "0ms" }}
-        >
-          <span className="text-[11px] font-medium tracking-[0.3em] uppercase text-white/20">
-            Open Agents
-          </span>
-          <nav className="flex gap-0.5">
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-5xl px-6 py-8 sm:py-12">
+        {/* Page header with date presets */}
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-semibold">Profile</h1>
+          <nav className="flex gap-1">
             {presets.map((preset) => {
               const href = preset.value
                 ? `${publicProfilePath}?date=${preset.value}`
@@ -149,10 +276,10 @@ export default async function PublicUsagePage({
                 <Link
                   key={preset.label}
                   href={href}
-                  className={`rounded-full px-3 py-1 text-[12px] transition-colors duration-150 ease-out active:scale-[0.97] ${
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     isActive
-                      ? "bg-white/[0.1] text-white"
-                      : "text-white/25 hover:text-white/50"
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
                   }`}
                 >
                   {preset.label}
@@ -160,218 +287,107 @@ export default async function PublicUsagePage({
               );
             })}
           </nav>
-        </header>
+        </div>
 
         {profile.invalidDateError ? (
-          <p
-            className="wrapped-enter mt-4 text-[13px] text-white/30"
-            style={{ animationDelay: "40ms" }}
-          >
+          <p className="mt-2 text-sm text-muted-foreground">
             Invalid date filter — showing all-time data.
           </p>
         ) : null}
 
-        {/* ── Identity ── */}
-        <div
-          className="wrapped-enter mt-12 flex items-center gap-3.5"
-          style={{ animationDelay: "60ms" }}
-        >
-          {profile.user.avatarUrl ? (
-            <Image
-              src={profile.user.avatarUrl}
-              alt={profile.user.username}
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-full opacity-80 grayscale"
-            />
-          ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-sm font-medium text-white/40">
-              {profile.user.username.slice(0, 1).toUpperCase()}
+        {/* Two-column layout */}
+        <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:gap-10">
+          {/* Left sidebar */}
+          <div className="w-full shrink-0 lg:w-56">
+            <div className="space-y-5">
+              {/* Avatar + name */}
+              <div className="flex items-center gap-3">
+                {profile.user.avatarUrl ? (
+                  <Image
+                    src={profile.user.avatarUrl}
+                    alt={profile.user.username}
+                    width={56}
+                    height={56}
+                    className="shrink-0 rounded-full"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium text-muted-foreground">
+                    {profile.user.username.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  {displayName !== profile.user.username ? (
+                    <p className="truncate text-base font-semibold leading-tight">
+                      {displayName}
+                    </p>
+                  ) : null}
+                  <p className="truncate text-sm text-muted-foreground">
+                    @{profile.user.username}
+                  </p>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Usage · {profile.dateSelection.label}
+                </h3>
+                <div className="rounded-lg border border-border/50 bg-muted/10 px-4 py-1 divide-y divide-border/50">
+                  <StatItem
+                    label="Total tokens"
+                    value={formatTokens(totalTokens)}
+                  />
+                  <StatItem
+                    label="Messages"
+                    value={profile.totals.messageCount.toLocaleString()}
+                  />
+                  <StatItem
+                    label="Tool calls"
+                    value={profile.totals.toolCallCount.toLocaleString()}
+                  />
+                </div>
+              </div>
+
+              {/* Top repos */}
+              <TopRepos repos={profile.topRepositories} />
             </div>
-          )}
-          <div className="text-[14px] text-white/40">
-            {displayName !== profile.user.username ? (
-              <>
-                <span className="text-white/60">{displayName}</span>
-                {" · "}
-              </>
-            ) : null}
-            @{profile.user.username}
+          </div>
+
+          {/* Right content */}
+          <div className="min-w-0 flex-1 space-y-8">
+            {/* Activity grid */}
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  Activity
+                </h2>
+              </div>
+              <ContributionChart data={profile.dailyActivity} />
+            </div>
+
+            {/* Usage breakdown — ranked lists in a grid */}
+            {hasRankedData && (
+              <div className="grid gap-8 sm:grid-cols-3">
+                {hasUsage && (
+                  <RankedList title="Agent split" items={agentItems} />
+                )}
+                {modelItems.length > 0 && (
+                  <RankedList title="Top models" items={modelItems} />
+                )}
+                {codeChurnItems.length > 0 && (
+                  <RankedList title="Code churn" items={codeChurnItems} />
+                )}
+              </div>
+            )}
+
+            {/* Insights */}
+            <UsageInsightsSection insights={profile.insights} />
           </div>
         </div>
 
-        {/* ── The Number ── */}
-        <section
-          className="wrapped-enter mt-16 sm:mt-20"
-          style={{ animationDelay: "140ms" }}
-        >
-          <div className="text-[clamp(3rem,10vw,5rem)] leading-[0.9] font-semibold tracking-[-0.03em] text-white">
-            {formatCompactNumber(profile.totals.totalTokens)}
-          </div>
-          <div className="mt-3 text-[13px] tracking-[0.2em] uppercase text-white/25">
-            tokens consumed
-          </div>
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[14px] text-white/30">
-            <span>
-              <span className="font-mono text-white/50 tabular-nums">
-                {formatCompactNumber(profile.totals.outputTokens)}
-              </span>{" "}
-              output
-            </span>
-            <span>
-              <span className="font-mono text-white/50 tabular-nums">
-                {profile.totals.messageCount.toLocaleString()}
-              </span>{" "}
-              messages
-            </span>
-            <span>
-              <span className="font-mono text-white/50 tabular-nums">
-                {profile.totals.toolCallCount.toLocaleString()}
-              </span>{" "}
-              tool calls
-            </span>
-          </div>
-        </section>
-
-        {/* ── Divider ── */}
-        <div
-          className="wrapped-enter mt-16 h-px bg-white/[0.06] sm:mt-20"
-          style={{ animationDelay: "260ms" }}
-        />
-
-        {/* ── Models ── */}
-        <section
-          className="wrapped-enter mt-12 sm:mt-14"
-          style={{ animationDelay: "300ms" }}
-        >
-          {topModels.length > 0 ? (
-            <>
-              <p className="text-[13px] text-white/25">
-                {topModels.length === 1 ? "Model of choice" : "#1 model"}
-              </p>
-              <h2 className="mt-1 text-[clamp(2.5rem,8vw,4rem)] leading-[0.95] font-semibold tracking-[-0.03em] text-white">
-                {topModels[0].label}
-              </h2>
-
-              <div className="mt-10 space-y-5">
-                {topModels.map((model, i) => {
-                  const pct = (model.totalTokens / maxModelTokens) * 100;
-                  return (
-                    <div key={model.modelId}>
-                      <div className="flex items-baseline justify-between gap-4">
-                        <div className="min-w-0 flex items-baseline gap-2.5">
-                          <span className="font-mono text-[12px] text-white/15 tabular-nums">
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          <span className="truncate text-[15px] text-white/70">
-                            {model.label}
-                          </span>
-                        </div>
-                        <span className="shrink-0 font-mono text-[13px] text-white/35 tabular-nums">
-                          {formatCompactNumber(model.totalTokens)}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-white/[0.04]">
-                        <div
-                          className="wrapped-bar-fill h-full rounded-full"
-                          style={{
-                            width: `${Math.max(pct, 1.5)}%`,
-                            animationDelay: `${380 + i * 70}ms`,
-                            background:
-                              i === 0
-                                ? "linear-gradient(90deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 100%)"
-                                : "linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <p className="text-[14px] text-white/20">
-              No model usage tracked yet.
-            </p>
-          )}
-        </section>
-
-        {/* ── Divider ── */}
-        <div
-          className="wrapped-enter mt-16 h-px bg-white/[0.06] sm:mt-20"
-          style={{ animationDelay: "540ms" }}
-        />
-
-        {/* ── Impact ── */}
-        <section
-          className="wrapped-enter mt-12 sm:mt-14"
-          style={{ animationDelay: "580ms" }}
-        >
-          <div className="grid grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-4 sm:gap-8">
-            <div>
-              <div className="font-mono text-[clamp(1.75rem,6vw,3rem)] leading-none font-semibold tracking-[-0.03em] text-white tabular-nums">
-                {profile.insights.pr.mergedPrCount.toLocaleString()}
-              </div>
-              <div className="mt-2 text-[12px] tracking-[0.15em] uppercase text-white/20">
-                PRs merged
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-[clamp(1.75rem,6vw,3rem)] leading-none font-semibold tracking-[-0.03em] text-white tabular-nums">
-                {formatPercent(profile.insights.pr.mergeRate)}
-              </div>
-              <div className="mt-2 text-[12px] tracking-[0.15em] uppercase text-white/20">
-                Merge rate
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-[clamp(1.75rem,6vw,3rem)] leading-none font-semibold tracking-[-0.03em] text-white tabular-nums">
-                {formatCompactNumber(profile.insights.code.totalLinesChanged)}
-              </div>
-              <div className="mt-2 text-[12px] tracking-[0.15em] uppercase text-white/20">
-                Lines changed
-              </div>
-            </div>
-            <div>
-              <div className="font-mono text-[clamp(1.75rem,6vw,3rem)] leading-none font-semibold tracking-[-0.03em] text-white tabular-nums">
-                {totalRepos.toLocaleString()}
-              </div>
-              <div className="mt-2 text-[12px] tracking-[0.15em] uppercase text-white/20">
-                Repos
-              </div>
-            </div>
-          </div>
-
-          {topRepos.length > 0 ? (
-            <div className="mt-8 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px]">
-              {topRepos.map((repo, i) => (
-                <span key={`${repo.repoOwner}/${repo.repoName}`}>
-                  <a
-                    href={`https://github.com/${repo.repoOwner}/${repo.repoName}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-white/35 underline decoration-white/10 underline-offset-2 transition-colors duration-150 hover:text-white/60 hover:decoration-white/25"
-                  >
-                    {repo.repoOwner}/{repo.repoName}
-                  </a>
-                  {i < topRepos.length - 1 ? (
-                    <span className="ml-1.5 text-white/10">·</span>
-                  ) : null}
-                </span>
-              ))}
-              {totalRepos > 3 ? (
-                <span className="text-white/15">+{totalRepos - 3} more</span>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-
-        {/* ── Footer ── */}
-        <div
-          className="wrapped-enter mt-24 flex items-center justify-between gap-4 border-t border-white/[0.04] pt-6 sm:mt-32"
-          style={{ animationDelay: "660ms" }}
-        >
-          <span className="font-mono text-[12px] text-white/15">
+        {/* Footer */}
+        <div className="mt-16 flex items-center justify-between gap-4 border-t border-border/50 pt-6">
+          <span className="font-mono text-xs text-muted-foreground">
             open-agents.dev{publicProfilePath}
             {profile.dateSelection.value
               ? `?date=${profile.dateSelection.value}`
@@ -379,7 +395,7 @@ export default async function PublicUsagePage({
           </span>
           <a
             href="https://open-agents.dev"
-            className="text-[12px] text-white/15 transition-colors duration-150 hover:text-white/30"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Open Agents ↗
           </a>

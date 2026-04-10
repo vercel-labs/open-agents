@@ -31,6 +31,14 @@ export interface PublicUsageTotals {
   totalTokens: number;
 }
 
+export interface PublicUsageDailyActivity {
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  messageCount: number;
+  toolCallCount: number;
+}
+
 export interface PublicUsageProfile {
   user: {
     id: string;
@@ -48,6 +56,7 @@ export interface PublicUsageProfile {
   topModels: PublicUsageModelSummary[];
   topRepositories: UsageRepositoryInsight[];
   insights: UsageInsights;
+  dailyActivity: PublicUsageDailyActivity[];
   hasUsage: boolean;
 }
 
@@ -80,12 +89,39 @@ function sumRows(rows: DailyUsage[]): PublicUsageTotals {
   return totals;
 }
 
+function mergeDailyActivity(rows: DailyUsage[]): PublicUsageDailyActivity[] {
+  const map = new Map<string, PublicUsageDailyActivity>();
+  for (const r of rows) {
+    const existing = map.get(r.date);
+    if (existing) {
+      existing.inputTokens += r.inputTokens;
+      existing.outputTokens += r.outputTokens;
+      existing.messageCount += r.messageCount;
+      existing.toolCallCount += r.toolCallCount;
+    } else {
+      map.set(r.date, {
+        date: r.date,
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        messageCount: r.messageCount,
+        toolCallCount: r.toolCallCount,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
 export function buildPublicUsageProfileData(params: {
   usage: DailyUsage[];
   insights: UsageInsights;
 }): Pick<
   PublicUsageProfile,
-  "totals" | "agentSplit" | "topModels" | "topRepositories" | "hasUsage"
+  | "totals"
+  | "agentSplit"
+  | "topModels"
+  | "topRepositories"
+  | "dailyActivity"
+  | "hasUsage"
 > {
   const modelUsage = new Map<string, PublicUsageModelSummary>();
   let mainTokens = 0;
@@ -142,6 +178,7 @@ export function buildPublicUsageProfileData(params: {
       return a.modelId.localeCompare(b.modelId);
     }),
     topRepositories: params.insights.topRepositories,
+    dailyActivity: mergeDailyActivity(params.usage),
     hasUsage: params.usage.length > 0,
   };
 }
@@ -249,6 +286,7 @@ export const getPublicUsageProfile = cache(
       topModels: derived.topModels,
       topRepositories: derived.topRepositories,
       insights,
+      dailyActivity: derived.dailyActivity,
       hasUsage: derived.hasUsage,
     };
   },

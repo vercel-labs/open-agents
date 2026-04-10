@@ -223,6 +223,29 @@ describe("buildPublicUsageProfileData", () => {
           totalLinesChanged: 52,
         },
       ],
+      dailyActivity: [
+        {
+          date: "2026-02-01",
+          inputTokens: 100,
+          outputTokens: 50,
+          messageCount: 2,
+          toolCallCount: 1,
+        },
+        {
+          date: "2026-02-02",
+          inputTokens: 60,
+          outputTokens: 30,
+          messageCount: 0,
+          toolCallCount: 3,
+        },
+        {
+          date: "2026-02-03",
+          inputTokens: 20,
+          outputTokens: 10,
+          messageCount: 1,
+          toolCallCount: 0,
+        },
+      ],
       hasUsage: true,
     });
   });
@@ -251,6 +274,7 @@ describe("buildPublicUsageProfileData", () => {
       },
       topModels: [],
       topRepositories: [],
+      dailyActivity: [],
       hasUsage: false,
     });
   });
