@@ -1,33 +1,40 @@
-Summary: Derive chat-header git action state from persisted chat message git parts instead of local optimistic commit state, while keeping preview deployment freshness based on the existing preview-URL comparison.
+Summary: Detect invalid GitHub connections from live GitHub data instead of trusting cached installation rows, then show a global reconnect prompt that sends the user through a non-destructive re-auth flow before they keep using the app.
 
 Context:
-- The header in `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` currently mixes two local heuristics: `useAutoCommitStatus` for “Committing...” and `branchPreviewUrlChangeBaseline` for “Deploying…”.
-- Agent turns already stream and persist `data-commit` / `data-pr` parts from `apps/web/app/workflows/chat.ts`.
-- Manual commit and PR flows already write the same synthetic assistant git messages from `apps/web/components/commit-dialog.tsx` and `apps/web/components/create-pr-dialog.tsx`.
-- `apps/web/lib/chat-streaming-state.ts` already understands git parts for in-flight UI, so it is the natural place to centralize message-derived navbar state.
-- Confirmed requirements: state is chat-scoped, deployment freshness stays as-is, overflow menu should match the primary action, and terminal `error` / `skipped` states should fall back to normal actions.
+- GitHub installation state is currently treated as DB-backed cached data. `apps/web/app/api/auth/info/route.ts` only reports whether an account row or installation rows exist; it never checks whether the GitHub token or installations are still valid.
+- Installation sync only happens in `apps/web/app/api/github/app/install/route.ts`, `apps/web/app/api/github/app/callback/route.ts`, and via webhook updates in `apps/web/app/api/github/webhook/route.ts`. Normal app loads do not refresh installation truth from GitHub.
+- The connectors UI in `apps/web/app/settings/accounts-section.tsx` fetches `/api/github/orgs/install-status`, which depends on `getUserGitHubToken()` plus DB installation rows. If the GitHub token is invalid or GitHub returns an auth error, the component currently falls through to the empty state and looks like “zero installations” instead of surfacing “reconnect GitHub”.
+- Repo-selection surfaces (`apps/web/components/repo-selector-compact.tsx`, `apps/web/components/repo-selector.tsx`, `apps/web/components/create-repo-dialog.tsx`) also trust `/api/github/installations`, which is DB-only and does not distinguish “never installed” from “previously connected but now invalidated”.
+- There is already reconnect intent in the codebase: `apps/web/app/api/auth/github/unlink/route.ts` sets a `github_reconnect` cookie, and `apps/web/app/api/github/app/callback/route.ts` clears it, but `apps/web/app/api/github/app/install/route.ts` never reads it. So reconnect support is partially sketched but not actually wired.
 
 System Impact:
-- Source of truth for commit / PR progress in the navbar shifts from transient client-only optimistic state to persisted chat history.
-- Deployment freshness remains client-derived from preview URL polling, but the trigger for “a new deploy should be expected” can be tied to message-derived commit completion for the active chat.
-- No backend protocol changes are needed because the required git action state is already embedded in messages.
+- Source of truth for “is GitHub usable right now?” should shift from cached DB presence to a lightweight GitHub health check using the current user token plus a fresh installation sync.
+- The DB remains the local cache for installation lists, but reconnect gating should be derived from live validation, not just row existence.
+- A global reconnect state becomes available to all authenticated screens, so the app can block or interrupt flows before users hit repo picker, sandbox creation, or settings confusion.
+- The reconnect action should be non-destructive: re-run OAuth/install flow first, then refresh cached installations. Do not require manual disconnect before reconnect.
 
 Approach:
-- Add a small helper that inspects the current chat’s latest assistant git parts and derives the active navbar git state (`creating-commit`, `creating-pr`, or idle).
-- Use that derived state in both the primary header button and the overflow menu so labels, icons, and disabled states stay aligned.
-- Keep preview polling and stale-preview detection intact, but trigger the stale-preview baseline off the message-derived commit completion transition instead of `isAutoCommitting`.
-- Treat only pending git parts as dynamic navbar states; once the latest git part resolves to `success`, `error`, or `skipped`, fall back to the normal action selection logic.
+- Add a dedicated GitHub connection-health endpoint that, for authenticated users with a linked GitHub account, validates the user token, attempts a fresh installation sync, and returns one of: connected, disconnected, or reconnect_required.
+- Treat these cases as reconnect_required: user token missing/refresh failed, GitHub auth failure during the health check, or installations dropping from previously-present to zero after a live sync.
+- Add a dedicated reconnect entrypoint that sends the user back through the existing GitHub install/auth flow in reconnect mode without forcing them to manually disconnect first.
+- Mount a global authenticated reconnect gate near the app root so the prompt appears before users start a session or navigate deep into flows.
+- Tighten local surfaces so settings/repo selection show explicit reconnect messaging instead of ambiguous empty states when the health check has already determined GitHub is invalid.
 
 Changes:
-- `apps/web/lib/chat-streaming-state.ts` - add helper(s) to derive the latest navbar git action state from chat messages / git parts.
-- `apps/web/lib/chat-streaming-state.test.ts` - add coverage for pending commit, pending PR, resolved states, and latest-message precedence.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` - replace header/menu commit state usage with message-derived state and switch deploy-stale triggering to the derived commit completion transition.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/commit-action-button.tsx` - generalize from auto-commit-specific copy to message-derived pending labels.
-- `apps/web/app/sessions/[sessionId]/chats/[chatId]/hooks/use-auto-commit-status.ts` and its test - remove if no longer needed after the message-derived flow is wired in.
+- `apps/web/app/api/github/connection-status/route.ts` - new endpoint that validates the GitHub account, performs a guarded live installation sync, and returns structured status/reason/action URL data.
+- `apps/web/lib/github/installations-sync.ts` - optionally add small error classification helpers so callers can distinguish auth failures from transient GitHub/API failures.
+- `apps/web/app/api/github/app/install/route.ts` - honor reconnect mode instead of blindly using the existing linked-account path; route reconnects through OAuth when needed.
+- `apps/web/app/api/auth/github/reconnect/route.ts` (new) or equivalent install-route support - provide a stable non-destructive reconnect URL that preserves `next`.
+- `apps/web/app/providers.tsx` - mount a global reconnect checker/gate for authenticated users, likely via a small child component under the existing SWR provider.
+- `apps/web/components/github-reconnect-dialog.tsx` (new) - blocking or near-blocking reconnect prompt with primary CTA back into the reconnect flow.
+- `apps/web/app/settings/accounts-section.tsx` - replace the current misleading empty/error fallthrough with explicit reconnect-aware states.
+- `apps/web/components/repo-selector-compact.tsx`, `apps/web/components/repo-selector.tsx`, `apps/web/components/create-repo-dialog.tsx` - consume the same reconnect status so repo-related entry points show the right CTA instead of generic “no installations”.
+- Tests for the new connection-status route and reconnect-mode install flow, plus focused UI tests where practical.
 
 Verification:
 - Run `bun run ci`.
-- In a chat with auto-commit enabled, confirm the header and overflow menu show pending commit / PR labels from streamed git parts.
-- Confirm successful, skipped, or failed git parts return the navbar to normal actions.
-- Confirm manual commit and manual PR creation still update the navbar via their synthetic assistant git messages.
-- Confirm preview still shows “Deploying…” until the preview URL changes after a pushed commit.
+- With a healthy GitHub connection, confirm the global gate does not appear and installation/repo pickers behave as before.
+- Simulate an invalid GitHub token or revoked/reduced installation state and confirm the app shows the reconnect prompt before normal use.
+- Confirm the reconnect CTA returns the user to their original page and repopulates installations without requiring manual disconnect.
+- Confirm settings/connections now shows a reconnect-specific state instead of a misleading zero-installations empty state.
+- Confirm repo picker, create-repo flow, and sandbox/session entry points all surface the same reconnect path if reached while invalid.
