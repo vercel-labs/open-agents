@@ -1163,7 +1163,7 @@ export function SessionChatContent({
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
-  const _upsertSyntheticAssistantGitMessage = useCallback(
+  const upsertSyntheticAssistantGitMessage = useCallback(
     async (message: WebAgentUIMessage) => {
       setMessages((currentMessages) => {
         const existingIndex = currentMessages.findIndex(
@@ -2880,6 +2880,7 @@ export function SessionChatContent({
         updateSessionPullRequest(pr);
         void refreshGitStatus().catch(() => {});
       }}
+      onGitMessage={upsertSyntheticAssistantGitMessage}
     />
   ) : null;
 

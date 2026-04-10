@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
+import type { WebAgentUIMessage } from "@/app/types";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { Session } from "@/lib/db/schema";
@@ -130,6 +131,7 @@ type GitPanelProps = {
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
 };
 
 /* ------------------------------------------------------------------ */
@@ -555,6 +557,7 @@ function InlinePrCreatePanel({
   refreshGitStatus,
   hasUncommittedGitChanges,
   onPrDetected,
+  onGitMessage,
   isAgentWorking,
   baseBranch,
 }: {
@@ -567,6 +570,7 @@ function InlinePrCreatePanel({
     prNumber: number;
     prStatus: "open" | "merged" | "closed";
   }) => void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   isAgentWorking: boolean;
   baseBranch: string;
 }) {
@@ -675,6 +679,9 @@ function InlinePrCreatePanel({
     setIsCreatingPr(true);
     setPrError(null);
 
+    const gitMessageId = crypto.randomUUID();
+    const prPartId = `${gitMessageId}:pr`;
+
     try {
       let finalTitle = prTitle.trim();
       let finalBody = prBody.trim();
@@ -702,6 +709,20 @@ function InlinePrCreatePanel({
         }
       }
 
+      // Emit pending data-pr part
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: { status: "pending" },
+          },
+        ],
+      });
+
       // Check if we need to open compare page instead
       const headOwner = prHeadOwner?.trim() || session.repoOwner;
       const ownerMismatch =
@@ -721,6 +742,22 @@ function InlinePrCreatePanel({
         setPrSuccess({
           prUrl: compareUrl.toString(),
           requiresManualCreation: true,
+        });
+        await onGitMessage?.({
+          id: gitMessageId,
+          role: "assistant",
+          metadata: {},
+          parts: [
+            {
+              type: "data-pr",
+              id: prPartId,
+              data: {
+                status: "success",
+                url: compareUrl.toString(),
+                requiresManualCreation: true,
+              },
+            },
+          ],
         });
         return;
       }
@@ -758,6 +795,25 @@ function InlinePrCreatePanel({
             : undefined,
       });
 
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "success",
+              created: true,
+              prNumber:
+                typeof data.prNumber === "number" ? data.prNumber : undefined,
+              url: typeof data.prUrl === "string" ? data.prUrl : undefined,
+            },
+          },
+        ],
+      });
+
       if (typeof data.prNumber === "number") {
         onPrDetected?.({
           prNumber: data.prNumber,
@@ -768,7 +824,24 @@ function InlinePrCreatePanel({
         });
       }
     } catch (err) {
-      setPrError(err instanceof Error ? err.message : "Failed to create PR");
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create PR";
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-pr",
+            id: prPartId,
+            data: {
+              status: "error",
+              error: errorMessage,
+            },
+          },
+        ],
+      });
+      setPrError(errorMessage);
     } finally {
       setIsCreatingPr(false);
     }
@@ -1576,6 +1649,7 @@ export function GitPanel(props: GitPanelProps) {
     refreshGitStatus,
     onCommitted,
     onPrDetected,
+    onGitMessage,
     isAgentWorking,
   } = props;
   const [baseBranch, setBaseBranch] = useState("main");
@@ -1930,6 +2004,7 @@ export function GitPanel(props: GitPanelProps) {
                 refreshGitStatus={refreshGitStatus}
                 hasUncommittedGitChanges={hasUncommittedGitChanges}
                 onPrDetected={onPrDetected}
+                onGitMessage={onGitMessage}
                 isAgentWorking={isAgentWorking}
                 baseBranch={baseBranch}
               />
