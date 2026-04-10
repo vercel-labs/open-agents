@@ -203,7 +203,7 @@ export default async function PublicUsagePage({
           className="wrapped-enter mt-16 sm:mt-20"
           style={{ animationDelay: "140ms" }}
         >
-          <div className="text-[clamp(5rem,18vw,9rem)] leading-[0.9] font-semibold tracking-[-0.04em] text-white">
+          <div className="text-[clamp(3rem,10vw,5rem)] leading-[0.9] font-semibold tracking-[-0.03em] text-white">
             {formatCompactNumber(profile.totals.totalTokens)}
           </div>
           <div className="mt-3 text-[13px] tracking-[0.2em] uppercase text-white/25">
@@ -247,7 +247,7 @@ export default async function PublicUsagePage({
               <p className="text-[13px] text-white/25">
                 {topModels.length === 1 ? "Model of choice" : "#1 model"}
               </p>
-              <h2 className="mt-1 text-[clamp(3rem,12vw,6rem)] leading-[0.95] font-semibold tracking-[-0.04em] text-white">
+              <h2 className="mt-1 text-[clamp(2.5rem,8vw,4rem)] leading-[0.95] font-semibold tracking-[-0.03em] text-white">
                 {topModels[0].label}
               </h2>
 
