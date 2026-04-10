@@ -109,6 +109,7 @@ export default async function PublicUsagePage({
 
   const displayName = profile.user.name?.trim() || profile.user.username;
   const topModel = profile.topModels[0] ?? null;
+  const maxModelTokens = topModel?.totalTokens ?? 1;
   const presets = [
     { label: "All time", value: null },
     { label: "7d", value: "7d" },
@@ -116,209 +117,285 @@ export default async function PublicUsagePage({
     { label: "90d", value: "90d" },
   ];
 
+  const mainPercent =
+    profile.totals.totalTokens > 0
+      ? Math.round(
+          (profile.agentSplit.mainTokens / profile.totals.totalTokens) * 100,
+        )
+      : 0;
+  const subPercent = 100 - mainPercent;
+
   return (
-    <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
-        <section className="relative overflow-hidden rounded-[32px] border border-border/60 bg-gradient-to-br from-background via-background to-muted/30 p-6 shadow-sm sm:p-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(120,119,198,0.18),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(14,165,233,0.12),transparent_28%)]" />
-          <div className="relative flex flex-col gap-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 items-center gap-4">
-                {profile.user.avatarUrl ? (
-                  <Image
-                    src={profile.user.avatarUrl}
-                    alt={profile.user.username}
-                    width={72}
-                    height={72}
-                    className="h-[72px] w-[72px] rounded-full border border-border/60 object-cover"
-                  />
-                ) : (
-                  <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full border border-border/60 bg-muted/60 text-2xl font-semibold">
-                    {profile.user.username.slice(0, 1).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                    <span>Open Agents Wrapped</span>
-                    <span className="rounded-full border border-border/60 px-2 py-0.5 tracking-normal normal-case text-foreground/80">
-                      {profile.dateSelection.label}
-                    </span>
-                  </div>
-                  <div>
-                    <h1 className="truncate text-3xl font-semibold tracking-tight sm:text-4xl">
-                      {displayName}
-                    </h1>
-                    <p className="text-sm text-muted-foreground sm:text-base">
-                      @{profile.user.username}
-                    </p>
-                  </div>
-                  <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-                    Shareable usage stats from Open Agents — output volume, top
-                    models, repo activity, and how this profile works across
-                    main agents and subagents.
-                  </p>
-                </div>
-              </div>
+    <main className="relative min-h-screen overflow-hidden bg-[#09090b] text-white selection:bg-amber-500/30">
+      {/* Atmospheric gradient orbs */}
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute top-[-30%] left-[-15%] h-[700px] w-[700px] rounded-full bg-amber-500/[0.04] blur-[160px]" />
+        <div className="absolute right-[-10%] bottom-[-25%] h-[600px] w-[600px] rounded-full bg-sky-500/[0.03] blur-[140px]" />
+      </div>
 
-              <div className="flex flex-wrap gap-2">
-                {presets.map((preset) => {
-                  const href = preset.value
-                    ? `/${profile.user.username}?date=${preset.value}`
-                    : `/${profile.user.username}`;
-                  const isActive = profile.dateSelection.value === preset.value;
+      {/* Grain texture */}
+      <div className="grain pointer-events-none fixed inset-0 z-[1]" />
 
-                  return (
-                    <Link
-                      key={preset.label}
-                      href={href}
-                      className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                        isActive
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border/60 bg-background/70 text-muted-foreground hover:border-foreground/40 hover:text-foreground"
-                      }`}
-                    >
-                      {preset.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
+      <div className="relative z-10 mx-auto max-w-[960px] px-6 py-14 sm:py-20">
+        {/* ── Top bar: brand + date filter ── */}
+        <div
+          className="wrapped-enter flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ animationDelay: "0ms" }}
+        >
+          <span className="text-[11px] font-medium tracking-[0.25em] uppercase text-white/25">
+            Open Agents Wrapped
+          </span>
 
-            {profile.invalidDateError ? (
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-                Couldn&apos;t parse that date filter, so this page is showing
-                all-time usage instead.
-              </div>
-            ) : null}
+          <nav className="flex gap-1.5">
+            {presets.map((preset) => {
+              const href = preset.value
+                ? `/${profile.user.username}?date=${preset.value}`
+                : `/${profile.user.username}`;
+              const isActive = profile.dateSelection.value === preset.value;
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Total tokens"
-                value={formatCompactNumber(profile.totals.totalTokens)}
-                detail={`${formatCompactNumber(profile.totals.outputTokens)} output`}
-              />
-              <StatCard
-                label="Messages"
-                value={profile.totals.messageCount.toLocaleString()}
-                detail={`${profile.totals.toolCallCount.toLocaleString()} tool calls`}
-              />
-              <StatCard
-                label="Top model"
-                value={topModel?.label ?? "None yet"}
-                detail={
-                  topModel
-                    ? `${formatCompactNumber(topModel.totalTokens)} tokens`
-                    : "No tracked model usage"
-                }
-              />
-              <StatCard
-                label="Merge rate"
-                value={formatPercent(profile.insights.pr.mergeRate)}
-                detail={`${profile.insights.pr.mergedPrCount.toLocaleString()} merged PRs`}
-              />
-            </div>
+              return (
+                <Link
+                  key={preset.label}
+                  href={href}
+                  className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150 ease-out active:scale-[0.97] ${
+                    isActive
+                      ? "bg-white text-[#09090b] shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+                      : "text-white/40 hover:bg-white/[0.06] hover:text-white/70"
+                  }`}
+                >
+                  {preset.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* ── Invalid date warning ── */}
+        {profile.invalidDateError ? (
+          <div
+            className="wrapped-enter mt-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-4 py-3 text-[13px] text-amber-200/80"
+            style={{ animationDelay: "60ms" }}
+          >
+            Couldn&apos;t parse that date filter — showing all-time usage
+            instead.
           </div>
-        </section>
+        ) : null}
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <Panel
-              title="Top models"
-              description="Where most of the tokens went."
+        {/* ── Profile hero ── */}
+        <div
+          className="wrapped-enter mt-14 flex items-center gap-5 sm:mt-16"
+          style={{ animationDelay: "80ms" }}
+        >
+          {profile.user.avatarUrl ? (
+            <Image
+              src={profile.user.avatarUrl}
+              alt={profile.user.username}
+              width={72}
+              height={72}
+              className="h-[72px] w-[72px] rounded-full ring-1 ring-white/[0.08] ring-offset-2 ring-offset-[#09090b]"
+            />
+          ) : (
+            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/[0.06] text-2xl font-semibold text-white/50 ring-1 ring-white/[0.08]">
+              {profile.user.username.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h1 className="truncate text-[clamp(1.75rem,5vw,3rem)] leading-[1.1] font-semibold tracking-[-0.03em]">
+              {displayName}
+            </h1>
+            <p className="mt-1.5 text-[15px] text-white/35">
+              @{profile.user.username}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Hero stats ── */}
+        <div className="mt-14 grid grid-cols-2 gap-x-10 gap-y-8 sm:mt-16 sm:grid-cols-4 sm:gap-8">
+          <StatBlock
+            label="Total tokens"
+            value={formatCompactNumber(profile.totals.totalTokens)}
+            detail={`${formatCompactNumber(profile.totals.outputTokens)} output`}
+            delay={160}
+          />
+          <StatBlock
+            label="Messages"
+            value={profile.totals.messageCount.toLocaleString()}
+            detail={`${profile.totals.toolCallCount.toLocaleString()} tool calls`}
+            delay={210}
+          />
+          <StatBlock
+            label="Top model"
+            value={topModel?.label ?? "—"}
+            detail={
+              topModel
+                ? `${formatCompactNumber(topModel.totalTokens)} tokens`
+                : "No tracked model usage"
+            }
+            delay={260}
+            isHighlight
+          />
+          <StatBlock
+            label="Merge rate"
+            value={formatPercent(profile.insights.pr.mergeRate)}
+            detail={`${profile.insights.pr.mergedPrCount.toLocaleString()} merged PRs`}
+            delay={310}
+          />
+        </div>
+
+        {/* ── Divider ── */}
+        <div
+          className="wrapped-enter mt-14 h-px bg-white/[0.06] sm:mt-16"
+          style={{ animationDelay: "380ms" }}
+        />
+
+        {/* ── Content columns ── */}
+        <div className="mt-12 grid gap-14 lg:grid-cols-[1.2fr_0.8fr] lg:gap-16">
+          {/* Left column */}
+          <div className="space-y-14">
+            {/* Top Models */}
+            <section
+              className="wrapped-enter"
+              style={{ animationDelay: "420ms" }}
             >
+              <SectionHeader
+                title="Top models"
+                subtitle="Where the tokens went"
+              />
               {profile.topModels.length > 0 ? (
-                <div className="space-y-3">
-                  {profile.topModels.slice(0, 5).map((model, index) => (
-                    <div
-                      key={model.modelId}
-                      className="flex items-center gap-4 rounded-2xl border border-border/60 bg-background/80 px-4 py-3"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">
-                          {model.label}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {model.provider}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-mono text-sm font-semibold tabular-nums">
-                          {formatCompactNumber(model.totalTokens)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {model.messageCount.toLocaleString()} msgs
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="mt-6 space-y-2">
+                  {profile.topModels.slice(0, 5).map((model, index) => {
+                    const barPercent =
+                      (model.totalTokens / maxModelTokens) * 100;
+                    return (
+                      <ModelRow
+                        key={model.modelId}
+                        rank={index + 1}
+                        name={model.label}
+                        provider={model.provider}
+                        tokens={formatCompactNumber(model.totalTokens)}
+                        messages={model.messageCount.toLocaleString()}
+                        barPercent={barPercent}
+                        delay={460 + index * 50}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
-                <EmptyState message="No model usage has been tracked yet." />
+                <EmptyState message="No model usage tracked yet." />
               )}
-            </Panel>
+            </section>
 
-            <Panel
-              title="Repository activity"
-              description="Where this profile has spent the most coding time."
+            {/* Repository activity */}
+            <section
+              className="wrapped-enter"
+              style={{ animationDelay: "500ms" }}
             >
+              <SectionHeader
+                title="Repositories"
+                subtitle="Where the code was written"
+              />
               {profile.topRepositories.length > 0 ? (
-                <div className="space-y-3">
+                <div className="mt-6 space-y-2">
                   {profile.topRepositories.slice(0, 4).map((repo) => (
                     <a
                       key={`${repo.repoOwner}/${repo.repoName}`}
                       href={`https://github.com/${repo.repoOwner}/${repo.repoName}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-background/80 px-4 py-3 transition-colors hover:border-foreground/30"
+                      className="group -mx-3 flex items-center justify-between gap-4 rounded-xl px-3 py-3.5 transition-colors duration-150 ease-out hover:bg-white/[0.04]"
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium">
-                          {repo.repoOwner}/{repo.repoName}
+                        <div className="truncate text-[15px] font-medium text-white/90 transition-colors duration-150 group-hover:text-white">
+                          {repo.repoOwner}
+                          <span className="text-white/25">/</span>
+                          {repo.repoName}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="mt-0.5 text-[13px] text-white/30">
                           {repo.sessionCount.toLocaleString()} sessions ·{" "}
                           {repo.trackedPrCount.toLocaleString()} tracked PRs
                         </div>
                       </div>
-                      <div className="font-mono text-sm text-muted-foreground tabular-nums">
+                      <div className="shrink-0 font-mono text-[13px] text-white/40 tabular-nums">
                         {repo.totalLinesChanged.toLocaleString()} lines
                       </div>
                     </a>
                   ))}
                 </div>
               ) : (
-                <EmptyState message="No repository activity has been tracked yet." />
+                <EmptyState message="No repository activity tracked yet." />
               )}
-            </Panel>
+            </section>
           </div>
 
-          <div className="space-y-6">
-            <Panel
-              title="Agent split"
-              description="How work was split between the main agent and subagents."
+          {/* Right column */}
+          <div className="space-y-14">
+            {/* Agent split */}
+            <section
+              className="wrapped-enter"
+              style={{ animationDelay: "460ms" }}
             >
-              <div className="space-y-4">
-                <UsageBar
-                  label="Main agent"
-                  value={profile.agentSplit.mainTokens}
-                  total={profile.totals.totalTokens}
-                />
-                <UsageBar
-                  label="Subagents"
-                  value={profile.agentSplit.subagentTokens}
-                  total={profile.totals.totalTokens}
-                />
+              <SectionHeader
+                title="Agent split"
+                subtitle="Main agent vs. subagents"
+              />
+              <div className="mt-6">
+                {/* Split bar */}
+                <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.06]">
+                  {profile.totals.totalTokens > 0 ? (
+                    <>
+                      <div
+                        className="wrapped-bar-fill rounded-l-full bg-gradient-to-r from-amber-400/50 to-amber-500/30"
+                        style={{
+                          width: `${mainPercent}%`,
+                          animationDelay: "700ms",
+                        }}
+                      />
+                      <div
+                        className="wrapped-bar-fill bg-white/[0.10]"
+                        style={{
+                          width: `${subPercent}%`,
+                          animationDelay: "750ms",
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div className="h-full w-full bg-white/[0.04]" />
+                  )}
+                </div>
+                {/* Labels */}
+                <div className="mt-3.5 flex items-center justify-between text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400/60" />
+                    <span className="text-white/50">Main agent</span>
+                    <span className="font-mono text-white/30 tabular-nums">
+                      {formatCompactNumber(profile.agentSplit.mainTokens)} ·{" "}
+                      {mainPercent}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-white/20" />
+                    <span className="text-white/50">Subagents</span>
+                    <span className="font-mono text-white/30 tabular-nums">
+                      {formatCompactNumber(profile.agentSplit.subagentTokens)} ·{" "}
+                      {subPercent}%
+                    </span>
+                  </div>
+                </div>
               </div>
-            </Panel>
+            </section>
 
-            <Panel
-              title="Code + efficiency"
-              description="The high-level stats behind this profile."
+            {/* Code + efficiency */}
+            <section
+              className="wrapped-enter"
+              style={{ animationDelay: "520ms" }}
             >
-              <dl className="space-y-3 text-sm">
+              <SectionHeader
+                title="Code + efficiency"
+                subtitle="The numbers behind the output"
+              />
+              <div className="mt-6 space-y-0">
                 <MetricRow
                   label="Lines changed"
                   value={profile.insights.code.totalLinesChanged.toLocaleString()}
@@ -351,90 +428,147 @@ export default async function PublicUsagePage({
                     profile.insights.efficiency.cacheReadRatio,
                   )}
                 />
-              </dl>
-            </Panel>
+              </div>
+            </section>
 
-            <Panel
-              title="Share this filter"
-              description="The query param stays in the URL, so you can share a specific window."
+            {/* Share URL */}
+            <section
+              className="wrapped-enter"
+              style={{ animationDelay: "580ms" }}
             >
-              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 font-mono text-sm text-muted-foreground break-all">
-                https://open-agents.dev/{profile.user.username}
+              <SectionHeader title="Share" subtitle="Link to this exact view" />
+              <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 font-mono text-[13px] text-white/35 break-all">
+                open-agents.dev/{profile.user.username}
                 {profile.dateSelection.value
                   ? `?date=${profile.dateSelection.value}`
                   : ""}
               </div>
-            </Panel>
+            </section>
           </div>
-        </section>
+        </div>
+
+        {/* ── Footer ── */}
+        <div
+          className="wrapped-enter mt-20 border-t border-white/[0.06] pt-6"
+          style={{ animationDelay: "650ms" }}
+        >
+          <p className="text-[12px] text-white/20">
+            Shareable usage stats from{" "}
+            <a
+              href="https://open-agents.dev"
+              className="text-white/30 underline decoration-white/10 underline-offset-2 transition-colors duration-150 hover:text-white/50"
+            >
+              Open Agents
+            </a>{" "}
+            — output volume, top models, repo activity, and agent behavior.
+          </p>
+        </div>
       </div>
     </main>
   );
 }
 
-function Panel({
+/* ─────────────────────────── Local components ─────────────────────────── */
+
+function SectionHeader({
   title,
-  description,
-  children,
+  subtitle,
 }: {
   title: string;
-  description: string;
-  children: React.ReactNode;
+  subtitle: string;
 }) {
   return (
-    <section className="rounded-[28px] border border-border/60 bg-muted/20 p-6">
-      <div className="mb-5 space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
-      <div className="mt-1 text-sm text-muted-foreground">{detail}</div>
+    <div>
+      <h2 className="text-[15px] font-medium tracking-[-0.01em] text-white/90">
+        {title}
+      </h2>
+      <p className="mt-0.5 text-[13px] text-white/30">{subtitle}</p>
     </div>
   );
 }
 
-function UsageBar({
+function StatBlock({
   label,
   value,
-  total,
+  detail,
+  delay,
+  isHighlight,
 }: {
   label: string;
-  value: number;
-  total: number;
+  value: string;
+  detail: string;
+  delay: number;
+  isHighlight?: boolean;
 }) {
-  const percent = total > 0 ? Math.max((value / total) * 100, 0) : 0;
-
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-4 text-sm">
-        <span>{label}</span>
-        <span className="font-mono text-muted-foreground tabular-nums">
-          {formatCompactNumber(value)} · {Math.round(percent)}%
-        </span>
+    <div className="wrapped-enter" style={{ animationDelay: `${delay}ms` }}>
+      <div className="text-[11px] font-medium tracking-[0.2em] uppercase text-white/25">
+        {label}
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
+      <div
+        className={`mt-2.5 font-mono text-[clamp(1.5rem,4vw,2.25rem)] leading-none font-semibold tracking-[-0.02em] tabular-nums ${
+          isHighlight
+            ? "bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent"
+            : "text-white"
+        }`}
+      >
+        {value}
+      </div>
+      <div className="mt-1.5 text-[13px] text-white/30">{detail}</div>
+    </div>
+  );
+}
+
+function ModelRow({
+  rank,
+  name,
+  provider,
+  tokens,
+  messages,
+  barPercent,
+  delay,
+}: {
+  rank: number;
+  name: string;
+  provider: string;
+  tokens: string;
+  messages: string;
+  barPercent: number;
+  delay: number;
+}) {
+  return (
+    <div className="group -mx-3 rounded-xl px-3 py-3 transition-colors duration-150 ease-out hover:bg-white/[0.03]">
+      <div className="flex items-center gap-3.5">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-medium tabular-nums ${
+            rank === 1
+              ? "bg-amber-500/15 text-amber-300/90"
+              : "bg-white/[0.05] text-white/25"
+          }`}
+        >
+          {rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-medium text-white/85">
+            {name}
+          </div>
+          <div className="text-[12px] text-white/25">{provider}</div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-[13px] font-medium text-white/70 tabular-nums">
+            {tokens}
+          </div>
+          <div className="text-[12px] text-white/25">{messages} msgs</div>
+        </div>
+      </div>
+      {/* Relative usage bar */}
+      <div className="mt-2.5 h-[3px] overflow-hidden rounded-full bg-white/[0.04]">
         <div
-          className="h-full rounded-full bg-foreground transition-[width]"
-          style={{ width: `${Math.min(percent, 100)}%` }}
+          className="wrapped-bar-fill h-full rounded-full bg-gradient-to-r from-white/20 to-white/[0.06]"
+          style={{
+            width: `${Math.max(barPercent, 2)}%`,
+            animationDelay: `${delay}ms`,
+          }}
         />
       </div>
     </div>
@@ -443,16 +577,19 @@ function UsageBar({
 
 function MetricRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-background/80 px-4 py-3">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-mono font-medium tabular-nums">{value}</dd>
+    <div className="flex items-baseline gap-2 border-b border-dotted border-white/[0.06] py-2.5">
+      <span className="text-[13px] text-white/40">{label}</span>
+      <span className="min-w-0 flex-1" />
+      <span className="font-mono text-[13px] font-medium text-white/80 tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+    <div className="mt-6 rounded-xl border border-dashed border-white/[0.08] px-4 py-8 text-center text-[13px] text-white/25">
       {message}
     </div>
   );
