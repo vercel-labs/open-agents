@@ -45,6 +45,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CheckRunsList } from "@/components/merge-check-runs";
+import {
+  MERGE_READINESS_POLL_INTERVAL_MS,
+  shouldPollMergeReadiness,
+} from "@/lib/merge-readiness-polling";
 import { cn } from "@/lib/utils";
 import {
   commitAndPushSessionChanges,
@@ -76,8 +80,6 @@ const mergeMethodDescriptions: Record<PullRequestMergeMethod, string> = {
   merge: "All commits will be added to the base branch via a merge commit.",
   rebase: "All commits will be rebased and added to the base branch.",
 };
-
-const MERGE_READINESS_POLL_INTERVAL_MS = 5_000;
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -950,6 +952,7 @@ function InlineMergePanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forceConfirming, setForceConfirming] = useState(false);
+  const [emptyChecksPollCount, setEmptyChecksPollCount] = useState(0);
 
   const readinessRequestIdRef = useRef(0);
   const forceConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -1009,6 +1012,10 @@ function InlineMergePanel({
     }
   }, [session.id]);
 
+  useEffect(() => {
+    setEmptyChecksPollCount(0);
+  }, [session.prNumber]);
+
   // Load readiness on mount
   useEffect(() => {
     if (!hasLoadedRef.current) {
@@ -1018,18 +1025,29 @@ function InlineMergePanel({
   }, [loadReadiness]);
 
   useEffect(() => {
-    if (isLoadingReadiness || (readiness?.checks.pending ?? 0) <= 0) {
+    if (
+      isLoadingReadiness ||
+      !shouldPollMergeReadiness({ readiness, emptyChecksPollCount })
+    ) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (
+        readiness &&
+        readiness.checks.pending === 0 &&
+        readiness.checks.requiredTotal === 0 &&
+        readiness.checkRuns.length === 0
+      ) {
+        setEmptyChecksPollCount((currentCount) => currentCount + 1);
+      }
       void loadReadiness();
     }, MERGE_READINESS_POLL_INTERVAL_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [isLoadingReadiness, loadReadiness, readiness?.checks.pending]);
+  }, [emptyChecksPollCount, isLoadingReadiness, loadReadiness, readiness]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

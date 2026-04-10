@@ -34,6 +34,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { CheckRunsList } from "@/components/merge-check-runs";
 import { MergePrDialogActions } from "@/components/merge-pr-dialog-actions";
+import {
+  MERGE_READINESS_POLL_INTERVAL_MS,
+  shouldPollMergeReadiness,
+} from "@/lib/merge-readiness-polling";
 
 interface MergePrDialogProps {
   open: boolean;
@@ -67,8 +71,6 @@ const mergeMethodDescriptions: Record<PullRequestMergeMethod, string> = {
   rebase: "All commits will be rebased and added to the base branch.",
 };
 
-const MERGE_READINESS_POLL_INTERVAL_MS = 5_000;
-
 export function MergePrDialog({
   open,
   onOpenChange,
@@ -90,6 +92,7 @@ export function MergePrDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forceConfirming, setForceConfirming] = useState(false);
+  const [emptyChecksPollCount, setEmptyChecksPollCount] = useState(0);
 
   const readinessRequestIdRef = useRef(0);
   const forceConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -157,6 +160,7 @@ export function MergePrDialog({
       setMergeMethod("squash");
       setIsLoadingReadiness(false);
       setForceConfirming(false);
+      setEmptyChecksPollCount(0);
       if (forceConfirmTimeoutRef.current) {
         clearTimeout(forceConfirmTimeoutRef.current);
         forceConfirmTimeoutRef.current = null;
@@ -168,18 +172,36 @@ export function MergePrDialog({
   }, [open, loadReadiness]);
 
   useEffect(() => {
-    if (!open || isLoadingReadiness || (readiness?.checks.pending ?? 0) <= 0) {
+    if (
+      !open ||
+      isLoadingReadiness ||
+      !shouldPollMergeReadiness({ readiness, emptyChecksPollCount })
+    ) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (
+        readiness &&
+        readiness.checks.pending === 0 &&
+        readiness.checks.requiredTotal === 0 &&
+        readiness.checkRuns.length === 0
+      ) {
+        setEmptyChecksPollCount((currentCount) => currentCount + 1);
+      }
       void loadReadiness();
     }, MERGE_READINESS_POLL_INTERVAL_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [isLoadingReadiness, loadReadiness, open, readiness?.checks.pending]);
+  }, [
+    emptyChecksPollCount,
+    isLoadingReadiness,
+    loadReadiness,
+    open,
+    readiness,
+  ]);
 
   const canMerge = readiness?.canMerge ?? false;
   const pullRequestUrl = readiness?.pr
