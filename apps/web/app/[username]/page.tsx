@@ -74,6 +74,7 @@ export async function generateMetadata({
   const dateQuery = profile.dateSelection.value
     ? `?date=${encodeURIComponent(profile.dateSelection.value)}`
     : "";
+  const publicProfilePath = `/u/${profile.user.username}`;
   const baseUrl = await getBaseUrl();
 
   return {
@@ -83,13 +84,13 @@ export async function generateMetadata({
     openGraph: {
       title: `${displayName} · Open Agents Wrapped`,
       description: `${formatCompactNumber(profile.totals.totalTokens)} tokens · ${profile.dateSelection.label}`,
-      images: [`${baseUrl}/${profile.user.username}/og${dateQuery}`],
+      images: [`${baseUrl}${publicProfilePath}/og${dateQuery}`],
     },
     twitter: {
       card: "summary_large_image",
       title: `${displayName} · Open Agents Wrapped`,
       description: `${formatCompactNumber(profile.totals.totalTokens)} tokens · ${profile.dateSelection.label}`,
-      images: [`${baseUrl}/${profile.user.username}/og${dateQuery}`],
+      images: [`${baseUrl}${publicProfilePath}/og${dateQuery}`],
     },
   };
 }
@@ -108,6 +109,7 @@ export default async function PublicUsagePage({
   }
 
   const displayName = profile.user.name?.trim() || profile.user.username;
+  const publicProfilePath = `/u/${profile.user.username}`;
   const topModel = profile.topModels[0] ?? null;
   const topModels = profile.topModels.slice(0, 5);
   const maxModelTokens = topModel?.totalTokens ?? 1;
@@ -140,8 +142,8 @@ export default async function PublicUsagePage({
           <nav className="flex gap-0.5">
             {presets.map((preset) => {
               const href = preset.value
-                ? `/${profile.user.username}?date=${preset.value}`
-                : `/${profile.user.username}`;
+                ? `${publicProfilePath}?date=${preset.value}`
+                : publicProfilePath;
               const isActive = profile.dateSelection.value === preset.value;
               return (
                 <Link
@@ -370,7 +372,7 @@ export default async function PublicUsagePage({
           style={{ animationDelay: "660ms" }}
         >
           <span className="font-mono text-[12px] text-white/15">
-            open-agents.dev/{profile.user.username}
+            open-agents.dev{publicProfilePath}
             {profile.dateSelection.value
               ? `?date=${profile.dateSelection.value}`
               : ""}

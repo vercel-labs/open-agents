@@ -128,7 +128,7 @@ export function PreferencesSection() {
     preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
   const selectedSubagentModelId = preferences?.defaultSubagentModelId ?? "auto";
   const publicProfilePath = session?.user?.username
-    ? `/${session.user.username}`
+    ? `/u/${session.user.username}`
     : null;
 
   const defaultModelOptions = useMemo(
@@ -515,7 +515,7 @@ export function PreferencesSection() {
                   Public usage profile
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Publish a shareable wrapped page at <code>/username</code>.
+                  Publish a shareable wrapped page at <code>/u/username</code>.
                 </p>
               </div>
               <Switch
