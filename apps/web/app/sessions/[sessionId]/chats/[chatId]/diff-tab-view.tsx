@@ -204,7 +204,7 @@ export function DiffTabView() {
     sandboxInfo,
     refreshDiff,
   } = useSessionChatWorkspaceContext();
-  const { focusedDiffFile, setFocusedDiffFile, diffScope } = useGitPanel();
+  const { focusedDiffFile, diffScope } = useGitPanel();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
@@ -229,9 +229,7 @@ export function DiffTabView() {
     // Expand the focused file
     setExpandedFiles((prev) => {
       if (prev.has(focusedDiffFile)) return prev;
-      const next = new Set(prev);
-      next.add(focusedDiffFile);
-      return next;
+      return new Set([...prev, focusedDiffFile]);
     });
 
     // Scroll to the focused file after a short delay (to allow expand render)
@@ -330,9 +328,7 @@ export function DiffTabView() {
                   variant="ghost"
                   size="sm"
                   onClick={() =>
-                    setExpandedFiles(
-                      new Set(visibleFiles.map((f) => f.path)),
-                    )
+                    setExpandedFiles(new Set(visibleFiles.map((f) => f.path)))
                   }
                   className="h-7 px-1.5 text-xs text-muted-foreground"
                 >
@@ -352,9 +348,7 @@ export function DiffTabView() {
                   Collapse all
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
-                Collapse all files
-              </TooltipContent>
+              <TooltipContent side="bottom">Collapse all files</TooltipContent>
             </Tooltip>
           </div>
           {/* Unified / Split icon toggle */}
