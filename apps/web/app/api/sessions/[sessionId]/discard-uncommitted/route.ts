@@ -71,16 +71,17 @@ async function discardPathChanges(params: {
       if (!restoreResult.success) {
         return { ok: false, error: toGitErrorMessage(restoreResult) };
       }
-    } else {
-      const clearIndexResult = await sandbox.exec(
-        `git rm -rf --cached -- ${quotedPath}`,
-        cwd,
-        30000,
-      );
-      const clearIndexError = toGitErrorMessage(clearIndexResult);
-      if (!clearIndexResult.success && !isPathspecError(clearIndexError)) {
-        return { ok: false, error: clearIndexError };
-      }
+      return { ok: true };
+    }
+
+    const clearIndexResult = await sandbox.exec(
+      `git rm -rf --cached -- ${quotedPath}`,
+      cwd,
+      30000,
+    );
+    const clearIndexError = toGitErrorMessage(clearIndexResult);
+    if (!clearIndexResult.success && !isPathspecError(clearIndexError)) {
+      return { ok: false, error: clearIndexError };
     }
   }
 

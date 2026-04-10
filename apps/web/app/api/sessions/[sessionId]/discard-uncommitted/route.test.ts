@@ -55,6 +55,21 @@ const execMock = mock(async (command: string) => {
     return successResult("abc123\n");
   }
 
+  if (command === "git ls-files --error-unmatch -- 'tracked-file.txt'") {
+    return successResult("tracked-file.txt\n");
+  }
+
+  if (
+    command ===
+    "git restore --source=HEAD --staged --worktree -- 'tracked-file.txt'"
+  ) {
+    return successResult();
+  }
+
+  if (command === "git status --porcelain -- 'tracked-file.txt'") {
+    return successResult();
+  }
+
   if (command === "git ls-files --error-unmatch -- 'new-file.txt'") {
     return failureResult(
       "error: pathspec 'new-file.txt' did not match any file(s) known to git",
@@ -105,6 +120,40 @@ describe("/api/sessions/[sessionId]/discard-uncommitted", () => {
     requireOwnedSessionWithSandboxGuardMock.mockClear();
     connectSandboxMock.mockClear();
     execMock.mockClear();
+  });
+
+  test("discards a tracked modified file via git restore without deleting it", async () => {
+    const { POST } = await loadRouteModule();
+
+    const response = await POST(
+      new Request(
+        "http://localhost/api/sessions/session-1/discard-uncommitted",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filePath: "tracked-file.txt" }),
+        },
+      ),
+      createContext(),
+    );
+
+    const body = (await response.json()) as {
+      discarded: boolean;
+      hasUncommittedChanges: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      discarded: true,
+      hasUncommittedChanges: false,
+    });
+    expect(execCalls).toEqual([
+      "git rev-parse --show-toplevel",
+      "git rev-parse --verify HEAD",
+      "git ls-files --error-unmatch -- 'tracked-file.txt'",
+      "git restore --source=HEAD --staged --worktree -- 'tracked-file.txt'",
+      "git status --porcelain -- 'tracked-file.txt'",
+    ]);
   });
 
   test("discards an untracked file by deleting it directly", async () => {
