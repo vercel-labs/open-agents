@@ -135,7 +135,7 @@ export default async function PublicUsagePage({
           style={{ animationDelay: "0ms" }}
         >
           <span className="text-[11px] font-medium tracking-[0.3em] uppercase text-white/20">
-            Wrapped
+            Open Agents
           </span>
           <nav className="flex gap-0.5">
             {presets.map((preset) => {
@@ -247,7 +247,7 @@ export default async function PublicUsagePage({
               <p className="text-[13px] text-white/25">
                 {topModels.length === 1 ? "Model of choice" : "#1 model"}
               </p>
-              <h2 className="mt-1 text-[clamp(1.5rem,5vw,2.5rem)] leading-[1.1] font-semibold tracking-[-0.03em] text-white">
+              <h2 className="mt-1 text-[clamp(3rem,12vw,6rem)] leading-[0.95] font-semibold tracking-[-0.04em] text-white">
                 {topModels[0].label}
               </h2>
 
