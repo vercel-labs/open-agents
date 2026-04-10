@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { UsageInsights, UsageRepositoryInsight } from "@/lib/usage/types";
 import {
   parsePublicUsageDate,
@@ -153,33 +153,76 @@ const ALL_TIME_DATE_SELECTION: PublicUsageDateSelection = {
   range: null,
 };
 
+interface PublicUsageUserCandidate {
+  id: string;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  lastLoginAt: Date | null;
+  publicUsageEnabled: boolean | null;
+}
+
+function pickPublicUsageUserCandidate(
+  candidates: PublicUsageUserCandidate[],
+  requestedUsername: string,
+): PublicUsageProfile["user"] | null {
+  const enabledCandidates = candidates.filter(
+    (candidate) => candidate.publicUsageEnabled,
+  );
+
+  if (enabledCandidates.length === 0) {
+    return null;
+  }
+
+  const selectedCandidate = enabledCandidates.toSorted((a, b) => {
+    const exactMatchDifference =
+      Number(b.username === requestedUsername) -
+      Number(a.username === requestedUsername);
+    if (exactMatchDifference !== 0) {
+      return exactMatchDifference;
+    }
+
+    const lastLoginDifference =
+      (b.lastLoginAt?.getTime() ?? 0) - (a.lastLoginAt?.getTime() ?? 0);
+    if (lastLoginDifference !== 0) {
+      return lastLoginDifference;
+    }
+
+    return a.id.localeCompare(b.id);
+  })[0];
+
+  return selectedCandidate
+    ? {
+        id: selectedCandidate.id,
+        username: selectedCandidate.username,
+        name: selectedCandidate.name,
+        avatarUrl: selectedCandidate.avatarUrl,
+      }
+    : null;
+}
+
 export const getPublicUsageProfile = cache(
   async (
     username: string,
     dateValue: string | null,
   ): Promise<PublicUsageProfile | null> => {
-    const user = await db.query.users.findFirst({
-      where: eq(users.username, username),
-      columns: {
-        id: true,
-        username: true,
-        name: true,
-        avatarUrl: true,
-      },
-    });
+    const normalizedUsername = username.trim().toLowerCase();
+    const userCandidates = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        lastLoginAt: users.lastLoginAt,
+        publicUsageEnabled: userPreferences.publicUsageEnabled,
+      })
+      .from(users)
+      .leftJoin(userPreferences, eq(userPreferences.userId, users.id))
+      .where(sql`lower(${users.username}) = ${normalizedUsername}`)
+      .limit(10);
+    const user = pickPublicUsageUserCandidate(userCandidates, username);
 
     if (!user) {
-      return null;
-    }
-
-    const preferences = await db.query.userPreferences.findFirst({
-      where: eq(userPreferences.userId, user.id),
-      columns: {
-        publicUsageEnabled: true,
-      },
-    });
-
-    if (!preferences?.publicUsageEnabled) {
       return null;
     }
 

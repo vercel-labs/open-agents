@@ -5,15 +5,12 @@ type MockPublicUser = {
   username: string;
   name: string | null;
   avatarUrl: string | null;
+  lastLoginAt: Date | null;
+  publicUsageEnabled: boolean | null;
 };
 
-type MockPublicUserPreferences = {
-  publicUsageEnabled: boolean;
-};
-
-const findUserMock = mock(async (): Promise<MockPublicUser | null> => null);
-const findUserPreferencesMock = mock(
-  async (): Promise<MockPublicUserPreferences | null> => null,
+const findPublicUsersByUsernameMock = mock(
+  async (): Promise<MockPublicUser[]> => [],
 );
 const getUsageHistoryMock = mock(async () => []);
 const getUsageInsightsMock = mock(async () => ({
@@ -43,14 +40,15 @@ const getUsageInsightsMock = mock(async () => ({
 
 mock.module("./client", () => ({
   db: {
-    query: {
-      users: {
-        findFirst: findUserMock,
-      },
-      userPreferences: {
-        findFirst: findUserPreferencesMock,
-      },
-    },
+    select: () => ({
+      from: () => ({
+        leftJoin: () => ({
+          where: () => ({
+            limit: findPublicUsersByUsernameMock,
+          }),
+        }),
+      }),
+    }),
   },
 }));
 
@@ -65,11 +63,11 @@ mock.module("./usage-insights", () => ({
 const publicUsageProfileModulePromise = import("./public-usage-profile");
 
 beforeEach(() => {
-  findUserMock.mockClear();
-  findUserPreferencesMock.mockClear();
+  findPublicUsersByUsernameMock.mockClear();
   getUsageHistoryMock.mockClear();
   getUsageInsightsMock.mockClear();
 
+  findPublicUsersByUsernameMock.mockImplementation(async () => []);
   getUsageHistoryMock.mockImplementation(async () => []);
   getUsageInsightsMock.mockImplementation(async () => ({
     lookbackDays: 0,
@@ -262,7 +260,7 @@ describe("getPublicUsageProfile", () => {
   test("returns null when the user does not exist", async () => {
     const { getPublicUsageProfile } = await publicUsageProfileModulePromise;
 
-    findUserMock.mockImplementation(async () => null);
+    findPublicUsersByUsernameMock.mockImplementation(async () => []);
 
     expect(await getPublicUsageProfile("missing-user", null)).toBeNull();
     expect(getUsageHistoryMock).not.toHaveBeenCalled();
@@ -272,15 +270,16 @@ describe("getPublicUsageProfile", () => {
   test("returns null when public usage is disabled", async () => {
     const { getPublicUsageProfile } = await publicUsageProfileModulePromise;
 
-    findUserMock.mockImplementation(async () => ({
-      id: "user-1",
-      username: "private-user",
-      name: "Private User",
-      avatarUrl: null,
-    }));
-    findUserPreferencesMock.mockImplementation(async () => ({
-      publicUsageEnabled: false,
-    }));
+    findPublicUsersByUsernameMock.mockImplementation(async () => [
+      {
+        id: "user-1",
+        username: "private-user",
+        name: "Private User",
+        avatarUrl: null,
+        lastLoginAt: new Date("2026-01-01T00:00:00.000Z"),
+        publicUsageEnabled: false,
+      },
+    ]);
 
     expect(await getPublicUsageProfile("private-user", null)).toBeNull();
     expect(getUsageHistoryMock).not.toHaveBeenCalled();
@@ -290,15 +289,16 @@ describe("getPublicUsageProfile", () => {
   test("uses all-time queries when no valid date is provided", async () => {
     const { getPublicUsageProfile } = await publicUsageProfileModulePromise;
 
-    findUserMock.mockImplementation(async () => ({
-      id: "user-2",
-      username: "all-time-user",
-      name: null,
-      avatarUrl: null,
-    }));
-    findUserPreferencesMock.mockImplementation(async () => ({
-      publicUsageEnabled: true,
-    }));
+    findPublicUsersByUsernameMock.mockImplementation(async () => [
+      {
+        id: "user-2",
+        username: "all-time-user",
+        name: null,
+        avatarUrl: null,
+        lastLoginAt: new Date("2026-01-02T00:00:00.000Z"),
+        publicUsageEnabled: true,
+      },
+    ]);
 
     const profile = await getPublicUsageProfile("all-time-user", "bad-value");
 
@@ -317,24 +317,39 @@ describe("getPublicUsageProfile", () => {
     });
   });
 
-  test("forwards explicit date ranges to usage queries", async () => {
+  test("prefers an enabled case-insensitive match", async () => {
     const { getPublicUsageProfile } = await publicUsageProfileModulePromise;
 
-    findUserMock.mockImplementation(async () => ({
-      id: "user-3",
-      username: "range-user",
-      name: "Range User",
-      avatarUrl: null,
-    }));
-    findUserPreferencesMock.mockImplementation(async () => ({
-      publicUsageEnabled: true,
-    }));
+    findPublicUsersByUsernameMock.mockImplementation(async () => [
+      {
+        id: "user-disabled",
+        username: "range-user",
+        name: "Disabled User",
+        avatarUrl: null,
+        lastLoginAt: new Date("2026-01-01T00:00:00.000Z"),
+        publicUsageEnabled: false,
+      },
+      {
+        id: "user-3",
+        username: "Range-User",
+        name: "Range User",
+        avatarUrl: null,
+        lastLoginAt: new Date("2026-01-03T00:00:00.000Z"),
+        publicUsageEnabled: true,
+      },
+    ]);
 
     const profile = await getPublicUsageProfile(
-      "range-user",
+      "RANGE-USER",
       "2026-01-01..2026-01-31",
     );
 
+    expect(profile?.user).toEqual({
+      id: "user-3",
+      username: "Range-User",
+      name: "Range User",
+      avatarUrl: null,
+    });
     expect(profile?.dateSelection).toEqual({
       kind: "range",
       value: "2026-01-01..2026-01-31",
