@@ -578,12 +578,15 @@ function InlinePrCreatePanel({
     prUrl: string;
     requiresManualCreation?: boolean;
     isDraft?: boolean;
+    autoMergeEnabled?: boolean;
+    autoMergeError?: string;
   } | null>(null);
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [enableAutoMerge, setEnableAutoMerge] = useState(false);
   const hasGeneratedRef = useRef(false);
 
   const branchFromStatus =
@@ -595,6 +598,21 @@ function InlinePrCreatePanel({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isDetachedHead = gitStatus?.isDetachedHead ?? false;
   const needsNewBranch = displayBranch === baseBranch || isDetachedHead;
+
+  const normalizedRepoOwner = session.repoOwner?.toLowerCase() ?? null;
+  const normalizedHeadOwner = prHeadOwner?.toLowerCase() ?? null;
+  const shouldOpenCompareInsteadOfApi = Boolean(
+    normalizedRepoOwner &&
+    normalizedHeadOwner &&
+    normalizedHeadOwner !== normalizedRepoOwner,
+  );
+  const canEnableAutoMerge = !shouldOpenCompareInsteadOfApi;
+
+  useEffect(() => {
+    if (!canEnableAutoMerge) {
+      setEnableAutoMerge(false);
+    }
+  }, [canEnableAutoMerge]);
 
   const handleCreateBranch = async () => {
     if (!hasSandbox) return;
@@ -719,6 +737,7 @@ function InlinePrCreatePanel({
           baseBranch,
           headOwner: prHeadOwner ?? undefined,
           isDraft,
+          enableAutoMerge: !isDraft && enableAutoMerge,
         }),
       });
 
@@ -732,6 +751,11 @@ function InlinePrCreatePanel({
         prUrl: data.prUrl,
         requiresManualCreation: Boolean(data.requiresManualCreation),
         isDraft,
+        autoMergeEnabled: Boolean(data.autoMergeEnabled),
+        autoMergeError:
+          typeof data.autoMergeError === "string"
+            ? data.autoMergeError
+            : undefined,
       });
 
       if (typeof data.prNumber === "number") {
@@ -759,11 +783,18 @@ function InlinePrCreatePanel({
           <span>
             {prSuccess.requiresManualCreation
               ? "Compare page opened"
-              : prSuccess.isDraft
-                ? "Draft pull request created!"
-                : "Pull request created!"}
+              : prSuccess.autoMergeEnabled
+                ? "PR created — auto-merge enabled!"
+                : prSuccess.isDraft
+                  ? "Draft pull request created!"
+                  : "Pull request created!"}
           </span>
         </div>
+        {prSuccess.autoMergeError && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+            {prSuccess.autoMergeError}
+          </div>
+        )}
         {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
         <a
           href={prSuccess.prUrl}
@@ -886,6 +917,21 @@ function InlinePrCreatePanel({
             rows={3}
             className="max-h-40 text-xs"
           />
+          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-2">
+            <div className="space-y-0.5 pr-3">
+              <p className="text-xs font-medium">Auto-merge</p>
+              <p className="text-[10px] text-muted-foreground">
+                {shouldOpenCompareInsteadOfApi
+                  ? "Unavailable for compare page flow."
+                  : "Merge automatically once checks pass."}
+              </p>
+            </div>
+            <Switch
+              checked={enableAutoMerge}
+              onCheckedChange={setEnableAutoMerge}
+              disabled={isAgentWorking || isCreatingPr || !canEnableAutoMerge}
+            />
+          </div>
         </>
       )}
       <div className="flex w-full">
