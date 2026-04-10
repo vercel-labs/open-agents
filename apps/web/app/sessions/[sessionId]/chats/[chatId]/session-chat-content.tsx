@@ -160,6 +160,10 @@ const DiffTabView = dynamic(
   () => import("./diff-tab-view").then((m) => m.DiffTabView),
   { ssr: false },
 );
+const FileTabView = dynamic(
+  () => import("./file-tab-view").then((m) => m.FileTabView),
+  { ssr: false },
+);
 
 const emptySubscribe = () => () => {};
 
@@ -2956,10 +2960,12 @@ export function SessionChatContent({
           </DialogContent>
         </Dialog>
 
-        {/* Main content: chat or diff */}
+        {/* Main content: chat, diff, or file */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === "diff" ? (
             <DiffTabView />
+          ) : activeView === "file" ? (
+            <FileTabView />
           ) : (
             <>
               {/* Transient error banner (e.g. iOS "Load failed" after sleep) */}
