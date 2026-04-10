@@ -1440,7 +1440,7 @@ function InlineMergePanel({
 /* ------------------------------------------------------------------ */
 
 export function GitPanel(props: GitPanelProps) {
-  const { gitPanelTab, setGitPanelTab, diffScope, setDiffScope } =
+  const { gitPanelOpen, gitPanelTab, setGitPanelTab, diffScope, setDiffScope } =
     useGitPanel();
 
   const {
@@ -1476,6 +1476,9 @@ export function GitPanel(props: GitPanelProps) {
   const hasDiffChanges =
     diffSummary &&
     (diffSummary.totalAdditions > 0 || diffSummary.totalDeletions > 0);
+  const hasUnstagedChanges =
+    (gitStatus?.unstagedCount ?? 0) > 0 ||
+    Boolean(diffFiles?.some(isUncommittedFile));
   const showPreviewButton = Boolean(prDeploymentUrl) || isDeploymentStale;
   const previewTargetUrl = isDeploymentStale
     ? buildingDeploymentUrl
@@ -1489,13 +1492,22 @@ export function GitPanel(props: GitPanelProps) {
     (gitStatus !== null && hasDiff && !hasUncommittedGitChanges);
   const showCreatePrShortcut = hasRepo && !hasExistingPr && showGitTab;
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
+  const previousGitPanelOpenRef = useRef(gitPanelOpen);
+
+  useEffect(() => {
+    if (!previousGitPanelOpenRef.current && gitPanelOpen) {
+      setDiffScope(hasUnstagedChanges ? "uncommitted" : "branch");
+    }
+
+    previousGitPanelOpenRef.current = gitPanelOpen;
+  }, [gitPanelOpen, hasUnstagedChanges, setDiffScope]);
 
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Panel top bar: PR link or branch name — matches session header height */}
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         {/* Left: PR link or repo info */}
-        <div className="flex min-w-0 items-center gap-2 min-h-7">
+        <div className="flex min-h-7 min-w-0 items-center gap-2">
           {hasExistingPr && existingPrUrl ? (
             /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
             <a
@@ -1524,8 +1536,9 @@ export function GitPanel(props: GitPanelProps) {
               Create PR
             </button>
           ) : null}
+        </div>
 
-          {/* Preview deployment button */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {showPreviewButton && previewTargetUrl && (
             /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
             <a
@@ -1545,10 +1558,7 @@ export function GitPanel(props: GitPanelProps) {
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           )}
-        </div>
 
-        {/* Right: Create repo button if no repo */}
-        <div className="shrink-0">
           {!hasRepo && supportsRepoCreation && (
             <Button
               size="sm"
