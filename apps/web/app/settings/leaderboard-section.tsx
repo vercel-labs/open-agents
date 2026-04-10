@@ -50,7 +50,6 @@ function buildUsagePath(range: LeaderboardRange): string {
   return `/api/usage?${query.toString()}`;
 }
 
-
 function displayModelId(modelId: string | null): string {
   if (!modelId) {
     return "Unknown";

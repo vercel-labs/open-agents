@@ -55,7 +55,6 @@ interface UsageResponse {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-
 function sumRows(rows: DailyUsageRow[]) {
   return rows.reduce(
     (acc, d) => ({

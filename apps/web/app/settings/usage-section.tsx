@@ -64,7 +64,6 @@ interface UsageResponse {
   domainLeaderboard: UsageDomainLeaderboard | null;
 }
 
-
 function formatDateRangeLabel(range: DateRange | undefined) {
   if (!range?.from) {
     return "Token consumption and activity over the past 39 weeks. Click the chart to filter.";
