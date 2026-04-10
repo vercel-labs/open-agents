@@ -1,5 +1,6 @@
 import {
   type AvailableModel,
+  type AvailableModelCost,
   DEFAULT_MODEL_ID,
   getModelDisplayName,
 } from "@/lib/models";
@@ -14,6 +15,7 @@ export interface ModelOption {
   description?: string;
   isVariant: boolean;
   contextWindow?: number;
+  cost?: AvailableModelCost;
 }
 
 function toBaseModelOption(model: AvailableModel): ModelOption {
@@ -23,6 +25,7 @@ function toBaseModelOption(model: AvailableModel): ModelOption {
     description: model.description ?? undefined,
     isVariant: false,
     contextWindow: model.context_window,
+    ...(model.cost ? { cost: model.cost } : {}),
   };
 }
 
@@ -40,6 +43,7 @@ function toVariantOption(
     description: `Variant of ${baseLabel}`,
     isVariant: true,
     contextWindow: baseModel?.context_window,
+    ...(baseModel?.cost ? { cost: baseModel.cost } : {}),
   };
 }
 

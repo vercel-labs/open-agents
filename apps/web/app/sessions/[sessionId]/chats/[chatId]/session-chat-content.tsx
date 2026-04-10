@@ -1,7 +1,12 @@
 "use client";
 
 import type { AskUserQuestionInput } from "@open-harness/agent";
-import { isReasoningUIPart, isToolUIPart, type FileUIPart } from "ai";
+import {
+  isReasoningUIPart,
+  isToolUIPart,
+  type FileUIPart,
+  type LanguageModelUsage,
+} from "ai";
 import {
   Archive,
   ArrowDown,
@@ -104,7 +109,11 @@ import {
 } from "@/lib/chat-streaming-state";
 import { ACCEPT_IMAGE_TYPES, isValidImageType } from "@/lib/image-utils";
 import { isLargeText } from "@/lib/text-attachment-utils";
-import { DEFAULT_CONTEXT_LIMIT } from "@/lib/models";
+import {
+  type AvailableModelCost,
+  DEFAULT_CONTEXT_LIMIT,
+  estimateModelUsageCost,
+} from "@/lib/models";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
 import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
@@ -392,6 +401,129 @@ function formatTokens(tokens: number): string {
   return tokens.toString();
 }
 
+function formatUsd(amount: number): string {
+  if (amount >= 100) {
+    return "$" + amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+  if (amount >= 1) {
+    return (
+      "$" +
+      amount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
+  }
+  if (amount >= 0.01) {
+    return (
+      "$" +
+      amount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
+  }
+  return (
+    "$" +
+    amount.toLocaleString("en-US", {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    })
+  );
+}
+
+type MessageUsageTotals = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+};
+
+function getCachedInputTokens(usage: LanguageModelUsage | undefined): number {
+  return (
+    usage?.inputTokenDetails?.cacheReadTokens ?? usage?.cachedInputTokens ?? 0
+  );
+}
+
+function getUsageTotals(
+  usage: LanguageModelUsage | undefined,
+): MessageUsageTotals {
+  return {
+    inputTokens: usage?.inputTokens ?? 0,
+    cachedInputTokens: getCachedInputTokens(usage),
+    outputTokens: usage?.outputTokens ?? 0,
+  };
+}
+
+function getLatestContextUsage(
+  messages: WebAgentUIMessage[],
+): MessageUsageTotals {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
+      return getUsageTotals(message.metadata.lastStepUsage);
+    }
+  }
+
+  return getUsageTotals(undefined);
+}
+
+function getConversationUsage(
+  messages: WebAgentUIMessage[],
+): MessageUsageTotals {
+  return messages.reduce<MessageUsageTotals>((total, message) => {
+    if (message.role !== "assistant") {
+      return total;
+    }
+
+    const usage =
+      message.metadata?.totalMessageUsage ?? message.metadata?.lastStepUsage;
+    if (!usage) {
+      return total;
+    }
+
+    const usageTotals = getUsageTotals(usage);
+    return {
+      inputTokens: total.inputTokens + usageTotals.inputTokens,
+      cachedInputTokens:
+        total.cachedInputTokens + usageTotals.cachedInputTokens,
+      outputTokens: total.outputTokens + usageTotals.outputTokens,
+    };
+  }, getUsageTotals(undefined));
+}
+
+function getConversationEstimatedCost(
+  messages: WebAgentUIMessage[],
+  modelCost: AvailableModelCost | undefined,
+): number | undefined {
+  let totalCost = 0;
+  let hasUsage = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+
+    const usage =
+      message.metadata?.totalMessageUsage ?? message.metadata?.lastStepUsage;
+    if (!usage) {
+      continue;
+    }
+
+    const estimatedCost = estimateModelUsageCost(
+      getUsageTotals(usage),
+      modelCost,
+    );
+    if (estimatedCost === undefined) {
+      return undefined;
+    }
+
+    totalCost += estimatedCost;
+    hasUsage = true;
+  }
+
+  return hasUsage ? totalCost : undefined;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -440,11 +572,17 @@ function CircularProgress({
 
 function ContextUsageIndicator({
   inputTokens,
-  outputTokens,
+  conversationInputTokens,
+  conversationCachedInputTokens,
+  conversationOutputTokens,
+  estimatedConversationCost,
   contextLimit,
 }: {
   inputTokens: number;
-  outputTokens: number;
+  conversationInputTokens: number;
+  conversationCachedInputTokens: number;
+  conversationOutputTokens: number;
+  estimatedConversationCost?: number;
   contextLimit: number;
 }) {
   if (inputTokens === 0) {
@@ -453,6 +591,10 @@ function ContextUsageIndicator({
 
   const percentage =
     contextLimit > 0 ? Math.round((inputTokens / contextLimit) * 100) : 0;
+  const uncachedConversationInputTokens = Math.max(
+    0,
+    conversationInputTokens - conversationCachedInputTokens,
+  );
 
   return (
     <Tooltip delayDuration={200}>
@@ -479,13 +621,27 @@ function ContextUsageIndicator({
         {/* Breakdown */}
         <div className="space-y-1 p-3 text-xs">
           <div className="flex justify-between gap-6">
-            <span className="opacity-60">Input</span>
-            <span>{formatTokens(inputTokens)}</span>
+            <span className="opacity-60">Conversation input</span>
+            <span>{formatTokens(conversationInputTokens)}</span>
           </div>
           <div className="flex justify-between gap-6">
-            <span className="opacity-60">Output</span>
-            <span>{formatTokens(outputTokens)}</span>
+            <span className="opacity-60">Cached input</span>
+            <span>{formatTokens(conversationCachedInputTokens)}</span>
           </div>
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Uncached input</span>
+            <span>{formatTokens(uncachedConversationInputTokens)}</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span className="opacity-60">Conversation output</span>
+            <span>{formatTokens(conversationOutputTokens)}</span>
+          </div>
+          {estimatedConversationCost !== undefined ? (
+            <div className="flex justify-between gap-6">
+              <span className="opacity-60">Est. cost</span>
+              <span>{formatUsd(estimatedConversationCost)}</span>
+            </div>
+          ) : null}
         </div>
       </TooltipContent>
     </Tooltip>
@@ -1110,7 +1266,7 @@ export function SessionChatContent({
     clearChatTitle,
     refreshChats,
   } = useSessionChats(session.id);
-  const _upsertSyntheticAssistantGitMessage = useCallback(
+  const upsertSyntheticAssistantGitMessage = useCallback(
     async (message: WebAgentUIMessage) => {
       setMessages((currentMessages) => {
         const existingIndex = currentMessages.findIndex(
@@ -1678,7 +1834,12 @@ export function SessionChatContent({
 
   const handleFixChecks = useCallback(
     async (failedRuns: PullRequestCheckRun[]) => {
-      let text = "";
+      const names = failedRuns.map((run) => run.name).join(", ");
+      const fallbackPrompt = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
+      let messagePayload: Parameters<typeof sendMessageWithPendingState>[0] = {
+        text: fallbackPrompt,
+      };
+
       try {
         const res = await fetch(`/api/sessions/${session.id}/checks/fix`, {
           method: "POST",
@@ -1686,19 +1847,37 @@ export function SessionChatContent({
           body: JSON.stringify({ checkRuns: failedRuns }),
         });
         if (res.ok) {
-          const data = (await res.json()) as { message: string };
-          text = data.message;
+          const data = (await res.json()) as {
+            prompt?: string;
+            snippets?: Array<{ filename: string; content: string }>;
+            message?: string;
+          };
+          const prompt = data.prompt?.trim() || data.message?.trim();
+          const snippets = Array.isArray(data.snippets) ? data.snippets : [];
+
+          if (prompt && snippets.length > 0) {
+            messagePayload = {
+              parts: [
+                {
+                  type: "text" as const,
+                  text: prompt,
+                },
+                ...snippets.map((snippet, index) => ({
+                  type: "data-snippet" as const,
+                  id: `fix-check-${index}`,
+                  data: snippet,
+                })),
+              ],
+            };
+          } else if (prompt) {
+            messagePayload = { text: prompt };
+          }
         }
       } catch {
         // Fall through to fallback
       }
 
-      if (!text) {
-        const names = failedRuns.map((run) => run.name).join(", ");
-        text = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
-      }
-
-      await sendMessageWithPendingState({ text });
+      await sendMessageWithPendingState(messagePayload);
     },
     [sendMessageWithPendingState, session.id],
   );
@@ -2392,20 +2571,19 @@ export function SessionChatContent({
   // Note: SWR handles automatic fetching when sandbox becomes available
   // and caching/deduplication of requests
 
-  // Get token usage from the most recent assistant message (current context usage)
-  const tokenUsage = useMemo(() => {
-    // Find the last assistant message with usage metadata
-    for (let i = renderMessages.length - 1; i >= 0; i--) {
-      const message = renderMessages[i];
-      if (message?.role === "assistant" && message.metadata?.lastStepUsage) {
-        return {
-          inputTokens: message.metadata.lastStepUsage.inputTokens ?? 0,
-          outputTokens: message.metadata.lastStepUsage.outputTokens ?? 0,
-        };
-      }
-    }
-    return { inputTokens: 0, outputTokens: 0 };
-  }, [renderMessages]);
+  const tokenUsage = useMemo(
+    () => getLatestContextUsage(renderMessages),
+    [renderMessages],
+  );
+  const conversationUsage = useMemo(
+    () => getConversationUsage(renderMessages),
+    [renderMessages],
+  );
+  const conversationEstimatedCost = useMemo(
+    () =>
+      getConversationEstimatedCost(renderMessages, selectedModelOption?.cost),
+    [renderMessages, selectedModelOption?.cost],
+  );
 
   // Detect pending AskUserQuestion tool calls
   const { hasPendingQuestion, pendingQuestionPart, questionToolCallId } =
@@ -2625,6 +2803,10 @@ export function SessionChatContent({
   ]);
 
   const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
+  const previewDeploymentTargetUrl =
+    (isDeploymentStale ? buildingDeploymentUrl : null) ?? prDeploymentUrl;
+  const showHeaderActions =
+    canRunDevServer || Boolean(previewDeploymentTargetUrl);
 
   // When auto-commit lands (transitions from committing to clean), mark the
   // current preview deployment as stale so the UI shows "Deploying…" until
@@ -2802,6 +2984,7 @@ export function SessionChatContent({
         updateSessionPullRequest(pr);
         void refreshGitStatus().catch(() => {});
       }}
+      onGitMessage={upsertSyntheticAssistantGitMessage}
     />
   ) : null;
 
@@ -2814,103 +2997,143 @@ export function SessionChatContent({
 
       {/* Header actions portaled from chat-level state */}
       {headerActionsRef.current &&
-        canRunDevServer &&
+        showHeaderActions &&
         createPortal(
           <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hidden h-7 w-7 sm:inline-flex"
-                  onClick={() => void codeEditor.handleOpen()}
-                  disabled={
-                    codeEditor.state.status === "starting" ||
-                    codeEditor.state.status === "stopping"
-                  }
-                >
-                  {codeEditor.state.status === "starting" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {canRunDevServer && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden h-7 w-7 sm:inline-flex"
+                      onClick={() => void codeEditor.handleOpen()}
+                      disabled={
+                        codeEditor.state.status === "starting" ||
+                        codeEditor.state.status === "stopping"
+                      }
+                    >
+                      {codeEditor.state.status === "starting" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Code2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {codeEditor.menuLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <div className="hidden h-7 items-center sm:flex">
+                  {devServer.state.status === "ready" ? (
+                    <div className="flex items-center rounded-md border border-border px-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handlePrimaryAction()}
+                          >
+                            <Globe className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Open dev server
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-sm"
+                            onClick={() => void devServer.handleStopAction()}
+                          >
+                            <Square className="h-2.5 w-2.5 fill-current" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          Stop dev server
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  ) : devServer.state.status === "starting" ||
+                    devServer.state.status === "stopping" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          disabled
+                        >
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {devServer.state.status === "starting"
+                          ? "Starting dev server..."
+                          : "Stopping dev server..."}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : (
-                    <Code2 className="h-3.5 w-3.5" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => void devServer.handlePrimaryAction()}
+                        >
+                          <Play className="h-3.5 w-3.5 fill-current" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Start dev server
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {codeEditor.menuLabel}
-              </TooltipContent>
-            </Tooltip>
-            <div className="hidden h-7 items-center sm:flex">
-              {devServer.state.status === "ready" ? (
-                <div className="flex items-center rounded-md border border-border px-0.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handlePrimaryAction()}
-                      >
-                        <Globe className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Open dev server
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 rounded-sm"
-                        onClick={() => void devServer.handleStopAction()}
-                      >
-                        <Square className="h-2.5 w-2.5 fill-current" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Stop dev server
-                    </TooltipContent>
-                  </Tooltip>
                 </div>
-              ) : devServer.state.status === "starting" ||
-                devServer.state.status === "stopping" ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled
+              </>
+            )}
+            {previewDeploymentTargetUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="hidden h-7 w-7 sm:inline-flex"
+                  >
+                    <a
+                      href={previewDeploymentTargetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={
+                        isDeploymentStale
+                          ? "Open latest preview deployment (building)"
+                          : "Open latest preview deployment"
+                      }
                     >
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {devServer.state.status === "starting"
-                      ? "Starting dev server..."
-                      : "Stopping dev server..."}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void devServer.handlePrimaryAction()}
-                    >
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    Start dev server
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+                      <Globe
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          !isDeploymentStale && "text-green-500",
+                          isDeploymentStale && "animate-pulse text-amber-500",
+                        )}
+                      />
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {isDeploymentStale
+                    ? "Open latest preview deployment (building)"
+                    : "Open latest preview deployment"}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>,
           headerActionsRef.current,
         )}
@@ -3878,7 +4101,18 @@ export function SessionChatContent({
                             )}
                             <ContextUsageIndicator
                               inputTokens={tokenUsage.inputTokens}
-                              outputTokens={tokenUsage.outputTokens}
+                              conversationInputTokens={
+                                conversationUsage.inputTokens
+                              }
+                              conversationCachedInputTokens={
+                                conversationUsage.cachedInputTokens
+                              }
+                              conversationOutputTokens={
+                                conversationUsage.outputTokens
+                              }
+                              estimatedConversationCost={
+                                conversationEstimatedCost
+                              }
                               contextLimit={
                                 contextLimit ?? DEFAULT_CONTEXT_LIMIT
                               }

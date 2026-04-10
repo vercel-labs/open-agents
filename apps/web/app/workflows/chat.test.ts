@@ -478,6 +478,72 @@ describe("runAgentWorkflow", () => {
     ]);
   });
 
+  test("streams and persists cumulative total message usage", async () => {
+    agentFinishReason = "tool-calls";
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        rawFinishReason: "provider_tool_use",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(
+      makeOptions({
+        maxSteps: 2,
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          totalMessageUsage?: {
+            inputTokens?: number;
+            outputTokens?: number;
+            totalTokens?: number;
+          };
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(
+      metadataChunks.map((chunk) => ({
+        inputTokens: chunk.messageMetadata.totalMessageUsage?.inputTokens,
+        outputTokens: chunk.messageMetadata.totalMessageUsage?.outputTokens,
+        totalTokens: chunk.messageMetadata.totalMessageUsage?.totalTokens,
+      })),
+    ).toEqual([
+      { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+    ]);
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        totalMessageUsage?: {
+          inputTokens?: number;
+          outputTokens?: number;
+          totalTokens?: number;
+        };
+      };
+    };
+
+    expect({
+      inputTokens: persistedMessage.metadata?.totalMessageUsage?.inputTokens,
+      outputTokens: persistedMessage.metadata?.totalMessageUsage?.outputTokens,
+      totalTokens: persistedMessage.metadata?.totalMessageUsage?.totalTokens,
+    }).toEqual({
+      inputTokens: 20,
+      outputTokens: 10,
+      totalTokens: 30,
+    });
+  });
+
   test("refreshes lifecycle activity before clearing the active stream", async () => {
     const callOrder: string[] = [];
     spies.refreshLifecycleActivity.mockImplementationOnce(async () => {

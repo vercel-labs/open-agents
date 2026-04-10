@@ -52,6 +52,26 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Convert vertical wheel events to horizontal scrolling on the tab bar.
+  // Must use a non-passive native listener so we can call preventDefault.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Only intercept if there's horizontal overflow
+      if (container.scrollWidth <= container.clientWidth) return;
+
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, []);
   const prefetchedChatHrefsRef = useRef(new Set<string>());
 
   const prefetchChat = useCallback(
