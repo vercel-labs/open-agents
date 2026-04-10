@@ -27,7 +27,9 @@ import {
   InstallationRepo,
   useInstallationRepos,
 } from "@/hooks/use-installation-repos";
+import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
+import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 import { cn } from "@/lib/utils";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -117,12 +119,44 @@ function SkeletonRow() {
   );
 }
 
+function GitHubActionCard({
+  title,
+  description,
+  buttonLabel,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
+      <GitHubIcon className="size-8 text-muted-foreground" />
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+      >
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
 export function RepoSelectorCompact({
   selectedOwner,
   selectedRepo,
   onSelect,
 }: RepoSelectorCompactProps) {
   const { hasGitHub, loading: sessionLoading } = useSession();
+  const { reconnectRequired } = useGitHubConnectionStatus({
+    enabled: hasGitHub,
+  });
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [currentOwner, setCurrentOwner] = useState(selectedOwner);
   const [repoSearch, setRepoSearch] = useState("");
@@ -138,9 +172,16 @@ export function RepoSelectorCompact({
     window.location.href = `/api/github/app/install?${params.toString()}`;
   }, []);
 
+  const startGitHubReconnect = useCallback(() => {
+    window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
+  }, []);
+
   const { data: installations = [], isLoading: installationsLoading } = useSWR<
     Installation[]
-  >(hasGitHub ? "github-installations" : null, fetchInstallations);
+  >(
+    hasGitHub && !reconnectRequired ? "github-installations" : null,
+    fetchInstallations,
+  );
 
   const currentInstallation = installations.find(
     (installation) => installation.accountLogin === currentOwner,
@@ -229,44 +270,35 @@ export function RepoSelectorCompact({
   // Not connected to GitHub
   if (!sessionLoading && !hasGitHub) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
-        <GitHubIcon className="size-8 text-muted-foreground" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Install GitHub App</p>
-          <p className="text-xs text-muted-foreground">
-            Continue on GitHub to choose which repositories are available.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={startGitHubInstall}
-          className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
-        >
-          Choose repositories
-        </button>
-      </div>
+      <GitHubActionCard
+        title="Install GitHub App"
+        description="Continue on GitHub to choose which repositories are available."
+        buttonLabel="Choose repositories"
+        onClick={startGitHubInstall}
+      />
+    );
+  }
+
+  if (reconnectRequired) {
+    return (
+      <GitHubActionCard
+        title="Reconnect GitHub"
+        description="Your saved GitHub connection is no longer valid. Reconnect to refresh repository access."
+        buttonLabel="Reconnect GitHub"
+        onClick={startGitHubReconnect}
+      />
     );
   }
 
   // No installations
   if (!installationsLoading && installations.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
-        <GitHubIcon className="size-8 text-muted-foreground" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Install GitHub App</p>
-          <p className="text-xs text-muted-foreground">
-            Install the GitHub App to choose which repositories are available.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={startGitHubInstall}
-          className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
-        >
-          Choose repositories
-        </button>
-      </div>
+      <GitHubActionCard
+        title="Install GitHub App"
+        description="Install the GitHub App to choose which repositories are available."
+        buttonLabel="Choose repositories"
+        onClick={startGitHubInstall}
+      />
     );
   }
 

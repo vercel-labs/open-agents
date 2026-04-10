@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import {
+  Suspense,
   createContext,
   useCallback,
   useContext,
@@ -12,6 +13,7 @@ import {
 } from "react";
 import { Toaster } from "sonner";
 import { SWRConfig } from "swr";
+import { GitHubReconnectGate } from "@/components/github-reconnect-gate";
 import { FetchError } from "@/lib/swr";
 
 const THEME_STORAGE_KEY = "open-agents-theme";
@@ -129,7 +131,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <SWRConfig value={{ onError: handleError }}>{children}</SWRConfig>
+      <SWRConfig value={{ onError: handleError }}>
+        {children}
+        <Suspense fallback={null}>
+          <GitHubReconnectGate />
+        </Suspense>
+      </SWRConfig>
       <Toaster theme={resolvedTheme} />
     </ThemeContext.Provider>
   );

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useVercelRepoProjects } from "@/hooks/use-vercel-repo-projects";
@@ -61,7 +62,10 @@ export function SessionStarter({
     string | null | undefined
   >(undefined);
 
-  const { session, loading: sessionLoading } = useSession();
+  const { session, loading: sessionLoading, hasGitHub } = useSession();
+  const { reconnectRequired } = useGitHubConnectionStatus({
+    enabled: hasGitHub,
+  });
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const defaultAutoCreatePr = preferences?.autoCreatePr ?? false;
@@ -148,6 +152,7 @@ export function SessionStarter({
   const controlsDisabled = isLoading || preferencesLoading;
   const isSubmitDisabled =
     controlsDisabled ||
+    (mode === "repo" && reconnectRequired) ||
     !isRepoSelectionComplete ||
     isVercelLookupPending ||
     requiresVercelChoice;
@@ -155,6 +160,7 @@ export function SessionStarter({
   const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
   const showVercelProjectSection =
     mode === "repo" &&
+    !reconnectRequired &&
     !!selectedOwner &&
     !!selectedRepo &&
     (sessionLoading || session?.authProvider === "vercel");
@@ -243,7 +249,7 @@ export function SessionStarter({
               selectedRepo={selectedRepo}
               onSelect={handleRepoSelect}
             />
-            {selectedOwner && selectedRepo && (
+            {selectedOwner && selectedRepo && !reconnectRequired && (
               <BranchSelectorCompact
                 owner={selectedOwner}
                 repo={selectedRepo}

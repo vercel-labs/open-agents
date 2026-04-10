@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/button";
+import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import {
   Dialog,
   DialogClose,
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/hooks/use-session";
+import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 import { fetcher } from "@/lib/swr";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -69,11 +71,19 @@ function startGitHubInstallForOrg(githubId: number) {
   window.location.href = `/api/github/app/install?${params.toString()}`;
 }
 
+function getCurrentPathWithSearch(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function startGitHubInstallFromSettings() {
   const params = new URLSearchParams({
     next: "/settings/connections",
   });
   window.location.href = `/api/github/app/install?${params.toString()}`;
+}
+
+function startGitHubReconnectFromSettings() {
+  window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
 }
 
 // ── Post-return toast handler ──────────────────────────────────────────────
@@ -286,16 +296,24 @@ export function AccountsSection() {
   const { hasGitHubAccount, hasGitHub, loading } = useSession();
   const { mutate } = useSWRConfig();
   const [unlinking, setUnlinking] = useState(false);
+  const {
+    reconnectRequired,
+    reason,
+    status: githubConnectionStatus,
+    isLoading: githubConnectionLoading,
+  } = useGitHubConnectionStatus({ enabled: hasGitHub });
 
   useGitHubReturnToast();
 
-  // Fetch org install status only when a GitHub account is linked
+  // Fetch org install status only when the GitHub connection is healthy.
   const {
     data: orgs,
     isLoading: orgsLoading,
     mutate: mutateOrgs,
   } = useSWR<OrgInstallStatus[]>(
-    hasGitHubAccount ? "/api/github/orgs/install-status" : null,
+    hasGitHubAccount && githubConnectionStatus === "connected"
+      ? "/api/github/orgs/install-status"
+      : null,
     fetcher,
   );
 
@@ -335,6 +353,9 @@ export function AccountsSection() {
       {/* ── GitHub connection ── */}
       <GitHubConnection
         hasGitHub={hasGitHub}
+        reconnectRequired={reconnectRequired}
+        reconnectReason={reason}
+        connectionLoading={githubConnectionLoading}
         orgs={orgs ?? null}
         orgsLoading={orgsLoading}
         isRefreshing={isRefreshing}
@@ -353,6 +374,9 @@ export function AccountsSection() {
 
 function GitHubConnection({
   hasGitHub,
+  reconnectRequired,
+  reconnectReason,
+  connectionLoading,
   orgs,
   orgsLoading,
   isRefreshing,
@@ -361,6 +385,9 @@ function GitHubConnection({
   onUnlink,
 }: {
   hasGitHub: boolean;
+  reconnectRequired: boolean;
+  reconnectReason: string | null;
+  connectionLoading: boolean;
   orgs: OrgInstallStatus[] | null;
   orgsLoading: boolean;
   isRefreshing: boolean;
@@ -371,6 +398,10 @@ function GitHubConnection({
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const installedCount =
     orgs?.filter((o) => o.installStatus === "installed").length ?? 0;
+  const reconnectDescription =
+    reconnectReason === "installations_missing"
+      ? "GitHub no longer reports any app installations for this account. Reconnect to refresh access."
+      : "Your saved GitHub connection is no longer valid. Reconnect to restore account and repository access.";
 
   return (
     <div className="rounded-lg border border-border/50 bg-muted/10">
@@ -382,20 +413,49 @@ function GitHubConnection({
             <span className="text-sm font-medium">GitHub</span>
             {hasGitHub && (
               <span className="text-xs text-muted-foreground">
-                · {installedCount}{" "}
-                {installedCount === 1 ? "account" : "accounts"} configured
+                {reconnectRequired
+                  ? "· reconnect required"
+                  : `· ${installedCount} ${installedCount === 1 ? "account" : "accounts"} configured`}
               </span>
             )}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          {hasGitHub && (
+          {hasGitHub && reconnectRequired && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startGitHubReconnectFromSettings}
+                className="h-7 text-xs"
+              >
+                Reconnect
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDisconnectOpen(true)}
+                disabled={unlinking}
+                className="h-7 text-xs text-destructive hover:text-destructive"
+              >
+                {unlinking ? (
+                  <>
+                    <Loader2 className="mr-1 size-3 animate-spin" />
+                    Disconnecting…
+                  </>
+                ) : (
+                  "Disconnect"
+                )}
+              </Button>
+            </>
+          )}
+          {hasGitHub && !reconnectRequired && (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onRefresh}
-                disabled={isRefreshing || orgsLoading}
+                disabled={isRefreshing || orgsLoading || connectionLoading}
                 className="h-7 w-7 p-0"
               >
                 <RefreshCw
@@ -475,6 +535,38 @@ function GitHubConnection({
             Connect GitHub to access private repositories and enable
             installations for your accounts and organizations.
           </p>
+        ) : connectionLoading ? (
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-lg border border-border/50 p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-20" />
+              </div>
+            ))}
+          </div>
+        ) : reconnectRequired ? (
+          <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+            <p className="text-sm font-medium text-foreground">
+              Reconnect GitHub to continue
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {reconnectDescription}
+            </p>
+            <div>
+              <Button size="sm" onClick={startGitHubReconnectFromSettings}>
+                Reconnect GitHub
+              </Button>
+            </div>
+          </div>
         ) : orgsLoading && !orgs ? (
           <div className="space-y-2">
             {[1, 2].map((i) => (

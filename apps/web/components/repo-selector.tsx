@@ -24,7 +24,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useInstallationRepos } from "@/hooks/use-installation-repos";
+import { useSession } from "@/hooks/use-session";
+import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 import { cn } from "@/lib/utils";
 
 interface Installation {
@@ -54,6 +57,10 @@ export function RepoSelector({
 }: {
   onRepoSelect: (owner: string, repo: string) => void;
 }) {
+  const { hasGitHub } = useSession();
+  const { reconnectRequired } = useGitHubConnectionStatus({
+    enabled: hasGitHub,
+  });
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [selectedOwner, setSelectedOwner] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("");
@@ -70,6 +77,10 @@ export function RepoSelector({
       next: getCurrentPathWithSearch(),
     });
     window.location.href = `/api/github/app/install?${params.toString()}`;
+  }, []);
+
+  const startGitHubReconnect = useCallback(() => {
+    window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
   }, []);
 
   const selectedInstallation = installations.find(
@@ -89,6 +100,14 @@ export function RepoSelector({
 
   useEffect(() => {
     const loadInstallations = async () => {
+      if (reconnectRequired) {
+        setInstallations([]);
+        setSelectedOwner("");
+        setError(null);
+        setOwnersLoading(false);
+        return;
+      }
+
       setOwnersLoading(true);
       setError(null);
       try {
@@ -122,7 +141,7 @@ export function RepoSelector({
     };
 
     loadInstallations();
-  }, []);
+  }, [reconnectRequired]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -158,6 +177,17 @@ export function RepoSelector({
     onRepoSelect(selectedOwner, repoName);
     setRepoOpen(false);
   };
+
+  if (reconnectRequired) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <p className="text-sm text-muted-foreground">
+          Your saved GitHub connection is no longer valid.
+        </p>
+        <Button onClick={startGitHubReconnect}>Reconnect GitHub</Button>
+      </div>
+    );
+  }
 
   if (error) {
     return (

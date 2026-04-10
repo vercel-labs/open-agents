@@ -26,6 +26,13 @@ const COOKIE_OPTIONS = {
   sameSite: "lax" as const,
 };
 
+function shouldForceReconnect(req: NextRequest): boolean {
+  return (
+    req.nextUrl.searchParams.get("reconnect") === "1" ||
+    req.cookies.get("github_reconnect")?.value === "1"
+  );
+}
+
 /**
  * Create a redirect response with install cookies set directly on it.
  * Using NextResponse.redirect() + response.cookies.set() ensures cookies
@@ -80,6 +87,24 @@ export async function GET(req: NextRequest): Promise<Response> {
     installUrl.searchParams.set("state", state);
     installUrl.searchParams.set("target_id", targetId);
     return redirectWithInstallCookies(installUrl, redirectTo, state);
+  }
+
+  if (shouldForceReconnect(req)) {
+    const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+    if (clientId) {
+      const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
+      authorizeUrl.searchParams.set("client_id", clientId);
+      authorizeUrl.searchParams.set("state", state);
+      const callbackUrl = new URL("/api/github/app/callback", req.url);
+      authorizeUrl.searchParams.set("redirect_uri", callbackUrl.toString());
+      return redirectWithInstallCookies(authorizeUrl, redirectTo, state);
+    }
+
+    const selectTargetUrl = new URL(
+      `https://github.com/apps/${appSlug}/installations/select_target`,
+    );
+    selectTargetUrl.searchParams.set("state", state);
+    return redirectWithInstallCookies(selectTargetUrl, redirectTo, state);
   }
 
   const ghAccount = await getGitHubAccount(session.user.id);

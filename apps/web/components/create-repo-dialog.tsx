@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { ExternalLink, Check, Loader2, FolderGit2 } from "lucide-react";
+import { Check, ExternalLink, FolderGit2, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { Session } from "@/lib/db/schema";
+import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 
 interface CreateRepoDialogProps {
   open: boolean;
@@ -59,6 +61,10 @@ async function fetchInstallations(): Promise<Installation[]> {
   return Array.isArray(data) ? data : [];
 }
 
+function getCurrentPathWithSearch(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -83,11 +89,19 @@ export function CreateRepoDialog({
   const [result, setResult] = useState<CreateRepoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedOwner, setSelectedOwner] = useState<string>("");
+  const { reconnectRequired } = useGitHubConnectionStatus({ enabled: open });
+
+  const handleReconnect = () => {
+    window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
+  };
 
   // Use SWR for installations (shares cache with RepoSelectorCompact)
   const { data: installations = [], isLoading: loadingInstallations } = useSWR<
     Installation[]
-  >(open ? "github-installations" : null, fetchInstallations);
+  >(
+    open && !reconnectRequired ? "github-installations" : null,
+    fetchInstallations,
+  );
 
   // Reset form state when dialog opens
   useEffect(() => {
@@ -121,6 +135,11 @@ export function CreateRepoDialog({
 
     if (!hasSandbox) {
       setError("Sandbox not active. Please wait for sandbox to start.");
+      return;
+    }
+
+    if (reconnectRequired) {
+      setError("Reconnect GitHub before creating a repository.");
       return;
     }
 
@@ -223,7 +242,22 @@ export function CreateRepoDialog({
               {/* Owner / Account Picker */}
               <div className="grid gap-2">
                 <Label htmlFor="repo-owner">Owner</Label>
-                {loadingInstallations ? (
+                {reconnectRequired ? (
+                  <div className="space-y-3 rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
+                    <p className="text-sm text-muted-foreground">
+                      Your saved GitHub connection is no longer valid. Reconnect
+                      before creating a repository.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReconnect}
+                    >
+                      Reconnect GitHub
+                    </Button>
+                  </div>
+                ) : loadingInstallations ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading accounts...
@@ -327,6 +361,7 @@ export function CreateRepoDialog({
                 onClick={handleCreate}
                 disabled={
                   isCreating ||
+                  reconnectRequired ||
                   !repoName.trim() ||
                   !hasSandbox ||
                   !selectedOwner

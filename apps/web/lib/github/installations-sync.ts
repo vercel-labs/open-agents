@@ -18,6 +18,33 @@ const userInstallationsResponseSchema = z.object({
   installations: z.array(userInstallationSchema),
 });
 
+export class GitHubInstallationsSyncError extends Error {
+  readonly status: number;
+  readonly responseText: string;
+
+  constructor(
+    message: string,
+    options: { status: number; responseText: string },
+  ) {
+    super(message);
+    this.name = "GitHubInstallationsSyncError";
+    this.status = options.status;
+    this.responseText = options.responseText;
+  }
+}
+
+export function isGitHubInstallationsAuthError(error: unknown): boolean {
+  if (error instanceof GitHubInstallationsSyncError) {
+    return error.status === 401 || error.status === 403;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.includes(" 401 ") || error.message.includes(" 403 ");
+}
+
 function normalizeAccountType(type: string): "User" | "Organization" {
   return type === "Organization" ? "Organization" : "User";
 }
@@ -41,8 +68,12 @@ async function fetchUserInstallations(userToken: string) {
 
     if (!response.ok) {
       const responseText = await response.text();
-      throw new Error(
+      throw new GitHubInstallationsSyncError(
         `Failed to fetch GitHub installations page ${page}: ${response.status} ${responseText}`,
+        {
+          status: response.status,
+          responseText,
+        },
       );
     }
 
