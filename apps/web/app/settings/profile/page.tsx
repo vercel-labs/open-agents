@@ -147,10 +147,34 @@ function displayModelId(modelId: string): string {
 }
 
 function formatUsd(amount: number): string {
-  if (amount >= 100) return "$" + amount.toFixed(0);
-  if (amount >= 1) return "$" + amount.toFixed(2);
-  if (amount >= 0.01) return "$" + amount.toFixed(2);
-  return "$" + amount.toFixed(4);
+  if (amount >= 100) {
+    return "$" + amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+  if (amount >= 1) {
+    return (
+      "$" +
+      amount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
+  }
+  if (amount >= 0.01) {
+    return (
+      "$" +
+      amount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
+  }
+  return (
+    "$" +
+    amount.toLocaleString("en-US", {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    })
+  );
 }
 
 function estimateUsageCost(
@@ -187,29 +211,6 @@ function estimateUsageCost(
     pricedTokens,
     totalTokens,
   };
-}
-
-function getCostEstimateDetail(
-  costEstimate: CostEstimateSummary | undefined,
-  isPricingLoading: boolean,
-): string {
-  if (isPricingLoading) {
-    return "Loading model pricing";
-  }
-
-  if (!costEstimate) {
-    return "No model usage";
-  }
-
-  if (costEstimate.pricedTokens <= 0) {
-    return "No pricing available for used models";
-  }
-
-  if (costEstimate.pricedTokens >= costEstimate.totalTokens) {
-    return "Estimated from models.dev pricing";
-  }
-
-  return `Estimated from ${Math.round((costEstimate.pricedTokens / costEstimate.totalTokens) * 100)}% of tokens with known pricing`;
 }
 
 // Gray-scale dot classes: brightest first (top rank), darkest last
@@ -329,7 +330,6 @@ function ProfileSidebar({
   totals,
   topRepos,
   estimatedCostValue,
-  estimatedCostDetail,
 }: {
   totals: {
     inputTokens: number;
@@ -339,7 +339,6 @@ function ProfileSidebar({
   } | null;
   topRepos: UsageRepositoryInsight[] | null;
   estimatedCostValue: string;
-  estimatedCostDetail: string;
 }) {
   const { session, loading } = useSession();
 
@@ -407,11 +406,7 @@ function ProfileSidebar({
           </h3>
           <div className="rounded-lg border border-border/50 bg-muted/10 px-4 py-1 divide-y divide-border/50">
             <StatItem label="Total tokens" value={formatTokens(totalTokens)} />
-            <StatItem
-              label="Estimated cost"
-              value={estimatedCostValue}
-              detail={estimatedCostDetail}
-            />
+            <StatItem label="Estimated cost" value={estimatedCostValue} />
             <StatItem
               label="Messages"
               value={totals.messageCount.toLocaleString()}
@@ -453,8 +448,7 @@ export default function ProfilePage() {
     isLoading: isFilteredDataLoading,
     error: filteredDataError,
   } = useSWR<UsageResponse>(filteredUsagePath, fetcher);
-  const { data: modelsData, isLoading: isModelsLoading } =
-    useSWR<ModelsResponse>("/api/models", fetcher);
+  const { data: modelsData } = useSWR<ModelsResponse>("/api/models", fetcher);
 
   const data = filteredUsagePath ? filteredData : fullData;
   const isLoading =
@@ -495,9 +489,6 @@ export default function ProfilePage() {
     costEstimate && costEstimate.pricedTokens > 0
       ? formatUsd(costEstimate.amount)
       : "—";
-  const estimatedCostDetail = hasUsage
-    ? getCostEstimateDetail(costEstimate, isModelsLoading)
-    : "No usage yet";
 
   // Build ranked-list items for agent split
   const agentItems = [
@@ -560,7 +551,6 @@ export default function ProfilePage() {
             totals={isLoading ? null : totals}
             topRepos={isLoading ? null : topRepos}
             estimatedCostValue={estimatedCostValue}
-            estimatedCostDetail={estimatedCostDetail}
           />
         </div>
 
