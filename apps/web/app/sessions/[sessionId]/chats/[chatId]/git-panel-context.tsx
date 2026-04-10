@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
   useMemo,
   useRef,
@@ -20,7 +19,6 @@ type GitPanelContextValue = {
   /** Whether the right git panel is open */
   gitPanelOpen: boolean;
   setGitPanelOpen: (open: boolean) => void;
-  toggleGitPanel: () => void;
 
   /** Active tab within the git panel */
   gitPanelTab: GitPanelTab;
@@ -88,30 +86,6 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const panelPortalRef = useRef<HTMLDivElement | null>(null);
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
 
-  const toggleGitPanel = useCallback(() => {
-    setGitPanelOpen((prev) => !prev);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isGitPanelShortcut =
-        event.code === "KeyB" &&
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        !event.altKey;
-
-      if (!isGitPanelShortcut || event.repeat) {
-        return;
-      }
-
-      event.preventDefault();
-      toggleGitPanel();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleGitPanel]);
-
   const openDiffToFile = useCallback((filePath: string) => {
     setFocusedDiffFile(filePath);
     setFocusedDiffRequestId((prev) => prev + 1);
@@ -123,7 +97,6 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
     () => ({
       gitPanelOpen,
       setGitPanelOpen,
-      toggleGitPanel,
       gitPanelTab,
       setGitPanelTab,
       activeView,
@@ -149,7 +122,6 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
     }),
     [
       gitPanelOpen,
-      toggleGitPanel,
       gitPanelTab,
       activeView,
       changesTabDismissed,

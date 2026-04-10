@@ -1626,18 +1626,6 @@ export function GitPanel(props: GitPanelProps) {
   const showCreatePrShortcut = hasRepo && !hasExistingPr && canOpenPrTab;
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
   const diffScopeManuallySetRef = useRef(false);
-  const previousGitPanelOpenRef = useRef(gitPanelOpen);
-
-  useEffect(() => {
-    const wasOpen = previousGitPanelOpenRef.current;
-    previousGitPanelOpenRef.current = gitPanelOpen;
-
-    if (!gitPanelOpen || wasOpen || !hasExistingPr) {
-      return;
-    }
-
-    setGitPanelTab("pr");
-  }, [gitPanelOpen, hasExistingPr, setGitPanelTab]);
 
   useEffect(() => {
     if (!gitPanelOpen) {
