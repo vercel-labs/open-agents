@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens } from "@open-harness/shared/lib/tool-state";
 import { ContributionChart } from "@/components/contribution-chart";
 import type { UsageRepositoryInsight } from "@/lib/usage/types";
 import { getPublicUsageProfile } from "@/lib/db/public-usage-profile";
