@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { formatTokens } from "@open-harness/shared/lib/tool-state";
 import { ContributionChart } from "@/components/contribution-chart";
@@ -41,16 +40,6 @@ function formatCompactNumber(value: number): string {
   return value.toLocaleString();
 }
 
-async function getBaseUrl(): Promise<string> {
-  const headerStore = await headers();
-  const host =
-    headerStore.get("x-forwarded-host") ??
-    headerStore.get("host") ??
-    "open-agents.dev";
-  const protocol = headerStore.get("x-forwarded-proto") ?? "https";
-  return `${protocol}://${host}`;
-}
-
 export async function generateMetadata({
   params,
   searchParams,
@@ -74,7 +63,6 @@ export async function generateMetadata({
     ? `?date=${encodeURIComponent(profile.dateSelection.value)}`
     : "";
   const publicProfilePath = `/u/${profile.user.username}`;
-  const baseUrl = await getBaseUrl();
 
   return {
     title: `${displayName} · Open Agents Wrapped`,
@@ -83,13 +71,13 @@ export async function generateMetadata({
     openGraph: {
       title: `${displayName} · Open Agents Wrapped`,
       description: `${formatCompactNumber(profile.totals.totalTokens)} tokens · ${profile.dateSelection.label}`,
-      images: [`${baseUrl}${publicProfilePath}/og${dateQuery}`],
+      images: [`${publicProfilePath}/og${dateQuery}`],
     },
     twitter: {
       card: "summary_large_image",
       title: `${displayName} · Open Agents Wrapped`,
       description: `${formatCompactNumber(profile.totals.totalTokens)} tokens · ${profile.dateSelection.label}`,
-      images: [`${baseUrl}${publicProfilePath}/og${dateQuery}`],
+      images: [`${publicProfilePath}/og${dateQuery}`],
     },
   };
 }
@@ -230,6 +218,7 @@ export default async function PublicUsagePage({
                 <Link
                   key={preset.label}
                   href={href}
+                  prefetch={false}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                     isActive
                       ? "bg-accent text-accent-foreground"
