@@ -63,7 +63,7 @@ import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown"
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
 import { ModelSelectorCompact } from "@/components/model-selector-compact";
-import { QuestionPanel } from "@/components/question-panel";
+import { useInlineQuestion } from "@/components/inline-question-input";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { SnippetChip } from "@/components/snippet-chip";
 import { AssistantMessageGroups } from "@/components/assistant-message-groups";
@@ -2638,6 +2638,26 @@ export function SessionChatContent({
     }
   }, [questionToolCallId, addToolOutput]);
 
+  // Stable empty array so the hook doesn't reset on every render when there's no question
+  const emptyQuestions = useMemo(
+    () => [] as AskUserQuestionInput["questions"],
+    [],
+  );
+
+  const inlineQuestion = useInlineQuestion({
+    questions:
+      hasPendingQuestion && pendingQuestionPart
+        ? pendingQuestionPart.input.questions
+        : emptyQuestions,
+    onSubmit: handleQuestionSubmit,
+    onCancel: handleQuestionCancel,
+    textareaValue: input,
+    onTextareaChange: setInput,
+  });
+
+  // Inline question UI is integrated into the prompt box on all viewports
+  const showInlineQuestion = inlineQuestion.isActive;
+
   const isReconnectingSandbox =
     reconnectionStatus === "checking" &&
     !sandboxInfo &&
@@ -3656,15 +3676,6 @@ export function SessionChatContent({
                 )}
               </div>
 
-              {/* Question Panel */}
-              {hasPendingQuestion && pendingQuestionPart && (
-                <QuestionPanel
-                  questions={pendingQuestionPart.input.questions}
-                  onSubmit={handleQuestionSubmit}
-                  onCancel={handleQuestionCancel}
-                />
-              )}
-
               {/* Input */}
               <div className="p-4 pb-2 sm:pb-8">
                 <div className="mx-auto max-w-4xl space-y-2">
@@ -3755,6 +3766,8 @@ export function SessionChatContent({
                       <form
                         onSubmit={async (e) => {
                           e.preventDefault();
+                          // When inline question is active, don't send a chat message
+                          if (showInlineQuestion) return;
                           if (
                             isArchived ||
                             !isSandboxActive ||
@@ -3960,12 +3973,19 @@ export function SessionChatContent({
                           </div>
                         )}
 
+                        {/* Inline question UI for mobile — rendered inside prompt box */}
+                        {showInlineQuestion && inlineQuestion.questionHeaderUI}
+
                         {/* Textarea area */}
                         <div className="px-4 pb-2 pt-3">
                           <textarea
                             ref={inputRef}
                             value={input}
-                            placeholder="Request changes or ask a question..."
+                            placeholder={
+                              showInlineQuestion
+                                ? inlineQuestion.placeholder
+                                : "Request changes or ask a question..."
+                            }
                             rows={1}
                             onFocus={handleTextareaFocus}
                             onChange={(e) => {
@@ -3975,6 +3995,16 @@ export function SessionChatContent({
                               );
                             }}
                             onKeyDown={(e) => {
+                              // When inline question is active, Enter advances the question
+                              if (
+                                showInlineQuestion &&
+                                e.key === "Enter" &&
+                                !e.shiftKey
+                              ) {
+                                e.preventDefault();
+                                inlineQuestion.handleNext();
+                                return;
+                              }
                               // Let suggestions handle keyboard events first
                               if (handleSuggestionsKeyDown(e)) {
                                 return;
@@ -4144,7 +4174,21 @@ export function SessionChatContent({
                               )}
                             </Button>
 
-                            {isChatInFlight || hasPendingResponse ? (
+                            {showInlineQuestion ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  inlineQuestion.handleNext();
+                                }}
+                                disabled={!inlineQuestion.hasCurrentAnswer}
+                                className="h-8 rounded-full bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+                              >
+                                <Check className="mr-1 h-3 w-3" />
+                                {inlineQuestion.buttonLabel}
+                              </Button>
+                            ) : isChatInFlight || hasPendingResponse ? (
                               <Button
                                 type="button"
                                 size="icon"
