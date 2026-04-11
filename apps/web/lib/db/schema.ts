@@ -261,6 +261,59 @@ export const chatReads = pgTable(
   ],
 );
 
+export const workflowRuns = pgTable(
+  "workflow_runs",
+  {
+    id: text("id").primaryKey(),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    modelId: text("model_id"),
+    status: text("status", {
+      enum: ["completed", "aborted", "failed"],
+    }).notNull(),
+    startedAt: timestamp("started_at").notNull(),
+    finishedAt: timestamp("finished_at").notNull(),
+    totalDurationMs: integer("total_duration_ms").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("workflow_runs_chat_id_idx").on(table.chatId),
+    index("workflow_runs_session_id_idx").on(table.sessionId),
+    index("workflow_runs_user_id_idx").on(table.userId),
+  ],
+);
+
+export const workflowRunSteps = pgTable(
+  "workflow_run_steps",
+  {
+    id: text("id").primaryKey(),
+    workflowRunId: text("workflow_run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    stepNumber: integer("step_number").notNull(),
+    startedAt: timestamp("started_at").notNull(),
+    finishedAt: timestamp("finished_at").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    finishReason: text("finish_reason"),
+    rawFinishReason: text("raw_finish_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("workflow_run_steps_run_id_idx").on(table.workflowRunId),
+    uniqueIndex("workflow_run_steps_run_step_idx").on(
+      table.workflowRunId,
+      table.stepNumber,
+    ),
+  ],
+);
+
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type VercelProjectLink = typeof vercelProjectLinks.$inferSelect;
@@ -273,6 +326,10 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;
 export type ChatRead = typeof chatReads.$inferSelect;
 export type NewChatRead = typeof chatReads.$inferInsert;
+export type WorkflowRun = typeof workflowRuns.$inferSelect;
+export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
+export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
+export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
 export type GitHubInstallation = typeof githubInstallations.$inferSelect;
 export type NewGitHubInstallation = typeof githubInstallations.$inferInsert;
 
