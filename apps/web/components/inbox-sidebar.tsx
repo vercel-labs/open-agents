@@ -1022,7 +1022,9 @@ export function InboxSidebar({
                         </span>
                       </button>
                       {hasRepo ? (
-                        <span className="hidden shrink-0 items-center gap-0.5 group-hover/repo:flex">
+                        <span
+                          className={`shrink-0 items-center gap-0.5 ${isMobile ? "flex" : "hidden group-hover/repo:flex"}`}
+                        >
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button

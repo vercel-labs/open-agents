@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useGitPanel } from "./git-panel-context";
 
 type ChatTabsProps = {
@@ -50,6 +51,8 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     fileTabDismissed,
     setFileTabDismissed,
   } = useGitPanel();
+
+  const isMobile = useIsMobile();
 
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -226,7 +229,10 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
         <button
           type="button"
           onClick={handleCloseChanges}
-          className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          className={cn(
+            "mr-1 rounded p-0.5 text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground",
+            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
         >
           <X className="h-3 w-3" />
         </button>
@@ -254,7 +260,10 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
         <button
           type="button"
           onClick={handleCloseFile}
-          className="mr-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          className={cn(
+            "mr-1 rounded p-0.5 text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground",
+            isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
         >
           <X className="h-3 w-3" />
         </button>
@@ -326,7 +335,12 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
           )}
 
           {!isRenaming && (
-            <div className="flex items-center gap-0.5 pr-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div
+              className={cn(
+                "flex items-center gap-0.5 pr-1 transition-opacity",
+                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              )}
+            >
               <button
                 type="button"
                 onClick={(e) => {
@@ -378,6 +392,7 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     handleFinishRename,
     handleStartRename,
     insertAt,
+    isMobile,
     prefetchChat,
     renameValue,
     renamingChatId,

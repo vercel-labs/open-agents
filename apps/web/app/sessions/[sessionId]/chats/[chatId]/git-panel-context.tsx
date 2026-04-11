@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export type GitPanelTab = "diff" | "pr" | "files";
 export type ActiveView = "chat" | "diff" | "file";
@@ -83,6 +84,7 @@ const GitPanelContext = createContext<GitPanelContextValue | undefined>(
 );
 
 export function GitPanelProvider({ children }: { children: ReactNode }) {
+  const isMobile = useIsMobile();
   const [gitPanelOpen, setGitPanelOpen] = useState(false);
   const [gitPanelTab, setGitPanelTab] = useState<GitPanelTab>("files");
   const [activeView, setActiveView] = useState<ActiveView>("chat");
@@ -99,18 +101,26 @@ export function GitPanelProvider({ children }: { children: ReactNode }) {
   const panelPortalRef = useRef<HTMLDivElement | null>(null);
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
 
-  const openDiffToFile = useCallback((filePath: string) => {
-    setFocusedDiffFile(filePath);
-    setFocusedDiffRequestId((prev) => prev + 1);
-    setActiveView("diff");
-    setChangesTabDismissed(false);
-  }, []);
+  const openDiffToFile = useCallback(
+    (filePath: string) => {
+      setFocusedDiffFile(filePath);
+      setFocusedDiffRequestId((prev) => prev + 1);
+      setActiveView("diff");
+      setChangesTabDismissed(false);
+      if (isMobile) setGitPanelOpen(false);
+    },
+    [isMobile],
+  );
 
-  const openFileTab = useCallback((filePath: string) => {
-    setFocusedFilePath(filePath);
-    setActiveView("file");
-    setFileTabDismissed(false);
-  }, []);
+  const openFileTab = useCallback(
+    (filePath: string) => {
+      setFocusedFilePath(filePath);
+      setActiveView("file");
+      setFileTabDismissed(false);
+      if (isMobile) setGitPanelOpen(false);
+    },
+    [isMobile],
+  );
 
   const value = useMemo(
     () => ({
