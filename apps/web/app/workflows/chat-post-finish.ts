@@ -252,18 +252,22 @@ export async function recordWorkflowUsage(
       await import("@open-harness/agent");
 
     if (workflowRun) {
-      await recordWorkflowRun({
-        id: workflowRun.workflowRunId,
-        chatId: workflowRun.chatId,
-        sessionId: workflowRun.sessionId,
-        userId,
-        modelId,
-        status: workflowRun.status,
-        startedAt: workflowRun.startedAt,
-        finishedAt: workflowRun.finishedAt,
-        totalDurationMs: workflowRun.totalDurationMs,
-        stepTimings: workflowRun.stepTimings,
-      });
+      try {
+        await recordWorkflowRun({
+          id: workflowRun.workflowRunId,
+          chatId: workflowRun.chatId,
+          sessionId: workflowRun.sessionId,
+          userId,
+          modelId,
+          status: workflowRun.status,
+          startedAt: workflowRun.startedAt,
+          finishedAt: workflowRun.finishedAt,
+          totalDurationMs: workflowRun.totalDurationMs,
+          stepTimings: workflowRun.stepTimings,
+        });
+      } catch (error) {
+        console.error("[workflow] Failed to record workflow run:", error);
+      }
     }
 
     // Record main agent usage

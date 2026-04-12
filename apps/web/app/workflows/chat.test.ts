@@ -308,7 +308,7 @@ describe("runAgentWorkflow", () => {
     expect(rwCalls[0][1]).toBe("gpt-4");
   });
 
-  test("passes workflow timing data to recordWorkflowUsage", async () => {
+  test("marks workflow run as failed when maxSteps is exhausted", async () => {
     agentFinishReason = "tool-calls";
     agentRawFinishReason = "provider_tool_use";
 
@@ -331,7 +331,7 @@ describe("runAgentWorkflow", () => {
     };
 
     expect(workflowRun.workflowRunId).toBe("wrun_test-123");
-    expect(workflowRun.status).toBe("completed");
+    expect(workflowRun.status).toBe("failed");
     expect(workflowRun.totalDurationMs).toBeGreaterThanOrEqual(0);
     expect(workflowRun.stepTimings).toHaveLength(2);
     expect(workflowRun.stepTimings).toEqual([

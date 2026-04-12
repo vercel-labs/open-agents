@@ -154,6 +154,43 @@ describe("recordWorkflowUsage", () => {
     });
   });
 
+  test("continues recording usage when workflow run persistence fails", async () => {
+    spies.recordWorkflowRun.mockImplementationOnce(() =>
+      Promise.reject(new Error("workflow runs table missing")),
+    );
+
+    const usage = makeUsage({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    });
+
+    await recordWorkflowUsage(
+      "user-1",
+      "gpt-4",
+      usage,
+      makeAssistantMessage(),
+      undefined,
+      {
+        workflowRunId: "wrun-1",
+        chatId: "chat-1",
+        sessionId: "session-1",
+        status: "completed",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:00:05.000Z",
+        totalDurationMs: 5000,
+        stepTimings: [],
+      },
+    );
+
+    expect(spies.recordWorkflowRun).toHaveBeenCalledTimes(1);
+    expect(spies.recordUsage).toHaveBeenCalledTimes(1);
+    expect((spies.recordUsage.mock.calls as unknown[][])[0][1]).toMatchObject({
+      agentType: "main",
+      model: "gpt-4",
+    });
+  });
+
   test("skips main recording when totalUsage is undefined", async () => {
     await recordWorkflowUsage(
       "user-1",

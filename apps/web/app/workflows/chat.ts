@@ -477,6 +477,7 @@ export async function runAgentWorkflow(options: Options) {
     latestMessage.role === "assistant" ? latestMessage : undefined;
   const stepTimings: WorkflowRunStepTiming[] = [];
   let wasAborted = false;
+  let exhaustedMaxSteps = false;
   let totalUsage: LanguageModelUsage | undefined;
   let finalFinishReason: FinishReason | undefined;
   let streamClosed = false;
@@ -526,12 +527,18 @@ export async function runAgentWorkflow(options: Options) {
           : result.stepUsage;
       }
 
-      if (
-        result.finishReason !== "tool-calls" ||
-        shouldPauseForToolInteraction(
+      const shouldContinue =
+        result.finishReason === "tool-calls" &&
+        !shouldPauseForToolInteraction(
           result.responseMessage?.parts ?? pendingAssistantResponse.parts,
-        )
-      ) {
+        );
+
+      if (!shouldContinue) {
+        break;
+      }
+
+      if (options.maxSteps !== undefined && step + 1 >= options.maxSteps) {
+        exhaustedMaxSteps = true;
         break;
       }
     }
@@ -699,7 +706,11 @@ export async function runAgentWorkflow(options: Options) {
       await refreshDiffCache(options.sessionId, sandboxState);
     }
 
-    workflowStatus = wasAborted ? "aborted" : "completed";
+    workflowStatus = wasAborted
+      ? "aborted"
+      : exhaustedMaxSteps
+        ? "failed"
+        : "completed";
   } catch (error) {
     workflowStatus = wasAborted ? "aborted" : "failed";
     caughtError = error;
