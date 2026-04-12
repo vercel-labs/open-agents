@@ -863,9 +863,10 @@ export function InboxSidebar({
 
   const handleCreateForRepo = useCallback(
     (owner: string, repo: string) => {
+      if (isMobile) setOpenMobile(false);
       onCreateSessionForRepo(owner, repo);
     },
-    [onCreateSessionForRepo],
+    [isMobile, setOpenMobile, onCreateSessionForRepo],
   );
 
   const handleOpenBranchPicker = useCallback((owner: string, repo: string) => {
@@ -883,13 +884,14 @@ export function InboxSidebar({
           branch,
         );
         setBranchPickerRepo(null);
+        if (isMobile) setOpenMobile(false);
       } catch (error) {
         console.error("Failed to create session from branch:", error);
       } finally {
         setIsCreatingFromBranch(false);
       }
     },
-    [branchPickerRepo, onCreateSessionFromBranch],
+    [branchPickerRepo, onCreateSessionFromBranch, isMobile, setOpenMobile],
   );
 
   return (
