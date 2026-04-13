@@ -257,7 +257,6 @@ function InlineCommitPanel({
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const hasGeneratedRef = useRef(false);
 
   const hasUncommittedChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -308,15 +307,6 @@ function InlineCommitPanel({
 
   const handleExpandCommit = () => {
     setIsExpanded(true);
-    // Auto-generate message when expanding for the first time
-    if (
-      !hasGeneratedRef.current &&
-      !commitMessage.trim() &&
-      hasPendingGitWork
-    ) {
-      hasGeneratedRef.current = true;
-      void handleGenerateMessage();
-    }
   };
 
   const handleGenerateMessage = async () => {
@@ -593,7 +583,6 @@ function InlinePrCreatePanel({
   const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [enableAutoMerge, setEnableAutoMerge] = useState(false);
-  const hasGeneratedRef = useRef(false);
 
   const branchFromStatus =
     resolvedBranch ??
@@ -646,11 +635,6 @@ function InlinePrCreatePanel({
 
   const handleExpand = () => {
     setIsExpanded(true);
-    // Auto-generate content when expanding for the first time
-    if (!hasGeneratedRef.current && !prTitle.trim() && !prBody.trim()) {
-      hasGeneratedRef.current = true;
-      void handleGenerateContent();
-    }
   };
 
   const handleGenerateContent = async () => {
