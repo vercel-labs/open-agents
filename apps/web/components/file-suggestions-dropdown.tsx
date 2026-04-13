@@ -61,8 +61,15 @@ export function FileSuggestionsDropdown({
         <div className="space-y-px">
           {suggestions.map((suggestion, index) => {
             const fullPath = suggestion.display;
-            const fileName = fullPath.split("/").pop() ?? fullPath;
-            const dirPath = fullPath.slice(0, -fileName.length);
+            const normalizedPath = suggestion.isDirectory
+              ? fullPath.replace(/\/$/, "")
+              : fullPath;
+            const fileName =
+              normalizedPath.split("/").pop() ?? normalizedPath;
+            const dirPath = normalizedPath.slice(
+              0,
+              normalizedPath.length - fileName.length,
+            );
 
             return (
               <button
