@@ -96,7 +96,9 @@ type GitPanelProps = {
   existingPrUrl: string | null;
   prDeploymentUrl: string | null;
   buildingDeploymentUrl: string | null;
+  failedDeploymentUrl: string | null;
   isDeploymentStale: boolean;
+  isDeploymentFailed: boolean;
   hasUncommittedGitChanges: boolean;
   supportsRepoCreation: boolean;
   hasDiff: boolean;
@@ -1637,7 +1639,9 @@ export function GitPanel(props: GitPanelProps) {
     existingPrUrl,
     prDeploymentUrl,
     buildingDeploymentUrl,
+    failedDeploymentUrl,
     isDeploymentStale,
+    isDeploymentFailed,
     hasUncommittedGitChanges,
     supportsRepoCreation,
     hasDiff,
@@ -1693,10 +1697,11 @@ export function GitPanel(props: GitPanelProps) {
   const hasUnstagedChanges =
     (gitStatus?.unstagedCount ?? 0) > 0 ||
     Boolean(diffFiles?.some(isUncommittedFile));
-  const showPreviewButton = Boolean(prDeploymentUrl) || isDeploymentStale;
+  const showPreviewButton =
+    Boolean(prDeploymentUrl) || isDeploymentStale || isDeploymentFailed;
   const previewTargetUrl = isDeploymentStale
     ? buildingDeploymentUrl
-    : prDeploymentUrl;
+    : (prDeploymentUrl ?? (isDeploymentFailed ? failedDeploymentUrl : null));
 
   const canOpenPrTab =
     hasExistingPr ||
@@ -1785,11 +1790,16 @@ export function GitPanel(props: GitPanelProps) {
               <Globe
                 className={cn(
                   "h-3.5 w-3.5",
-                  !isDeploymentStale && "text-green-500",
-                  isDeploymentStale && "text-amber-500 animate-pulse",
+                  isDeploymentFailed && "text-red-500",
+                  !isDeploymentFailed &&
+                    !isDeploymentStale &&
+                    "text-green-500",
+                  !isDeploymentFailed &&
+                    isDeploymentStale &&
+                    "text-amber-500 animate-pulse",
                 )}
               />
-              Preview
+              {isDeploymentFailed ? "Preview (failed)" : "Preview"}
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           )}

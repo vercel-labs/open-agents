@@ -2797,6 +2797,7 @@ export function SessionChatContent({
     );
   const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
   const buildingDeploymentUrl = prDeploymentData?.buildingDeploymentUrl ?? null;
+  const failedDeploymentUrl = prDeploymentData?.failedDeploymentUrl ?? null;
 
   useEffect(() => {
     if (!hasExistingPr && !hasBranchPreviewLookup) {
@@ -2821,8 +2822,15 @@ export function SessionChatContent({
   ]);
 
   const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
+  const isDeploymentFailed =
+    !prDeploymentUrl &&
+    !buildingDeploymentUrl &&
+    !hasExistingPr &&
+    Boolean(failedDeploymentUrl);
   const previewDeploymentTargetUrl =
-    (isDeploymentStale ? buildingDeploymentUrl : null) ?? prDeploymentUrl;
+    (isDeploymentStale ? buildingDeploymentUrl : null) ??
+    prDeploymentUrl ??
+    (isDeploymentFailed ? failedDeploymentUrl : null);
   const showHeaderActions =
     canRunDevServer || Boolean(previewDeploymentTargetUrl);
 
@@ -2978,7 +2986,9 @@ export function SessionChatContent({
       existingPrUrl={existingPrUrl}
       prDeploymentUrl={prDeploymentUrl}
       buildingDeploymentUrl={buildingDeploymentUrl}
+      failedDeploymentUrl={failedDeploymentUrl}
       isDeploymentStale={isDeploymentStale}
+      isDeploymentFailed={isDeploymentFailed}
       hasUncommittedGitChanges={hasUncommittedGitChanges}
       supportsRepoCreation={supportsRepoCreation}
       hasDiff={Boolean(diff || session.cachedDiff)}
@@ -3130,25 +3140,34 @@ export function SessionChatContent({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={
-                        isDeploymentStale
-                          ? "Open latest preview deployment (building)"
-                          : "Open latest preview deployment"
+                        isDeploymentFailed
+                          ? "Open failed preview deployment"
+                          : isDeploymentStale
+                            ? "Open latest preview deployment (building)"
+                            : "Open latest preview deployment"
                       }
                     >
                       <Globe
                         className={cn(
                           "h-3.5 w-3.5",
-                          !isDeploymentStale && "text-green-500",
-                          isDeploymentStale && "animate-pulse text-amber-500",
+                          isDeploymentFailed && "text-red-500",
+                          !isDeploymentFailed &&
+                            !isDeploymentStale &&
+                            "text-green-500",
+                          !isDeploymentFailed &&
+                            isDeploymentStale &&
+                            "animate-pulse text-amber-500",
                         )}
                       />
                     </a>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {isDeploymentStale
-                    ? "Open latest preview deployment (building)"
-                    : "Open latest preview deployment"}
+                  {isDeploymentFailed
+                    ? "Preview deployment failed"
+                    : isDeploymentStale
+                      ? "Open latest preview deployment (building)"
+                      : "Open latest preview deployment"}
                 </TooltipContent>
               </Tooltip>
             )}
