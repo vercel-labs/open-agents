@@ -1,8 +1,6 @@
-import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { getInstallationToken } from "@/lib/github/app-auth";
 
-const CACHE_REVALIDATE_SECONDS = 120;
 const INSTALLATION_REPOS_MAX_PAGES = 20;
 
 const installationRepoSchema = z.object({
@@ -23,13 +21,6 @@ const installationReposResponseSchema = z.object({
 });
 
 interface ListInstallationRepositoriesOptions {
-  owner?: string;
-  query?: string;
-  limit?: number;
-}
-
-interface FetchInstallationRepositoriesOptions {
-  installationId: number;
   owner?: string;
   query?: string;
   limit?: number;
