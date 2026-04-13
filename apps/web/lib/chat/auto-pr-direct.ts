@@ -70,20 +70,15 @@ function isSkippablePrContentError(error: string): boolean {
 
 async function resolveDefaultBranch(params: {
   sandbox: Sandbox;
-  userId: string;
   repoOwner: string;
   repoName: string;
   tokenCandidates: string[];
 }): Promise<string | null> {
-  const { sandbox, userId, repoOwner, repoName, tokenCandidates } = params;
+  const { sandbox, repoOwner, repoName, tokenCandidates } = params;
   const cwd = sandbox.workingDirectory;
 
   for (const token of tokenCandidates) {
-    const branchData = await fetchGitHubBranches(
-      token,
-      repoOwner,
-      repoName,
-    );
+    const branchData = await fetchGitHubBranches(token, repoOwner, repoName);
 
     if (branchData?.defaultBranch?.trim()) {
       return branchData.defaultBranch.trim();
@@ -206,7 +201,6 @@ export async function performAutoCreatePr(
 
   const defaultBranch = await resolveDefaultBranch({
     sandbox,
-    userId,
     repoOwner,
     repoName,
     tokenCandidates,

@@ -304,12 +304,7 @@ export async function GET(request: NextRequest) {
             query,
             limit,
           )
-        : await fetchGitHubBranches(
-            token,
-            owner,
-            repo,
-            limit,
-          );
+        : await fetchGitHubBranches(token, owner, repo, limit);
 
       if (result) {
         return NextResponse.json(result);

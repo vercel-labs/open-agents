@@ -56,9 +56,9 @@ export async function GET(request: NextRequest) {
   try {
     const repos = await fetchInstallationRepositories({
       installationId,
+      owner: installation.accountLogin,
       query,
       limit,
-      owner: installation.accountLogin,
     });
 
     return NextResponse.json(repos);

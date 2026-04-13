@@ -48,21 +48,17 @@ export async function GET(request: NextRequest) {
       const repos = await fetchInstallationRepositories({
         installationId: tokenResult.installationId,
         owner,
-        limit,
         query,
+        limit,
       });
 
       return NextResponse.json(repos);
     }
 
-    const repos = await fetchGitHubRepos(
-      tokenResult.token,
-      owner,
-      {
-        limit,
-        query,
-      },
-    );
+    const repos = await fetchGitHubRepos(tokenResult.token, owner, {
+      limit,
+      query,
+    });
 
     if (!repos) {
       return NextResponse.json(
