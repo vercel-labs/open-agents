@@ -153,7 +153,7 @@ export default function OgImage() {
           <TechPill label="AI SDK" />
           <TechPill label="Gateway" />
           <TechPill label="Sandbox" />
-          <TechPill label="Workflow DevKit" />
+          <TechPill label="Workflow SDK" />
 
           {/* Spacer + domain */}
           <div

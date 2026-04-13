@@ -32,7 +32,7 @@ That separation is the main point of the project:
 ## Current capabilities
 
 - chat-driven coding agent with file, search, shell, task, skill, and web tools
-- durable multi-step execution with Workflow DevKit-backed runs
+- durable multi-step execution with Workflow SDK-backed runs
 - isolated Vercel sandboxes with snapshot-based resume
 - repo cloning and branch work inside the sandbox
 - optional auto-commit, push, and PR creation after a successful run

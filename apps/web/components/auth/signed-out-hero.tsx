@@ -32,7 +32,7 @@ export function SignedOutHero() {
                 style={{ animationDelay: "90ms" }}
               >
                 Spawn coding agents that run infinitely in the cloud. Powered by
-                AI SDK, Gateway, Sandbox, and Workflow DevKit.
+                AI SDK, Gateway, Sandbox, and Workflow SDK.
               </p>
             </div>
 
