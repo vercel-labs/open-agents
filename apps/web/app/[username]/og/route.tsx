@@ -25,7 +25,9 @@ export async function GET(request: Request, context: OgRouteContext) {
   // ── Activity grid ────────────────────────────────────────────────────────
   const activityData = profile.dailyActivity;
   const maxTokens = Math.max(
-    ...activityData.map((d) => d.inputTokens + d.outputTokens + d.messageCount),
+    ...activityData.map(
+      (d) => d.inputTokens + d.outputTokens + d.messageCount * 100,
+    ),
     1,
   );
 
