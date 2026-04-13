@@ -1,20 +1,18 @@
-Summary: Close the free-user message deletion loophole with the smallest workable change: store a persistent hosted-trial message counter on the user record and stop deriving quota from deletable chat history.
+Summary: Close the free-user message deletion loophole with the smallest product-level change: on the hosted deployment, non-Vercel trial users cannot delete chat messages.
 
-Context: The current gate in `apps/web/app/api/chat/route.ts` calls `countUserMessagesByUserId`, which counts live `chat_messages` rows in `apps/web/lib/db/sessions.ts`. Deleting a message chain in `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]/route.ts` removes those rows, so users can drop back under the cap. A boolean like `trialExhausted` is not enough by itself, because users can keep deleting messages before they ever hit the fifth live row.
+Context: The current 5-message cap in `apps/web/app/api/chat/route.ts` is derived from live `chat_messages`. Deleting messages through `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]/route.ts` removes those rows, which is the loophole. If the main goal is just to stop hosted-demo abuse quickly, preventing delete for managed-template trial users is the smallest direct fix.
 
-System Impact: The source of truth for hosted-trial usage changes from mutable chat history to `users.managedTemplateTrialMessageCount`. `chat_messages` remains only conversation history. New invariant: the counter only goes up, delete never gives quota back, and the request is blocked once the counter reaches 5.
+System Impact: No quota source-of-truth changes. Instead, the deletion capability changes for one user segment: managed-template trial users on the hosted deployment lose message deletion. Existing message-limit logic remains as-is. New invariant: trial users cannot reduce their live message count by deleting messages.
 
-Approach: Use a persistent integer counter on the user table, not a separate reservation table. For managed-template trial users, treat a newly accepted user message as quota consumption and increment the counter before starting the workflow. To keep this reasonably safe, do the counter increment together with user-message persistence for that request path instead of relying on the current fire-and-forget persistence.
+Approach: Add a server-side guard in the message-delete route using the existing managed-template trial detection. Return a 403 with a clear error for managed-template trial users. Optionally hide or disable the delete UI for the same segment, but the server check is the real protection.
 
 Changes:
-- `apps/web/lib/db/schema.ts` - add `managedTemplateTrialMessageCount integer not null default 0` to `users`.
-- `apps/web/lib/db/users.ts` (or a small dedicated helper) - add a helper that checks/increments the counter for managed-template trial users.
-- `apps/web/app/api/chat/route.ts` - replace the current live-message count check with the persistent counter check, and make trial-user message persistence/counter update happen before the workflow starts.
-- `apps/web/app/api/chat/route.test.ts` - cover: first five messages allowed, sixth blocked, and deleting chat history does not restore quota.
-- `apps/web/lib/db/migrations/*` - generate the Drizzle migration and snapshot for the new column.
+- `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]/route.ts` - block delete for managed-template trial users on the hosted deployment.
+- `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]/route.test.ts` - add coverage for the 403 guard.
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` - optionally hide/disable delete controls and show a clearer message for trial users.
 
 Verification:
 - Run `bun run ci`.
-- Confirm managed-template trial users can send exactly 5 messages total.
-- Confirm deleting old messages does not allow a 6th message.
-- Confirm non-trial users are unaffected.
+- Confirm managed-template trial users get 403 when attempting to delete.
+- Confirm their sixth message is still blocked by the existing chat limit.
+- Confirm Vercel users and self-hosted deployments can still delete messages normally.
