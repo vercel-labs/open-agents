@@ -124,33 +124,28 @@ Store the credentials as:
 - `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
 - `VERCEL_APP_CLIENT_SECRET`
 
-### GitHub OAuth app
-Tell the user to create a GitHub OAuth app and set:
-
-- Homepage URL: `https://YOUR_DOMAIN`
-- Authorization callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- For local dev: `http://localhost:3000/api/github/app/callback`
-
-Store the credentials as:
-
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
-
 ### GitHub App
+Tell the user they do not need a separate GitHub OAuth app. Open Harness uses the GitHub App's user authorization flow.
+
 Tell the user to create a GitHub App and set:
 
+- Homepage URL: `https://YOUR_DOMAIN`
 - Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
 - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
+- For local dev: homepage `http://localhost:3000`, callback/setup `http://localhost:3000/api/github/app/callback`
 
 Also tell them to:
 
 - enable "Request user authorization (OAuth) during installation"
+- use the GitHub App Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
 - make the app public if they want org installs to work cleanly
 - generate a webhook secret
 - download/generate the private key
 
 Store the values as:
 
+- `NEXT_PUBLIC_GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
 - `NEXT_PUBLIC_GITHUB_APP_SLUG`
@@ -175,7 +170,7 @@ Guide the user through this sequence:
 5. Create the Vercel OAuth app using that production URL.
 6. Add `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` and `VERCEL_APP_CLIENT_SECRET`.
 7. Redeploy.
-8. If the user wants the full GitHub flow, create the GitHub OAuth app and GitHub App using the same production URL, add the GitHub env vars, and redeploy again.
+8. If the user wants the full GitHub flow, create the GitHub App using the production URL, add the GitHub env vars, and redeploy again.
 9. Optionally add Redis/KV and the production URL vars.
 
 If the user already has a custom domain ready, it is fine to use that domain from the start instead of the default `vercel.app` production URL.

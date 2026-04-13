@@ -74,7 +74,7 @@ Without these, the site can deploy, but Vercel sign-in will not work.
 
 ### Required for GitHub repo access, pushes, and PRs
 
-If you want users to connect GitHub, install the app on repos/orgs, clone private repos, push branches, or open PRs, add:
+If you want users to connect GitHub, install the app on repos/orgs, clone private repos, push branches, or open PRs, add these GitHub App values:
 
 ```env
 NEXT_PUBLIC_GITHUB_CLIENT_ID=
@@ -137,18 +137,18 @@ Recommended path: deploy this repo at the repo root on Vercel, then layer on aut
    VERCEL_APP_CLIENT_SECRET=
    ```
 
-9. If you want the full GitHub-enabled coding-agent flow, also create GitHub OAuth + GitHub App credentials using:
+9. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
 
    - Homepage URL: `https://YOUR_DOMAIN`
-   - GitHub OAuth callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
-   - GitHub App callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
-   - GitHub App setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
+   - Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
+   - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
 
    In the GitHub App settings:
    - enable "Request user authorization (OAuth) during installation"
+   - use the GitHub App's Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
    - make the app public if you want org installs to work cleanly
 
-10. Add the GitHub env vars and redeploy.
+10. Add the GitHub App env vars and redeploy.
 11. Optionally add Redis/KV and the canonical production URL vars.
 
 ## Local setup
@@ -197,37 +197,25 @@ NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
 VERCEL_APP_CLIENT_SECRET=...
 ```
 
-### GitHub OAuth
-
-Create a GitHub OAuth app for account linking and use:
-
-- Homepage URL: `https://YOUR_DOMAIN`
-- Authorization callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
-
-For local development:
-
-- Homepage URL: `http://localhost:3000`
-- Authorization callback URL: `http://localhost:3000/api/github/app/callback`
-
-Then set:
-
-```env
-NEXT_PUBLIC_GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-```
-
 ### GitHub App
+
+You do not need a separate GitHub OAuth app. Open Harness uses the GitHub App's user authorization flow.
 
 Create a GitHub App for installation-based repo access and configure:
 
+- Homepage URL: `https://YOUR_DOMAIN`
 - Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
 - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
 - enable "Request user authorization (OAuth) during installation"
 - make the app public if you want org installs to work cleanly
 
+For local development, use `http://localhost:3000/api/github/app/callback` for the callback/setup URL and `http://localhost:3000` as the homepage URL.
+
 Then set:
 
 ```env
+NEXT_PUBLIC_GITHUB_CLIENT_ID=...   # GitHub App Client ID
+GITHUB_CLIENT_SECRET=...           # GitHub App Client Secret
 GITHUB_APP_ID=...
 GITHUB_APP_PRIVATE_KEY=...
 NEXT_PUBLIC_GITHUB_APP_SLUG=...
