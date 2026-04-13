@@ -6,8 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDotDashed,
-  List,
-  ArrowUpDown,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -22,8 +20,6 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 /*  Types & constants                                                  */
 /* ------------------------------------------------------------------ */
-
-type GroupMode = "status" | "flat";
 
 const stateOrder: Record<PullRequestCheckState, number> = {
   failed: 0,
@@ -213,27 +209,32 @@ function GroupSection({
   state,
   checkRuns,
   defaultOpen,
+  trailing,
 }: {
   state: PullRequestCheckState;
   checkRuns: PullRequestCheckRun[];
   defaultOpen: boolean;
+  trailing?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {open ? (
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0" />
-        )}
-        <span>{groupLabel(state, checkRuns.length)}</span>
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          {open ? (
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0" />
+          )}
+          <span className="truncate">{groupLabel(state, checkRuns.length)}</span>
+        </button>
+        {trailing && <div className="shrink-0">{trailing}</div>}
+      </div>
       {open && (
         <ul className="ml-4 space-y-0.5">
           {checkRuns.map((cr, i) => (
@@ -333,17 +334,16 @@ export function CheckRunsList({
     checks?.failed ?? checkRuns.filter((c) => c.state === "failed").length;
   const total = passed + pending + failed;
 
-  const [groupMode, setGroupMode] = useState<GroupMode>("status");
   // Always start open so checks are visible in the panel
   const [detailsOpen, setDetailsOpen] = useState(true);
 
-  // Count distinct states present
+  // Count distinct states present — auto-group when > 1
   const distinctStates = useMemo(() => {
     const s = new Set(checkRuns.map((c) => c.state));
     return s.size;
   }, [checkRuns]);
 
-  const showGroupToggle = distinctStates > 1;
+  const shouldGroup = distinctStates > 1;
 
   const sorted = useMemo(
     () =>
@@ -412,15 +412,6 @@ export function CheckRunsList({
         {/* Action buttons — outside the toggle button */}
         {!showLoading && (
           <div className="flex shrink-0 items-center gap-1">
-            {failed > 0 && onFixChecks && (
-              <FixErrorsButton
-                disabled={fixChecksDisabled}
-                onClick={() =>
-                  onFixChecks(checkRuns.filter((cr) => cr.state === "failed"))
-                }
-              />
-            )}
-
             {onRefresh && (
               <button
                 type="button"
@@ -447,38 +438,9 @@ export function CheckRunsList({
 
       {/* ---- Expanded detail list ---- */}
       {detailsOpen && !showLoading && (
-        <div className="relative border-t border-border px-3 pb-3 pt-2">
-          {/* Sort/group toggle – absolutely positioned, floats top-right */}
-          {showGroupToggle && (
-            <button
-              type="button"
-              onClick={() =>
-                setGroupMode(groupMode === "status" ? "flat" : "status")
-              }
-              className="absolute right-3 top-2 z-10 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={
-                groupMode === "status"
-                  ? "Switch to flat list"
-                  : "Switch to grouped by status"
-              }
-              title={groupMode === "status" ? "Flat list" : "Group by status"}
-            >
-              {groupMode === "status" ? (
-                <List className="h-3.5 w-3.5" />
-              ) : (
-                <ArrowUpDown className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-
-          {/* pr-7 reserves space so check names truncate before the toggle button */}
-          <div
-            className={cn(
-              "max-h-48 overflow-y-auto",
-              showGroupToggle && "pr-7",
-            )}
-          >
-            {groupMode === "status" && showGroupToggle ? (
+        <div className="border-t border-border px-3 pb-3 pt-2">
+          <div className="max-h-48 overflow-y-auto">
+            {shouldGroup ? (
               <div className="space-y-1">
                 {groupOrder.map((state) => {
                   const runs = grouped[state];
@@ -489,18 +451,40 @@ export function CheckRunsList({
                       state={state}
                       checkRuns={runs}
                       defaultOpen
+                      trailing={
+                        state === "failed" && onFixChecks ? (
+                          <FixErrorsButton
+                            disabled={fixChecksDisabled}
+                            onClick={() => onFixChecks(runs)}
+                          />
+                        ) : undefined
+                      }
                     />
                   );
                 })}
               </div>
             ) : (
-              <ul className="space-y-0.5">
-                {sorted.map((cr, i) => (
-                  <li key={`${cr.name}-${cr.detailsUrl ?? "no-url"}-${i}`}>
-                    <CheckRunRow checkRun={cr} />
-                  </li>
-                ))}
-              </ul>
+              <div>
+                {failed > 0 && onFixChecks && (
+                  <div className="flex items-center justify-end pb-1">
+                    <FixErrorsButton
+                      disabled={fixChecksDisabled}
+                      onClick={() =>
+                        onFixChecks(
+                          checkRuns.filter((cr) => cr.state === "failed"),
+                        )
+                      }
+                    />
+                  </div>
+                )}
+                <ul className="space-y-0.5">
+                  {sorted.map((cr, i) => (
+                    <li key={`${cr.name}-${cr.detailsUrl ?? "no-url"}-${i}`}>
+                      <CheckRunRow checkRun={cr} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>
