@@ -47,11 +47,17 @@ mock.module("@/lib/vercel/token", () => ({
   getUserVercelToken: getUserVercelTokenMock,
 }));
 
+const findLatestFailedDeploymentInspectorUrlForBranchMock = mock(
+  async () => null as string | null,
+);
+
 mock.module("@/lib/vercel/projects", () => ({
   findLatestPreviewDeploymentUrlForBranch:
     findLatestPreviewDeploymentUrlForBranchMock,
   findLatestBuildingDeploymentUrlForBranch:
     findLatestBuildingDeploymentUrlForBranchMock,
+  findLatestFailedDeploymentInspectorUrlForBranch:
+    findLatestFailedDeploymentInspectorUrlForBranchMock,
 }));
 
 mock.module("@/lib/github/get-repo-token", () => ({
