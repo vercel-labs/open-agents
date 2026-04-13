@@ -1,6 +1,7 @@
 import "server-only";
 
 import { gateway } from "ai";
+import { filterDisabledModels } from "./model-availability";
 import type { AvailableModel, AvailableModelCost } from "./models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
@@ -173,7 +174,9 @@ export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
   const { models } = await gateway.getAvailableModels();
-  return models.filter((model) => model.modelType === "language");
+  return filterDisabledModels(
+    models.filter((model) => model.modelType === "language"),
+  );
 }
 
 export async function fetchAvailableLanguageModelsWithContext(): Promise<
