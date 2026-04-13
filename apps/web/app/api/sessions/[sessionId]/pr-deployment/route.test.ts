@@ -51,10 +51,6 @@ mock.module("@/lib/vercel/token", () => ({
   getUserVercelToken: getUserVercelTokenMock,
 }));
 
-const findLatestFailedDeploymentInspectorUrlForBranchMock = mock(
-  async () => null as string | null,
-);
-
 mock.module("@/lib/vercel/projects", () => ({
   findLatestPreviewDeploymentUrlForBranch:
     findLatestPreviewDeploymentUrlForBranchMock,
