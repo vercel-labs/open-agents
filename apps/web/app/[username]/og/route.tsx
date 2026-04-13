@@ -25,9 +25,7 @@ export async function GET(request: Request, context: OgRouteContext) {
   // ── Activity grid ────────────────────────────────────────────────────────
   const activityData = profile.dailyActivity;
   const maxTokens = Math.max(
-    ...activityData.map(
-      (d) => d.inputTokens + d.outputTokens + d.messageCount,
-    ),
+    ...activityData.map((d) => d.inputTokens + d.outputTokens + d.messageCount),
     1,
   );
 
@@ -217,7 +215,9 @@ export async function GET(request: Request, context: OgRouteContext) {
         }}
       >
         {profile.user.avatarUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
+            alt=""
             src={profile.user.avatarUrl}
             width={72}
             height={72}
@@ -317,9 +317,7 @@ export async function GET(request: Request, context: OgRouteContext) {
           gap: 12,
         }}
       >
-        {topModelLabel && (
-          <Pill label="Top model" value={topModelLabel} />
-        )}
+        {topModelLabel && <Pill label="Top model" value={topModelLabel} />}
         <Pill
           label="Messages"
           value={profile.totals.messageCount.toLocaleString()}
