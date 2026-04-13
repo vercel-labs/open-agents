@@ -52,10 +52,14 @@ export const metadata: Metadata = {
     default: "Open Agents",
     template: "%s | Open Agents",
   },
-  description: "Open Agents web app for managing AI coding sessions.",
+  description:
+    "Spawn coding agents that run infinitely in the cloud. Powered by AI SDK, Gateway, Sandbox, and Workflow DevKit.",
   icons: {
     icon: faviconPath,
     shortcut: faviconPath,
+  },
+  twitter: {
+    card: "summary_large_image",
   },
 };
 
