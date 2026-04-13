@@ -1,5 +1,8 @@
 import { ImageResponse } from "next/og";
-import { getPublicUsageProfile } from "@/lib/db/public-usage-profile";
+import {
+  getPublicUsageProfile,
+  displayModelId,
+} from "@/lib/db/public-usage-profile";
 
 interface OgRouteContext {
   params: Promise<{ username: string }>;
@@ -15,8 +18,57 @@ export async function GET(request: Request, context: OgRouteContext) {
     return new Response("Not found", { status: 404 });
   }
 
-  const topModel = profile.topModels[0]?.label ?? "No tracked model yet";
   const displayName = profile.user.name?.trim() || profile.user.username;
+  const topModel = profile.topModels[0];
+  const topModelLabel = topModel ? displayModelId(topModel.modelId) : null;
+
+  // ── Activity grid ────────────────────────────────────────────────────────
+  const activityData = profile.dailyActivity;
+  const maxTokens = Math.max(
+    ...activityData.map(
+      (d) => d.inputTokens + d.outputTokens + d.messageCount,
+    ),
+    1,
+  );
+
+  const today = new Date();
+  const gridWeeks = 30;
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - gridWeeks * 7 + 1);
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+
+  const activityMap = new Map<string, number>();
+  for (const d of activityData) {
+    activityMap.set(
+      d.date,
+      d.inputTokens + d.outputTokens + d.messageCount * 100,
+    );
+  }
+
+  const weeks: number[][] = [];
+  const cursor = new Date(startDate);
+  for (let w = 0; w < gridWeeks; w++) {
+    const week: number[] = [];
+    for (let d = 0; d < 7; d++) {
+      const key = cursor.toISOString().slice(0, 10);
+      week.push(activityMap.get(key) ?? 0);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  const cellSize = 14;
+  const cellGap = 3;
+
+  function getColor(value: number): string {
+    if (value === 0) return "rgba(255, 255, 255, 0.03)";
+    const ratio = value / maxTokens;
+    if (ratio < 0.15) return "rgba(255, 255, 255, 0.07)";
+    if (ratio < 0.35) return "rgba(255, 255, 255, 0.14)";
+    if (ratio < 0.6) return "rgba(255, 255, 255, 0.24)";
+    if (ratio < 0.8) return "rgba(255, 255, 255, 0.38)";
+    return "rgba(255, 255, 255, 0.55)";
+  }
 
   return new ImageResponse(
     <div
@@ -32,6 +84,7 @@ export async function GET(request: Request, context: OgRouteContext) {
           'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
+      {/* Radial glow */}
       <div
         style={{
           position: "absolute",
@@ -42,6 +95,7 @@ export async function GET(request: Request, context: OgRouteContext) {
         }}
       />
 
+      {/* Border frame */}
       <div
         style={{
           position: "absolute",
@@ -52,6 +106,70 @@ export async function GET(request: Request, context: OgRouteContext) {
         }}
       />
 
+      {/* Activity grid — decorative, top-right */}
+      <div
+        style={{
+          position: "absolute",
+          top: 52,
+          right: 56,
+          display: "flex",
+          gap: cellGap,
+          opacity: 0.7,
+        }}
+      >
+        {weeks.map((week, wi) => (
+          <div
+            key={wi}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: cellGap,
+            }}
+          >
+            {week.map((val, di) => (
+              <div
+                key={di}
+                style={{
+                  width: cellSize,
+                  height: cellSize,
+                  borderRadius: 3,
+                  background: getColor(val),
+                  display: "flex",
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Fade-out gradient over grid so it blends into bg */}
+      <div
+        style={{
+          position: "absolute",
+          top: 28,
+          right: 28,
+          width: 600,
+          height: 200,
+          display: "flex",
+          background:
+            "linear-gradient(to right, #0a0a0a, transparent 40%)",
+          borderRadius: "24px 24px 0 0",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: 170,
+          right: 28,
+          width: 600,
+          height: 80,
+          display: "flex",
+          background:
+            "linear-gradient(to top, #0a0a0a, transparent)",
+        }}
+      />
+
+      {/* Content */}
       <div
         style={{
           position: "absolute",
@@ -62,192 +180,223 @@ export async function GET(request: Request, context: OgRouteContext) {
           justifyContent: "space-between",
         }}
       >
+        {/* Top: Open Agents branding */}
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none">
+            <path
+              d="M4 17L10 11L4 5"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 19H20"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span
+            style={{
+              fontSize: 20,
+              fontWeight: 600,
+              color: "rgba(255, 255, 255, 0.5)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Open Agents
+          </span>
+        </div>
+
+        {/* Middle: user identity + big token number */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
             gap: 24,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 22,
-              flex: 1,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 4,
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none">
-                <path
-                  d="M4 17L10 11L4 5"
-                  stroke="rgba(255,255,255,0.5)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 19H20"
-                  stroke="rgba(255,255,255,0.5)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span
-                style={{
-                  fontSize: 20,
-                  fontWeight: 600,
-                  color: "rgba(255, 255, 255, 0.5)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Open Agents
-              </span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span
-                style={{
-                  fontSize: 18,
-                  textTransform: "uppercase",
-                  letterSpacing: 1.6,
-                  color: "rgba(255, 255, 255, 0.45)",
-                  fontWeight: 600,
-                }}
-              >
-                Wrapped
-              </span>
+          {/* Avatar + name row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {profile.user.avatarUrl ? (
+              <img
+                src={profile.user.avatarUrl}
+                width={64}
+                height={64}
+                style={{ borderRadius: "50%" }}
+              />
+            ) : (
               <div
                 style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.1)",
                   display: "flex",
                   alignItems: "center",
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                  background: "rgba(255, 255, 255, 0.04)",
-                  fontSize: 16,
-                  color: "rgba(255, 255, 255, 0.55)",
+                  justifyContent: "center",
+                  fontSize: 26,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,0.5)",
                 }}
               >
-                {profile.dateSelection.label}
+                {profile.user.username.slice(0, 1).toUpperCase()}
               </div>
-            </div>
-
-            <div
-              style={{
-                fontSize: 64,
-                fontWeight: 700,
-                lineHeight: 1,
-                letterSpacing: "-0.04em",
-                color: "#ffffff",
-                maxWidth: 660,
-              }}
-            >
-              {displayName}
-            </div>
-
-            <div style={{ fontSize: 28, color: "rgba(255, 255, 255, 0.45)" }}>
-              @{profile.user.username}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 16,
-              minWidth: 360,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 13,
-                textTransform: "uppercase",
-                letterSpacing: 1.8,
-                color: "rgba(255, 255, 255, 0.4)",
-                fontWeight: 600,
-              }}
-            >
-              Total tokens
-            </div>
-            <div
-              style={{
-                fontSize: 72,
-                lineHeight: 1,
-                fontWeight: 700,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              {formatCompactNumber(profile.totals.totalTokens)}
-            </div>
-
+            )}
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 10,
-                width: "100%",
-                marginTop: 4,
+                gap: 4,
               }}
             >
-              <Pill
-                label="Messages"
-                value={profile.totals.messageCount.toLocaleString()}
-              />
-              <Pill
-                label="Tool calls"
-                value={profile.totals.toolCallCount.toLocaleString()}
-              />
-              <Pill
-                label="Merge rate"
-                value={`${Math.round(profile.insights.pr.mergeRate * 100)}%`}
-              />
+              <span
+                style={{
+                  fontSize: 36,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  letterSpacing: "-0.03em",
+                  color: "#ffffff",
+                }}
+              >
+                {displayName}
+              </span>
+              {displayName !== profile.user.username && (
+                <span
+                  style={{
+                    fontSize: 20,
+                    color: "rgba(255, 255, 255, 0.4)",
+                  }}
+                >
+                  @{profile.user.username}
+                </span>
+              )}
             </div>
+          </div>
+
+          {/* Total tokens — hero number */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 16,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 88,
+                fontWeight: 700,
+                lineHeight: 1,
+                letterSpacing: "-0.04em",
+                color: "#ffffff",
+              }}
+            >
+              {formatCompactNumber(profile.totals.totalTokens)}
+            </span>
+            <span
+              style={{
+                fontSize: 24,
+                color: "rgba(255, 255, 255, 0.35)",
+                fontWeight: 500,
+              }}
+            >
+              tokens
+            </span>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 14 }}>
-          <FeatureCard
-            title="Top model"
-            value={topModel}
-            detail={
-              profile.topModels[0]
-                ? `${formatCompactNumber(profile.topModels[0].totalTokens)} tokens`
-                : "No tracked model usage"
-            }
-          />
-          <FeatureCard
-            title="Main agent"
-            value={formatCompactNumber(profile.agentSplit.mainTokens)}
-            detail="Primary agent token volume"
-          />
-          <FeatureCard
-            title="Subagents"
-            value={formatCompactNumber(profile.agentSplit.subagentTokens)}
-            detail="Explorer + executor work"
-          />
-          <FeatureCard
-            title="Top repo"
-            value={
-              profile.topRepositories[0]
-                ? `${profile.topRepositories[0].repoOwner}/${profile.topRepositories[0].repoName}`
-                : "No repo yet"
-            }
-            detail={
-              profile.topRepositories[0]
-                ? `${profile.topRepositories[0].totalLinesChanged.toLocaleString()} lines changed`
-                : "Waiting for tracked sessions"
-            }
-          />
+        {/* Bottom row: pills */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          {topModelLabel && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "8px 16px",
+                borderRadius: 999,
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                background: "rgba(255, 255, 255, 0.04)",
+                fontSize: 16,
+                color: "rgba(255, 255, 255, 0.55)",
+                gap: 8,
+              }}
+            >
+              <span style={{ color: "rgba(255,255,255,0.3)" }}>
+                Top model
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+                {topModelLabel}
+              </span>
+            </div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.04)",
+              fontSize: 16,
+              color: "rgba(255, 255, 255, 0.55)",
+              gap: 8,
+            }}
+          >
+            <span style={{ color: "rgba(255,255,255,0.3)" }}>Messages</span>
+            <span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+              {profile.totals.messageCount.toLocaleString()}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255, 255, 255, 0.04)",
+              fontSize: 16,
+              color: "rgba(255, 255, 255, 0.55)",
+              gap: 8,
+            }}
+          >
+            <span style={{ color: "rgba(255,255,255,0.3)" }}>Tool calls</span>
+            <span style={{ color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+              {profile.totals.toolCallCount.toLocaleString()}
+            </span>
+          </div>
+
+          {/* Spacer + domain */}
+          <div
+            style={{
+              display: "flex",
+              flex: 1,
+              justifyContent: "flex-end",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 18,
+                color: "rgba(255, 255, 255, 0.25)",
+                letterSpacing: "0.01em",
+              }}
+            >
+              open-agents.dev
+            </span>
+          </div>
         </div>
       </div>
     </div>,
@@ -262,92 +411,11 @@ function formatCompactNumber(value: number): string {
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(1)}B`;
   }
-
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`;
   }
-
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}K`;
   }
-
   return value.toLocaleString();
-}
-
-function Pill({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "12px 14px",
-        borderRadius: 999,
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        background: "rgba(255, 255, 255, 0.04)",
-        fontSize: 20,
-      }}
-    >
-      <span style={{ color: "rgba(255, 255, 255, 0.5)" }}>{label}</span>
-      <span style={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.9)" }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function FeatureCard({
-  title,
-  value,
-  detail,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        borderRadius: 16,
-        padding: 20,
-        background: "rgba(255, 255, 255, 0.03)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 14,
-          textTransform: "uppercase",
-          letterSpacing: 1.5,
-          color: "rgba(255, 255, 255, 0.4)",
-        }}
-      >
-        {title}
-      </div>
-      <div
-        style={{
-          fontSize: 26,
-          lineHeight: 1.2,
-          fontWeight: 600,
-          color: "rgba(255, 255, 255, 0.95)",
-          textWrap: "balance",
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontSize: 14,
-          lineHeight: 1.3,
-          color: "rgba(255, 255, 255, 0.4)",
-        }}
-      >
-        {detail}
-      </div>
-    </div>
-  );
 }
