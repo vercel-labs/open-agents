@@ -33,7 +33,7 @@ const DEPLOY_PRODUCTS = [
 
 const DEPLOY_TEMPLATE_URL = (() => {
   const params = new URLSearchParams([
-    ["project-name", "open-harness"],
+    ["project-name", "open-agents"],
     ["repository-name", "open-agents"],
     ["repository-url", "https://github.com/vercel-labs/open-agents"],
     ["demo-title", "Open Harness"],
