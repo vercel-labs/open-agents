@@ -26,7 +26,15 @@ interface TestChatRecord {
 
 let sessionRecord: TestSessionRecord | null;
 let chatRecord: TestChatRecord | null;
-let currentAuthSession: { user: { id: string } } | null;
+let currentAuthSession: {
+  authProvider?: "vercel" | "github";
+  user: {
+    id: string;
+    email?: string;
+  };
+} | null;
+let existingUserMessageCount = 0;
+let existingChatMessage: { id: string } | null = null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let getRunShouldThrow = false;
@@ -143,8 +151,10 @@ mock.module("./_lib/persist-tool-results", () => ({
 
 mock.module("@/lib/db/sessions", () => ({
   compareAndSetChatActiveStreamId: compareAndSetChatActiveStreamIdSpy,
+  countUserMessagesByUserId: async () => existingUserMessageCount,
   createChatMessageIfNotExists: async () => undefined,
   getChatById: async () => chatRecord,
+  getChatMessageById: async () => existingChatMessage,
   getSessionById: async () => sessionRecord,
   isFirstChatMessage: async () => false,
   touchChat: async () => {},
@@ -203,8 +213,8 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
 });
 
-function createRequest(body: string) {
-  return new Request("http://localhost/api/chat", {
+function createRequest(body: string, url = "http://localhost/api/chat") {
+  return new Request(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -240,6 +250,8 @@ describe("/api/chat route", () => {
     startCalls = [];
     cachedSkillsState = null;
     discoverSkillDirsCalls = [];
+    existingUserMessageCount = 0;
+    existingChatMessage = null;
     preferencesState = {
       autoCommitPush: true,
       autoCreatePr: false,
@@ -281,6 +293,42 @@ describe("/api/chat route", () => {
     const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
+  });
+
+  test("blocks a sixth message for non-Vercel trial users on the managed deployment", async () => {
+    const { POST } = await routeModulePromise;
+    currentAuthSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        email: "person@example.com",
+      },
+    };
+    existingUserMessageCount = 5;
+
+    const response = await POST(
+      createRequest(
+        JSON.stringify({
+          sessionId: "session-1",
+          chatId: "chat-1",
+          messages: [
+            {
+              id: "user-6",
+              role: "user",
+              parts: [{ type: "text", text: "One more thing" }],
+            },
+          ],
+        }),
+        "https://open-agents.dev/api/chat",
+      ),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "This hosted deployment includes 5 trial messages for non-Vercel accounts. Deploy your own copy for more.",
+    );
+    expect(startCalls).toHaveLength(0);
   });
 
   test("passes the 500 maxSteps limit to the workflow", async () => {

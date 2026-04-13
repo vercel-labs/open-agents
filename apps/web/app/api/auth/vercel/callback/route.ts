@@ -6,59 +6,10 @@ import { encryptJWE } from "@/lib/jwe/encrypt";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 import { exchangeVercelCode, getVercelUserInfo } from "@/lib/vercel/oauth";
 
-const ALLOWED_VERCEL_EMAIL_DOMAIN = "vercel.com";
-const DEPLOY_YOUR_OWN_PATH = "/deploy-your-own";
-const MANAGED_TEMPLATE_HOSTS = new Set([
-  "open-agents.dev",
-  "www.open-agents.dev",
-]);
-
 function clearVercelOauthCookies(store: Awaited<ReturnType<typeof cookies>>) {
   store.delete("vercel_auth_state");
   store.delete("vercel_code_verifier");
   store.delete("vercel_auth_redirect_to");
-}
-
-function normalizeHost(value?: string) {
-  const normalizedValue = value?.trim().toLowerCase();
-  if (!normalizedValue) {
-    return null;
-  }
-
-  try {
-    return new URL(
-      normalizedValue.startsWith("http://") ||
-        normalizedValue.startsWith("https://")
-        ? normalizedValue
-        : `https://${normalizedValue}`,
-    ).hostname;
-  } catch {
-    return null;
-  }
-}
-
-function isManagedTemplateDeployment(req: NextRequest) {
-  const requestHost = req.nextUrl.hostname.toLowerCase();
-  if (MANAGED_TEMPLATE_HOSTS.has(requestHost)) {
-    return true;
-  }
-
-  return [
-    process.env.VERCEL_PROJECT_PRODUCTION_URL,
-    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
-  ]
-    .map((value) => normalizeHost(value))
-    .some((host) => host !== null && MANAGED_TEMPLATE_HOSTS.has(host));
-}
-
-function hasAllowedEmailDomain(email?: string) {
-  const normalizedEmail = email?.trim().toLowerCase();
-  if (!normalizedEmail) {
-    return false;
-  }
-
-  const emailDomain = normalizedEmail.split("@")[1];
-  return emailDomain === ALLOWED_VERCEL_EMAIL_DOMAIN;
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -99,14 +50,6 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
 
     const userInfo = await getVercelUserInfo(tokens.access_token);
-
-    if (
-      isManagedTemplateDeployment(req) &&
-      !hasAllowedEmailDomain(userInfo.email)
-    ) {
-      clearVercelOauthCookies(cookieStore);
-      return Response.redirect(new URL(DEPLOY_YOUR_OWN_PATH, req.url));
-    }
 
     const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 

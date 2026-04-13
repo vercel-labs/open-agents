@@ -149,6 +149,28 @@ export async function getSessionsByUserId(userId: string) {
   return records.map((session) => normalizeSessionRecord(session));
 }
 
+export async function countSessionsByUserId(userId: string): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessions)
+    .where(eq(sessions.userId, userId));
+
+  return result?.count ?? 0;
+}
+
+export async function countUserMessagesByUserId(
+  userId: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(chatMessages)
+    .innerJoin(chats, eq(chats.id, chatMessages.chatId))
+    .innerJoin(sessions, eq(sessions.id, chats.sessionId))
+    .where(and(eq(sessions.userId, userId), eq(chatMessages.role, "user")));
+
+  return result?.count ?? 0;
+}
+
 type SessionSidebarFields = Pick<
   typeof sessions.$inferSelect,
   | "id"
