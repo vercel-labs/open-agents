@@ -1,8 +1,6 @@
-import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { getInstallationToken } from "@/lib/github/app-auth";
 
-const CACHE_REVALIDATE_SECONDS = 120;
 const INSTALLATION_REPOS_MAX_PAGES = 20;
 
 const installationRepoSchema = z.object({
@@ -43,10 +41,6 @@ export interface InstallationRepository {
   clone_url: string;
   updated_at: string;
   language: string | null;
-}
-
-export function getInstallationReposCacheTag(installationId: number): string {
-  return `github-installation-repos-${installationId}`;
 }
 
 function normalizeLimit(limit?: number): number {
@@ -147,34 +141,16 @@ export async function listInstallationRepositories(
   }));
 }
 
-async function fetchInstallationRepositoriesByInstallation(
-  installationId: number,
-  owner?: string,
-  query?: string,
-  limit?: number,
-): Promise<InstallationRepository[]> {
+export async function fetchInstallationRepositories({
+  installationId,
+  owner,
+  query,
+  limit,
+}: FetchInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
   const token = await getInstallationToken(installationId);
   return listInstallationRepositories(token, {
     owner,
     query,
     limit,
   });
-}
-
-export function getCachedInstallationRepositories({
-  installationId,
-  owner,
-  query,
-  limit,
-}: FetchInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
-  const cachedFn = unstable_cache(
-    fetchInstallationRepositoriesByInstallation,
-    ["github-installation-repos"],
-    {
-      revalidate: CACHE_REVALIDATE_SECONDS,
-      tags: [getInstallationReposCacheTag(installationId)],
-    },
-  );
-
-  return cachedFn(installationId, owner, query, limit);
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { getCachedGitHubOrgs } from "@/lib/github/cached-api";
+import { fetchGitHubOrgs } from "@/lib/github/api";
 
 export async function GET() {
   const session = await getServerSession();
@@ -23,7 +23,7 @@ export async function GET() {
   }
 
   try {
-    const orgs = await getCachedGitHubOrgs(session.user.id, token);
+    const orgs = await fetchGitHubOrgs(token);
 
     if (!orgs) {
       return NextResponse.json(

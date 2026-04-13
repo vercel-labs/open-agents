@@ -5,7 +5,7 @@ import {
   createPullRequest,
   findPullRequestByBranch,
 } from "@/lib/github/client";
-import { getCachedGitHubBranches } from "@/lib/github/cached-api";
+import { fetchGitHubBranches } from "@/lib/github/api";
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import {
   buildGitHubAuthRemoteUrl,
@@ -79,8 +79,7 @@ async function resolveDefaultBranch(params: {
   const cwd = sandbox.workingDirectory;
 
   for (const token of tokenCandidates) {
-    const branchData = await getCachedGitHubBranches(
-      userId,
+    const branchData = await fetchGitHubBranches(
       token,
       repoOwner,
       repoName,
