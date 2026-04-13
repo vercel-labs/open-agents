@@ -1791,9 +1791,7 @@ export function GitPanel(props: GitPanelProps) {
                 className={cn(
                   "h-3.5 w-3.5",
                   isDeploymentFailed && "text-red-500",
-                  !isDeploymentFailed &&
-                    !isDeploymentStale &&
-                    "text-green-500",
+                  !isDeploymentFailed && !isDeploymentStale && "text-green-500",
                   !isDeploymentFailed &&
                     isDeploymentStale &&
                     "text-amber-500 animate-pulse",
