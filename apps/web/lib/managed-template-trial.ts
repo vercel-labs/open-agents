@@ -12,6 +12,8 @@ export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR =
   "This hosted deployment includes 5 trial messages for non-Vercel accounts. Deploy your own copy for more.";
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR =
   "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.";
+export const MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR =
+  "This hosted deployment does not allow message deletion for non-Vercel trial accounts. Deploy your own copy for full controls.";
 
 function normalizeHost(value?: string | URL) {
   const rawValue =
