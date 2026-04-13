@@ -279,7 +279,7 @@ export async function GET(request: Request, context: OgRouteContext) {
           bottom: 136,
           left: 84,
           display: "flex",
-          alignItems: "baseline",
+          alignItems: "flex-end",
           gap: 16,
         }}
       >
@@ -297,8 +297,10 @@ export async function GET(request: Request, context: OgRouteContext) {
         <span
           style={{
             fontSize: 28,
+            lineHeight: 1,
             color: "rgba(255, 255, 255, 0.3)",
             fontWeight: 500,
+            paddingBottom: 8,
           }}
         >
           tokens
