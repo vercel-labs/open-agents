@@ -40,9 +40,11 @@ export interface VercelSandboxConfig {
   };
   /**
    * Environment variables to make available to all commands in the sandbox.
-   * Useful for API keys, tokens, and other secrets.
+   * Useful for API keys and other secrets that must exist inside the sandbox.
    */
   env?: Record<string, string>;
+  /** GitHub token used for credential brokering; never exposed inside the sandbox. */
+  githubToken?: string;
   /**
    * Number of vCPUs (1-8). Each vCPU provides 2048 MB of memory.
    * @default 4
@@ -99,6 +101,8 @@ export interface VercelSandboxConnectConfig {
   sandboxName: string;
   /** Environment variables to make available to commands */
   env?: Record<string, string>;
+  /** GitHub token used for credential brokering; never exposed inside the sandbox. */
+  githubToken?: string;
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;
   /**
