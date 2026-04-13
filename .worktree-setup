@@ -1,14 +1,20 @@
 #!/bin/zsh
 
+set -e
+
 git fetch origin
 
-# Copy env files from main worktree as base
-cp "$GWT_MAIN_PATH/apps/cli/.env" apps/cli/.env
-cp "$GWT_MAIN_PATH/apps/web/.env" apps/web/.env
+# Copy the local web env from the main worktree when it exists.
+if [[ -f "$GWT_MAIN_PATH/apps/web/.env" ]]; then
+  cp "$GWT_MAIN_PATH/apps/web/.env" apps/web/.env
+fi
 
-# Pull fresh Vercel env to main worktree and copy to this worktree
-vc env pull "$GWT_MAIN_PATH/.env.local" --cwd "$GWT_MAIN_PATH"
-cp "$GWT_MAIN_PATH/.env.local" .env.local
+# Pull fresh Vercel env to the main worktree and copy it into this worktree.
+if command -v vc >/dev/null 2>&1; then
+  vc env pull "$GWT_MAIN_PATH/.env.local" --cwd "$GWT_MAIN_PATH"
+  if [[ -f "$GWT_MAIN_PATH/.env.local" ]]; then
+    cp "$GWT_MAIN_PATH/.env.local" .env.local
+  fi
+fi
 
-# Delegate to setup script for dependency install and env sync
-./scripts/setup.sh --no-pull
+bun install
