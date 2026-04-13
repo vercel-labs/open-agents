@@ -6,7 +6,7 @@ import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client
 import { getRepoToken } from "@/lib/github/get-repo-token";
 import {
   findLatestBuildingDeploymentUrlForBranch,
-  findLatestErrorDeploymentUrlForBranch,
+  findLatestFailedDeploymentInspectorUrlForBranch,
   findLatestPreviewDeploymentUrlForBranch,
 } from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
@@ -86,7 +86,7 @@ export async function GET(req: Request, context: RouteContext) {
           findLatestBuildingDeploymentUrlForBranch(lookupParams).catch(
             () => null,
           ),
-          findLatestErrorDeploymentUrlForBranch(lookupParams).catch(
+          findLatestFailedDeploymentInspectorUrlForBranch(lookupParams).catch(
             () => null,
           ),
         ]);

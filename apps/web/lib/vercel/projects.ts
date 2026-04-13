@@ -321,6 +321,7 @@ export async function buildDevelopmentDotenvFromVercelProject(params: {
 interface VercelDeployment {
   url?: string | null;
   defaultRoute?: string | null;
+  inspectorUrl?: string | null;
   created?: number;
   createdAt?: number;
   ready?: number;
@@ -470,7 +471,12 @@ export async function findLatestBuildingDeploymentUrlForBranch(params: {
   return latestBuilding ? getDeploymentUrl(latestBuilding) : null;
 }
 
-export async function findLatestErrorDeploymentUrlForBranch(params: {
+/**
+ * Returns the Vercel inspector URL (dashboard / build-logs page) for the
+ * most recent failed preview deployment on the given branch, or `null` if
+ * there is no such deployment.
+ */
+export async function findLatestFailedDeploymentInspectorUrlForBranch(params: {
   token: string;
   projectIdOrName: string;
   branch: string;
@@ -498,16 +504,12 @@ export async function findLatestErrorDeploymentUrlForBranch(params: {
 
   const latestError = (response.deployments ?? [])
     .filter((deployment) => {
-      if (!getDeploymentUrl(deployment)) {
-        return false;
-      }
-
       const state = deployment.readyState ?? deployment.state ?? "";
-      if (!ERROR_STATES.has(state)) {
-        return false;
-      }
-
-      return deployment.target !== "production";
+      return (
+        ERROR_STATES.has(state) &&
+        deployment.target !== "production" &&
+        isNonEmptyString(deployment.inspectorUrl)
+      );
     })
     .sort(
       (left, right) =>
@@ -515,5 +517,5 @@ export async function findLatestErrorDeploymentUrlForBranch(params: {
         getDeploymentRecencyTimestamp(left),
     )[0];
 
-  return latestError ? getDeploymentUrl(latestError) : null;
+  return latestError?.inspectorUrl ?? null;
 }
