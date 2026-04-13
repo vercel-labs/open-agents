@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Check,
   ChevronDown,
@@ -248,6 +248,53 @@ function GroupSection({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Fix errors button with loading state                               */
+/* ------------------------------------------------------------------ */
+
+function FixErrorsButton({
+  disabled,
+  onClick,
+}: {
+  disabled?: boolean;
+  onClick: () => Promise<void> | void;
+}) {
+  const [isFixing, setIsFixing] = useState(false);
+
+  const handleClick = useCallback(async () => {
+    if (isFixing) return;
+    setIsFixing(true);
+    try {
+      await onClick();
+    } finally {
+      setIsFixing(false);
+    }
+  }, [isFixing, onClick]);
+
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      disabled={disabled || isFixing}
+      title={
+        disabled
+          ? "Disabled while the agent is working"
+          : isFixing
+            ? "Analyzing logs…"
+            : undefined
+      }
+      onClick={() => void handleClick()}
+    >
+      {isFixing ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <Sparkles className="h-3 w-3" />
+      )}
+      {isFixing ? "Analyzing logs…" : "Fix errors"}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -366,22 +413,12 @@ export function CheckRunsList({
         {!showLoading && (
           <div className="flex shrink-0 items-center gap-1">
             {failed > 0 && onFixChecks && (
-              <button
-                type="button"
-                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              <FixErrorsButton
                 disabled={fixChecksDisabled}
-                title={
-                  fixChecksDisabled
-                    ? "Disabled while the agent is working"
-                    : undefined
+                onClick={() =>
+                  onFixChecks(checkRuns.filter((cr) => cr.state === "failed"))
                 }
-                onClick={() => {
-                  onFixChecks(checkRuns.filter((cr) => cr.state === "failed"));
-                }}
-              >
-                <Sparkles className="h-3 w-3" />
-                Fix errors
-              </button>
+              />
             )}
 
             {onRefresh && (
