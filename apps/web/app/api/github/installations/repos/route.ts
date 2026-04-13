@@ -2,8 +2,8 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getInstallationByUserAndId } from "@/lib/db/installations";
 import {
-  getCachedInstallationRepositories,
   getInstallationReposCacheTag,
+  fetchInstallationRepositoriesByInstallation,
 } from "@/lib/github/installation-repos";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -59,18 +59,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (refresh) {
-      revalidateTag(getInstallationReposCacheTag(installationId), {
-        expire: 0,
-      });
-    }
-
-    const repos = await getCachedInstallationRepositories({
+    const repos = await fetchInstallationRepositoriesByInstallation(
       installationId,
+      installation.accountLogin,
       query,
       limit,
-      owner: installation.accountLogin,
-    });
+    );
 
     return NextResponse.json(repos);
   } catch (error) {

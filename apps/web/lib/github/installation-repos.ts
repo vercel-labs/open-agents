@@ -147,9 +147,9 @@ export async function listInstallationRepositories(
   }));
 }
 
-async function fetchInstallationRepositoriesByInstallation(
+export async function fetchInstallationRepositoriesByInstallation(
   installationId: number,
-  owner?: string,
+  owner: string,
   query?: string,
   limit?: number,
 ): Promise<InstallationRepository[]> {
@@ -161,20 +161,3 @@ async function fetchInstallationRepositoriesByInstallation(
   });
 }
 
-export function getCachedInstallationRepositories({
-  installationId,
-  owner,
-  query,
-  limit,
-}: FetchInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
-  const cachedFn = unstable_cache(
-    fetchInstallationRepositoriesByInstallation,
-    ["github-installation-repos"],
-    {
-      revalidate: CACHE_REVALIDATE_SECONDS,
-      tags: [getInstallationReposCacheTag(installationId)],
-    },
-  );
-
-  return cachedFn(installationId, owner, query, limit);
-}
