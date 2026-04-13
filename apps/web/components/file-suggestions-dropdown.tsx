@@ -64,8 +64,7 @@ export function FileSuggestionsDropdown({
             const normalizedPath = suggestion.isDirectory
               ? fullPath.replace(/\/$/, "")
               : fullPath;
-            const fileName =
-              normalizedPath.split("/").pop() ?? normalizedPath;
+            const fileName = normalizedPath.split("/").pop() ?? normalizedPath;
             const dirPath = normalizedPath.slice(
               0,
               normalizedPath.length - fileName.length,
