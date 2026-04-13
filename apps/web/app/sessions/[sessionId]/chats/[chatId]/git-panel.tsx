@@ -1799,7 +1799,7 @@ export function GitPanel(props: GitPanelProps) {
                     "text-amber-500 animate-pulse",
                 )}
               />
-              {isDeploymentFailed ? "Preview (failed)" : "Preview"}
+              Preview
               <ExternalLink className="h-3 w-3 text-muted-foreground" />
             </a>
           )}

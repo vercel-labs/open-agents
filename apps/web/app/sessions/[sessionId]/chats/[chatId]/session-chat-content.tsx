@@ -3140,11 +3140,9 @@ export function SessionChatContent({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={
-                        isDeploymentFailed
-                          ? "Open failed preview deployment"
-                          : isDeploymentStale
-                            ? "Open latest preview deployment (building)"
-                            : "Open latest preview deployment"
+                        isDeploymentStale
+                          ? "Open latest preview deployment (building)"
+                          : "Open latest preview deployment"
                       }
                     >
                       <Globe
@@ -3163,11 +3161,9 @@ export function SessionChatContent({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {isDeploymentFailed
-                    ? "Preview deployment failed"
-                    : isDeploymentStale
-                      ? "Open latest preview deployment (building)"
-                      : "Open latest preview deployment"}
+                  {isDeploymentStale
+                    ? "Open latest preview deployment (building)"
+                    : "Open latest preview deployment"}
                 </TooltipContent>
               </Tooltip>
             )}
