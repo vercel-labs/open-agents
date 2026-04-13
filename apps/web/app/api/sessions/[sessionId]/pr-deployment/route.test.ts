@@ -13,6 +13,7 @@ const currentSessionRecord = {
 let currentVercelToken: string | null = "vercel-token";
 let currentBranchDeploymentUrl: string | null = null;
 let currentBuildingDeploymentUrl: string | null = null;
+let currentFailedDeploymentInspectorUrl: string | null = null;
 let currentPullRequestDeploymentResult: {
   success: boolean;
   deploymentUrl?: string | null;
@@ -26,6 +27,9 @@ const findLatestPreviewDeploymentUrlForBranchMock = mock(
 );
 const findLatestBuildingDeploymentUrlForBranchMock = mock(
   async () => currentBuildingDeploymentUrl,
+);
+const findLatestFailedDeploymentInspectorUrlForBranchMock = mock(
+  async () => currentFailedDeploymentInspectorUrl,
 );
 const getRepoTokenMock = mock(async () => ({ token: "repo-token" }));
 const findLatestVercelDeploymentUrlForPullRequestMock = mock(
@@ -88,10 +92,12 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     currentVercelToken = "vercel-token";
     currentBranchDeploymentUrl = null;
     currentBuildingDeploymentUrl = null;
+    currentFailedDeploymentInspectorUrl = null;
     currentPullRequestDeploymentResult = { success: false };
     getUserVercelTokenMock.mockClear();
     findLatestPreviewDeploymentUrlForBranchMock.mockClear();
     findLatestBuildingDeploymentUrlForBranchMock.mockClear();
+    findLatestFailedDeploymentInspectorUrlForBranchMock.mockClear();
     getRepoTokenMock.mockClear();
     findLatestVercelDeploymentUrlForPullRequestMock.mockClear();
   });
@@ -222,5 +228,85 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
       prNumber: 42,
       token: "repo-token",
     });
+  });
+
+  test("returns failedDeploymentUrl when only a failed deployment exists", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentBranchDeploymentUrl = null;
+    currentBuildingDeploymentUrl = null;
+    currentFailedDeploymentInspectorUrl =
+      "https://vercel.com/team/project/dpl_failed123";
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/session-1/pr-deployment"),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      deploymentUrl: string | null;
+      buildingDeploymentUrl: string | null;
+      failedDeploymentUrl: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBeNull();
+    expect(body.buildingDeploymentUrl).toBeNull();
+    expect(body.failedDeploymentUrl).toBe(
+      "https://vercel.com/team/project/dpl_failed123",
+    );
+  });
+
+  test("returns failedDeploymentUrl alongside a ready deployment", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentBranchDeploymentUrl = "https://project-preview.vercel.app";
+    currentBuildingDeploymentUrl = null;
+    currentFailedDeploymentInspectorUrl =
+      "https://vercel.com/team/project/dpl_failed456";
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/session-1/pr-deployment"),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      deploymentUrl: string | null;
+      failedDeploymentUrl: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBe("https://project-preview.vercel.app");
+    expect(body.failedDeploymentUrl).toBe(
+      "https://vercel.com/team/project/dpl_failed456",
+    );
+  });
+
+  test("does not return failedDeploymentUrl for PR-based lookups", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentSessionRecord.prNumber = 42;
+    currentFailedDeploymentInspectorUrl =
+      "https://vercel.com/team/project/dpl_failed789";
+    currentPullRequestDeploymentResult = {
+      success: true,
+      deploymentUrl: "https://pr-preview.vercel.app",
+    };
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/sessions/session-1/pr-deployment?prNumber=42&branch=feature/preview",
+      ),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as {
+      deploymentUrl: string | null;
+      failedDeploymentUrl?: string | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
+    expect(body.failedDeploymentUrl).toBeUndefined();
+    expect(
+      findLatestFailedDeploymentInspectorUrlForBranchMock,
+    ).toHaveBeenCalledTimes(0);
   });
 });
