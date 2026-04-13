@@ -44,6 +44,7 @@ export async function GET() {
     const syncedInstallationsCount = await syncUserInstallations(
       session.user.id,
       token,
+      ghAccount.username,
     );
     const reconnectRequired =
       installations.length > 0 && syncedInstallationsCount === 0;

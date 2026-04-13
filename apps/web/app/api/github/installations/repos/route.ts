@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInstallationByUserAndId } from "@/lib/db/installations";
-import { fetchInstallationRepositories } from "@/lib/github/installation-repos";
+import { listUserInstallationRepositories } from "@/lib/github/installation-repos";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function parseInstallationId(value: string | null): number | null {
@@ -53,9 +54,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const userToken = await getUserGitHubToken(session.user.id);
+  if (!userToken) {
+    return NextResponse.json(
+      { error: "GitHub not connected" },
+      { status: 401 },
+    );
+  }
+
   try {
-    const repos = await fetchInstallationRepositories({
+    const repos = await listUserInstallationRepositories({
       installationId,
+      userToken,
       owner: installation.accountLogin,
       query,
       limit,

@@ -83,6 +83,20 @@ function normalizeAccountType(type: string): "User" | "Organization" {
   return type === "Organization" ? "Organization" : "User";
 }
 
+function isSyncableInstallation(
+  installation: z.infer<typeof userInstallationSchema>,
+  personalAccountLogin: string,
+): boolean {
+  if (installation.account.type !== "User") {
+    return true;
+  }
+
+  return (
+    installation.account.login.toLowerCase() ===
+    personalAccountLogin.trim().toLowerCase()
+  );
+}
+
 async function fetchUserInstallations(userToken: string) {
   const installations: z.infer<typeof userInstallationSchema>[] = [];
   const perPage = 100;
@@ -133,10 +147,14 @@ async function fetchUserInstallations(userToken: string) {
 export async function syncUserInstallations(
   userId: string,
   userToken: string,
+  personalAccountLogin: string,
 ): Promise<number> {
   const installations = await fetchUserInstallations(userToken);
+  const syncableInstallations = installations.filter((installation) =>
+    isSyncableInstallation(installation, personalAccountLogin),
+  );
 
-  for (const installation of installations) {
+  for (const installation of syncableInstallations) {
     await upsertInstallation({
       userId,
       installationId: installation.id,
@@ -149,8 +167,8 @@ export async function syncUserInstallations(
 
   await deleteInstallationsNotInList(
     userId,
-    installations.map((installation) => installation.id),
+    syncableInstallations.map((installation) => installation.id),
   );
 
-  return installations.length;
+  return syncableInstallations.length;
 }

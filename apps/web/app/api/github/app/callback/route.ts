@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { encrypt } from "@/lib/crypto";
-import { upsertGitHubAccount } from "@/lib/db/accounts";
+import { getGitHubAccount, upsertGitHubAccount } from "@/lib/db/accounts";
 import { syncUserInstallations } from "@/lib/github/installations-sync";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -45,7 +45,11 @@ function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
 async function exchangeOAuthCode(
   code: string,
   userId: string,
-): Promise<{ token: string; githubUserId: string } | null> {
+): Promise<{
+  token: string;
+  githubUserId: string;
+  githubUsername: string;
+} | null> {
   const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
@@ -116,7 +120,11 @@ async function exchangeOAuthCode(
       username: githubUser.login,
     });
 
-    return { token: tokenData.access_token, githubUserId: `${githubUser.id}` };
+    return {
+      token: tokenData.access_token,
+      githubUserId: `${githubUser.id}`,
+      githubUsername: githubUser.login,
+    };
   } catch (error) {
     console.error("OAuth code exchange error:", error);
     return null;
@@ -173,7 +181,11 @@ export async function GET(req: Request): Promise<Response> {
   // ── Step 1: Handle OAuth code if present ──────────────────────────────
   // The install route sends users without a linked GitHub account through
   // OAuth first. Exchange the code for a token and link the account.
-  let oauthResult: { token: string; githubUserId: string } | null = null;
+  let oauthResult: {
+    token: string;
+    githubUserId: string;
+    githubUsername: string;
+  } | null = null;
 
   if (oauthCode) {
     oauthResult = await exchangeOAuthCode(oauthCode, session.user.id);
@@ -189,12 +201,17 @@ export async function GET(req: Request): Promise<Response> {
     (await import("@/lib/github/user-token")).getUserGitHubToken();
   const resolvedToken =
     typeof tokenForSync === "string" ? tokenForSync : await tokenForSync;
+  const personalAccountLogin =
+    oauthResult?.githubUsername ??
+    (await getGitHubAccount(session.user.id))?.username ??
+    null;
 
-  if (resolvedToken) {
+  if (resolvedToken && personalAccountLogin) {
     try {
       syncedInstallationsCount = await syncUserInstallations(
         session.user.id,
         resolvedToken,
+        personalAccountLogin,
       );
       synced = true;
     } catch (error) {

@@ -116,7 +116,11 @@ export async function GET(req: NextRequest): Promise<Response> {
     if (installations.length === 0) {
       try {
         const userToken = decrypt(ghAccount.accessToken);
-        await syncUserInstallations(session.user.id, userToken);
+        await syncUserInstallations(
+          session.user.id,
+          userToken,
+          ghAccount.username,
+        );
         installations = await getInstallationsByUserId(session.user.id);
       } catch (error) {
         console.error("Failed to sync GitHub installations in install flow:", {
