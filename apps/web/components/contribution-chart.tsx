@@ -201,7 +201,8 @@ export function ContributionChart({
   }, []);
 
   return (
-    <div ref={scrollRef} className="flex flex-col gap-1 overflow-x-auto">
+    <div className="flex flex-col gap-1">
+      <div ref={scrollRef} className="overflow-x-auto scrollbar-fade">
       <div
         className="grid"
         style={{
@@ -337,6 +338,7 @@ export function ContributionChart({
             );
           }),
         )}
+      </div>
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-1 text-xs text-muted-foreground">

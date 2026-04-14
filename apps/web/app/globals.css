@@ -322,6 +322,34 @@
   opacity: 0.06;
 }
 
+.scrollbar-fade {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+.scrollbar-fade:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+.scrollbar-fade::-webkit-scrollbar {
+  height: 6px;
+}
+
+.scrollbar-fade::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-fade::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.3s;
+}
+
+.scrollbar-fade:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
 .terminal-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
