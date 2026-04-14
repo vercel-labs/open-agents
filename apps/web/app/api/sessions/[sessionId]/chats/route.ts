@@ -9,17 +9,20 @@ import {
   getChatSummariesBySessionId,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
 };
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
   }
 
+  const session = await getServerSession();
   const { sessionId } = await context.params;
 
   const sessionContext = await requireOwnedSession({
@@ -30,10 +33,15 @@ export async function GET(_req: Request, context: RouteContext) {
     return sessionContext.response;
   }
 
-  const [chats, preferences] = await Promise.all([
+  const [chats, rawPreferences] = await Promise.all([
     getChatSummariesBySessionId(sessionId, authResult.userId),
     getUserPreferences(authResult.userId),
   ]);
+  const preferences = sanitizeUserPreferencesForSession(
+    rawPreferences,
+    session,
+    req.url,
+  );
   return Response.json({ chats, defaultModelId: preferences.defaultModelId });
 }
 
@@ -43,6 +51,7 @@ export async function POST(req: Request, context: RouteContext) {
     return authResult.response;
   }
 
+  const session = await getServerSession();
   const { sessionId } = await context.params;
 
   const sessionContext = await requireOwnedSession({
@@ -81,7 +90,11 @@ export async function POST(req: Request, context: RouteContext) {
     }
   }
 
-  const preferences = await getUserPreferences(authResult.userId);
+  const preferences = sanitizeUserPreferencesForSession(
+    await getUserPreferences(authResult.userId),
+    session,
+    req.url,
+  );
   const chat = await createChat({
     id: requestedChatId ?? nanoid(),
     sessionId,

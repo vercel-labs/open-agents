@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { headers as nextHeaders } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import {
   createSessionWithInitialChat,
@@ -6,8 +7,9 @@ import {
 } from "@/lib/db/sessions";
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { getRandomCityName } from "@/lib/random-city";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
+import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface RepoPageProps {
@@ -85,10 +87,16 @@ export default async function RepoPage({ params }: RepoPageProps) {
   }
 
   // Use the user's preferred sandbox type and model
-  const [preferences, savedVercelProject] = await Promise.all([
+  const requestHost = (await nextHeaders()).get("host") ?? "";
+  const [rawPreferences, savedVercelProject] = await Promise.all([
     preferencesPromise,
     savedVercelProjectPromise,
   ]);
+  const preferences = sanitizeUserPreferencesForSession(
+    rawPreferences,
+    session,
+    requestHost,
+  );
 
   const cloneUrl = `https://github.com/${username}/${repo}.git`;
 

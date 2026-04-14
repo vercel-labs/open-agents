@@ -14,6 +14,11 @@ import {
   getUserPreferences,
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
+import {
+  filterModelVariantsForSession,
+  isRestrictedModelIdForSession,
+  MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR,
+} from "@/lib/model-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 const PROVIDER_OPTIONS_MAX_BYTES = 16 * 1024;
@@ -37,7 +42,7 @@ function jsonError(error: string, status: number) {
   return Response.json({ error }, { status });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return jsonError("Not authenticated", 401);
@@ -45,7 +50,11 @@ export async function GET() {
 
   const preferences = await getUserPreferences(session.user.id);
   return Response.json({
-    modelVariants: getAllVariants(preferences.modelVariants),
+    modelVariants: filterModelVariantsForSession(
+      getAllVariants(preferences.modelVariants),
+      session,
+      req.url,
+    ),
   });
 }
 
@@ -67,6 +76,12 @@ export async function POST(req: Request) {
     return jsonError("Invalid model variant payload", 400);
   }
 
+  if (
+    isRestrictedModelIdForSession(parsedBody.data.baseModelId, session, req.url)
+  ) {
+    return jsonError(MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR, 403);
+  }
+
   if (isProviderOptionsTooLarge(parsedBody.data.providerOptions)) {
     return jsonError("Provider options must be 16 KB or smaller", 400);
   }
@@ -86,7 +101,11 @@ export async function POST(req: Request) {
     });
 
     return Response.json({
-      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+      modelVariants: filterModelVariantsForSession(
+        getAllVariants(updatedPreferences.modelVariants),
+        session,
+        req.url,
+      ),
     });
   } catch (error) {
     console.error("Failed to create model variant:", error);
@@ -114,6 +133,13 @@ export async function PATCH(req: Request) {
 
   if (isBuiltInVariant(parsedBody.data.id)) {
     return jsonError("Built-in variants cannot be modified", 403);
+  }
+
+  if (
+    parsedBody.data.baseModelId &&
+    isRestrictedModelIdForSession(parsedBody.data.baseModelId, session, req.url)
+  ) {
+    return jsonError(MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR, 403);
   }
 
   try {
@@ -148,7 +174,11 @@ export async function PATCH(req: Request) {
     });
 
     return Response.json({
-      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+      modelVariants: filterModelVariantsForSession(
+        getAllVariants(updatedPreferences.modelVariants),
+        session,
+        req.url,
+      ),
     });
   } catch (error) {
     console.error("Failed to update model variant:", error);
@@ -193,7 +223,11 @@ export async function DELETE(req: Request) {
     });
 
     return Response.json({
-      modelVariants: getAllVariants(updatedPreferences.modelVariants),
+      modelVariants: filterModelVariantsForSession(
+        getAllVariants(updatedPreferences.modelVariants),
+        session,
+        req.url,
+      ),
     });
   } catch (error) {
     console.error("Failed to delete model variant:", error);

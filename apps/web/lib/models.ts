@@ -1,4 +1,4 @@
-export const DEFAULT_MODEL_ID = "anthropic/claude-opus-4.6";
+export const DEFAULT_MODEL_ID = "anthropic/claude-haiku-4.5";
 export const DEFAULT_CONTEXT_LIMIT = 200_000;
 const TOKENS_PER_MILLION = 1_000_000;
 

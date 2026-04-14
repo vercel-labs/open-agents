@@ -37,6 +37,12 @@ let ownedSessionResult: OwnedSessionResult = {
   ok: true,
   sessionRecord: { id: "session-1" },
 };
+let currentSession: {
+  authProvider?: "vercel" | "github";
+  user: { id: string; email?: string; username?: string; avatar?: string };
+} | null = {
+  user: { id: "user-1" },
+};
 
 let chatSummaries: ChatSummary[] = [{ id: "chat-1", title: "Chat 1" }];
 let existingChat: ChatRecord | null = null;
@@ -64,6 +70,10 @@ mock.module("nanoid", () => ({
   nanoid: () => "generated-chat-id",
 }));
 
+mock.module("@/lib/session/get-server-session", () => ({
+  getServerSession: async () => currentSession,
+}));
+
 mock.module("@/lib/db/sessions", () => ({
   getChatSummariesBySessionId: async (sessionId: string, userId: string) => {
     getSummaryCalls.push({ sessionId, userId });
@@ -82,7 +92,20 @@ mock.module("@/lib/db/sessions", () => ({
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
-  getUserPreferences: async () => ({ defaultModelId: "model-default" }),
+  getUserPreferences: async () => ({
+    defaultModelId: "model-default",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
+    autoCommitPush: false,
+    autoCreatePr: false,
+    alertsEnabled: true,
+    alertSoundEnabled: true,
+    publicUsageEnabled: false,
+    globalSkillRefs: [],
+    modelVariants: [],
+    enabledModelIds: [],
+  }),
 }));
 
 const routeModulePromise = import("./route");
@@ -108,6 +131,7 @@ describe("/api/sessions/[sessionId]/chats", () => {
       ok: true,
       sessionRecord: { id: "session-1" },
     };
+    currentSession = { user: { id: "user-1" } };
     chatSummaries = [{ id: "chat-1", title: "Chat 1" }];
     existingChat = null;
     createdChat = {

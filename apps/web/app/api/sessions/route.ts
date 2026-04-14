@@ -11,6 +11,7 @@ import {
   upsertVercelProjectLink,
 } from "@/lib/db/vercel-project-links";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
@@ -313,10 +314,15 @@ export async function POST(req: Request) {
       }
     }
 
-    const [title, preferences] = await Promise.all([
+    const [title, rawPreferences] = await Promise.all([
       titlePromise,
       preferencesPromise,
     ]);
+    const preferences = sanitizeUserPreferencesForSession(
+      rawPreferences,
+      session,
+      req.url,
+    );
     const effectiveAutoCommitPush =
       autoCommitPush ?? preferences.autoCommitPush;
     const effectiveAutoCreatePr = autoCreatePr ?? preferences.autoCreatePr;

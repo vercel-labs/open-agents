@@ -34,9 +34,17 @@ mock.module("@/lib/random-city", () => ({
 mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => ({
     defaultModelId: "anthropic/claude-haiku-4.5",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
     autoCommitPush: false,
     autoCreatePr: false,
+    alertsEnabled: true,
+    alertSoundEnabled: true,
+    publicUsageEnabled: false,
     globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
+    modelVariants: [],
+    enabledModelIds: [],
   }),
 }));
 

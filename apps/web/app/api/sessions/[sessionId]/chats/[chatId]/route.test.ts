@@ -49,6 +49,12 @@ let ownedSessionChatResult: OwnedSessionChatResult = {
     activeStreamId: null,
   },
 };
+let currentSession: {
+  authProvider?: "vercel" | "github";
+  user: { id: string; email?: string; username?: string; avatar?: string };
+} | null = {
+  user: { id: "user-1" },
+};
 let chatMessages: ChatMessageRecord[] = [
   {
     id: "message-1",
@@ -93,6 +99,27 @@ mock.module("@/lib/db/sessions", () => ({
   },
 }));
 
+mock.module("@/lib/db/user-preferences", () => ({
+  getUserPreferences: async () => ({
+    defaultModelId: "model-default",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
+    autoCommitPush: false,
+    autoCreatePr: false,
+    alertsEnabled: true,
+    alertSoundEnabled: true,
+    publicUsageEnabled: false,
+    globalSkillRefs: [],
+    modelVariants: [],
+    enabledModelIds: [],
+  }),
+}));
+
+mock.module("@/lib/session/get-server-session", () => ({
+  getServerSession: async () => currentSession,
+}));
+
 const routeModulePromise = import("./route");
 
 function createContext(sessionId = "session-1", chatId = "chat-1") {
@@ -126,6 +153,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]", () => {
         activeStreamId: null,
       },
     };
+    currentSession = { user: { id: "user-1" } };
     chatMessages = [
       {
         id: "message-1",
