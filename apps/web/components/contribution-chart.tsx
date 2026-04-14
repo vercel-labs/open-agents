@@ -177,7 +177,10 @@ export function ContributionChart({
     <div className="flex flex-col gap-1">
       {/* direction:rtl makes the scroll container start at the right (most recent).
           The inner grid resets to direction:ltr so visual order is correct. */}
-      <div className="overflow-x-auto scrollbar-fade" style={{ direction: "rtl" }}>
+      <div
+        className="overflow-x-auto scrollbar-fade"
+        style={{ direction: "rtl" }}
+      >
         <div
           className="grid"
           style={{
