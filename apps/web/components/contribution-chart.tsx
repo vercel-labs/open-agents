@@ -1,7 +1,7 @@
 "use client";
 
 import { formatTokens } from "@open-harness/shared";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { DateRange } from "react-day-picker";
 import {
   Tooltip,
@@ -26,7 +26,6 @@ interface ContributionChartProps {
 
 const DAYS_IN_WEEK = 7;
 const WEEKS = 39;
-const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
 function getIntensity(
   value: number,
@@ -76,18 +75,16 @@ function formatDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const DAY_LABEL_WIDTH = 32;
-const CELL_GAP = 2;
+const CELL_SIZE = 11;
+const CELL_GAP = 3;
 const LEGEND_CELL_SIZE = 12;
-const MIN_CELL_SIZE = 10;
-const MIN_MONTH_SPAN_WEEKS = 3;
 
 export function ContributionChart({
   data,
   selectedRange,
   onSelectRange,
 }: ContributionChartProps) {
-  const { grid, monthLabels, selectedBounds, thresholds } = useMemo(() => {
+  const { grid, selectedBounds, thresholds } = useMemo(() => {
     const dataMap = new Map<string, DayData>();
     for (const d of data) {
       dataMap.set(d.date, d);
@@ -128,30 +125,6 @@ export function ContributionChart({
       weeks.push(cells.slice(i, i + DAYS_IN_WEEK));
     }
 
-    const rawMonths: Array<{ label: string; weekIndex: number }> = [];
-    let lastMonth = -1;
-    for (let w = 0; w < weeks.length; w++) {
-      const firstDay = weeks[w]?.[0];
-      if (!firstDay) continue;
-      const month = parseDateKey(firstDay.date).getMonth();
-      if (month !== lastMonth) {
-        lastMonth = month;
-        rawMonths.push({
-          label: parseDateKey(firstDay.date).toLocaleDateString("en-US", {
-            month: "short",
-          }),
-          weekIndex: w,
-        });
-      }
-    }
-
-    // Drop month labels that are too close to the next one (boundary months)
-    const months = rawMonths.filter((m, i) => {
-      const next = rawMonths[i + 1];
-      if (!next) return true;
-      return next.weekIndex - m.weekIndex >= MIN_MONTH_SPAN_WEEKS;
-    });
-
     const rangeFrom = selectedRange?.from
       ? formatDateKey(selectedRange.from)
       : null;
@@ -167,28 +140,13 @@ export function ContributionChart({
 
     return {
       grid: weeks,
-      monthLabels: months,
       selectedBounds: bounds,
       thresholds: t,
     };
   }, [data, selectedRange]);
 
   const weekCount = grid.length;
-  const minGridWidth =
-    DAY_LABEL_WIDTH + weekCount * MIN_CELL_SIZE + (weekCount - 1) * CELL_GAP;
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    // Double-rAF to ensure layout is complete after hydration
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        el.scrollLeft = el.scrollWidth;
-      });
-    });
-  }, []);
+  const gridWidth = weekCount * CELL_SIZE + (weekCount - 1) * CELL_GAP;
 
   function handleDateSelect(date: string) {
     if (!onSelectRange) {
@@ -215,51 +173,21 @@ export function ContributionChart({
     onSelectRange({ from: selectedRange.from, to: nextDate });
   }
 
-  // Month-label row = row 1, day cells = rows 2–8
-  const MONTH_ROW = 1;
-  const CELL_ROW_OFFSET = 2;
-
   return (
     <div className="flex flex-col gap-1">
-      <div ref={scrollRef} className="overflow-x-auto scrollbar-fade">
+      {/* direction:rtl makes the scroll container start at the right (most recent).
+          The inner grid resets to direction:ltr so visual order is correct. */}
+      <div className="overflow-x-auto scrollbar-fade" style={{ direction: "rtl" }}>
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
-            gridTemplateRows: `auto repeat(${DAYS_IN_WEEK}, ${MIN_CELL_SIZE}px)`,
-            columnGap: CELL_GAP,
-            rowGap: CELL_GAP,
-            minWidth: minGridWidth,
+            direction: "ltr",
+            gridTemplateColumns: `repeat(${weekCount}, ${CELL_SIZE}px)`,
+            gridTemplateRows: `repeat(${DAYS_IN_WEEK}, ${CELL_SIZE}px)`,
+            gap: CELL_GAP,
+            width: gridWidth,
           }}
         >
-          {/* Month labels — row 1, width:0 so text doesn't stretch columns */}
-          {monthLabels.map((m, i) => (
-            <span
-              key={`${m.label}-${i}`}
-              className="whitespace-nowrap text-xs text-muted-foreground"
-              style={{
-                gridColumn: m.weekIndex + 2,
-                gridRow: MONTH_ROW,
-                width: 0,
-                overflow: "visible",
-              }}
-            >
-              {m.label}
-            </span>
-          ))}
-
-          {/* Day-of-week labels — column 1, rows 2–8 */}
-          {DAY_LABELS.map((label, i) => (
-            <span
-              key={i}
-              className="flex items-center text-xs leading-none text-muted-foreground"
-              style={{ gridColumn: 1, gridRow: i + CELL_ROW_OFFSET }}
-            >
-              {label}
-            </span>
-          ))}
-
-          {/* Cells */}
           {grid.flatMap((week, wi) =>
             week.map((cell, di) => {
               if (cell.isFuture) {
@@ -267,8 +195,8 @@ export function ContributionChart({
                   <div
                     key={cell.date}
                     style={{
-                      gridColumn: wi + 2,
-                      gridRow: di + CELL_ROW_OFFSET,
+                      gridColumn: wi + 1,
+                      gridRow: di + 1,
                     }}
                   />
                 );
@@ -301,8 +229,8 @@ export function ContributionChart({
                       "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
                   )}
                   style={{
-                    gridColumn: wi + 2,
-                    gridRow: di + CELL_ROW_OFFSET,
+                    gridColumn: wi + 1,
+                    gridRow: di + 1,
                   }}
                   onClick={() => handleDateSelect(cell.date)}
                 />
@@ -318,8 +246,8 @@ export function ContributionChart({
                       "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
                   )}
                   style={{
-                    gridColumn: wi + 2,
-                    gridRow: di + CELL_ROW_OFFSET,
+                    gridColumn: wi + 1,
+                    gridRow: di + 1,
                   }}
                 />
               );
