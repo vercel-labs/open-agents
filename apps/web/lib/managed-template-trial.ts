@@ -9,7 +9,7 @@ const MANAGED_TEMPLATE_HOSTS = new Set([
 export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT = 5;
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT = 1;
 export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR =
-  "This hosted deployment has a 5 message limit. Deploy your own copy for no limit.";
+  "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.";
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR =
   "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.";
 export const MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR =

@@ -322,7 +322,7 @@ describe("/api/chat route", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment has a 5 message limit. Deploy your own copy for no limit.",
+      "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.",
     );
     expect(startCalls).toHaveLength(0);
   });
