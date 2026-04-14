@@ -1,6 +1,6 @@
 "use client";
 
-import type { TaskToolUIPart } from "@open-harness/agent";
+import type { TaskToolUIPart } from "@open-agents/agent";
 import { isReasoningUIPart, isToolUIPart } from "ai";
 import {
   ArrowRight,

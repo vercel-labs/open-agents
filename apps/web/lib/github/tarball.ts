@@ -83,7 +83,7 @@ export async function downloadAndExtractTarball(
 
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "open-harness",
+    "User-Agent": "open-agents",
   };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;

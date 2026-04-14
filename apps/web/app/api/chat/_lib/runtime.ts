@@ -1,5 +1,5 @@
-import { discoverSkills } from "@open-harness/agent";
-import { connectSandbox } from "@open-harness/sandbox";
+import { discoverSkills } from "@open-agents/agent";
+import { connectSandbox } from "@open-agents/sandbox";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import {

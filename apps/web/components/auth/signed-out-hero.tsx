@@ -42,7 +42,7 @@ export function SignedOutHero() {
             >
               <SignInButton className="h-10 rounded-md border-0 bg-(--l-btn-bg) px-5 text-[13px] font-medium text-(--l-btn-fg) transition-colors hover:bg-(--l-btn-hover)" />
               <a
-                href="https://github.com/vercel-labs/open-harness"
+                href="https://github.com/vercel-labs/open-agents"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-[13px] text-(--l-fg-4) transition-colors hover:text-(--l-fg-2)"

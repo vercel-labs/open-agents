@@ -9,7 +9,7 @@ import type { WebAgentUIToolPart } from "../types";
 import {
   extractRenderState,
   type ToolRenderState,
-} from "@open-harness/shared/lib/tool-state";
+} from "@open-agents/shared/lib/tool-state";
 
 /**
  * All possible tool part types derived from the agent.

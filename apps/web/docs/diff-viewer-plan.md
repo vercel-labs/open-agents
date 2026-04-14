@@ -120,7 +120,7 @@ type DiffViewerProps = {
 
 ### Existing Patterns to Reuse
 
-- `createEditDiffLines` from `@open-harness/shared/lib/diff` - adapt for unified diff parsing
+- `createEditDiffLines` from `@open-agents/shared/lib/diff` - adapt for unified diff parsing
 - Diff line rendering from `edit-renderer.tsx` (lines 101-144)
 - Collapsible pattern from `edit-renderer.tsx`
 - Shiki themes from `task-detail-content.tsx` (lines 49-52)
@@ -300,8 +300,8 @@ These should be answered before implementation:
 
 No new dependencies required. Uses existing:
 
-- `@open-harness/sandbox` for `connectVercelSandbox`
-- `@open-harness/shared/lib/diff` for diff utilities
+- `@open-agents/sandbox` for `connectVercelSandbox`
+- `@open-agents/shared/lib/diff` for diff utilities
 - `lucide-react` for icons
 - Existing UI components (Button, etc.)
 

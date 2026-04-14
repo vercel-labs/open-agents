@@ -1,6 +1,6 @@
 # Code Style & Patterns
 
-Detailed coding conventions, tool implementation patterns, and common patterns for the Open Harness codebase.
+Detailed coding conventions, tool implementation patterns, and common patterns for the Open Agents codebase.
 
 ## Package Manager
 
@@ -120,7 +120,7 @@ Use `workspace:*` for internal packages:
 ```json
 {
   "dependencies": {
-    "@open-harness/sandbox": "workspace:*"
+    "@open-agents/sandbox": "workspace:*"
   }
 }
 ```

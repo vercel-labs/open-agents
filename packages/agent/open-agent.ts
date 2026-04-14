@@ -1,4 +1,4 @@
-import type { SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-agents/sandbox";
 import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
 import { z } from "zod";
 import { addCacheControl } from "./context-management";
@@ -29,7 +29,7 @@ export interface AgentModelSelection {
   providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
-export type OpenHarnessAgentModelInput = GatewayModelId | AgentModelSelection;
+export type OpenAgentModelInput = GatewayModelId | AgentModelSelection;
 
 export interface AgentSandboxContext {
   state: SandboxState;
@@ -40,19 +40,19 @@ export interface AgentSandboxContext {
 
 const callOptionsSchema = z.object({
   sandbox: z.custom<AgentSandboxContext>(),
-  model: z.custom<OpenHarnessAgentModelInput>().optional(),
-  subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
+  model: z.custom<OpenAgentModelInput>().optional(),
+  subagentModel: z.custom<OpenAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
 });
 
-export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
+export type OpenAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const defaultModelLabel = "anthropic/claude-opus-4.6" as const;
 export const defaultModel = gateway(defaultModelLabel);
 
 function normalizeAgentModelSelection(
-  selection: OpenHarnessAgentModelInput | undefined,
+  selection: OpenAgentModelInput | undefined,
   fallbackId: GatewayModelId,
 ): AgentModelSelection {
   if (!selection) {
@@ -76,7 +76,7 @@ const tools = {
   web_fetch: webFetchTool,
 } satisfies ToolSet;
 
-export const openHarnessAgent = new ToolLoopAgent({
+export const openAgent = new ToolLoopAgent({
   model: defaultModel,
   instructions: buildSystemPrompt({}),
   tools,
@@ -92,7 +92,7 @@ export const openHarnessAgent = new ToolLoopAgent({
   },
   prepareCall: ({ options, ...settings }) => {
     if (!options) {
-      throw new Error("Open Harness agent requires call options with sandbox.");
+      throw new Error("Open Agent requires call options with sandbox.");
     }
 
     const mainSelection = normalizeAgentModelSelection(
@@ -142,4 +142,4 @@ export const openHarnessAgent = new ToolLoopAgent({
   },
 });
 
-export type OpenHarnessAgent = typeof openHarnessAgent;
+export type OpenAgent = typeof openAgent;

@@ -1,4 +1,4 @@
-import type { SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-agents/sandbox";
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "./client";
 import {

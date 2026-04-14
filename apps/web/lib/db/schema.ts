@@ -1,4 +1,4 @@
-import type { SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-agents/sandbox";
 import type { ModelVariant } from "@/lib/model-variants";
 import type { GlobalSkillRef } from "@/lib/skills/global-skill-refs";
 import {

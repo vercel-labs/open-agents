@@ -1,6 +1,6 @@
 "use client";
 
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens } from "@open-agents/shared";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

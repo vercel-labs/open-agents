@@ -69,7 +69,7 @@ mock.module("@/lib/db/workflow-runs", () => ({
   recordWorkflowRun: spies.recordWorkflowRun,
 }));
 
-mock.module("@open-harness/agent", () => ({
+mock.module("@open-agents/agent", () => ({
   collectTaskToolUsageEvents: spies.collectTaskToolUsageEvents,
   sumLanguageModelUsage: spies.sumLanguageModelUsage,
 }));

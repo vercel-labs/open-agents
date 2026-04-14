@@ -74,7 +74,7 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
   buildLifecycleActivityUpdate: spies.buildLifecycleActivityUpdate,
 }));
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: spies.connectSandbox,
 }));
 

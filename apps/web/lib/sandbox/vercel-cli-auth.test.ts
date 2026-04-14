@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-agents/sandbox";
 
 mock.module("server-only", () => ({}));
 
@@ -89,7 +89,7 @@ describe("vercel-cli-auth", () => {
       userId: "user-1",
       sessionRecord: {
         vercelProjectId: "prj_123",
-        vercelProjectName: "open-harness-web",
+        vercelProjectName: "open-agents-web",
         vercelTeamId: "team_123",
       },
     });
@@ -102,7 +102,7 @@ describe("vercel-cli-auth", () => {
       projectLink: {
         orgId: "team_123",
         projectId: "prj_123",
-        projectName: "open-harness-web",
+        projectName: "open-agents-web",
       },
     });
   });
@@ -134,7 +134,7 @@ describe("vercel-cli-auth", () => {
       userId: "user-1",
       sessionRecord: {
         vercelProjectId: "prj_123",
-        vercelProjectName: "open-harness-web",
+        vercelProjectName: "open-agents-web",
         vercelTeamId: "team_123",
       },
     });
@@ -157,7 +157,7 @@ describe("vercel-cli-auth", () => {
       {
         path: "/workspace/.vercel/project.json",
         content:
-          '{\n  "orgId": "team_123",\n  "projectId": "prj_123",\n  "projectName": "open-harness-web"\n}\n',
+          '{\n  "orgId": "team_123",\n  "projectId": "prj_123",\n  "projectName": "open-agents-web"\n}\n',
       },
     ]);
     expect(writeFileCalls[0]?.content).not.toContain("refreshToken");

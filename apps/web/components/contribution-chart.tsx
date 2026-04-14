@@ -1,6 +1,6 @@
 "use client";
 
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens } from "@open-agents/shared";
 import { useMemo } from "react";
 import type { DateRange } from "react-day-picker";
 import {

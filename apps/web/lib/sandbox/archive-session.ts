@@ -1,6 +1,6 @@
 import "server-only";
 
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-agents/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import {
   findPullRequestByBranch,

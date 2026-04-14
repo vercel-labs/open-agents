@@ -26,7 +26,7 @@ function detectModelFamily(modelId: string | undefined): ModelFamily {
 // Core system prompt -- shared across all model families
 // ---------------------------------------------------------------------------
 
-const CORE_SYSTEM_PROMPT = `You are Open Harness agent -- an AI coding assistant that completes complex, multi-step tasks through planning, context management, and delegation.
+const CORE_SYSTEM_PROMPT = `You are Open Agent -- an AI coding assistant that completes complex, multi-step tasks through planning, context management, and delegation.
 
 # Role & Agency
 

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 const currentSessionRecord = {
   userId: "user-1",
   repoOwner: "vercel",
-  repoName: "open-harness",
+  repoName: "open-agents",
   branch: "feature/preview",
   vercelProjectId: "project-1",
   vercelTeamId: "team-1",
@@ -80,7 +80,7 @@ function createRouteContext(sessionId = "session-1") {
 describe("/api/sessions/[sessionId]/pr-deployment", () => {
   beforeEach(() => {
     currentSessionRecord.repoOwner = "vercel";
-    currentSessionRecord.repoName = "open-harness";
+    currentSessionRecord.repoName = "open-agents";
     currentSessionRecord.branch = "feature/preview";
     currentSessionRecord.vercelProjectId = "project-1";
     currentSessionRecord.vercelTeamId = "team-1";
@@ -220,7 +220,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
       findLatestVercelDeploymentUrlForPullRequestMock,
     ).toHaveBeenCalledWith({
       owner: "vercel",
-      repo: "open-harness",
+      repo: "open-agents",
       prNumber: 42,
       token: "repo-token",
     });

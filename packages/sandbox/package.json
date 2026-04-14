@@ -1,5 +1,5 @@
 {
-  "name": "@open-harness/sandbox",
+  "name": "@open-agents/sandbox",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,8 @@
     "@vercel/sandbox": "2.0.0-beta.11"
   },
   "devDependencies": {
-    "@open-harness/tsconfig": "workspace:*",
+    "@open-agents/tsconfig": "workspace:*",
+    "@types/bun": "1.3.12",
     "@types/node": "^22"
   },
   "peerDependencies": {

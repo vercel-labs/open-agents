@@ -68,7 +68,7 @@ const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
 };
 
-function createRequest(origin = "https://open-harness.example") {
+function createRequest(origin = "https://open-agents.example") {
   const url = `${origin}/api/auth/vercel/callback?code=code-123&state=state-123`;
   return {
     nextUrl: new URL(url),
@@ -93,7 +93,7 @@ beforeEach(() => {
     NEXT_PUBLIC_VERCEL_APP_CLIENT_ID: "client-id",
     VERCEL_APP_CLIENT_SECRET: "client-secret",
     VERCEL_GIT_REPO_OWNER: "vercel-labs",
-    VERCEL_GIT_REPO_SLUG: "open-harness",
+    VERCEL_GIT_REPO_SLUG: "open-agents",
     VERCEL_PROJECT_PRODUCTION_URL: "",
     NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL: "",
     NODE_ENV: "test",
@@ -155,7 +155,7 @@ describe("GET /api/auth/vercel/callback", () => {
 
   test("allows non-Vercel emails on self-hosted deployments", async () => {
     process.env.VERCEL_GIT_REPO_OWNER = "someone-else";
-    process.env.VERCEL_GIT_REPO_SLUG = "open-harness-clone";
+    process.env.VERCEL_GIT_REPO_SLUG = "open-agents-clone";
 
     const { GET } = await routeModulePromise;
     const response = await GET(createRequest("https://self-hosted.example"));

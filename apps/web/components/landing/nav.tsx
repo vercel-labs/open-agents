@@ -50,7 +50,7 @@ export function LandingNav() {
 
           <div className="flex items-center gap-6">
             <a
-              href="https://github.com/vercel-labs/open-harness"
+              href="https://github.com/vercel-labs/open-agents"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub"

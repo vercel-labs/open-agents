@@ -2,7 +2,7 @@
 
 import { Brain } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRenderState } from "@open-agents/shared/lib/tool-state";
 import { ToolLayout } from "./tool-call/tool-layout";
 
 interface ThinkingBlockProps {

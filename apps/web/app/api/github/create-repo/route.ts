@@ -1,4 +1,4 @@
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-agents/sandbox";
 import { runCreateRepoWorkflow } from "@/app/api/github/create-repo/_lib/create-repo-workflow";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";

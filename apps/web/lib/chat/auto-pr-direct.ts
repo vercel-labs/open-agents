@@ -1,4 +1,4 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-agents/sandbox";
 import { looksLikeCommitHash } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
 import { updateSession } from "@/lib/db/sessions";
 import {

@@ -1,5 +1,5 @@
-import type { Sandbox } from "@open-harness/sandbox";
-import { gateway } from "@open-harness/agent";
+import type { Sandbox } from "@open-agents/sandbox";
+import { gateway } from "@open-agents/agent";
 import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";

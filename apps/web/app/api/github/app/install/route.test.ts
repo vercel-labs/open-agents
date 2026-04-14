@@ -62,7 +62,7 @@ describe("GET /api/github/app/install", () => {
     installations = [{ installationId: 1 }];
 
     Object.assign(process.env, {
-      NEXT_PUBLIC_GITHUB_APP_SLUG: "open-harness",
+      NEXT_PUBLIC_GITHUB_APP_SLUG: "open-agents",
       NEXT_PUBLIC_GITHUB_CLIENT_ID: "client-id",
       NODE_ENV: "test",
     });

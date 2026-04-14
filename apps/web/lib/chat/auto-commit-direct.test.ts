@@ -37,7 +37,7 @@ mock.module("ai", () => ({
   generateText: async () => generateTextResult,
 }));
 
-mock.module("@open-harness/agent", () => ({
+mock.module("@open-agents/agent", () => ({
   gateway: () => "mock-model",
 }));
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { formatTokens } from "@open-harness/shared/lib/tool-state";
+import { formatTokens } from "@open-agents/shared/lib/tool-state";
 import { ContributionChart } from "@/components/contribution-chart";
 import { getPublicUsageProfile } from "@/lib/db/public-usage-profile";
 import { UsageInsightsSection } from "../settings/usage/usage-insights-section";

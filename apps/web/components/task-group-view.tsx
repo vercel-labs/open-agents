@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Hammer, Loader2, Paintbrush, Telescope } from "lucide-react";
-import type { TaskPendingToolCall, TaskToolUIPart } from "@open-harness/agent";
-import { formatTokens, toRelativePath } from "@open-harness/shared";
+import type { TaskPendingToolCall, TaskToolUIPart } from "@open-agents/agent";
+import { formatTokens, toRelativePath } from "@open-agents/shared";
 import { cn } from "@/lib/utils";
 import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { ApprovalButtons } from "./tool-call/approval-buttons";
