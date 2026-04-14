@@ -180,7 +180,7 @@ If you already have a linked Vercel project, you can still pull env vars locally
 
 ### Vercel OAuth
 
-Create a Vercel OAuth app and use this callback:
+[Create a Vercel OAuth app](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard#create-an-app) and use this callback:
 
 ```text
 https://YOUR_DOMAIN/api/auth/vercel/callback
