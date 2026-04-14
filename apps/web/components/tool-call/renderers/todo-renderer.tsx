@@ -147,7 +147,7 @@ export function TodoRenderer({
 
   const expandedContent =
     todos.length > 0 ? (
-      <div className="space-y-0.5 pl-6">
+      <div className="max-h-48 space-y-0.5 overflow-y-auto pl-6">
         {todos.map((todo, i) => (
           <TodoItem key={todo.id ?? i} todo={todo} />
         ))}

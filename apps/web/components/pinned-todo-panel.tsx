@@ -155,7 +155,7 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
 
       {/* Expanded todo list */}
       {!isMinimized && (
-        <div className="border-t border-border/40 px-3 py-2">
+        <div className="max-h-48 overflow-y-auto border-t border-border/40 px-3 py-2">
           <div className="space-y-1">
             {todos.map((todo, index) => {
               if (!todo) return null;
