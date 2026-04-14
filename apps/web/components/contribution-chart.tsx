@@ -1,7 +1,7 @@
 "use client";
 
 import { formatTokens } from "@open-harness/shared";
-import { useCallback, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { DateRange } from "react-day-picker";
 import {
   Tooltip,
@@ -77,9 +77,9 @@ function formatDateKey(d: Date): string {
 }
 
 const DAY_LABEL_WIDTH = 32;
+const CELL_SIZE = 11;
 const CELL_GAP = 2;
 const LEGEND_CELL_SIZE = 12;
-const MIN_CELL_SIZE = 10;
 
 export function ContributionChart({
   data,
@@ -166,8 +166,19 @@ export function ContributionChart({
   }, [data, selectedRange]);
 
   const weekCount = grid.length;
-  const minGridWidth =
-    DAY_LABEL_WIDTH + weekCount * MIN_CELL_SIZE + (weekCount - 1) * CELL_GAP;
+  const gridWidth =
+    DAY_LABEL_WIDTH + weekCount * CELL_SIZE + (weekCount - 1) * CELL_GAP;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollLeft = el.scrollWidth;
+      });
+    }
+  }, []);
 
   function handleDateSelect(date: string) {
     if (!onSelectRange) {
@@ -194,151 +205,141 @@ export function ContributionChart({
     onSelectRange({ from: selectedRange.from, to: nextDate });
   }
 
-  const scrollRef = useCallback((node: HTMLDivElement | null) => {
-    if (node) {
-      node.scrollLeft = node.scrollWidth;
-    }
-  }, []);
+  // Month-label row = row 1, day cells = rows 2–8
+  const MONTH_ROW = 1;
+  const CELL_ROW_OFFSET = 2;
 
   return (
     <div className="flex flex-col gap-1">
       <div ref={scrollRef} className="overflow-x-auto scrollbar-fade">
-      <div
-        className="grid"
-        style={{
-          gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
-          columnGap: CELL_GAP,
-          minWidth: minGridWidth,
-        }}
-      >
-        {monthLabels.map((m, i) => (
-          <span
-            key={`${m.label}-${i}`}
-            className="whitespace-nowrap text-xs text-muted-foreground"
-            style={{
-              gridColumn: m.weekIndex + 2,
-              gridRow: 1,
-            }}
-          >
-            {m.label}
-          </span>
-        ))}
-      </div>
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, ${CELL_SIZE}px)`,
+            gridTemplateRows: `auto repeat(${DAYS_IN_WEEK}, ${CELL_SIZE}px)`,
+            columnGap: CELL_GAP,
+            rowGap: CELL_GAP,
+            width: gridWidth,
+          }}
+        >
+          {/* Month labels — row 1 */}
+          {monthLabels.map((m, i) => (
+            <span
+              key={`${m.label}-${i}`}
+              className="whitespace-nowrap text-xs text-muted-foreground"
+              style={{
+                gridColumn: m.weekIndex + 2,
+                gridRow: MONTH_ROW,
+              }}
+            >
+              {m.label}
+            </span>
+          ))}
 
-      <div
-        className="grid"
-        style={{
-          gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
-          gridTemplateRows: `repeat(${DAYS_IN_WEEK}, auto)`,
-          gap: CELL_GAP,
-          minWidth: minGridWidth,
-        }}
-      >
-        {DAY_LABELS.map((label, i) => (
-          <span
-            key={i}
-            className="flex items-center text-xs leading-none text-muted-foreground"
-            style={{ gridColumn: 1, gridRow: i + 1 }}
-          >
-            {label}
-          </span>
-        ))}
+          {/* Day-of-week labels — column 1, rows 2–8 */}
+          {DAY_LABELS.map((label, i) => (
+            <span
+              key={i}
+              className="flex items-center text-xs leading-none text-muted-foreground"
+              style={{ gridColumn: 1, gridRow: i + CELL_ROW_OFFSET }}
+            >
+              {label}
+            </span>
+          ))}
 
-        {grid.flatMap((week, wi) =>
-          week.map((cell, di) => {
-            if (cell.isFuture) {
-              return (
-                <div
-                  key={cell.date}
+          {/* Cells */}
+          {grid.flatMap((week, wi) =>
+            week.map((cell, di) => {
+              if (cell.isFuture) {
+                return (
+                  <div
+                    key={cell.date}
+                    style={{
+                      gridColumn: wi + 2,
+                      gridRow: di + CELL_ROW_OFFSET,
+                    }}
+                  />
+                );
+              }
+
+              const messageCount = cell.data?.messageCount ?? 0;
+              const intensity = getIntensity(messageCount, thresholds);
+              const hasActiveSelection = selectedBounds !== null;
+              const isSelected =
+                hasActiveSelection &&
+                cell.date >= selectedBounds.from &&
+                cell.date <= selectedBounds.to;
+              const totalTokens =
+                (cell.data?.inputTokens ?? 0) + (cell.data?.outputTokens ?? 0);
+              const isInteractive = typeof onSelectRange === "function";
+
+              const cellContent = isInteractive ? (
+                <button
+                  type="button"
+                  aria-label={`Usage for ${formatDate(cell.date)}`}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    "block h-full w-full rounded-[3px] transition-[filter,opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
+                    "hover:opacity-85",
+                    INTENSITY_CLASSES[intensity],
+                    hasActiveSelection &&
+                      !isSelected &&
+                      "grayscale opacity-35 saturate-0",
+                    isSelected &&
+                      "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
+                  )}
                   style={{
                     gridColumn: wi + 2,
-                    gridRow: di + 1,
-                    aspectRatio: "1 / 1",
+                    gridRow: di + CELL_ROW_OFFSET,
+                  }}
+                  onClick={() => handleDateSelect(cell.date)}
+                />
+              ) : (
+                <div
+                  className={cn(
+                    "rounded-[3px] transition-[filter,opacity,box-shadow]",
+                    INTENSITY_CLASSES[intensity],
+                    hasActiveSelection &&
+                      !isSelected &&
+                      "grayscale opacity-35 saturate-0",
+                    isSelected &&
+                      "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
+                  )}
+                  style={{
+                    gridColumn: wi + 2,
+                    gridRow: di + CELL_ROW_OFFSET,
                   }}
                 />
               );
-            }
 
-            const messageCount = cell.data?.messageCount ?? 0;
-            const intensity = getIntensity(messageCount, thresholds);
-            const hasActiveSelection = selectedBounds !== null;
-            const isSelected =
-              hasActiveSelection &&
-              cell.date >= selectedBounds.from &&
-              cell.date <= selectedBounds.to;
-            const totalTokens =
-              (cell.data?.inputTokens ?? 0) + (cell.data?.outputTokens ?? 0);
-            const isInteractive = typeof onSelectRange === "function";
-
-            const cellContent = isInteractive ? (
-              <button
-                type="button"
-                aria-label={`Usage for ${formatDate(cell.date)}`}
-                aria-pressed={isSelected}
-                className={cn(
-                  "block w-full rounded-[3px] transition-[filter,opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
-                  "hover:opacity-85",
-                  INTENSITY_CLASSES[intensity],
-                  hasActiveSelection &&
-                    !isSelected &&
-                    "grayscale opacity-35 saturate-0",
-                  isSelected &&
-                    "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
-                )}
-                style={{
-                  gridColumn: wi + 2,
-                  gridRow: di + 1,
-                  aspectRatio: "1 / 1",
-                }}
-                onClick={() => handleDateSelect(cell.date)}
-              />
-            ) : (
-              <div
-                className={cn(
-                  "rounded-[3px] transition-[filter,opacity,box-shadow]",
-                  INTENSITY_CLASSES[intensity],
-                  hasActiveSelection &&
-                    !isSelected &&
-                    "grayscale opacity-35 saturate-0",
-                  isSelected &&
-                    "ring-2 ring-neutral-700/60 ring-offset-1 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] dark:ring-neutral-100/80 dark:shadow-[0_0_0_1px_rgba(3,7,18,0.9)]",
-                )}
-                style={{
-                  gridColumn: wi + 2,
-                  gridRow: di + 1,
-                  aspectRatio: "1 / 1",
-                }}
-              />
-            );
-
-            return (
-              <Tooltip key={cell.date}>
-                <TooltipTrigger asChild>{cellContent}</TooltipTrigger>
-                <TooltipContent side="top">
-                  <div className="text-xs">
-                    <div className="font-medium">{formatDate(cell.date)}</div>
-                    {messageCount > 0 ? (
-                      <div className="font-mono tabular-nums">
-                        <div>
-                          {messageCount} message
-                          {messageCount !== 1 ? "s" : ""}
+              return (
+                <Tooltip key={cell.date}>
+                  <TooltipTrigger asChild>{cellContent}</TooltipTrigger>
+                  <TooltipContent side="top">
+                    <div className="text-xs">
+                      <div className="font-medium">{formatDate(cell.date)}</div>
+                      {messageCount > 0 ? (
+                        <div className="font-mono tabular-nums">
+                          <div>
+                            {messageCount} message
+                            {messageCount !== 1 ? "s" : ""}
+                          </div>
+                          <div>{formatTokens(totalTokens)} tokens</div>
+                          <div>
+                            {cell.data?.toolCallCount ?? 0} tool call
+                            {(cell.data?.toolCallCount ?? 0) !== 1 ? "s" : ""}
+                          </div>
                         </div>
-                        <div>{formatTokens(totalTokens)} tokens</div>
-                        <div>
-                          {cell.data?.toolCallCount ?? 0} tool call
-                          {(cell.data?.toolCallCount ?? 0) !== 1 ? "s" : ""}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground">No activity</div>
-                    )}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            );
-          }),
-        )}
-      </div>
+                      ) : (
+                        <div className="text-muted-foreground">No activity</div>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }),
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-1 text-xs text-muted-foreground">
