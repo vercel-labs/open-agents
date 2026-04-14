@@ -1,7 +1,7 @@
 import {
+  APP_DEFAULT_MODEL_ID,
   type AvailableModel,
   type AvailableModelCost,
-  DEFAULT_MODEL_ID,
   getModelDisplayName,
 } from "@/lib/models";
 import {
@@ -95,9 +95,9 @@ export function withMissingModelOption(
 }
 
 export function getDefaultModelOptionId(modelOptions: ModelOption[]): string {
-  if (modelOptions.some((option) => option.id === DEFAULT_MODEL_ID)) {
-    return DEFAULT_MODEL_ID;
+  if (modelOptions.some((option) => option.id === APP_DEFAULT_MODEL_ID)) {
+    return APP_DEFAULT_MODEL_ID;
   }
 
-  return modelOptions[0]?.id ?? DEFAULT_MODEL_ID;
+  return modelOptions[0]?.id ?? APP_DEFAULT_MODEL_ID;
 }

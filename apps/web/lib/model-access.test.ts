@@ -92,7 +92,7 @@ describe("model access gating", () => {
       requestUrl,
     );
 
-    expect(result).toBe("anthropic/claude-haiku-4.5");
+    expect(result).toBe("openai/gpt-5.4");
   });
 
   test("sanitizes managed trial preferences without mutating the database shape", () => {
@@ -103,8 +103,8 @@ describe("model access gating", () => {
     );
 
     expect(result).toMatchObject({
-      defaultModelId: "anthropic/claude-haiku-4.5",
-      defaultSubagentModelId: "anthropic/claude-haiku-4.5",
+      defaultModelId: "openai/gpt-5.4",
+      defaultSubagentModelId: "openai/gpt-5.4",
       modelVariants: [],
       enabledModelIds: ["openai/gpt-5"],
     });

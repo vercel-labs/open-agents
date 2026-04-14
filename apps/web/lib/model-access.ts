@@ -1,6 +1,6 @@
 import type { UserPreferencesData } from "@/lib/db/user-preferences";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import {
   getAllVariants,
   MODEL_VARIANT_ID_PREFIX,
@@ -77,7 +77,7 @@ export function sanitizeSelectedModelIdForSession(
   }
 
   if (RESTRICTED_MODEL_PREFIXES.some((prefix) => modelId.startsWith(prefix))) {
-    return DEFAULT_MODEL_ID;
+    return APP_DEFAULT_MODEL_ID;
   }
 
   if (
@@ -86,7 +86,7 @@ export function sanitizeSelectedModelIdForSession(
       (variant) => variant.id === modelId,
     )
   ) {
-    return DEFAULT_MODEL_ID;
+    return APP_DEFAULT_MODEL_ID;
   }
 
   return modelId;
@@ -120,7 +120,7 @@ export function sanitizeUserPreferencesForSession(
         availableModelVariants,
         session,
         url,
-      ) ?? DEFAULT_MODEL_ID,
+      ) ?? APP_DEFAULT_MODEL_ID,
     defaultSubagentModelId:
       sanitizeSelectedModelIdForSession(
         preferences.defaultSubagentModelId,
