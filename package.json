@@ -1,5 +1,5 @@
 {
-  "name": "open-harness",
+  "name": "davinci",
   "private": true,
   "workspaces": {
     "packages": [
