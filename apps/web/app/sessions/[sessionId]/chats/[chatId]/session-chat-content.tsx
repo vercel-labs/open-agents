@@ -4083,8 +4083,8 @@ export function SessionChatContent({
                         </div>
 
                         {/* Bottom toolbar */}
-                        <div className="flex items-center justify-between px-3 pb-2">
-                          <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-2 px-3 pb-2">
+                          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                             <Button
                               type="button"
                               variant="ghost"
@@ -4138,7 +4138,7 @@ export function SessionChatContent({
                               </div>
                             ) : (
                               chatInfo.modelId && (
-                                <span className="text-xs text-muted-foreground/60">
+                                <span className="max-w-28 truncate text-xs text-muted-foreground/60 sm:max-w-none">
                                   {selectedModelOption?.label ??
                                     chatInfo.modelId}
                                 </span>
@@ -4164,7 +4164,7 @@ export function SessionChatContent({
                             />
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
                             <Button
                               type="button"
                               variant="ghost"
@@ -4200,8 +4200,13 @@ export function SessionChatContent({
                                 disabled={!inlineQuestion.hasCurrentAnswer}
                                 className="h-8 rounded-full bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
                               >
-                                <Check className="mr-1 h-3 w-3" />
-                                {inlineQuestion.buttonLabel}
+                                <Check className="h-3 w-3" />
+                                <span className="sm:hidden">
+                                  {inlineQuestion.compactButtonLabel}
+                                </span>
+                                <span className="hidden sm:inline">
+                                  {inlineQuestion.buttonLabel}
+                                </span>
                               </Button>
                             ) : isChatInFlight || hasPendingResponse ? (
                               <Button
