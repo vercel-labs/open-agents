@@ -498,7 +498,9 @@ function SharedMessage({
     });
 
   if (isUser) {
-    return <div className="flex flex-col gap-1">{renderGroupElements(true)}</div>;
+    return (
+      <div className="flex flex-col gap-1">{renderGroupElements(true)}</div>
+    );
   }
 
   // Assistant messages: wrap with collapsible summary bar (same as session chat)
