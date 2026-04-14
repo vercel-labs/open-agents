@@ -570,6 +570,106 @@ export function useSessionChats(
     return { chat: optimisticChat, persisted };
   };
 
+  const forkChat = (
+    sourceChatId: string,
+    messageId: string,
+  ): CreateChatResult => {
+    if (!sessionId) {
+      throw new Error("Missing sessionId");
+    }
+
+    const sourceChat = chats.find((chat) => chat.id === sourceChatId);
+    if (!sourceChat) {
+      throw new Error("Source chat not found");
+    }
+
+    const now = new Date();
+    const optimisticChat: Chat = {
+      id: crypto.randomUUID(),
+      sessionId,
+      title: `Fork of ${sourceChat.title}`,
+      modelId: sourceChat.modelId,
+      activeStreamId: null,
+      lastAssistantMessageAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    void mutate(
+      (current) =>
+        toChatsResponse(current, [
+          ...(current?.chats ?? []).filter(
+            (chat) => chat.id !== optimisticChat.id,
+          ),
+          {
+            ...optimisticChat,
+            hasUnread: false,
+            isStreaming: false,
+          },
+        ]),
+      { revalidate: false },
+    );
+
+    const persisted = (async () => {
+      const res = await fetch(
+        `/api/sessions/${sessionId}/chats/${sourceChatId}/fork`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: optimisticChat.id,
+            messageId,
+          }),
+        },
+      );
+
+      const responseData = (await res.json()) as {
+        chat?: Chat;
+        error?: string;
+      };
+
+      if (!res.ok || !responseData.chat) {
+        await mutate(
+          (current) =>
+            toChatsResponse(
+              current,
+              (current?.chats ?? []).filter(
+                (chat) => chat.id !== optimisticChat.id,
+              ),
+            ),
+          { revalidate: false },
+        );
+        throw new Error(responseData.error ?? "Failed to fork chat");
+      }
+
+      const createdChat = responseData.chat;
+      await mutate(
+        (current) =>
+          toChatsResponse(
+            current,
+            (current?.chats ?? []).map((chat) =>
+              chat.id === optimisticChat.id
+                ? {
+                    ...chat,
+                    ...createdChat,
+                    hasUnread: false,
+                    isStreaming: false,
+                  }
+                : chat,
+            ),
+          ),
+        { revalidate: false },
+      );
+
+      return createdChat;
+    })();
+
+    return {
+      chat: optimisticChat,
+      persisted,
+    };
+  };
+
   const renameChat = async (chatId: string, title: string) => {
     if (!sessionId) {
       throw new Error("Missing sessionId");
@@ -755,6 +855,7 @@ export function useSessionChats(
     loading: isLoading,
     error,
     createChat,
+    forkChat,
     renameChat,
     deleteChat,
     markChatRead,

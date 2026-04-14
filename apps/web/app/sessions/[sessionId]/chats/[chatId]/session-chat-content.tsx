@@ -16,6 +16,7 @@ import {
   Code2,
   Copy,
   ExternalLink,
+  GitBranch,
   GitCommitHorizontal,
   GitPullRequest,
   Globe,
@@ -1032,6 +1033,9 @@ export function SessionChatContent({
   const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
     string | null
   >(null);
+  const [forkingAssistantMessageId, setForkingAssistantMessageId] = useState<
+    string | null
+  >(null);
   const [branchPreviewUrlChangeBaseline, setBranchPreviewUrlChangeBaseline] =
     useState<string | null | undefined>(undefined);
   const hasMounted = useHasMounted();
@@ -1263,7 +1267,33 @@ export function SessionChatContent({
     setChatTitle,
     clearChatTitle,
     refreshChats,
+    forkChat,
   } = useSessionChats(session.id);
+  const handleForkAssistantMessage = useCallback(
+    async (messageId: string) => {
+      if (forkingAssistantMessageId !== null) {
+        return;
+      }
+
+      setForkingAssistantMessageId(messageId);
+      try {
+        const { persisted } = forkChat(chatInfo.id, messageId);
+        const forkedChat = await persisted;
+        router.push(`/sessions/${session.id}/chats/${forkedChat.id}`, {
+          scroll: false,
+        });
+      } catch (forkError) {
+        console.error("Failed to fork chat:", forkError);
+      } finally {
+        if (isMountedRef.current) {
+          setForkingAssistantMessageId((currentMessageId) =>
+            currentMessageId === messageId ? null : currentMessageId,
+          );
+        }
+      }
+    },
+    [chatInfo.id, forkChat, forkingAssistantMessageId, router, session.id],
+  );
   const upsertSyntheticAssistantGitMessage = useCallback(
     async (message: WebAgentUIMessage) => {
       setMessages((currentMessages) => {
@@ -3464,24 +3494,51 @@ export function SessionChatContent({
                                           </Streamdown>
                                           {canCopyAssistantMessage && (
                                             <div className="mt-1 flex justify-start">
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  void handleCopyAssistantMessage(
-                                                    m.id,
-                                                    p.text,
-                                                  )
-                                                }
-                                                aria-label="Copy assistant response"
-                                                className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                                              >
-                                                {copiedAssistantMessageId ===
-                                                m.id ? (
-                                                  <Check className="h-4 w-4" />
-                                                ) : (
-                                                  <Copy className="h-4 w-4" />
-                                                )}
-                                              </button>
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    void handleCopyAssistantMessage(
+                                                      m.id,
+                                                      p.text,
+                                                    )
+                                                  }
+                                                  aria-label="Copy assistant response"
+                                                  className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                                >
+                                                  {copiedAssistantMessageId ===
+                                                  m.id ? (
+                                                    <Check className="h-4 w-4" />
+                                                  ) : (
+                                                    <Copy className="h-4 w-4" />
+                                                  )}
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    void handleForkAssistantMessage(
+                                                      m.id,
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    forkingAssistantMessageId !==
+                                                    null
+                                                  }
+                                                  aria-label="Fork conversation from this response"
+                                                  className={cn(
+                                                    "rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40",
+                                                    forkingAssistantMessageId ===
+                                                      m.id && "opacity-100",
+                                                  )}
+                                                >
+                                                  {forkingAssistantMessageId ===
+                                                  m.id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                  ) : (
+                                                    <GitBranch className="h-4 w-4" />
+                                                  )}
+                                                </button>
+                                              </div>
                                             </div>
                                           )}
                                         </div>
