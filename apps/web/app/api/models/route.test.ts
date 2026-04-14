@@ -157,6 +157,68 @@ describe("/api/models context window enrichment", () => {
     expect(body.models[0]?.context_window).toBe(200_000);
   });
 
+  test("keeps valid models.dev metadata when sibling fields are invalid", async () => {
+    gatewayModels.push({
+      id: "openai/gpt-5.3-codex",
+      modelType: "language",
+      context_window: 200_000,
+    });
+
+    modelsDevApiData = {
+      invalidProvider: "bad",
+      openai: {
+        models: {
+          "gpt-5.3-codex": {
+            limit: { context: "400_000" },
+            cost: {
+              input: 1.25,
+              output: 10,
+              context_over_200k: {
+                input: 2.5,
+              },
+            },
+          },
+          broken: {
+            limit: { context: "not-a-number" },
+            cost: { input: "expensive" },
+          },
+        },
+      },
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{
+        id: string;
+        context_window?: number;
+        cost?: {
+          input?: number;
+          output?: number;
+          context_over_200k?: {
+            input?: number;
+          };
+        };
+      }>;
+    };
+
+    expect(body.models).toHaveLength(1);
+    expect(body.models[0]).toMatchObject({
+      id: "openai/gpt-5.3-codex",
+      context_window: 200_000,
+      cost: {
+        input: 1.25,
+        output: 10,
+        context_over_200k: {
+          input: 2.5,
+        },
+      },
+    });
+  });
+
   test("recovers from gateway validation errors when response still includes models", async () => {
     gatewayError = {
       response: {
@@ -165,6 +227,10 @@ describe("/api/models context window enrichment", () => {
             id: "openai/gpt-5.4",
             name: "GPT 5.4",
             description: "Latest GPT model",
+            modelType: "language",
+          },
+          {
+            id: "openai/gpt-5.4-broken",
             modelType: "language",
           },
           {
