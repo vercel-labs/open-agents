@@ -11,16 +11,6 @@ interface GitHubOrg {
   avatar_url: string;
 }
 
-interface GitHubRepo {
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean;
-  clone_url: string;
-  updated_at: string;
-  language: string | null;
-}
-
 interface GitHubBranch {
   name: string;
 }
@@ -29,33 +19,10 @@ interface GitHubRepoInfo {
   default_branch: string;
 }
 
-export interface GitHubRepoOptions {
-  limit?: number;
-  query?: string;
-}
-
-interface GitHubSearchResponse {
-  items: GitHubRepo[];
-}
-
 function normalizeGitHubLimit(limit: number | undefined): number | undefined {
   return typeof limit === "number" && Number.isFinite(limit)
     ? Math.max(1, Math.min(limit, 100))
     : undefined;
-}
-
-function compareReposByRecentActivity(
-  a: Pick<GitHubRepo, "name" | "updated_at">,
-  b: Pick<GitHubRepo, "name" | "updated_at">,
-): number {
-  const updatedAtA = Date.parse(a.updated_at);
-  const updatedAtB = Date.parse(b.updated_at);
-
-  if (updatedAtA !== updatedAtB) {
-    return updatedAtB - updatedAtA;
-  }
-
-  return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 }
 
 async function fetchGitHubAPI<T>(
@@ -96,108 +63,6 @@ export async function fetchGitHubOrgs(token: string) {
     name: org.login,
     avatar_url: org.avatar_url,
   }));
-}
-
-export async function fetchGitHubRepos(
-  token: string,
-  owner: string,
-  options?: GitHubRepoOptions,
-) {
-  const normalizedLimit = normalizeGitHubLimit(options?.limit);
-  const normalizedQuery = options?.query?.trim() || undefined;
-
-  // Check if owner is the authenticated user
-  const currentUser = await fetchGitHubAPI<{ login: string }>("/user", token);
-  if (!currentUser) return null;
-
-  const isAuthenticatedUser = currentUser.login === owner;
-
-  // Determine endpoint type
-  let apiEndpointType: "user" | "org" | "other" = "other";
-  if (isAuthenticatedUser) {
-    apiEndpointType = "user";
-  } else {
-    const orgResponse = await fetchGitHubAPI<unknown>(`/orgs/${owner}`, token);
-    if (orgResponse) {
-      apiEndpointType = "org";
-    }
-  }
-
-  if (normalizedQuery) {
-    const perPage = normalizedLimit ?? 50;
-    const ownerQualifier = apiEndpointType === "org" ? "org" : "user";
-    const searchQuery = `${normalizedQuery} in:name ${ownerQualifier}:${owner}`;
-    const searchEndpoint = `/search/repositories?q=${encodeURIComponent(searchQuery)}&sort=updated&order=desc&per_page=${perPage}`;
-    const searchResult = await fetchGitHubAPI<GitHubSearchResponse>(
-      searchEndpoint,
-      token,
-    );
-
-    if (!searchResult) return null;
-
-    return searchResult.items.map((repo) => ({
-      name: repo.name,
-      full_name: repo.full_name,
-      description: repo.description,
-      private: repo.private,
-      clone_url: repo.clone_url,
-      updated_at: repo.updated_at,
-      language: repo.language,
-    }));
-  }
-
-  // Fetch all repos with pagination
-  const allRepos: GitHubRepo[] = [];
-  let page = 1;
-  const perPage = normalizedLimit ?? 100;
-  const maxPages = normalizedLimit ? 1 : 50;
-
-  while (page <= maxPages) {
-    let endpoint: string;
-
-    if (apiEndpointType === "user") {
-      endpoint = `/user/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner`;
-    } else if (apiEndpointType === "org") {
-      endpoint = `/orgs/${owner}/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}&type=all&visibility=all`;
-    } else {
-      endpoint = `/users/${owner}/repos?sort=updated&direction=desc&per_page=${perPage}&page=${page}`;
-    }
-
-    const repos = await fetchGitHubAPI<GitHubRepo[]>(endpoint, token);
-    if (!repos) {
-      // API error on first page means failure; on subsequent pages, return what we have
-      if (page === 1) return null;
-      break;
-    }
-    if (repos.length === 0) break;
-
-    allRepos.push(...repos);
-    if (repos.length < perPage) break;
-    page++;
-  }
-
-  // Dedupe and sort
-  const uniqueRepos = allRepos.filter(
-    (repo, index, self) =>
-      index === self.findIndex((r) => r.full_name === repo.full_name),
-  );
-  uniqueRepos.sort(compareReposByRecentActivity);
-
-  const mappedRepos = uniqueRepos.map((repo) => ({
-    name: repo.name,
-    full_name: repo.full_name,
-    description: repo.description,
-    private: repo.private,
-    clone_url: repo.clone_url,
-    updated_at: repo.updated_at,
-    language: repo.language,
-  }));
-
-  if (normalizedLimit) {
-    return mappedRepos.slice(0, normalizedLimit);
-  }
-
-  return mappedRepos;
 }
 
 export async function fetchGitHubBranches(
