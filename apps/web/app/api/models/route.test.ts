@@ -10,6 +10,7 @@ const gatewayModels: MockGatewayModel[] = [];
 const requestedUrls: string[] = [];
 
 let modelsDevApiData: unknown = {};
+let gatewayGetAvailableModels = async () => ({ models: gatewayModels });
 
 const originalFetch = globalThis.fetch;
 
@@ -25,7 +26,7 @@ function getRequestUrl(input: RequestInfo | URL): string {
 
 mock.module("ai", () => ({
   gateway: {
-    getAvailableModels: async () => ({ models: gatewayModels }),
+    getAvailableModels: () => gatewayGetAvailableModels(),
   },
 }));
 
@@ -42,6 +43,7 @@ describe("/api/models context window enrichment", () => {
     gatewayModels.length = 0;
     requestedUrls.length = 0;
     modelsDevApiData = {};
+    gatewayGetAvailableModels = async () => ({ models: gatewayModels });
 
     globalThis.fetch = mock((input: RequestInfo | URL, _init?: RequestInit) => {
       requestedUrls.push(getRequestUrl(input));
@@ -145,5 +147,69 @@ describe("/api/models context window enrichment", () => {
 
     expect(body.models).toHaveLength(1);
     expect(body.models[0]?.context_window).toBe(200_000);
+  });
+
+  test("falls back to valid language models when gateway returns an unknown modelType", async () => {
+    const gatewayResponseError = new Error(
+      "Invalid response from Gateway",
+    ) as Error & {
+      response?: unknown;
+    };
+
+    gatewayResponseError.response = {
+      models: [
+        {
+          id: "openai/gpt-5.4-mini",
+          name: "GPT-5.4 Mini",
+          modelType: "language",
+          specification: {
+            specificationVersion: "v3",
+            provider: "openai",
+            modelId: "openai/gpt-5.4-mini",
+          },
+          pricing: {
+            input: "0.00000025",
+            output: "0.000002",
+            input_cache_read: "0.000000025",
+          },
+        },
+        {
+          id: "openai/gpt-5.4-audio",
+          name: "GPT-5.4 Audio",
+          modelType: "audio",
+          specification: {
+            specificationVersion: "v3",
+            provider: "openai",
+            modelId: "openai/gpt-5.4-audio",
+          },
+        },
+      ],
+    };
+
+    gatewayGetAvailableModels = async () => {
+      throw gatewayResponseError;
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{
+        id: string;
+        modelType?: string;
+        pricing?: {
+          input: string;
+          output: string;
+          cachedInputTokens?: string;
+        };
+      }>;
+    };
+
+    expect(body.models).toHaveLength(1);
+    expect(body.models[0]?.id).toBe("openai/gpt-5.4-mini");
+    expect(body.models[0]?.modelType).toBe("language");
+    expect(body.models[0]?.pricing?.cachedInputTokens).toBe("0.000000025");
   });
 });
