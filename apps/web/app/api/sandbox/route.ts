@@ -214,6 +214,7 @@ export async function POST(req: Request) {
     });
 
     if (sessionRecord) {
+      // TODO: Re-enable this once we have a solid exfiltration defense strategy.
       // try {
       //   await syncVercelProjectEnvVarsToSandbox({
       //     userId: session.user.id,
