@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { FileIcon, FolderIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getFileIcon, FolderIcon } from "@/components/file-type-icons";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 
 interface FileSuggestionsDropdownProps {
@@ -56,29 +56,55 @@ export function FileSuggestionsDropdown({
       <div
         ref={listRef}
         className="max-h-[280px] overflow-y-auto py-1"
-        style={{ maxHeight: `${MAX_VISIBLE_ITEMS * 28}px` }}
+        style={{ maxHeight: `${MAX_VISIBLE_ITEMS * 32}px` }}
       >
-        {suggestions.map((suggestion, index) => (
-          <button
-            key={suggestion.value}
-            ref={index === selectedIndex ? selectedRef : null}
-            type="button"
-            onClick={() => onSelect(suggestion)}
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-1 text-left text-sm",
-              index === selectedIndex
-                ? "bg-accent text-accent-foreground"
-                : "hover:bg-muted",
-            )}
-          >
-            {suggestion.isDirectory ? (
-              <FolderIcon className="h-4 w-4 shrink-0 text-blue-500" />
-            ) : (
-              <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )}
-            <span className="truncate">{suggestion.display}</span>
-          </button>
-        ))}
+        <div className="space-y-px">
+          {suggestions.map((suggestion, index) => {
+            const fullPath = suggestion.display;
+            const normalizedPath = suggestion.isDirectory
+              ? fullPath.replace(/\/$/, "")
+              : fullPath;
+            const fileName = normalizedPath.split("/").pop() ?? normalizedPath;
+            const dirPath = normalizedPath.slice(
+              0,
+              normalizedPath.length - fileName.length,
+            );
+
+            return (
+              <button
+                key={suggestion.value}
+                ref={index === selectedIndex ? selectedRef : null}
+                type="button"
+                onClick={() => onSelect(suggestion)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+                  index === selectedIndex
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-accent",
+                )}
+              >
+                {suggestion.isDirectory ? (
+                  <FolderIcon className="h-4 w-4 shrink-0" />
+                ) : (
+                  getFileIcon(fileName, { className: "h-4 w-4 shrink-0" })
+                )}
+                <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
+                  <span className="shrink-0 text-xs font-medium text-foreground font-mono">
+                    {fileName}
+                  </span>
+                  {dirPath && (
+                    <span
+                      className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-muted-foreground"
+                      dir="rtl"
+                    >
+                      <bdi>{dirPath.replace(/\/$/, "")}</bdi>
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="border-t bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
         <kbd className="rounded bg-muted px-1">Tab</kbd> or{" "}

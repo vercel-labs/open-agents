@@ -308,6 +308,46 @@ describe("runAgentWorkflow", () => {
     expect(rwCalls[0][1]).toBe("gpt-4");
   });
 
+  test("marks workflow run as failed when maxSteps is exhausted", async () => {
+    agentFinishReason = "tool-calls";
+    agentRawFinishReason = "provider_tool_use";
+
+    await runAgentWorkflow(
+      makeOptions({
+        maxSteps: 2,
+      }),
+    );
+
+    const rwCalls = spies.recordWorkflowUsage.mock.calls as unknown[][];
+    const workflowRun = rwCalls[0][5] as {
+      workflowRunId: string;
+      status: string;
+      totalDurationMs: number;
+      stepTimings: Array<{
+        stepNumber: number;
+        durationMs: number;
+        finishReason?: string;
+      }>;
+    };
+
+    expect(workflowRun.workflowRunId).toBe("wrun_test-123");
+    expect(workflowRun.status).toBe("failed");
+    expect(workflowRun.totalDurationMs).toBeGreaterThanOrEqual(0);
+    expect(workflowRun.stepTimings).toHaveLength(2);
+    expect(workflowRun.stepTimings).toEqual([
+      expect.objectContaining({
+        stepNumber: 1,
+        durationMs: expect.any(Number),
+        finishReason: "tool-calls",
+      }),
+      expect.objectContaining({
+        stepNumber: 2,
+        durationMs: expect.any(Number),
+        finishReason: "tool-calls",
+      }),
+    ]);
+  });
+
   test("logs full step diagnostics when the agent finishes with reason other", async () => {
     agentFinishReason = "other";
     agentRawFinishReason = "provider_other";

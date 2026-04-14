@@ -3,9 +3,10 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
   findLatestBuildingDeploymentUrlForBranch,
+  findLatestFailedDeploymentInspectorUrlForBranch,
   findLatestPreviewDeploymentUrlForBranch,
 } from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
@@ -17,6 +18,7 @@ type RouteContext = {
 export type PrDeploymentResponse = {
   deploymentUrl: string | null;
   buildingDeploymentUrl?: string | null;
+  failedDeploymentUrl?: string | null;
 };
 
 export async function GET(req: Request, context: RouteContext) {
@@ -76,17 +78,24 @@ export async function GET(req: Request, context: RouteContext) {
         teamId: sessionRecord.vercelTeamId,
       };
 
-      const [deploymentUrl, buildingDeploymentUrl] = await Promise.all([
-        findLatestPreviewDeploymentUrlForBranch(lookupParams).catch(() => null),
-        findLatestBuildingDeploymentUrlForBranch(lookupParams).catch(
-          () => null,
-        ),
-      ]);
+      const [deploymentUrl, buildingDeploymentUrl, failedDeploymentUrl] =
+        await Promise.all([
+          findLatestPreviewDeploymentUrlForBranch(lookupParams).catch(
+            () => null,
+          ),
+          findLatestBuildingDeploymentUrlForBranch(lookupParams).catch(
+            () => null,
+          ),
+          findLatestFailedDeploymentInspectorUrlForBranch(lookupParams).catch(
+            () => null,
+          ),
+        ]);
 
-      if (deploymentUrl || buildingDeploymentUrl) {
+      if (deploymentUrl || buildingDeploymentUrl || failedDeploymentUrl) {
         return Response.json({
           deploymentUrl,
           buildingDeploymentUrl,
+          failedDeploymentUrl,
         } satisfies PrDeploymentResponse);
       }
     }
@@ -102,14 +111,8 @@ export async function GET(req: Request, context: RouteContext) {
     } satisfies PrDeploymentResponse);
   }
 
-  let token: string;
-  try {
-    const tokenResult = await getRepoToken(
-      authResult.userId,
-      sessionRecord.repoOwner,
-    );
-    token = tokenResult.token;
-  } catch {
+  const token = await getUserGitHubToken(authResult.userId);
+  if (!token) {
     return Response.json({
       deploymentUrl: null,
     } satisfies PrDeploymentResponse);

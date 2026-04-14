@@ -132,8 +132,8 @@ function registerRouteMocks() {
     },
   }));
 
-  mock.module("@/lib/github/get-repo-token", () => ({
-    getRepoToken: async () => ({ token: "token-123", type: "user" as const }),
+  mock.module("@/lib/github/user-token", () => ({
+    getUserGitHubToken: async () => "token-123",
   }));
 
   mock.module("@/lib/github/client", () => ({

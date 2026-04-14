@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { AutoCreatePrResult } from "./auto-pr-direct";
 
+mock.module("server-only", () => ({}));
+
 type ExecResult = {
   success: boolean;
   stdout: string;
@@ -9,14 +11,7 @@ type ExecResult = {
 };
 
 let execResults: Map<string, ExecResult>;
-let repoTokenResult:
-  | { token: string; type: "installation"; installationId: number }
-  | { token: string; type: "user" } = {
-  token: "ghp_repo",
-  type: "installation",
-  installationId: 1,
-};
-let userTokenResult: string | null = null;
+let userTokenResult: string | null = "ghp_user";
 let cachedBranchesResult: { branches: string[]; defaultBranch: string } | null =
   {
     branches: ["main", "feature-branch"],
@@ -70,7 +65,7 @@ const execSpy = mock(async (command: string): Promise<ExecResult> => {
 });
 
 const updateSessionSpy = mock(async () => {});
-const getCachedGitHubBranchesSpy = mock(async () => cachedBranchesResult);
+const fetchGitHubBranchesSpy = mock(async () => cachedBranchesResult);
 const findPullRequestByBranchSpy = mock(async () => findPullRequestResult);
 const createPullRequestSpy = mock(async () => createPullRequestResult);
 const generatePullRequestContentFromSandboxSpy = mock(
@@ -91,12 +86,8 @@ mock.module("@/lib/db/sessions", () => ({
   updateSession: updateSessionSpy,
 }));
 
-mock.module("@/lib/github/cached-api", () => ({
-  getCachedGitHubBranches: getCachedGitHubBranchesSpy,
-}));
-
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: async () => repoTokenResult,
+mock.module("@/lib/github/api", () => ({
+  fetchGitHubBranches: fetchGitHubBranchesSpy,
 }));
 
 mock.module("@/lib/github/user-token", () => ({
@@ -152,19 +143,14 @@ function makeParams() {
 beforeEach(() => {
   execSpy.mockClear();
   updateSessionSpy.mockClear();
-  getCachedGitHubBranchesSpy.mockClear();
+  fetchGitHubBranchesSpy.mockClear();
   findPullRequestByBranchSpy.mockClear();
   createPullRequestSpy.mockClear();
   generatePullRequestContentFromSandboxSpy.mockClear();
   getUserGitHubTokenSpy.mockClear();
 
   execResults = defaultExecResults();
-  repoTokenResult = {
-    token: "ghp_repo",
-    type: "installation",
-    installationId: 1,
-  };
-  userTokenResult = null;
+  userTokenResult = "ghp_user";
   cachedBranchesResult = {
     branches: ["main", "feature-branch"],
     defaultBranch: "main",

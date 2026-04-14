@@ -115,7 +115,7 @@ afterEach(() => {
 });
 
 describe("GET /api/auth/vercel/callback", () => {
-  test("redirects non-Vercel emails on the managed deployment", async () => {
+  test("allows non-Vercel emails on the managed deployment", async () => {
     getVercelUserInfoMock.mockResolvedValueOnce({
       sub: "vercel-user-1",
       email: "person@example.com",
@@ -128,10 +128,11 @@ describe("GET /api/auth/vercel/callback", () => {
     const response = await GET(createRequest("https://open-agents.dev"));
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://open-agents.dev/deploy-your-own",
+    expect(response.headers.get("location")).toBe("/sessions");
+    expect(upsertUserMock).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("set-cookie")).toContain(
+      `${SESSION_COOKIE_NAME}=session-token`,
     );
-    expect(upsertUserMock).not.toHaveBeenCalled();
     expect(deletedCookies).toEqual([
       "vercel_auth_state",
       "vercel_code_verifier",
@@ -139,7 +140,7 @@ describe("GET /api/auth/vercel/callback", () => {
     ]);
   });
 
-  test("redirects non-Vercel emails on preview hosts for the managed deployment", async () => {
+  test("allows non-Vercel emails on preview hosts for the managed deployment", async () => {
     process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL = "open-agents.dev";
 
     const { GET } = await routeModulePromise;
@@ -148,10 +149,8 @@ describe("GET /api/auth/vercel/callback", () => {
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "https://preview-feature.vercel.app/deploy-your-own",
-    );
-    expect(upsertUserMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe("/sessions");
+    expect(upsertUserMock).toHaveBeenCalledTimes(1);
   });
 
   test("allows non-Vercel emails on self-hosted deployments", async () => {

@@ -37,10 +37,6 @@ let enableAutoMergeResult: EnableAutoMergeResult = {
   success: true,
   mergeMethod: "squash",
 };
-let repoTokenResult = {
-  token: "installation-token",
-  type: "installation" as const,
-};
 let userToken: string | null = "user-token";
 
 const createCalls: Array<Record<string, unknown>> = [];
@@ -77,10 +73,6 @@ function registerRouteMocks() {
       updateCalls.push({ sessionId, patch });
       return sessionRecord ? { ...sessionRecord, ...patch } : null;
     },
-  }));
-
-  mock.module("@/lib/github/get-repo-token", () => ({
-    getRepoToken: async () => repoTokenResult,
   }));
 
   mock.module("@/lib/github/user-token", () => ({
@@ -123,10 +115,6 @@ describe("/api/pr", () => {
     enableAutoMergeResult = {
       success: true,
       mergeMethod: "squash",
-    };
-    repoTokenResult = {
-      token: "installation-token",
-      type: "installation",
     };
     userToken = "user-token";
     createCalls.length = 0;
@@ -172,12 +160,12 @@ describe("/api/pr", () => {
     expect(createCalls).toHaveLength(1);
     expect(autoMergeCalls).toHaveLength(1);
     expect(createCalls[0]).toMatchObject({
-      token: "installation-token",
+      token: "user-token",
       isDraft: false,
     });
     expect(autoMergeCalls[0]).toMatchObject({
       prNumber: 77,
-      token: "installation-token",
+      token: "user-token",
     });
     expect(updateCalls).toEqual([
       {
@@ -229,7 +217,7 @@ describe("/api/pr", () => {
       "Auto-merge can only be enabled for pull requests created through the GitHub API.",
     );
     expect(body.prUrl).toContain("/compare/main...feature%2Fauto-merge");
-    expect(createCalls).toHaveLength(2);
+    expect(createCalls).toHaveLength(1);
     expect(autoMergeCalls).toHaveLength(0);
     expect(updateCalls).toHaveLength(0);
   });

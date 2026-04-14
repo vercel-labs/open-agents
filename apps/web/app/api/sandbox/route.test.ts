@@ -33,10 +33,10 @@ interface ConnectConfig {
       repo?: string;
       branch?: string;
       newBranch?: string;
-      token?: string;
     };
   };
   options?: {
+    githubToken?: string;
     gitUser?: {
       email?: string;
     };
@@ -59,6 +59,7 @@ const dotenvSyncCalls: Array<Record<string, unknown>> = [];
 
 let sessionRecord: TestSessionRecord;
 let currentVercelAuthInfo: TestVercelAuthInfo | null;
+let currentGitHubToken: string | null;
 let currentDotenvContent: string;
 let currentDotenvError: Error | null;
 
@@ -84,7 +85,7 @@ mock.module("@/lib/db/accounts", () => ({
 }));
 
 mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => null,
+  getUserGitHubToken: async () => currentGitHubToken,
 }));
 
 mock.module("@/lib/vercel/token", () => ({
@@ -177,6 +178,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       expiresAt: 1_700_000_000,
       externalId: "user_ext_1",
     };
+    currentGitHubToken = null;
     currentDotenvContent = 'API_KEY="secret"\n';
     currentDotenvError = null;
     sessionRecord = {
@@ -231,7 +233,43 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(dotenvSyncCalls).toHaveLength(0);
   });
 
-  test("new vercel sandbox writes linked Development env vars to .env.local", async () => {
+  test("repo sandboxes broker the user GitHub token instead of embedding it", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentGitHubToken = "github-user-token";
+    sessionRecord.vercelProjectId = null;
+    sessionRecord.vercelProjectName = null;
+    sessionRecord.vercelTeamId = null;
+
+    const response = await POST(
+      new Request("http://localhost/api/sandbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoUrl: "https://github.com/acme/private-repo",
+          branch: "main",
+          sandboxType: "vercel",
+        }),
+      }),
+    );
+
+    expect(response.ok).toBe(true);
+    expect(connectConfigs[0]).toMatchObject({
+      state: {
+        type: "vercel",
+        source: {
+          repo: "https://github.com/acme/private-repo",
+          branch: "main",
+        },
+      },
+      options: {
+        githubToken: "github-user-token",
+      },
+    });
+    expect(connectConfigs[0]?.state.source).not.toHaveProperty("token");
+  });
+
+  test("new vercel sandbox does not sync linked Development env vars while code is commented out", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -256,18 +294,8 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(connectConfigs[0]?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
-    expect(dotenvSyncCalls).toEqual([
-      {
-        token: "vercel-token",
-        projectIdOrName: "project-1",
-        teamId: "team-1",
-      },
-    ]);
+    expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
-      {
-        path: "/vercel/sandbox/.env.local",
-        content: 'API_KEY="secret"\n',
-      },
       {
         path: "/root/.local/share/com.vercel.cli/auth.json",
         content:
@@ -288,7 +316,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(payload.mode).toBe("vercel");
   });
 
-  test("env sync failures do not block sandbox creation", async () => {
+  test("commented-out env sync does not run during sandbox creation", async () => {
     const { POST } = await routeModulePromise;
 
     currentDotenvError = new Error("boom");
@@ -311,7 +339,7 @@ describe("/api/sandbox lifecycle kicks", () => {
         reason: "sandbox-created",
       },
     ]);
-    expect(dotenvSyncCalls).toHaveLength(1);
+    expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
       {
         path: "/root/.local/share/com.vercel.cli/auth.json",

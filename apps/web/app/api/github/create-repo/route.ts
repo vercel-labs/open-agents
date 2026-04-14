@@ -1,8 +1,7 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { runCreateRepoWorkflow } from "@/app/api/github/create-repo/_lib/create-repo-workflow";
-import { getInstallationByAccountLogin } from "@/lib/db/installations";
+import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { getInstallationToken } from "@/lib/github/app-auth";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -69,51 +68,22 @@ export async function POST(req: Request) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
-  // 4. Resolve GitHub token for repo creation
-  // For orgs: use installation token + createInOrg
-  // For personal accounts: use user OAuth token + createForAuthenticatedUser
-  // (POST /user/repos only works with user access tokens, not installation tokens)
-  let repoToken: string | null = null;
-  let installationToken: string | null = null;
-  let accountType: "User" | "Organization" | undefined;
-
-  if (owner) {
-    const installation = await getInstallationByAccountLogin(
-      session.user.id,
-      owner,
-    );
-    if (!installation) {
-      return Response.json(
-        {
-          error: `No GitHub App installation found for "${owner}". Install the GitHub App on that account first.`,
-        },
-        { status: 400 },
-      );
-    }
-
-    accountType = installation.accountType;
-
-    try {
-      installationToken = await getInstallationToken(
-        installation.installationId,
-      );
-    } catch (error) {
-      console.error(`Failed to get installation token for ${owner}:`, error);
-    }
-
-    // Only use installation token for org repos (createInOrg)
-    if (installation.accountType === "Organization" && installationToken) {
-      repoToken = installationToken;
-    }
-  }
-
-  // Use user OAuth token for personal accounts (or as fallback)
-  if (!repoToken) {
-    repoToken = await getUserGitHubToken();
-  }
+  // 4. Resolve GitHub OAuth token for repo creation
+  const githubAccount = await getGitHubAccount(session.user.id);
+  const repoToken = await getUserGitHubToken(session.user.id);
 
   if (!repoToken) {
     return Response.json({ error: "GitHub not connected" }, { status: 401 });
+  }
+
+  const githubUsername = githubAccount?.username?.trim();
+  let accountType: "User" | "Organization" | undefined;
+
+  if (owner) {
+    accountType =
+      githubUsername && owner.toLowerCase() === githubUsername.toLowerCase()
+        ? "User"
+        : "Organization";
   }
 
   // 5. Connect to sandbox
@@ -130,7 +100,6 @@ export async function POST(req: Request) {
     owner,
     accountType,
     repoToken,
-    installationToken,
     sessionUser: {
       id: session.user.id,
       username: session.user.username,

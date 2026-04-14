@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
+import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import type { Chat, Session } from "@/lib/db/schema";
 import type { VercelProjectSelection } from "@/lib/vercel/types";
@@ -146,7 +147,9 @@ export function useSessions(options?: {
       };
 
       if (!res.ok || !responseData.session || !responseData.chat) {
-        throw new Error(responseData.error ?? "Failed to create session");
+        const message = responseData.error ?? "Failed to create session";
+        toast.error(message);
+        throw new Error(message);
       }
 
       const createdSession = responseData.session;

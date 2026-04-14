@@ -13,10 +13,10 @@ import {
 } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -98,33 +98,29 @@ export async function POST(req: Request) {
   // 3. Connect to sandbox
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
-  let repoTokenResult: Awaited<ReturnType<typeof getRepoToken>> | null = null;
-  let cachedUserToken: string | null = null;
+  let userToken: string | null = null;
 
   if (sessionRecord.repoOwner && sessionRecord.repoName) {
-    try {
-      repoTokenResult = await getRepoToken(
-        session.user.id,
-        sessionRecord.repoOwner,
-      );
-      const authUrl = buildGitHubAuthRemoteUrl({
-        token: repoTokenResult.token,
-        owner: sessionRecord.repoOwner,
-        repo: sessionRecord.repoName,
-      });
-      if (!authUrl) {
-        return Response.json(
-          { error: "Invalid repository configuration" },
-          { status: 400 },
-        );
-      }
-      await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 5000);
-    } catch {
+    userToken = await getUserGitHubToken(session.user.id);
+    if (!userToken) {
       return Response.json(
         { error: "No GitHub token available for this repository" },
         { status: 403 },
       );
     }
+
+    const authUrl = buildGitHubAuthRemoteUrl({
+      token: userToken,
+      owner: sessionRecord.repoOwner,
+      repo: sessionRecord.repoName,
+    });
+    if (!authUrl) {
+      return Response.json(
+        { error: "Invalid repository configuration" },
+        { status: 400 },
+      );
+    }
+    await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 5000);
   }
 
   // 3a. Resolve live branch from sandbox
@@ -341,11 +337,8 @@ Respond with ONLY the commit message, nothing else.`,
     // by ending the quote, adding an escaped single quote, and starting a new quote
     //
     // Set the git author identity to the authenticated user so the commit is
-    // attributed to them. When the GitHub App rewrites the committer on push it
-    // will still show the user as the author. Do NOT add a Co-Authored-By trailer
-    // for the bot — the bot is already attributed as PR creator/committer, and
-    // adding the trailer causes it to appear twice (as committer + co-author) on
-    // squash-merged PRs, resulting in 3 authors instead of 2.
+    // attributed to them. A Co-Authored-By trailer is appended for the GitHub
+    // App bot so the agent's involvement is visible in the commit history.
     const githubAccount = await getGitHubAccount(session.user.id);
     if (githubAccount?.externalUserId && githubAccount.username) {
       const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
@@ -358,10 +351,14 @@ Respond with ONLY the commit message, nothing else.`,
     }
 
     const escapedMessage = commitMessage.replace(/'/g, "'\\''");
+    const coAuthorTrailer = await getAppCoAuthorTrailer();
+    const trailerArg = coAuthorTrailer
+      ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
+      : "";
     const commitCommand =
       useManualCommitMessage && normalizedManualBody.length > 0
-        ? `git commit -m '${escapedMessage}' -m '${normalizedManualBody.replace(/'/g, "'\\''")}'`
-        : `git commit -m '${escapedMessage}'`;
+        ? `git commit -m '${escapedMessage}' -m '${normalizedManualBody.replace(/'/g, "'\\''")}'${trailerArg}`
+        : `git commit -m '${escapedMessage}'${trailerArg}`;
     const commitResult = await sandbox.exec(commitCommand, cwd, 10000);
 
     if (!commitResult.success) {
@@ -459,79 +456,17 @@ Respond with ONLY the commit message, nothing else.`,
       }
 
       if (
-        repoTokenResult?.type === "installation" &&
-        sessionRecord.repoOwner &&
-        sessionRecord.repoName
-      ) {
-        if (!cachedUserToken) {
-          cachedUserToken = await getUserGitHubToken();
-        }
-
-        if (cachedUserToken) {
-          const userAuthUrl = buildGitHubAuthRemoteUrl({
-            token: cachedUserToken,
-            owner: sessionRecord.repoOwner,
-            repo: sessionRecord.repoName,
-          });
-          if (!userAuthUrl) {
-            return Response.json(
-              { error: "Invalid repository configuration" },
-              { status: 400 },
-            );
-          }
-          const setOriginUserAuthResult = await sandbox.exec(
-            `git remote set-url origin "${userAuthUrl}"`,
-            cwd,
-            10000,
-          );
-
-          if (setOriginUserAuthResult.success) {
-            pushResult = await sandbox.exec(
-              `GIT_TERMINAL_PROMPT=0 git push --verbose -u origin ${resolvedBranch}`,
-              cwd,
-              60000,
-            );
-
-            if (pushResult.success) {
-              console.log(
-                `[generate-pr] Push to origin succeeded with user token after installation token failure`,
-              );
-              gitActions.pushed = true;
-            } else {
-              pushOutput =
-                `${pushResult.stdout}\n${pushResult.stderr ?? ""}`.trim();
-              redactedPushOutput = redactGitHubToken(pushOutput);
-              isPermissionError = isPermissionPushError(pushOutput);
-              if (
-                !isPermissionError &&
-                !pushOutput &&
-                pushResult.exitCode === 128
-              ) {
-                isPermissionError = true;
-              }
-              console.log(
-                `[generate-pr] Push to origin with user token also failed (exitCode=${pushResult.exitCode}, output=${redactedPushOutput.slice(0, 200) || "none"})`,
-              );
-            }
-          }
-        }
-      }
-
-      if (
         !gitActions.pushed &&
         isPermissionError &&
         sessionRecord.repoOwner &&
         sessionRecord.repoName
       ) {
-        if (!cachedUserToken) {
-          cachedUserToken = await getUserGitHubToken();
-        }
         const githubAccount = await getGitHubAccount(session.user.id);
 
-        if (cachedUserToken && githubAccount?.username) {
+        if (userToken && githubAccount?.username) {
           const forkOwner = githubAccount.username;
           const forkResult = await ensureForkExists({
-            token: cachedUserToken,
+            token: userToken,
             upstreamOwner: sessionRecord.repoOwner,
             upstreamRepo: sessionRecord.repoName,
             forkOwner,
@@ -547,7 +482,7 @@ Respond with ONLY the commit message, nothing else.`,
           }
 
           const { forkRepoName } = forkResult;
-          const forkAuthUrl = `https://x-access-token:${cachedUserToken}@github.com/${forkOwner}/${forkRepoName}.git`;
+          const forkAuthUrl = `https://x-access-token:${userToken}@github.com/${forkOwner}/${forkRepoName}.git`;
 
           await sandbox.exec(
             "git remote remove fork 2>/dev/null || true",

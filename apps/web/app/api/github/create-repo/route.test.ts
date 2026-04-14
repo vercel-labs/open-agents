@@ -18,9 +18,8 @@ type SessionRecord = {
   sandboxState: { type: "vercel" } | null;
 };
 
-type InstallationRecord = {
-  accountType: "User" | "Organization";
-  installationId: number;
+type GitHubAccount = {
+  username: string;
 } | null;
 
 type WorkflowResult =
@@ -46,15 +45,17 @@ const connectStates: unknown[] = [];
 
 let authSession: AuthSession;
 let sessionRecord: SessionRecord | null;
-let installationRecord: InstallationRecord;
-let installationTokenValue: string | null;
-let installationTokenThrows: boolean;
+let githubAccount: GitHubAccount;
 let userToken: string | null;
 let sandboxActive: boolean;
 let workflowResult: WorkflowResult;
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => authSession,
+}));
+
+mock.module("@/lib/db/accounts", () => ({
+  getGitHubAccount: async () => githubAccount,
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -71,19 +72,6 @@ mock.module("@/lib/db/sessions", () => ({
     return {
       ...patch,
     };
-  },
-}));
-
-mock.module("@/lib/db/installations", () => ({
-  getInstallationByAccountLogin: async () => installationRecord,
-}));
-
-mock.module("@/lib/github/app-auth", () => ({
-  getInstallationToken: async () => {
-    if (installationTokenThrows || !installationTokenValue) {
-      throw new Error("Failed to get installation token");
-    }
-    return installationTokenValue;
   },
 }));
 
@@ -141,9 +129,9 @@ describe("/api/github/create-repo", () => {
       cloneUrl: null,
       sandboxState: { type: "vercel" },
     };
-    installationRecord = null;
-    installationTokenValue = null;
-    installationTokenThrows = false;
+    githubAccount = {
+      username: "alice-gh",
+    };
     userToken = "user-token";
     sandboxActive = true;
     workflowResult = {
@@ -170,27 +158,6 @@ describe("/api/github/create-repo", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Not authenticated" });
-  });
-
-  test("returns 400 when owner installation is missing", async () => {
-    installationRecord = null;
-    const { POST } = await routeModulePromise;
-
-    const response = await POST(
-      createRequest({
-        sessionId: "session-1",
-        repoName: "repo-1",
-        sessionTitle: "Session",
-        owner: "acme-org",
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error:
-        'No GitHub App installation found for "acme-org". Install the GitHub App on that account first.',
-    });
-    expect(workflowCalls).toHaveLength(0);
   });
 
   test("returns 401 when no GitHub token is available", async () => {
@@ -230,14 +197,7 @@ describe("/api/github/create-repo", () => {
     expect(updateCalls).toHaveLength(0);
   });
 
-  test("uses organization installation token and updates session on success", async () => {
-    installationRecord = {
-      accountType: "Organization",
-      installationId: 42,
-    };
-    installationTokenValue = "installation-token";
-    userToken = null;
-
+  test("uses the OAuth token for personal repo creation", async () => {
     const { POST } = await routeModulePromise;
 
     const response = await POST(
@@ -245,7 +205,7 @@ describe("/api/github/create-repo", () => {
         sessionId: "session-1",
         repoName: "repo-1",
         sessionTitle: "Session",
-        owner: "acme-org",
+        owner: "alice-gh",
       }),
     );
 
@@ -260,9 +220,11 @@ describe("/api/github/create-repo", () => {
     });
 
     expect(workflowCalls).toHaveLength(1);
-    expect(workflowCalls[0]?.accountType).toBe("Organization");
-    expect(workflowCalls[0]?.repoToken).toBe("installation-token");
-    expect(workflowCalls[0]?.installationToken).toBe("installation-token");
+    expect(workflowCalls[0]).toMatchObject({
+      owner: "alice-gh",
+      accountType: "User",
+      repoToken: "user-token",
+    });
 
     expect(updateCalls).toEqual([
       {
@@ -276,5 +238,26 @@ describe("/api/github/create-repo", () => {
         },
       },
     ]);
+  });
+
+  test("treats a different owner as an organization while still using the OAuth token", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createRequest({
+        sessionId: "session-1",
+        repoName: "repo-1",
+        sessionTitle: "Session",
+        owner: "acme-org",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(workflowCalls).toHaveLength(1);
+    expect(workflowCalls[0]).toMatchObject({
+      owner: "acme-org",
+      accountType: "Organization",
+      repoToken: "user-token",
+    });
   });
 });

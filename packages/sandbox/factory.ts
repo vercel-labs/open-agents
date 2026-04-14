@@ -16,8 +16,10 @@ export type SandboxState = { type: "vercel" } & VercelState;
  * Base connect options for all sandbox types.
  */
 export interface ConnectOptions {
-  /** Environment variables (e.g., GITHUB_TOKEN) */
+  /** Environment variables available to sandbox commands */
   env?: Record<string, string>;
+  /** GitHub token used for credential brokering; never exposed inside the sandbox */
+  githubToken?: string;
   /** Git user for commits */
   gitUser?: { name: string; email: string };
   /** Lifecycle hooks */

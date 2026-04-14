@@ -321,6 +321,7 @@ export async function buildDevelopmentDotenvFromVercelProject(params: {
 interface VercelDeployment {
   url?: string | null;
   defaultRoute?: string | null;
+  inspectorUrl?: string | null;
   created?: number;
   createdAt?: number;
   ready?: number;
@@ -420,6 +421,7 @@ export async function findLatestPreviewDeploymentUrlForBranch(params: {
 }
 
 const BUILDING_STATES = new Set(["BUILDING", "QUEUED", "INITIALIZING"]);
+const ERROR_STATES = new Set(["ERROR", "CANCELED"]);
 
 export async function findLatestBuildingDeploymentUrlForBranch(params: {
   token: string;
@@ -467,4 +469,53 @@ export async function findLatestBuildingDeploymentUrlForBranch(params: {
     )[0];
 
   return latestBuilding ? getDeploymentUrl(latestBuilding) : null;
+}
+
+/**
+ * Returns the Vercel inspector URL (dashboard / build-logs page) for the
+ * most recent failed preview deployment on the given branch, or `null` if
+ * there is no such deployment.
+ */
+export async function findLatestFailedDeploymentInspectorUrlForBranch(params: {
+  token: string;
+  projectIdOrName: string;
+  branch: string;
+  teamId?: string | null;
+}): Promise<string | null> {
+  const branch = params.branch.trim();
+  if (!branch) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    projectId: params.projectIdOrName,
+    branch,
+    limit: "5",
+  });
+  if (params.teamId) {
+    query.set("teamId", params.teamId);
+  }
+
+  const response = await fetchVercelJson<VercelDeploymentsResponse>({
+    path: "/v6/deployments",
+    token: params.token,
+    query,
+  });
+
+  const latestError = (response.deployments ?? [])
+    .filter((deployment) => {
+      const state = deployment.readyState ?? deployment.state ?? "";
+      return (
+        ERROR_STATES.has(state) &&
+        deployment.target !== "production" &&
+        isNonEmptyString(deployment.inspectorUrl)
+      );
+    })
+    .sort(
+      (left, right) =>
+        getDeploymentRecencyTimestamp(right) -
+        getDeploymentRecencyTimestamp(left),
+    )[0];
+
+  return latestError?.inspectorUrl ?? null;
 }

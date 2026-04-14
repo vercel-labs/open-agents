@@ -1,8 +1,5 @@
-import { unstable_cache } from "next/cache";
 import { z } from "zod";
-import { getInstallationToken } from "@/lib/github/app-auth";
 
-const CACHE_REVALIDATE_SECONDS = 120;
 const INSTALLATION_REPOS_MAX_PAGES = 20;
 
 const installationRepoSchema = z.object({
@@ -22,19 +19,6 @@ const installationReposResponseSchema = z.object({
   repositories: z.array(installationRepoSchema),
 });
 
-interface ListInstallationRepositoriesOptions {
-  owner?: string;
-  query?: string;
-  limit?: number;
-}
-
-interface FetchInstallationRepositoriesOptions {
-  installationId: number;
-  owner?: string;
-  query?: string;
-  limit?: number;
-}
-
 export interface InstallationRepository {
   name: string;
   full_name: string;
@@ -45,8 +29,12 @@ export interface InstallationRepository {
   language: string | null;
 }
 
-export function getInstallationReposCacheTag(installationId: number): string {
-  return `github-installation-repos-${installationId}`;
+interface ListUserInstallationRepositoriesOptions {
+  installationId: number;
+  userToken: string;
+  owner?: string;
+  query?: string;
+  limit?: number;
 }
 
 function normalizeLimit(limit?: number): number {
@@ -77,23 +65,36 @@ function compareRepositoriesByRecentActivity(
   return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 }
 
-export async function listInstallationRepositories(
-  token: string,
-  options?: ListInstallationRepositoriesOptions,
-): Promise<InstallationRepository[]> {
-  const ownerFilter = options?.owner?.trim().toLowerCase();
-  const queryFilter = options?.query?.trim().toLowerCase();
-  const limit = normalizeLimit(options?.limit);
+/**
+ * List repositories accessible to the user through a specific GitHub App
+ * installation. Uses the user's OAuth token so GitHub computes the
+ * intersection of repos the app can see and repos the user can see.
+ */
+export async function listUserInstallationRepositories({
+  installationId,
+  userToken,
+  owner,
+  query,
+  limit,
+}: ListUserInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
+  const ownerFilter = owner?.trim().toLowerCase();
+  const queryFilter = query?.trim().toLowerCase();
+  const normalizedLimit = normalizeLimit(limit);
 
   const perPage = 100;
   const maxPages = INSTALLATION_REPOS_MAX_PAGES;
   const matchedRepos: z.infer<typeof installationRepoSchema>[] = [];
 
   for (let page = 1; page <= maxPages; page++) {
-    const endpoint = `https://api.github.com/installation/repositories?per_page=${perPage}&page=${page}`;
+    const endpoint = new URL(
+      `https://api.github.com/user/installations/${installationId}/repositories`,
+    );
+    endpoint.searchParams.set("per_page", `${perPage}`);
+    endpoint.searchParams.set("page", `${page}`);
+
     const response = await fetch(endpoint, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${userToken}`,
         Accept: "application/vnd.github.v3+json",
       },
     });
@@ -101,14 +102,14 @@ export async function listInstallationRepositories(
     if (!response.ok) {
       const body = await response.text();
       throw new Error(
-        `Failed to fetch installation repositories: ${response.status} ${body}`,
+        `Failed to fetch user installation repositories: ${response.status} ${body}`,
       );
     }
 
     const json = await response.json();
     const parsed = installationReposResponseSchema.safeParse(json);
     if (!parsed.success) {
-      throw new Error("Invalid GitHub installation repositories response");
+      throw new Error("Invalid GitHub user installation repositories response");
     }
 
     if (parsed.data.repositories.length === 0) {
@@ -136,7 +137,7 @@ export async function listInstallationRepositories(
 
   matchedRepos.sort(compareRepositoriesByRecentActivity);
 
-  return matchedRepos.slice(0, limit).map((repo) => ({
+  return matchedRepos.slice(0, normalizedLimit).map((repo) => ({
     name: repo.name,
     full_name: repo.full_name,
     description: repo.description,
@@ -145,36 +146,4 @@ export async function listInstallationRepositories(
     updated_at: repo.updated_at,
     language: repo.language,
   }));
-}
-
-async function fetchInstallationRepositoriesByInstallation(
-  installationId: number,
-  owner?: string,
-  query?: string,
-  limit?: number,
-): Promise<InstallationRepository[]> {
-  const token = await getInstallationToken(installationId);
-  return listInstallationRepositories(token, {
-    owner,
-    query,
-    limit,
-  });
-}
-
-export function getCachedInstallationRepositories({
-  installationId,
-  owner,
-  query,
-  limit,
-}: FetchInstallationRepositoriesOptions): Promise<InstallationRepository[]> {
-  const cachedFn = unstable_cache(
-    fetchInstallationRepositoriesByInstallation,
-    ["github-installation-repos"],
-    {
-      revalidate: CACHE_REVALIDATE_SECONDS,
-      tags: [getInstallationReposCacheTag(installationId)],
-    },
-  );
-
-  return cachedFn(installationId, owner, query, limit);
 }

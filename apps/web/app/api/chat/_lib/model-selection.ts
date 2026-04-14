@@ -1,4 +1,5 @@
 import type { AgentModelSelection } from "@open-harness/agent";
+import { resolveAvailableModelId } from "@/lib/model-availability";
 import { type ModelVariant, resolveModelSelection } from "@/lib/model-variants";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 
@@ -23,8 +24,16 @@ export function resolveChatModelSelection({
     return { id: DEFAULT_MODEL_ID as AgentModelSelection["id"] };
   }
 
+  const availableModelId = resolveAvailableModelId(selection.resolvedModelId);
+  if (availableModelId !== selection.resolvedModelId) {
+    console.warn(
+      `${missingVariantLabel} "${requestedModelId}" resolves to disabled model "${selection.resolvedModelId}". Falling back to default model.`,
+    );
+    return { id: DEFAULT_MODEL_ID as AgentModelSelection["id"] };
+  }
+
   return {
-    id: selection.resolvedModelId as AgentModelSelection["id"],
+    id: availableModelId as AgentModelSelection["id"],
     ...(selection.providerOptionsByProvider
       ? {
           providerOptionsOverrides: selection.providerOptionsByProvider,

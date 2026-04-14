@@ -45,19 +45,51 @@ export function isGitHubAppConfigured(): boolean {
 }
 
 /**
+ * Cached co-author trailer so we only hit the GitHub API once per process.
+ * `undefined` = not yet fetched.
+ */
+let cachedTrailer: string | null | undefined;
+
+/**
  * Returns a git commit trailer for co-authoring with the GitHub App bot, e.g.:
- *   Co-Authored-By: open-agents[bot] <12345+open-agents[bot]@users.noreply.github.com>
+ *   Co-Authored-By: open-agents[bot] <260704009+open-agents[bot]@users.noreply.github.com>
  *
- * GitHub uses this to display "user and bot committed" on commits.
+ * The numeric prefix is the bot's **user** ID (not the app ID) so that GitHub
+ * can resolve the account and display the bot avatar inline on PR commits.
+ *
+ * The result is cached for the lifetime of the process.
  * Returns null if the app is not configured.
  */
-export function getAppCoAuthorTrailer(): string | null {
-  const appId = process.env.GITHUB_APP_ID;
+export async function getAppCoAuthorTrailer(): Promise<string | null> {
+  if (cachedTrailer !== undefined) return cachedTrailer;
+
   const slug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-  if (!appId || !slug) return null;
+  if (!slug) {
+    cachedTrailer = null;
+    return null;
+  }
+
   const botName = `${slug}[bot]`;
-  const botEmail = `${appId}+${botName}@users.noreply.github.com`;
-  return `Co-Authored-By: ${botName} <${botEmail}>`;
+  let botUserId: number | null = null;
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/users/${encodeURIComponent(botName)}`,
+      { headers: { Accept: "application/vnd.github+json" } },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { id?: number };
+      botUserId = data.id ?? null;
+    }
+  } catch {
+    // Fall back to email without numeric prefix
+  }
+
+  const botEmail = botUserId
+    ? `${botUserId}+${botName}@users.noreply.github.com`
+    : `${botName}@users.noreply.github.com`;
+  cachedTrailer = `Co-Authored-By: ${botName} <${botEmail}>`;
+  return cachedTrailer;
 }
 
 export async function getInstallationToken(

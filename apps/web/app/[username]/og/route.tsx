@@ -26,9 +26,8 @@ export async function GET(request: Request, context: OgRouteContext) {
         display: "flex",
         position: "relative",
         overflow: "hidden",
-        background:
-          "linear-gradient(135deg, #060816 0%, #0f172a 38%, #111827 100%)",
-        color: "#f8fafc",
+        background: "#0a0a0a",
+        color: "#ffffff",
         fontFamily:
           'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
@@ -37,75 +36,126 @@ export async function GET(request: Request, context: OgRouteContext) {
         style={{
           position: "absolute",
           inset: 0,
+          display: "flex",
           background:
-            "radial-gradient(circle at top right, rgba(99, 102, 241, 0.45), transparent 28%), radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.32), transparent 24%)",
+            "radial-gradient(ellipse 900px 500px at 15% 20%, rgba(255, 138, 61, 0.12), transparent 60%), radial-gradient(ellipse 700px 500px at 85% 80%, rgba(255, 255, 255, 0.04), transparent 60%)",
         }}
       />
+
       <div
         style={{
           position: "absolute",
-          inset: 32,
-          borderRadius: 40,
-          border: "1px solid rgba(148, 163, 184, 0.18)",
-          background: "rgba(15, 23, 42, 0.58)",
+          inset: 28,
+          borderRadius: 24,
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          display: "flex",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 28,
+          padding: "52px 56px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          padding: 44,
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 32,
+            alignItems: "flex-start",
+            gap: 24,
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 22,
+              flex: 1,
+            }}
+          >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                fontSize: 22,
-                letterSpacing: 3,
-                textTransform: "uppercase",
-                color: "rgba(226, 232, 240, 0.72)",
+                marginBottom: 4,
               }}
             >
-              <span>Open Agents Wrapped</span>
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none">
+                <path
+                  d="M4 17L10 11L4 5"
+                  stroke="rgba(255,255,255,0.5)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 19H20"
+                  stroke="rgba(255,255,255,0.5)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
               <span
                 style={{
-                  border: "1px solid rgba(148, 163, 184, 0.25)",
-                  borderRadius: 999,
-                  padding: "8px 14px",
-                  textTransform: "none",
-                  letterSpacing: 0,
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: "rgba(255, 255, 255, 0.5)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Open Agents
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span
+                style={{
                   fontSize: 18,
-                  color: "#f8fafc",
+                  textTransform: "uppercase",
+                  letterSpacing: 1.6,
+                  color: "rgba(255, 255, 255, 0.45)",
+                  fontWeight: 600,
+                }}
+              >
+                Wrapped
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "8px 14px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: "rgba(255, 255, 255, 0.04)",
+                  fontSize: 16,
+                  color: "rgba(255, 255, 255, 0.55)",
                 }}
               >
                 {profile.dateSelection.label}
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 68, fontWeight: 700, lineHeight: 1 }}>
-                {displayName}
-              </div>
-              <div style={{ fontSize: 30, color: "rgba(226, 232, 240, 0.72)" }}>
-                @{profile.user.username}
               </div>
             </div>
+
             <div
               style={{
-                maxWidth: 760,
-                fontSize: 28,
-                lineHeight: 1.35,
-                color: "rgba(226, 232, 240, 0.82)",
+                fontSize: 64,
+                fontWeight: 700,
+                lineHeight: 1,
+                letterSpacing: "-0.04em",
+                color: "#ffffff",
+                maxWidth: 660,
               }}
             >
-              Shareable output, usage, and model stats from Open Agents.
+              {displayName}
+            </div>
+
+            <div style={{ fontSize: 28, color: "rgba(255, 255, 255, 0.45)" }}>
+              @{profile.user.username}
             </div>
           </div>
 
@@ -115,35 +165,38 @@ export async function GET(request: Request, context: OgRouteContext) {
               flexDirection: "column",
               alignItems: "flex-end",
               gap: 16,
+              minWidth: 360,
             }}
           >
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
+                fontSize: 13,
+                textTransform: "uppercase",
+                letterSpacing: 1.8,
+                color: "rgba(255, 255, 255, 0.4)",
+                fontWeight: 600,
               }}
             >
-              <div
-                style={{
-                  fontSize: 22,
-                  textTransform: "uppercase",
-                  letterSpacing: 2,
-                  color: "rgba(226, 232, 240, 0.6)",
-                }}
-              >
-                Total tokens
-              </div>
-              <div style={{ fontSize: 84, fontWeight: 700, lineHeight: 1 }}>
-                {formatCompactNumber(profile.totals.totalTokens)}
-              </div>
+              Total tokens
             </div>
+            <div
+              style={{
+                fontSize: 72,
+                lineHeight: 1,
+                fontWeight: 700,
+                letterSpacing: "-0.03em",
+              }}
+            >
+              {formatCompactNumber(profile.totals.totalTokens)}
+            </div>
+
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: 10,
-                width: 320,
+                width: "100%",
+                marginTop: 4,
               }}
             >
               <Pill
@@ -162,13 +215,7 @@ export async function GET(request: Request, context: OgRouteContext) {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "stretch",
-            gap: 20,
-          }}
-        >
+        <div style={{ display: "flex", gap: 14 }}>
           <FeatureCard
             title="Top model"
             value={topModel}
@@ -232,17 +279,19 @@ function Pill({ label, value }: { label: string; value: string }) {
     <div
       style={{
         display: "flex",
-        justifyContent: "space-between",
         alignItems: "center",
-        padding: "14px 18px",
-        borderRadius: 20,
-        background: "rgba(15, 23, 42, 0.8)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        fontSize: 22,
+        justifyContent: "space-between",
+        padding: "12px 14px",
+        borderRadius: 999,
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        background: "rgba(255, 255, 255, 0.04)",
+        fontSize: 20,
       }}
     >
-      <span style={{ color: "rgba(226, 232, 240, 0.72)" }}>{label}</span>
-      <span style={{ fontWeight: 700 }}>{value}</span>
+      <span style={{ color: "rgba(255, 255, 255, 0.5)" }}>{label}</span>
+      <span style={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.9)" }}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -262,28 +311,29 @@ function FeatureCard({
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        gap: 12,
-        borderRadius: 28,
-        padding: 24,
-        background: "rgba(15, 23, 42, 0.82)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
+        gap: 10,
+        borderRadius: 16,
+        padding: 20,
+        background: "rgba(255, 255, 255, 0.03)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
       }}
     >
       <div
         style={{
-          fontSize: 18,
+          fontSize: 14,
           textTransform: "uppercase",
-          letterSpacing: 2,
-          color: "rgba(226, 232, 240, 0.6)",
+          letterSpacing: 1.5,
+          color: "rgba(255, 255, 255, 0.4)",
         }}
       >
         {title}
       </div>
       <div
         style={{
-          fontSize: 34,
-          fontWeight: 700,
-          lineHeight: 1.15,
+          fontSize: 26,
+          lineHeight: 1.2,
+          fontWeight: 600,
+          color: "rgba(255, 255, 255, 0.95)",
           textWrap: "balance",
         }}
       >
@@ -291,9 +341,9 @@ function FeatureCard({
       </div>
       <div
         style={{
-          fontSize: 18,
-          lineHeight: 1.35,
-          color: "rgba(226, 232, 240, 0.72)",
+          fontSize: 14,
+          lineHeight: 1.3,
+          color: "rgba(255, 255, 255, 0.4)",
         }}
       >
         {detail}

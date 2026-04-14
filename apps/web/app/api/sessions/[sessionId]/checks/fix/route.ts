@@ -3,7 +3,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import type { PullRequestCheckRun } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { Octokit } from "@octokit/rest";
 import { gateway, generateText } from "ai";
 
@@ -179,7 +179,7 @@ async function compactLog(rawLog: string): Promise<string> {
  *      compacted by a lightweight LLM call that strips CI noise and preserves
  *      the actual errors, stack traces, and exit status.
  *
- * Requires the GitHub App to have `actions: read` and `checks: read` permissions.
+ * Requires the user's GitHub token with `actions: read` and `checks: read` permissions.
  *
  * Request body:
  *   { checkRuns: PullRequestCheckRun[] } — the failing check runs
@@ -235,14 +235,8 @@ export async function POST(req: Request, context: RouteContext) {
   const allAnnotations: Record<string, CheckAnnotation[]> = {};
 
   if (runsWithIds.length > 0) {
-    let token: string;
-    try {
-      const tokenResult = await getRepoToken(
-        authResult.userId,
-        sessionRecord.repoOwner,
-      );
-      token = tokenResult.token;
-    } catch {
+    const token = await getUserGitHubToken(authResult.userId);
+    if (!token) {
       return Response.json(
         formatFixResponse(checkRuns, compactedLogs, allAnnotations),
       );

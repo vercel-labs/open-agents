@@ -51,7 +51,7 @@ export function LandingFooter() {
                 rel="noopener noreferrer"
                 className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
-                Workflow DevKit
+                Workflow SDK
               </a>
             </div>
           </div>

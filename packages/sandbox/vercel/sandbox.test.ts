@@ -37,6 +37,7 @@ type MockSessionState = {
 
 const createCalls: Array<Record<string, unknown>> = [];
 const getCalls: Array<Record<string, unknown>> = [];
+const updateNetworkPolicyCalls: Array<Record<string, unknown>> = [];
 const runCommandCalls: MockRunCommandParams[] = [];
 const writeFilesCalls: Array<{ path: string; content: Buffer }[]> = [];
 let readFileToBufferResult: Buffer | null = Buffer.from("");
@@ -116,6 +117,9 @@ function createMockSandboxSdk(name: string) {
       lastRunCommandEnv = params.env;
       return runCommandMock(params);
     },
+    updateNetworkPolicy: async (policy: Record<string, unknown>) => {
+      updateNetworkPolicyCalls.push(policy);
+    },
     writeFiles: async (files: { path: string; content: Buffer }[]) => {
       writeFilesCalls.push(files);
     },
@@ -152,6 +156,7 @@ beforeAll(async () => {
 beforeEach(() => {
   createCalls.length = 0;
   getCalls.length = 0;
+  updateNetworkPolicyCalls.length = 0;
   runCommandCalls.length = 0;
   writeFilesCalls.length = 0;
   readFileToBufferResult = Buffer.from("");
@@ -329,6 +334,113 @@ describe("VercelSandbox persistence", () => {
     );
     expect(remaining).toBeGreaterThan(298_000);
     expect(remaining).toBeLessThanOrEqual(300_000);
+  });
+});
+
+describe("GitHub credential brokering", () => {
+  test("applies a brokered GitHub network policy when creating a sandbox", async () => {
+    const basicAuthToken = Buffer.from(
+      "x-access-token:github-user-token",
+      "utf-8",
+    ).toString("base64");
+
+    await sandboxModule.VercelSandbox.create({
+      githubToken: "github-user-token",
+      source: {
+        url: "https://github.com/open-harness/example",
+        branch: "main",
+      },
+    });
+
+    expect(createCalls[0]?.networkPolicy).toEqual({
+      allow: {
+        "api.github.com": [
+          {
+            transform: [
+              { headers: { Authorization: "Bearer github-user-token" } },
+            ],
+          },
+        ],
+        "uploads.github.com": [
+          {
+            transform: [
+              { headers: { Authorization: "Bearer github-user-token" } },
+            ],
+          },
+        ],
+        "codeload.github.com": [
+          {
+            transform: [
+              { headers: { Authorization: "Bearer github-user-token" } },
+            ],
+          },
+        ],
+        "github.com": [
+          {
+            transform: [
+              {
+                headers: {
+                  Authorization: `Basic ${basicAuthToken}`,
+                },
+              },
+            ],
+          },
+        ],
+        "*": [],
+      },
+    });
+    expect(createCalls[0]?.source).toEqual({
+      type: "git",
+      url: "https://github.com/open-harness/example",
+      revision: "main",
+    });
+  });
+
+  test("refreshes brokered GitHub auth when reconnecting to a sandbox", async () => {
+    await sandboxModule.VercelSandbox.connect("session_123", {
+      githubToken: "github-user-token",
+      remainingTimeout: 0,
+    });
+
+    expect(updateNetworkPolicyCalls).toEqual([
+      {
+        allow: {
+          "api.github.com": [
+            {
+              transform: [
+                { headers: { Authorization: "Bearer github-user-token" } },
+              ],
+            },
+          ],
+          "uploads.github.com": [
+            {
+              transform: [
+                { headers: { Authorization: "Bearer github-user-token" } },
+              ],
+            },
+          ],
+          "codeload.github.com": [
+            {
+              transform: [
+                { headers: { Authorization: "Bearer github-user-token" } },
+              ],
+            },
+          ],
+          "github.com": [
+            {
+              transform: [
+                {
+                  headers: {
+                    Authorization: `Basic ${Buffer.from("x-access-token:github-user-token", "utf-8").toString("base64")}`,
+                  },
+                },
+              ],
+            },
+          ],
+          "*": [],
+        },
+      },
+    ]);
   });
 });
 

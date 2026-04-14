@@ -1,6 +1,7 @@
 import type { Sandbox } from "@open-harness/sandbox";
 import { gateway, generateText } from "ai";
 import { getGitHubAccount } from "@/lib/db/accounts";
+import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
 
 // Escape shell metacharacters to prevent command injection
@@ -34,7 +35,6 @@ interface RunCreateRepoWorkflowParams {
   owner?: string;
   accountType?: "User" | "Organization";
   repoToken: string;
-  installationToken: string | null;
   sessionUser: SessionUser;
 }
 
@@ -48,7 +48,6 @@ export async function runCreateRepoWorkflow({
   owner,
   accountType,
   repoToken,
-  installationToken,
   sessionUser,
 }: RunCreateRepoWorkflowParams): Promise<WorkflowResult> {
   // 6. Check if there are any files to push
@@ -162,16 +161,9 @@ export async function runCreateRepoWorkflow({
     };
   }
 
-  // For orgs, use installation token for push (has Contents write permission).
-  // For personal accounts, use the same OAuth token that created the repo —
-  // the installation token may not have access if repositorySelection is "selected".
-  const pushToken =
-    accountType === "Organization" && installationToken
-      ? installationToken
-      : repoToken;
   const authUrl = repoResult.cloneUrl.replace(
     "https://",
-    `https://x-access-token:${pushToken}@`,
+    `https://x-access-token:${repoToken}@`,
   );
   const addRemoteResult = await sandbox.exec(
     `git remote add origin "${authUrl}"`,
@@ -221,13 +213,14 @@ Respond with ONLY the commit message, nothing else.`,
     commitMessage = "feat: initial commit";
   }
 
-  // 13. Create commit
-  // Do NOT add a Co-Authored-By trailer for the bot — the bot is already
-  // attributed as committer when pushing via the installation token, and adding
-  // the trailer causes it to appear twice on squash-merged PRs (3 authors).
+  // 13. Create commit with Co-Authored-By trailer for the agent app
   const escapedMessage = commitMessage.replace(/'/g, "'\\''");
+  const coAuthorTrailer = await getAppCoAuthorTrailer();
+  const trailerArg = coAuthorTrailer
+    ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
+    : "";
   const commitResult = await sandbox.exec(
-    `git commit -m '${escapedMessage}'`,
+    `git commit -m '${escapedMessage}'${trailerArg}`,
     cwd,
     10000,
   );

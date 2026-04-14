@@ -28,6 +28,7 @@ function makeAssistantMessage(
 
 const spies = {
   recordUsage: mock(() => Promise.resolve()),
+  recordWorkflowRun: mock(() => Promise.resolve()),
   collectTaskToolUsageEvents: mock(
     (_message?: unknown) =>
       [] as Array<{
@@ -64,6 +65,10 @@ mock.module("@/lib/db/usage", () => ({
   recordUsage: spies.recordUsage,
 }));
 
+mock.module("@/lib/db/workflow-runs", () => ({
+  recordWorkflowRun: spies.recordWorkflowRun,
+}));
+
 mock.module("@open-harness/agent", () => ({
   collectTaskToolUsageEvents: spies.collectTaskToolUsageEvents,
   sumLanguageModelUsage: spies.sumLanguageModelUsage,
@@ -91,6 +96,96 @@ describe("recordWorkflowUsage", () => {
     expect(calls[0][0]).toBe("user-1");
     expect(calls[0][1]).toMatchObject({
       source: "web",
+      agentType: "main",
+      model: "gpt-4",
+    });
+  });
+
+  test("records workflow run timing when provided", async () => {
+    await recordWorkflowUsage(
+      "user-1",
+      "gpt-4",
+      undefined,
+      makeAssistantMessage(),
+      undefined,
+      {
+        workflowRunId: "wrun-1",
+        chatId: "chat-1",
+        sessionId: "session-1",
+        status: "completed",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:00:05.000Z",
+        totalDurationMs: 5000,
+        stepTimings: [
+          {
+            stepNumber: 1,
+            startedAt: "2026-01-01T00:00:00.000Z",
+            finishedAt: "2026-01-01T00:00:02.000Z",
+            durationMs: 2000,
+            finishReason: "tool-calls",
+            rawFinishReason: "provider_tool_use",
+          },
+          {
+            stepNumber: 2,
+            startedAt: "2026-01-01T00:00:02.000Z",
+            finishedAt: "2026-01-01T00:00:05.000Z",
+            durationMs: 3000,
+            finishReason: "stop",
+            rawFinishReason: "provider_stop",
+          },
+        ],
+      },
+    );
+
+    expect(spies.recordWorkflowRun).toHaveBeenCalledTimes(1);
+    const calls = spies.recordWorkflowRun.mock.calls as unknown[][];
+    expect(calls[0][0]).toMatchObject({
+      id: "wrun-1",
+      chatId: "chat-1",
+      sessionId: "session-1",
+      userId: "user-1",
+      modelId: "gpt-4",
+      status: "completed",
+      totalDurationMs: 5000,
+      stepTimings: [
+        expect.objectContaining({ stepNumber: 1, durationMs: 2000 }),
+        expect.objectContaining({ stepNumber: 2, durationMs: 3000 }),
+      ],
+    });
+  });
+
+  test("continues recording usage when workflow run persistence fails", async () => {
+    spies.recordWorkflowRun.mockImplementationOnce(() =>
+      Promise.reject(new Error("workflow runs table missing")),
+    );
+
+    const usage = makeUsage({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    });
+
+    await recordWorkflowUsage(
+      "user-1",
+      "gpt-4",
+      usage,
+      makeAssistantMessage(),
+      undefined,
+      {
+        workflowRunId: "wrun-1",
+        chatId: "chat-1",
+        sessionId: "session-1",
+        status: "completed",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:00:05.000Z",
+        totalDurationMs: 5000,
+        stepTimings: [],
+      },
+    );
+
+    expect(spies.recordWorkflowRun).toHaveBeenCalledTimes(1);
+    expect(spies.recordUsage).toHaveBeenCalledTimes(1);
+    expect((spies.recordUsage.mock.calls as unknown[][])[0][1]).toMatchObject({
       agentType: "main",
       model: "gpt-4",
     });

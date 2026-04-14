@@ -18,6 +18,11 @@ import {
   buildLifecycleActivityUpdate,
 } from "@/lib/sandbox/lifecycle";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
+import {
+  recordWorkflowRun,
+  type WorkflowRunStatus,
+  type WorkflowRunStepTiming,
+} from "@/lib/db/workflow-runs";
 import { recordUsage } from "@/lib/db/usage";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
@@ -229,12 +234,41 @@ export async function recordWorkflowUsage(
   totalUsage: LanguageModelUsage | undefined,
   responseMessage: WebAgentUIMessage,
   previousResponseMessage?: WebAgentUIMessage,
+  workflowRun?: {
+    workflowRunId: string;
+    chatId: string;
+    sessionId: string;
+    status: WorkflowRunStatus;
+    startedAt: string;
+    finishedAt: string;
+    totalDurationMs: number;
+    stepTimings: WorkflowRunStepTiming[];
+  },
 ): Promise<void> {
   "use step";
 
   try {
     const { collectTaskToolUsageEvents, sumLanguageModelUsage } =
       await import("@open-harness/agent");
+
+    if (workflowRun) {
+      try {
+        await recordWorkflowRun({
+          id: workflowRun.workflowRunId,
+          chatId: workflowRun.chatId,
+          sessionId: workflowRun.sessionId,
+          userId,
+          modelId,
+          status: workflowRun.status,
+          startedAt: workflowRun.startedAt,
+          finishedAt: workflowRun.finishedAt,
+          totalDurationMs: workflowRun.totalDurationMs,
+          stepTimings: workflowRun.stepTimings,
+        });
+      } catch (error) {
+        console.error("[workflow] Failed to record workflow run:", error);
+      }
+    }
 
     // Record main agent usage
     if (totalUsage) {

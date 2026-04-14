@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: {
+  authProvider?: "vercel" | "github";
   user: {
     id: string;
     username: string;
     name: string;
+    email?: string;
   };
 } | null = {
   user: {
@@ -14,6 +16,7 @@ let currentSession: {
     name: "Nico",
   },
 };
+let existingSessionCount = 0;
 let savedLink: VercelProjectSelection | null = null;
 let currentVercelToken: string | null = "vercel-token";
 let matchingProjects: VercelProjectSelection[] = [];
@@ -53,6 +56,7 @@ mock.module("@/lib/vercel/projects", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  countSessionsByUserId: async () => existingSessionCount,
   createSessionWithInitialChat: async (input: {
     session: Record<string, unknown>;
     initialChat: Record<string, unknown>;
@@ -81,8 +85,11 @@ mock.module("@/lib/db/sessions", () => ({
 
 const routeModulePromise = import("./route");
 
-function createJsonRequest(body: unknown): Request {
-  return new Request("http://localhost/api/sessions", {
+function createJsonRequest(
+  body: unknown,
+  url = "http://localhost/api/sessions",
+): Request {
+  return new Request(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -98,11 +105,46 @@ describe("/api/sessions POST vercel project linking", () => {
         name: "Nico",
       },
     };
+    existingSessionCount = 0;
     savedLink = null;
     currentVercelToken = "vercel-token";
     matchingProjects = [];
     createCalls.length = 0;
     upsertCalls.length = 0;
+  });
+
+  test("blocks additional sessions for non-Vercel trial users on the managed deployment", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        username: "nico",
+        name: "Nico",
+        email: "person@example.com",
+      },
+    };
+    existingSessionCount = 1;
+
+    const response = await POST(
+      createJsonRequest(
+        {
+          branch: "main",
+          cloneUrl: "https://github.com/vercel/open-harness",
+          repoOwner: "vercel",
+          repoName: "open-harness",
+        },
+        "https://open-agents.dev/api/sessions",
+      ),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.",
+    );
+    expect(createCalls).toHaveLength(0);
   });
 
   test("explicit Vercel project is validated against live repo matches before it is persisted", async () => {

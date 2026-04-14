@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import {
+  countSessionsByUserId,
   createSessionWithInitialChat,
   getArchivedSessionCountByUserId,
   getSessionsWithUnreadByUserId,
@@ -16,6 +17,11 @@ import {
 } from "@/lib/github/repo-identifiers";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
+import {
+  isManagedTemplateTrialUser,
+  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT,
+  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR,
+} from "@/lib/managed-template-trial";
 import { listMatchingVercelProjects } from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
 import {
@@ -163,6 +169,16 @@ export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (isManagedTemplateTrialUser(session, req.url)) {
+    const existingSessionCount = await countSessionsByUserId(session.user.id);
+    if (existingSessionCount >= MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT) {
+      return Response.json(
+        { error: MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR },
+        { status: 403 },
+      );
+    }
   }
 
   let body: CreateSessionRequest;

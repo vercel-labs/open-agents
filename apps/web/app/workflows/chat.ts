@@ -31,6 +31,10 @@ import {
   runAutoCreatePrStep,
 } from "./chat-post-finish";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
+import type {
+  WorkflowRunStatus,
+  WorkflowRunStepTiming,
+} from "@/lib/db/workflow-runs";
 
 type Options = {
   messages: WebAgentUIMessage[];
@@ -95,6 +99,34 @@ const generateId = async () => {
   "use step";
   return generateIdAi();
 };
+
+function buildStepTiming(
+  stepNumber: number,
+  startedAt: Date,
+  finishedAt: Date,
+  finishReason?: string,
+  rawFinishReason?: string,
+): WorkflowRunStepTiming {
+  return {
+    stepNumber,
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+    finishReason,
+    rawFinishReason,
+  };
+}
+
+function isStepTimingError(
+  error: unknown,
+): error is Error & { stepTiming: WorkflowRunStepTiming } {
+  return (
+    error instanceof Error &&
+    "stepTiming" in error &&
+    typeof error.stepTiming === "object" &&
+    error.stepTiming !== null
+  );
+}
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -440,10 +472,17 @@ export async function runAgentWorkflow(options: Options) {
 
   await sendStart(writable, assistantId);
 
+  const runStartedAt = new Date();
+  const previousResponseMessage =
+    latestMessage.role === "assistant" ? latestMessage : undefined;
+  const stepTimings: WorkflowRunStepTiming[] = [];
   let wasAborted = false;
+  let exhaustedMaxSteps = false;
   let totalUsage: LanguageModelUsage | undefined;
   let finalFinishReason: FinishReason | undefined;
   let streamClosed = false;
+  let workflowStatus: WorkflowRunStatus = "completed";
+  let caughtError: unknown;
   const sandboxState = options.agentOptions.sandbox?.state;
 
   try {
@@ -452,18 +491,29 @@ export async function runAgentWorkflow(options: Options) {
       options.maxSteps === undefined || step < options.maxSteps;
       step++
     ) {
-      const result = await runAgentStep(
-        modelMessages,
-        originalMessagesForStep,
-        assistantId,
-        writable,
-        workflowRunId,
-        options.chatId,
-        options.sessionId,
-        options.modelId,
-        options.agentOptions,
-      );
+      let result: Awaited<ReturnType<typeof runAgentStep>>;
 
+      try {
+        result = await runAgentStep(
+          modelMessages,
+          originalMessagesForStep,
+          assistantId,
+          writable,
+          workflowRunId,
+          options.chatId,
+          options.sessionId,
+          options.modelId,
+          options.agentOptions,
+          step + 1,
+        );
+      } catch (error) {
+        if (isStepTimingError(error)) {
+          stepTimings.push(error.stepTiming);
+        }
+        throw error;
+      }
+
+      stepTimings.push(result.stepTiming);
       pendingAssistantResponse =
         result.responseMessage ?? pendingAssistantResponse;
       originalMessagesForStep = [pendingAssistantResponse];
@@ -477,12 +527,18 @@ export async function runAgentWorkflow(options: Options) {
           : result.stepUsage;
       }
 
-      if (
-        result.finishReason !== "tool-calls" ||
-        shouldPauseForToolInteraction(
+      const shouldContinue =
+        result.finishReason === "tool-calls" &&
+        !shouldPauseForToolInteraction(
           result.responseMessage?.parts ?? pendingAssistantResponse.parts,
-        )
-      ) {
+        );
+
+      if (!shouldContinue) {
+        break;
+      }
+
+      if (options.maxSteps !== undefined && step + 1 >= options.maxSteps) {
+        exhaustedMaxSteps = true;
         break;
       }
     }
@@ -504,14 +560,6 @@ export async function runAgentWorkflow(options: Options) {
     // Persist the assistant message immediately so completed model output is not
     // lost if later post-finish work fails.
     await persistAssistantMessage(options.chatId, pendingAssistantResponse);
-
-    await recordWorkflowUsage(
-      options.userId,
-      options.modelId,
-      totalUsage,
-      pendingAssistantResponse,
-      latestMessage.role === "assistant" ? latestMessage : undefined,
-    );
 
     // Persist the sandbox state so lifecycle timers stay accurate.
     if (sandboxState) {
@@ -657,15 +705,49 @@ export async function runAgentWorkflow(options: Options) {
     if (sandboxState) {
       await refreshDiffCache(options.sessionId, sandboxState);
     }
+
+    workflowStatus = wasAborted
+      ? "aborted"
+      : exhaustedMaxSteps
+        ? "failed"
+        : "completed";
+  } catch (error) {
+    workflowStatus = wasAborted ? "aborted" : "failed";
+    caughtError = error;
   } finally {
-    // On unexpected errors, still clear the active stream and close
-    // so the chat is never permanently marked as streaming.
-    if (!streamClosed) {
-      await Promise.all([
-        clearActiveStream(options.chatId, workflowRunId),
-        sendFinish(writable).then(() => closeStream(writable)),
-      ]);
+    try {
+      // On unexpected errors, still clear the active stream and close
+      // so the chat is never permanently marked as streaming.
+      if (!streamClosed) {
+        await Promise.all([
+          clearActiveStream(options.chatId, workflowRunId),
+          sendFinish(writable).then(() => closeStream(writable)),
+        ]);
+      }
+    } finally {
+      const runFinishedAt = new Date();
+      await recordWorkflowUsage(
+        options.userId,
+        options.modelId,
+        totalUsage,
+        pendingAssistantResponse,
+        previousResponseMessage,
+        {
+          workflowRunId,
+          chatId: options.chatId,
+          sessionId: options.sessionId,
+          status: workflowStatus,
+          startedAt: runStartedAt.toISOString(),
+          finishedAt: runFinishedAt.toISOString(),
+          totalDurationMs: runFinishedAt.getTime() - runStartedAt.getTime(),
+          stepTimings,
+        },
+      );
     }
+  }
+
+  if (caughtError) {
+    throw caughtError;
   }
 }
 
@@ -679,9 +761,11 @@ const runAgentStep = async (
   sessionId: string,
   selectedModelId: string,
   agentOptions: OpenHarnessAgentCallOptions,
+  stepNumber: number,
 ) => {
   "use step";
 
+  const stepStartedAt = new Date();
   const { webAgent } = await import("@/app/config");
 
   const abortController = new AbortController();
@@ -830,6 +914,8 @@ const runAgentStep = async (
       );
     }
 
+    const stepFinishedAt = new Date();
+
     return {
       responseMessage,
       responseMessages: response.messages,
@@ -837,8 +923,17 @@ const runAgentStep = async (
       rawFinishReason,
       stepUsage,
       stepWasAborted: false,
+      stepTiming: buildStepTiming(
+        stepNumber,
+        stepStartedAt,
+        stepFinishedAt,
+        finishReason,
+        rawFinishReason,
+      ),
     };
   } catch (error) {
+    const stepFinishedAt = new Date();
+
     if (isAbortError(error)) {
       const abortedFinishReason: FinishReason = "stop";
       return {
@@ -848,10 +943,27 @@ const runAgentStep = async (
         rawFinishReason: undefined,
         stepUsage: undefined,
         stepWasAborted: true,
+        stepTiming: buildStepTiming(
+          stepNumber,
+          stepStartedAt,
+          stepFinishedAt,
+          abortedFinishReason,
+        ),
       };
     }
 
-    throw error;
+    const errorWithStepTiming =
+      error instanceof Error ? error : new Error(String(error));
+    Object.assign(errorWithStepTiming, {
+      stepTiming: buildStepTiming(
+        stepNumber,
+        stepStartedAt,
+        stepFinishedAt,
+        "error",
+        errorWithStepTiming.name,
+      ),
+    });
+    throw errorWithStepTiming;
   } finally {
     stopMonitor.stop();
     await stopMonitor.done;

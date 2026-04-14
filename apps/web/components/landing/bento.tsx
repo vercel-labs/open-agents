@@ -24,7 +24,7 @@ const items: readonly BentoItem[] = [
   },
   {
     id: "004",
-    title: "Workflow DevKit",
+    title: "Workflow SDK",
     body: "Durable, resumable agent workflows that survive restarts and coordinate multi-step operations.",
   },
 ];
