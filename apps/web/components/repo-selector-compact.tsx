@@ -195,7 +195,7 @@ export function RepoSelectorCompact({
   } = useInstallationRepos({
     installationId: currentInstallation?.installationId ?? null,
     query: debouncedRepoSearch,
-    limit: 50,
+    limit: 25,
   });
 
   // Sort repos: by updated_at desc if available, otherwise alphabetical
@@ -512,7 +512,7 @@ export function RepoSelectorCompact({
           </div>
         ) : (
           <div className="divide-y divide-border/50 dark:divide-white/[0.06]">
-            {sortedRepos.slice(0, 50).map((repo) => (
+            {sortedRepos.slice(0, 25).map((repo) => (
               <div
                 key={repo.full_name}
                 className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30 dark:hover:bg-white/[0.03]"
@@ -539,9 +539,9 @@ export function RepoSelectorCompact({
                 </button>
               </div>
             ))}
-            {sortedRepos.length === 50 && !debouncedRepoSearch && (
+            {sortedRepos.length === 25 && !debouncedRepoSearch && (
               <div className="px-4 py-2.5 text-center text-xs text-muted-foreground">
-                Showing first 50 results. Use search to narrow.
+                Showing first 25 results. Use search to narrow.
               </div>
             )}
           </div>

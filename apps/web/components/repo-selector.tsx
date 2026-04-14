@@ -95,7 +95,7 @@ export function RepoSelector({
   } = useInstallationRepos({
     installationId: selectedInstallation?.installationId ?? null,
     query: debouncedRepoSearch,
-    limit: 50,
+    limit: 25,
   });
 
   useEffect(() => {
@@ -322,7 +322,7 @@ export function RepoSelector({
                     : "No repositories found."}
               </CommandEmpty>
               <CommandGroup>
-                {repos.slice(0, 50).map((repo) => (
+                {repos.slice(0, 25).map((repo) => (
                   <CommandItem
                     key={repo.full_name}
                     value={repo.name}
@@ -342,9 +342,9 @@ export function RepoSelector({
                     )}
                   </CommandItem>
                 ))}
-                {repos.length === 50 && !debouncedRepoSearch && (
+                {repos.length === 25 && !debouncedRepoSearch && (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    Showing first 50 results. Use search to narrow.
+                    Showing first 25 results. Use search to narrow.
                   </div>
                 )}
               </CommandGroup>
