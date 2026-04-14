@@ -1,3 +1,5 @@
+import { checkBotId } from "botid/server";
+import { botIdConfig } from "@/lib/botid";
 import { connectSandbox } from "@open-harness/sandbox";
 import { gateway, generateText } from "ai";
 import {
@@ -40,6 +42,11 @@ export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const botVerification = await checkBotId(botIdConfig);
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
   // 2. Parse request
