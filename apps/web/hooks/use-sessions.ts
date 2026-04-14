@@ -370,6 +370,90 @@ export function useSessions(options?: {
     [data, includeArchived, mutate],
   );
 
+  const unarchiveSession = useCallback(
+    async (sessionId: string) => {
+      const previousData = cloneSessionsResponse(data);
+      const nextArchivedCount = Math.max(
+        (previousData?.archivedCount ?? 0) - 1,
+        0,
+      );
+
+      await mutate(
+        (current) => {
+          const source = current ?? previousData;
+          if (!source) {
+            return source;
+          }
+
+          return {
+            ...source,
+            archivedCount: nextArchivedCount,
+            sessions: includeArchived
+              ? source.sessions.map((session) =>
+                  session.id === sessionId
+                    ? { ...session, status: "running" }
+                    : session,
+                )
+              : source.sessions,
+          };
+        },
+        { revalidate: false },
+      );
+
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "running" }),
+        });
+
+        const responseData = (await res.json()) as {
+          session?: Session;
+          error?: string;
+        };
+
+        if (!res.ok || !responseData.session) {
+          throw new Error(responseData.error ?? "Failed to unarchive session");
+        }
+
+        const updatedSession = responseData.session;
+
+        if (includeArchived) {
+          await mutate(
+            (current) => {
+              if (!current) {
+                return current;
+              }
+
+              return {
+                ...current,
+                sessions: current.sessions.map((session) =>
+                  session.id === sessionId
+                    ? mergeSessionWithSummary(session, updatedSession)
+                    : session,
+                ),
+              };
+            },
+            { revalidate: false },
+          );
+        } else {
+          await mutate();
+        }
+
+        return responseData.session;
+      } catch (error) {
+        if (previousData) {
+          await mutate(previousData, { revalidate: false });
+        } else {
+          void mutate();
+        }
+
+        throw error;
+      }
+    },
+    [data, includeArchived, mutate],
+  );
+
   return {
     sessions,
     archivedCount,
@@ -378,6 +462,7 @@ export function useSessions(options?: {
     createSession,
     renameSession,
     archiveSession,
+    unarchiveSession,
     refreshSessions: mutate,
   };
 }

@@ -59,6 +59,7 @@ type InboxSidebarProps = {
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onRenameSession?: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (sessionId: string) => Promise<void>;
+  onUnarchiveSession: (sessionId: string) => Promise<void>;
   onOpenNewSession: () => void;
   onCreateSessionForRepo: (repoOwner: string, repoName: string) => void;
   onCreateSessionFromBranch: (
@@ -345,6 +346,7 @@ type SessionRowProps = {
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onRenameSession?: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (session: SessionWithUnread) => void;
+  onUnarchiveSession: (session: SessionWithUnread) => void;
 };
 
 const SessionRow = memo(function SessionRow({
@@ -355,6 +357,7 @@ const SessionRow = memo(function SessionRow({
   onSessionPrefetch,
   onRenameSession,
   onArchiveSession,
+  onUnarchiveSession,
 }: SessionRowProps) {
   const isMobile = useIsMobile();
   const [isHovered, setIsHovered] = useState(false);
@@ -382,8 +385,7 @@ const SessionRow = memo(function SessionRow({
   }, [isRenaming]);
 
   const hasDiff = session.linesAdded !== null || session.linesRemoved !== null;
-  const showActionButtons =
-    isHovered && (Boolean(onRenameSession) || session.status !== "archived");
+  const showActionButtons = isHovered;
 
   const handleMouseEnter = useCallback(() => {
     if (leaveTimeoutRef.current) {
@@ -545,26 +547,34 @@ const SessionRow = memo(function SessionRow({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            {session.status !== "archived" ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
-                    aria-label="Archive session"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onArchiveSession(session);
-                    }}
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  Archive session
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                  aria-label={
+                    session.status === "archived"
+                      ? "Unarchive session"
+                      : "Archive session"
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (session.status === "archived") {
+                      onUnarchiveSession(session);
+                      return;
+                    }
+                    onArchiveSession(session);
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {session.status === "archived"
+                  ? "Unarchive session"
+                  : "Archive session"}
+              </TooltipContent>
+            </Tooltip>
           </>
         ) : hasDiff ? (
           <DiffStats
@@ -637,6 +647,7 @@ export function InboxSidebar({
   onSessionPrefetch,
   onRenameSession,
   onArchiveSession,
+  onUnarchiveSession,
   onOpenNewSession,
   onCreateSessionForRepo,
   onCreateSessionFromBranch,
@@ -841,6 +852,22 @@ export function InboxSidebar({
       console.error("Failed to archive session:", err);
     }
   }, [archiveConfirmSession, archivedCount, onArchiveSession]);
+
+  const handleUnarchiveSession = useCallback(
+    async (session: SessionWithUnread) => {
+      try {
+        await onUnarchiveSession(session.id);
+        setArchivedSessions((current) =>
+          current.filter(
+            (existingSession) => existingSession.id !== session.id,
+          ),
+        );
+      } catch (err) {
+        console.error("Failed to unarchive session:", err);
+      }
+    },
+    [onUnarchiveSession],
+  );
 
   const handleLoadMoreArchivedSessions = useCallback(() => {
     if (archivedSessionsLoading) {
@@ -1094,6 +1121,7 @@ export function InboxSidebar({
                               onSessionPrefetch={handleSessionPrefetch}
                               onRenameSession={onRenameSession}
                               onArchiveSession={handleArchiveSession}
+                              onUnarchiveSession={handleUnarchiveSession}
                             />
                           ))}
                         </div>

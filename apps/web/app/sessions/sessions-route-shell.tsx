@@ -72,6 +72,7 @@ export function SessionsRouteShell({
     createSession,
     renameSession,
     archiveSession,
+    unarchiveSession,
   } = useSessions({
     enabled: true,
     includeArchived: false,
@@ -166,6 +167,17 @@ export function SessionsRouteShell({
     [archiveSession, routeSessionId, router, startNavigationTransition],
   );
 
+  const handleUnarchiveSession = useCallback(
+    async (targetSessionId: string) => {
+      await unarchiveSession(targetSessionId);
+
+      if (targetSessionId === routeSessionId) {
+        window.location.reload();
+      }
+    },
+    [routeSessionId, unarchiveSession],
+  );
+
   const handleCreateSessionForRepo = useCallback(
     async (repoOwner: string, repoName: string) => {
       try {
@@ -257,6 +269,7 @@ export function SessionsRouteShell({
               onSessionPrefetch={handleSessionPrefetch}
               onRenameSession={handleRenameSession}
               onArchiveSession={handleArchiveSession}
+              onUnarchiveSession={handleUnarchiveSession}
               onOpenNewSession={openNewSessionDialog}
               onCreateSessionForRepo={handleCreateSessionForRepo}
               onCreateSessionFromBranch={handleCreateSessionFromBranch}
