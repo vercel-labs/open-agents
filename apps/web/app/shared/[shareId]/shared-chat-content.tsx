@@ -123,135 +123,124 @@ export function SharedChatContent({
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-background text-foreground">
-      {/* Hero Header */}
+      {/* Header */}
       <header className="border-b border-border bg-background">
-        <div className="mx-auto max-w-4xl px-4 py-6">
-          {ownerSessionHref && (
-            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-secondary/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  You own this shared chat
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Open the original session to keep working from your private
-                  view.
-                </p>
-              </div>
-              <Button size="sm" asChild className="shrink-0">
-                <Link href={ownerSessionHref}>
-                  Open session
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
-          )}
+        <div className="mx-auto max-w-4xl px-4 py-4">
+          {/* Title + meta row: inline on desktop */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            {/* Left: title + repo */}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-semibold leading-tight text-foreground">
+                {session.title}
+              </h1>
 
-          {/* Top row: shared by user */}
-          {sharedBy && (
-            <div className="mb-4 flex items-center gap-2.5">
-              <Avatar size="sm">
-                {sharedBy.avatarUrl && (
-                  <AvatarImage
-                    src={sharedBy.avatarUrl}
-                    alt={sharedBy.name ?? sharedBy.username}
-                  />
-                )}
-                <AvatarFallback>
-                  {(sharedBy.name ?? sharedBy.username).charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-muted-foreground">
-                Shared by{" "}
-                <span className="font-medium text-foreground">
-                  {sharedBy.name ?? sharedBy.username}
-                </span>
-              </span>
-            </div>
-          )}
-
-          {/* Title */}
-          <h1 className="text-lg font-semibold leading-tight text-foreground">
-            {session.title}
-          </h1>
-
-          {/* Repo / branch / PR line */}
-          {hasRepo && (
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <div className="inline-flex items-center gap-1.5 text-muted-foreground">
-                <GitBranch className="h-3.5 w-3.5" />
-                {repoUrl ? (
-                  /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {session.repoOwner}/{session.repoName}
-                  </a>
-                ) : (
-                  <span className="font-medium text-foreground">
-                    {session.repoOwner}/{session.repoName}
-                  </span>
-                )}
-                {session.branch && (
+              {/* Inline meta: repo · branch · PR · model — all on one line on desktop */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                {hasRepo && (
                   <>
-                    <span className="text-muted-foreground/40">/</span>
-                    <span className="text-muted-foreground">
-                      {session.branch}
-                    </span>
+                    <div className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <GitBranch className="h-3.5 w-3.5" />
+                      {repoUrl ? (
+                        /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
+                        <a
+                          href={repoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-foreground hover:underline"
+                        >
+                          {session.repoOwner}/{session.repoName}
+                        </a>
+                      ) : (
+                        <span className="font-medium text-foreground">
+                          {session.repoOwner}/{session.repoName}
+                        </span>
+                      )}
+                      {session.branch && (
+                        <>
+                          <span className="text-muted-foreground/40">/</span>
+                          <span className="text-muted-foreground">
+                            {session.branch}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {prUrl && session.prNumber && (
+                      <>
+                        <span className="text-muted-foreground/40">·</span>
+                        {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
+                        <a
+                          href={prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <GitPullRequest className="h-3.5 w-3.5" />
+                          <span className="font-medium">
+                            #{session.prNumber}
+                          </span>
+                          {session.prStatus && (
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                                session.prStatus === "open" &&
+                                  "bg-green-500/10 text-green-600 dark:text-green-400",
+                                session.prStatus === "merged" &&
+                                  "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+                                session.prStatus === "closed" &&
+                                  "bg-red-500/10 text-red-600 dark:text-red-400",
+                              )}
+                            >
+                              {session.prStatus}
+                            </span>
+                          )}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </>
+                    )}
+                    {modelId && (
+                      <span className="text-muted-foreground/40">·</span>
+                    )}
                   </>
                 )}
-              </div>
-              {prUrl && session.prNumber && (
-                <>
-                  <span className="text-muted-foreground/40">·</span>
-                  {/* oxlint-disable-next-line nextjs/no-html-link-for-pages */}
-                  <a
-                    href={prUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <GitPullRequest className="h-3.5 w-3.5" />
-                    <span className="font-medium">#{session.prNumber}</span>
-                    {session.prStatus && (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                          session.prStatus === "open" &&
-                            "bg-green-500/10 text-green-600 dark:text-green-400",
-                          session.prStatus === "merged" &&
-                            "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-                          session.prStatus === "closed" &&
-                            "bg-red-500/10 text-red-600 dark:text-red-400",
-                        )}
-                      >
-                        {session.prStatus}
+                {modelId && (
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <Bot className="h-3 w-3" />
+                    <span className="font-medium text-foreground">
+                      {displayModelName(modelId, modelName)}
+                    </span>
+                    {displayProviderName(modelId) && (
+                      <span className="text-muted-foreground/60">
+                        · {displayProviderName(modelId)}
                       </span>
                     )}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Meta pills row */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {/* Model pill */}
-            {modelId && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-1 text-xs text-muted-foreground">
-                <Bot className="h-3 w-3" />
-                <span className="font-medium text-foreground">
-                  {displayModelName(modelId, modelName)}
-                </span>
-                {displayProviderName(modelId) && (
-                  <span className="text-muted-foreground/60">
-                    · {displayProviderName(modelId)}
                   </span>
                 )}
-              </span>
+              </div>
+            </div>
+
+            {/* Right: shared by user */}
+            {sharedBy && (
+              <div className="flex shrink-0 items-center gap-2">
+                <Avatar size="sm">
+                  {sharedBy.avatarUrl && (
+                    <AvatarImage
+                      src={sharedBy.avatarUrl}
+                      alt={sharedBy.name ?? sharedBy.username}
+                    />
+                  )}
+                  <AvatarFallback>
+                    {(sharedBy.name ?? sharedBy.username)
+                      .charAt(0)
+                      .toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-muted-foreground">
+                  Shared by{" "}
+                  <span className="font-medium text-foreground">
+                    {sharedBy.name ?? sharedBy.username}
+                  </span>
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -261,6 +250,26 @@ export function SharedChatContent({
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
           <div className="space-y-4">
+            {/* Owner banner — between header and messages */}
+            {ownerSessionHref && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/40 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    You own this shared chat
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Open the original session to keep working from your private
+                    view.
+                  </p>
+                </div>
+                <Button size="sm" asChild className="shrink-0">
+                  <Link href={ownerSessionHref}>
+                    Open session
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </div>
+            )}
             {chats.map(({ chat, messagesWithTiming }) => (
               <div key={chat.id}>
                 {chats.length > 1 && (
