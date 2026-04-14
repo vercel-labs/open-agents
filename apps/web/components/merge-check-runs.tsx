@@ -231,7 +231,9 @@ function GroupSection({
           ) : (
             <ChevronRight className="h-3 w-3 shrink-0" />
           )}
-          <span className="truncate">{groupLabel(state, checkRuns.length)}</span>
+          <span className="truncate">
+            {groupLabel(state, checkRuns.length)}
+          </span>
         </button>
         {trailing && <div className="shrink-0">{trailing}</div>}
       </div>
