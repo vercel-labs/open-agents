@@ -35,7 +35,7 @@ type DeleteMessageResult =
 
 let authResult: AuthResult = { ok: true, userId: "user-1" };
 let currentAuthSession: {
-  authProvider?: "vercel" | "github";
+  authProvider?: "workos" | "github";
   user: {
     id: string;
     email?: string;
@@ -161,7 +161,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]", () => 
 
   test("returns 403 for managed-template trial users", async () => {
     currentAuthSession = {
-      authProvider: "vercel",
+      authProvider: "workos",
       user: {
         id: "user-1",
         email: "person@example.com",

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: {
-  authProvider?: "vercel" | "github";
+  authProvider?: "workos" | "github";
   user: {
     id: string;
     username: string;
@@ -117,7 +117,7 @@ describe("/api/sessions POST vercel project linking", () => {
     const { POST } = await routeModulePromise;
 
     currentSession = {
-      authProvider: "vercel",
+      authProvider: "workos",
       user: {
         id: "user-1",
         username: "nico",

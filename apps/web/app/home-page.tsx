@@ -11,7 +11,6 @@ import { SessionStarter } from "@/components/session-starter";
 import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
 import { useSession } from "@/hooks/use-session";
 import { useSessions } from "@/hooks/use-sessions";
-import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 interface HomePageProps {
   hasSessionCookie: boolean;
@@ -40,7 +39,6 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     sandboxType: SandboxType;
     autoCommitPush: boolean;
     autoCreatePr: boolean;
-    vercelProject?: VercelProjectSelection | null;
   }) => {
     setIsCreating(true);
     try {
@@ -53,7 +51,6 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
         sandboxType: input.sandboxType,
         autoCommitPush: input.autoCommitPush,
         autoCreatePr: input.autoCreatePr,
-        vercelProject: input.vercelProject,
       });
 
       router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);

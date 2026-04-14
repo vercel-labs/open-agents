@@ -1,21 +1,8 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import { useState, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
-
-function VercelIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M12 1L24 22H0L12 1Z" />
-    </svg>
-  );
-}
 
 function resolveRedirectPath(value: string): string {
   if (value.startsWith("/") && !value.startsWith("//")) {
@@ -53,7 +40,7 @@ export function SignInButton({
     const fallback = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
     const encodedRedirect = encodeURIComponent(redirectPath);
-    const destination = `/api/auth/signin/vercel?next=${encodedRedirect}`;
+    const destination = `/api/auth/signin/workos?next=${encodedRedirect}`;
 
     setIsLoading(true);
     window.requestAnimationFrame(() => {
@@ -73,9 +60,9 @@ export function SignInButton({
       {isLoading ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
-        <VercelIcon className="mr-2 h-4 w-4" />
+        <LogIn className="mr-2 h-4 w-4" />
       )}
-      {isLoading ? "Signing in..." : "Sign in with Vercel"}
+      {isLoading ? "Signing in..." : "Sign in"}
     </Button>
   );
 }

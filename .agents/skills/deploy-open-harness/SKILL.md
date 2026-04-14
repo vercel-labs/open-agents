@@ -16,8 +16,8 @@ Before giving deployment advice, read these files if you have not already:
 - `apps/web/lib/db/client.ts`
 - `apps/web/lib/jwe/encrypt.ts`
 - `apps/web/lib/crypto.ts`
-- `apps/web/app/api/auth/signin/vercel/route.ts`
-- `apps/web/app/api/auth/vercel/callback/route.ts`
+- `apps/web/app/api/auth/signin/workos/route.ts`
+- `apps/web/app/api/auth/workos/callback/route.ts`
 - `apps/web/app/api/github/app/install/route.ts`
 - `apps/web/app/api/github/app/callback/route.ts`
 - `apps/web/lib/github/app-auth.ts`
@@ -51,7 +51,7 @@ Help the user:
 Start by determining which path the user wants:
 
 ### 1) Minimal deploy
-A working hosted app where the user can deploy it, sign in with Vercel, and use the product without GitHub repo access.
+A working hosted app where the user can deploy it, sign in with WorkOS AuthKit, and use the product without GitHub repo access.
 
 ### 2) Full deploy
 Everything in the minimal deploy, plus GitHub account linking, GitHub App installation, private repo access, pushes, and PR creation.
@@ -70,8 +70,8 @@ Use this checklist when guiding the user.
 ### Required for a usable hosted deployment
 
 - `ENCRYPTION_KEY`
-- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
-- `VERCEL_APP_CLIENT_SECRET`
+- `WORKOS_API_KEY`
+- `WORKOS_CLIENT_ID`
 
 ### Required for GitHub-enabled repo flows
 
@@ -113,16 +113,16 @@ Recommended generation command:
 openssl rand -hex 32
 ```
 
-### Vercel OAuth app
-Tell the user to create a Vercel OAuth app and set:
+### WorkOS AuthKit
+Tell the user to create a WorkOS account and set up an AuthKit application. Configure the redirect URI:
 
-- Callback URL: `https://YOUR_DOMAIN/api/auth/vercel/callback`
-- For local dev: `http://localhost:3000/api/auth/vercel/callback`
+- Redirect URI: `https://YOUR_DOMAIN/api/auth/workos/callback`
+- For local dev: `http://localhost:3000/api/auth/workos/callback`
 
 Store the credentials as:
 
-- `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID`
-- `VERCEL_APP_CLIENT_SECRET`
+- `WORKOS_API_KEY`
+- `WORKOS_CLIENT_ID`
 
 ### GitHub App
 Tell the user they do not need a separate GitHub OAuth app. Open Harness uses the GitHub App's user authorization flow.
@@ -167,8 +167,8 @@ Guide the user through this sequence:
    - `JWE_SECRET`
    - `ENCRYPTION_KEY`
 4. Deploy once to get a stable production URL.
-5. Create the Vercel OAuth app using that production URL.
-6. Add `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` and `VERCEL_APP_CLIENT_SECRET`.
+5. Create the WorkOS AuthKit application using that production URL as the redirect URI.
+6. Add `WORKOS_API_KEY` and `WORKOS_CLIENT_ID`.
 7. Redeploy.
 8. If the user wants the full GitHub flow, create the GitHub App using the production URL, add the GitHub env vars, and redeploy again.
 9. Optionally add Redis/KV and the production URL vars.
@@ -180,7 +180,7 @@ If the user already has a custom domain ready, it is fine to use that domain fro
 For a minimal deploy, walk the user through:
 
 1. Open the production site.
-2. Sign in with Vercel.
+2. Sign in via WorkOS AuthKit.
 3. Confirm they land in the app successfully.
 4. Create a session and confirm the basic UI loads.
 

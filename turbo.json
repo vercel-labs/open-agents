@@ -14,10 +14,10 @@
         "KV_URL",
         "NEXT_PUBLIC_AUTH_PROVIDERS",
         "NEXT_PUBLIC_GITHUB_CLIENT_ID",
-        "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
         "POSTGRES_URL",
         "REDIS_URL",
-        "VERCEL_APP_CLIENT_SECRET"
+        "WORKOS_API_KEY",
+        "WORKOS_CLIENT_ID"
       ],
       "outputs": ["dist/**"]
     },

@@ -1,6 +1,6 @@
 # Open Agents
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CJWE_SECRET%2CENCRYPTION_KEY%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+JWE_SECRET+and+ENCRYPTION_KEY+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CJWE_SECRET%2CENCRYPTION_KEY%2CWORKOS_API_KEY%2CWORKOS_CLIENT_ID%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+JWE_SECRET+and+ENCRYPTION_KEY+yourself%2C+then+add+your+WorkOS+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
 
 Open Agents is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
 
@@ -64,15 +64,15 @@ JWE_SECRET=
 
 ### Required to sign in and actually use the hosted app
 
-A useful deployment also needs token encryption plus Vercel OAuth sign-in:
+A useful deployment also needs token encryption plus WorkOS AuthKit sign-in:
 
 ```env
 ENCRYPTION_KEY=
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
-VERCEL_APP_CLIENT_SECRET=
+WORKOS_API_KEY=
+WORKOS_CLIENT_ID=
 ```
 
-Without these, the site can deploy, but Vercel sign-in will not work.
+Without these, the site can deploy, but sign-in will not work.
 
 ### Required for GitHub repo access, pushes, and PRs
 
@@ -126,17 +126,17 @@ Recommended path: deploy this repo at the repo root on Vercel, then layer on aut
    ```
 
 6. Deploy once to get a stable production URL.
-7. Create a Vercel OAuth app with callback URL:
+7. Create a WorkOS account and set up an AuthKit application. Configure the redirect URI:
 
    ```text
-   https://YOUR_DOMAIN/api/auth/vercel/callback
+   https://YOUR_DOMAIN/api/auth/workos/callback
    ```
 
 8. Add these env vars and redeploy:
 
    ```env
-   NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
-   VERCEL_APP_CLIENT_SECRET=
+   WORKOS_API_KEY=
+   WORKOS_CLIENT_ID=
    ```
 
 9. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
@@ -178,25 +178,25 @@ If you already have a linked Vercel project, you can still pull env vars locally
 
 ## OAuth and integration setup
 
-### Vercel OAuth
+### WorkOS AuthKit
 
-Create a Vercel OAuth app and use this callback:
+Create a WorkOS account and set up an AuthKit application. Configure the redirect URI:
 
 ```text
-https://YOUR_DOMAIN/api/auth/vercel/callback
+https://YOUR_DOMAIN/api/auth/workos/callback
 ```
 
 For local development, use:
 
 ```text
-http://localhost:3000/api/auth/vercel/callback
+http://localhost:3000/api/auth/workos/callback
 ```
 
 Then set:
 
 ```env
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
-VERCEL_APP_CLIENT_SECRET=...
+WORKOS_API_KEY=...
+WORKOS_CLIENT_ID=...
 ```
 
 ### GitHub App

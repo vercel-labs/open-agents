@@ -64,7 +64,7 @@ export function isManagedTemplateTrialUser(
   url: string | URL,
 ) {
   return (
-    session?.authProvider === "vercel" &&
+    session?.authProvider === "workos" &&
     isManagedTemplateDeployment(url) &&
     !hasAllowedManagedTemplateEmail(session.user.email)
   );

@@ -3,7 +3,40 @@ import { and, eq } from "drizzle-orm";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { refreshVercelToken } from "./oauth";
+
+const VERCEL_TOKEN_URL = "https://api.vercel.com/login/oauth/token";
+
+interface VercelTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope?: string;
+}
+
+async function refreshVercelToken(params: {
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
+}): Promise<VercelTokenResponse> {
+  const response = await fetch(VERCEL_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: params.refreshToken,
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Vercel token refresh failed: ${text}`);
+  }
+
+  return response.json() as Promise<VercelTokenResponse>;
+}
 
 interface UserVercelAuthRow {
   accessToken: string;

@@ -17,7 +17,7 @@ export async function userExists(userId: string): Promise<boolean> {
 }
 
 export async function upsertUser(userData: {
-  provider: "github" | "vercel";
+  provider: "github" | "vercel" | "workos";
   externalId: string;
   accessToken: string;
   refreshToken?: string;
