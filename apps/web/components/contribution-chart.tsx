@@ -1,7 +1,7 @@
 "use client";
 
 import { formatTokens } from "@open-harness/shared";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { DateRange } from "react-day-picker";
 import {
   Tooltip,
@@ -194,8 +194,14 @@ export function ContributionChart({
     onSelectRange({ from: selectedRange.from, to: nextDate });
   }
 
+  const scrollRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      node.scrollLeft = node.scrollWidth;
+    }
+  }, []);
+
   return (
-    <div className="flex flex-col gap-1 overflow-x-auto">
+    <div ref={scrollRef} className="flex flex-col gap-1 overflow-x-auto">
       <div
         className="grid"
         style={{
@@ -333,7 +339,7 @@ export function ContributionChart({
         )}
       </div>
 
-      <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+      <div className="mt-3 flex items-center justify-end gap-1 text-xs text-muted-foreground">
         <span>Less</span>
         {INTENSITY_CLASSES.map((cls, i) => (
           <div

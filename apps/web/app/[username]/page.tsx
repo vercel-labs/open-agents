@@ -182,7 +182,7 @@ export default async function PublicUsagePage({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-5xl px-6 py-8 sm:py-12">
+      <div className="mx-auto max-w-5xl px-6 py-8 pb-16 sm:py-12 sm:pb-20">
         {/* Page header with date presets */}
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Profile</h1>
