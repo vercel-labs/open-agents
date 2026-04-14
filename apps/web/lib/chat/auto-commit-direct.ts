@@ -117,9 +117,7 @@ export async function performAutoCommit(
   );
 
   if (!pushResult.success) {
-    console.warn(
-      `[auto-commit] Push failed for session ${params.sessionId}: ${pushResult.stderr ?? pushResult.stdout}`,
-    );
+    console.warn(`[auto-commit] Push failed for session ${params.sessionId}`);
     return {
       committed: true,
       pushed: false,

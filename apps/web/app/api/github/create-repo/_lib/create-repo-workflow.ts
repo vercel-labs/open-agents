@@ -239,10 +239,9 @@ Respond with ONLY the commit message, nothing else.`,
   // 15. Push to remote
   const pushResult = await sandbox.exec("git push -u origin main", cwd, 60000);
   if (!pushResult.success) {
-    const pushOutput = pushResult.stdout + (pushResult.stderr ?? "");
     return {
       ok: false,
-      response: repoCreatedError(`Failed to push: ${pushOutput.slice(0, 100)}`),
+      response: repoCreatedError("Failed to push to remote"),
     };
   }
 

@@ -21,7 +21,10 @@ export async function POST(req: NextRequest): Promise<Response> {
           }
         }
       } catch (error) {
-        console.error("Failed to revoke Vercel token:", error);
+        console.error(
+          "Failed to revoke Vercel token:",
+          error instanceof Error ? error.message : "Unknown error",
+        );
       }
     }
   }

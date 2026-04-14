@@ -589,7 +589,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
       if (cloneResult.exitCode !== 0) {
         throw new Error(
-          `Failed to clone repository '${source.url}': ${await cloneResult.stderr()}`,
+          `Failed to clone repository '${source.url}' (exit code ${cloneResult.exitCode})`,
         );
       }
     }
