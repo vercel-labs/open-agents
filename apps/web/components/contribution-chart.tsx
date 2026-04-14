@@ -146,7 +146,7 @@ export function ContributionChart({
   }, [data, selectedRange]);
 
   const weekCount = grid.length;
-  const gridWidth = weekCount * CELL_SIZE + (weekCount - 1) * CELL_GAP;
+  const minGridWidth = weekCount * CELL_SIZE + (weekCount - 1) * CELL_GAP;
 
   function handleDateSelect(date: string) {
     if (!onSelectRange) {
@@ -182,10 +182,10 @@ export function ContributionChart({
           className="grid"
           style={{
             direction: "ltr",
-            gridTemplateColumns: `repeat(${weekCount}, ${CELL_SIZE}px)`,
-            gridTemplateRows: `repeat(${DAYS_IN_WEEK}, ${CELL_SIZE}px)`,
+            gridTemplateColumns: `repeat(${weekCount}, 1fr)`,
+            gridTemplateRows: `repeat(${DAYS_IN_WEEK}, auto)`,
             gap: CELL_GAP,
-            width: gridWidth,
+            minWidth: minGridWidth,
           }}
         >
           {grid.flatMap((week, wi) =>
@@ -197,6 +197,7 @@ export function ContributionChart({
                     style={{
                       gridColumn: wi + 1,
                       gridRow: di + 1,
+                      aspectRatio: "1 / 1",
                     }}
                   />
                 );
@@ -219,7 +220,7 @@ export function ContributionChart({
                   aria-label={`Usage for ${formatDate(cell.date)}`}
                   aria-pressed={isSelected}
                   className={cn(
-                    "block h-full w-full rounded-[3px] transition-[filter,opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
+                    "block aspect-square w-full rounded-[3px] transition-[filter,opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-1",
                     "hover:opacity-85",
                     INTENSITY_CLASSES[intensity],
                     hasActiveSelection &&
@@ -237,7 +238,7 @@ export function ContributionChart({
               ) : (
                 <div
                   className={cn(
-                    "rounded-[3px] transition-[filter,opacity,box-shadow]",
+                    "aspect-square rounded-[3px] transition-[filter,opacity,box-shadow]",
                     INTENSITY_CLASSES[intensity],
                     hasActiveSelection &&
                       !isSelected &&
