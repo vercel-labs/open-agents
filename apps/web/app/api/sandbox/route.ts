@@ -30,8 +30,8 @@ import {
   hasResumableSandboxState,
 } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
-import { getUserVercelToken } from "@/lib/vercel/token";
+// import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
+// import { getUserVercelToken } from "@/lib/vercel/token";
 
 interface CreateSandboxRequest {
   repoUrl?: string;
@@ -41,35 +41,35 @@ interface CreateSandboxRequest {
   sandboxType?: "vercel";
 }
 
-async function syncVercelProjectEnvVarsToSandbox(params: {
-  userId: string;
-  sessionRecord: SessionRecord;
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
-}): Promise<void> {
-  if (!params.sessionRecord.vercelProjectId) {
-    return;
-  }
-
-  const token = await getUserVercelToken(params.userId);
-  if (!token) {
-    return;
-  }
-
-  const dotenvContent = await buildDevelopmentDotenvFromVercelProject({
-    token,
-    projectIdOrName: params.sessionRecord.vercelProjectId,
-    teamId: params.sessionRecord.vercelTeamId,
-  });
-  if (!dotenvContent) {
-    return;
-  }
-
-  await params.sandbox.writeFile(
-    `${params.sandbox.workingDirectory}/.env.local`,
-    dotenvContent,
-    "utf-8",
-  );
-}
+// async function syncVercelProjectEnvVarsToSandbox(params: {
+//   userId: string;
+//   sessionRecord: SessionRecord;
+//   sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+// }): Promise<void> {
+//   if (!params.sessionRecord.vercelProjectId) {
+//     return;
+//   }
+//
+//   const token = await getUserVercelToken(params.userId);
+//   if (!token) {
+//     return;
+//   }
+//
+//   const dotenvContent = await buildDevelopmentDotenvFromVercelProject({
+//     token,
+//     projectIdOrName: params.sessionRecord.vercelProjectId,
+//     teamId: params.sessionRecord.vercelTeamId,
+//   });
+//   if (!dotenvContent) {
+//     return;
+//   }
+//
+//   await params.sandbox.writeFile(
+//     `${params.sandbox.workingDirectory}/.env.local`,
+//     dotenvContent,
+//     "utf-8",
+//   );
+// }
 
 async function syncVercelCliAuthForSandbox(params: {
   userId: string;
@@ -214,18 +214,18 @@ export async function POST(req: Request) {
     });
 
     if (sessionRecord) {
-      try {
-        await syncVercelProjectEnvVarsToSandbox({
-          userId: session.user.id,
-          sessionRecord,
-          sandbox,
-        });
-      } catch (error) {
-        console.error(
-          `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
-          error,
-        );
-      }
+      // try {
+      //   await syncVercelProjectEnvVarsToSandbox({
+      //     userId: session.user.id,
+      //     sessionRecord,
+      //     sandbox,
+      //   });
+      // } catch (error) {
+      //   console.error(
+      //     `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
+      //     error,
+      //   );
+      // }
 
       try {
         await syncVercelCliAuthForSandbox({

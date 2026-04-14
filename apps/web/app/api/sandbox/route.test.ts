@@ -269,7 +269,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(connectConfigs[0]?.state.source).not.toHaveProperty("token");
   });
 
-  test("new vercel sandbox writes linked Development env vars to .env.local", async () => {
+  test("new vercel sandbox does not sync linked Development env vars while code is commented out", async () => {
     const { POST } = await routeModulePromise;
 
     const request = new Request("http://localhost/api/sandbox", {
@@ -294,18 +294,8 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(connectConfigs[0]?.options?.gitUser?.email).toBe(
       "12345+nico-gh@users.noreply.github.com",
     );
-    expect(dotenvSyncCalls).toEqual([
-      {
-        token: "vercel-token",
-        projectIdOrName: "project-1",
-        teamId: "team-1",
-      },
-    ]);
+    expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
-      {
-        path: "/vercel/sandbox/.env.local",
-        content: 'API_KEY="secret"\n',
-      },
       {
         path: "/root/.local/share/com.vercel.cli/auth.json",
         content:
@@ -326,7 +316,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(payload.mode).toBe("vercel");
   });
 
-  test("env sync failures do not block sandbox creation", async () => {
+  test("commented-out env sync does not run during sandbox creation", async () => {
     const { POST } = await routeModulePromise;
 
     currentDotenvError = new Error("boom");
@@ -349,7 +339,7 @@ describe("/api/sandbox lifecycle kicks", () => {
         reason: "sandbox-created",
       },
     ]);
-    expect(dotenvSyncCalls).toHaveLength(1);
+    expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
       {
         path: "/root/.local/share/com.vercel.cli/auth.json",
