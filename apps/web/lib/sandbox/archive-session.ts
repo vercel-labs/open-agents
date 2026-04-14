@@ -6,7 +6,7 @@ import {
   findPullRequestByBranch,
   getPullRequestStatus,
 } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
 type SessionRecord = NonNullable<Awaited<ReturnType<typeof getSessionById>>>;
@@ -70,16 +70,8 @@ async function refreshArchiveGitState(
       updates.branch = branch;
     }
 
-    let token: string | undefined;
-    try {
-      const repoToken = await getRepoToken(
-        currentSession.userId,
-        currentSession.repoOwner,
-      );
-      token = repoToken.token;
-    } catch {
-      token = undefined;
-    }
+    const token =
+      (await getUserGitHubToken(currentSession.userId)) ?? undefined;
 
     if (!branchChanged && currentSession.prNumber != null) {
       const repoUrl = getSessionRepoUrl(currentSession);

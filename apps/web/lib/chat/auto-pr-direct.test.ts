@@ -11,14 +11,7 @@ type ExecResult = {
 };
 
 let execResults: Map<string, ExecResult>;
-let repoTokenResult:
-  | { token: string; type: "installation"; installationId: number }
-  | { token: string; type: "user" } = {
-  token: "ghp_repo",
-  type: "installation",
-  installationId: 1,
-};
-let userTokenResult: string | null = null;
+let userTokenResult: string | null = "ghp_user";
 let cachedBranchesResult: { branches: string[]; defaultBranch: string } | null =
   {
     branches: ["main", "feature-branch"],
@@ -97,10 +90,6 @@ mock.module("@/lib/github/api", () => ({
   fetchGitHubBranches: fetchGitHubBranchesSpy,
 }));
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: async () => repoTokenResult,
-}));
-
 mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: getUserGitHubTokenSpy,
 }));
@@ -161,12 +150,7 @@ beforeEach(() => {
   getUserGitHubTokenSpy.mockClear();
 
   execResults = defaultExecResults();
-  repoTokenResult = {
-    token: "ghp_repo",
-    type: "installation",
-    installationId: 1,
-  };
-  userTokenResult = null;
+  userTokenResult = "ghp_user";
   cachedBranchesResult = {
     branches: ["main", "feature-branch"],
     defaultBranch: "main",

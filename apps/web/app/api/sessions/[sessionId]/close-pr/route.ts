@@ -4,7 +4,7 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
 import { closePullRequest } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -64,14 +64,8 @@ export async function POST(_req: Request, context: RouteContext) {
     } satisfies ClosePullRequestResponse);
   }
 
-  let token: string;
-  try {
-    const tokenResult = await getRepoToken(
-      authResult.userId,
-      sessionRecord.repoOwner,
-    );
-    token = tokenResult.token;
-  } catch {
+  const token = await getUserGitHubToken(authResult.userId);
+  if (!token) {
     return Response.json(
       { error: "No GitHub token available for this repository" },
       { status: 403 },

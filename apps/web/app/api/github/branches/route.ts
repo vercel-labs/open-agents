@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchGitHubBranches } from "@/lib/github/api";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface RepoInfo {
@@ -286,13 +286,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let token: string | null = null;
-  try {
-    const tokenResult = await getRepoToken(session.user.id, owner);
-    token = tokenResult.token;
-  } catch {
-    token = null;
-  }
+  const token = await getUserGitHubToken(session.user.id);
 
   try {
     if (token) {

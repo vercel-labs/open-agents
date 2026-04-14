@@ -6,7 +6,6 @@ import {
   findPullRequestByBranch,
 } from "@/lib/github/client";
 import { fetchGitHubBranches } from "@/lib/github/api";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import {
   buildGitHubAuthRemoteUrl,
   isValidGitHubRepoName,
@@ -160,10 +159,8 @@ export async function performAutoCreatePr(
     };
   }
 
-  let repoTokenResult: Awaited<ReturnType<typeof getRepoToken>>;
-  try {
-    repoTokenResult = await getRepoToken(userId, repoOwner);
-  } catch {
+  const userToken = await getUserGitHubToken(userId);
+  if (!userToken) {
     return {
       created: false,
       syncedExisting: false,
@@ -172,17 +169,10 @@ export async function performAutoCreatePr(
     };
   }
 
-  const userToken =
-    repoTokenResult.type === "installation"
-      ? await getUserGitHubToken(userId)
-      : null;
-  const tokenCandidates = dedupeTokenCandidates([
-    repoTokenResult.token,
-    userToken,
-  ]);
+  const tokenCandidates = dedupeTokenCandidates([userToken]);
 
   const authUrl = buildGitHubAuthRemoteUrl({
-    token: repoTokenResult.token,
+    token: userToken,
     owner: repoOwner,
     repo: repoName,
   });

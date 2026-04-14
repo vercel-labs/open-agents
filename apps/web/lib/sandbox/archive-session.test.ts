@@ -104,11 +104,7 @@ const spies = {
 
     return sandbox;
   }),
-  getRepoToken: mock(async () => ({
-    token: "repo-token",
-    type: "installation" as const,
-    installationId: 1,
-  })),
+  getUserGitHubToken: mock(async () => "repo-token"),
   getPullRequestStatus: mock(
     async (): Promise<MockPullRequestStatusResult> => ({
       success: false,
@@ -131,8 +127,8 @@ mock.module("@open-harness/sandbox", () => ({
   connectSandbox: spies.connectSandbox,
 }));
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: spies.getRepoToken,
+mock.module("@/lib/github/user-token", () => ({
+  getUserGitHubToken: spies.getUserGitHubToken,
 }));
 
 mock.module("@/lib/github/client", () => ({
@@ -183,11 +179,7 @@ beforeEach(() => {
   sandboxQueue = [];
   Object.values(spies).forEach((spy) => spy.mockClear());
 
-  spies.getRepoToken.mockImplementation(async () => ({
-    token: "repo-token",
-    type: "installation",
-    installationId: 1,
-  }));
+  spies.getUserGitHubToken.mockImplementation(async () => "repo-token");
   spies.getPullRequestStatus.mockImplementation(async () => ({
     success: false,
     error: "Failed to get PR status",

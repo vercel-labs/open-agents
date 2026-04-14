@@ -31,7 +31,7 @@ const findLatestBuildingDeploymentUrlForBranchMock = mock(
 const findLatestFailedDeploymentInspectorUrlForBranchMock = mock(
   async () => currentFailedDeploymentInspectorUrl,
 );
-const getRepoTokenMock = mock(async () => ({ token: "repo-token" }));
+const getUserGitHubTokenMock = mock(async () => "repo-token");
 const findLatestVercelDeploymentUrlForPullRequestMock = mock(
   async () => currentPullRequestDeploymentResult,
 );
@@ -60,8 +60,8 @@ mock.module("@/lib/vercel/projects", () => ({
     findLatestFailedDeploymentInspectorUrlForBranchMock,
 }));
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: getRepoTokenMock,
+mock.module("@/lib/github/user-token", () => ({
+  getUserGitHubToken: getUserGitHubTokenMock,
 }));
 
 mock.module("@/lib/github/client", () => ({
@@ -94,7 +94,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     findLatestPreviewDeploymentUrlForBranchMock.mockClear();
     findLatestBuildingDeploymentUrlForBranchMock.mockClear();
     findLatestFailedDeploymentInspectorUrlForBranchMock.mockClear();
-    getRepoTokenMock.mockClear();
+    getUserGitHubTokenMock.mockClear();
     findLatestVercelDeploymentUrlForPullRequestMock.mockClear();
   });
 
@@ -118,7 +118,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
       branch: "feature/preview",
       teamId: "team-1",
     });
-    expect(getRepoTokenMock).toHaveBeenCalledTimes(0);
+    expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(0);
     expect(
       findLatestVercelDeploymentUrlForPullRequestMock,
     ).toHaveBeenCalledTimes(0);
@@ -215,7 +215,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     expect(findLatestPreviewDeploymentUrlForBranchMock).toHaveBeenCalledTimes(
       0,
     );
-    expect(getRepoTokenMock).toHaveBeenCalledTimes(1);
+    expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(1);
     expect(
       findLatestVercelDeploymentUrlForPullRequestMock,
     ).toHaveBeenCalledWith({

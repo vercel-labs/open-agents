@@ -45,8 +45,8 @@ mock.module("@/lib/db/accounts", () => ({
   getGitHubAccount: async () => githubAccountResult,
 }));
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: async () => repoTokenResult,
+mock.module("@/lib/github/user-token", () => ({
+  getUserGitHubToken: async () => repoTokenResult.token,
 }));
 
 const { performAutoCommit } = await import("./auto-commit-direct");
@@ -241,7 +241,7 @@ describe("performAutoCommit", () => {
     expect(result.commitMessage!.length).toBeLessThanOrEqual(72);
   });
 
-  test("proceeds without token when getRepoToken throws", async () => {
+  test("proceeds without token when no user token is available", async () => {
     // Override the mock for this test by manipulating exec results
     // The token fetch will fail but commit should still work
     repoTokenResult = { token: null };

@@ -3,7 +3,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import type { PullRequestCheckRun } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { Octokit } from "@octokit/rest";
 
 type RouteContext = {
@@ -147,14 +147,8 @@ export async function POST(req: Request, context: RouteContext) {
   const logs: Record<string, string> = {};
 
   if (runsWithIds.length > 0) {
-    let token: string;
-    try {
-      const tokenResult = await getRepoToken(
-        authResult.userId,
-        sessionRecord.repoOwner,
-      );
-      token = tokenResult.token;
-    } catch {
+    const token = await getUserGitHubToken(authResult.userId);
+    if (!token) {
       return Response.json(formatFixResponse(checkRuns, logs));
     }
 

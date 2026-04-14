@@ -2,8 +2,8 @@ import type { Sandbox } from "@open-harness/sandbox";
 import { generateText } from "ai";
 import { gateway } from "@open-harness/agent";
 import { getGitHubAccount } from "@/lib/db/accounts";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 
 export interface AutoCommitParams {
   sandbox: Sandbox;
@@ -39,13 +39,7 @@ export async function performAutoCommit(
   }
 
   // 2. Set up auth on the remote
-  let repoToken: string | null = null;
-  try {
-    const tokenResult = await getRepoToken(userId, repoOwner);
-    repoToken = tokenResult.token;
-  } catch {
-    // No token available — push will likely fail, but commit can still succeed
-  }
+  const repoToken = await getUserGitHubToken(userId);
 
   if (repoToken) {
     const authUrl = buildGitHubAuthRemoteUrl({

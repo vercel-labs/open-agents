@@ -170,10 +170,6 @@ mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => preferencesState,
 }));
 
-mock.module("@/lib/github/get-repo-token", () => ({
-  getRepoToken: async () => ({ token: null }),
-}));
-
 mock.module("@/lib/skills-cache", () => ({
   getCachedSkills: async () => cachedSkillsState,
   setCachedSkills: async () => {},

@@ -4,7 +4,6 @@ import {
   enablePullRequestAutoMerge,
   parseGitHubUrl,
 } from "@/lib/github/client";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -136,57 +135,32 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid head owner" }, { status: 400 });
   }
 
-  let tokenResult: Awaited<ReturnType<typeof getRepoToken>>;
-  try {
-    tokenResult = await getRepoToken(session.user.id, parsedRepoUrl.owner);
-  } catch {
+  const userToken = await getUserGitHubToken(session.user.id);
+  if (!userToken) {
     return Response.json(
       { error: "No GitHub token available for this repository" },
       { status: 403 },
     );
   }
 
-  const userToken = await getUserGitHubToken();
-  const tokenCandidates: string[] = [];
-
   let headRef = resolvedBranch;
   const normalizedBaseOwner = parsedRepoUrl.owner.toLowerCase();
   const normalizedHeadOwner = headOwner?.trim().toLowerCase();
 
   if (normalizedHeadOwner && normalizedHeadOwner !== normalizedBaseOwner) {
-    // Cross-fork PRs: prefer user token first since installation tokens are
-    // scoped to specific repos and may not cover the fork owner.
     headRef = `${headOwner}:${resolvedBranch}`;
-    if (userToken) {
-      tokenCandidates.push(userToken);
-    }
   }
 
-  // Always try the installation token (or user token if no installation) first
-  // for same-owner PRs, so the PR is created from the GitHub App installation.
-  tokenCandidates.push(tokenResult.token);
-
-  // Fall back to user token if the primary token fails (e.g. repo-scoped
-  // installation tokens that don't cover this particular repo).
-  if (tokenResult.type === "installation" && userToken) {
-    tokenCandidates.push(userToken);
-  }
-
-  const dedupedTokenCandidates: string[] = [];
-  for (const token of tokenCandidates) {
-    if (!dedupedTokenCandidates.includes(token)) {
-      dedupedTokenCandidates.push(token);
-    }
-  }
+  const tokenCandidates = [userToken];
 
   // 4. Create PR using existing function
   let result: Awaited<ReturnType<typeof createPullRequest>> = {
     success: false,
     error: "Failed to create pull request",
   };
-  let tokenUsedForCreation = dedupedTokenCandidates[0];
+  let tokenUsedForCreation = tokenCandidates[0];
 
-  for (const candidateToken of dedupedTokenCandidates) {
+  for (const candidateToken of tokenCandidates) {
     tokenUsedForCreation = candidateToken;
     result = await createPullRequest({
       repoUrl,
@@ -251,7 +225,7 @@ export async function POST(req: Request) {
       autoMergeError =
         "The pull request was created, but auto-merge could not be enabled.";
     } else {
-      const remainingTokens = dedupedTokenCandidates.filter(
+      const remainingTokens = tokenCandidates.filter(
         (candidateToken) => candidateToken !== tokenUsedForCreation,
       );
       const autoMergeTokenCandidates = [

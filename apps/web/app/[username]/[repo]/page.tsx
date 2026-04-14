@@ -6,8 +6,8 @@ import {
 } from "@/lib/db/sessions";
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { getRepoToken } from "@/lib/github/get-repo-token";
 import { getRandomCityName } from "@/lib/random-city";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface RepoPageProps {
@@ -65,8 +65,8 @@ export default async function RepoPage({ params }: RepoPageProps) {
   );
 
   // Get a GitHub token (if available) for private repo access
-  const token = await getRepoToken(session.user.id, username)
-    .then((result) => result.token)
+  const token = await getUserGitHubToken(session.user.id)
+    .then((value) => value ?? undefined)
     .catch(() => {
       // No token available -- will try unauthenticated (works for public repos)
       return undefined;
