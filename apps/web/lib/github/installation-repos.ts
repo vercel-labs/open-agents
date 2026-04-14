@@ -130,6 +130,10 @@ export async function listUserInstallationRepositories({
 
     matchedRepos.push(...pageMatches);
 
+    if (matchedRepos.length >= normalizedLimit) {
+      break;
+    }
+
     if (parsed.data.repositories.length < perPage) {
       break;
     }
