@@ -2,13 +2,16 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 interface MockGatewayModel extends Record<string, unknown> {
   id: string;
-  modelType: "language" | "image";
+  name?: string;
+  description?: string | null;
+  modelType: string;
   context_window?: number;
 }
 
 const gatewayModels: MockGatewayModel[] = [];
 const requestedUrls: string[] = [];
 
+let gatewayError: unknown = null;
 let modelsDevApiData: unknown = {};
 
 const originalFetch = globalThis.fetch;
@@ -25,7 +28,13 @@ function getRequestUrl(input: RequestInfo | URL): string {
 
 mock.module("ai", () => ({
   gateway: {
-    getAvailableModels: async () => ({ models: gatewayModels }),
+    getAvailableModels: async () => {
+      if (gatewayError) {
+        throw gatewayError;
+      }
+
+      return { models: gatewayModels };
+    },
   },
 }));
 
@@ -41,6 +50,7 @@ describe("/api/models context window enrichment", () => {
   beforeEach(() => {
     gatewayModels.length = 0;
     requestedUrls.length = 0;
+    gatewayError = null;
     modelsDevApiData = {};
 
     globalThis.fetch = mock((input: RequestInfo | URL, _init?: RequestInit) => {
@@ -145,5 +155,49 @@ describe("/api/models context window enrichment", () => {
 
     expect(body.models).toHaveLength(1);
     expect(body.models[0]?.context_window).toBe(200_000);
+  });
+
+  test("recovers from gateway validation errors when response still includes models", async () => {
+    gatewayError = {
+      response: {
+        models: [
+          {
+            id: "openai/gpt-5.4",
+            name: "GPT 5.4",
+            description: "Latest GPT model",
+            modelType: "language",
+          },
+          {
+            id: "cohere/rerank-v3.5",
+            name: "Cohere Rerank 3.5",
+            description: "Reranking model",
+            modelType: "reranking",
+          },
+        ],
+      },
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{
+        id: string;
+        name: string;
+        description?: string | null;
+        modelType?: string;
+      }>;
+    };
+
+    expect(body.models).toEqual([
+      {
+        id: "openai/gpt-5.4",
+        name: "GPT 5.4",
+        description: "Latest GPT model",
+        modelType: "language",
+      },
+    ]);
   });
 });

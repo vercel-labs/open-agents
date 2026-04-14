@@ -1,12 +1,13 @@
-import { gateway } from "ai";
-
 export const DEFAULT_MODEL_ID = "anthropic/claude-opus-4.6";
 export const DEFAULT_CONTEXT_LIMIT = 200_000;
 const TOKENS_PER_MILLION = 1_000_000;
 
-type GatewayAvailableModel = Awaited<
-  ReturnType<typeof gateway.getAvailableModels>
->["models"][number];
+export interface GatewayAvailableModel {
+  id: string;
+  name: string;
+  description?: string | null;
+  modelType?: string | null;
+}
 
 export interface AvailableModelCostTier {
   input?: number;

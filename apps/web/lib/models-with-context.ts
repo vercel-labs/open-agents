@@ -2,14 +2,16 @@ import "server-only";
 
 import { gateway } from "ai";
 import { filterDisabledModels } from "./model-availability";
-import type { AvailableModel, AvailableModelCost } from "./models";
+import type {
+  AvailableModel,
+  AvailableModelCost,
+  GatewayAvailableModel,
+} from "./models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 750;
 
-type GatewayModel = Awaited<
-  ReturnType<typeof gateway.getAvailableModels>
->["models"][number];
+type GatewayModel = GatewayAvailableModel;
 
 interface ModelsDevMetadata {
   contextWindow?: number;
@@ -18,6 +20,39 @@ interface ModelsDevMetadata {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isGatewayModel(value: unknown): value is GatewayModel {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { id, name, description, modelType } = value;
+
+  return (
+    typeof id === "string" &&
+    typeof name === "string" &&
+    (description === undefined ||
+      description === null ||
+      typeof description === "string") &&
+    (modelType === undefined ||
+      modelType === null ||
+      typeof modelType === "string")
+  );
+}
+
+function getModelsFromGatewayError(error: unknown): GatewayModel[] | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+
+  const response = error.response;
+  if (!isRecord(response) || !Array.isArray(response.models)) {
+    return undefined;
+  }
+
+  const models = response.models.filter(isGatewayModel);
+  return models.length > 0 ? models : undefined;
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -170,10 +205,24 @@ function addModelsDevMetadata(
   return nextModel;
 }
 
+async function fetchGatewayModels(): Promise<GatewayModel[]> {
+  try {
+    const { models } = await gateway.getAvailableModels();
+    return models;
+  } catch (error) {
+    const models = getModelsFromGatewayError(error);
+    if (models) {
+      return models;
+    }
+
+    throw error;
+  }
+}
+
 export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
-  const { models } = await gateway.getAvailableModels();
+  const models = await fetchGatewayModels();
   return filterDisabledModels(
     models.filter((model) => model.modelType === "language"),
   );
