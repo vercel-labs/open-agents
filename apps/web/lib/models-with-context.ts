@@ -16,8 +16,107 @@ interface ModelsDevMetadata {
   cost?: AvailableModelCost;
 }
 
+type GatewayPricing = NonNullable<AvailableModel["pricing"]>;
+
+type GatewaySpecification = AvailableModel["specification"];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isGatewaySpecification(value: unknown): value is GatewaySpecification {
+  return (
+    isRecord(value) &&
+    value.specificationVersion === "v3" &&
+    typeof value.provider === "string" &&
+    typeof value.modelId === "string"
+  );
+}
+
+function isSupportedModelType(
+  value: unknown,
+): value is NonNullable<AvailableModel["modelType"]> {
+  return (
+    value === "embedding" ||
+    value === "image" ||
+    value === "language" ||
+    value === "video"
+  );
+}
+
+function toGatewayPricing(value: unknown): GatewayPricing | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const input = value.input;
+  const output = value.output;
+
+  if (typeof input !== "string" || typeof output !== "string") {
+    return undefined;
+  }
+
+  const pricing: GatewayPricing = { input, output };
+
+  if (typeof value.input_cache_read === "string") {
+    pricing.cachedInputTokens = value.input_cache_read;
+  }
+
+  if (typeof value.input_cache_write === "string") {
+    pricing.cacheCreationInputTokens = value.input_cache_write;
+  }
+
+  return pricing;
+}
+
+function toLanguageModelFromGatewayEntry(
+  value: unknown,
+): AvailableModel | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, name, description, modelType, specification } = value;
+  if (typeof id !== "string" || typeof name !== "string") {
+    return null;
+  }
+
+  if (!isSupportedModelType(modelType) || modelType !== "language") {
+    return null;
+  }
+
+  if (!isGatewaySpecification(specification)) {
+    return null;
+  }
+
+  const pricing = toGatewayPricing(value.pricing);
+
+  return {
+    id,
+    name,
+    description: typeof description === "string" ? description : null,
+    modelType,
+    specification,
+    ...(pricing ? { pricing } : {}),
+  };
+}
+
+function extractLanguageModelsFromGatewayError(
+  error: unknown,
+): AvailableModel[] {
+  if (!isRecord(error) || !isRecord(error.response)) {
+    return [];
+  }
+
+  const models = error.response.models;
+  if (!Array.isArray(models)) {
+    return [];
+  }
+
+  return models.flatMap((model) => {
+    const parsed = toLanguageModelFromGatewayEntry(model);
+    return parsed ? [parsed] : [];
+  });
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -173,10 +272,19 @@ function addModelsDevMetadata(
 export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
-  const { models } = await gateway.getAvailableModels();
-  return filterDisabledModels(
-    models.filter((model) => model.modelType === "language"),
-  );
+  try {
+    const { models } = await gateway.getAvailableModels();
+    return filterDisabledModels(
+      models.filter((model) => model.modelType === "language"),
+    );
+  } catch (error) {
+    const fallbackModels = extractLanguageModelsFromGatewayError(error);
+    if (fallbackModels.length > 0) {
+      return filterDisabledModels(fallbackModels);
+    }
+
+    throw error;
+  }
 }
 
 export async function fetchAvailableLanguageModelsWithContext(): Promise<
