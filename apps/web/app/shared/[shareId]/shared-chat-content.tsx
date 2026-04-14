@@ -127,7 +127,7 @@ export function SharedChatContent({
       <header className="border-b border-border bg-background">
         <div className="mx-auto max-w-4xl px-4 py-4">
           {/* Title + meta row: inline on desktop */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             {/* Left: title + repo */}
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-semibold leading-tight text-foreground">
