@@ -181,11 +181,13 @@ export function ContributionChart({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) {
+    if (!el) return;
+    // Double-rAF to ensure layout is complete after hydration
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.scrollLeft = el.scrollWidth;
       });
-    }
+    });
   }, []);
 
   function handleDateSelect(date: string) {
@@ -230,7 +232,7 @@ export function ContributionChart({
             minWidth: minGridWidth,
           }}
         >
-          {/* Month labels — row 1 */}
+          {/* Month labels — row 1, width:0 so text doesn't stretch columns */}
           {monthLabels.map((m, i) => (
             <span
               key={`${m.label}-${i}`}
@@ -238,6 +240,8 @@ export function ContributionChart({
               style={{
                 gridColumn: m.weekIndex + 2,
                 gridRow: MONTH_ROW,
+                width: 0,
+                overflow: "visible",
               }}
             >
               {m.label}
