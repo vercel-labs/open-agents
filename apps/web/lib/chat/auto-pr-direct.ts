@@ -35,24 +35,6 @@ export interface AutoCreatePrResult {
   error?: string;
 }
 
-function dedupeTokenCandidates(
-  candidates: Array<string | null | undefined>,
-): string[] {
-  const deduped: string[] = [];
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-
-    if (!deduped.includes(candidate)) {
-      deduped.push(candidate);
-    }
-  }
-
-  return deduped;
-}
-
 function parseOriginHeadRef(output: string): string | null {
   const trimmed = output.trim();
   const match = trimmed.match(/^refs\/remotes\/origin\/(.+)$/);
@@ -71,17 +53,15 @@ async function resolveDefaultBranch(params: {
   sandbox: Sandbox;
   repoOwner: string;
   repoName: string;
-  tokenCandidates: string[];
+  token: string;
 }): Promise<string | null> {
-  const { sandbox, repoOwner, repoName, tokenCandidates } = params;
+  const { sandbox, repoOwner, repoName, token } = params;
   const cwd = sandbox.workingDirectory;
 
-  for (const token of tokenCandidates) {
-    const branchData = await fetchGitHubBranches(token, repoOwner, repoName);
+  const branchData = await fetchGitHubBranches(token, repoOwner, repoName);
 
-    if (branchData?.defaultBranch?.trim()) {
-      return branchData.defaultBranch.trim();
-    }
+  if (branchData?.defaultBranch?.trim()) {
+    return branchData.defaultBranch.trim();
   }
 
   const originHeadResult = await sandbox.exec(
@@ -97,21 +77,19 @@ async function findExistingOpenPullRequest(params: {
   repoOwner: string;
   repoName: string;
   branchName: string;
-  tokenCandidates: string[];
+  token: string;
 }): Promise<Awaited<ReturnType<typeof findPullRequestByBranch>> | null> {
-  const { repoOwner, repoName, branchName, tokenCandidates } = params;
+  const { repoOwner, repoName, branchName, token } = params;
 
-  for (const token of tokenCandidates) {
-    const prResult = await findPullRequestByBranch({
-      owner: repoOwner,
-      repo: repoName,
-      branchName,
-      token,
-    });
+  const prResult = await findPullRequestByBranch({
+    owner: repoOwner,
+    repo: repoName,
+    branchName,
+    token,
+  });
 
-    if (prResult.found && prResult.prStatus === "open") {
-      return prResult;
-    }
+  if (prResult.found && prResult.prStatus === "open") {
+    return prResult;
   }
 
   return null;
@@ -169,8 +147,6 @@ export async function performAutoCreatePr(
     };
   }
 
-  const tokenCandidates = dedupeTokenCandidates([userToken]);
-
   const authUrl = buildGitHubAuthRemoteUrl({
     token: userToken,
     owner: repoOwner,
@@ -193,7 +169,7 @@ export async function performAutoCreatePr(
     sandbox,
     repoOwner,
     repoName,
-    tokenCandidates,
+    token: userToken,
   });
 
   if (!defaultBranch) {
@@ -272,7 +248,7 @@ export async function performAutoCreatePr(
     repoOwner,
     repoName,
     branchName,
-    tokenCandidates,
+    token: userToken,
   });
 
   if (existingPr?.prNumber) {
@@ -326,22 +302,14 @@ export async function performAutoCreatePr(
   }
 
   const repoUrl = `https://github.com/${repoOwner}/${repoName}`;
-  let createResult: Awaited<ReturnType<typeof createPullRequest>> | undefined;
-
-  for (const token of tokenCandidates) {
-    createResult = await createPullRequest({
-      repoUrl,
-      branchName,
-      title: prContentResult.title,
-      body: prContentResult.body,
-      baseBranch: defaultBranch,
-      token,
-    });
-
-    if (createResult.success) {
-      break;
-    }
-  }
+  const createResult = await createPullRequest({
+    repoUrl,
+    branchName,
+    title: prContentResult.title,
+    body: prContentResult.body,
+    baseBranch: defaultBranch,
+    token: userToken,
+  });
 
   if (!createResult?.success) {
     if (createResult?.error === "PR already exists or branch not found") {
@@ -349,7 +317,7 @@ export async function performAutoCreatePr(
         repoOwner,
         repoName,
         branchName,
-        tokenCandidates,
+        token: userToken,
       });
 
       if (detectedPr?.prNumber) {

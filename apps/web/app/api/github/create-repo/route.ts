@@ -76,14 +76,12 @@ export async function POST(req: Request) {
     return Response.json({ error: "GitHub not connected" }, { status: 401 });
   }
 
-  const trimmedOwner = owner?.trim();
   const githubUsername = githubAccount?.username?.trim();
   let accountType: "User" | "Organization" | undefined;
 
-  if (trimmedOwner) {
+  if (owner) {
     accountType =
-      githubUsername &&
-      trimmedOwner.toLowerCase() === githubUsername.toLowerCase()
+      githubUsername && owner.toLowerCase() === githubUsername.toLowerCase()
         ? "User"
         : "Organization";
   }
@@ -99,7 +97,7 @@ export async function POST(req: Request) {
     description,
     isPrivate,
     sessionTitle,
-    owner: trimmedOwner,
+    owner,
     accountType,
     repoToken,
     sessionUser: {

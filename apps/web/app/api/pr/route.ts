@@ -151,32 +151,18 @@ export async function POST(req: Request) {
     headRef = `${headOwner}:${resolvedBranch}`;
   }
 
-  const tokenCandidates = [userToken];
-
   // 4. Create PR using existing function
-  let result: Awaited<ReturnType<typeof createPullRequest>> = {
-    success: false,
-    error: "Failed to create pull request",
-  };
-  let tokenUsedForCreation = tokenCandidates[0];
-
-  for (const candidateToken of tokenCandidates) {
-    tokenUsedForCreation = candidateToken;
-    result = await createPullRequest({
-      repoUrl,
-      branchName: resolvedBranch,
-      headRef,
-      title,
-      body: prBody || "",
-      baseBranch,
-      isDraft,
-      token: candidateToken,
-    });
-
-    if (result.success) {
-      break;
-    }
-  }
+  const tokenUsedForCreation = userToken;
+  const result = await createPullRequest({
+    repoUrl,
+    branchName: resolvedBranch,
+    headRef,
+    title,
+    body: prBody || "",
+    baseBranch,
+    isDraft,
+    token: tokenUsedForCreation,
+  });
 
   if (!result.success) {
     const error = result.error || "Failed to create pull request";
@@ -225,36 +211,16 @@ export async function POST(req: Request) {
       autoMergeError =
         "The pull request was created, but auto-merge could not be enabled.";
     } else {
-      const remainingTokens = tokenCandidates.filter(
-        (candidateToken) => candidateToken !== tokenUsedForCreation,
-      );
-      const autoMergeTokenCandidates = [
-        tokenUsedForCreation,
-        ...remainingTokens,
-      ];
+      const autoMergeResult = await enablePullRequestAutoMerge({
+        repoUrl,
+        prNumber: result.prNumber,
+        nodeId: result.nodeId,
+        token: tokenUsedForCreation,
+      });
 
-      let autoMergeResult: Awaited<
-        ReturnType<typeof enablePullRequestAutoMerge>
-      > = {
-        success: false,
-        error: "Failed to enable auto-merge",
-      };
-
-      for (const candidateToken of autoMergeTokenCandidates) {
-        autoMergeResult = await enablePullRequestAutoMerge({
-          repoUrl,
-          prNumber: result.prNumber,
-          nodeId: result.nodeId,
-          token: candidateToken,
-        });
-
-        if (autoMergeResult.success) {
-          autoMergeEnabled = true;
-          break;
-        }
-      }
-
-      if (!autoMergeEnabled) {
+      if (autoMergeResult.success) {
+        autoMergeEnabled = true;
+      } else {
         autoMergeError = autoMergeResult.error || "Failed to enable auto-merge";
       }
     }
