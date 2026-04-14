@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SharedChatStatusData } from "./shared-chat-status-utils";
 
-const POLL_INTERVAL_MS = 10_000;
+/** Poll every 3 seconds while streaming so tool calls appear ~live. */
+const POLL_INTERVAL_MS = 3_000;
 
 const STATUS_WORDS = [
   "Pondering",
@@ -72,7 +73,8 @@ export function SharedChatStatus({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable per startMs
   }, [isStreaming, startMs]);
 
-  // Poll the status endpoint while streaming.
+  // Poll the status endpoint while streaming. Refresh server data on every
+  // poll so the viewer sees new tool calls / text as it streams in.
   const poll = useCallback(async () => {
     try {
       const res = await fetch(`/api/shared/${shareId}/status`, {
@@ -80,11 +82,12 @@ export function SharedChatStatus({
       });
       if (!res.ok) return;
       const data: SharedChatStatusData = await res.json();
+
+      // Always refresh to pull latest messages (shows tool calls live)
+      router.refresh();
+
       if (!data.isStreaming) {
         setIsStreaming(false);
-        // Streaming just ended — refresh server data to pull in the new
-        // assistant response without a full page reload.
-        router.refresh();
       }
     } catch {
       // Silently ignore transient network errors; next poll will retry.

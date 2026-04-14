@@ -6,14 +6,11 @@ import {
   ArrowRight,
   Bot,
   ExternalLink,
-  Eye,
-  EyeOff,
   GitBranch,
   GitPullRequest,
-  Wrench,
 } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Streamdown } from "streamdown";
 import type {
   WebAgentUIMessage,
@@ -24,6 +21,7 @@ import {
   AssistantFileLink,
   type AssistantFileLinkProps,
 } from "@/components/assistant-file-link";
+import { AssistantMessageGroups } from "@/components/assistant-message-groups";
 import { SnippetChip } from "@/components/snippet-chip";
 import { TaskGroupView } from "@/components/task-group-view";
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -90,32 +88,11 @@ function displayProviderName(modelId: string): string {
   return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return "<1s";
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (remainingSeconds === 0) return `${minutes}m`;
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
 function getReasoningGroupText(parts: ReasoningMessagePart[]): string {
   return parts
     .map((part) => part.text)
     .filter((text) => text.trim().length > 0)
     .join("\n\n");
-}
-
-/** Count all tool-call parts (regular + task groups) in a message */
-function countToolCalls(message: WebAgentUIMessage): number {
-  let count = 0;
-  for (const part of message.parts) {
-    if (isToolUIPart(part)) {
-      count++;
-    }
-  }
-  return count;
 }
 
 export function SharedChatContent({
@@ -139,8 +116,6 @@ export function SharedChatContent({
   lastUserMessageSentAt: string | null;
   shareId: string;
 }) {
-  const [showToolCalls, setShowToolCalls] = useState(false);
-
   const hasRepo = session.repoOwner && session.repoName;
   const repoUrl = hasRepo
     ? `https://github.com/${session.repoOwner}/${session.repoName}`
@@ -281,34 +256,13 @@ export function SharedChatContent({
               </span>
             )}
           </div>
-
-          {/* Tool call toggle */}
-          <div className="mt-3 flex items-center border-t border-border pt-3">
-            <button
-              type="button"
-              onClick={() => setShowToolCalls((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-                showToolCalls
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
-              )}
-            >
-              {showToolCalls ? (
-                <Eye className="h-3 w-3" />
-              ) : (
-                <EyeOff className="h-3 w-3" />
-              )}
-              {showToolCalls ? "Tool calls visible" : "Tool calls hidden"}
-            </button>
-          </div>
         </div>
       </header>
 
       {/* Messages */}
       <div className="min-w-0 flex-1">
         <div className="mx-auto max-w-4xl overflow-hidden px-4 py-8">
-          <div className="space-y-6">
+          <div className="space-y-4">
             {chats.map(({ chat, messagesWithTiming }) => (
               <div key={chat.id}>
                 {chats.length > 1 && (
@@ -318,13 +272,14 @@ export function SharedChatContent({
                     <div className="h-px flex-1 bg-border" />
                   </div>
                 )}
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {messagesWithTiming.map(({ message: m, durationMs }) => (
                     <SharedMessage
                       key={m.id}
                       message={m}
                       durationMs={durationMs}
-                      showToolCalls={showToolCalls}
+                      isStreaming={false}
+                      lastUserMessageSentAt={lastUserMessageSentAt}
                     />
                   ))}
                 </div>
@@ -343,44 +298,17 @@ export function SharedChatContent({
   );
 }
 
-/** Summary bar shown for assistant messages when tool calls are hidden */
-function ToolCallSummary({
-  toolCallCount,
-  durationMs,
-}: {
-  toolCallCount: number;
-  durationMs: number | null;
-}) {
-  return (
-    <div className="flex justify-start">
-      <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground">
-        <Wrench className="h-3 w-3 text-muted-foreground/70" />
-        <span>
-          {toolCallCount} tool call{toolCallCount !== 1 ? "s" : ""}
-        </span>
-        {durationMs != null && durationMs > 0 && (
-          <>
-            <span className="text-muted-foreground/40">·</span>
-            <span>{formatDuration(durationMs)}</span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function SharedMessage({
   message: m,
   durationMs,
-  showToolCalls,
+  isStreaming,
+  lastUserMessageSentAt,
 }: {
   message: WebAgentUIMessage;
   durationMs: number | null;
-  showToolCalls: boolean;
+  isStreaming: boolean;
+  lastUserMessageSentAt: string | null;
 }) {
-  const toolCallCount = useMemo(() => countToolCalls(m), [m]);
-  const hasToolCalls = toolCallCount > 0;
-
   type RenderGroup =
     | {
         type: "part";
@@ -457,9 +385,6 @@ function SharedMessage({
   flushTaskGroup();
   flushReasoningGroup();
 
-  // When tool calls are hidden and this assistant message has tool calls,
-  // show a compact summary bar instead
-  const showSummary = !showToolCalls && m.role === "assistant" && hasToolCalls;
   const streamdownComponents = useMemo(
     () => ({
       a: (props: AssistantFileLinkProps) => <AssistantFileLink {...props} />,
@@ -468,130 +393,135 @@ function SharedMessage({
   );
 
   const isUser = m.role === "user";
-  const Wrapper = isUser ? "div" : Fragment;
-  const wrapperProps = isUser ? { className: "space-y-1" } : {};
 
+  const renderGroupElements = (isExpanded: boolean) =>
+    renderGroups.map((group) => {
+      if (group.type === "task-group") {
+        if (!isExpanded) return null;
+        return (
+          <div
+            key={`${m.id}-task-group-${group.startIndex}`}
+            className="max-w-full"
+          >
+            <TaskGroupView
+              taskParts={group.tasks}
+              activeApprovalId={null}
+              isStreaming={false}
+            />
+          </div>
+        );
+      }
+
+      if (group.type === "reasoning-group") {
+        if (!isExpanded) return null;
+        return (
+          <div
+            key={`${m.id}-reasoning-group-${group.startIndex}`}
+            className="flex justify-start"
+          >
+            <ThinkingBlock
+              text={getReasoningGroupText(group.parts)}
+              isStreaming={false}
+              partCount={group.parts.length}
+            />
+          </div>
+        );
+      }
+
+      const p = group.part;
+      const i = group.index;
+
+      if (isReasoningUIPart(p)) {
+        if (!isExpanded) return null;
+        return (
+          <div key={`${m.id}-${i}`} className="flex justify-start">
+            <ThinkingBlock text={p.text} isStreaming={false} />
+          </div>
+        );
+      }
+
+      if (p.type === "text") {
+        return (
+          <div
+            key={`${m.id}-${i}`}
+            className={cn(
+              "flex min-w-0",
+              m.role === "user" ? "justify-end" : "justify-start",
+            )}
+          >
+            {m.role === "user" ? (
+              <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
+                <p className="whitespace-pre-wrap break-words">{p.text}</p>
+              </div>
+            ) : (
+              <div className="min-w-0 w-full overflow-hidden">
+                <Streamdown
+                  mode="static"
+                  isAnimating={false}
+                  components={streamdownComponents}
+                  plugins={streamdownPlugins}
+                >
+                  {p.text}
+                </Streamdown>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (isToolUIPart(p)) {
+        if (!isExpanded) return null;
+        return (
+          <div key={`${m.id}-${i}`} className="max-w-full">
+            <ToolCall part={p as WebAgentUIToolPart} isStreaming={false} />
+          </div>
+        );
+      }
+
+      if (p.type === "file" && p.mediaType?.startsWith("image/")) {
+        return (
+          <div key={`${m.id}-${i}`} className="flex justify-end">
+            <div className="max-w-[80%]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
+              <img
+                src={p.url}
+                alt={p.filename ?? "Attached image"}
+                className="max-h-64 rounded-lg"
+              />
+            </div>
+          </div>
+        );
+      }
+
+      if (p.type === "data-snippet") {
+        return (
+          <div key={`${m.id}-${i}`} className="flex justify-end">
+            <div className="max-w-[80%]">
+              <SnippetChip
+                filename={p.data.filename}
+                content={p.data.content}
+              />
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    });
+
+  if (isUser) {
+    return <div className="space-y-1">{renderGroupElements(true)}</div>;
+  }
+
+  // Assistant messages: wrap with collapsible summary bar (same as session chat)
   return (
-    <Wrapper {...wrapperProps}>
-      {showSummary && (
-        <ToolCallSummary
-          toolCallCount={toolCallCount}
-          durationMs={durationMs}
-        />
-      )}
-      {renderGroups.map((group) => {
-        if (group.type === "task-group") {
-          if (!showToolCalls) return null;
-          return (
-            <div
-              key={`${m.id}-task-group-${group.startIndex}`}
-              className="max-w-full"
-            >
-              <TaskGroupView
-                taskParts={group.tasks}
-                activeApprovalId={null}
-                isStreaming={false}
-              />
-            </div>
-          );
-        }
-
-        if (group.type === "reasoning-group") {
-          if (!showToolCalls) return null;
-          return (
-            <div
-              key={`${m.id}-reasoning-group-${group.startIndex}`}
-              className="flex justify-start"
-            >
-              <ThinkingBlock
-                text={getReasoningGroupText(group.parts)}
-                isStreaming={false}
-                partCount={group.parts.length}
-              />
-            </div>
-          );
-        }
-
-        const p = group.part;
-        const i = group.index;
-
-        if (isReasoningUIPart(p)) {
-          if (!showToolCalls) return null;
-          return (
-            <div key={`${m.id}-${i}`} className="flex justify-start">
-              <ThinkingBlock text={p.text} isStreaming={false} />
-            </div>
-          );
-        }
-
-        if (p.type === "text") {
-          return (
-            <div
-              key={`${m.id}-${i}`}
-              className={cn(
-                "flex min-w-0",
-                m.role === "user" ? "justify-end" : "justify-start",
-              )}
-            >
-              {m.role === "user" ? (
-                <div className="min-w-0 max-w-[80%] rounded-3xl bg-secondary px-4 py-2">
-                  <p className="whitespace-pre-wrap break-words">{p.text}</p>
-                </div>
-              ) : (
-                <div className="min-w-0 w-full overflow-hidden">
-                  <Streamdown
-                    mode="static"
-                    isAnimating={false}
-                    components={streamdownComponents}
-                    plugins={streamdownPlugins}
-                  >
-                    {p.text}
-                  </Streamdown>
-                </div>
-              )}
-            </div>
-          );
-        }
-
-        if (isToolUIPart(p)) {
-          if (!showToolCalls) return null;
-          return (
-            <div key={`${m.id}-${i}`} className="max-w-full">
-              <ToolCall part={p as WebAgentUIToolPart} isStreaming={false} />
-            </div>
-          );
-        }
-
-        if (p.type === "file" && p.mediaType?.startsWith("image/")) {
-          return (
-            <div key={`${m.id}-${i}`} className="flex justify-end">
-              <div className="max-w-[80%]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- Data URLs not supported by next/image */}
-                <img
-                  src={p.url}
-                  alt={p.filename ?? "Attached image"}
-                  className="max-h-64 rounded-lg"
-                />
-              </div>
-            </div>
-          );
-        }
-
-        if (p.type === "data-snippet") {
-          return (
-            <div key={`${m.id}-${i}`} className="flex justify-end">
-              <div className="max-w-[80%]">
-                <SnippetChip
-                  filename={p.data.filename}
-                  content={p.data.content}
-                />
-              </div>
-            </div>
-          );
-        }
-
-        return null;
-      })}
-    </Wrapper>
+    <AssistantMessageGroups
+      message={m}
+      isStreaming={isStreaming}
+      durationMs={durationMs}
+      startedAt={isStreaming ? lastUserMessageSentAt : null}
+    >
+      {renderGroupElements}
+    </AssistantMessageGroups>
   );
 }
