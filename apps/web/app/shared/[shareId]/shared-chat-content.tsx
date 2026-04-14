@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import type { Chat } from "@/lib/db/schema";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
+import { DownloadMarkdownButton } from "./download-markdown-button";
 import { SharedChatStatus } from "./shared-chat-status";
 import "streamdown/styles.css";
 
@@ -218,30 +219,40 @@ export function SharedChatContent({
               </div>
             </div>
 
-            {/* Right: shared by user */}
-            {sharedBy && (
-              <div className="flex shrink-0 items-center gap-2">
-                <Avatar size="sm">
-                  {sharedBy.avatarUrl && (
-                    <AvatarImage
-                      src={sharedBy.avatarUrl}
-                      alt={sharedBy.name ?? sharedBy.username}
-                    />
-                  )}
-                  <AvatarFallback>
-                    {(sharedBy.name ?? sharedBy.username)
-                      .charAt(0)
-                      .toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm text-muted-foreground">
-                  Shared by{" "}
-                  <span className="font-medium text-foreground">
-                    {sharedBy.name ?? sharedBy.username}
+            {/* Right: download + shared by user */}
+            <div className="flex shrink-0 items-center gap-3">
+              <DownloadMarkdownButton
+                chats={chats.map((c) => ({
+                  title: c.chat.title,
+                  messages: c.messagesWithTiming,
+                }))}
+                shareId={shareId}
+                title={session.title}
+              />
+              {sharedBy && (
+                <div className="flex items-center gap-2">
+                  <Avatar size="sm">
+                    {sharedBy.avatarUrl && (
+                      <AvatarImage
+                        src={sharedBy.avatarUrl}
+                        alt={sharedBy.name ?? sharedBy.username}
+                      />
+                    )}
+                    <AvatarFallback>
+                      {(sharedBy.name ?? sharedBy.username)
+                        .charAt(0)
+                        .toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-muted-foreground">
+                    Shared by{" "}
+                    <span className="font-medium text-foreground">
+                      {sharedBy.name ?? sharedBy.username}
+                    </span>
                   </span>
-                </span>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
