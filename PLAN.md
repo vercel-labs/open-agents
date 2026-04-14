@@ -1,32 +1,21 @@
-Summary: Replace `getRepoToken`-based auth in GitHub user actions with the GitHub OAuth user token helper and update all callsites so user-triggered actions are always performed as the user.
+Summary: Add a fork action on assistant responses that creates a new chat from the current chat up to the selected assistant message, then opens that forked chat.
 
-Context: `apps/web/lib/github/get-repo-token.ts` currently prefers installation tokens, which causes user-triggered clone/setup, commit/push, PR, merge/close, checks/log reads, repo listing/branch listing, and create-repo flows to act via the app installation. The codebase already has `getUserGitHubToken` in `apps/web/lib/github/user-token.ts`, including refresh support, so the smallest coherent fix is to make user-action boundaries call that helper directly.
+Context: Assistant response actions are rendered in [apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx](#workspace-file=apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx). Session chat list state and optimistic chat creation live in [apps/web/hooks/use-session-chats.ts](#workspace-file=apps/web/hooks/use-session-chats.ts). Server chat ownership guards already exist in [apps/web/app/api/sessions/_lib/session-context.ts](#workspace-file=apps/web/app/api/sessions/_lib/session-context.ts), and chat/message persistence lives in [apps/web/lib/db/sessions.ts](#workspace-file=apps/web/lib/db/sessions.ts). The cleanest boundary is to treat “fork” as an action on an existing chat, backed by persisted messages as the source of truth.
 
-System Impact: The source of truth for GitHub auth in user actions becomes the linked OAuth token from `apps/web/lib/github/user-token.ts`. Installation-token auth is removed from these user-action paths, so action attribution and permissions follow the linked user account consistently.
+System Impact: The source of truth stays server-side: the fork is created from persisted chat messages, not client state. This adds one new server action that duplicates a chat subset into a new chat, plus a client-side optimistic chat entry while the request is in flight. No existing chat/message schema changes are needed.
 
-Approach: Replace production `getRepoToken` usages with `getUserGitHubToken`, preserving existing error/public fallback behavior where applicable. Update the create-repo flow to create and push with the same OAuth token. Remove the now-obsolete `getRepoToken` helper once no production code depends on it.
+Approach: Add a dedicated fork endpoint under the existing chat resource, plus a small DB transaction helper that creates the new chat and copies messages through the selected assistant message with fresh message IDs. On the client, add a fork button beside the assistant copy button and reuse the existing session chat hook for optimistic chat insertion and navigation.
 
 Changes:
-- `apps/web/app/[username]/[repo]/page.tsx` - use `getUserGitHubToken` for authenticated repo lookup.
-- `apps/web/app/api/check-pr/route.ts` - read PR state with OAuth token.
-- `apps/web/app/api/generate-pr/route.ts` - set remote auth, push, fork fallback, and PR generation around OAuth token only.
-- `apps/web/app/api/github/branches/route.ts` - fetch private branches with OAuth token; retain unauthenticated public fallback.
-- `apps/web/app/api/github/repos/route.ts` - fetch repositories with OAuth token only.
-- `apps/web/app/api/github/create-repo/route.ts` - create repos with OAuth token and resolve owner/account type without installation-token auth.
-- `apps/web/app/api/pr/route.ts` - create PRs and enable auto-merge with OAuth token.
-- `apps/web/app/api/sessions/[sessionId]/checks/fix/route.ts` - fetch Actions logs with OAuth token.
-- `apps/web/app/api/sessions/[sessionId]/close-pr/route.ts` - close PR with OAuth token.
-- `apps/web/app/api/sessions/[sessionId]/merge-readiness/route.ts` - read merge readiness/checks with OAuth token.
-- `apps/web/app/api/sessions/[sessionId]/merge/route.ts` - merge/delete branch with OAuth token.
-- `apps/web/app/api/sessions/[sessionId]/pr-deployment/route.ts` - read deployment metadata with OAuth token.
-- `apps/web/lib/chat/auto-commit-direct.ts` - push with OAuth token.
-- `apps/web/lib/chat/auto-pr-direct.ts` - use OAuth token for repo reads and PR creation.
-- `apps/web/lib/github/get-repo-token.ts` and tests - remove if unused after migration.
-- Affected tests under `apps/web/app/api/**` and `apps/web/lib/**` - update mocks/expectations to use `getUserGitHubToken`.
+- `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/fork/route.ts` - add authenticated fork endpoint for the current chat; validate input, handle requested chat-id reuse/conflicts, and call the DB fork helper.
+- `apps/web/app/api/sessions/[sessionId]/chats/[chatId]/fork/route.test.ts` - cover auth, ownership, validation, conflict handling, and successful fork responses.
+- `apps/web/lib/db/sessions.ts` - add a transaction helper that creates the forked chat and copies source messages through the selected assistant message with fresh top-level message IDs.
+- `apps/web/hooks/use-session-chats.ts` - add an optimistic `forkChat` helper that creates a temporary chat entry and persists it through the new endpoint.
+- `apps/web/app/sessions/[sessionId]/chats/[chatId]/session-chat-content.tsx` - render the new fork button next to copy on assistant responses and invoke the new hook action.
 
 Verification:
 - Run `bun run check`
 - Run `bun run typecheck`
-- Run targeted isolated tests for updated modules
+- Run targeted tests for the new/updated chat API coverage
 - Run `bun run ci`
-- Edge cases: missing/expired OAuth token, public repo lookup fallback, org repo creation via OAuth token, fork PR flows, merge/close permissions, Actions log access.
+- Edge cases: selected assistant message not found, requested chat ID conflicts, fork request failure after optimistic insertion, copied chats should not show unread state from historical assistant messages, and only messages up to the selected assistant response should be copied.
