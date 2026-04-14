@@ -26,10 +26,7 @@ export function FetchRenderer({
   const displayUrl = url.length > 60 ? `${url.slice(0, 57)}...` : url;
   const summary = method === "GET" ? displayUrl : `${method} ${displayUrl}`;
 
-  const meta =
-    status !== undefined
-      ? `${status}${output?.statusText ? ` ${output.statusText}` : ""}`
-      : undefined;
+  const meta = status !== undefined ? `${status}` : undefined;
 
   return (
     <ToolLayout
