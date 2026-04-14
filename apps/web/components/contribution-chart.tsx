@@ -77,9 +77,10 @@ function formatDateKey(d: Date): string {
 }
 
 const DAY_LABEL_WIDTH = 32;
-const CELL_SIZE = 11;
 const CELL_GAP = 2;
 const LEGEND_CELL_SIZE = 12;
+const MIN_CELL_SIZE = 10;
+const MIN_MONTH_SPAN_WEEKS = 3;
 
 export function ContributionChart({
   data,
@@ -127,7 +128,7 @@ export function ContributionChart({
       weeks.push(cells.slice(i, i + DAYS_IN_WEEK));
     }
 
-    const months: Array<{ label: string; weekIndex: number }> = [];
+    const rawMonths: Array<{ label: string; weekIndex: number }> = [];
     let lastMonth = -1;
     for (let w = 0; w < weeks.length; w++) {
       const firstDay = weeks[w]?.[0];
@@ -135,7 +136,7 @@ export function ContributionChart({
       const month = parseDateKey(firstDay.date).getMonth();
       if (month !== lastMonth) {
         lastMonth = month;
-        months.push({
+        rawMonths.push({
           label: parseDateKey(firstDay.date).toLocaleDateString("en-US", {
             month: "short",
           }),
@@ -143,6 +144,13 @@ export function ContributionChart({
         });
       }
     }
+
+    // Drop month labels that are too close to the next one (boundary months)
+    const months = rawMonths.filter((m, i) => {
+      const next = rawMonths[i + 1];
+      if (!next) return true;
+      return next.weekIndex - m.weekIndex >= MIN_MONTH_SPAN_WEEKS;
+    });
 
     const rangeFrom = selectedRange?.from
       ? formatDateKey(selectedRange.from)
@@ -166,8 +174,8 @@ export function ContributionChart({
   }, [data, selectedRange]);
 
   const weekCount = grid.length;
-  const gridWidth =
-    DAY_LABEL_WIDTH + weekCount * CELL_SIZE + (weekCount - 1) * CELL_GAP;
+  const minGridWidth =
+    DAY_LABEL_WIDTH + weekCount * MIN_CELL_SIZE + (weekCount - 1) * CELL_GAP;
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -215,11 +223,11 @@ export function ContributionChart({
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, ${CELL_SIZE}px)`,
-            gridTemplateRows: `auto repeat(${DAYS_IN_WEEK}, ${CELL_SIZE}px)`,
+            gridTemplateColumns: `${DAY_LABEL_WIDTH}px repeat(${weekCount}, 1fr)`,
+            gridTemplateRows: `auto repeat(${DAYS_IN_WEEK}, ${MIN_CELL_SIZE}px)`,
             columnGap: CELL_GAP,
             rowGap: CELL_GAP,
-            width: gridWidth,
+            minWidth: minGridWidth,
           }}
         >
           {/* Month labels — row 1 */}
