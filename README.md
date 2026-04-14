@@ -32,7 +32,7 @@ That separation is the main point of the project:
 ## Current capabilities
 
 - chat-driven coding agent with file, search, shell, task, skill, and web tools
-- durable multi-step execution with Workflow SDK-backed runs
+- durable multi-step execution with Workflow SDK-backed runs, streaming, and cancellation
 - isolated Vercel sandboxes with snapshot-based resume
 - repo cloning and branch work inside the sandbox
 - optional auto-commit, push, and PR creation after a successful run
@@ -98,7 +98,7 @@ VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
 ELEVENLABS_API_KEY=
 ```
 
-- `REDIS_URL` / `KV_URL`: resumable streams, stop signaling, and Redis-backed caching.
+- `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
 - `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.
 - `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: override the default sandbox snapshot.
 - `ELEVENLABS_API_KEY`: voice transcription.
