@@ -61,7 +61,7 @@
     "swr": "^2.3.8",
     "tailwind-merge": "^3.4.0",
     "vaul": "^1.1.2",
-    "workflow": "^4.2.2",
+    "workflow": "^4.2.0-beta.72",
     "zod": "catalog:"
   },
   "devDependencies": {
