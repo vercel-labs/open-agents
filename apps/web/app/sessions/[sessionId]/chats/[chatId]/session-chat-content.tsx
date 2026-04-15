@@ -2784,6 +2784,10 @@ export function SessionChatContent({
     sessionId: session.id,
     canRun: canRunDevServer && canUseCodeEditor,
   });
+  const isCodeEditorActionDisabled =
+    !canUseCodeEditor ||
+    codeEditor.state.status === "starting" ||
+    codeEditor.state.status === "stopping";
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
@@ -3065,25 +3069,26 @@ export function SessionChatContent({
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="hidden h-7 w-7 sm:inline-flex"
-                      onClick={() => void codeEditor.handleOpen()}
-                      disabled={
-                        !canUseCodeEditor ||
-                        codeEditor.state.status === "starting" ||
-                        codeEditor.state.status === "stopping"
-                      }
-                    >
-                      {codeEditor.state.status === "starting" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Code2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
+                    <span className="hidden sm:inline-flex">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => void codeEditor.handleOpen()}
+                        disabled={isCodeEditorActionDisabled}
+                      >
+                        {codeEditor.state.status === "starting" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Code2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </span>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">
+                  <TooltipContent
+                    side="bottom"
+                    className="max-w-72 text-pretty"
+                  >
                     {codeEditorDisabledReason ?? codeEditor.menuLabel}
                   </TooltipContent>
                 </Tooltip>
