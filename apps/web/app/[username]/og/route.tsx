@@ -8,6 +8,16 @@ interface OgRouteContext {
   params: Promise<{ username: string }>;
 }
 
+function getPublicUsageOgTitle(title: string): string {
+  const sanitizedTitle = title
+    .replace(/\bwrapped\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s:|-]+|[\s:|-]+$/g, "")
+    .trim();
+
+  return sanitizedTitle || "Public profile";
+}
+
 export async function GET(request: Request, context: OgRouteContext) {
   const { username } = await context.params;
   const { searchParams } = new URL(request.url);
@@ -18,7 +28,11 @@ export async function GET(request: Request, context: OgRouteContext) {
     return new Response("Not found", { status: 404 });
   }
 
-  const displayName = profile.user.name?.trim() || profile.user.username;
+  const rawDisplayName = profile.user.name?.trim() || profile.user.username;
+  const displayName = getPublicUsageOgTitle(rawDisplayName);
+  const shouldShowUsername =
+    rawDisplayName !== profile.user.username &&
+    displayName !== profile.user.username;
   const topModel = profile.topModels[0];
   const topModelLabel = topModel ? displayModelId(topModel.modelId) : null;
 
@@ -261,7 +275,7 @@ export async function GET(request: Request, context: OgRouteContext) {
           >
             {displayName}
           </span>
-          {displayName !== profile.user.username && (
+          {shouldShowUsername && (
             <span
               style={{
                 fontSize: 22,
