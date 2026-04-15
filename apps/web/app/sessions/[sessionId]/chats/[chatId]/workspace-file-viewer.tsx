@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 type WorkspaceFileViewerProps = {
   editorBusy?: boolean;
+  editorDisabledReason?: string | null;
   filePath: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -95,6 +96,7 @@ function CopyButton({
 
 function ViewerBody({
   editorBusy,
+  editorDisabledReason,
   errorMessage,
   filePath,
   isLoading,
@@ -105,6 +107,7 @@ function ViewerBody({
   response,
 }: {
   editorBusy?: boolean;
+  editorDisabledReason?: string | null;
   errorMessage: string | null;
   filePath: string;
   isLoading: boolean;
@@ -119,6 +122,9 @@ function ViewerBody({
     ? { ...defaultFileOptions, overflow: "wrap" as const }
     : defaultFileOptions;
   const contentRef = useRef<HTMLDivElement>(null);
+  const openInEditorTitle = editorBusy
+    ? "Starting editor…"
+    : (editorDisabledReason ?? "Open in code editor");
 
   return (
     <>
@@ -135,10 +141,10 @@ function ViewerBody({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={editorBusy}
+              disabled={editorBusy || editorDisabledReason != null}
               onClick={onOpenInEditor}
               className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-              title={editorBusy ? "Starting editor…" : "Open in code editor"}
+              title={openInEditorTitle}
             >
               {editorBusy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -212,6 +218,7 @@ function ViewerBody({
 
 export function WorkspaceFileViewer({
   editorBusy,
+  editorDisabledReason,
   filePath,
   open,
   onOpenChange,
@@ -251,6 +258,7 @@ export function WorkspaceFileViewer({
   const body = (
     <ViewerBody
       editorBusy={editorBusy}
+      editorDisabledReason={editorDisabledReason}
       errorMessage={errorMessage}
       filePath={filePath}
       isLoading={isLoading}

@@ -1005,6 +1005,7 @@ export function SessionChatContent({
   messageDurationMap,
   messageStartedAtMap,
   lastUserMessageSentAt,
+  codeEditorDisabledReason,
 }: {
   initialIsOnlyChatInSession: boolean;
   /** Pre-computed generation duration (ms) per assistant message ID */
@@ -1013,6 +1014,7 @@ export function SessionChatContent({
   messageStartedAtMap: Record<string, string>;
   /** Fallback: last user message's createdAt, for refresh-during-stream */
   lastUserMessageSentAt: string | null;
+  codeEditorDisabledReason: string | null;
 }) {
   const router = useRouter();
   const [input, setInput] = useState("");
@@ -2773,13 +2775,14 @@ export function SessionChatContent({
     !isRestoringSnapshot &&
     !isReconnectingSandbox &&
     !isHibernatingUi;
+  const canUseCodeEditor = codeEditorDisabledReason === null;
   const devServer = useDevServer({
     sessionId: session.id,
     canRun: canRunDevServer,
   });
   const codeEditor = useCodeEditor({
     sessionId: session.id,
-    canRun: canRunDevServer,
+    canRun: canRunDevServer && canUseCodeEditor,
   });
 
   const hasRepo = Boolean(session.cloneUrl);
@@ -3068,6 +3071,7 @@ export function SessionChatContent({
                       className="hidden h-7 w-7 sm:inline-flex"
                       onClick={() => void codeEditor.handleOpen()}
                       disabled={
+                        !canUseCodeEditor ||
                         codeEditor.state.status === "starting" ||
                         codeEditor.state.status === "stopping"
                       }
@@ -3080,7 +3084,7 @@ export function SessionChatContent({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {codeEditor.menuLabel}
+                    {codeEditorDisabledReason ?? codeEditor.menuLabel}
                   </TooltipContent>
                 </Tooltip>
                 <div className="hidden h-7 items-center sm:flex">
@@ -4397,6 +4401,7 @@ export function SessionChatContent({
           codeEditor.state.status === "starting" ||
           codeEditor.state.status === "stopping"
         }
+        editorDisabledReason={codeEditorDisabledReason}
         onOpenInEditor={(filePath) => {
           void codeEditor.handleOpenFile(filePath);
         }}

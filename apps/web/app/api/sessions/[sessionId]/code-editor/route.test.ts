@@ -18,6 +18,13 @@ let processListOutput = "";
 let portProbeStatusCode: string | null = null;
 let lastLaunchCommand: string | null = null;
 let lastLaunchCwd: string | null = null;
+let currentAuthSession: {
+  authProvider?: "vercel" | "github";
+  user: {
+    id: string;
+    email?: string;
+  };
+} | null = null;
 
 function successResult(stdout = "") {
   return {
@@ -126,6 +133,10 @@ mock.module("@open-harness/sandbox", () => ({
   connectSandbox: connectSandboxMock,
 }));
 
+mock.module("@/lib/session/get-server-session", () => ({
+  getServerSession: async () => currentAuthSession,
+}));
+
 const routeModulePromise = import("./route");
 
 function createRouteContext(sessionId = "session-1") {
@@ -142,6 +153,7 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
     portProbeStatusCode = null;
     lastLaunchCommand = null;
     lastLaunchCwd = null;
+    currentAuthSession = null;
     currentSessionRecord.sandboxState.expiresAt = Date.now() + 60_000;
     requireAuthenticatedUserMock.mockClear();
     requireOwnedSessionWithSandboxGuardMock.mockClear();
@@ -219,6 +231,35 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
       url: "https://sb-8000.vercel.run",
       port: 8000,
     });
+    expect(execDetachedMock).toHaveBeenCalledTimes(0);
+  });
+
+  test("POST returns 403 for managed-template trial users", async () => {
+    currentAuthSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        email: "person@example.com",
+      },
+    };
+    const { POST } = await routeModulePromise;
+    const expectedError =
+      "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+
+    const response = await POST(
+      new Request(
+        "https://open-agents.dev/api/sessions/session-1/code-editor",
+        {
+          method: "POST",
+        },
+      ),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(expectedError);
+    expect(connectSandboxMock).toHaveBeenCalledTimes(0);
     expect(execDetachedMock).toHaveBeenCalledTimes(0);
   });
 
