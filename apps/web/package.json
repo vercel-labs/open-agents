@@ -15,7 +15,7 @@
     "db:check": "bun run scripts/check-migrations.ts"
   },
   "dependencies": {
-    "@ai-sdk/elevenlabs": "^2.0.26",
+    "@ai-sdk/elevenlabs": "^2.0.29",
     "@ai-sdk/react": "catalog:",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
