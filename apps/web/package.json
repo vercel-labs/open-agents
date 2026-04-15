@@ -17,6 +17,8 @@
   "dependencies": {
     "@ai-sdk/elevenlabs": "^2.0.26",
     "@ai-sdk/react": "catalog:",
+    "@chat-adapter/slack": "^4.26.0",
+    "@chat-adapter/state-ioredis": "^4.26.0",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
     "@open-harness/agent": "workspace:*",
@@ -41,6 +43,7 @@
     "ai": "catalog:",
     "arctic": "^3.7.0",
     "botid": "^1.5.11",
+    "chat": "^4.26.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
