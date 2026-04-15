@@ -66,7 +66,7 @@ mock.module("@open-harness/sandbox", () => ({
 
 const { askUserQuestionTool } = await import("./ask-user-question");
 const { bashTool, commandNeedsApproval } = await import("./bash");
-const { webFetchTool } = await import("./fetch");
+const { MAX_BODY_LENGTH, webFetchTool } = await import("./fetch");
 const { globTool } = await import("./glob");
 const { grepTool } = await import("./grep");
 const { readFileTool } = await import("./read");
@@ -422,7 +422,7 @@ describe("tools execute behavior", () => {
 
   test("webFetchTool treats curl exit 23 as a truncated success", async () => {
     let executedCommand = "";
-    const responseBody = "x".repeat(5_000);
+    const responseBody = "x".repeat(MAX_BODY_LENGTH);
 
     const sandbox = {
       workingDirectory: "/repo",
@@ -449,7 +449,7 @@ describe("tools execute behavior", () => {
     );
 
     expect(executedCommand).toContain("curl");
-    expect(executedCommand).toContain("head -c 5000");
+    expect(executedCommand).toContain(`head -c ${MAX_BODY_LENGTH}`);
     expect(result).toMatchObject({
       success: true,
       status: 200,
@@ -460,7 +460,7 @@ describe("tools execute behavior", () => {
       result && typeof result === "object" && "body" in result
         ? (result.body as string)
         : "";
-    expect(body.length).toBe(5_000);
+    expect(body.length).toBe(MAX_BODY_LENGTH);
   });
 
   test("askUserQuestionTool formats structured answers", () => {
