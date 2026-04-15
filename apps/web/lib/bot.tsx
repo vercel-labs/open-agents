@@ -1,3 +1,4 @@
+/* eslint-disable jsdoc/check-tag-names */
 /** @jsxImportSource chat */
 
 import { Chat, ConsoleLogger, toAiMessages } from "chat";
