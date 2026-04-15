@@ -420,7 +420,7 @@ describe("tools execute behavior", () => {
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool parses bounded sandbox JSON output without temp files", async () => {
+  test("webFetchTool treats curl exit 23 as a truncated success", async () => {
     let executedCommand = "";
     const responseBody = "x".repeat(5_000);
 
@@ -429,14 +429,9 @@ describe("tools execute behavior", () => {
       exec: async (command: string) => {
         executedCommand = command;
         return {
-          success: true,
-          exitCode: 0,
-          stdout: JSON.stringify({
-            success: true,
-            status: 200,
-            body: responseBody,
-            truncated: true,
-          }),
+          success: false,
+          exitCode: 23,
+          stdout: `${responseBody}\n200`,
           stderr: "",
           truncated: false,
         };
@@ -453,8 +448,8 @@ describe("tools execute behavior", () => {
       executionOptions(context),
     );
 
-    expect(executedCommand).toContain("node -e");
-    expect(executedCommand).not.toContain("mktemp");
+    expect(executedCommand).toContain("curl");
+    expect(executedCommand).toContain("head -c 5000");
     expect(result).toMatchObject({
       success: true,
       status: 200,
