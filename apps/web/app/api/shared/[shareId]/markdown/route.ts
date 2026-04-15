@@ -66,6 +66,14 @@ function getMessageBody(message: WebAgentUIMessage): string {
       if (text.length > 0) {
         blocks.push(text);
       }
+      continue;
+    }
+
+    if (part.type === "data-snippet") {
+      blocks.push(
+        `<snippet filename=${JSON.stringify(part.data.filename)}>` +
+          `\n${part.data.content}\n</snippet>`,
+      );
     }
   }
 

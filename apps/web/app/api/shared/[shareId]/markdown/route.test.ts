@@ -36,7 +36,18 @@ let messageRows: Array<{ parts: unknown; role: string; createdAt: Date }> = [
     parts: {
       id: "m1",
       role: "user",
-      parts: [{ type: "text", text: "Please debug the flaky tests." }],
+      parts: [
+        { type: "text", text: "Please debug the flaky tests." },
+        {
+          type: "data-snippet",
+          id: "snippet-1",
+          data: {
+            filename: "logs/test-output.txt",
+            content:
+              " FAIL  tests/flaky.test.ts\nExpected 200 but received 500",
+          },
+        },
+      ],
     },
     role: "user",
     createdAt: new Date("2025-01-01T12:00:00Z"),
@@ -118,7 +129,18 @@ describe("GET /api/shared/:shareId/markdown", () => {
         parts: {
           id: "m1",
           role: "user",
-          parts: [{ type: "text", text: "Please debug the flaky tests." }],
+          parts: [
+            { type: "text", text: "Please debug the flaky tests." },
+            {
+              type: "data-snippet",
+              id: "snippet-1",
+              data: {
+                filename: "logs/test-output.txt",
+                content:
+                  " FAIL  tests/flaky.test.ts\nExpected 200 but received 500",
+              },
+            },
+          ],
         },
         role: "user",
         createdAt: new Date("2025-01-01T12:00:00Z"),
@@ -187,6 +209,9 @@ describe("GET /api/shared/:shareId/markdown", () => {
     expect(body).toContain("pr_number: 123");
     expect(body).toContain('created_at: "2025-01-01T12:00:00.000Z"');
     expect(body).toContain("## User\nPlease debug the flaky tests.");
+    expect(body).toContain(
+      '<snippet filename="logs/test-output.txt">\n FAIL  tests/flaky.test.ts\nExpected 200 but received 500\n</snippet>',
+    );
     expect(body).toContain("<!-- tool_activity: duration=15m tool_calls=2 -->");
     expect(body).toContain("## Assistant\nI fixed the timeout handling.");
     expect(body).not.toContain("README.md");
