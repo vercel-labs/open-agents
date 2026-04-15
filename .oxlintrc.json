@@ -91,7 +91,8 @@
     "unicorn/prefer-ternary": "off",
     "unicorn/prefer-type-error": "off",
     "unicorn/switch-case-braces": "off",
-    "unicorn/text-encoding-identifier-case": "off"
+    "unicorn/text-encoding-identifier-case": "off",
+    "jsdoc/check-tag-names": "off"
   },
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",

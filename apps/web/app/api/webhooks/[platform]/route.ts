@@ -3,10 +3,11 @@ import { bot } from "@/lib/bot";
 
 type Platform = keyof typeof bot.webhooks;
 
-export async function POST(
-  request: Request,
-  context: RouteContext<"/api/webhooks/[platform]">
-) {
+type RouteContext = {
+  params: Promise<{ platform: string }>;
+};
+
+export async function POST(request: Request, context: RouteContext) {
   const { platform } = await context.params;
 
   const handler = bot.webhooks[platform as Platform];
