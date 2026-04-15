@@ -420,10 +420,10 @@ describe("tools execute behavior", () => {
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool truncates oversized response bodies via sandbox", async () => {
-    const oversizedBody = "x".repeat(5_050);
-    // curl -w '\n%{http_code}' appends status on the last line
-    const curlOutput = `${oversizedBody}\n200`;
+  test("webFetchTool preserves status when sandbox truncates stdout", async () => {
+    const truncatedBody = "x".repeat(5_000);
+    const bodyLength = 5_050;
+    const curlOutput = `__OPEN_HARNESS_FETCH_STATUS__200\n__OPEN_HARNESS_FETCH_LENGTH__${bodyLength}\n${truncatedBody}`;
 
     const sandbox = {
       workingDirectory: "/repo",
@@ -432,6 +432,7 @@ describe("tools execute behavior", () => {
         exitCode: 0,
         stdout: curlOutput,
         stderr: "",
+        truncated: true,
       }),
     };
 

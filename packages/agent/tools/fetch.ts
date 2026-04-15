@@ -4,6 +4,8 @@ import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
 const MAX_BODY_LENGTH = 5_000;
+const STATUS_PREFIX = "__OPEN_HARNESS_FETCH_STATUS__";
+const LENGTH_PREFIX = "__OPEN_HARNESS_FETCH_LENGTH__";
 
 const fetchInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
@@ -41,8 +43,6 @@ EXAMPLES:
     const sandbox = await getSandbox(experimental_context, "web_fetch");
     const workingDirectory = sandbox.workingDirectory;
 
-    // Build curl command to run inside the sandbox VM.
-    // -sS: silent but show errors, -w: append HTTP status code after body
     const args: string[] = [
       "curl",
       "-sS",
@@ -50,8 +50,10 @@ EXAMPLES:
       method,
       "--max-time",
       String(Math.ceil(TIMEOUT_MS / 1000)),
+      "-o",
+      '"$tmp"',
       "-w",
-      shellEscape("\n%{http_code}"),
+      shellEscape("%{http_code}"),
     ];
 
     if (headers) {
@@ -66,39 +68,59 @@ EXAMPLES:
 
     args.push(shellEscape(url));
 
+    const command = [
+      "tmp=$(mktemp)",
+      `status=$( ${args.join(" ")} )`,
+      "exit_code=$?",
+      'if [ "$exit_code" -ne 0 ]; then',
+      '  rm -f "$tmp"',
+      '  exit "$exit_code"',
+      "fi",
+      'body_length=$(wc -c < "$tmp")',
+      `printf '%s%s\\n' ${shellEscape(STATUS_PREFIX)} "$status"`,
+      `printf '%s%s\\n' ${shellEscape(LENGTH_PREFIX)} "$body_length"`,
+      `head -c ${MAX_BODY_LENGTH} "$tmp"`,
+      'rm -f "$tmp"',
+    ].join("; ");
+
     try {
-      const result = await sandbox.exec(
-        args.join(" "),
-        workingDirectory,
-        TIMEOUT_MS,
-        { signal: abortSignal },
-      );
+      const result = await sandbox.exec(command, workingDirectory, TIMEOUT_MS, {
+        signal: abortSignal,
+      });
 
       if (!result.success) {
         return {
           success: false,
-          error: `Fetch failed: ${result.stderr || "Unknown error"}`,
+          error: `Fetch failed: ${result.stderr || result.stdout || "Unknown error"}`,
         };
       }
 
-      // curl -w '\n%{http_code}' appends the status code on the last line
       const output = result.stdout ?? "";
-      const lastNewline = output.lastIndexOf("\n");
-      const statusCode =
-        lastNewline !== -1 ? parseInt(output.slice(lastNewline + 1), 10) : null;
-      let responseBody =
-        lastNewline !== -1 ? output.slice(0, lastNewline) : output;
-
-      const truncated = responseBody.length > MAX_BODY_LENGTH;
-      if (truncated) {
-        responseBody = responseBody.slice(0, MAX_BODY_LENGTH);
-      }
+      const firstNewline = output.indexOf("\n");
+      const secondNewline =
+        firstNewline === -1 ? -1 : output.indexOf("\n", firstNewline + 1);
+      const statusLine =
+        firstNewline === -1 ? "" : output.slice(0, firstNewline);
+      const lengthLine =
+        firstNewline === -1 || secondNewline === -1
+          ? ""
+          : output.slice(firstNewline + 1, secondNewline);
+      const parsedStatus = statusLine.startsWith(STATUS_PREFIX)
+        ? Number.parseInt(statusLine.slice(STATUS_PREFIX.length), 10)
+        : Number.NaN;
+      const parsedLength = lengthLine.startsWith(LENGTH_PREFIX)
+        ? Number.parseInt(lengthLine.slice(LENGTH_PREFIX.length), 10)
+        : Number.NaN;
+      const responseBody =
+        secondNewline === -1 ? output : output.slice(secondNewline + 1);
 
       return {
         success: true,
-        status: statusCode,
+        status: Number.isFinite(parsedStatus) ? parsedStatus : null,
         body: responseBody,
-        truncated,
+        truncated: Number.isFinite(parsedLength)
+          ? parsedLength > MAX_BODY_LENGTH
+          : result.truncated,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
