@@ -14,6 +14,7 @@ import {
   askUserQuestionTool,
   bashTool,
   editFileTool,
+  exaSearchTool,
   globTool,
   grepTool,
   readFileTool,
@@ -74,6 +75,7 @@ const tools = {
   ask_user_question: askUserQuestionTool,
   skill: skillTool,
   web_fetch: webFetchTool,
+  exa_search: exaSearchTool,
 } satisfies ToolSet;
 
 export const openHarnessAgent = new ToolLoopAgent({
