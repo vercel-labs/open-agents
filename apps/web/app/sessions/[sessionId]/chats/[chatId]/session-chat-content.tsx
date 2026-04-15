@@ -3925,8 +3925,8 @@ export function SessionChatContent({
                             trimmedText.length > 0
                           ) {
                             const nextTitle =
-                              trimmedText.length > 30
-                                ? `${trimmedText.slice(0, 30)}...`
+                              trimmedText.length > 80
+                                ? `${trimmedText.slice(0, 80)}...`
                                 : trimmedText;
                             pendingOptimisticTitleChatIdRef.current =
                               chatInfo.id;

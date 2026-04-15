@@ -383,8 +383,8 @@ async function persistLatestUserMessage(
 
     if (textContent.length > 0) {
       const title =
-        textContent.length > 30
-          ? `${textContent.slice(0, 30)}...`
+        textContent.length > 80
+          ? `${textContent.slice(0, 80)}...`
           : textContent;
       await updateChat(chatId, { title });
     }
