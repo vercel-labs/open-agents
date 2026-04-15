@@ -4,8 +4,6 @@ import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
 const MAX_BODY_LENGTH = 5_000;
-const STATUS_PREFIX = "__OPEN_HARNESS_FETCH_STATUS__";
-const LENGTH_PREFIX = "__OPEN_HARNESS_FETCH_LENGTH__";
 
 const fetchInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
@@ -23,6 +21,19 @@ const fetchInputSchema = z.object({
     .describe("Optional request body (for POST/PUT/PATCH)"),
 });
 
+const fetchOutputSchema = z.union([
+  z.object({
+    success: z.literal(true),
+    status: z.number().int().nullable(),
+    body: z.string(),
+    truncated: z.boolean(),
+  }),
+  z.object({
+    success: z.literal(false),
+    error: z.string(),
+  }),
+]);
+
 export const webFetchTool = tool({
   description: `Fetch a URL from the web.
 
@@ -36,6 +47,7 @@ EXAMPLES:
 - Simple GET: url: "https://api.example.com/data"
 - POST with JSON: url: "https://api.example.com/items", method: "POST", headers: {"Content-Type": "application/json"}, body: "{\\\\"name\\\\":\\\\"item\\\\"}"`,
   inputSchema: fetchInputSchema,
+  outputSchema: fetchOutputSchema,
   execute: async (
     { url, method = "GET", headers, body },
     { experimental_context, abortSignal },
@@ -43,50 +55,94 @@ EXAMPLES:
     const sandbox = await getSandbox(experimental_context, "web_fetch");
     const workingDirectory = sandbox.workingDirectory;
 
-    const args: string[] = [
-      "curl",
-      "-sS",
-      "-X",
+    const requestPayload = JSON.stringify({
+      url,
       method,
-      "--max-time",
-      String(Math.ceil(TIMEOUT_MS / 1000)),
-      "-o",
-      '"$tmp"',
-      "-w",
-      shellEscape("%{http_code}"),
-    ];
+      headers,
+      body,
+      maxBodyLength: MAX_BODY_LENGTH,
+      timeoutMs: TIMEOUT_MS,
+    });
 
-    if (headers) {
-      for (const [key, value] of Object.entries(headers)) {
-        args.push("-H", shellEscape(`${key}: ${value}`));
+    const script = `
+const input = JSON.parse(process.argv[1]);
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+
+(async () => {
+  try {
+    const response = await fetch(input.url, {
+      method: input.method,
+      headers: input.headers,
+      body:
+        input.method === "GET" || input.method === "HEAD"
+          ? undefined
+          : input.body,
+      redirect: "manual",
+      signal: controller.signal,
+    });
+
+    const reader = response.body?.getReader();
+    const chunks = [];
+    let capturedBytes = 0;
+    let totalBytes = 0;
+    let truncated = false;
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        totalBytes += value.byteLength;
+
+        const remaining = input.maxBodyLength - capturedBytes;
+        if (remaining > 0) {
+          const slice = value.subarray(0, remaining);
+          if (slice.byteLength > 0) {
+            chunks.push(Buffer.from(slice));
+            capturedBytes += slice.byteLength;
+          }
+        }
+
+        if (totalBytes > input.maxBodyLength) {
+          truncated = true;
+          await reader.cancel();
+          break;
+        }
       }
     }
 
-    if (method !== "GET" && method !== "HEAD" && body) {
-      args.push("-d", shellEscape(body));
-    }
-
-    args.push(shellEscape(url));
-
-    const command = [
-      "tmp=$(mktemp)",
-      `status=$( ${args.join(" ")} )`,
-      "exit_code=$?",
-      'if [ "$exit_code" -ne 0 ]; then',
-      '  rm -f "$tmp"',
-      '  exit "$exit_code"',
-      "fi",
-      'body_length=$(wc -c < "$tmp")',
-      `printf '%s%s\\n' ${shellEscape(STATUS_PREFIX)} "$status"`,
-      `printf '%s%s\\n' ${shellEscape(LENGTH_PREFIX)} "$body_length"`,
-      `head -c ${MAX_BODY_LENGTH} "$tmp"`,
-      'rm -f "$tmp"',
-    ].join("; ");
+    const body = Buffer.concat(chunks).toString("utf8");
+    process.stdout.write(
+      JSON.stringify({
+        success: true,
+        status: Number.isInteger(response.status) ? response.status : null,
+        body,
+        truncated,
+      }),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stdout.write(
+      JSON.stringify({
+        success: false,
+        error: \`Fetch failed: \${message}\`,
+      }),
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+})();`;
 
     try {
-      const result = await sandbox.exec(command, workingDirectory, TIMEOUT_MS, {
-        signal: abortSignal,
-      });
+      const result = await sandbox.exec(
+        `node -e ${shellEscape(script)} ${shellEscape(requestPayload)}`,
+        workingDirectory,
+        TIMEOUT_MS,
+        { signal: abortSignal },
+      );
 
       if (!result.success) {
         return {
@@ -95,33 +151,17 @@ EXAMPLES:
         };
       }
 
-      const output = result.stdout ?? "";
-      const firstNewline = output.indexOf("\n");
-      const secondNewline =
-        firstNewline === -1 ? -1 : output.indexOf("\n", firstNewline + 1);
-      const statusLine =
-        firstNewline === -1 ? "" : output.slice(0, firstNewline);
-      const lengthLine =
-        firstNewline === -1 || secondNewline === -1
-          ? ""
-          : output.slice(firstNewline + 1, secondNewline);
-      const parsedStatus = statusLine.startsWith(STATUS_PREFIX)
-        ? Number.parseInt(statusLine.slice(STATUS_PREFIX.length), 10)
-        : Number.NaN;
-      const parsedLength = lengthLine.startsWith(LENGTH_PREFIX)
-        ? Number.parseInt(lengthLine.slice(LENGTH_PREFIX.length), 10)
-        : Number.NaN;
-      const responseBody =
-        secondNewline === -1 ? output : output.slice(secondNewline + 1);
+      const rawOutput = result.stdout.trim();
+      const parsedOutput = fetchOutputSchema.safeParse(JSON.parse(rawOutput));
 
-      return {
-        success: true,
-        status: Number.isFinite(parsedStatus) ? parsedStatus : null,
-        body: responseBody,
-        truncated: Number.isFinite(parsedLength)
-          ? parsedLength > MAX_BODY_LENGTH
-          : result.truncated,
-      };
+      if (!parsedOutput.success) {
+        return {
+          success: false,
+          error: "Fetch failed: Sandbox returned an invalid response.",
+        };
+      }
+
+      return parsedOutput.data;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {

@@ -420,20 +420,27 @@ describe("tools execute behavior", () => {
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool preserves status when sandbox truncates stdout", async () => {
-    const truncatedBody = "x".repeat(5_000);
-    const bodyLength = 5_050;
-    const curlOutput = `__OPEN_HARNESS_FETCH_STATUS__200\n__OPEN_HARNESS_FETCH_LENGTH__${bodyLength}\n${truncatedBody}`;
+  test("webFetchTool parses bounded sandbox JSON output without temp files", async () => {
+    let executedCommand = "";
+    const responseBody = "x".repeat(5_000);
 
     const sandbox = {
       workingDirectory: "/repo",
-      exec: async () => ({
-        success: true,
-        exitCode: 0,
-        stdout: curlOutput,
-        stderr: "",
-        truncated: true,
-      }),
+      exec: async (command: string) => {
+        executedCommand = command;
+        return {
+          success: true,
+          exitCode: 0,
+          stdout: JSON.stringify({
+            success: true,
+            status: 200,
+            body: responseBody,
+            truncated: true,
+          }),
+          stderr: "",
+          truncated: false,
+        };
+      },
     };
 
     const context = createContext(sandbox);
@@ -446,6 +453,8 @@ describe("tools execute behavior", () => {
       executionOptions(context),
     );
 
+    expect(executedCommand).toContain("node -e");
+    expect(executedCommand).not.toContain("mktemp");
     expect(result).toMatchObject({
       success: true,
       status: 200,

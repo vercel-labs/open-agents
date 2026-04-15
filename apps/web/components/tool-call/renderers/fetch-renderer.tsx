@@ -15,9 +15,9 @@ export function FetchRenderer({
   const method = input?.method ?? "GET";
 
   const output = part.state === "output-available" ? part.output : undefined;
-  const status = output?.status;
+  const status = output?.success === true ? output.status : undefined;
   const outputError =
-    output?.success === false ? (output?.error ?? "Fetch failed") : undefined;
+    output?.success === false ? (output.error ?? "Fetch failed") : undefined;
 
   const mergedState = outputError
     ? { ...state, error: state.error ?? outputError }
