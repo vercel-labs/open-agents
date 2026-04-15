@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
-const MAX_BODY_LENGTH = 20_000;
+const MAX_BODY_LENGTH = 5_000;
 
 const fetchInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
@@ -28,7 +28,7 @@ USAGE:
 - Make HTTP requests to external URLs
 - Supports GET, POST, PUT, PATCH, DELETE, and HEAD methods
 - Returns the response status and body text
-- Body is truncated to 20000 characters to avoid overwhelming context
+- Body is truncated to 5000 characters to avoid overwhelming context
 
 EXAMPLES:
 - Simple GET: url: "https://api.example.com/data"

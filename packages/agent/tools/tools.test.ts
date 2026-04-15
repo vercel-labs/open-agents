@@ -421,7 +421,7 @@ describe("tools execute behavior", () => {
   });
 
   test("webFetchTool truncates oversized response bodies via sandbox", async () => {
-    const oversizedBody = "x".repeat(20_050);
+    const oversizedBody = "x".repeat(5_050);
     // curl -w '\n%{http_code}' appends status on the last line
     const curlOutput = `${oversizedBody}\n200`;
 
@@ -455,7 +455,7 @@ describe("tools execute behavior", () => {
       result && typeof result === "object" && "body" in result
         ? (result.body as string)
         : "";
-    expect(body.length).toBe(20_000);
+    expect(body.length).toBe(5_000);
   });
 
   test("askUserQuestionTool formats structured answers", () => {
