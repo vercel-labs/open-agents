@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
-const MAX_BODY_LENGTH = 5_000;
+const MAX_BODY_LENGTH = 10_000;
 
 const fetchInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
