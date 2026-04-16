@@ -4171,7 +4171,7 @@ export function SessionChatContent({
                             >
                               <Paperclip className="h-4 w-4" />
                             </Button>
-                            {renderMessages.length === 0 && chatInfo.modelId ? (
+                            {chatInfo.modelId && (
                               <div
                                 className={
                                   isChatInFlight ||
@@ -4212,13 +4212,6 @@ export function SessionChatContent({
                                   }}
                                 />
                               </div>
-                            ) : (
-                              chatInfo.modelId && (
-                                <span className="max-w-28 truncate text-xs text-muted-foreground/60 sm:max-w-none">
-                                  {selectedModelOption?.label ??
-                                    chatInfo.modelId}
-                                </span>
-                              )
                             )}
                             <ContextUsageIndicator
                               inputTokens={tokenUsage.inputTokens}
