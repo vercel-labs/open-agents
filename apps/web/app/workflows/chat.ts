@@ -17,7 +17,6 @@ import type {
   WebAgentMessageMetadata,
   WebAgentPrData,
   WebAgentStepFinishMetadata,
-  WebAgentStepModelMetadata,
   WebAgentUIMessage,
 } from "@/app/types";
 import {
@@ -119,27 +118,15 @@ function buildStepTiming(
   };
 }
 
-function buildStepModelMetadata(
-  selectedModelId: string,
-  modelId: string,
-): WebAgentStepModelMetadata {
-  return {
-    selectedModelId,
-    modelId,
-  };
-}
-
 function withModelMetadata(
   metadata: WebAgentMessageMetadata | undefined,
   selectedModelId: string,
   modelId: string,
-  stepModels?: WebAgentStepModelMetadata[],
 ): WebAgentMessageMetadata {
   return {
     ...metadata,
     selectedModelId,
     modelId,
-    ...(stepModels ? { stepModels } : {}),
   };
 }
 
@@ -488,7 +475,6 @@ export async function runAgentWorkflow(options: Options) {
             latestMessage.metadata,
             options.selectedModelId,
             options.modelId,
-            latestMessage.metadata?.stepModels,
           ),
           parts: [...latestMessage.parts],
         }
@@ -816,16 +802,11 @@ const runAgentStep = async (
       lastOriginalMessage?.role === "assistant"
         ? [...(lastOriginalMessage.metadata?.stepFinishReasons ?? [])]
         : [];
-    const existingStepModels: WebAgentStepModelMetadata[] =
-      lastOriginalMessage?.role === "assistant"
-        ? [...(lastOriginalMessage.metadata?.stepModels ?? [])]
-        : [];
     const existingTotalMessageUsage =
       lastOriginalMessage?.role === "assistant"
         ? lastOriginalMessage.metadata?.totalMessageUsage
         : undefined;
     let stepFinishReasons = existingStepFinishReasons;
-    let stepModels = existingStepModels;
     let totalMessageUsage = existingTotalMessageUsage;
 
     const result = await webAgent.stream({
@@ -854,14 +835,9 @@ const runAgentStep = async (
               rawFinishReason: streamPart.rawFinishReason,
             },
           ];
-          stepModels = [
-            ...stepModels,
-            buildStepModelMetadata(selectedModelId, modelId),
-          ];
           return {
             selectedModelId,
             modelId,
-            stepModels,
             lastStepUsage,
             totalMessageUsage,
             lastStepFinishReason: streamPart.finishReason,
@@ -890,8 +866,6 @@ const runAgentStep = async (
         responseMessage.metadata,
         selectedModelId,
         modelId,
-        responseMessage.metadata?.stepModels ??
-          (existingStepModels.length > 0 ? existingStepModels : undefined),
       ),
     };
 

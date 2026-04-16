@@ -323,10 +323,6 @@ describe("runAgentWorkflow", () => {
       metadata?: {
         selectedModelId?: string;
         modelId?: string;
-        stepModels?: Array<{
-          selectedModelId: string;
-          modelId: string;
-        }>;
       };
     };
 
@@ -334,10 +330,9 @@ describe("runAgentWorkflow", () => {
       selectedModelId: "variant:builtin:gpt-5.4-xhigh",
       modelId: "openai/gpt-5.4",
     });
-    expect(persistedMessage.metadata?.stepModels).toBeUndefined();
   });
 
-  test("streams and persists step model history", async () => {
+  test("streams model metadata in finish-step chunks", async () => {
     agentStreamParts = [
       {
         type: "finish-step",
@@ -362,10 +357,6 @@ describe("runAgentWorkflow", () => {
         messageMetadata: {
           selectedModelId?: string;
           modelId?: string;
-          stepModels?: Array<{
-            selectedModelId: string;
-            modelId: string;
-          }>;
         };
       } => chunk.type === "message-metadata",
     );
@@ -373,12 +364,6 @@ describe("runAgentWorkflow", () => {
     expect(metadataChunks.at(-1)?.messageMetadata).toMatchObject({
       selectedModelId: "variant:builtin:gpt-5.4-xhigh",
       modelId: "openai/gpt-5.4",
-      stepModels: [
-        {
-          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
-          modelId: "openai/gpt-5.4",
-        },
-      ],
     });
 
     const persistCalls = spies.persistAssistantMessage.mock
@@ -387,26 +372,16 @@ describe("runAgentWorkflow", () => {
       metadata?: {
         selectedModelId?: string;
         modelId?: string;
-        stepModels?: Array<{
-          selectedModelId: string;
-          modelId: string;
-        }>;
       };
     };
 
     expect(persistedMessage.metadata).toMatchObject({
       selectedModelId: "variant:builtin:gpt-5.4-xhigh",
       modelId: "openai/gpt-5.4",
-      stepModels: [
-        {
-          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
-          modelId: "openai/gpt-5.4",
-        },
-      ],
     });
   });
 
-  test("appends model history when resuming an assistant message", async () => {
+  test("overwrites model metadata when resuming an assistant message", async () => {
     agentStreamParts = [
       {
         type: "finish-step",
@@ -426,12 +401,6 @@ describe("runAgentWorkflow", () => {
             metadata: {
               selectedModelId: "variant:builtin:gpt-5.4-xhigh",
               modelId: "openai/gpt-5.4",
-              stepModels: [
-                {
-                  selectedModelId: "variant:builtin:gpt-5.4-xhigh",
-                  modelId: "openai/gpt-5.4",
-                },
-              ],
             },
           },
         ],
@@ -446,26 +415,12 @@ describe("runAgentWorkflow", () => {
       metadata?: {
         selectedModelId?: string;
         modelId?: string;
-        stepModels?: Array<{
-          selectedModelId: string;
-          modelId: string;
-        }>;
       };
     };
 
     expect(persistedMessage.metadata).toMatchObject({
       selectedModelId: "anthropic/claude-opus-4.6",
       modelId: "anthropic/claude-opus-4.6",
-      stepModels: [
-        {
-          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
-          modelId: "openai/gpt-5.4",
-        },
-        {
-          selectedModelId: "anthropic/claude-opus-4.6",
-          modelId: "anthropic/claude-opus-4.6",
-        },
-      ],
     });
   });
 
