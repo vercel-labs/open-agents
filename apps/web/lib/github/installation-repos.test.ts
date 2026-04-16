@@ -25,7 +25,7 @@ function createPage(
 ) {
   return [
     ...repositories,
-    ...Array.from({ length: 25 - repositories.length }, (_, index) =>
+    ...Array.from({ length: 50 - repositories.length }, (_, index) =>
       createRepository(
         `filler-${page}-${index}`,
         `2023-01-${`${(index % 28) + 1}`.padStart(2, "0")}T00:00:00Z`,
@@ -48,7 +48,7 @@ describe("installation-repos", () => {
       const url = new URL(input.toString());
       const page = url.searchParams.get("page");
 
-      expect(url.searchParams.get("per_page")).toBe("25");
+      expect(url.searchParams.get("per_page")).toBe("50");
 
       if (page === "1") {
         return Response.json({
@@ -86,7 +86,7 @@ describe("installation-repos", () => {
       const url = new URL(input.toString());
       const page = url.searchParams.get("page");
 
-      expect(url.searchParams.get("per_page")).toBe("25");
+      expect(url.searchParams.get("per_page")).toBe("50");
 
       if (page === "1") {
         return Response.json({
