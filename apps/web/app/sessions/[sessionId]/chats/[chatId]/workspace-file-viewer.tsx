@@ -98,31 +98,9 @@ function CopyButton({
 
 function PlanMarkdown({ content }: { content: string }) {
   return (
-    <div className="px-6 py-5 pr-20 sm:px-8 sm:pr-24">
-      <div
-        className={cn(
-          "max-w-none font-sans text-[15px] leading-7 text-foreground",
-          "[&_h1]:mt-0 [&_h1]:mb-6 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:tracking-tight",
-          "[&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight",
-          "[&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold",
-          "[&_p]:my-4 [&_strong]:font-semibold",
-          "[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6",
-          "[&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6",
-          "[&_li]:my-1.5",
-          "[&_a]:text-foreground [&_a]:underline [&_a]:decoration-muted-foreground/60 [&_a:hover]:decoration-foreground",
-          "[&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-muted/40",
-          "[&_code]:font-mono [&_code]:text-[0.9em]",
-        )}
-      >
-        <Streamdown
-          mode="static"
-          isAnimating={false}
-          plugins={streamdownPlugins}
-        >
-          {content}
-        </Streamdown>
-      </div>
-    </div>
+    <Streamdown mode="static" isAnimating={false} plugins={streamdownPlugins}>
+      {content}
+    </Streamdown>
   );
 }
 
