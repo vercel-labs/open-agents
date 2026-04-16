@@ -491,15 +491,46 @@ function getConversationUsage(
   }, getUsageTotals(undefined));
 }
 
-function getConversationEstimatedCost(
+type ConversationCostSource = "gateway" | "estimate" | "mixed";
+
+type ConversationCost = {
+  total: number;
+  source: ConversationCostSource;
+};
+
+/**
+ * Compute the cumulative USD cost across every assistant message in the
+ * conversation. Per-message preference order:
+ *   1. Gateway-reported `totalMessageCost` (authoritative when present).
+ *   2. Token-based estimate from `totalMessageUsage` / `lastStepUsage`.
+ *
+ * Returns `undefined` when no cost can be attributed to any message (e.g. no
+ * usage metadata and no gateway cost), matching the previous "hide the row"
+ * behavior. The `source` discriminant lets the UI label the figure correctly.
+ */
+function getConversationCost(
   messages: WebAgentUIMessage[],
   modelCost: AvailableModelCost | undefined,
-): number | undefined {
-  let totalCost = 0;
-  let hasUsage = false;
+): ConversationCost | undefined {
+  let total = 0;
+  let hasAnyCost = false;
+  let sawGateway = false;
+  let sawEstimate = false;
 
   for (const message of messages) {
     if (message.role !== "assistant") {
+      continue;
+    }
+
+    const gatewayCost = message.metadata?.totalMessageCost;
+    if (
+      typeof gatewayCost === "number" &&
+      Number.isFinite(gatewayCost) &&
+      gatewayCost >= 0
+    ) {
+      total += gatewayCost;
+      hasAnyCost = true;
+      sawGateway = true;
       continue;
     }
 
@@ -514,14 +545,22 @@ function getConversationEstimatedCost(
       modelCost,
     );
     if (estimatedCost === undefined) {
-      return undefined;
+      continue;
     }
 
-    totalCost += estimatedCost;
-    hasUsage = true;
+    total += estimatedCost;
+    hasAnyCost = true;
+    sawEstimate = true;
   }
 
-  return hasUsage ? totalCost : undefined;
+  if (!hasAnyCost) {
+    return undefined;
+  }
+
+  const source: ConversationCostSource =
+    sawGateway && sawEstimate ? "mixed" : sawGateway ? "gateway" : "estimate";
+
+  return { total, source };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -575,14 +614,14 @@ function ContextUsageIndicator({
   conversationInputTokens,
   conversationCachedInputTokens,
   conversationOutputTokens,
-  estimatedConversationCost,
+  conversationCost,
   contextLimit,
 }: {
   inputTokens: number;
   conversationInputTokens: number;
   conversationCachedInputTokens: number;
   conversationOutputTokens: number;
-  estimatedConversationCost?: number;
+  conversationCost?: ConversationCost;
   contextLimit: number;
 }) {
   if (inputTokens === 0) {
@@ -636,10 +675,18 @@ function ContextUsageIndicator({
             <span className="opacity-60">Conversation output</span>
             <span>{formatTokens(conversationOutputTokens)}</span>
           </div>
-          {estimatedConversationCost !== undefined ? (
+          {conversationCost !== undefined ? (
             <div className="flex justify-between gap-6">
-              <span className="opacity-60">Est. cost</span>
-              <span>{formatUsd(estimatedConversationCost)}</span>
+              <span className="opacity-60">
+                {conversationCost.source === "gateway"
+                  ? "Cost"
+                  : conversationCost.source === "mixed"
+                    ? "Cost (partial est.)"
+                    : "Est. cost"}
+              </span>
+              <span className="tabular-nums">
+                {formatUsd(conversationCost.total)}
+              </span>
             </div>
           ) : null}
         </div>
@@ -2620,9 +2667,8 @@ export function SessionChatContent({
     () => getConversationUsage(renderMessages),
     [renderMessages],
   );
-  const conversationEstimatedCost = useMemo(
-    () =>
-      getConversationEstimatedCost(renderMessages, selectedModelOption?.cost),
+  const conversationCost = useMemo(
+    () => getConversationCost(renderMessages, selectedModelOption?.cost),
     [renderMessages, selectedModelOption?.cost],
   );
 
@@ -4242,9 +4288,7 @@ export function SessionChatContent({
                               conversationOutputTokens={
                                 conversationUsage.outputTokens
                               }
-                              estimatedConversationCost={
-                                conversationEstimatedCost
-                              }
+                              conversationCost={conversationCost}
                               contextLimit={
                                 contextLimit ?? DEFAULT_CONTEXT_LIMIT
                               }
