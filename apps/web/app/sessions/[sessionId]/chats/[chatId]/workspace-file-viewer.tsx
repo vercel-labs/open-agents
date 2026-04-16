@@ -40,6 +40,11 @@ type WorkspaceFileViewerProps = {
 };
 
 const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
+const planFileUnsafeCSS = `${defaultFileOptions.unsafeCSS ?? ""}
+  :host {
+    --diffs-font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  }
+`;
 
 function shouldWrapFileContent(filePath: string) {
   const normalizedPath = filePath.toLowerCase();
@@ -118,9 +123,18 @@ function ViewerBody({
   response: WorkspaceFileContentResponse | undefined;
 }) {
   const hasContent = response != null && response.content.length > 0;
-  const fileOptions = shouldWrapFileContent(filePath)
-    ? { ...defaultFileOptions, overflow: "wrap" as const }
-    : defaultFileOptions;
+  const fileName = filePath.split("/").pop() ?? filePath;
+  const isPlanFile = fileName === "Plan.md";
+  const fileOptions = {
+    ...defaultFileOptions,
+    ...(shouldWrapFileContent(filePath) ? { overflow: "wrap" as const } : {}),
+    ...(isPlanFile
+      ? {
+          disableLineNumbers: true,
+          unsafeCSS: planFileUnsafeCSS,
+        }
+      : {}),
+  };
   const contentRef = useRef<HTMLDivElement>(null);
   const openInEditorTitle = editorBusy
     ? "Starting editor…"
