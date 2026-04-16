@@ -33,6 +33,7 @@ interface HelpResult {
 }
 
 function printUsage() {
+  const configuredSnapshot = DEFAULT_SANDBOX_BASE_SNAPSHOT_ID ?? "<not set>";
   console.log(`Usage:
   bun run sandbox:snapshot-base -- --command "apt-get update"
   bun run sandbox:snapshot-base -- --from snap_123 --command "apt-get install -y ripgrep"
@@ -45,7 +46,7 @@ Options:
   --help                       Show this message
 
 Current configured base snapshot:
-  ${DEFAULT_SANDBOX_BASE_SNAPSHOT_ID}`);
+  ${configuredSnapshot}`);
 }
 
 function requireOptionValue(
@@ -131,8 +132,15 @@ async function main() {
     return;
   }
 
+  const sourceSnapshotId = parsed.baseSnapshotId ?? DEFAULT_SANDBOX_BASE_SNAPSHOT_ID;
+  if (!sourceSnapshotId) {
+    throw new Error(
+      "No base snapshot configured. Set VERCEL_SANDBOX_BASE_SNAPSHOT_ID or pass --from <snapshot-id>.",
+    );
+  }
+
   const result = await refreshBaseSnapshot({
-    baseSnapshotId: parsed.baseSnapshotId ?? DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+    baseSnapshotId: sourceSnapshotId,
     commands: parsed.commands,
     sandboxTimeoutMs: parsed.sandboxTimeoutMs ?? DEFAULT_SANDBOX_TIMEOUT_MS,
     commandTimeoutMs: parsed.commandTimeoutMs,

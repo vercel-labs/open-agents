@@ -29,8 +29,8 @@
   "devDependencies": {
     "oxfmt": "^0.43.0",
     "oxlint": "1.57.0",
-    "turbo": "^2.5.4",
-    "typescript": "^5",
+    "turbo": "^2.9.6",
+    "typescript": "^5.9.3",
     "ultracite": "7.4.0"
   },
   "overrides": {
