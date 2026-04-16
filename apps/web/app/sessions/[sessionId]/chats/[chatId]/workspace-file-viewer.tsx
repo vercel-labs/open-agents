@@ -3,6 +3,7 @@
 import { File as DiffsFile } from "@pierre/diffs/react";
 import { Check, CodeXml, Copy, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { Streamdown } from "streamdown";
 import useSWR from "swr";
 import type { WorkspaceFileContentResponse } from "@/app/api/sessions/[sessionId]/files/content/route";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 import { SelectionPopover } from "@/components/selection-popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultFileOptions } from "@/lib/diffs-config";
+import { streamdownPlugins } from "@/lib/streamdown-config";
 import { fetcherNoStore } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 
@@ -40,11 +42,6 @@ type WorkspaceFileViewerProps = {
 };
 
 const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
-const planFileUnsafeCSS = `${defaultFileOptions.unsafeCSS ?? ""}
-  :host {
-    --diffs-font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  }
-`;
 
 function shouldWrapFileContent(filePath: string) {
   const normalizedPath = filePath.toLowerCase();
@@ -99,6 +96,36 @@ function CopyButton({
   );
 }
 
+function PlanMarkdown({ content }: { content: string }) {
+  return (
+    <div className="px-6 py-5 pr-20 sm:px-8 sm:pr-24">
+      <div
+        className={cn(
+          "max-w-none font-sans text-[15px] leading-7 text-foreground",
+          "[&_h1]:mt-0 [&_h1]:mb-6 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:tracking-tight",
+          "[&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight",
+          "[&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold",
+          "[&_p]:my-4 [&_strong]:font-semibold",
+          "[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6",
+          "[&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6",
+          "[&_li]:my-1.5",
+          "[&_a]:text-foreground [&_a]:underline [&_a]:decoration-muted-foreground/60 [&_a:hover]:decoration-foreground",
+          "[&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-muted/40",
+          "[&_code]:font-mono [&_code]:text-[0.9em]",
+        )}
+      >
+        <Streamdown
+          mode="static"
+          isAnimating={false}
+          plugins={streamdownPlugins}
+        >
+          {content}
+        </Streamdown>
+      </div>
+    </div>
+  );
+}
+
 function ViewerBody({
   editorBusy,
   editorDisabledReason,
@@ -125,16 +152,9 @@ function ViewerBody({
   const hasContent = response != null && response.content.length > 0;
   const fileName = filePath.split("/").pop() ?? filePath;
   const isPlanFile = fileName.toLowerCase() === "plan.md";
-  const fileOptions = {
-    ...defaultFileOptions,
-    ...(shouldWrapFileContent(filePath) ? { overflow: "wrap" as const } : {}),
-    ...(isPlanFile
-      ? {
-          disableLineNumbers: true,
-          unsafeCSS: planFileUnsafeCSS,
-        }
-      : {}),
-  };
+  const fileOptions = shouldWrapFileContent(filePath)
+    ? { ...defaultFileOptions, overflow: "wrap" as const }
+    : defaultFileOptions;
   const contentRef = useRef<HTMLDivElement>(null);
   const openInEditorTitle = editorBusy
     ? "Starting editor…"
@@ -208,6 +228,8 @@ function ViewerBody({
             <div className="px-4 py-6 text-sm text-muted-foreground">
               This file is empty.
             </div>
+          ) : isPlanFile ? (
+            <PlanMarkdown content={response.content} />
           ) : (
             <DiffsFile
               file={{ name: filePath, contents: response.content }}
