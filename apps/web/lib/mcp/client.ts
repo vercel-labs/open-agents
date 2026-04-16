@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/mcp-connections";
 import { resolveAuthHeaders, MCPAuthError } from "./auth";
 import { getCatalogEntry } from "./catalog";
+import { assertSafeUrl } from "./validate";
 
 export interface ResolvedMCPTools {
   tools: ToolSet;
@@ -51,6 +52,8 @@ export async function resolveMCPTools(
         }
         throw error;
       }
+
+      assertSafeUrl(conn.url);
 
       const client = await createMCPClient({
         transport: {

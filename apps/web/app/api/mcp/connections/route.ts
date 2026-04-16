@@ -5,6 +5,7 @@ import {
   createMCPConnection,
 } from "@/lib/db/mcp-connections";
 import { encrypt } from "@/lib/crypto";
+import { validateMcpUrl, BLOCKED_HEADER_NAMES } from "@/lib/mcp/validate";
 
 export async function GET() {
   const session = await getServerSession();
@@ -56,17 +57,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate URL is HTTPS
-  try {
-    const parsed = new URL(body.url);
-    if (parsed.protocol !== "https:") {
-      return NextResponse.json(
-        { error: "MCP server URL must use HTTPS" },
-        { status: 400 },
-      );
+  // Validate URL is HTTPS and safe (SSRF protection)
+  const urlCheck = validateMcpUrl(body.url);
+  if (!urlCheck.valid) {
+    return NextResponse.json({ error: urlCheck.error }, { status: 400 });
+  }
+
+  // Validate custom header keys (prevent request smuggling)
+  if (body.customHeaders) {
+    for (const key of Object.keys(body.customHeaders)) {
+      if (BLOCKED_HEADER_NAMES.has(key.toLowerCase())) {
+        return NextResponse.json(
+          { error: `Header "${key}" is not allowed` },
+          { status: 400 },
+        );
+      }
     }
-  } catch {
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
   const connection = await createMCPConnection({

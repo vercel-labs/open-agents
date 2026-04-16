@@ -6,6 +6,7 @@ import {
   updateMCPConnectionStatus,
 } from "@/lib/db/mcp-connections";
 import { resolveAuthHeaders } from "@/lib/mcp/auth";
+import { assertSafeUrl } from "@/lib/mcp/validate";
 
 export async function POST(
   _req: NextRequest,
@@ -22,6 +23,18 @@ export async function POST(
   const connection = await getMCPConnectionById(id, userId);
   if (!connection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  try {
+    assertSafeUrl(connection.url);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        status: "error",
+        error: error instanceof Error ? error.message : "Invalid URL",
+      },
+      { status: 400 },
+    );
   }
 
   try {

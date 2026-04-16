@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCodeForTokens({
       tokenEndpoint: metadata.token_endpoint,
       code,
-      codeVerifier: oauthState.codeVerifier,
+      codeVerifier: decrypt(oauthState.codeVerifier),
       redirectUri,
       clientId,
       clientSecret,

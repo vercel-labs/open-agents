@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { assertSafeUrl } from "./validate";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -56,9 +57,12 @@ export async function discoverOAuthMetadata(
 
   const metadataUrl = `${baseUrl.origin}/.well-known/oauth-authorization-server`;
 
+  assertSafeUrl(metadataUrl);
+
   try {
     const response = await fetch(metadataUrl, {
       headers: { "MCP-Protocol-Version": "2025-03-26" },
+      redirect: "error",
     });
 
     if (response.ok) {
@@ -82,6 +86,8 @@ export async function registerOAuthClient(
   registrationEndpoint: string,
   redirectUri: string,
 ): Promise<OAuthClientRegistration> {
+  assertSafeUrl(registrationEndpoint);
+
   const response = await fetch(registrationEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -134,6 +140,8 @@ export async function exchangeCodeForTokens(params: {
     body.set("client_secret", params.clientSecret);
   }
 
+  assertSafeUrl(params.tokenEndpoint);
+
   const response = await fetch(params.tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -165,6 +173,8 @@ export async function refreshOAuthTokens(params: {
   if (params.clientSecret) {
     body.set("client_secret", params.clientSecret);
   }
+
+  assertSafeUrl(params.tokenEndpoint);
 
   const response = await fetch(params.tokenEndpoint, {
     method: "POST",

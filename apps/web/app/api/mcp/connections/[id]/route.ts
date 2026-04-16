@@ -6,6 +6,7 @@ import {
   deleteMCPConnection,
 } from "@/lib/db/mcp-connections";
 import { encrypt } from "@/lib/crypto";
+import { validateMcpUrl } from "@/lib/mcp/validate";
 
 export async function PATCH(
   req: NextRequest,
@@ -35,7 +36,13 @@ export async function PATCH(
 
   const update: Record<string, unknown> = {};
   if (body.name !== undefined) update.name = body.name;
-  if (body.url !== undefined) update.url = body.url;
+  if (body.url !== undefined) {
+    const urlCheck = validateMcpUrl(body.url);
+    if (!urlCheck.valid) {
+      return NextResponse.json({ error: urlCheck.error }, { status: 400 });
+    }
+    update.url = body.url;
+  }
   if (body.transportType !== undefined)
     update.transportType = body.transportType;
   if (body.enabledByDefault !== undefined)

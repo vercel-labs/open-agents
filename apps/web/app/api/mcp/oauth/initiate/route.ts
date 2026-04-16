@@ -16,6 +16,7 @@ import {
 } from "@/lib/mcp/oauth";
 import { getCatalogEntry } from "@/lib/mcp/catalog";
 import { encrypt } from "@/lib/crypto";
+import { validateMcpUrl } from "@/lib/mcp/validate";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession();
@@ -71,7 +72,11 @@ export async function POST(req: NextRequest) {
       isExistingConnection = true;
     }
   } else if (body.url) {
-    // New custom OAuth connection
+    // New custom OAuth connection — validate URL before proceeding
+    const urlCheck = validateMcpUrl(body.url);
+    if (!urlCheck.valid) {
+      return NextResponse.json({ error: urlCheck.error }, { status: 400 });
+    }
     mcpUrl = body.url;
     provider = "custom";
     connectionName = body.name ?? "Custom MCP";
@@ -117,7 +122,7 @@ export async function POST(req: NextRequest) {
       console.error("Dynamic client registration failed:", errorMessage, error);
       return NextResponse.json(
         {
-          error: `OAuth client registration failed with the MCP server: ${errorMessage}`,
+          error: "OAuth client registration failed with the MCP server",
         },
         { status: 502 },
       );
@@ -159,7 +164,7 @@ export async function POST(req: NextRequest) {
     userId,
     connectionId: connectionId!,
     provider,
-    codeVerifier,
+    codeVerifier: encrypt(codeVerifier),
     redirectTo: "/settings/connections",
     oauthClientId: clientId,
     oauthClientSecret: clientSecret ? encrypt(clientSecret) : null,

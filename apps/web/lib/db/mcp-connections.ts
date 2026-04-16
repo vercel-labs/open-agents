@@ -133,15 +133,11 @@ export async function consumeOAuthState(
   state: string,
 ): Promise<MCPOAuthState | null> {
   const [row] = await db
-    .select()
-    .from(mcpOAuthStates)
+    .delete(mcpOAuthStates)
     .where(eq(mcpOAuthStates.state, state))
-    .limit(1);
+    .returning();
 
   if (!row) return null;
-
-  // Delete the state (single-use)
-  await db.delete(mcpOAuthStates).where(eq(mcpOAuthStates.state, state));
 
   // Check expiry
   if (row.expiresAt.getTime() < Date.now()) {
