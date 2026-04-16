@@ -327,4 +327,22 @@ describe("dedupeCrossMessageReasoning", () => {
     expect(messages).toHaveLength(originalLength);
     expect(messages[1].parts).toHaveLength(originalPartsLength);
   });
+
+  test("keeps reasoning-only message without provider metadata item IDs", () => {
+    // A reasoning-only assistant message that has no provider metadata
+    // (no rs_* IDs) should NOT be dropped
+    const messages = [
+      userMsg("question"),
+      msg(
+        [
+          reasoning("some thought"), // no itemId
+        ],
+        "msg_1",
+      ),
+    ];
+
+    const result = dedupeCrossMessageReasoning(messages);
+    expect(result).toHaveLength(2);
+    expect(result[1].id).toBe("msg_1");
+  });
 });

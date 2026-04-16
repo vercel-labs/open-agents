@@ -143,7 +143,7 @@ export function dedupeCrossMessageReasoning(
     // Check if this assistant message's reasoning IDs are all duplicates
     const hasNewId = messageIds.some((id) => !seenGlobalIds.has(id));
 
-    if (!hasNewId && isReasoningOnlyMessage(message)) {
+    if (!hasNewId && messageIds.length > 0 && isReasoningOnlyMessage(message)) {
       // Entire message is a replay — skip it
       changed = true;
       continue;
