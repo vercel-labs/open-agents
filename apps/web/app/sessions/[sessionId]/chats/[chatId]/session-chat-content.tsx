@@ -1606,8 +1606,13 @@ export function SessionChatContent({
     inFlight: false,
     lastAt: 0,
   });
+  const shouldSkipServerSnapshotOverwriteRef = useRef(false);
 
   const refreshCurrentChatSnapshot = useCallback(async (): Promise<void> => {
+    if (shouldSkipServerSnapshotOverwriteRef.current) {
+      return;
+    }
+
     const response = await fetch(
       `/api/sessions/${session.id}/chats/${chatInfo.id}`,
       {
@@ -1842,6 +1847,11 @@ export function SessionChatContent({
 
   const hasMessageActionInFlight =
     deletingMessageId !== null || resendingMessageId !== null || isChatInFlight;
+
+  shouldSkipServerSnapshotOverwriteRef.current =
+    hasPendingResponse ||
+    deletingMessageId !== null ||
+    resendingMessageId !== null;
 
   const sendMessageWithPendingState = useCallback(
     async (message: Parameters<typeof sendMessage>[0]) => {
