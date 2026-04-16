@@ -30,7 +30,7 @@ import {
   runAutoCommitStep,
   runAutoCreatePrStep,
 } from "./chat-post-finish";
-import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
+import { dedupeMessageReasoning, dedupeCrossMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import type {
   WorkflowRunStatus,
   WorkflowRunStepTiming,
@@ -71,7 +71,9 @@ const convertMessages = async (
 ): Promise<ModelMessage[]> => {
   "use step";
   const { webAgent } = await import("@/app/config");
-  const dedupedMessages = messages.map(dedupeMessageReasoning);
+  const dedupedMessages = dedupeCrossMessageReasoning(
+    messages.map(dedupeMessageReasoning),
+  );
   const modelMessages = await convertToModelMessages<WebAgentUIMessage>(
     dedupedMessages,
     {
