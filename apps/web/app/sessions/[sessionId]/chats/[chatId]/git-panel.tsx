@@ -1700,6 +1700,9 @@ export function GitPanel(props: GitPanelProps) {
           ? "Commit your changes before creating a pull request."
           : "Commit changes to your branch before creating a pull request.";
   const showCreatePrShortcut = hasRepo && !hasExistingPr && canOpenPrTab;
+  const hasPendingGitWork =
+    hasUncommittedGitChanges || (gitStatus?.hasUnpushedCommits ?? false);
+  const showCommitPanel = hasRepo && (!hasExistingPr || hasPendingGitWork);
   const isRefreshingChanges = diffRefreshing || gitStatusLoading;
   const diffScopeManuallySetRef = useRef(false);
 
@@ -1872,7 +1875,7 @@ export function GitPanel(props: GitPanelProps) {
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Fixed commit area */}
             <div className="shrink-0 p-3 pb-0">
-              {hasRepo && (
+              {showCommitPanel && (
                 <div className="mb-2">
                   <InlineCommitPanel
                     session={session}
@@ -1887,7 +1890,7 @@ export function GitPanel(props: GitPanelProps) {
               )}
 
               {/* Separator */}
-              {hasRepo && diffFiles && diffFiles.length > 0 && (
+              {showCommitPanel && diffFiles && diffFiles.length > 0 && (
                 <div className="mb-2 border-t border-border" />
               )}
 
