@@ -28,23 +28,26 @@ interface ToolOptions {
   needsApproval?: boolean | ApprovalFn;
 }
 
-// Commands that should require approval
-const DANGEROUS_COMMAND_PATTERNS = [/\brm\s+-rf\b/];
-
 /**
  * Check if a command should require approval.
  * Returns true only for dangerous patterns.
  */
 export function commandNeedsApproval(command: string): boolean {
   const trimmedCommand = command.trim();
+  const rmMatch = trimmedCommand.match(/^\s*\brm\b(.*)$/);
+  if (!rmMatch) return false;
 
-  for (const pattern of DANGEROUS_COMMAND_PATTERNS) {
-    if (pattern.test(trimmedCommand)) {
-      return true;
-    }
-  }
+  // Normalize long-form flags to short form
+  let flags = rmMatch[1]
+    .replace(/--recursive/g, " -r ")
+    .replace(/--force/g, " -f ");
 
-  return false;
+  // Extract all short flag characters (after each -)
+  const flagChars = flags
+    .replace(/-([a-zA-Z]+)/g, (_, f) => " " + f.toLowerCase() + " ");
+
+  // Dangerous: rm called with both recursive (-r) and force (-f) flags
+  return flagChars.includes("r") && flagChars.includes("f");
 }
 
 export const bashTool = (options?: ToolOptions) =>
