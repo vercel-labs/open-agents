@@ -243,6 +243,7 @@ function makeOptions(overrides?: Record<string, unknown>) {
     chatId: "chat-1",
     sessionId: "session-1",
     userId: "user-1",
+    selectedModelId: "gpt-4",
     modelId: "gpt-4",
     agentOptions: {
       sandbox: { state: { type: "vercel" } },
@@ -306,6 +307,166 @@ describe("runAgentWorkflow", () => {
     const rwCalls = spies.recordWorkflowUsage.mock.calls as unknown[][];
     expect(rwCalls[0][0]).toBe("user-1");
     expect(rwCalls[0][1]).toBe("gpt-4");
+  });
+
+  test("persists model metadata even without a finish-step chunk", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+        stepModels?: Array<{
+          selectedModelId: string;
+          modelId: string;
+        }>;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+    });
+    expect(persistedMessage.metadata?.stepModels).toBeUndefined();
+  });
+
+  test("streams and persists step model history", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(
+      makeOptions({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          selectedModelId?: string;
+          modelId?: string;
+          stepModels?: Array<{
+            selectedModelId: string;
+            modelId: string;
+          }>;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(metadataChunks.at(-1)?.messageMetadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+      stepModels: [
+        {
+          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+          modelId: "openai/gpt-5.4",
+        },
+      ],
+    });
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+        stepModels?: Array<{
+          selectedModelId: string;
+          modelId: string;
+        }>;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+      stepModels: [
+        {
+          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+          modelId: "openai/gpt-5.4",
+        },
+      ],
+    });
+  });
+
+  test("appends model history when resuming an assistant message", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(
+      makeOptions({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant" as const,
+            parts: [{ type: "text", text: "Need your approval" }],
+            metadata: {
+              selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+              modelId: "openai/gpt-5.4",
+              stepModels: [
+                {
+                  selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+                  modelId: "openai/gpt-5.4",
+                },
+              ],
+            },
+          },
+        ],
+        selectedModelId: "anthropic/claude-opus-4.6",
+        modelId: "anthropic/claude-opus-4.6",
+      }),
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+        stepModels?: Array<{
+          selectedModelId: string;
+          modelId: string;
+        }>;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "anthropic/claude-opus-4.6",
+      modelId: "anthropic/claude-opus-4.6",
+      stepModels: [
+        {
+          selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+          modelId: "openai/gpt-5.4",
+        },
+        {
+          selectedModelId: "anthropic/claude-opus-4.6",
+          modelId: "anthropic/claude-opus-4.6",
+        },
+      ],
+    });
   });
 
   test("marks workflow run as failed when maxSteps is exhausted", async () => {
