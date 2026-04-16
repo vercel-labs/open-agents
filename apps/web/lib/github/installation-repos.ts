@@ -81,7 +81,7 @@ export async function listUserInstallationRepositories({
   const queryFilter = query?.trim().toLowerCase();
   const normalizedLimit = normalizeLimit(limit);
 
-  const perPage = 25;
+  const perPage = 100;
   const maxPages = INSTALLATION_REPOS_MAX_PAGES;
   const matchedRepos: z.infer<typeof installationRepoSchema>[] = [];
 
@@ -129,10 +129,6 @@ export async function listUserInstallationRepositories({
     });
 
     matchedRepos.push(...pageMatches);
-
-    if (matchedRepos.length >= normalizedLimit) {
-      break;
-    }
 
     if (parsed.data.repositories.length < perPage) {
       break;
