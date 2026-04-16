@@ -25,7 +25,7 @@ function createPage(
 ) {
   return [
     ...repositories,
-    ...Array.from({ length: 100 - repositories.length }, (_, index) =>
+    ...Array.from({ length: 25 - repositories.length }, (_, index) =>
       createRepository(
         `filler-${page}-${index}`,
         `2023-01-${`${(index % 28) + 1}`.padStart(2, "0")}T00:00:00Z`,
@@ -43,12 +43,12 @@ describe("installation-repos", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test("sorts by recent activity across pages before applying the limit", async () => {
+  test("stops paging once it has enough matches to satisfy the limit", async () => {
     const fetchMock = mock(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       const page = url.searchParams.get("page");
 
-      expect(url.searchParams.get("per_page")).toBe("100");
+      expect(url.searchParams.get("per_page")).toBe("25");
 
       if (page === "1") {
         return Response.json({
@@ -77,16 +77,16 @@ describe("installation-repos", () => {
       limit: 2,
     });
 
-    expect(repos.map((repo) => repo.name)).toEqual(["omega", "alpha"]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(repos.map((repo) => repo.name)).toEqual(["alpha", "beta"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("sorts query matches by recent activity across all fetched pages", async () => {
+  test("continues paging until a query has enough matches", async () => {
     const fetchMock = mock(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       const page = url.searchParams.get("page");
 
-      expect(url.searchParams.get("per_page")).toBe("100");
+      expect(url.searchParams.get("per_page")).toBe("25");
 
       if (page === "1") {
         return Response.json({
@@ -127,7 +127,7 @@ describe("installation-repos", () => {
       limit: 2,
     });
 
-    expect(repos.map((repo) => repo.name)).toEqual(["docs-api", "docs-site"]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(repos.map((repo) => repo.name)).toEqual(["docs-site", "docs"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
