@@ -124,7 +124,7 @@ function ViewerBody({
 }) {
   const hasContent = response != null && response.content.length > 0;
   const fileName = filePath.split("/").pop() ?? filePath;
-  const isPlanFile = fileName === "Plan.md";
+  const isPlanFile = fileName.toLowerCase() === "plan.md";
   const fileOptions = {
     ...defaultFileOptions,
     ...(shouldWrapFileContent(filePath) ? { overflow: "wrap" as const } : {}),
