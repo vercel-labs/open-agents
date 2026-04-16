@@ -98,9 +98,11 @@ function CopyButton({
 
 function PlanMarkdown({ content }: { content: string }) {
   return (
-    <Streamdown mode="static" isAnimating={false} plugins={streamdownPlugins}>
-      {content}
-    </Streamdown>
+    <div className="px-6 py-5 pr-20 sm:px-8 sm:pr-24">
+      <Streamdown mode="static" isAnimating={false} plugins={streamdownPlugins}>
+        {content}
+      </Streamdown>
+    </div>
   );
 }
 
