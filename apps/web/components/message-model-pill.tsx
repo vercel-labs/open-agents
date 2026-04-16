@@ -20,8 +20,8 @@ interface MessageModelPillProps {
  * - Single-model turn: one pill with the model name.
  * - Variant turn: pill shows the variant label; tooltip shows the resolved
  *   underlying model.
- * - Multi-model turn (stepModels.length > 1): pill shows the latest model
- *   plus "· N models" suffix.
+ * - Multi-model turn (distinct models in stepModels > 1): pill shows the
+ *   latest model plus "· N models" suffix.
  */
 export function MessageModelPill({
   metadata,
@@ -54,7 +54,13 @@ export function MessageModelPill({
   }
 
   const isVariant = selectedOption?.isVariant ?? false;
-  const hasMultipleModels = stepModels != null && stepModels.length > 1;
+
+  // Count distinct resolved models across steps — not array length, since
+  // every agent step appends an entry even when the model doesn't change.
+  const distinctModelCount = stepModels
+    ? new Set(stepModels.map((s) => s.modelId)).size
+    : 0;
+  const hasMultipleModels = distinctModelCount > 1;
 
   // Build tooltip for variants: show which model actually ran.
   let tooltipText: string | undefined;
@@ -69,7 +75,7 @@ export function MessageModelPill({
       {hasMultipleModels && (
         <>
           <span className="text-muted-foreground/30">·</span>
-          <span className="shrink-0">{stepModels.length} models</span>
+          <span className="shrink-0">{distinctModelCount} models</span>
         </>
       )}
     </span>
