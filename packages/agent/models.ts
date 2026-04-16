@@ -10,10 +10,14 @@ import {
 import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
 import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 
-// Models with 4.5+ support adaptive thinking with effort control.
+function supportsAdaptiveAnthropicThinking(modelId: string): boolean {
+  return modelId.includes("4.6") || modelId.includes("4.7");
+}
+
+// Models with adaptive thinking support use effort control.
 // Older models use the legacy extended thinking API with a budget.
 function getAnthropicSettings(modelId: string): AnthropicLanguageModelOptions {
-  if (modelId.includes("4.6")) {
+  if (supportsAdaptiveAnthropicThinking(modelId)) {
     return {
       effort: "medium",
       thinking: { type: "adaptive" },
