@@ -128,11 +128,23 @@ function CopyButton({
   );
 }
 
+function stripMarkdownFrontmatter(content: string) {
+  const frontmatterMatch = content.match(
+    /^(?:\uFEFF)?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$)/,
+  );
+
+  if (!frontmatterMatch) {
+    return content;
+  }
+
+  return content.slice(frontmatterMatch[0].length);
+}
+
 function PrettyMarkdown({ content }: { content: string }) {
   return (
     <div className="p-6">
       <Streamdown mode="static" isAnimating={false} plugins={streamdownPlugins}>
-        {content}
+        {stripMarkdownFrontmatter(content)}
       </Streamdown>
     </div>
   );
