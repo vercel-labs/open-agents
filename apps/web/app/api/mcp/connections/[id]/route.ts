@@ -6,7 +6,7 @@ import {
   deleteMCPConnection,
 } from "@/lib/db/mcp-connections";
 import { encrypt } from "@/lib/crypto";
-import { validateMcpUrl } from "@/lib/mcp/validate";
+import { BLOCKED_HEADER_NAMES, validateMcpUrl } from "@/lib/mcp/validate";
 
 export async function PATCH(
   req: NextRequest,
@@ -52,6 +52,15 @@ export async function PATCH(
     update.status = "active";
   }
   if (body.customHeaders !== undefined) {
+    for (const key of Object.keys(body.customHeaders)) {
+      if (BLOCKED_HEADER_NAMES.has(key.toLowerCase())) {
+        return NextResponse.json(
+          { error: `Header "${key}" is not allowed` },
+          { status: 400 },
+        );
+      }
+    }
+
     update.customHeaders = Object.fromEntries(
       Object.entries(body.customHeaders).map(([k, v]) => [k, encrypt(v)]),
     );

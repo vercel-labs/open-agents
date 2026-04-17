@@ -43,7 +43,7 @@ interface MCPConnectionSafe {
   name: string;
   url: string;
   transportType: string;
-  authType: string;
+  authType: AuthType;
   status: "active" | "needs_auth" | "error" | "unchecked";
   enabledByDefault: boolean;
   lastError: string | null;
@@ -52,11 +52,19 @@ interface MCPConnectionSafe {
   updatedAt: string;
 }
 
-type AuthType = "none" | "bearer" | "custom_headers" | "oauth";
+type AuthType = "none" | "bearer" | "headers" | "oauth";
 
 interface CustomHeader {
   key: string;
   value: string;
+}
+
+interface CreateCustomConnectionData {
+  name: string;
+  url: string;
+  authType: AuthType;
+  accessToken?: string;
+  customHeaders?: Record<string, string>;
 }
 
 // ── Provider definitions ───────────────────────────────────────────────────
@@ -128,7 +136,7 @@ function AuthTypeBadge({ authType }: { authType: string }) {
   const labels: Record<string, string> = {
     none: "No auth",
     bearer: "Bearer",
-    custom_headers: "Headers",
+    headers: "Headers",
     oauth: "OAuth",
   };
   return (
@@ -277,18 +285,24 @@ function ProviderCard({
 
 function CustomConnectionRow({
   connection,
+  onAuthorize,
   onTest,
   onDelete,
+  authorizing,
   testing,
   deleting,
 }: {
   connection: MCPConnectionSafe;
+  onAuthorize: (id: string) => void;
   onTest: (id: string) => void;
   onDelete: (id: string) => void;
+  authorizing: boolean;
   testing: boolean;
   deleting: boolean;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canAuthorize =
+    connection.authType === "oauth" && connection.status !== "active";
 
   return (
     <>
@@ -312,12 +326,30 @@ function CustomConnectionRow({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {canAuthorize && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onAuthorize(connection.id)}
+              disabled={authorizing}
+            >
+              {authorizing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <>
+                  <ExternalLink className="mr-1 size-3" />
+                  {connection.status === "error" ? "Retry" : "Authorize"}
+                </>
+              )}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
             onClick={() => onTest(connection.id)}
-            disabled={testing}
+            disabled={testing || authorizing}
             title="Test connection"
           >
             {testing ? (
@@ -331,7 +363,7 @@ function CustomConnectionRow({
             size="sm"
             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
             onClick={() => setDeleteOpen(true)}
-            disabled={deleting}
+            disabled={deleting || authorizing}
             title="Delete connection"
           >
             {deleting ? (
@@ -383,13 +415,7 @@ function AddCustomMcpDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: {
-    name: string;
-    url: string;
-    authType: AuthType;
-    bearerToken?: string;
-    customHeaders?: CustomHeader[];
-  }) => void;
+  onSubmit: (data: CreateCustomConnectionData) => void;
   submitting: boolean;
 }) {
   const [name, setName] = useState("");
@@ -430,18 +456,20 @@ function AddCustomMcpDialog({
     if (!name.trim() || !url.trim()) return;
     if (!validateUrl(url)) return;
 
+    const normalizedHeaders = Object.fromEntries(
+      customHeaders
+        .map((header) => [header.key.trim(), header.value.trim()] as const)
+        .filter(([key, value]) => key.length > 0 && value.length > 0),
+    );
+
     onSubmit({
       name: name.trim(),
       url: url.trim(),
       authType,
-      ...(authType === "bearer" ? { bearerToken } : {}),
-      ...(authType === "custom_headers"
-        ? {
-            customHeaders: customHeaders.filter(
-              (h) => h.key.trim() && h.value.trim(),
-            ),
-          }
+      ...(authType === "bearer" && bearerToken.trim().length > 0
+        ? { accessToken: bearerToken.trim() }
         : {}),
+      ...(authType === "headers" ? { customHeaders: normalizedHeaders } : {}),
     });
   }
 
@@ -521,7 +549,7 @@ function AddCustomMcpDialog({
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
                 <SelectItem value="bearer">Bearer Token</SelectItem>
-                <SelectItem value="custom_headers">Custom Headers</SelectItem>
+                <SelectItem value="headers">Custom Headers</SelectItem>
                 <SelectItem value="oauth">OAuth</SelectItem>
               </SelectContent>
             </Select>
@@ -543,7 +571,7 @@ function AddCustomMcpDialog({
           )}
 
           {/* Custom headers inputs */}
-          {authType === "custom_headers" && (
+          {authType === "headers" && (
             <div className="space-y-2">
               <Label>Headers</Label>
               <div className="space-y-2">
@@ -636,6 +664,7 @@ export function McpConnectionsSection() {
   const [connectingProvider, setConnectingProvider] = useState<string | null>(
     null,
   );
+  const [authorizingId, setAuthorizingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -666,34 +695,62 @@ export function McpConnectionsSection() {
     return connections?.find((c) => c.provider === providerId);
   }
 
+  async function initiateOAuthConnection(body: {
+    connectionId?: string;
+    provider?: string;
+    url?: string;
+    name?: string;
+  }) {
+    const res = await fetch("/api/mcp/oauth/initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      authUrl?: string;
+      error?: string;
+    };
+
+    if (!res.ok || !data.authUrl) {
+      toast.error("Failed to initiate connection", {
+        description: data.error ?? "An unexpected error occurred.",
+      });
+      return null;
+    }
+
+    return data.authUrl;
+  }
+
   // Connect to a predefined provider via OAuth
   async function handleConnectProvider(providerId: string) {
     setConnectingProvider(providerId);
     try {
-      const res = await fetch("/api/mcp/oauth/initiate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: providerId }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        toast.error("Failed to initiate connection", {
-          description: data.error ?? "An unexpected error occurred.",
-        });
+      const authUrl = await initiateOAuthConnection({ provider: providerId });
+      if (!authUrl) {
         return;
       }
-      const data = (await res.json()) as {
-        authUrl: string;
-        connectionId: string;
-      };
-      window.location.href = data.authUrl;
+      window.location.href = authUrl;
     } catch (error) {
       console.error("Failed to connect provider:", error);
       toast.error("Failed to initiate connection");
     } finally {
       setConnectingProvider(null);
+    }
+  }
+
+  async function handleAuthorizeConnection(connectionId: string) {
+    setAuthorizingId(connectionId);
+    try {
+      const authUrl = await initiateOAuthConnection({ connectionId });
+      if (!authUrl) {
+        return;
+      }
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("Failed to authorize connection:", error);
+      toast.error("Failed to initiate connection");
+    } finally {
+      setAuthorizingId(null);
     }
   }
 
@@ -719,15 +776,22 @@ export function McpConnectionsSection() {
   }
 
   // Create a custom MCP connection
-  async function handleCreateCustom(data: {
-    name: string;
-    url: string;
-    authType: AuthType;
-    bearerToken?: string;
-    customHeaders?: CustomHeader[];
-  }) {
+  async function handleCreateCustom(data: CreateCustomConnectionData) {
     setSubmitting(true);
     try {
+      if (data.authType === "oauth") {
+        const authUrl = await initiateOAuthConnection({
+          url: data.url,
+          name: data.name,
+        });
+        if (!authUrl) {
+          return;
+        }
+        setAddDialogOpen(false);
+        window.location.href = authUrl;
+        return;
+      }
+
       const res = await fetch("/api/mcp/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -746,19 +810,6 @@ export function McpConnectionsSection() {
       await mutateConnections();
       setAddDialogOpen(false);
       toast.success(`${created.name} MCP added`);
-
-      // For OAuth custom MCPs, auto-initiate OAuth flow
-      if (data.authType === "oauth") {
-        const oauthRes = await fetch("/api/mcp/oauth/initiate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ connectionId: created.id }),
-        });
-        if (oauthRes.ok) {
-          const oauthData = (await oauthRes.json()) as { authUrl: string };
-          window.location.href = oauthData.authUrl;
-        }
-      }
     } catch (error) {
       console.error("Failed to create connection:", error);
       toast.error("Failed to create connection");
@@ -917,8 +968,10 @@ export function McpConnectionsSection() {
                   <CustomConnectionRow
                     key={conn.id}
                     connection={conn}
+                    onAuthorize={handleAuthorizeConnection}
                     onTest={handleTest}
                     onDelete={handleDelete}
+                    authorizing={authorizingId === conn.id}
                     testing={testingId === conn.id}
                     deleting={deletingId === conn.id}
                   />

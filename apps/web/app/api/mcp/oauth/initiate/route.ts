@@ -1,22 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getServerSession } from "@/lib/session/get-server-session";
+import { encrypt } from "@/lib/crypto";
 import {
   createMCPConnection,
+  createOAuthState,
   getMCPConnectionById,
   getUserMCPConnections,
-  createOAuthState,
   updateMCPConnection,
 } from "@/lib/db/mcp-connections";
+import { getCatalogEntry } from "@/lib/mcp/catalog";
 import {
+  buildAuthorizationUrl,
   discoverOAuthMetadata,
-  registerOAuthClient,
   generatePKCE,
   generateState,
-  buildAuthorizationUrl,
+  registerOAuthClient,
 } from "@/lib/mcp/oauth";
-import { getCatalogEntry } from "@/lib/mcp/catalog";
-import { encrypt } from "@/lib/crypto";
 import { validateMcpUrl } from "@/lib/mcp/validate";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession();
@@ -36,24 +36,29 @@ export async function POST(req: NextRequest) {
   let mcpUrl: string;
   let provider: string;
   let connectionName: string;
-  let isExistingConnection = false;
-  let catalogTransportType: "http" | "sse" = "http";
+  let transportType: "http" | "sse" = "http";
 
   if (connectionId) {
-    // Re-authorize existing connection
-    const conn = await getMCPConnectionById(connectionId, userId);
-    if (!conn) {
+    const connection = await getMCPConnectionById(connectionId, userId);
+    if (!connection) {
       return NextResponse.json(
         { error: "Connection not found" },
         { status: 404 },
       );
     }
-    mcpUrl = conn.url;
-    provider = conn.provider;
-    connectionName = conn.name;
-    isExistingConnection = true;
+
+    if (connection.authType !== "oauth") {
+      return NextResponse.json(
+        { error: "Connection does not use OAuth" },
+        { status: 400 },
+      );
+    }
+
+    mcpUrl = connection.url;
+    provider = connection.provider;
+    connectionName = connection.name;
+    transportType = connection.transportType;
   } else if (body.provider) {
-    // New pre-defined connection
     const catalogEntry = getCatalogEntry(body.provider);
     if (!catalogEntry) {
       return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
@@ -62,35 +67,36 @@ export async function POST(req: NextRequest) {
     mcpUrl = catalogEntry.url;
     provider = catalogEntry.provider;
     connectionName = catalogEntry.name;
-    catalogTransportType = catalogEntry.transportType as "http" | "sse";
+    transportType = catalogEntry.transportType;
 
-    // Check if a connection already exists for this user+provider
     const existingConnections = await getUserMCPConnections(userId);
-    const existing = existingConnections.find((c) => c.provider === provider);
-    if (existing) {
-      connectionId = existing.id;
-      isExistingConnection = true;
+    const existingConnection = existingConnections.find(
+      (connection) => connection.provider === provider,
+    );
+
+    if (existingConnection) {
+      if (existingConnection.authType !== "oauth") {
+        return NextResponse.json(
+          { error: "Connection does not use OAuth" },
+          { status: 400 },
+        );
+      }
+
+      connectionId = existingConnection.id;
+      mcpUrl = existingConnection.url;
+      provider = existingConnection.provider;
+      connectionName = existingConnection.name;
+      transportType = existingConnection.transportType;
     }
   } else if (body.url) {
-    // New custom OAuth connection — validate URL before proceeding
     const urlCheck = validateMcpUrl(body.url);
     if (!urlCheck.valid) {
       return NextResponse.json({ error: urlCheck.error }, { status: 400 });
     }
+
     mcpUrl = body.url;
     provider = "custom";
     connectionName = body.name ?? "Custom MCP";
-
-    const conn = await createMCPConnection({
-      userId,
-      provider,
-      name: connectionName,
-      url: mcpUrl,
-      transportType: "http",
-      authType: "oauth",
-      status: "needs_auth",
-    });
-    connectionId = conn.id;
   } else {
     return NextResponse.json(
       { error: "Either connectionId, provider, or url is required" },
@@ -98,80 +104,77 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Discover OAuth metadata from MCP server
   const metadata = await discoverOAuthMetadata(mcpUrl);
+  const redirectUri = `${req.nextUrl.origin}/api/mcp/oauth/callback`;
 
-  const origin = req.nextUrl.origin;
-  const redirectUri = `${origin}/api/mcp/oauth/callback`;
-
-  // Try dynamic client registration
   let clientId: string;
   let clientSecret: string | undefined;
 
-  if (metadata.registration_endpoint) {
-    try {
-      const registration = await registerOAuthClient(
-        metadata.registration_endpoint,
-        redirectUri,
-      );
-      clientId = registration.clientId;
-      clientSecret = registration.clientSecret;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error("Dynamic client registration failed:", errorMessage, error);
-      return NextResponse.json(
-        {
-          error: "OAuth client registration failed with the MCP server",
-        },
-        { status: 502 },
-      );
-    }
-  } else {
+  if (!metadata.registration_endpoint) {
     return NextResponse.json(
       { error: "MCP server does not support dynamic client registration" },
       { status: 400 },
     );
   }
 
-  // For predefined providers: create the connection AFTER successful registration
-  if (body.provider && !isExistingConnection) {
-    const conn = await createMCPConnection({
+  try {
+    const registration = await registerOAuthClient(
+      metadata.registration_endpoint,
+      redirectUri,
+    );
+    clientId = registration.clientId;
+    clientSecret = registration.clientSecret;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Dynamic client registration failed:", errorMessage, error);
+    return NextResponse.json(
+      {
+        error: "OAuth client registration failed with the MCP server",
+      },
+      { status: 502 },
+    );
+  }
+
+  if (!connectionId) {
+    const connection = await createMCPConnection({
       userId,
       provider,
       name: connectionName,
       url: mcpUrl,
-      transportType: catalogTransportType,
+      transportType,
       authType: "oauth",
       status: "needs_auth",
     });
-    connectionId = conn.id;
+    connectionId = connection.id;
   }
 
-  // Store client credentials on the connection
-  await updateMCPConnection(connectionId!, userId, {
+  if (!connectionId) {
+    return NextResponse.json(
+      { error: "Failed to initialize OAuth connection" },
+      { status: 500 },
+    );
+  }
+
+  await updateMCPConnection(connectionId, userId, {
     oauthClientId: clientId,
     oauthClientSecret: clientSecret ? encrypt(clientSecret) : null,
   });
 
-  // Generate PKCE and state
   const { codeVerifier, codeChallenge } = generatePKCE();
   const state = generateState();
 
-  // Store OAuth state for callback validation
   await createOAuthState({
     state,
     userId,
-    connectionId: connectionId!,
+    connectionId,
     provider,
     codeVerifier: encrypt(codeVerifier),
     redirectTo: "/settings/connections",
     oauthClientId: clientId,
     oauthClientSecret: clientSecret ? encrypt(clientSecret) : null,
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
   });
 
-  // Build authorization URL
   const authUrl = buildAuthorizationUrl({
     authorizationEndpoint: metadata.authorization_endpoint,
     clientId,

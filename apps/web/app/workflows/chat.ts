@@ -800,17 +800,22 @@ const runAgentStep = async (
   // Resolve MCP tools inside the workflow step (ToolSet objects contain Zod
   // schemas with Symbols that can't be serialized across the workflow boundary).
   let resolvedOptions = agentOptions;
+  let closeResolvedMcpClients: (() => Promise<void>) | undefined;
   if (enabledMcpConnectionIds && enabledMcpConnectionIds.length > 0) {
     try {
       const { getEnabledMCPConnections } =
         await import("@/lib/db/mcp-connections");
-      const { resolveMCPTools } = await import("@/lib/mcp/client");
+      const { closeMCPClients, resolveMCPTools } =
+        await import("@/lib/mcp/client");
       const connections = await getEnabledMCPConnections(
         userId,
         enabledMcpConnectionIds,
       );
       if (connections.length > 0) {
         const mcpResult = await resolveMCPTools(connections);
+        closeResolvedMcpClients = async () => {
+          await closeMCPClients(mcpResult.clients);
+        };
         if (Object.keys(mcpResult.tools).length > 0) {
           resolvedOptions = {
             ...agentOptions,
@@ -1036,6 +1041,16 @@ const runAgentStep = async (
     });
     throw errorWithStepTiming;
   } finally {
+    if (closeResolvedMcpClients) {
+      try {
+        await closeResolvedMcpClients();
+      } catch (error) {
+        console.error(
+          `Failed to close MCP clients in workflow step for session ${sessionId}:`,
+          error,
+        );
+      }
+    }
     stopMonitor.stop();
     await stopMonitor.done;
   }
