@@ -3,6 +3,11 @@
 import type { WebAgentMessageMetadata } from "@/app/types";
 import type { ModelOption } from "@/lib/model-options";
 import {
+  ProviderIcon,
+  getProviderFromModelId,
+  stripProviderPrefix,
+} from "@/components/provider-icons";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -74,15 +79,21 @@ export function MessageModelPill({
     ? modelOptions.find((o) => o.id === resolvedModelId)
     : undefined;
 
+  const option = selectedOption ?? resolvedOption;
   const displayLabel =
-    selectedOption?.label ??
-    resolvedOption?.label ??
-    selectedModelId ??
-    resolvedModelId;
+    option?.shortLabel ?? option?.label ?? selectedModelId ?? resolvedModelId;
 
   if (!displayLabel) {
     return null;
   }
+
+  const provider =
+    option?.provider ??
+    getProviderFromModelId(selectedModelId ?? resolvedModelId ?? "");
+
+  const shortLabel = option
+    ? (option.shortLabel ?? stripProviderPrefix(option.label, provider))
+    : displayLabel;
 
   const isVariant = selectedOption?.isVariant ?? false;
   const hasCost =
@@ -105,7 +116,8 @@ export function MessageModelPill({
 
   const pill = (
     <span className="inline-flex max-w-[320px] items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-tight text-muted-foreground/50 transition-colors hover:text-muted-foreground/80">
-      <span className="truncate">{displayLabel}</span>
+      <ProviderIcon provider={provider} className="size-3 shrink-0" />
+      <span className="truncate">{shortLabel}</span>
       {hasCost && (
         <>
           <span aria-hidden className="text-muted-foreground/30">
