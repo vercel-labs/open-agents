@@ -162,7 +162,7 @@ export function ModelSelectorCompact({
                   >
                     <ProviderIcon
                       provider={option.provider}
-                      className="mr-2 size-3.5 shrink-0 opacity-70"
+                      className="mr-1.5 size-3.5 shrink-0 opacity-70"
                     />
                     <span className="min-w-0 truncate">
                       {option.shortLabel}

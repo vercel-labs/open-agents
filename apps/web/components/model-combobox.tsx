@@ -160,7 +160,7 @@ export function ModelCombobox({
                     >
                       <ProviderIcon
                         provider={provider}
-                        className="mr-2 size-3.5 shrink-0 opacity-70"
+                        className="mr-1.5 size-3.5 shrink-0 opacity-70"
                       />
                       <span className="min-w-0 truncate">{shortLabel}</span>
                       {item.isVariant && (
