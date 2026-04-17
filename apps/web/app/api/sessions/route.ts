@@ -6,6 +6,7 @@ import {
   getSessionsWithUnreadByUserId,
   getUsedSessionTitles,
 } from "@/lib/db/sessions";
+import { getInstallationByAccountLogin } from "@/lib/db/installations";
 import {
   getVercelProjectLinkByRepo,
   upsertVercelProjectLink,
@@ -16,6 +17,8 @@ import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/repo-identifiers";
+import { isInstallationRepositoryAccessible } from "@/lib/github/installation-repos";
+import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
@@ -42,6 +45,9 @@ interface CreateSessionRequest {
   autoCreatePr?: boolean;
   vercelProject?: VercelProjectSelection | null;
 }
+
+const REPO_INSTALLATION_ACCESS_ERROR =
+  "Repository is not available through your GitHub App installation";
 
 function generateBranchName(username: string, name?: string | null): string {
   let initials = "nb";
@@ -85,6 +91,43 @@ function parseNonNegativeInteger(value: string | null): number | null {
   }
 
   return Number(value);
+}
+
+async function validateSessionRepositoryAccess(params: {
+  userId: string;
+  repoOwner: string;
+  repoName: string;
+}): Promise<Response | null> {
+  const installation = await getInstallationByAccountLogin(
+    params.userId,
+    params.repoOwner,
+  );
+  if (!installation) {
+    return Response.json(
+      { error: REPO_INSTALLATION_ACCESS_ERROR },
+      { status: 403 },
+    );
+  }
+
+  const userGitHubToken = await getUserGitHubToken(params.userId);
+  if (!userGitHubToken) {
+    return Response.json({ error: "GitHub not connected" }, { status: 401 });
+  }
+
+  const hasRepoAccess = await isInstallationRepositoryAccessible({
+    installationId: installation.installationId,
+    userToken: userGitHubToken,
+    owner: installation.accountLogin,
+    name: params.repoName,
+  });
+  if (!hasRepoAccess) {
+    return Response.json(
+      { error: REPO_INSTALLATION_ACCESS_ERROR },
+      { status: 403 },
+    );
+  }
+
+  return null;
 }
 
 export async function GET(req: Request) {
@@ -270,6 +313,15 @@ export async function POST(req: Request) {
     let resolvedVercelProject: VercelProjectSelection | null = null;
     const hasRepo = Boolean(repoOwner && repoName);
     if (hasRepo && repoOwner && repoName) {
+      const repoAccessError = await validateSessionRepositoryAccess({
+        userId: session.user.id,
+        repoOwner,
+        repoName,
+      });
+      if (repoAccessError) {
+        return repoAccessError;
+      }
+
       if (explicitVercelProject) {
         const vercelToken = await getUserVercelToken(session.user.id);
         if (!vercelToken) {

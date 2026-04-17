@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { listUserInstallationRepositories } from "./installation-repos";
+import {
+  isInstallationRepositoryAccessible,
+  listAccessibleInstallationRepositoriesByNames,
+  listUserInstallationRepositories,
+} from "./installation-repos";
 
 const originalFetch = globalThis.fetch;
 
@@ -129,5 +133,68 @@ describe("installation-repos", () => {
 
     expect(repos.map((repo) => repo.name)).toEqual(["docs-site", "docs"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("matches recent repo names against installation-scoped access and preserves request order", async () => {
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      const page = url.searchParams.get("page");
+
+      if (page === "1") {
+        return Response.json({
+          repositories: createPage(
+            [
+              createRepository("alpha", "2024-01-01T00:00:00Z"),
+              createRepository("gamma", "2024-03-01T00:00:00Z"),
+            ],
+            1,
+          ),
+        });
+      }
+
+      return Response.json({
+        repositories: [createRepository("beta", "2024-02-01T00:00:00Z")],
+      });
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const repos = await listAccessibleInstallationRepositoriesByNames({
+      installationId: 123,
+      userToken: "token",
+      owner: "acme",
+      names: ["beta", "alpha", "beta", "missing"],
+    });
+
+    expect(repos.map((repo) => repo.name)).toEqual(["beta", "alpha"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("checks installation-scoped access for a single repository name", async () => {
+    const fetchMock = mock(async () =>
+      Response.json({
+        repositories: [createRepository("alpha", "2024-01-01T00:00:00Z")],
+      }),
+    );
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(
+      isInstallationRepositoryAccessible({
+        installationId: 123,
+        userToken: "token",
+        owner: "acme",
+        name: "alpha",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      isInstallationRepositoryAccessible({
+        installationId: 123,
+        userToken: "token",
+        owner: "acme",
+        name: "beta",
+      }),
+    ).resolves.toBe(false);
   });
 });
