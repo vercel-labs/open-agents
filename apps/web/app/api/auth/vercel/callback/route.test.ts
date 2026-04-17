@@ -37,9 +37,15 @@ mock.module("next/headers", () => ({
   }),
 }));
 
+const hasAccessToVercelTeamSlugMock = mock(async () => false);
+
 mock.module("@/lib/vercel/oauth", () => ({
   exchangeVercelCode: exchangeVercelCodeMock,
   getVercelUserInfo: getVercelUserInfoMock,
+}));
+
+mock.module("@/lib/vercel/projects", () => ({
+  hasAccessToVercelTeamSlug: hasAccessToVercelTeamSlugMock,
 }));
 
 mock.module("@/lib/db/users", () => ({
@@ -85,6 +91,7 @@ beforeEach(() => {
 
   exchangeVercelCodeMock.mockClear();
   getVercelUserInfoMock.mockClear();
+  hasAccessToVercelTeamSlugMock.mockClear();
   upsertUserMock.mockClear();
   encryptMock.mockClear();
   encryptJWEMock.mockClear();
@@ -151,6 +158,34 @@ describe("GET /api/auth/vercel/callback", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/sessions");
     expect(upsertUserMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("includes isAllowedTeamMember in the encrypted session", async () => {
+    hasAccessToVercelTeamSlugMock.mockResolvedValueOnce(true);
+
+    const { GET } = await routeModulePromise;
+    await GET(createRequest());
+
+    expect(hasAccessToVercelTeamSlugMock).toHaveBeenCalledWith(
+      "access-token",
+      "vercel",
+    );
+    const sessionArg = (
+      encryptJWEMock.mock.calls as unknown as [Record<string, unknown>][]
+    )[0][0];
+    expect(sessionArg.isAllowedTeamMember).toBe(true);
+  });
+
+  test("sets isAllowedTeamMember to false for non-team users", async () => {
+    hasAccessToVercelTeamSlugMock.mockResolvedValueOnce(false);
+
+    const { GET } = await routeModulePromise;
+    await GET(createRequest());
+
+    const sessionArg = (
+      encryptJWEMock.mock.calls as unknown as [Record<string, unknown>][]
+    )[0][0];
+    expect(sessionArg.isAllowedTeamMember).toBe(false);
   });
 
   test("allows non-Vercel emails on self-hosted deployments", async () => {

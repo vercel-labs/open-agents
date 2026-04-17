@@ -1,6 +1,7 @@
 export interface Session {
   created: number;
   authProvider: "vercel" | "github";
+  isAllowedTeamMember?: boolean;
   user: {
     id: string;
     username: string;
