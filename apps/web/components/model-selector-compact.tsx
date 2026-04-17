@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, ChevronDown } from "lucide-react";
-import { type ModelOption } from "@/lib/model-options";
+import { type ModelOption, groupByProvider } from "@/lib/model-options";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
@@ -18,6 +18,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  ProviderIcon,
+  getProviderDisplayName,
+} from "@/components/provider-icons";
 
 interface ModelSelectorCompactProps {
   value: string;
@@ -90,7 +94,9 @@ export function ModelSelectorCompact({
   };
 
   const selectedOption = modelOptions.find((option) => option.id === value);
-  const displayText = selectedOption?.label ?? value;
+  const displayText = selectedOption?.shortLabel ?? value;
+
+  const groups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
 
   return (
     <Popover
@@ -111,12 +117,18 @@ export function ModelSelectorCompact({
           title="Change model (⌘⌥/)"
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300 disabled:pointer-events-none disabled:opacity-60"
         >
+          {selectedOption && (
+            <ProviderIcon
+              provider={selectedOption.provider}
+              className="size-3.5 shrink-0"
+            />
+          )}
           <span className="max-w-[140px] truncate">{displayText}</span>
           <ChevronDown className="h-3 w-3" />
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-72 p-0"
+        className="w-64 p-0"
         align="start"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -136,40 +148,45 @@ export function ModelSelectorCompact({
           />
           <CommandList>
             <CommandEmpty>No models found.</CommandEmpty>
-            <CommandGroup>
-              {modelOptions.map((option) => (
-                <CommandItem
-                  key={option.id}
-                  value={`${option.label} ${option.id} ${option.description ?? ""}`}
-                  onSelect={() => handleSelect(option.id)}
-                >
-                  <CheckIcon
-                    className={cn(
-                      "mr-2 size-4",
-                      value === option.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate">{option.label}</span>
-                      {option.isVariant && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                          variant
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {option.description ?? option.id}
-                    </p>
-                  </div>
-                  {option.id === APP_DEFAULT_MODEL_ID && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      default
+            {groups.map((group) => (
+              <CommandGroup
+                key={group.provider}
+                heading={getProviderDisplayName(group.provider)}
+              >
+                {group.options.map((option) => (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.label} ${option.id}`}
+                    onSelect={() => handleSelect(option.id)}
+                    className="flex items-center"
+                  >
+                    <ProviderIcon
+                      provider={option.provider}
+                      className="mr-1.5 size-3.5 shrink-0 opacity-70"
+                    />
+                    <span className="min-w-0 truncate">
+                      {option.shortLabel}
                     </span>
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+                    {option.isVariant && (
+                      <span className="ml-1.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        variant
+                      </span>
+                    )}
+                    {option.id === APP_DEFAULT_MODEL_ID && (
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        default
+                      </span>
+                    )}
+                    <CheckIcon
+                      className={cn(
+                        "ml-auto size-4 shrink-0",
+                        value === option.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -41,7 +41,16 @@ let getRunShouldThrow = false;
 let compareAndSetDefaultResult = true;
 let compareAndSetResults: boolean[] = [];
 let startCalls: unknown[][] = [];
-let preferencesState = {
+let preferencesState: {
+  autoCommitPush: boolean;
+  autoCreatePr: boolean;
+  modelVariants: Array<{
+    id: string;
+    name: string;
+    baseModelId: string;
+    providerOptions: Record<string, unknown>;
+  }>;
+} = {
   autoCommitPush: true,
   autoCreatePr: false,
   modelVariants: [],
@@ -340,6 +349,34 @@ describe("/api/chat route", () => {
         agentOptions: expect.objectContaining({
           customInstructions: assistantFileLinkPrompt,
         }),
+      }),
+    ]);
+  });
+
+  test("passes selected and resolved model ids to the workflow", async () => {
+    const { POST } = await routeModulePromise;
+    if (!chatRecord) {
+      throw new Error("chatRecord must be set");
+    }
+
+    chatRecord.modelId = "variant:test-model";
+    preferencesState.modelVariants = [
+      {
+        id: "variant:test-model",
+        name: "Test model",
+        baseModelId: "openai/gpt-5",
+        providerOptions: {},
+      },
+    ];
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        selectedModelId: "variant:test-model",
+        modelId: "openai/gpt-5",
       }),
     ]);
   });

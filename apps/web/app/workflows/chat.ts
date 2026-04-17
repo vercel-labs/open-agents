@@ -41,6 +41,7 @@ type Options = {
   chatId: string;
   sessionId: string;
   userId: string;
+  selectedModelId: string;
   modelId: string;
   agentOptions: OpenHarnessAgentCallOptions;
   maxSteps?: number;
@@ -114,6 +115,18 @@ function buildStepTiming(
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     finishReason,
     rawFinishReason,
+  };
+}
+
+function withModelMetadata(
+  metadata: WebAgentMessageMetadata | undefined,
+  selectedModelId: string,
+  modelId: string,
+): WebAgentMessageMetadata {
+  return {
+    ...metadata,
+    selectedModelId,
+    modelId,
   };
 }
 
@@ -458,14 +471,22 @@ export async function runAgentWorkflow(options: Options) {
     latestMessage.role === "assistant"
       ? {
           ...latestMessage,
-          metadata: latestMessage.metadata ?? ({} as WebAgentMessageMetadata),
+          metadata: withModelMetadata(
+            latestMessage.metadata,
+            options.selectedModelId,
+            options.modelId,
+          ),
           parts: [...latestMessage.parts],
         }
       : {
           role: "assistant",
           id: assistantId,
           parts: [],
-          metadata: {} as WebAgentMessageMetadata,
+          metadata: withModelMetadata(
+            undefined,
+            options.selectedModelId,
+            options.modelId,
+          ),
         };
 
   let originalMessagesForStep: WebAgentUIMessage[] = [latestMessage];
@@ -502,6 +523,7 @@ export async function runAgentWorkflow(options: Options) {
           workflowRunId,
           options.chatId,
           options.sessionId,
+          options.selectedModelId,
           options.modelId,
           options.agentOptions,
           step + 1,
@@ -760,6 +782,7 @@ const runAgentStep = async (
   chatId: string,
   sessionId: string,
   selectedModelId: string,
+  modelId: string,
   agentOptions: OpenHarnessAgentCallOptions,
   stepNumber: number,
 ) => {
@@ -813,6 +836,8 @@ const runAgentStep = async (
             },
           ];
           return {
+            selectedModelId,
+            modelId,
             lastStepUsage,
             totalMessageUsage,
             lastStepFinishReason: streamPart.finishReason,
@@ -834,6 +859,15 @@ const runAgentStep = async (
     if (responseMessage == null) {
       throw new Error("Agent stream finished without a response message");
     }
+
+    responseMessage = {
+      ...responseMessage,
+      metadata: withModelMetadata(
+        responseMessage.metadata,
+        selectedModelId,
+        modelId,
+      ),
+    };
 
     const [stepUsage, finishReason, rawFinishReason, response, steps] =
       await Promise.all([
@@ -901,6 +935,7 @@ const runAgentStep = async (
         sessionId,
         messageId,
         selectedModelId,
+        modelId,
         finishReason,
         rawFinishReason,
         stepUsage,

@@ -19,6 +19,8 @@ export type WebAgentStepFinishMetadata = {
 };
 
 export type WebAgentMessageMetadata = {
+  selectedModelId?: string;
+  modelId?: string;
   lastStepUsage?: LanguageModelUsage;
   totalMessageUsage?: LanguageModelUsage;
   lastStepFinishReason?: FinishReason;

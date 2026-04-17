@@ -18,6 +18,7 @@ import {
   SquareDot,
   SquareMinus,
   SquarePlus,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,9 +32,18 @@ import type {
   PullRequestMergeMethod,
 } from "@/lib/github/client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -54,6 +64,7 @@ import { cn } from "@/lib/utils";
 import {
   commitAndPushSessionChanges,
   createSessionBranch,
+  discardSessionUncommittedChanges,
   fetchRepoBranches,
   generatePullRequestContent,
 } from "@/lib/git-flow-client";
@@ -61,6 +72,7 @@ import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import { useSessionFiles } from "@/hooks/use-session-files";
 import { useGitPanel } from "./git-panel-context";
 import { FileTree } from "./file-tree";
+import { useSessionChatWorkspaceContext } from "./session-chat-context";
 
 /* ------------------------------------------------------------------ */
 /* Merge method labels / descriptions                                  */
@@ -160,7 +172,21 @@ function isUncommittedFile(file: DiffFile): boolean {
   return file.stagingStatus === "unstaged" || file.stagingStatus === "partial";
 }
 
-function DiffFileList({ files }: { files: DiffFile[] }) {
+function canDiscardFile(file: DiffFile): boolean {
+  return isUncommittedFile(file);
+}
+
+function DiffFileList({
+  files,
+  onDiscardFile,
+  discardingFilePath,
+  discardDisabled,
+}: {
+  files: DiffFile[];
+  onDiscardFile: (file: DiffFile) => void;
+  discardingFilePath: string | null;
+  discardDisabled: boolean;
+}) {
   const { openDiffToFile, diffScope } = useGitPanel();
 
   const filteredFiles =
@@ -186,39 +212,58 @@ function DiffFileList({ files }: { files: DiffFile[] }) {
           const dirPath = file.path.slice(0, -fileName.length);
 
           return (
-            <button
+            <div
               key={file.path}
-              type="button"
-              onClick={() => openDiffToFile(file.path)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent"
+              className="group flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
             >
-              <DiffFileStatusIcon status={file.status} />
-              <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
-                <span className="shrink-0 text-xs font-medium text-foreground font-mono">
-                  {fileName}
-                </span>
-                {dirPath && (
-                  <span
-                    className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-muted-foreground"
-                    dir="rtl"
-                  >
-                    <bdi>{dirPath.replace(/\/$/, "")}</bdi>
+              <button
+                type="button"
+                onClick={() => openDiffToFile(file.path)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <DiffFileStatusIcon status={file.status} />
+                <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
+                  <span className="shrink-0 font-mono text-xs font-medium text-foreground">
+                    {fileName}
                   </span>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5 text-[10px]">
-                {file.additions > 0 && (
-                  <span className="text-green-600 dark:text-green-500">
-                    +{file.additions}
-                  </span>
-                )}
-                {file.deletions > 0 && (
-                  <span className="text-red-600 dark:text-red-400">
-                    -{file.deletions}
-                  </span>
-                )}
-              </div>
-            </button>
+                  {dirPath && (
+                    <span
+                      className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] text-muted-foreground"
+                      dir="rtl"
+                    >
+                      <bdi>{dirPath.replace(/\/$/, "")}</bdi>
+                    </span>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 text-[10px]">
+                  {file.additions > 0 && (
+                    <span className="text-green-600 dark:text-green-500">
+                      +{file.additions}
+                    </span>
+                  )}
+                  {file.deletions > 0 && (
+                    <span className="text-red-600 dark:text-red-400">
+                      -{file.deletions}
+                    </span>
+                  )}
+                </div>
+              </button>
+              {canDiscardFile(file) ? (
+                <button
+                  type="button"
+                  onClick={() => onDiscardFile(file)}
+                  disabled={discardDisabled || discardingFilePath === file.path}
+                  aria-label={`Discard changes in ${file.path}`}
+                  className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-destructive group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-100"
+                >
+                  {discardingFilePath === file.path ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>
@@ -1648,7 +1693,45 @@ export function GitPanel(props: GitPanelProps) {
     onGitMessage,
     isAgentWorking,
   } = props;
+  const { refreshFiles } = useSessionChatWorkspaceContext();
   const [baseBranch, setBaseBranch] = useState("main");
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [discardTarget, setDiscardTarget] = useState<{
+    filePath: string;
+    oldPath?: string;
+  } | null>(null);
+  const [discardError, setDiscardError] = useState<string | null>(null);
+  const [isDiscardingChanges, setIsDiscardingChanges] = useState(false);
+
+  const handleDiscardChanges = useCallback(async () => {
+    setIsDiscardingChanges(true);
+    setDiscardError(null);
+
+    try {
+      await discardSessionUncommittedChanges({
+        sessionId: session.id,
+        ...(discardTarget ? { filePath: discardTarget.filePath } : {}),
+        ...(discardTarget?.oldPath ? { oldPath: discardTarget.oldPath } : {}),
+      });
+    } catch (error) {
+      setDiscardError(
+        error instanceof Error
+          ? error.message
+          : "Failed to discard uncommitted changes",
+      );
+      setIsDiscardingChanges(false);
+      return;
+    }
+
+    await Promise.allSettled([
+      refreshDiff(),
+      refreshGitStatus(),
+      refreshFiles(),
+    ]);
+    setDiscardDialogOpen(false);
+    setDiscardTarget(null);
+    setIsDiscardingChanges(false);
+  }, [discardTarget, refreshDiff, refreshFiles, refreshGitStatus, session.id]);
 
   useEffect(() => {
     if (!session.repoOwner || !session.repoName) {
@@ -1720,6 +1803,13 @@ export function GitPanel(props: GitPanelProps) {
     }
   }, [gitPanelTab, prTabDisabledReason, setGitPanelTab]);
 
+  const discardTitle = discardTarget
+    ? "Discard file changes?"
+    : "Discard uncommitted changes?";
+  const discardDescription = discardTarget
+    ? `This permanently removes local changes for ${discardTarget.filePath}. Committed changes stay intact.`
+    : "This permanently removes local uncommitted changes from the sandbox. Committed changes stay intact.";
+  const discardingFilePath = discardTarget?.filePath ?? null;
   const gitPanelTabs = [
     "files" as const,
     "diff" as const,
@@ -1926,25 +2016,55 @@ export function GitPanel(props: GitPanelProps) {
                       Uncommitted
                     </button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      void Promise.all([refreshDiff(), refreshGitStatus()]);
-                    }}
-                    disabled={!hasSandbox || isRefreshingChanges}
-                    className="h-6 w-6 shrink-0 px-0"
-                    title="Refresh changes"
-                    aria-label="Refresh changes"
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "h-3.5 w-3.5",
-                        isRefreshingChanges && "animate-spin",
-                      )}
-                    />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {hasUncommittedGitChanges ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setDiscardTarget(null);
+                          setDiscardError(null);
+                          setDiscardDialogOpen(true);
+                        }}
+                        disabled={
+                          !hasSandbox || isDiscardingChanges || isAgentWorking
+                        }
+                        className="h-6 w-6 shrink-0 px-0 text-muted-foreground hover:text-destructive"
+                        title="Discard uncommitted changes"
+                        aria-label="Discard uncommitted changes"
+                      >
+                        {isDiscardingChanges ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void Promise.all([
+                          refreshDiff(),
+                          refreshGitStatus(),
+                          refreshFiles(),
+                        ]);
+                      }}
+                      disabled={!hasSandbox || isRefreshingChanges}
+                      className="h-6 w-6 shrink-0 px-0"
+                      title="Refresh changes"
+                      aria-label="Refresh changes"
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          isRefreshingChanges && "animate-spin",
+                        )}
+                      />
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1991,7 +2111,23 @@ export function GitPanel(props: GitPanelProps) {
             {/* Scrollable file list */}
             <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
               {diffFiles && diffFiles.length > 0 ? (
-                <DiffFileList files={diffFiles} />
+                <DiffFileList
+                  files={diffFiles}
+                  onDiscardFile={(file) => {
+                    setDiscardTarget({
+                      filePath: file.path,
+                      ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+                    });
+                    setDiscardError(null);
+                    setDiscardDialogOpen(true);
+                  }}
+                  discardingFilePath={
+                    isDiscardingChanges && discardTarget
+                      ? discardingFilePath
+                      : null
+                  }
+                  discardDisabled={isDiscardingChanges || isAgentWorking}
+                />
               ) : (
                 <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
                   <p className="text-xs text-muted-foreground">
@@ -2039,6 +2175,55 @@ export function GitPanel(props: GitPanelProps) {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={discardDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDiscardingChanges) {
+            setDiscardDialogOpen(open);
+          }
+          if (!open) {
+            setDiscardError(null);
+            setDiscardTarget(null);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{discardTitle}</DialogTitle>
+            <DialogDescription>{discardDescription}</DialogDescription>
+          </DialogHeader>
+          {discardError ? (
+            <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+              {discardError}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDiscardingChanges}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => void handleDiscardChanges()}
+              disabled={isDiscardingChanges}
+            >
+              {isDiscardingChanges ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Discarding...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {discardTarget ? "Discard file" : "Discard changes"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

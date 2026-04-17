@@ -3,6 +3,7 @@
 import { File as DiffsFile } from "@pierre/diffs/react";
 import { Check, CodeXml, Copy, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { Streamdown } from "streamdown";
 import useSWR from "swr";
 import type { WorkspaceFileContentResponse } from "@/app/api/sessions/[sessionId]/files/content/route";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 import { SelectionPopover } from "@/components/selection-popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultFileOptions } from "@/lib/diffs-config";
+import { streamdownPlugins } from "@/lib/streamdown-config";
 import { fetcherNoStore } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 
@@ -39,13 +41,45 @@ type WorkspaceFileViewerProps = {
   sessionId: string;
 };
 
+type ViewerMode = "raw" | "pretty";
+type PrettyViewKind = "markdown" | "text";
+
 const wrappedFileExtensions = new Set([".md", ".mdx", ".markdown", ".txt"]);
+const markdownExtensions = new Set([".md", ".mdx", ".markdown"]);
+const plainTextExtensions = new Set([".txt"]);
+
+function getFileExtension(filePath: string) {
+  const normalizedPath = filePath.toLowerCase();
+  const lastDotIndex = normalizedPath.lastIndexOf(".");
+
+  if (lastDotIndex === -1) {
+    return "";
+  }
+
+  return normalizedPath.slice(lastDotIndex);
+}
 
 function shouldWrapFileContent(filePath: string) {
-  const normalizedPath = filePath.toLowerCase();
-  return [...wrappedFileExtensions].some((extension) =>
-    normalizedPath.endsWith(extension),
-  );
+  return wrappedFileExtensions.has(getFileExtension(filePath));
+}
+
+function getPrettyViewKind(filePath: string): PrettyViewKind | null {
+  const extension = getFileExtension(filePath);
+
+  if (markdownExtensions.has(extension)) {
+    return "markdown";
+  }
+
+  if (plainTextExtensions.has(extension)) {
+    return "text";
+  }
+
+  return null;
+}
+
+function getDefaultViewerMode(filePath: string): ViewerMode {
+  const fileName = filePath.split("/").pop()?.toLowerCase();
+  return fileName === "plan.md" ? "pretty" : "raw";
 }
 
 function useCopyAction() {
@@ -94,6 +128,89 @@ function CopyButton({
   );
 }
 
+function stripMarkdownFrontmatter(content: string) {
+  const frontmatterMatch = content.match(
+    /^(?:\uFEFF)?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$)/,
+  );
+
+  if (!frontmatterMatch) {
+    return content;
+  }
+
+  return content.slice(frontmatterMatch[0].length);
+}
+
+function PrettyMarkdown({ content }: { content: string }) {
+  return (
+    <div className="p-6">
+      <Streamdown mode="static" isAnimating={false} plugins={streamdownPlugins}>
+        {stripMarkdownFrontmatter(content)}
+      </Streamdown>
+    </div>
+  );
+}
+
+function PrettyText({ content }: { content: string }) {
+  return (
+    <pre className="overflow-x-auto whitespace-pre-wrap break-words p-6 text-sm leading-6 text-foreground">
+      {content}
+    </pre>
+  );
+}
+
+function PrettyFileContent({
+  content,
+  kind,
+}: {
+  content: string;
+  kind: PrettyViewKind;
+}) {
+  if (kind === "markdown") {
+    return <PrettyMarkdown content={content} />;
+  }
+
+  return <PrettyText content={content} />;
+}
+
+function ViewModeToggle({
+  mode,
+  onModeChange,
+}: {
+  mode: ViewerMode;
+  onModeChange: (mode: ViewerMode) => void;
+}) {
+  return (
+    <div className="flex items-center rounded-md border border-border bg-muted p-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-pressed={mode === "raw"}
+        onClick={() => onModeChange("raw")}
+        className={cn(
+          "h-6 px-2 text-xs",
+          mode === "raw" && "bg-background shadow-xs hover:bg-background",
+        )}
+      >
+        Raw
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        aria-pressed={mode === "pretty"}
+        onClick={() => onModeChange("pretty")}
+        className={cn(
+          "h-6 px-2 text-xs",
+          mode === "pretty" && "bg-background shadow-xs hover:bg-background",
+        )}
+      >
+        Pretty
+      </Button>
+    </div>
+  );
+}
+
 function ViewerBody({
   editorBusy,
   editorDisabledReason,
@@ -117,7 +234,12 @@ function ViewerBody({
   onAddToPrompt?: (selectedText: string, comment: string) => void;
   response: WorkspaceFileContentResponse | undefined;
 }) {
+  const [viewerMode, setViewerMode] = useState<ViewerMode>(() =>
+    getDefaultViewerMode(filePath),
+  );
   const hasContent = response != null && response.content.length > 0;
+  const prettyViewKind = getPrettyViewKind(filePath);
+  const supportsPrettyView = prettyViewKind != null;
   const fileOptions = shouldWrapFileContent(filePath)
     ? { ...defaultFileOptions, overflow: "wrap" as const }
     : defaultFileOptions;
@@ -136,6 +258,9 @@ function ViewerBody({
           <CopyButton text={filePath} title="Copy file path" />
         </div>
         <div className="flex items-center gap-1">
+          {supportsPrettyView && (
+            <ViewModeToggle mode={viewerMode} onModeChange={setViewerMode} />
+          )}
           {onOpenInEditor && (
             <Button
               type="button"
@@ -177,7 +302,7 @@ function ViewerBody({
           <CopyButton
             text={response.content}
             title="Copy file contents"
-            className="absolute top-2 right-4 z-10 bg-background/80 backdrop-blur-sm border border-border/60 shadow-sm hover:bg-muted"
+            className="absolute top-2 right-4 z-10 border border-border/60 bg-background/80 shadow-sm backdrop-blur-sm hover:bg-muted"
           />
         )}
         {isLoading ? (
@@ -194,6 +319,11 @@ function ViewerBody({
             <div className="px-4 py-6 text-sm text-muted-foreground">
               This file is empty.
             </div>
+          ) : viewerMode === "pretty" && prettyViewKind ? (
+            <PrettyFileContent
+              content={response.content}
+              kind={prettyViewKind}
+            />
           ) : (
             <DiffsFile
               file={{ name: filePath, contents: response.content }}
@@ -257,6 +387,7 @@ export function WorkspaceFileViewer({
 
   const body = (
     <ViewerBody
+      key={filePath}
       editorBusy={editorBusy}
       editorDisabledReason={editorDisabledReason}
       errorMessage={errorMessage}

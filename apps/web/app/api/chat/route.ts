@@ -185,13 +185,17 @@ export async function POST(req: Request) {
     session,
     req.url,
   );
-  const mainModelSelection = resolveChatModelSelection({
-    selectedModelId: sanitizeSelectedModelIdForSession(
+  const selectedModelId =
+    sanitizeSelectedModelIdForSession(
       chat.modelId,
       modelVariants,
       session,
       req.url,
-    ),
+    ) ??
+    chat.modelId ??
+    null;
+  const mainModelSelection = resolveChatModelSelection({
+    selectedModelId,
     modelVariants,
     missingVariantLabel: "Selected model variant",
   });
@@ -224,6 +228,7 @@ export async function POST(req: Request) {
       chatId,
       sessionId,
       userId,
+      selectedModelId: selectedModelId ?? mainModelSelection.id,
       modelId: mainModelSelection.id,
       maxSteps: 500,
       agentOptions: {

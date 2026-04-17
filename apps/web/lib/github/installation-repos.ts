@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const INSTALLATION_REPOS_MAX_PAGES = 20;
-const INSTALLATION_REPOS_PER_PAGE = 25;
+const INSTALLATION_REPOS_PER_PAGE = 50;
 
 const installationRepoSchema = z.object({
   name: z.string(),
