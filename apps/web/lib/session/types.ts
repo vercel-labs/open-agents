@@ -16,4 +16,5 @@ export interface SessionUserInfo {
   hasGitHub?: boolean;
   hasGitHubAccount?: boolean;
   hasGitHubInstallations?: boolean;
+  vercelReconnectRequired?: boolean;
 }

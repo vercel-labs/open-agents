@@ -14,6 +14,7 @@ import {
 import { Toaster } from "sonner";
 import { SWRConfig } from "swr";
 import { GitHubReconnectGate } from "@/components/github-reconnect-gate";
+import { useSession } from "@/hooks/use-session";
 import { FetchError } from "@/lib/swr";
 
 const THEME_STORAGE_KEY = "open-agents-theme";
@@ -53,6 +54,8 @@ function applyTheme(resolvedTheme: ResolvedTheme) {
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const signingOut = useRef(false);
+  const vercelReconnectRedirecting = useRef(false);
+  const { session, loading: sessionLoading } = useSession();
   const [theme, setThemeState] = useState<ThemePreference>("system");
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("dark");
 
@@ -98,6 +101,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
     },
     [applyThemePreference],
   );
+
+  useEffect(() => {
+    if (
+      sessionLoading ||
+      vercelReconnectRedirecting.current ||
+      session?.authProvider !== "vercel" ||
+      !session.vercelReconnectRequired
+    ) {
+      return;
+    }
+
+    vercelReconnectRedirecting.current = true;
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(
+      `/api/auth/signin/vercel?next=${encodeURIComponent(next)}`,
+    );
+  }, [session, sessionLoading]);
 
   const handleError = useCallback(
     (error: Error) => {
