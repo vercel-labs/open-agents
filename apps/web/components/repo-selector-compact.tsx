@@ -3,6 +3,7 @@
 import {
   CheckIcon,
   ChevronDown,
+  ChevronRight,
   ExternalLink,
   LockIcon,
   RefreshCw,
@@ -23,6 +24,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  type RecentInstallationRepo,
+  useInstallationRecentRepos,
+} from "@/hooks/use-installation-recent-repos";
 import {
   InstallationRepo,
   useInstallationRepos,
@@ -119,6 +124,39 @@ function SkeletonRow() {
   );
 }
 
+function RepositoryRow({
+  repo,
+  onSelect,
+  metaLabel,
+}: {
+  repo: InstallationRepo | RecentInstallationRepo;
+  onSelect: () => void;
+  metaLabel?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30 dark:hover:bg-white/[0.03]">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate text-sm font-medium">{repo.name}</span>
+        {repo.private && (
+          <LockIcon className="size-3 shrink-0 text-muted-foreground" />
+        )}
+        <span className="shrink-0 text-xs text-muted-foreground">
+          ·{" "}
+          {metaLabel ??
+            (repo.updated_at ? formatRelativeDate(repo.updated_at) : "unknown")}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onSelect}
+        className="shrink-0 rounded-md border border-border/70 bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent dark:border-white/20 dark:bg-white/[0.06] dark:hover:bg-white/10"
+      >
+        Select
+      </button>
+    </div>
+  );
+}
+
 function GitHubActionCard({
   title,
   description,
@@ -162,6 +200,8 @@ export function RepoSelectorCompact({
   const [repoSearch, setRepoSearch] = useState("");
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recentExpanded, setRecentExpanded] = useState(true);
+  const [allReposExpanded, setAllReposExpanded] = useState(true);
 
   const hasAutoSelectedRef = useRef(false);
 
@@ -196,6 +236,12 @@ export function RepoSelectorCompact({
     installationId: currentInstallation?.installationId ?? null,
     query: debouncedRepoSearch,
     limit: 25,
+  });
+  const showRecentRepos = repoSearch.trim().length === 0;
+  const { repos: recentRepos } = useInstallationRecentRepos({
+    installationId: currentInstallation?.installationId ?? null,
+    enabled: showRecentRepos,
+    limit: 5,
   });
 
   // Sort repos: by updated_at desc if available, otherwise alphabetical
@@ -256,7 +302,14 @@ export function RepoSelectorCompact({
     setRepoSearch("");
   }, [currentOwner]);
 
-  const handleRepoSelect = (repo: InstallationRepo) => {
+  useEffect(() => {
+    setRecentExpanded(true);
+    setAllReposExpanded(true);
+  }, [currentOwner]);
+
+  const handleRepoSelect = (
+    repo: InstallationRepo | RecentInstallationRepo,
+  ) => {
     onSelect(currentOwner, repo.name);
   };
 
@@ -506,44 +559,70 @@ export function RepoSelectorCompact({
           <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
             {reposError}
           </div>
-        ) : sortedRepos.length === 0 ? (
+        ) : sortedRepos.length === 0 && recentRepos.length === 0 ? (
           <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
             No repositories found.
           </div>
         ) : (
           <div className="divide-y divide-border/50 dark:divide-white/[0.06]">
-            {sortedRepos.slice(0, 25).map((repo) => (
-              <div
-                key={repo.full_name}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30 dark:hover:bg-white/[0.03]"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {repo.name}
-                  </span>
-                  {repo.private && (
-                    <LockIcon className="size-3 shrink-0 text-muted-foreground" />
-                  )}
-                  {repo.updated_at && (
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      · {formatRelativeDate(repo.updated_at)}
-                    </span>
-                  )}
-                </div>
+            {showRecentRepos && recentRepos.length > 0 && (
+              <div className="divide-y divide-border/50 dark:divide-white/[0.06]">
                 <button
                   type="button"
-                  onClick={() => handleRepoSelect(repo)}
-                  className="shrink-0 rounded-md border border-border/70 bg-background px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent dark:border-white/20 dark:bg-white/[0.06] dark:hover:bg-white/10"
+                  onClick={() => setRecentExpanded((expanded) => !expanded)}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground dark:hover:bg-white/[0.03]"
                 >
-                  Select
+                  {recentExpanded ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                  <span>Recent repos</span>
                 </button>
-              </div>
-            ))}
-            {sortedRepos.length === 25 && !debouncedRepoSearch && (
-              <div className="px-4 py-2.5 text-center text-xs text-muted-foreground">
-                Showing first 25 results. Use search to narrow.
+                {recentExpanded &&
+                  recentRepos.map((repo) => (
+                    <RepositoryRow
+                      key={`recent-${repo.full_name}`}
+                      repo={repo}
+                      onSelect={() => handleRepoSelect(repo)}
+                      metaLabel={`used ${formatRelativeDate(repo.last_used_at)}`}
+                    />
+                  ))}
               </div>
             )}
+            {showRecentRepos &&
+              recentRepos.length > 0 &&
+              sortedRepos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAllReposExpanded((expanded) => !expanded)}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground dark:hover:bg-white/[0.03]"
+                >
+                  {allReposExpanded ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                  <span>All repositories</span>
+                </button>
+              )}
+            {(recentRepos.length === 0 || allReposExpanded) &&
+              sortedRepos
+                .slice(0, 25)
+                .map((repo) => (
+                  <RepositoryRow
+                    key={repo.full_name}
+                    repo={repo}
+                    onSelect={() => handleRepoSelect(repo)}
+                  />
+                ))}
+            {(recentRepos.length === 0 || allReposExpanded) &&
+              sortedRepos.length === 25 &&
+              !debouncedRepoSearch && (
+                <div className="px-4 py-2.5 text-center text-xs text-muted-foreground">
+                  Showing first 25 results. Use search to narrow.
+                </div>
+              )}
           </div>
         )}
       </div>
