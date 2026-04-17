@@ -13,6 +13,7 @@ import { buildSystemPrompt } from "./system-prompt";
 import {
   askUserQuestionTool,
   bashTool,
+  composioTool,
   editFileTool,
   globTool,
   grepTool,
@@ -44,6 +45,7 @@ const callOptionsSchema = z.object({
   subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
+  userId: z.string().optional(),
 });
 
 export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -74,6 +76,7 @@ const tools = {
   ask_user_question: askUserQuestionTool,
   skill: skillTool,
   web_fetch: webFetchTool,
+  composio: composioTool,
 } satisfies ToolSet;
 
 export const openHarnessAgent = new ToolLoopAgent({
@@ -114,6 +117,7 @@ export const openHarnessAgent = new ToolLoopAgent({
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
+    const userId = options.userId;
 
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
@@ -137,6 +141,7 @@ export const openHarnessAgent = new ToolLoopAgent({
         skills,
         model: callModel,
         subagentModel,
+        userId,
       },
     };
   },

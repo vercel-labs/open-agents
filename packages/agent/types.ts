@@ -21,6 +21,7 @@ export interface AgentContext {
   skills?: SkillMetadata[];
   model: LanguageModel;
   subagentModel?: LanguageModel;
+  userId?: string;
 }
 
 export interface SandboxExecutionContext {

@@ -13,6 +13,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
     "@ai-sdk/openai": "catalog:",
+    "@composio/core": "^0.6.10",
     "@open-harness/sandbox": "workspace:*",
     "ai": "catalog:",
     "zod": "catalog:"
