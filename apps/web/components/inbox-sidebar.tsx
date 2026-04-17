@@ -19,6 +19,10 @@ import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BranchPickerDialog } from "@/components/branch-picker-dialog";
 import { getValidRenameTitle } from "@/components/inbox-sidebar-rename";
+import {
+  InboxSidebarSearch,
+  matchesSessionQuery,
+} from "@/components/inbox-sidebar-search";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -659,6 +663,7 @@ export function InboxSidebar({
     useLeaderboardRank();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [archivedSessions, setArchivedSessions] = useState<SessionWithUnread[]>(
     [],
   );
@@ -749,7 +754,20 @@ export function InboxSidebar({
   }, [archivedCount, fetchArchivedSessionsPage, showArchived]);
 
   const activeSessions = sessions;
-  const displayedSessions = showArchived ? archivedSessions : activeSessions;
+  const rawDisplayedSessions = showArchived ? archivedSessions : activeSessions;
+  const showSearch = !showArchived && activeSessions.length >= 10;
+  const effectiveSearchQuery = showSearch ? searchQuery : "";
+  const filteredSessions = useMemo(() => {
+    const trimmed = effectiveSearchQuery.trim();
+    if (!trimmed) {
+      return rawDisplayedSessions;
+    }
+    return rawDisplayedSessions.filter((session) =>
+      matchesSessionQuery(session, trimmed),
+    );
+  }, [effectiveSearchQuery, rawDisplayedSessions]);
+  const displayedSessions = filteredSessions;
+  const hasActiveSearch = effectiveSearchQuery.trim().length > 0;
   const showLoadingSkeleton =
     (!showArchived && sessionsLoading && sessions.length === 0) ||
     (showArchived && archivedSessionsLoading && archivedSessions.length === 0);
@@ -981,6 +999,10 @@ export function InboxSidebar({
         </div>
       </div>
 
+      {showSearch ? (
+        <InboxSidebarSearch value={searchQuery} onChange={setSearchQuery} />
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {showLoadingSkeleton ? (
           <div className="space-y-1 p-2">
@@ -993,9 +1015,11 @@ export function InboxSidebar({
           </div>
         ) : displayedSessions.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-            {showArchived
-              ? (archivedSessionsError ?? "No archived sessions")
-              : "No sessions yet"}
+            {hasActiveSearch
+              ? "No sessions match your filter"
+              : showArchived
+                ? (archivedSessionsError ?? "No archived sessions")
+                : "No sessions yet"}
             {showArchived && archivedSessionsError ? (
               <div className="mt-3">
                 <Button
