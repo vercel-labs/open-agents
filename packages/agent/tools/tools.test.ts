@@ -371,15 +371,23 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags only rm -rf commands", () => {
+  test("commandNeedsApproval flags rm with recursive+force flags", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(false);
     expect(commandNeedsApproval("bun install")).toBe(false);
     expect(commandNeedsApproval("custom-command --help")).toBe(false);
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
-    expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
+    // Safe: single flag only
+    expect(commandNeedsApproval("rm -r tmp")).toBe(false);
+    expect(commandNeedsApproval("rm -f tmp")).toBe(false);
+    // Dangerous: both recursive and force flags in any order/combination
     expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -fr tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -r -f tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -Rf tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -rRf tmp")).toBe(true);
+    expect(commandNeedsApproval("rm --recursive --force tmp")).toBe(true);
   });
 
   test("bashTool needsApproval blocks dangerous commands by default", async () => {
