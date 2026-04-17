@@ -81,7 +81,7 @@ describe("model options", () => {
     expect(options[0].label).toBe("Claude Opus 4.6");
   });
 
-  test("groupByProvider puts anthropic and openai first, variants last", () => {
+  test("groupByProvider puts anthropic and openai first, preserves insertion order", () => {
     const options = [
       {
         id: "google/gemini-2.5",
@@ -120,9 +120,9 @@ describe("model options", () => {
       "openai",
       "google",
     ]);
-    // Within anthropic: base model first, variant last
-    expect(groups[0].options[0].id).toBe("anthropic/claude-opus-4.6");
-    expect(groups[0].options[1].id).toBe("variant:opus-custom");
+    // Within anthropic: preserves original order (variant first, base second)
+    expect(groups[0].options[0].id).toBe("variant:opus-custom");
+    expect(groups[0].options[1].id).toBe("anthropic/claude-opus-4.6");
   });
 
   test("withMissingModelOption appends missing variant option", () => {

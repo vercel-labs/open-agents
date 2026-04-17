@@ -66,18 +66,10 @@ function groupByProvider(items: ModelComboboxItem[]) {
     return a.localeCompare(b);
   });
 
-  return providers.map((provider) => {
-    const opts = groups[provider];
-    opts.sort((a, b) => {
-      if ((a.isVariant ?? false) !== (b.isVariant ?? false))
-        return a.isVariant ? 1 : -1;
-      return 0;
-    });
-    return {
-      provider,
-      label: getProviderDisplayName(provider),
-      options: opts,
-    };
+  return providers.map((provider) => ({
+    provider,
+    label: getProviderDisplayName(provider),
+    options: groups[provider],
   });
 }
 

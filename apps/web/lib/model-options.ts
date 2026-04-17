@@ -95,15 +95,11 @@ export function groupByProvider(options: ModelOption[]): ModelGroup[] {
     return a.localeCompare(b);
   });
 
-  return providers.map((provider) => {
-    const opts = groups[provider];
-    // Base models first, variants last
-    opts.sort((a, b) => {
-      if (a.isVariant !== b.isVariant) return a.isVariant ? 1 : -1;
-      return 0;
-    });
-    return { provider, label: provider, options: opts };
-  });
+  return providers.map((provider) => ({
+    provider,
+    label: provider,
+    options: groups[provider],
+  }));
 }
 
 export function buildModelOptions(
