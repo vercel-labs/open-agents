@@ -70,7 +70,7 @@ function groupByProvider(items: ModelComboboxItem[]) {
     provider,
     label: getProviderDisplayName(provider),
     options: groups[provider],
-  });
+  }));
 }
 
 export function ModelCombobox({
