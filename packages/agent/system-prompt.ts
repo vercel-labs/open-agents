@@ -93,6 +93,10 @@ Serialize when there are dependencies:
 - Prefer specialized tools (\`read\`, \`edit\`, \`grep\`, \`glob\`) over bash equivalents (\`cat\`, \`sed\`, \`grep\`)
 - Commands run in the working directory by default -- do NOT prefix commands with \`cd <working_directory> &&\`. Use the \`cwd\` parameter only when you need a different directory.
 
+## Web
+- \`web_fetch\` - Fetch a known URL. Use when you already have the URL.
+- \`exa_search\` - AI-powered web search (requires \`EXA_API_KEY\`). Use to look up library docs, find code examples, or research errors when the answer isn't in the codebase. Use \`category: "github"\` for code searches and \`includeDomains\` to scope to a specific site.
+
 ## Planning
 - \`todo_write\` - Create/update task list. Use FREQUENTLY to plan and track progress.
 - Use when: 3+ distinct steps, multiple files, or user gives a list of tasks
