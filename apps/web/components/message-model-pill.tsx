@@ -44,10 +44,7 @@ export function MessageModelPill({
 
   const option = selectedOption ?? resolvedOption;
   const displayLabel =
-    option?.shortLabel ??
-    option?.label ??
-    selectedModelId ??
-    resolvedModelId;
+    option?.shortLabel ?? option?.label ?? selectedModelId ?? resolvedModelId;
 
   if (!displayLabel) {
     return null;

@@ -132,10 +132,7 @@ export function ModelCombobox({
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             {groups.map((group) => (
-              <CommandGroup
-                key={group.provider}
-                heading={group.label}
-              >
+              <CommandGroup key={group.provider} heading={group.label}>
                 {group.options.map((item) => {
                   const provider =
                     item.provider ?? getProviderFromModelId(item.id);
