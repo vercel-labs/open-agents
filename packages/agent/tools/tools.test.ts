@@ -451,6 +451,9 @@ describe("tools execute behavior", () => {
     expect(executedCommand).toContain("curl");
     expect(executedCommand).toContain(".open-harness/web-fetch");
     expect(executedCommand).toContain(`head -c ${MAX_BODY_LENGTH}`);
+    expect(executedCommand).toContain('-o "$body_file"');
+    expect(executedCommand).not.toContain(">&3");
+    expect(executedCommand.match(/\s-o\s/g)?.length ?? 0).toBe(1);
     expect(result).toMatchObject({
       success: true,
       status: 200,

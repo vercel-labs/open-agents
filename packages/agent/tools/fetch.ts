@@ -66,8 +66,6 @@ EXAMPLES:
       method,
       "--max-time",
       String(Math.ceil(TIMEOUT_MS / 1000)),
-      "-o",
-      `>(head -c ${MAX_BODY_LENGTH} >&3)`,
       "-w",
       shellEscape("%{http_code}"),
     ];
