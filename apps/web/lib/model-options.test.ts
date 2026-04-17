@@ -3,6 +3,7 @@ import type { ModelVariant } from "@/lib/model-variants";
 import {
   buildModelOptions,
   getDefaultModelOptionId,
+  groupByProvider,
   withMissingModelOption,
 } from "./model-options";
 import type { AvailableModel } from "./models";
@@ -48,6 +49,7 @@ describe("model options", () => {
       {
         id: "openai/gpt-5",
         label: "GPT-5",
+        shortLabel: "GPT-5",
         description: "Base model",
         isVariant: false,
         contextWindow: 400_000,
@@ -56,12 +58,71 @@ describe("model options", () => {
       {
         id: "variant:gpt-5-medium",
         label: "GPT-5 Medium Reasoning",
+        shortLabel: "GPT-5 Medium Reasoning",
         description: "Variant of GPT-5",
         isVariant: true,
         contextWindow: 400_000,
         provider: "openai",
       },
     ]);
+  });
+
+  test("buildModelOptions strips provider prefix for shortLabel", () => {
+    const models: AvailableModel[] = [
+      createModel({
+        id: "anthropic/claude-opus-4.6",
+        name: "Claude Opus 4.6",
+      }),
+    ];
+
+    const options = buildModelOptions(models, []);
+
+    expect(options[0].shortLabel).toBe("Opus 4.6");
+    expect(options[0].label).toBe("Claude Opus 4.6");
+  });
+
+  test("groupByProvider puts anthropic and openai first, variants last", () => {
+    const options = [
+      {
+        id: "google/gemini-2.5",
+        label: "Gemini 2.5",
+        shortLabel: "2.5",
+        isVariant: false,
+        provider: "google",
+      },
+      {
+        id: "openai/gpt-5",
+        label: "GPT-5",
+        shortLabel: "GPT-5",
+        isVariant: false,
+        provider: "openai",
+      },
+      {
+        id: "variant:opus-custom",
+        label: "Opus Custom",
+        shortLabel: "Opus Custom",
+        isVariant: true,
+        provider: "anthropic",
+      },
+      {
+        id: "anthropic/claude-opus-4.6",
+        label: "Claude Opus 4.6",
+        shortLabel: "Opus 4.6",
+        isVariant: false,
+        provider: "anthropic",
+      },
+    ];
+
+    const groups = groupByProvider(options);
+
+    expect(groups.map((g) => g.provider)).toEqual([
+      "anthropic",
+      "openai",
+      "google",
+    ]);
+    // Within anthropic: base model first, variant last
+    expect(groups[0].options[0].id).toBe("anthropic/claude-opus-4.6");
+    expect(groups[0].options[1].id).toBe("variant:opus-custom");
   });
 
   test("withMissingModelOption appends missing variant option", () => {
@@ -71,6 +132,7 @@ describe("model options", () => {
     expect(result[0]).toEqual({
       id: "variant:removed",
       label: "removed (missing)",
+      shortLabel: "removed (missing)",
       description: "Variant no longer exists",
       isVariant: true,
       contextWindow: undefined,
@@ -83,6 +145,7 @@ describe("model options", () => {
       {
         id: "openai/gpt-5",
         label: "GPT-5",
+        shortLabel: "GPT-5",
         isVariant: false,
         provider: "openai",
       },
@@ -98,6 +161,7 @@ describe("model options", () => {
       {
         id: "variant:existing",
         label: "Existing Variant",
+        shortLabel: "Existing Variant",
         isVariant: true,
         provider: "openai",
       },
@@ -111,12 +175,14 @@ describe("model options", () => {
       {
         id: "openai/gpt-5.4",
         label: "GPT-5.4",
+        shortLabel: "GPT-5.4",
         isVariant: false,
         provider: "anthropic",
       },
       {
         id: "openai/gpt-5",
         label: "GPT-5",
+        shortLabel: "GPT-5",
         isVariant: false,
         provider: "openai",
       },
@@ -130,6 +196,7 @@ describe("model options", () => {
       {
         id: "openai/gpt-5",
         label: "GPT-5",
+        shortLabel: "GPT-5",
         isVariant: false,
         provider: "openai",
       },

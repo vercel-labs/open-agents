@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, ChevronDown } from "lucide-react";
-import { type ModelOption } from "@/lib/model-options";
+import { type ModelOption, groupByProvider } from "@/lib/model-options";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import {
@@ -29,24 +29,6 @@ interface ModelSelectorCompactProps {
   onChange: (modelId: string) => void;
   disabled?: boolean;
   onCloseAutoFocus?: () => void;
-}
-
-function groupByProvider(options: ModelOption[]) {
-  const groups: Record<string, ModelOption[]> = {};
-  const order: string[] = [];
-  for (const option of options) {
-    const provider = option.provider;
-    if (!groups[provider]) {
-      groups[provider] = [];
-      order.push(provider);
-    }
-    groups[provider].push(option);
-  }
-  return order.map((provider) => ({
-    provider,
-    label: getProviderDisplayName(provider),
-    options: groups[provider],
-  }));
 }
 
 export function ModelSelectorCompact({
@@ -112,7 +94,7 @@ export function ModelSelectorCompact({
   };
 
   const selectedOption = modelOptions.find((option) => option.id === value);
-  const displayText = selectedOption?.label ?? value;
+  const displayText = selectedOption?.shortLabel ?? value;
 
   const groups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
 
@@ -146,7 +128,7 @@ export function ModelSelectorCompact({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-72 p-0"
+        className="w-64 p-0"
         align="start"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -169,46 +151,38 @@ export function ModelSelectorCompact({
             {groups.map((group) => (
               <CommandGroup
                 key={group.provider}
-                heading={
-                  <span className="flex items-center gap-1.5">
-                    <ProviderIcon
-                      provider={group.provider}
-                      className="size-3 opacity-60"
-                    />
-                    {group.label}
-                  </span>
-                }
+                heading={getProviderDisplayName(group.provider)}
               >
                 {group.options.map((option) => (
                   <CommandItem
                     key={option.id}
-                    value={`${option.label} ${option.id} ${option.description ?? ""}`}
+                    value={`${option.label} ${option.id}`}
                     onSelect={() => handleSelect(option.id)}
+                    className="flex items-center"
                   >
-                    <CheckIcon
-                      className={cn(
-                        "mr-2 size-4 shrink-0",
-                        value === option.id ? "opacity-100" : "opacity-0",
-                      )}
+                    <ProviderIcon
+                      provider={option.provider}
+                      className="mr-2 size-3.5 shrink-0 opacity-70"
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate">{option.label}</span>
-                        {option.isVariant && (
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                            variant
-                          </span>
-                        )}
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {option.description ?? option.id}
-                      </p>
-                    </div>
+                    <span className="min-w-0 truncate">
+                      {option.shortLabel}
+                    </span>
+                    {option.isVariant && (
+                      <span className="ml-1.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        variant
+                      </span>
+                    )}
                     {option.id === APP_DEFAULT_MODEL_ID && (
-                      <span className="ml-auto text-xs text-muted-foreground">
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                         default
                       </span>
                     )}
+                    <CheckIcon
+                      className={cn(
+                        "ml-auto size-4 shrink-0",
+                        value === option.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
                   </CommandItem>
                 ))}
               </CommandGroup>

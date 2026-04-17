@@ -17,14 +17,10 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   ProviderIcon,
   getProviderFromModelId,
   getProviderDisplayName,
+  stripProviderPrefix,
 } from "@/components/provider-icons";
 
 interface ModelComboboxItem {
@@ -46,22 +42,43 @@ interface ModelComboboxProps {
   onChange: (value: string) => void;
 }
 
+/** Providers pinned to the top. */
+const PRIORITY_PROVIDERS = ["anthropic", "openai"];
+
 function groupByProvider(items: ModelComboboxItem[]) {
   const groups: Record<string, ModelComboboxItem[]> = {};
-  const order: string[] = [];
+  const providers: string[] = [];
   for (const item of items) {
     const provider = item.provider ?? getProviderFromModelId(item.id);
     if (!groups[provider]) {
       groups[provider] = [];
-      order.push(provider);
+      providers.push(provider);
     }
     groups[provider].push(item);
   }
-  return order.map((provider) => ({
-    provider,
-    label: getProviderDisplayName(provider),
-    options: groups[provider],
-  }));
+
+  providers.sort((a, b) => {
+    const aIdx = PRIORITY_PROVIDERS.indexOf(a);
+    const bIdx = PRIORITY_PROVIDERS.indexOf(b);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  return providers.map((provider) => {
+    const opts = groups[provider];
+    opts.sort((a, b) => {
+      if ((a.isVariant ?? false) !== (b.isVariant ?? false))
+        return a.isVariant ? 1 : -1;
+      return 0;
+    });
+    return {
+      provider,
+      label: getProviderDisplayName(provider),
+      options: opts,
+    };
+  });
 }
 
 export function ModelCombobox({
@@ -77,9 +94,12 @@ export function ModelCombobox({
   const [open, setOpen] = useState(false);
 
   const selectedItem = items.find((item) => item.id === value);
-  const displayText = selectedItem?.label ?? placeholder;
   const selectedProvider =
-    selectedItem?.provider ?? (selectedItem ? getProviderFromModelId(selectedItem.id) : undefined);
+    selectedItem?.provider ??
+    (selectedItem ? getProviderFromModelId(selectedItem.id) : undefined);
+  const displayText = selectedItem
+    ? stripProviderPrefix(selectedItem.label, selectedProvider ?? "")
+    : placeholder;
 
   const groups = useMemo(() => groupByProvider(items), [items]);
 
@@ -122,49 +142,41 @@ export function ModelCombobox({
             {groups.map((group) => (
               <CommandGroup
                 key={group.provider}
-                heading={
-                  <span className="flex items-center gap-1.5">
-                    <ProviderIcon
-                      provider={group.provider}
-                      className="size-3 opacity-60"
-                    />
-                    {group.label}
-                  </span>
-                }
+                heading={group.label}
               >
-                {group.options.map((item) => (
-                  <Tooltip key={item.id}>
-                    <TooltipTrigger asChild>
-                      <CommandItem
-                        value={`${item.label} ${item.id} ${item.description ?? ""}`}
-                        onSelect={() => {
-                          onChange(item.id);
-                          setOpen(false);
-                        }}
-                      >
-                        <CheckIcon
-                          className={cn(
-                            "mr-2 size-4 shrink-0",
-                            value === item.id ? "opacity-100" : "opacity-0",
-                          )}
-                        />
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate">{item.label}</span>
-                          {item.isVariant && (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                              variant
-                            </span>
-                          )}
+                {group.options.map((item) => {
+                  const provider =
+                    item.provider ?? getProviderFromModelId(item.id);
+                  const shortLabel = stripProviderPrefix(item.label, provider);
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={`${item.label} ${item.id}`}
+                      onSelect={() => {
+                        onChange(item.id);
+                        setOpen(false);
+                      }}
+                      className="flex items-center"
+                    >
+                      <ProviderIcon
+                        provider={provider}
+                        className="mr-2 size-3.5 shrink-0 opacity-70"
+                      />
+                      <span className="min-w-0 truncate">{shortLabel}</span>
+                      {item.isVariant && (
+                        <span className="ml-1.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          variant
                         </span>
-                      </CommandItem>
-                    </TooltipTrigger>
-                    {item.description && (
-                      <TooltipContent side="right" sideOffset={8}>
-                        {item.description}
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                ))}
+                      )}
+                      <CheckIcon
+                        className={cn(
+                          "ml-auto size-4 shrink-0",
+                          value === item.id ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             ))}
           </CommandList>
