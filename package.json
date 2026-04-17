@@ -26,6 +26,9 @@
     "test:isolated": "bun run scripts/test-isolated.ts",
     "test:verbose": "bun test --reporter=junit --reporter-outfile /dev/stdout"
   },
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.35"
+  },
   "devDependencies": {
     "oxfmt": "^0.43.0",
     "oxlint": "1.57.0",

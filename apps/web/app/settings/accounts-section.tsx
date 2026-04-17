@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
+import { McpConnectionsSection } from "./mcp-connections-section";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -387,6 +388,9 @@ export function AccountsSection() {
           )}
         </div>
       </div>
+
+      {/* ── MCP connections ── */}
+      <McpConnectionsSection />
     </div>
   );
 }

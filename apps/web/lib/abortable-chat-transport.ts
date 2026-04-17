@@ -1,6 +1,7 @@
-import type { FetchFunction } from "@ai-sdk/provider-utils";
 import type { UIMessage } from "ai";
 import { DefaultChatTransport } from "ai";
+
+type FetchFunction = typeof globalThis.fetch;
 
 /**
  * A chat transport that allows aborting ALL active fetch connections,

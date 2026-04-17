@@ -4,6 +4,7 @@ import {
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
+import { filterValidConnectionIds } from "@/lib/mcp/validate";
 import { archiveSession } from "@/lib/sandbox/archive-session";
 import { hasRuntimeSandboxState } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -15,6 +16,7 @@ interface UpdateSessionRequest {
   linesRemoved?: number;
   prNumber?: number;
   prStatus?: "open" | "merged" | "closed";
+  enabledMcpConnectionIds?: string[];
 }
 
 export async function GET(
@@ -84,6 +86,14 @@ export async function PATCH(
           "Sandbox is still being paused for this archived session. Please try unarchiving again in a few seconds.",
       },
       { status: 409 },
+    );
+  }
+
+  // Validate enabledMcpConnectionIds belong to this user
+  if (body.enabledMcpConnectionIds) {
+    body.enabledMcpConnectionIds = await filterValidConnectionIds(
+      session.user.id,
+      body.enabledMcpConnectionIds,
     );
   }
 

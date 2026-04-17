@@ -192,6 +192,10 @@ export const sessions = pgTable(
     // Cached diff for offline viewing
     cachedDiff: jsonb("cached_diff"),
     cachedDiffUpdatedAt: timestamp("cached_diff_updated_at"),
+    enabledMcpConnectionIds: jsonb("enabled_mcp_connection_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     // Timestamps
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -426,3 +430,64 @@ export const usageEvents = pgTable("usage_events", {
 
 export type UsageEvent = typeof usageEvents.$inferSelect;
 export type NewUsageEvent = typeof usageEvents.$inferInsert;
+
+// MCP connections for external tool servers
+export const mcpConnections = pgTable(
+  "mcp_connections",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    name: text("name").notNull(),
+    url: text("url").notNull(),
+    transportType: text("transport_type", {
+      enum: ["http", "sse"],
+    })
+      .notNull()
+      .default("http"),
+    authType: text("auth_type", {
+      enum: ["none", "bearer", "headers", "oauth"],
+    })
+      .notNull()
+      .default("none"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at"),
+    oauthScopes: text("oauth_scopes"),
+    oauthClientId: text("oauth_client_id"),
+    oauthClientSecret: text("oauth_client_secret"),
+    customHeaders: jsonb("custom_headers").$type<Record<string, string>>(),
+    enabledByDefault: boolean("enabled_by_default").notNull().default(true),
+    status: text("status", {
+      enum: ["active", "needs_auth", "error", "unchecked"],
+    })
+      .notNull()
+      .default("unchecked"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("mcp_connections_user_id_idx").on(table.userId)],
+);
+
+export const mcpOAuthStates = pgTable("mcp_oauth_states", {
+  state: text("state").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  connectionId: text("connection_id"),
+  provider: text("provider").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  redirectTo: text("redirect_to").notNull().default("/settings/connections"),
+  oauthClientId: text("oauth_client_id"),
+  oauthClientSecret: text("oauth_client_secret"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type MCPConnection = typeof mcpConnections.$inferSelect;
+export type NewMCPConnection = typeof mcpConnections.$inferInsert;
+export type MCPOAuthState = typeof mcpOAuthStates.$inferSelect;
+export type NewMCPOAuthState = typeof mcpOAuthStates.$inferInsert;
