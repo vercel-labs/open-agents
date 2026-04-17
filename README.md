@@ -96,24 +96,18 @@ VERCEL_PROJECT_PRODUCTION_URL=
 NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=
 VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
 ELEVENLABS_API_KEY=
-COMPOSIO_API_KEY=
 ```
 
 - `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
 - `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.
 - `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: override the default sandbox snapshot.
 - `ELEVENLABS_API_KEY`: voice transcription.
-- `COMPOSIO_API_KEY`: enables the agent's Composio tool for external app actions.
 
 ### Composio (external apps)
 
-The agent's `composio` tool gives it access to 1000+ external apps like Gmail, Slack, Linear, Notion, and GitHub via [Composio](https://composio.dev).
+The repo ships a [`composio` skill](./.agents/skills/composio/SKILL.md) that teaches the agent to drive [Composio's CLI](https://composio.dev) for actions on 1000+ external apps like Gmail, Slack, Linear, Notion, and GitHub. It is a pure skill — no changes to the harness or chat route.
 
-1. Create a project at [dashboard.composio.dev](https://dashboard.composio.dev), then copy its project API key into `COMPOSIO_API_KEY`. The CLI user key (`uak_…`) will not work — the SDK expects a project-scoped key.
-2. In the Composio dashboard, configure an auth config for each toolkit you want to support (Gmail, Slack, etc.). Composio-hosted OAuth works out of the box for most toolkits; bring your own client credentials when you need branded consent screens.
-3. End users connect their accounts under your project — for now, send them to the dashboard's connection URL, or add a small server-side endpoint that calls `composio.connectedAccounts.initiate(userId, authConfigId)` and renders the returned redirect URL.
-
-The agent's `userId` is the authenticated Vercel user ID from this app, so each user's connections are isolated to them.
+The skill installs the CLI on first use if it is not already in the sandbox, and asks the user to run `composio login` on their host when auth is needed. For a hands-off deployment, bake `curl -fsSL https://composio.dev/install | bash` and a `composio login` step into your sandbox base snapshot via `bun run sandbox:snapshot-base`.
 
 ## Deploy your own copy on Vercel
 

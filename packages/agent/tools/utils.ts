@@ -168,20 +168,6 @@ export function getSubagentModel(
 }
 
 /**
- * Get user ID from experimental context when available.
- * Returns undefined when the tool is invoked without an authenticated user.
- */
-export function getUserId(
-  experimental_context: unknown,
-  _toolName?: string,
-): string | undefined {
-  const context = isAgentContext(experimental_context)
-    ? experimental_context
-    : undefined;
-  return context?.userId;
-}
-
-/**
  * Escape a string for safe use in a single-quoted shell argument.
  * Wraps the string in single quotes and escapes any embedded single quotes.
  */

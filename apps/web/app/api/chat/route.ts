@@ -233,7 +233,6 @@ export async function POST(req: Request) {
           currentBranch: sandbox.currentBranch,
           environmentDetails: sandbox.environmentDetails,
         },
-        userId,
         model: mainModelSelection,
         ...(subagentModelSelection
           ? { subagentModel: subagentModelSelection }
