@@ -10,12 +10,19 @@ import { getUserVercelToken } from "@/lib/vercel/token";
 
 const UNAUTHENTICATED: SessionUserInfo = { user: undefined };
 const VERCEL_USERINFO_URL = "https://api.vercel.com/login/oauth/userinfo";
+const VERCEL_USERINFO_TIMEOUT_MS = 3_000;
 
 async function requiresVercelReconnect(userId: string): Promise<boolean> {
   const token = await getUserVercelToken(userId);
   if (!token) {
     return true;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    VERCEL_USERINFO_TIMEOUT_MS,
+  );
 
   try {
     const response = await fetch(VERCEL_USERINFO_URL, {
@@ -24,6 +31,7 @@ async function requiresVercelReconnect(userId: string): Promise<boolean> {
         Accept: "application/json",
       },
       cache: "no-store",
+      signal: controller.signal,
     });
 
     if (response.ok) {
@@ -43,8 +51,15 @@ async function requiresVercelReconnect(userId: string): Promise<boolean> {
     );
     return false;
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("Timed out validating Vercel connection status");
+      return false;
+    }
+
     console.error("Failed to validate Vercel connection status:", error);
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

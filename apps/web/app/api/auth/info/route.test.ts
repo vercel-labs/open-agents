@@ -133,6 +133,21 @@ describe("GET /api/auth/info", () => {
     });
   });
 
+  test("keeps Vercel sessions connected when validation aborts", async () => {
+    const abortError = new Error("The operation was aborted.");
+    abortError.name = "AbortError";
+    fetchMock.mockRejectedValueOnce(abortError);
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(createRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      authProvider: "vercel",
+      vercelReconnectRequired: false,
+    });
+  });
+
   test("keeps Vercel sessions connected when the token validates", async () => {
     const { GET } = await routeModulePromise;
 

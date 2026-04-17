@@ -11,13 +11,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { SWRConfig } from "swr";
 import { GitHubReconnectGate } from "@/components/github-reconnect-gate";
 import { useSession } from "@/hooks/use-session";
 import { FetchError } from "@/lib/swr";
 
 const THEME_STORAGE_KEY = "open-agents-theme";
+const VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY =
+  "open-agents-vercel-reconnect-attempt";
 const DARK_MODE_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -55,6 +57,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const signingOut = useRef(false);
   const vercelReconnectRedirecting = useRef(false);
+  const vercelReconnectFailureNotifiedFor = useRef<string | null>(null);
   const { session, loading: sessionLoading } = useSession();
   const [theme, setThemeState] = useState<ThemePreference>("system");
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("dark");
@@ -103,16 +106,46 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (
-      sessionLoading ||
-      vercelReconnectRedirecting.current ||
-      session?.authProvider !== "vercel" ||
-      !session.vercelReconnectRequired
-    ) {
+    if (sessionLoading) {
       return;
     }
 
+    const reconnectAttemptedUserId = window.sessionStorage.getItem(
+      VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY,
+    );
+
+    if (
+      session?.authProvider !== "vercel" ||
+      !session?.user?.id ||
+      !session.vercelReconnectRequired
+    ) {
+      window.sessionStorage.removeItem(VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY);
+      vercelReconnectRedirecting.current = false;
+      vercelReconnectFailureNotifiedFor.current = null;
+      return;
+    }
+
+    if (vercelReconnectRedirecting.current) {
+      return;
+    }
+
+    if (reconnectAttemptedUserId === session.user.id) {
+      if (vercelReconnectFailureNotifiedFor.current !== session.user.id) {
+        vercelReconnectFailureNotifiedFor.current = session.user.id;
+        toast.error(
+          "Couldn't refresh your Vercel session. Sign out and sign back in to retry.",
+        );
+      }
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY,
+      session.user.id,
+    );
+    vercelReconnectFailureNotifiedFor.current = null;
     vercelReconnectRedirecting.current = true;
+
     const next = `${window.location.pathname}${window.location.search}`;
     window.location.assign(
       `/api/auth/signin/vercel?next=${encodeURIComponent(next)}`,
