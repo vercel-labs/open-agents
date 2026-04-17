@@ -420,7 +420,7 @@ describe("tools execute behavior", () => {
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool treats curl exit 23 as a truncated success", async () => {
+  test("webFetchTool persists large bodies and returns preview metadata", async () => {
     let executedCommand = "";
     const responseBody = "x".repeat(MAX_BODY_LENGTH);
 
@@ -429,9 +429,9 @@ describe("tools execute behavior", () => {
       exec: async (command: string) => {
         executedCommand = command;
         return {
-          success: false,
-          exitCode: 23,
-          stdout: `${responseBody}\n200`,
+          success: true,
+          exitCode: 0,
+          stdout: `${Buffer.from(responseBody).toString("base64")}\n200\ntext/html; charset=utf-8\n12000\ntrue\n.open-harness/web-fetch/fetch.abcd12.body`,
           stderr: "",
           truncated: false,
         };
@@ -449,11 +449,15 @@ describe("tools execute behavior", () => {
     );
 
     expect(executedCommand).toContain("curl");
+    expect(executedCommand).toContain(".open-harness/web-fetch");
     expect(executedCommand).toContain(`head -c ${MAX_BODY_LENGTH}`);
     expect(result).toMatchObject({
       success: true,
       status: 200,
+      contentType: "text/html; charset=utf-8",
+      bytes: 12000,
       truncated: true,
+      savedBodyPath: ".open-harness/web-fetch/fetch.abcd12.body",
     });
 
     const body =
@@ -461,6 +465,39 @@ describe("tools execute behavior", () => {
         ? (result.body as string)
         : "";
     expect(body.length).toBe(MAX_BODY_LENGTH);
+  });
+
+  test("webFetchTool keeps small bodies inline without saving a file", async () => {
+    const responseBody = "hello world";
+
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async () => ({
+        success: true,
+        exitCode: 0,
+        stdout: `${Buffer.from(responseBody).toString("base64")}\n200\napplication/json\n11\nfalse\n`,
+        stderr: "",
+        truncated: false,
+      }),
+    };
+
+    const result = await webFetchTool.execute?.(
+      {
+        url: "https://example.com/data",
+        method: "GET",
+      },
+      executionOptions(createContext(sandbox)),
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 200,
+      body: "hello world",
+      contentType: "application/json",
+      bytes: 11,
+      truncated: false,
+      savedBodyPath: null,
+    });
   });
 
   test("askUserQuestionTool formats structured answers", () => {

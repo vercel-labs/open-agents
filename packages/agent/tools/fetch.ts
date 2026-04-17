@@ -1,9 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { getSandbox, shellEscape } from "./utils";
+import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 const TIMEOUT_MS = 30_000;
 export const MAX_BODY_LENGTH = 10_000;
+const FETCH_BODY_DIR = ".open-harness/web-fetch";
 
 const fetchInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
@@ -26,7 +27,10 @@ const fetchOutputSchema = z.union([
     success: z.literal(true),
     status: z.number().int().nullable(),
     body: z.string(),
+    contentType: z.string().nullable(),
+    bytes: z.number().int(),
     truncated: z.boolean(),
+    savedBodyPath: z.string().nullable(),
   }),
   z.object({
     success: z.literal(false),
@@ -41,7 +45,7 @@ USAGE:
 - Make HTTP requests to external URLs
 - Supports GET, POST, PUT, PATCH, DELETE, and HEAD methods
 - Returns the response status and body text
-- Body is truncated to ${MAX_BODY_LENGTH} characters to avoid overwhelming context
+- Large response bodies are saved to a sandbox file while the tool returns a ${MAX_BODY_LENGTH}-character preview
 
 EXAMPLES:
 - Simple GET: url: "https://api.example.com/data"
@@ -81,11 +85,28 @@ EXAMPLES:
     args.push(shellEscape(url));
 
     const command = [
-      "exec 3>&1",
-      `status=$(${args.join(" ")})`,
+      `body_dir=${shellEscape(FETCH_BODY_DIR)}`,
+      'mkdir -p "$body_dir"',
+      'body_file=$(mktemp "$body_dir/body.XXXXXX")',
+      'headers_file=$(mktemp "$body_dir/headers.XXXXXX")',
+      `status=$(${args.join(" ")} -D "$headers_file" -o "$body_file")`,
       "curlExit=$?",
-      "exec 3>&-",
-      "printf '\\n%s' \"$status\"",
+      'if [ "$curlExit" -ne 0 ]; then rm -f "$body_file" "$headers_file"; exit "$curlExit"; fi',
+      String.raw`content_type=$(grep -i '^content-type:' "$headers_file" | tail -n 1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')`,
+      String.raw`bytes=$(wc -c < "$body_file" | tr -d '[:space:]')`,
+      "truncated=false",
+      'saved_body_path=""',
+      String.raw`if [ "\${bytes:-0}" -gt ${MAX_BODY_LENGTH} ]; then`,
+      "  truncated=true",
+      '  saved_body_path=$(mktemp "$body_dir/fetch.XXXXXX.body")',
+      '  mv "$body_file" "$saved_body_path"',
+      `  preview_base64=$(head -c ${MAX_BODY_LENGTH} "$saved_body_path" | base64 | tr -d '\\n')`,
+      "else",
+      "  preview_base64=$(base64 < \"$body_file\" | tr -d '\\n')",
+      '  rm -f "$body_file"',
+      "fi",
+      'rm -f "$headers_file"',
+      `printf '%s\\n%s\\n%s\\n%s\\n%s\\n%s' "$preview_base64" "$status" "$content_type" "$bytes" "$truncated" "$saved_body_path"`,
       "exit $curlExit",
     ].join("\n");
 
@@ -94,26 +115,39 @@ EXAMPLES:
         signal: abortSignal,
       });
 
-      if (result.exitCode !== 0 && result.exitCode !== 23) {
+      if (result.exitCode !== 0) {
         return {
           success: false,
           error: `Fetch failed: ${result.stderr || result.stdout || "Unknown error"}`,
         };
       }
 
-      const output = result.stdout ?? "";
-      const lastNewline = output.lastIndexOf("\n");
-      const statusText =
-        lastNewline !== -1 ? output.slice(lastNewline + 1).trim() : "";
-      const responseBody =
-        lastNewline !== -1 ? output.slice(0, lastNewline) : output;
+      const outputLines = (result.stdout ?? "").split("\n");
+      const [
+        previewBase64 = "",
+        statusText = "",
+        contentTypeText = "",
+        bytesText = "0",
+        truncatedText = "false",
+        savedBodyPathText = "",
+      ] = outputLines;
       const status = /^\d+$/.test(statusText) ? parseInt(statusText, 10) : null;
+      const bytes = /^\d+$/.test(bytesText) ? parseInt(bytesText, 10) : 0;
+      const responseBody = previewBase64
+        ? Buffer.from(previewBase64, "base64").toString("utf-8")
+        : "";
+      const savedBodyPath = savedBodyPathText.trim()
+        ? toDisplayPath(savedBodyPathText.trim(), workingDirectory)
+        : null;
 
       return {
         success: true,
         status,
         body: responseBody,
-        truncated: result.exitCode === 23,
+        contentType: contentTypeText.trim() || null,
+        bytes,
+        truncated: truncatedText.trim() === "true",
+        savedBodyPath,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
