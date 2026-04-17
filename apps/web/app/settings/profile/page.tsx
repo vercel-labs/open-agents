@@ -12,7 +12,11 @@ import { useSession } from "@/hooks/use-session";
 import { estimateModelUsageCost, type AvailableModel } from "@/lib/models";
 import { fetcher } from "@/lib/swr";
 import { formatDateOnly } from "@/lib/usage/date-range";
-import type { UsageInsights, UsageRepositoryInsight } from "@/lib/usage/types";
+import type {
+  UsageDomainLeaderboard,
+  UsageInsights,
+  UsageRepositoryInsight,
+} from "@/lib/usage/types";
 import { UsageInsightsSection } from "../usage/usage-insights-section";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -51,7 +55,7 @@ interface ModelUsage {
 interface UsageResponse {
   usage: DailyUsageRow[];
   insights: UsageInsights;
-  domainLeaderboard: unknown;
+  domainLeaderboard: UsageDomainLeaderboard | null;
 }
 
 interface ModelsResponse {
@@ -324,6 +328,8 @@ function ProfileSidebar({
   totals,
   topRepos,
   estimatedCostValue,
+  vercelRank,
+  orgLabel,
 }: {
   totals: {
     inputTokens: number;
@@ -333,6 +339,8 @@ function ProfileSidebar({
   } | null;
   topRepos: UsageRepositoryInsight[] | null;
   estimatedCostValue: string;
+  vercelRank: number | null;
+  orgLabel: string | null;
 }) {
   const { session, loading } = useSession();
 
@@ -384,7 +392,13 @@ function ProfileSidebar({
 
       {/* Rank + Email */}
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">#1 in Vercel</p>
+        <p className="text-sm font-medium text-foreground">
+          {vercelRank && orgLabel
+            ? `#${vercelRank} in ${orgLabel}`
+            : orgLabel
+              ? `${orgLabel} rank unavailable`
+              : "Org rank unavailable"}
+        </p>
         {session.user.email && (
           <p className="truncate text-sm text-muted-foreground">
             {session.user.email}
@@ -423,6 +437,7 @@ function ProfileSidebar({
 
 export default function ProfilePage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const { session } = useSession();
 
   const filteredUsagePath = useMemo(() => {
     if (!dateRange?.from) return null;
@@ -534,6 +549,31 @@ export default function ProfilePage() {
     : null;
 
   const topRepos = data?.insights?.topRepositories ?? null;
+  const allTimeLeaderboard = fullData?.domainLeaderboard ?? null;
+  const vercelRank = useMemo(() => {
+    const userId = session?.user?.id;
+    if (!allTimeLeaderboard || !userId) {
+      return null;
+    }
+
+    const index = allTimeLeaderboard.rows.findIndex(
+      (row) => row.userId === userId,
+    );
+    return index >= 0 ? index + 1 : null;
+  }, [allTimeLeaderboard, session?.user?.id]);
+  const orgLabel = useMemo(() => {
+    const domain = allTimeLeaderboard?.domain?.trim();
+    if (!domain) {
+      return null;
+    }
+
+    const [orgName] = domain.split(".");
+    if (!orgName) {
+      return domain;
+    }
+
+    return orgName.charAt(0).toUpperCase() + orgName.slice(1);
+  }, [allTimeLeaderboard?.domain]);
 
   return (
     <>
@@ -545,6 +585,8 @@ export default function ProfilePage() {
             totals={isLoading ? null : totals}
             topRepos={isLoading ? null : topRepos}
             estimatedCostValue={estimatedCostValue}
+            vercelRank={vercelRank}
+            orgLabel={orgLabel}
           />
         </div>
 
