@@ -149,6 +149,7 @@ Recommended path: deploy this repo at the repo root on Vercel, then layer on aut
    - enable "Request user authorization (OAuth) during installation"
    - use the GitHub App's Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
    - make the app public if you want org installs to work cleanly
+   - set repository and organization permissions, webhook URL, secret, and subscribed events as in [Permissions and webhooks](#permissions-and-webhooks) (under [GitHub App](#github-app))
 
 10. Add the GitHub App env vars and redeploy.
 11. Optionally add Redis/KV and the canonical production URL vars.
@@ -225,6 +226,34 @@ GITHUB_WEBHOOK_SECRET=...
 ```
 
 `GITHUB_APP_PRIVATE_KEY` can be stored as the PEM contents with escaped newlines or as a base64-encoded PEM.
+
+#### Permissions and webhooks
+
+Configure the GitHub App so installation tokens and user-authorized requests match what `apps/web` uses (clone/push in the sandbox, PRs, checks, CI logs, installation sync).
+
+**Repository permissions**
+
+| Permission | Access | Purpose |
+|------------|--------|---------|
+| **Contents** | Read and write | Clone, push, delete branch refs |
+| **Metadata** | Read-only | Repository and PR visibility |
+| **Pull requests** | Read and write | Open, update, merge, merge readiness, auto-merge |
+| **Issues** | Read-only | Read PR comments (e.g. deployment links) |
+| **Checks** | Read-only | Check runs and annotations |
+| **Actions** | Read-only | Workflow job logs (e.g. “fix failing checks”) |
+| **Administration** | Read-only | Optional; branch protection / status checks for merge readiness (best-effort if denied) |
+
+**Organization permissions**
+
+| Permission | Access | Purpose |
+|------------|--------|---------|
+| **Members** | Read | List organizations the user belongs to (`/user/orgs`) |
+
+**Webhooks**
+
+- **Payload URL:** `https://YOUR_DOMAIN/api/github/webhook` (same path on your deployed host; local dev usually skips this until you have a public URL)
+- **Secret:** Must match `GITHUB_WEBHOOK_SECRET`
+- **Events:** `installation`, `installation_repositories`, `pull_request`
 
 ## Useful commands
 
