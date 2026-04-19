@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 
@@ -18,9 +18,6 @@ let session: TestSession;
 let exists = true;
 let githubAccount: { id: string } | null = null;
 let installations: Array<{ installationId: number }> = [];
-let vercelToken: string | null = null;
-const fetchMock = mock(async () => new Response(null, { status: 200 }));
-const originalFetch = globalThis.fetch;
 
 mock.module("next/headers", () => ({
   cookies: async () => ({
@@ -46,10 +43,6 @@ mock.module("@/lib/db/installations", () => ({
   getInstallationsByUserId: async () => installations,
 }));
 
-mock.module("@/lib/vercel/token", () => ({
-  getUserVercelToken: async () => vercelToken,
-}));
-
 const routeModulePromise = import("./route");
 
 function createRequest(): NextRequest {
@@ -73,15 +66,7 @@ describe("GET /api/auth/info", () => {
     exists = true;
     githubAccount = null;
     installations = [];
-    vercelToken = "vercel-token";
     deletedCookies.length = 0;
-    fetchMock.mockClear();
-    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
   });
 
   test("returns unauthenticated when there is no session", async () => {
@@ -92,7 +77,6 @@ describe("GET /api/auth/info", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test("clears the session cookie when the user record is gone", async () => {
@@ -106,58 +90,35 @@ describe("GET /api/auth/info", () => {
     expect(deletedCookies).toEqual([SESSION_COOKIE_NAME]);
   });
 
-  test("flags reconnect when the Vercel token is unavailable", async () => {
-    vercelToken = null;
+  test("reports GitHub account and installation state", async () => {
+    githubAccount = { id: "github-account-1" };
+    installations = [{ installationId: 1 }];
     const { GET } = await routeModulePromise;
 
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    expect(await response.json()).toEqual({
+      user: session?.user,
       authProvider: "vercel",
-      vercelReconnectRequired: true,
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test("flags reconnect when Vercel rejects the saved token", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
-    const { GET } = await routeModulePromise;
-
-    const response = await GET(createRequest());
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      authProvider: "vercel",
-      vercelReconnectRequired: true,
+      hasGitHub: true,
+      hasGitHubAccount: true,
+      hasGitHubInstallations: true,
     });
   });
 
-  test("keeps Vercel sessions connected when validation aborts", async () => {
-    const abortError = new Error("The operation was aborted.");
-    abortError.name = "AbortError";
-    fetchMock.mockRejectedValueOnce(abortError);
+  test("reports missing GitHub connection state", async () => {
     const { GET } = await routeModulePromise;
 
     const response = await GET(createRequest());
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    expect(await response.json()).toEqual({
+      user: session?.user,
       authProvider: "vercel",
-      vercelReconnectRequired: false,
+      hasGitHub: false,
+      hasGitHubAccount: false,
+      hasGitHubInstallations: false,
     });
-  });
-
-  test("keeps Vercel sessions connected when the token validates", async () => {
-    const { GET } = await routeModulePromise;
-
-    const response = await GET(createRequest());
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      authProvider: "vercel",
-      vercelReconnectRequired: false,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
