@@ -194,7 +194,6 @@ mock.module("@/lib/sandbox/config", () => ({
 
 mock.module("@/lib/sandbox/vercel-cli-auth", () => ({
   getVercelCliSandboxSetup: async () => ({
-    auth: null,
     projectLink: null,
   }),
   syncVercelCliAuthToSandbox: async () => {},

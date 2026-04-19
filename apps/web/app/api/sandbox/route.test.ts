@@ -297,11 +297,6 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
       {
-        path: "/root/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
-      },
-      {
         path: "/vercel/sandbox/.vercel/project.json",
         content:
           '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
@@ -341,11 +336,6 @@ describe("/api/sandbox lifecycle kicks", () => {
     ]);
     expect(dotenvSyncCalls).toHaveLength(0);
     expect(writeFileCalls).toEqual([
-      {
-        path: "/root/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
-      },
       {
         path: "/vercel/sandbox/.vercel/project.json",
         content:

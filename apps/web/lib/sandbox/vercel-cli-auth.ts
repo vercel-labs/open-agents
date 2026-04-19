@@ -15,13 +15,7 @@ export interface VercelCliProjectLink {
   projectName?: string;
 }
 
-export interface VercelCliAuthConfig {
-  token: string;
-  expiresAt: number;
-}
-
 export interface VercelCliSandboxSetup {
-  auth: VercelCliAuthConfig | null;
   projectLink: VercelCliProjectLink | null;
 }
 
@@ -73,12 +67,6 @@ export async function getVercelCliSandboxSetup(params: {
     params.sessionRecord.vercelTeamId ?? authInfo?.externalId ?? null;
 
   return {
-    auth: authInfo
-      ? {
-          token: authInfo.token,
-          expiresAt: authInfo.expiresAt,
-        }
-      : null,
     projectLink: buildProjectLink({
       orgId,
       projectId: params.sessionRecord.vercelProjectId,
@@ -96,15 +84,7 @@ export async function syncVercelCliAuthToSandbox(params: {
   const authConfigPath = `${homeDirectory}/${VERCEL_CLI_CONFIG_DIRECTORY}/auth.json`;
   const projectLinkPath = `${sandbox.workingDirectory}/.vercel/project.json`;
 
-  if (setup.auth) {
-    await sandbox.writeFile(
-      authConfigPath,
-      `${JSON.stringify(setup.auth, null, 2)}\n`,
-      "utf-8",
-    );
-  } else {
-    await removeFileIfPresent(sandbox, authConfigPath);
-  }
+  await removeFileIfPresent(sandbox, authConfigPath);
 
   if (setup.projectLink) {
     await sandbox.writeFile(

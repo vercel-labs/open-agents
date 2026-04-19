@@ -95,10 +95,6 @@ describe("vercel-cli-auth", () => {
     });
 
     expect(setup).toEqual({
-      auth: {
-        token: "vca_token_123",
-        expiresAt: 1700000000,
-      },
       projectLink: {
         orgId: "team_123",
         projectId: "prj_123",
@@ -125,7 +121,7 @@ describe("vercel-cli-auth", () => {
     });
   });
 
-  test("syncs CLI auth and project metadata without persisting a refresh token", async () => {
+  test("removes sandboxed CLI auth and keeps project metadata only", async () => {
     const { getVercelCliSandboxSetup, syncVercelCliAuthToSandbox } =
       await vercelCliAuthModulePromise;
     const { sandbox, writeFileCalls, execCalls } = createSandbox();
@@ -141,26 +137,25 @@ describe("vercel-cli-auth", () => {
 
     await syncVercelCliAuthToSandbox({ sandbox, setup });
 
-    expect(execCalls).toEqual([
-      {
-        command: 'printf %s "$HOME"',
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-    ]);
     expect(writeFileCalls).toEqual([
-      {
-        path: "/home/tester/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vca_token_123",\n  "expiresAt": 1700000000\n}\n',
-      },
       {
         path: "/workspace/.vercel/project.json",
         content:
           '{\n  "orgId": "team_123",\n  "projectId": "prj_123",\n  "projectName": "open-harness-web"\n}\n',
       },
     ]);
-    expect(writeFileCalls[0]?.content).not.toContain("refreshToken");
+    expect(execCalls).toEqual([
+      {
+        command: 'printf %s "$HOME"',
+        cwd: "/workspace",
+        timeoutMs: 5000,
+      },
+      {
+        command: "rm -f '/home/tester/.local/share/com.vercel.cli/auth.json'",
+        cwd: "/workspace",
+        timeoutMs: 5000,
+      },
+    ]);
   });
 
   test("removes stale CLI auth and project metadata when no auth or link is available", async () => {
