@@ -51,6 +51,10 @@ export function useAudioRecording() {
   const mimeTypeRef = useRef<string>("");
   const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const speechTranscriptRef = useRef("");
+  const speechRecognitionHadErrorRef = useRef(false);
+  const speechStopResolveRef = useRef<((value: string | null) => void) | null>(
+    null,
+  );
 
   const resetMediaRecorder = useCallback(() => {
     mediaRecorderRef.current = null;
@@ -81,6 +85,7 @@ export function useAudioRecording() {
       const recognition = new speechRecognitionConstructor();
       speechRecognitionRef.current = recognition;
       speechTranscriptRef.current = "";
+      speechRecognitionHadErrorRef.current = false;
 
       recognition.continuous = true;
       recognition.interimResults = false;
@@ -113,8 +118,11 @@ export function useAudioRecording() {
       };
 
       recognition.onerror = (event) => {
+        speechRecognitionHadErrorRef.current = true;
         speechTranscriptRef.current = "";
         resetBrowserTranscription();
+        speechStopResolveRef.current?.(null);
+        speechStopResolveRef.current = null;
 
         switch (event.error) {
           case "not-allowed":
@@ -138,12 +146,21 @@ export function useAudioRecording() {
       };
 
       recognition.onend = () => {
+        const stopResolve = speechStopResolveRef.current;
+        speechStopResolveRef.current = null;
+        const didFail = speechRecognitionHadErrorRef.current;
+        speechRecognitionHadErrorRef.current = false;
         resetBrowserTranscription();
+
+        if (didFail) {
+          return;
+        }
 
         const nextTranscript = speechTranscriptRef.current.trim();
         if (nextTranscript) {
           setTranscript(nextTranscript);
         }
+        stopResolve?.(nextTranscript || null);
       };
 
       setState("recording");
@@ -218,8 +235,10 @@ export function useAudioRecording() {
     const speechRecognition = speechRecognitionRef.current;
     if (speechRecognition && state === "recording") {
       setState("processing");
-      speechRecognition.stop();
-      return null;
+      return new Promise((resolve) => {
+        speechStopResolveRef.current = resolve;
+        speechRecognition.stop();
+      });
     }
 
     const mediaRecorder = mediaRecorderRef.current;
@@ -259,10 +278,11 @@ export function useAudioRecording() {
           }
 
           const nextTranscript = data.text?.trim() ?? "";
-          setTranscript(nextTranscript || null);
+          const normalizedTranscript = nextTranscript || null;
+          setTranscript(normalizedTranscript);
           setState("idle");
           resetMediaRecorder();
-          resolve(nextTranscript || null);
+          resolve(normalizedTranscript);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           setError(`Transcription failed: ${message}`);
@@ -296,6 +316,8 @@ export function useAudioRecording() {
 
   useEffect(() => {
     return () => {
+      speechStopResolveRef.current?.(null);
+      speechStopResolveRef.current = null;
       speechRecognitionRef.current?.abort();
       speechRecognitionRef.current = null;
       resetMediaRecorder();
