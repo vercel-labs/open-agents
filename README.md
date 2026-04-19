@@ -103,6 +103,12 @@ ELEVENLABS_API_KEY=
 - `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: override the default sandbox snapshot.
 - `ELEVENLABS_API_KEY`: voice transcription.
 
+### Composio (external apps)
+
+The repo ships a [`composio` skill](./.agents/skills/composio/SKILL.md) that teaches the agent to drive [Composio's CLI](https://composio.dev) for actions on 1000+ external apps like Gmail, Slack, Linear, Notion, and GitHub. It is a pure skill — no changes to the harness or chat route.
+
+The skill installs the CLI on first use if it is not already in the sandbox, and asks the user to run `composio login` on their host when auth is needed. For a hands-off deployment, bake `curl -fsSL https://composio.dev/install | bash` and a `composio login` step into your sandbox base snapshot via `bun run sandbox:snapshot-base`.
+
 ## Deploy your own copy on Vercel
 
 Recommended path: deploy this repo at the repo root on Vercel, then layer on auth and GitHub integration.
