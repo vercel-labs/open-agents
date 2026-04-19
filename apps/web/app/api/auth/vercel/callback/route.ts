@@ -3,6 +3,7 @@ import { type NextRequest } from "next/server";
 import { encrypt } from "@/lib/crypto";
 import { upsertUser } from "@/lib/db/users";
 import { encryptJWE } from "@/lib/jwe/encrypt";
+import { needsOnboarding } from "@/lib/onboarding";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 import { exchangeVercelCode, getVercelUserInfo } from "@/lib/vercel/oauth";
 
@@ -88,10 +89,18 @@ export async function GET(req: NextRequest): Promise<Response> {
       Date.now() + 365 * 24 * 60 * 60 * 1000,
     ).toUTCString();
 
+    // Redirect users who haven't completed onboarding
+    let redirectTo = storedRedirectTo;
+    if (storedRedirectTo === "/") {
+      if (await needsOnboarding(userId)) {
+        redirectTo = "/onboarding";
+      }
+    }
+
     const response = new Response(null, {
       status: 302,
       headers: {
-        Location: storedRedirectTo,
+        Location: redirectTo,
       },
     });
 

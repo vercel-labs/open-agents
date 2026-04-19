@@ -20,7 +20,9 @@ Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle K
 bun run --cwd apps/web db:generate   # Creates a new .sql migration file
 ```
 
-Commit the generated `.sql` file alongside the schema change. **Do not use `db:push`** except for local throwaway databases.
+**Never hand-write migration SQL files.** Always use `db:generate` so Drizzle creates the `.sql` file, the snapshot in `migrations/meta/NNNN_snapshot.json`, and the entry in `migrations/meta/_journal.json`. The migration runner (`lib/db/migrate.ts`) reads the journal to discover pending migrations — a hand-written `.sql` file without journal/snapshot metadata will be silently ignored.
+
+Commit the generated `.sql`, snapshot, and journal files alongside the schema change. **Do not use `db:push`** except for local throwaway databases.
 
 Migrations run automatically during `bun run build` (via `lib/db/migrate.ts`), so every Vercel deploy — both preview and production — applies pending migrations to its own database.
 

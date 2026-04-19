@@ -2,13 +2,13 @@
 
 import {
   AlertCircle,
-  Check,
+  Ban,
   ChevronDown,
   ExternalLink,
+  Globe,
+  ListFilter,
   Loader2,
   RefreshCw,
-  TriangleAlert,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -27,6 +27,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
 import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
@@ -208,25 +213,31 @@ function InstallBadge({
 }) {
   if (status === "installed" && repositorySelection === "all") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
-        <Check className="size-2.5" />
-        All Repositories
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Globe className="size-4 shrink-0 text-green-600 dark:text-green-400" />
+        </TooltipTrigger>
+        <TooltipContent>All Repositories</TooltipContent>
+      </Tooltip>
     );
   }
   if (status === "installed") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
-        <TriangleAlert className="size-2.5" />
-        Select Repositories
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <ListFilter className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        </TooltipTrigger>
+        <TooltipContent>Select Repositories</TooltipContent>
+      </Tooltip>
     );
   }
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-red-600 dark:text-red-400">
-      <X className="size-2.5" />
-      Not Installed
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Ban className="size-4 shrink-0 text-red-600 dark:text-red-400" />
+      </TooltipTrigger>
+      <TooltipContent>No Repository Access</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -239,7 +250,7 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
   return (
     <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
       <div className="flex min-w-0 items-center gap-2">
-        <Avatar className="size-5 rounded-sm text-[8px]">
+        <Avatar className="size-5 rounded-full text-[8px]">
           <AvatarImage src={avatarSrc} alt={org.login} />
           <AvatarFallback className="rounded-sm text-[8px]">
             {org.login.charAt(0).toUpperCase()}
@@ -339,26 +350,31 @@ export function AccountsSection() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border/50 bg-muted/10">
-        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <GitHubIcon className="h-5 w-5" />
-            <span className="text-sm font-medium">GitHub</span>
+        <div className="border-b border-border/50 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <GitHubIcon className="h-5 w-5" />
+              <span className="text-sm font-medium">GitHub</span>
+            </div>
+            {hasGitHub && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={
+                  isRefreshing || connectionLoading || connectionStatusLoading
+                }
+                className="h-7 w-7 p-0"
+              >
+                <RefreshCw
+                  className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+              </Button>
+            )}
           </div>
-          {hasGitHub && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={
-                isRefreshing || connectionLoading || connectionStatusLoading
-              }
-              className="h-7 w-7 p-0"
-            >
-              <RefreshCw
-                className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
-              />
-            </Button>
-          )}
+          <p className="mt-2 text-xs text-muted-foreground">
+            Open Agents uses a GitHub App to access your repositories
+          </p>
         </div>
 
         <div className="space-y-4 p-4">
@@ -493,7 +509,7 @@ function ConnectedState({
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="size-9 rounded-sm">
+          <Avatar className="size-9 rounded-full">
             <AvatarImage src={data.user.avatarUrl} alt={data.user.login} />
             <AvatarFallback className="rounded-sm">
               {data.user.login.charAt(0).toUpperCase()}

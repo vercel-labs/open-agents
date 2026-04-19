@@ -403,6 +403,27 @@ export const userPreferences = pgTable("user_preferences", {
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type NewUserPreferences = typeof userPreferences.$inferInsert;
 
+// Vercel connection — stores the user's selected team and AI Gateway key
+export const vercelConnections = pgTable("vercel_connections", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  teamId: text("team_id").notNull(),
+  teamSlug: text("team_slug"),
+  // Encrypted AI Gateway API key scoped to the selected team
+  gatewayApiKey: text("gateway_api_key"),
+  // Vercel-side API key ID, used to revoke the key on team switch
+  gatewayApiKeyId: text("gateway_api_key_id"),
+  gatewayApiKeyObtainedAt: timestamp("gateway_api_key_obtained_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type VercelConnection = typeof vercelConnections.$inferSelect;
+export type NewVercelConnection = typeof vercelConnections.$inferInsert;
+
 // Usage tracking — one row per assistant turn (append-only)
 export const usageEvents = pgTable("usage_events", {
   id: text("id").primaryKey(),

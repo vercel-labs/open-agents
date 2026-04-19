@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 
+mock.module("server-only", () => ({}));
+
 const cookieValues = new Map<string, string>();
 const deletedCookies: string[] = [];
 

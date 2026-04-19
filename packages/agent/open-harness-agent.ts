@@ -44,6 +44,8 @@ const callOptionsSchema = z.object({
   subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
+  /** When set, routes AI Gateway calls through the user's team billing. */
+  gatewayConfig: z.custom<import("./models").GatewayConfig>().optional(),
 });
 
 export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -105,10 +107,12 @@ export const openHarnessAgent = new ToolLoopAgent({
 
     const callModel = gateway(mainSelection.id, {
       providerOptionsOverrides: mainSelection.providerOptionsOverrides,
+      config: options.gatewayConfig,
     });
     const subagentModel = subagentSelection
       ? gateway(subagentSelection.id, {
           providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
+          config: options.gatewayConfig,
         })
       : undefined;
     const customInstructions = options.customInstructions;

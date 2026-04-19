@@ -21,3 +21,16 @@ export const vercelRepoProjectsResponseSchema = z.object({
 export type VercelRepoProjectsResponse = z.infer<
   typeof vercelRepoProjectsResponseSchema
 >;
+
+export interface VercelTeamSelection {
+  teamId: string;
+  teamSlug: string;
+  teamName: string;
+}
+
+export interface GatewayKeyStatus {
+  hasKey: boolean;
+  teamId: string | null;
+  teamSlug: string | null;
+  obtainedAt: string | null;
+}
