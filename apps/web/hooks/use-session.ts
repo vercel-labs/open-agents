@@ -2,12 +2,12 @@
 
 import useSWR from "swr";
 import type { SessionUserInfo } from "@/lib/session/types";
-import { fetcher } from "@/lib/swr";
+import { fetcherNoStore } from "@/lib/swr";
 
 export function useSession() {
-  const { data, isLoading } = useSWR<SessionUserInfo>(
+  const { data, isLoading, mutate } = useSWR<SessionUserInfo>(
     "/api/auth/info",
-    fetcher,
+    fetcherNoStore,
     {
       revalidateOnFocus: true,
     },
@@ -20,5 +20,6 @@ export function useSession() {
     hasGitHub: data?.hasGitHub ?? false,
     hasGitHubAccount: data?.hasGitHubAccount ?? false,
     hasGitHubInstallations: data?.hasGitHubInstallations ?? false,
+    refresh: mutate,
   };
 }

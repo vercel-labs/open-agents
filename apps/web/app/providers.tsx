@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Suspense,
   createContext,
@@ -11,9 +11,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 import { SWRConfig } from "swr";
 import { GitHubReconnectGate } from "@/components/github-reconnect-gate";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useSession } from "@/hooks/use-session";
 import { FetchError } from "@/lib/swr";
 
@@ -54,13 +63,27 @@ function applyTheme(resolvedTheme: ResolvedTheme) {
  * global error handler that detects 401 responses and signs the user out.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const router = useRouter();
   const signingOut = useRef(false);
   const vercelReconnectRedirecting = useRef(false);
-  const vercelReconnectFailureNotifiedFor = useRef<string | null>(null);
-  const { session, loading: sessionLoading } = useSession();
+  const lastRevalidatedRouteRef = useRef<string | null>(null);
+  const {
+    session,
+    loading: sessionLoading,
+    refresh: refreshSession,
+  } = useSession();
   const [theme, setThemeState] = useState<ThemePreference>("system");
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("dark");
+  const [showVercelReconnectDialog, setShowVercelReconnectDialog] =
+    useState(false);
+
+  const currentRoute = pathname;
+
+  const getCurrentVercelReconnectUrl = useCallback(() => {
+    const next = `${window.location.pathname}${window.location.search}`;
+    return `/api/auth/signin/vercel?next=${encodeURIComponent(next)}`;
+  }, []);
 
   const applyThemePreference = useCallback((nextTheme: ThemePreference) => {
     const nextResolvedTheme =
@@ -106,6 +129,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    if (lastRevalidatedRouteRef.current === null) {
+      lastRevalidatedRouteRef.current = currentRoute;
+      return;
+    }
+
+    if (lastRevalidatedRouteRef.current === currentRoute) {
+      return;
+    }
+
+    lastRevalidatedRouteRef.current = currentRoute;
+    void refreshSession();
+  }, [currentRoute, refreshSession]);
+
+  useEffect(() => {
     if (sessionLoading) {
       return;
     }
@@ -121,7 +158,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     ) {
       window.sessionStorage.removeItem(VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY);
       vercelReconnectRedirecting.current = false;
-      vercelReconnectFailureNotifiedFor.current = null;
+      setShowVercelReconnectDialog(false);
       return;
     }
 
@@ -130,27 +167,32 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
 
     if (reconnectAttemptedUserId === session.user.id) {
-      if (vercelReconnectFailureNotifiedFor.current !== session.user.id) {
-        vercelReconnectFailureNotifiedFor.current = session.user.id;
-        toast.error(
-          "Couldn't refresh your Vercel session. Sign out and sign back in to retry.",
-        );
-      }
+      setShowVercelReconnectDialog(true);
       return;
     }
 
+    setShowVercelReconnectDialog(false);
     window.sessionStorage.setItem(
       VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY,
       session.user.id,
     );
-    vercelReconnectFailureNotifiedFor.current = null;
     vercelReconnectRedirecting.current = true;
+    window.location.assign(getCurrentVercelReconnectUrl());
+  }, [getCurrentVercelReconnectUrl, session, sessionLoading]);
 
-    const next = `${window.location.pathname}${window.location.search}`;
-    window.location.assign(
-      `/api/auth/signin/vercel?next=${encodeURIComponent(next)}`,
-    );
-  }, [session, sessionLoading]);
+  const handleReconnectVercel = useCallback(() => {
+    window.location.assign(getCurrentVercelReconnectUrl());
+  }, [getCurrentVercelReconnectUrl]);
+
+  const handleManualSignOut = useCallback(() => {
+    window.sessionStorage.removeItem(VERCEL_RECONNECT_ATTEMPT_STORAGE_KEY);
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/api/auth/signout";
+    document.body.appendChild(form);
+    form.submit();
+  }, []);
 
   const handleError = useCallback(
     (error: Error) => {
@@ -189,6 +231,29 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}>
           <GitHubReconnectGate />
         </Suspense>
+        <Dialog open={showVercelReconnectDialog}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Reconnect Vercel</DialogTitle>
+              <DialogDescription>
+                Your saved Vercel session is no longer valid. Reconnect now to
+                keep using the app.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleManualSignOut}
+              >
+                Sign out
+              </Button>
+              <Button type="button" onClick={handleReconnectVercel}>
+                Reconnect Vercel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SWRConfig>
       <Toaster theme={resolvedTheme} />
     </ThemeContext.Provider>
