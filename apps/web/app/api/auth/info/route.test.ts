@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
-
-const deletedCookies: string[] = [];
 
 type TestSession = {
   authProvider: "vercel" | "github";
@@ -18,14 +15,6 @@ let session: TestSession;
 let exists = true;
 let githubAccount: { id: string } | null = null;
 let installations: Array<{ installationId: number }> = [];
-
-mock.module("next/headers", () => ({
-  cookies: async () => ({
-    delete: (name: string) => {
-      deletedCookies.push(name);
-    },
-  }),
-}));
 
 mock.module("@/lib/session/server", () => ({
   getSessionFromReq: async () => session,
@@ -66,7 +55,6 @@ describe("GET /api/auth/info", () => {
     exists = true;
     githubAccount = null;
     installations = [];
-    deletedCookies.length = 0;
   });
 
   test("returns unauthenticated when there is no session", async () => {
@@ -79,7 +67,7 @@ describe("GET /api/auth/info", () => {
     expect(await response.json()).toEqual({});
   });
 
-  test("clears the session cookie when the user record is gone", async () => {
+  test("returns unauthenticated when the user record is gone", async () => {
     exists = false;
     const { GET } = await routeModulePromise;
 
@@ -87,7 +75,6 @@ describe("GET /api/auth/info", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
-    expect(deletedCookies).toEqual([SESSION_COOKIE_NAME]);
   });
 
   test("reports GitHub account and installation state", async () => {

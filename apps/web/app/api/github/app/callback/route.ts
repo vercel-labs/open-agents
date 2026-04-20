@@ -149,7 +149,7 @@ export async function GET(req: Request): Promise<Response> {
 
   const session = await getServerSession();
   if (!session?.user?.id) {
-    const signinUrl = new URL("/api/auth/signin/vercel", req.url);
+    const signinUrl = new URL("/", req.url);
     signinUrl.searchParams.set(
       "next",
       `${requestUrl.pathname}${requestUrl.search}`,

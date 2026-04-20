@@ -54,9 +54,7 @@ export default async function RepoPage({ params }: RepoPageProps) {
   // Auth check -- redirect to sign-in, preserving the URL for return
   const session = await getServerSession();
   if (!session?.user) {
-    redirect(
-      `/api/auth/signin/vercel?next=${encodeURIComponent(`/${username}/${repo}`)}`,
-    );
+    redirect("/");
   }
 
   const preferencesPromise = getUserPreferences(session.user.id);

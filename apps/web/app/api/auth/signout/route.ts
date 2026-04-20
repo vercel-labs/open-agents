@@ -1,15 +1,31 @@
 import { type NextRequest } from "next/server";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth/config";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
-import { revokeVercelToken } from "@/lib/vercel/oauth";
 import { getUserVercelToken } from "@/lib/vercel/token";
+
+const VERCEL_REVOKE_URL = "https://api.vercel.com/login/oauth/token/revoke";
+
+async function revokeVercelToken(params: {
+  token: string;
+  clientId: string;
+  clientSecret: string;
+}): Promise<void> {
+  await fetch(VERCEL_REVOKE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      token: params.token,
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+    }),
+  });
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   const session = await getServerSession();
 
   if (session?.user?.id) {
-    // Revoke Vercel token if signed in with Vercel
     if (session.authProvider === "vercel") {
       try {
         const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
@@ -29,8 +45,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
   }
 
-  const store = await cookies();
-  store.delete(SESSION_COOKIE_NAME);
+  await auth.api.signOut({ headers: await headers() });
 
   return Response.redirect(new URL("/", req.url));
 }

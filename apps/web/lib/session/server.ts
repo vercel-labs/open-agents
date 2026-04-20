@@ -1,26 +1,37 @@
 import type { NextRequest } from "next/server";
 import type { Session } from "./types";
-import { SESSION_COOKIE_NAME } from "./constants";
-import { decryptJWE } from "@/lib/jwe/decrypt";
+import { auth } from "@/lib/auth/config";
 
-export async function getSessionFromCookie(
-  cookieValue?: string,
-): Promise<Session | undefined> {
-  if (cookieValue) {
-    const decrypted = await decryptJWE<Session>(cookieValue);
-    if (decrypted) {
-      return {
-        created: decrypted.created,
-        authProvider: decrypted.authProvider,
-        user: decrypted.user,
-      };
-    }
+function extractUsername(user: {
+  name?: string | null;
+  [key: string]: unknown;
+}): string {
+  if (typeof user.username === "string" && user.username) {
+    return user.username;
   }
+  return user.name ?? "";
 }
 
 export async function getSessionFromReq(
   req: NextRequest,
 ): Promise<Session | undefined> {
-  const cookieValue = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  return getSessionFromCookie(cookieValue);
+  const baSession = await auth.api.getSession({
+    headers: req.headers,
+  });
+
+  if (!baSession?.user) {
+    return undefined;
+  }
+
+  return {
+    created: baSession.session.createdAt.getTime(),
+    authProvider: "vercel",
+    user: {
+      id: baSession.user.id,
+      username: extractUsername(baSession.user),
+      email: baSession.user.email ?? undefined,
+      avatar: baSession.user.image ?? "",
+      name: baSession.user.name ?? undefined,
+    },
+  };
 }

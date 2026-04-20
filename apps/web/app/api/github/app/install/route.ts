@@ -59,7 +59,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const redirectTo = sanitizeRedirectTo(req.nextUrl.searchParams.get("next"));
 
   if (!session?.user?.id) {
-    const signinUrl = new URL("/api/auth/signin/vercel", req.url);
+    const signinUrl = new URL("/", req.url);
     signinUrl.searchParams.set(
       "next",
       `${req.nextUrl.pathname}${req.nextUrl.search}`,

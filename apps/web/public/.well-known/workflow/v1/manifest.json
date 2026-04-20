@@ -6,17 +6,6 @@
         "stepId": "step//workflow@4.2.0-beta.74//fetch"
       }
     },
-    "node_modules/workflow/dist/internal/builtins.js": {
-      "__builtin_response_array_buffer": {
-        "stepId": "__builtin_response_array_buffer"
-      },
-      "__builtin_response_json": {
-        "stepId": "__builtin_response_json"
-      },
-      "__builtin_response_text": {
-        "stepId": "__builtin_response_text"
-      }
-    },
     "app/workflows/sandbox-lifecycle.ts": {
       "clearLifecycleRunIdIfOwned": {
         "stepId": "step//./app/workflows/sandbox-lifecycle//clearLifecycleRunIdIfOwned"
@@ -58,6 +47,17 @@
       },
       "runAutoCreatePrStep": {
         "stepId": "step//./app/workflows/chat-post-finish//runAutoCreatePrStep"
+      }
+    },
+    "node_modules/workflow/dist/internal/builtins.js": {
+      "__builtin_response_array_buffer": {
+        "stepId": "__builtin_response_array_buffer"
+      },
+      "__builtin_response_json": {
+        "stepId": "__builtin_response_json"
+      },
+      "__builtin_response_text": {
+        "stepId": "__builtin_response_text"
       }
     },
     "app/workflows/chat.ts": {
