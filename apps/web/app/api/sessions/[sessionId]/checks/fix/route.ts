@@ -3,7 +3,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import type { PullRequestCheckRun } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { Octokit } from "@octokit/rest";
 import { gateway, generateText } from "ai";
 

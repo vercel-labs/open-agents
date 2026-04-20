@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+mock.module("server-only", () => ({}));
+
 const currentSessionRecord = {
   userId: "user-1",
   repoOwner: "vercel",
@@ -60,7 +62,7 @@ mock.module("@/lib/vercel/projects", () => ({
     findLatestFailedDeploymentInspectorUrlForBranchMock,
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenMock,
 }));
 

@@ -27,8 +27,6 @@ export const auth = betterAuth({
     },
     additionalFields: {
       username: { type: "string", required: true },
-      provider: { type: "string", required: false },
-      externalId: { type: "string", required: false },
       lastLoginAt: { type: "date", required: false },
     },
   },
@@ -41,7 +39,7 @@ export const auth = betterAuth({
     encryptOAuthTokens: true,
     accountLinking: {
       enabled: true,
-      trustedProviders: ["vercel"],
+      trustedProviders: ["vercel", "github"],
     },
   },
 
@@ -49,6 +47,10 @@ export const auth = betterAuth({
     vercel: {
       clientId: process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID ?? "",
       clientSecret: process.env.VERCEL_APP_CLIENT_SECRET ?? "",
+    },
+    github: {
+      clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ?? "",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
     },
   },
 

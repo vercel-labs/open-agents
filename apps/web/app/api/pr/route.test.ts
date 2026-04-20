@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+mock.module("server-only", () => ({}));
+
 type AuthSession = { user: { id: string } } | null;
 
 type SessionRecord = {
@@ -75,7 +77,7 @@ function registerRouteMocks() {
     },
   }));
 
-  mock.module("@/lib/github/user-token", () => ({
+  mock.module("@/lib/github/token", () => ({
     getUserGitHubToken: async () => userToken,
   }));
 

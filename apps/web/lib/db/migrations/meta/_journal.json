@@ -218,6 +218,13 @@
       "when": 1776568000000,
       "tag": "0030_better_auth_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776670141613,
+      "tag": "0032_ambitious_silverclaw",
+      "breakpoints": true
     }
   ]
 }

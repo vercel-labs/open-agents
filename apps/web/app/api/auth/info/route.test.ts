@@ -13,8 +13,10 @@ type TestSession = {
 
 let session: TestSession;
 let exists = true;
-let githubAccount: { id: string } | null = null;
+let hasGitHubLinked = false;
 let installations: Array<{ installationId: number }> = [];
+
+mock.module("server-only", () => ({}));
 
 mock.module("@/lib/session/server", () => ({
   getSessionFromReq: async () => session,
@@ -24,8 +26,8 @@ mock.module("@/lib/db/users", () => ({
   userExists: async () => exists,
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccount,
+mock.module("@/lib/github/token", () => ({
+  hasGitHubAccount: async () => hasGitHubLinked,
 }));
 
 mock.module("@/lib/db/installations", () => ({
@@ -53,7 +55,7 @@ describe("GET /api/auth/info", () => {
       },
     };
     exists = true;
-    githubAccount = null;
+    hasGitHubLinked = false;
     installations = [];
   });
 
@@ -78,7 +80,7 @@ describe("GET /api/auth/info", () => {
   });
 
   test("reports GitHub account and installation state", async () => {
-    githubAccount = { id: "github-account-1" };
+    hasGitHubLinked = true;
     installations = [{ installationId: 1 }];
     const { GET } = await routeModulePromise;
 

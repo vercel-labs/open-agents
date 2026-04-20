@@ -184,7 +184,7 @@ mock.module("@/lib/skills-cache", () => ({
   setCachedSkills: async () => {},
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: async () => null,
 }));
 

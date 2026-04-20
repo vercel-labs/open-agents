@@ -1,5 +1,7 @@
-import { type NextRequest } from "next/server";
+"use server";
+
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserVercelToken } from "@/lib/vercel/token";
@@ -22,30 +24,28 @@ async function revokeVercelToken(params: {
   });
 }
 
-export async function POST(req: NextRequest): Promise<Response> {
+export async function signOut(): Promise<void> {
   const session = await getServerSession();
 
-  if (session?.user?.id) {
-    if (session.authProvider === "vercel") {
-      try {
-        const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
-        const clientSecret = process.env.VERCEL_APP_CLIENT_SECRET;
-        if (clientId && clientSecret) {
-          const token = await getUserVercelToken(session.user.id);
-          if (token) {
-            await revokeVercelToken({ token, clientId, clientSecret });
-          }
+  if (session?.user?.id && session.authProvider === "vercel") {
+    try {
+      const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
+      const clientSecret = process.env.VERCEL_APP_CLIENT_SECRET;
+      if (clientId && clientSecret) {
+        const token = await getUserVercelToken(session.user.id);
+        if (token) {
+          await revokeVercelToken({ token, clientId, clientSecret });
         }
-      } catch (error) {
-        console.error(
-          "Failed to revoke Vercel token:",
-          error instanceof Error ? error.message : "Unknown error",
-        );
       }
+    } catch (error) {
+      console.error(
+        "Failed to revoke Vercel token:",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }
 
   await auth.api.signOut({ headers: await headers() });
 
-  return Response.redirect(new URL("/", req.url));
+  redirect("/");
 }

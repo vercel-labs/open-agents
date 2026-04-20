@@ -1,6 +1,6 @@
 import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox } from "@open-harness/sandbox";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import {
   getVercelCliSandboxSetup,

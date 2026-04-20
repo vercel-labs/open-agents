@@ -74,17 +74,11 @@ mock.module("@/lib/session/get-server-session", () => ({
   }),
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => ({
+mock.module("@/lib/github/token", () => ({
+  getGitHubUserProfile: async () => ({
     externalUserId: "12345",
     username: "nico-gh",
-    accessToken: "token",
-    refreshToken: null,
-    expiresAt: null,
   }),
-}));
-
-mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => currentGitHubToken,
 }));
 
