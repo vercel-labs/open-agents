@@ -16,7 +16,10 @@ export async function upsertGitHubAccount(data: {
     .select({ id: githubAccounts.id })
     .from(githubAccounts)
     .where(
-      and(eq(githubAccounts.userId, data.userId), eq(githubAccounts.provider, "github")),
+      and(
+        eq(githubAccounts.userId, data.userId),
+        eq(githubAccounts.provider, "github"),
+      ),
     )
     .limit(1);
 
@@ -70,7 +73,12 @@ export async function getGitHubAccount(userId: string): Promise<{
       externalUserId: githubAccounts.externalUserId,
     })
     .from(githubAccounts)
-    .where(and(eq(githubAccounts.userId, userId), eq(githubAccounts.provider, "github")))
+    .where(
+      and(
+        eq(githubAccounts.userId, userId),
+        eq(githubAccounts.provider, "github"),
+      ),
+    )
     .limit(1);
 
   return result[0] ?? null;
@@ -92,11 +100,21 @@ export async function updateGitHubAccountTokens(
       expiresAt: data.expiresAt ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(githubAccounts.userId, userId), eq(githubAccounts.provider, "github")));
+    .where(
+      and(
+        eq(githubAccounts.userId, userId),
+        eq(githubAccounts.provider, "github"),
+      ),
+    );
 }
 
 export async function deleteGitHubAccount(userId: string): Promise<void> {
   await db
     .delete(githubAccounts)
-    .where(and(eq(githubAccounts.userId, userId), eq(githubAccounts.provider, "github")));
+    .where(
+      and(
+        eq(githubAccounts.userId, userId),
+        eq(githubAccounts.provider, "github"),
+      ),
+    );
 }
