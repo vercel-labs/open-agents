@@ -54,8 +54,9 @@ mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => authSession,
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccount,
+mock.module("@/lib/github/token", () => ({
+  getGitHubUserProfile: async () => githubAccount,
+  getUserGitHubToken: async () => userToken,
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -73,10 +74,6 @@ mock.module("@/lib/db/sessions", () => ({
       ...patch,
     };
   },
-}));
-
-mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => userToken,
 }));
 
 mock.module("@/lib/sandbox/utils", () => ({

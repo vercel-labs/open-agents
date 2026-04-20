@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+mock.module("server-only", () => ({}));
+
 let sessionRecord: { userId: string } | null = null;
 let chats: Array<{ id: string }> = [];
 let userRecord: { name: string | null; username: string | null } | null = null;
-let githubAccount: { username: string } | null = null;
+let githubProfile: { username: string; externalUserId: string } | null = null;
 
 const originalVercelUrl = process.env.VERCEL_URL;
 const originalVercelEnv = process.env.VERCEL_ENV;
@@ -40,8 +42,8 @@ mock.module("@/lib/db/sessions", () => ({
   getChatsBySessionId: async () => chats,
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccount,
+mock.module("@/lib/github/token", () => ({
+  getGitHubUserProfile: async () => githubProfile,
 }));
 
 mock.module("@/lib/db/client", () => ({
@@ -61,7 +63,7 @@ describe("pr-content", () => {
     sessionRecord = null;
     chats = [];
     userRecord = null;
-    githubAccount = null;
+    githubProfile = null;
     restoreEnv();
   });
 
@@ -75,7 +77,7 @@ describe("pr-content", () => {
     sessionRecord = { userId: "user-1" };
     chats = [{ id: "chat-2" }, { id: "chat-1" }];
     userRecord = { name: "Nico Albanese", username: "nico" };
-    githubAccount = { username: "nicoalbanese10" };
+    githubProfile = { username: "nicoalbanese10", externalUserId: "12345" };
 
     const section = await resolvePullRequestContextSection({
       sessionId: "session-1",

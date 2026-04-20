@@ -9,9 +9,10 @@ type AuthSession = {
 } | null;
 
 let authSession: AuthSession;
-let githubAccount: { username: string } | null;
+let hasLinkedGitHub = false;
 let installations: Array<{ installationId: number }>;
 let userToken: string | null;
+let githubUsername: string | null;
 let syncedInstallationsCount = 0;
 let syncError: Error | null;
 let syncErrorIsAuth = false;
@@ -20,16 +21,14 @@ mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => authSession,
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccount,
+mock.module("@/lib/github/token", () => ({
+  hasGitHubAccount: async () => hasLinkedGitHub,
+  getUserGitHubToken: async () => userToken,
+  getGitHubUsername: async () => githubUsername,
 }));
 
 mock.module("@/lib/db/installations", () => ({
   getInstallationsByUserId: async () => installations,
-}));
-
-mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => userToken,
 }));
 
 mock.module("@/lib/github/installations-sync", () => ({
@@ -48,9 +47,10 @@ const routeModulePromise = import("./route");
 describe("GET /api/github/connection-status", () => {
   beforeEach(() => {
     authSession = { user: { id: "user-1" } };
-    githubAccount = { username: "octocat" };
+    hasLinkedGitHub = true;
     installations = [{ installationId: 1 }];
     userToken = "ghu_user";
+    githubUsername = "octocat";
     syncedInstallationsCount = 1;
     syncError = null;
     syncErrorIsAuth = false;
@@ -67,7 +67,7 @@ describe("GET /api/github/connection-status", () => {
   });
 
   test("returns not_connected when no GitHub account is linked", async () => {
-    githubAccount = null;
+    hasLinkedGitHub = false;
     installations = [];
     const { GET } = await routeModulePromise;
 

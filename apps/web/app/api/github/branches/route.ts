@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchGitHubBranches } from "@/lib/github/api";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface RepoInfo {

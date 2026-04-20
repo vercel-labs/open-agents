@@ -11,7 +11,7 @@ import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/repo-identifiers";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 
 const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;

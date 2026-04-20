@@ -9,7 +9,7 @@ import {
   mergePullRequest,
   type PullRequestMergeMethod,
 } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;

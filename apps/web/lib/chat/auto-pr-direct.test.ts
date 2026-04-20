@@ -90,7 +90,7 @@ mock.module("@/lib/github/api", () => ({
   fetchGitHubBranches: fetchGitHubBranchesSpy,
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenSpy,
 }));
 

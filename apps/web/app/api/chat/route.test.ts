@@ -184,20 +184,12 @@ mock.module("@/lib/skills-cache", () => ({
   setCachedSkills: async () => {},
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
 mock.module("@/lib/sandbox/config", () => ({
   DEFAULT_SANDBOX_PORTS: [],
-}));
-
-mock.module("@/lib/sandbox/vercel-cli-auth", () => ({
-  getVercelCliSandboxSetup: async () => ({
-    auth: null,
-    projectLink: null,
-  }),
-  syncVercelCliAuthToSandbox: async () => {},
 }));
 
 mock.module("@/lib/sandbox/lifecycle", () => ({

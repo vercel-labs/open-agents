@@ -3,7 +3,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import {
   findLatestBuildingDeploymentUrlForBranch,
   findLatestFailedDeploymentInspectorUrlForBranch,
