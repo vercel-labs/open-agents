@@ -166,6 +166,34 @@ describe("tools execute behavior", () => {
     });
   });
 
+  test("readFileTool requires approval for dotenv files", async () => {
+    const baseContext = {
+      sandbox: { workingDirectory: "/repo" },
+      model: "test-model",
+    };
+
+    const dotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: ".env.local" },
+      baseContext,
+    );
+    expect(dotenvApproval).toBe(true);
+
+    const nestedDotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "apps/web/.env.example" },
+      baseContext,
+    );
+    expect(nestedDotenvApproval).toBe(true);
+
+    const regularFileApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "README.md" },
+      baseContext,
+    );
+    expect(regularFileApproval).toBe(false);
+  });
+
   test("writeFileTool creates parent directories and writes content", async () => {
     const { sandbox, workingDirectory } = await createFsSandbox();
     const relativePath = "nested/output.txt";
