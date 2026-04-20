@@ -4,6 +4,7 @@
     "build": {
       "dependsOn": ["^build"],
       "env": [
+        "BETTER_AUTH_SECRET",
         "BLOB_READ_WRITE_TOKEN",
         "ENCRYPTION_KEY",
         "GITHUB_CLIENT_SECRET",
