@@ -88,7 +88,7 @@ export const auth = betterAuth({
   user: {
     modelName: "users",
     fields: {
-      image: "avatar_url",
+      image: "avatarUrl",
     },
     additionalFields: {
       username: { type: "string", required: true },
@@ -114,6 +114,7 @@ export const auth = betterAuth({
       clientId: process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID ?? "",
       clientSecret: process.env.VERCEL_APP_CLIENT_SECRET ?? "",
       scope: ["openid", "email", "profile", "offline_access"],
+      overrideUserInfoOnSignIn: true,
     },
     github: {
       clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ?? "",
