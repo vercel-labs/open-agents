@@ -82,7 +82,7 @@ describe("vercel-cli-auth", () => {
     };
   });
 
-  test("builds a team-scoped CLI setup when the session is linked to a team project", async () => {
+  test("returns no sandboxed Vercel CLI setup for team-linked sessions", async () => {
     const { getVercelCliSandboxSetup } = await vercelCliAuthModulePromise;
 
     const setup = await getVercelCliSandboxSetup({
@@ -95,15 +95,11 @@ describe("vercel-cli-auth", () => {
     });
 
     expect(setup).toEqual({
-      projectLink: {
-        orgId: "team_123",
-        projectId: "prj_123",
-        projectName: "open-harness-web",
-      },
+      projectLink: null,
     });
   });
 
-  test("falls back to the user's Vercel external ID for personal projects", async () => {
+  test("returns no sandboxed Vercel CLI setup for personal projects", async () => {
     const { getVercelCliSandboxSetup } = await vercelCliAuthModulePromise;
 
     const setup = await getVercelCliSandboxSetup({
@@ -115,13 +111,12 @@ describe("vercel-cli-auth", () => {
       },
     });
 
-    expect(setup.projectLink).toEqual({
-      orgId: "user_ext_123",
-      projectId: "prj_123",
+    expect(setup).toEqual({
+      projectLink: null,
     });
   });
 
-  test("removes sandboxed CLI auth and keeps project metadata only", async () => {
+  test("does not write sandboxed Vercel auth or project metadata", async () => {
     const { getVercelCliSandboxSetup, syncVercelCliAuthToSandbox } =
       await vercelCliAuthModulePromise;
     const { sandbox, writeFileCalls, execCalls } = createSandbox();
@@ -137,28 +132,11 @@ describe("vercel-cli-auth", () => {
 
     await syncVercelCliAuthToSandbox({ sandbox, setup });
 
-    expect(writeFileCalls).toEqual([
-      {
-        path: "/workspace/.vercel/project.json",
-        content:
-          '{\n  "orgId": "team_123",\n  "projectId": "prj_123",\n  "projectName": "open-harness-web"\n}\n',
-      },
-    ]);
-    expect(execCalls).toEqual([
-      {
-        command: 'printf %s "$HOME"',
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-      {
-        command: "rm -f '/home/tester/.local/share/com.vercel.cli/auth.json'",
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-    ]);
+    expect(writeFileCalls).toEqual([]);
+    expect(execCalls).toEqual([]);
   });
 
-  test("removes stale CLI auth and project metadata when no auth or link is available", async () => {
+  test("does nothing when no auth or link data is available", async () => {
     currentAuthInfo = null;
     const { getVercelCliSandboxSetup, syncVercelCliAuthToSandbox } =
       await vercelCliAuthModulePromise;
@@ -176,22 +154,6 @@ describe("vercel-cli-auth", () => {
     await syncVercelCliAuthToSandbox({ sandbox, setup });
 
     expect(writeFileCalls).toEqual([]);
-    expect(execCalls).toEqual([
-      {
-        command: 'printf %s "$HOME"',
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-      {
-        command: "rm -f '/home/tester/.local/share/com.vercel.cli/auth.json'",
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-      {
-        command: "rm -f '/workspace/.vercel/project.json'",
-        cwd: "/workspace",
-        timeoutMs: 5000,
-      },
-    ]);
+    expect(execCalls).toEqual([]);
   });
 });
