@@ -77,6 +77,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!linked) {
     const connectUrl = new URL("/get-started", req.url);
     connectUrl.searchParams.set("github", "not_linked");
+    connectUrl.searchParams.set("next", redirectTo);
     return NextResponse.redirect(connectUrl);
   }
 

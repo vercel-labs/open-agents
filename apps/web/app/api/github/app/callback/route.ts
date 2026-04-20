@@ -16,6 +16,19 @@ function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
   return rawRedirectTo;
 }
 
+function parseInstallationId(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const installationId = Number.parseInt(value, 10);
+  if (!Number.isFinite(installationId)) {
+    return null;
+  }
+
+  return installationId;
+}
+
 function redirectAndClearCookies(url: string | URL): NextResponse {
   const response = NextResponse.redirect(url);
   response.cookies.delete("github_app_install_redirect_to");
@@ -40,7 +53,11 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const redirectUrl = new URL(redirectTo, req.url);
-  const setupAction = new URL(req.url).searchParams.get("setup_action");
+  const requestUrl = new URL(req.url);
+  const installationId = parseInstallationId(
+    requestUrl.searchParams.get("installation_id"),
+  );
+  const setupAction = requestUrl.searchParams.get("setup_action");
 
   // get the user's github token from better-auth
   const token = await getUserGitHubToken(session.user.id);
@@ -50,23 +67,29 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   // sync installations
-  let synced = false;
+  let syncedInstallationsCount: number | null = null;
   const username = await getGitHubUsername(session.user.id);
 
   if (username) {
     try {
-      await syncUserInstallations(session.user.id, token, username);
-      synced = true;
+      syncedInstallationsCount = await syncUserInstallations(
+        session.user.id,
+        token,
+        username,
+      );
     } catch (error) {
       console.error("Failed syncing installations:", error);
     }
   }
 
   let githubStatus: string;
-  if (synced && setupAction === "request") {
+  if (setupAction === "request") {
     githubStatus = "request_sent";
-  } else if (synced) {
+  } else if ((syncedInstallationsCount ?? 0) > 0) {
     githubStatus = "connected";
+  } else if (!installationId) {
+    githubStatus = "no_action";
+    redirectUrl.searchParams.set("missing_installation_id", "1");
   } else {
     githubStatus = "pending_sync";
   }
