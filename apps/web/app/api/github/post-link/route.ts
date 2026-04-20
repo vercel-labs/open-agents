@@ -4,6 +4,18 @@ import { getUserGitHubToken, getGitHubUsername } from "@/lib/github/token";
 import { syncUserInstallations } from "@/lib/github/installations-sync";
 import { getServerSession } from "@/lib/session/get-server-session";
 
+function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
+  if (!rawRedirectTo) {
+    return "/sessions";
+  }
+
+  if (!rawRedirectTo.startsWith("/") || rawRedirectTo.startsWith("//")) {
+    return "/sessions";
+  }
+
+  return rawRedirectTo;
+}
+
 /**
  * After better-auth completes the GitHub OAuth link, it redirects here.
  * We sync installations and chain to the GitHub App install page if needed.
@@ -15,7 +27,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const requestUrl = new URL(req.url);
-  const next = requestUrl.searchParams.get("next") ?? "/get-started";
+  const next = sanitizeRedirectTo(requestUrl.searchParams.get("next"));
   const redirectUrl = new URL(next, req.url);
 
   const token = await getUserGitHubToken(session.user.id);
@@ -50,15 +62,9 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // no installations at all — redirect to GitHub App install page
-  const appSlug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-  if (appSlug) {
-    const installUrl = new URL(
-      `https://github.com/apps/${appSlug}/installations/new`,
-    );
-    return NextResponse.redirect(installUrl);
-  }
-
-  redirectUrl.searchParams.set("github", "connected");
-  return NextResponse.redirect(redirectUrl);
+  // no installations at all — route through the internal install flow so it can
+  // preserve the intended destination across the GitHub App setup callback.
+  const installUrl = new URL("/api/github/app/install", req.url);
+  installUrl.searchParams.set("next", next);
+  return NextResponse.redirect(installUrl);
 }

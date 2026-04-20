@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Github, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,16 +37,35 @@ function OpenAgentsLogo({ className }: { className?: string }) {
   );
 }
 
+function sanitizeRedirectPath(rawPath: string | null): string {
+  if (!rawPath) {
+    return "/sessions";
+  }
+
+  if (!rawPath.startsWith("/") || rawPath.startsWith("//")) {
+    return "/sessions";
+  }
+
+  return rawPath;
+}
+
 export function GetStartedFlow() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     session,
     loading: sessionLoading,
     hasGitHubAccount,
     hasGitHubInstallations,
   } = useSession();
-  const [activeStep, setActiveStep] = useState<StepId>(1);
-  const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set());
+  const isGitHubReconnect = searchParams.get("step") === "github";
+  const redirectPath = sanitizeRedirectPath(searchParams.get("next"));
+  const [activeStep, setActiveStep] = useState<StepId>(
+    isGitHubReconnect ? 2 : 1,
+  );
+  const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(
+    () => new Set(isGitHubReconnect ? [1] : []),
+  );
 
   const markComplete = useCallback((step: StepId) => {
     setCompletedSteps((prev) => new Set([...prev, step]));
@@ -165,9 +184,11 @@ export function GetStartedFlow() {
                             loading={sessionLoading}
                             hasGitHubAccount={hasGitHubAccount}
                             hasGitHubInstallations={hasGitHubInstallations}
+                            forceReconnect={isGitHubReconnect}
+                            redirectPath={redirectPath}
                             onComplete={() => {
                               markComplete(2);
-                              router.push("/sessions");
+                              router.push(redirectPath);
                             }}
                           />
                         )}
@@ -245,16 +266,25 @@ function GitHubConnectStep({
   loading,
   hasGitHubAccount,
   hasGitHubInstallations,
+  forceReconnect,
+  redirectPath,
   onComplete,
 }: {
   session: ReturnType<typeof useSession>["session"];
   loading: boolean;
   hasGitHubAccount: boolean;
   hasGitHubInstallations: boolean;
+  forceReconnect: boolean;
+  redirectPath: string;
   onComplete: () => void;
 }) {
   const [isLinking, setIsLinking] = useState(false);
-  const isConnected = hasGitHubAccount && hasGitHubInstallations;
+  const isConnected =
+    !forceReconnect && hasGitHubAccount && hasGitHubInstallations;
+  const shouldShowInstallStep =
+    !forceReconnect && hasGitHubAccount && !hasGitHubInstallations;
+  const githubInstallHref = `/api/github/app/install?next=${encodeURIComponent(redirectPath)}`;
+  const githubPostLinkCallback = `/api/github/post-link?next=${encodeURIComponent(redirectPath)}`;
 
   if (loading) {
     return <Skeleton className="h-10 w-full rounded bg-white/5" />;
@@ -302,7 +332,7 @@ function GitHubConnectStep({
     );
   }
 
-  if (hasGitHubAccount && !hasGitHubInstallations) {
+  if (shouldShowInstallStep) {
     // linked but no app installed
     return (
       <div className="space-y-3">
@@ -314,7 +344,7 @@ function GitHubConnectStep({
           variant="outline"
           className="gap-2 border-zinc-700 bg-transparent text-zinc-300 hover:bg-white/5 hover:text-white"
         >
-          <Link href="/api/github/app/install?next=/get-started">
+          <Link href={githubInstallHref}>
             <Github className="size-4" />
             Install GitHub App
           </Link>
@@ -327,7 +357,9 @@ function GitHubConnectStep({
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500">
-        Connect your GitHub account to clone repos, create PRs, and push code.
+        {forceReconnect
+          ? "Reconnect your GitHub account to restore repository and installation access."
+          : "Connect your GitHub account to clone repos, create PRs, and push code."}
       </p>
       <Button
         variant="outline"
@@ -336,7 +368,7 @@ function GitHubConnectStep({
           setIsLinking(true);
           await authClient.linkSocial({
             provider: "github",
-            callbackURL: "/api/github/post-link?next=/get-started",
+            callbackURL: githubPostLinkCallback,
           });
         }}
         className="gap-2 border-zinc-700 bg-transparent text-zinc-300 hover:bg-white/5 hover:text-white"
@@ -346,7 +378,7 @@ function GitHubConnectStep({
         ) : (
           <Github className="size-4" />
         )}
-        Connect GitHub
+        {forceReconnect ? "Reconnect GitHub" : "Connect GitHub"}
       </Button>
     </div>
   );

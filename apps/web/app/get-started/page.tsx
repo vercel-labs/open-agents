@@ -9,14 +9,35 @@ export const metadata: Metadata = {
   description: "Set up your Open Agents workspace.",
 };
 
-export default async function GetStartedPage() {
+interface GetStartedPageProps {
+  searchParams: Promise<{
+    step?: string | string[];
+  }>;
+}
+
+function getSingleSearchParam(
+  value: string | string[] | undefined,
+): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return null;
+}
+
+export default async function GetStartedPage({
+  searchParams,
+}: GetStartedPageProps) {
   const session = await getServerSession();
   if (!session?.user) {
     redirect("/");
   }
 
+  const resolvedSearchParams = await searchParams;
+  const requestedStep = getSingleSearchParam(resolvedSearchParams.step);
   const onboarding = await needsOnboarding(session.user.id);
-  if (!onboarding) {
+
+  if (!onboarding && requestedStep !== "github") {
     redirect("/sessions");
   }
 
