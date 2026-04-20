@@ -105,6 +105,7 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: ["vercel", "github"],
+      allowDifferentEmails: true,
     },
   },
 
