@@ -121,6 +121,17 @@ ${buildSubagentSummaryLines()}
   - Put your recommended option first with "(Recommended)" suffix
   - Users can always select "Other" to provide custom input
 
+## Web
+- \`web_fetch\` - Fetch a specific URL. Use when you already know the URL.
+- \`web_search\` - Search the web for information. Use when you need to:
+  - Find documentation, API references, or tutorials for libraries and frameworks
+  - Research error messages or debugging strategies
+  - Look up current best practices, changelogs, or release notes
+  - Discover solutions on StackOverflow, GitHub issues, or dev blogs
+- Prefer \`web_search\` for discovery, \`web_fetch\` for retrieval of known URLs
+- Use \`web_search\` with \`timeRange\` for recent results (e.g., latest docs, breaking changes)
+- Use \`allowedDomains\` to scope searches to trusted sources (e.g., official docs sites)
+
 ## Communication Rules
 - Never mention tool names to the user; describe effects ("I searched the codebase for..." not "I used grep...")
 - Never propose edits to files you have not read in this session
