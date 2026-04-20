@@ -158,6 +158,19 @@ async function listAccessibleVercelTeams(
     }));
 }
 
+export async function hasAccessToVercelTeamSlug(
+  token: string,
+  slug: string,
+): Promise<boolean> {
+  try {
+    const teams = await listAccessibleVercelTeams(token);
+    return teams.some((team) => team.teamSlug === slug);
+  } catch (error) {
+    console.error("[hasAccessToVercelTeamSlug] failed:", error);
+    return false;
+  }
+}
+
 async function listProjectsForScope(params: {
   token: string;
   repoUrl: string;

@@ -4,7 +4,9 @@ import { encrypt } from "@/lib/crypto";
 import { upsertUser } from "@/lib/db/users";
 import { encryptJWE } from "@/lib/jwe/encrypt";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
+import { ALLOWED_VERCEL_TEAM_SLUG } from "@/lib/managed-template-trial";
 import { exchangeVercelCode, getVercelUserInfo } from "@/lib/vercel/oauth";
+import { hasAccessToVercelTeamSlug } from "@/lib/vercel/projects";
 
 function clearVercelOauthCookies(store: Awaited<ReturnType<typeof cookies>>) {
   store.delete("vercel_auth_state");
@@ -49,7 +51,10 @@ export async function GET(req: NextRequest): Promise<Response> {
       redirectUri,
     });
 
-    const userInfo = await getVercelUserInfo(tokens.access_token);
+    const [userInfo, isAllowedTeamMember] = await Promise.all([
+      getVercelUserInfo(tokens.access_token),
+      hasAccessToVercelTeamSlug(tokens.access_token, ALLOWED_VERCEL_TEAM_SLUG),
+    ]);
 
     const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
@@ -74,6 +79,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     const session = {
       created: Date.now(),
       authProvider: "vercel" as const,
+      isAllowedTeamMember,
       user: {
         id: userId,
         username,

@@ -3,6 +3,7 @@ import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: {
   authProvider?: "vercel" | "github";
+  isAllowedTeamMember?: boolean;
   user: {
     id: string;
     username: string;
@@ -153,6 +154,37 @@ describe("/api/sessions POST vercel project linking", () => {
       "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.",
     );
     expect(createCalls).toHaveLength(0);
+  });
+
+  test("allows additional sessions for Vercel team members on the managed deployment", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        username: "nico",
+        name: "Nico",
+        email: "person@example.com",
+      },
+      isAllowedTeamMember: true,
+    };
+    existingSessionCount = 5;
+
+    const response = await POST(
+      createJsonRequest(
+        {
+          branch: "main",
+          cloneUrl: "https://github.com/vercel/open-harness",
+          repoOwner: "vercel",
+          repoName: "open-harness",
+        },
+        "https://open-agents.dev/api/sessions",
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCalls).toHaveLength(1);
   });
 
   test("explicit Vercel project is validated against live repo matches before it is persisted", async () => {

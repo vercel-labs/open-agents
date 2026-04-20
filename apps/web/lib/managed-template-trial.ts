@@ -1,6 +1,7 @@
 import type { Session } from "@/lib/session/types";
 
 const ALLOWED_VERCEL_EMAIL_DOMAIN = "vercel.com";
+export const ALLOWED_VERCEL_TEAM_SLUG = "vercel";
 const MANAGED_TEMPLATE_HOSTS = new Set([
   "open-agents.dev",
   "www.open-agents.dev",
@@ -62,12 +63,16 @@ export function hasAllowedManagedTemplateEmail(email?: string) {
 }
 
 export function isManagedTemplateTrialUser(
-  session: Pick<Session, "authProvider" | "user"> | null | undefined,
+  session:
+    | Pick<Session, "authProvider" | "user" | "isAllowedTeamMember">
+    | null
+    | undefined,
   url: string | URL,
 ) {
   return (
     session?.authProvider === "vercel" &&
     isManagedTemplateDeployment(url) &&
+    !session.isAllowedTeamMember &&
     !hasAllowedManagedTemplateEmail(session.user.email)
   );
 }
