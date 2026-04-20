@@ -399,7 +399,7 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags only rm -rf commands", () => {
+  test("commandNeedsApproval flags rm -rf and dotenv commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(false);
@@ -408,9 +408,13 @@ describe("tools execute behavior", () => {
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
     expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
     expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
+    expect(commandNeedsApproval("cat .env.local")).toBe(true);
+    expect(commandNeedsApproval("grep API_KEY apps/web/.env.example")).toBe(
+      true,
+    );
   });
 
-  test("bashTool needsApproval blocks dangerous commands by default", async () => {
+  test("bashTool needsApproval blocks dangerous and dotenv commands by default", async () => {
     const baseContext = {
       sandbox: { workingDirectory: "/repo" },
       model: "test-model",
@@ -433,6 +437,15 @@ describe("tools execute behavior", () => {
       },
     );
     expect(dangerousCommand).toBe(true);
+
+    const dotenvCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "cat .env.local" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(dotenvCommand).toBe(true);
 
     const allowedBuildCommand = await getNeedsApprovalResult(
       bashTool().needsApproval,
