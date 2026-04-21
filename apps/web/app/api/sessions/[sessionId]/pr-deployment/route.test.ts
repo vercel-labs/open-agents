@@ -194,7 +194,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     });
   });
 
-  test("uses the PR-based lookup directly when the session already has a PR", async () => {
+  test("prefers Vercel API over PR comment lookup when both return a URL", async () => {
     const { GET } = await routeModulePromise;
 
     currentSessionRecord.prNumber = 42;
@@ -213,10 +213,39 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     const body = (await response.json()) as { deploymentUrl: string | null };
 
     expect(response.status).toBe(200);
-    expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
+    expect(body.deploymentUrl).toBe("https://branch-preview.vercel.app");
     expect(findLatestPreviewDeploymentUrlForBranchMock).toHaveBeenCalledTimes(
-      0,
+      1,
     );
+    // Vercel API returned a result so GitHub fallback is not needed
+    expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(0);
+    expect(
+      findLatestVercelDeploymentUrlForPullRequestMock,
+    ).toHaveBeenCalledTimes(0);
+  });
+
+  test("falls back to PR comment lookup when Vercel API has no deployment", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentSessionRecord.prNumber = 42;
+    currentBranchDeploymentUrl = null;
+    currentBuildingDeploymentUrl = null;
+    currentFailedDeploymentInspectorUrl = null;
+    currentPullRequestDeploymentResult = {
+      success: true,
+      deploymentUrl: "https://pr-preview.vercel.app",
+    };
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/sessions/session-1/pr-deployment?prNumber=42&branch=feature/preview",
+      ),
+      createRouteContext(),
+    );
+    const body = (await response.json()) as { deploymentUrl: string | null };
+
+    expect(response.status).toBe(200);
+    expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
     expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(1);
     expect(
       findLatestVercelDeploymentUrlForPullRequestMock,
@@ -278,7 +307,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     );
   });
 
-  test("does not return failedDeploymentUrl for PR-based lookups", async () => {
+  test("returns failedDeploymentUrl for PR sessions via Vercel API", async () => {
     const { GET } = await routeModulePromise;
 
     currentSessionRecord.prNumber = 42;
@@ -301,10 +330,12 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     };
 
     expect(response.status).toBe(200);
-    expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
-    expect(body.failedDeploymentUrl).toBeUndefined();
+    // Vercel API finds the failed deployment even with a PR
+    expect(body.failedDeploymentUrl).toBe(
+      "https://vercel.com/team/project/dpl_failed789",
+    );
     expect(
       findLatestFailedDeploymentInspectorUrlForBranchMock,
-    ).toHaveBeenCalledTimes(0);
+    ).toHaveBeenCalledTimes(1);
   });
 });
