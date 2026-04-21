@@ -67,6 +67,32 @@ export function shouldShowThinkingIndicator(options: {
   return !hasAssistantRenderableContent;
 }
 
+export function shouldUseChatListStreamingState(options: {
+  status: ChatUiStatus;
+  hasChatListStreaming: boolean;
+  userStopped: boolean;
+  hasAssistantRenderableContent: boolean;
+  lastMessageRole: "assistant" | "user" | "system" | undefined;
+}): boolean {
+  const {
+    status,
+    hasChatListStreaming,
+    userStopped,
+    hasAssistantRenderableContent,
+    lastMessageRole,
+  } = options;
+
+  if (userStopped || isChatInFlight(status) || !hasChatListStreaming) {
+    return false;
+  }
+
+  if (lastMessageRole !== "assistant") {
+    return true;
+  }
+
+  return !hasAssistantRenderableContent;
+}
+
 export function shouldKeepCollapsedReasoningStreaming(options: {
   isMessageStreaming: boolean;
   hasStreamingReasoningPart: boolean;
