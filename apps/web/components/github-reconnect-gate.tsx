@@ -21,7 +21,13 @@ export function GitHubReconnectGate() {
     return buildGitHubReconnectUrl(next);
   }, [pathname, searchParams]);
 
-  if (loading || !isAuthenticated || isLoading || !reconnectRequired) {
+  if (
+    loading ||
+    !isAuthenticated ||
+    isLoading ||
+    !reconnectRequired ||
+    pathname === "/get-started"
+  ) {
     return null;
   }
 
