@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  MERGE_READINESS_EMPTY_CHECKS_MAX_POLLS,
+  MERGE_READINESS_TRANSIENT_MAX_POLLS,
+  shouldIncrementMergeReadinessTransientPollCount,
   shouldPollMergeReadiness,
 } from "./merge-readiness-polling";
 
@@ -12,6 +13,7 @@ const baseReadiness = {
   checks: {
     requiredTotal: 0,
     pending: 0,
+    failed: 0,
   },
 };
 
@@ -24,9 +26,10 @@ describe("merge readiness polling", () => {
           checks: {
             requiredTotal: 2,
             pending: 1,
+            failed: 0,
           },
         },
-        emptyChecksPollCount: MERGE_READINESS_EMPTY_CHECKS_MAX_POLLS,
+        transientPollCount: MERGE_READINESS_TRANSIENT_MAX_POLLS,
       }),
     ).toBe(true);
   });
@@ -38,32 +41,82 @@ describe("merge readiness polling", () => {
           ...baseReadiness,
           reasons: ["Branch protection requirements are not yet satisfied"],
         },
-        emptyChecksPollCount: 0,
+        transientPollCount: 0,
       }),
     ).toBe(true);
   });
 
-  test("stops warm-up polling after the retry budget is exhausted", () => {
-    expect(
-      shouldPollMergeReadiness({
-        readiness: {
-          ...baseReadiness,
-          reasons: ["GitHub is still calculating mergeability"],
-        },
-        emptyChecksPollCount: MERGE_READINESS_EMPTY_CHECKS_MAX_POLLS,
-      }),
-    ).toBe(false);
-  });
-
-  test("stops warm-up polling once checks materialize", () => {
+  test("keeps polling briefly when all checks passed but mergeability is stale", () => {
     expect(
       shouldPollMergeReadiness({
         readiness: {
           ...baseReadiness,
           reasons: ["Branch protection requirements are not yet satisfied"],
           checkRuns: [{ id: 1 }],
+          checks: {
+            requiredTotal: 1,
+            pending: 0,
+            failed: 0,
+          },
         },
-        emptyChecksPollCount: 0,
+        transientPollCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test("stops transient polling after the retry budget is exhausted", () => {
+    expect(
+      shouldPollMergeReadiness({
+        readiness: {
+          ...baseReadiness,
+          reasons: ["GitHub is still calculating mergeability"],
+        },
+        transientPollCount: MERGE_READINESS_TRANSIENT_MAX_POLLS,
+      }),
+    ).toBe(false);
+  });
+
+  test("does not keep polling when checks are failing", () => {
+    expect(
+      shouldPollMergeReadiness({
+        readiness: {
+          ...baseReadiness,
+          reasons: ["Branch protection requirements are not yet satisfied"],
+          checkRuns: [{ id: 1 }],
+          checks: {
+            requiredTotal: 1,
+            pending: 0,
+            failed: 1,
+          },
+        },
+        transientPollCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test("increments the transient poll count only while waiting on transient readiness", () => {
+    expect(
+      shouldIncrementMergeReadinessTransientPollCount({
+        ...baseReadiness,
+        reasons: ["Branch protection requirements are not yet satisfied"],
+        checkRuns: [{ id: 1 }],
+        checks: {
+          requiredTotal: 1,
+          pending: 0,
+          failed: 0,
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldIncrementMergeReadinessTransientPollCount({
+        ...baseReadiness,
+        reasons: ["Required checks are still pending"],
+        checks: {
+          requiredTotal: 1,
+          pending: 1,
+          failed: 0,
+        },
       }),
     ).toBe(false);
   });
@@ -75,7 +128,7 @@ describe("merge readiness polling", () => {
           ...baseReadiness,
           reasons: ["Pull request has merge conflicts"],
         },
-        emptyChecksPollCount: 0,
+        transientPollCount: 0,
       }),
     ).toBe(false);
   });

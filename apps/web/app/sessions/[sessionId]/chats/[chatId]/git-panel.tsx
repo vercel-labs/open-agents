@@ -58,6 +58,7 @@ import {
 import { CheckRunsList } from "@/components/merge-check-runs";
 import {
   MERGE_READINESS_POLL_INTERVAL_MS,
+  shouldIncrementMergeReadinessTransientPollCount,
   shouldPollMergeReadiness,
 } from "@/lib/merge-readiness-polling";
 import { cn } from "@/lib/utils";
@@ -1147,7 +1148,7 @@ function InlineMergePanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forceConfirming, setForceConfirming] = useState(false);
-  const [emptyChecksPollCount, setEmptyChecksPollCount] = useState(0);
+  const [transientPollCount, setTransientPollCount] = useState(0);
 
   const readinessRequestIdRef = useRef(0);
   const forceConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -1208,7 +1209,7 @@ function InlineMergePanel({
   }, [session.id]);
 
   useEffect(() => {
-    setEmptyChecksPollCount(0);
+    setTransientPollCount(0);
   }, [session.prNumber]);
 
   // Load readiness on mount
@@ -1220,21 +1221,22 @@ function InlineMergePanel({
   }, [loadReadiness]);
 
   useEffect(() => {
+    if (!shouldIncrementMergeReadinessTransientPollCount(readiness)) {
+      setTransientPollCount(0);
+    }
+  }, [readiness]);
+
+  useEffect(() => {
     if (
       isLoadingReadiness ||
-      !shouldPollMergeReadiness({ readiness, emptyChecksPollCount })
+      !shouldPollMergeReadiness({ readiness, transientPollCount })
     ) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      if (
-        readiness &&
-        readiness.checks.pending === 0 &&
-        readiness.checks.requiredTotal === 0 &&
-        readiness.checkRuns.length === 0
-      ) {
-        setEmptyChecksPollCount((currentCount) => currentCount + 1);
+      if (shouldIncrementMergeReadinessTransientPollCount(readiness)) {
+        setTransientPollCount((currentCount) => currentCount + 1);
       }
       void loadReadiness();
     }, MERGE_READINESS_POLL_INTERVAL_MS);
@@ -1242,7 +1244,7 @@ function InlineMergePanel({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [emptyChecksPollCount, isLoadingReadiness, loadReadiness, readiness]);
+  }, [isLoadingReadiness, loadReadiness, readiness, transientPollCount]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

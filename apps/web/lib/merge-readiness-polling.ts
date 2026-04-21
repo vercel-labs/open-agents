@@ -6,7 +6,7 @@ const TRANSIENT_MERGE_READINESS_REASONS = new Set([
 ]);
 
 export const MERGE_READINESS_POLL_INTERVAL_MS = 5_000;
-export const MERGE_READINESS_EMPTY_CHECKS_MAX_POLLS = 6;
+export const MERGE_READINESS_TRANSIENT_MAX_POLLS = 6;
 
 type MergeReadinessPollingState = {
   canMerge: boolean;
@@ -16,14 +16,38 @@ type MergeReadinessPollingState = {
   checks: {
     requiredTotal: number;
     pending: number;
+    failed: number;
   };
 };
 
+function hasTransientMergeReadinessReason(
+  readiness: MergeReadinessPollingState,
+): boolean {
+  return readiness.reasons.some((reason) =>
+    TRANSIENT_MERGE_READINESS_REASONS.has(reason),
+  );
+}
+
+export function shouldIncrementMergeReadinessTransientPollCount(
+  readiness: MergeReadinessPollingState | null,
+): boolean {
+  if (
+    !readiness ||
+    readiness.canMerge ||
+    readiness.checks.pending > 0 ||
+    readiness.checks.failed > 0
+  ) {
+    return false;
+  }
+
+  return hasTransientMergeReadinessReason(readiness);
+}
+
 export function shouldPollMergeReadiness(params: {
   readiness: MergeReadinessPollingState | null;
-  emptyChecksPollCount: number;
+  transientPollCount: number;
 }): boolean {
-  const { readiness, emptyChecksPollCount } = params;
+  const { readiness, transientPollCount } = params;
 
   if (!readiness?.pr) {
     return false;
@@ -33,19 +57,13 @@ export function shouldPollMergeReadiness(params: {
     return true;
   }
 
-  if (readiness.canMerge) {
-    return false;
-  }
-
   if (
-    readiness.checks.requiredTotal > 0 ||
-    readiness.checkRuns.length > 0 ||
-    emptyChecksPollCount >= MERGE_READINESS_EMPTY_CHECKS_MAX_POLLS
+    readiness.canMerge ||
+    readiness.checks.failed > 0 ||
+    !hasTransientMergeReadinessReason(readiness)
   ) {
     return false;
   }
 
-  return readiness.reasons.some((reason) =>
-    TRANSIENT_MERGE_READINESS_REASONS.has(reason),
-  );
+  return transientPollCount < MERGE_READINESS_TRANSIENT_MAX_POLLS;
 }
