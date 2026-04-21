@@ -44,7 +44,7 @@ function buildUsagePath(range: LeaderboardRange): string {
     fromDate = now;
   } else {
     fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - 6);
+    fromDate.setUTCDate(now.getUTCDate() - 6);
   }
 
   const query = new URLSearchParams({ from: formatDateOnly(fromDate), to });
