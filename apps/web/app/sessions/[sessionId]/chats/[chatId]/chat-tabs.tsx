@@ -59,6 +59,7 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const activeChatTabRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -76,6 +77,19 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
   }, []);
+
+  useEffect(() => {
+    if (activeView !== "chat") {
+      return;
+    }
+
+    activeChatTabRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeChatId, activeView, chats.length]);
+
   const prefetchedChatHrefsRef = useRef(new Set<string>());
 
   const prefetchChat = useCallback(
@@ -128,12 +142,6 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
     const { chat } = createChat();
     switchChat(chat.id);
     setActiveView("chat");
-    requestAnimationFrame(() => {
-      scrollContainerRef.current?.scrollTo({
-        left: scrollContainerRef.current.scrollWidth,
-        behavior: "smooth",
-      });
-    });
   };
 
   const handleCloseChanges = useCallback(
@@ -286,6 +294,7 @@ export function ChatTabs({ activeChatId }: ChatTabsProps) {
       elements.push(
         <div
           key={chat.id}
+          ref={isActive ? activeChatTabRef : undefined}
           className={cn(
             "group relative flex shrink-0 items-center border-b-2 transition-colors",
             isActive
