@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../../../node_modules/streamdown/dist/*.js";
+@source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -354,25 +354,6 @@
   [data-streamdown="inline-code"] {
     overflow-wrap: anywhere;
     word-break: break-word;
-  }
-  [data-streamdown="unordered-list"],
-  [data-streamdown="ordered-list"] {
-    white-space: normal;
-  }
-  [data-streamdown="unordered-list"] {
-    list-style-position: inside;
-    list-style-type: disc;
-  }
-  [data-streamdown="ordered-list"] {
-    list-style-position: inside;
-    list-style-type: decimal;
-  }
-  [data-streamdown="list-item"] > p {
-    display: inline;
-  }
-  [data-streamdown="list-item"] [data-streamdown="unordered-list"],
-  [data-streamdown="list-item"] [data-streamdown="ordered-list"] {
-    padding-inline-start: 1.5rem;
   }
 
   ::-webkit-scrollbar {
