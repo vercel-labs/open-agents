@@ -64,11 +64,9 @@ export async function GET(req: Request, context: RouteContext) {
 
   const previewLookupBranch = requestedBranch ?? sessionRecord.branch;
 
-  if (
-    sessionRecord.prNumber === null &&
-    sessionRecord.vercelProjectId &&
-    previewLookupBranch
-  ) {
+  // Try the Vercel API first — it's the most reliable source since it queries
+  // deployments by branch directly, regardless of whether a PR exists.
+  if (sessionRecord.vercelProjectId && previewLookupBranch) {
     const vercelToken = await getUserVercelToken(authResult.userId);
     if (vercelToken) {
       const lookupParams = {
@@ -101,6 +99,7 @@ export async function GET(req: Request, context: RouteContext) {
     }
   }
 
+  // Fall back to searching GitHub PR comments for Vercel deployment URLs.
   if (
     !sessionRecord.repoOwner ||
     !sessionRecord.repoName ||

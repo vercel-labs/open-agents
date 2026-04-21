@@ -18,7 +18,13 @@ export async function getUserGitHubToken(
 
     return result?.accessToken ?? null;
   } catch (error) {
-    console.error("Error fetching GitHub token:", error);
+    // "Account not found" is expected when the user hasn't linked GitHub —
+    // only log unexpected errors.
+    const isExpected =
+      error instanceof Error && error.message === "Account not found";
+    if (!isExpected) {
+      console.error("Error fetching GitHub token:", error);
+    }
     return null;
   }
 }
