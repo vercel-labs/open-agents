@@ -1,8 +1,8 @@
 "use client";
 
-import { formatTokens } from "@open-harness/shared";
-import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { formatTokens } from "@open-agents/shared";
+import { useEffect, useMemo, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useSession } from "@/hooks/use-session";
+import { LEADERBOARD_RANK_SWR_KEY } from "@/hooks/use-leaderboard-rank";
 import { fetcher } from "@/lib/swr";
 import { formatDateOnly } from "@/lib/usage/date-range";
 import type { UsageDomainLeaderboard } from "@/lib/usage/types";
@@ -43,7 +44,7 @@ function buildUsagePath(range: LeaderboardRange): string {
     fromDate = now;
   } else {
     fromDate = new Date(now);
-    fromDate.setDate(now.getDate() - 6);
+    fromDate.setUTCDate(now.getUTCDate() - 6);
   }
 
   const query = new URLSearchParams({ from: formatDateOnly(fromDate), to });
@@ -108,6 +109,7 @@ export function LeaderboardSection() {
   const { session } = useSession();
   const userId = session?.user?.id;
   const [range, setRange] = useState<LeaderboardRange>("today");
+  const { mutate } = useSWRConfig();
 
   const usagePath = useMemo(() => buildUsagePath(range), [range]);
 
@@ -120,6 +122,14 @@ export function LeaderboardSection() {
     const index = leaderboard.rows.findIndex((row) => row.userId === userId);
     return index >= 0 ? index + 1 : null;
   }, [leaderboard, userId]);
+
+  // When the leaderboard page fetches fresh data, revalidate the sidebar rank
+  // so the two never show conflicting numbers.
+  useEffect(() => {
+    if (data) {
+      mutate(LEADERBOARD_RANK_SWR_KEY);
+    }
+  }, [data, mutate]);
 
   if (isLoading) return <LeaderboardSectionSkeleton />;
 

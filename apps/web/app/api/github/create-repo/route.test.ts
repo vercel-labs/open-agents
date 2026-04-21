@@ -54,8 +54,9 @@ mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => authSession,
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccount,
+mock.module("@/lib/github/token", () => ({
+  getGitHubUserProfile: async () => githubAccount,
+  getUserGitHubToken: async () => userToken,
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -75,15 +76,11 @@ mock.module("@/lib/db/sessions", () => ({
   },
 }));
 
-mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => userToken,
-}));
-
 mock.module("@/lib/sandbox/utils", () => ({
   isSandboxActive: () => sandboxActive,
 }));
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: async (state: unknown) => {
     connectStates.push(state);
     return {

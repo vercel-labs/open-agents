@@ -3,6 +3,10 @@ import { DEFAULT_SANDBOX_TIMEOUT_MS } from "@/lib/sandbox/config";
 
 mock.module("server-only", () => ({}));
 
+mock.module("botid/server", () => ({
+  checkBotId: async () => ({ isBot: false }),
+}));
+
 interface TestSessionRecord {
   id: string;
   userId: string;
@@ -74,17 +78,11 @@ mock.module("@/lib/session/get-server-session", () => ({
   }),
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => ({
+mock.module("@/lib/github/token", () => ({
+  getGitHubUserProfile: async () => ({
     externalUserId: "12345",
     username: "nico-gh",
-    accessToken: "token",
-    refreshToken: null,
-    expiresAt: null,
   }),
-}));
-
-mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => currentGitHubToken,
 }));
 
@@ -123,7 +121,7 @@ mock.module("@/lib/sandbox/lifecycle-kick", () => ({
   },
 }));
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: async (config: ConnectConfig) => {
     connectConfigs.push(config);
 
@@ -187,7 +185,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       lifecycleVersion: 3,
       sandboxState: { type: "vercel" },
       vercelProjectId: "project-1",
-      vercelProjectName: "open-harness-web",
+      vercelProjectName: "open-agents-web",
       vercelTeamId: "team-1",
       globalSkillRefs: [],
     };
@@ -295,18 +293,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       "12345+nico-gh@users.noreply.github.com",
     );
     expect(dotenvSyncCalls).toHaveLength(0);
-    expect(writeFileCalls).toEqual([
-      {
-        path: "/root/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
-      },
-      {
-        path: "/vercel/sandbox/.vercel/project.json",
-        content:
-          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
-      },
-    ]);
+    expect(writeFileCalls).toEqual([]);
 
     const payload = (await response.json()) as {
       timeout: number;
@@ -340,18 +327,7 @@ describe("/api/sandbox lifecycle kicks", () => {
       },
     ]);
     expect(dotenvSyncCalls).toHaveLength(0);
-    expect(writeFileCalls).toEqual([
-      {
-        path: "/root/.local/share/com.vercel.cli/auth.json",
-        content:
-          '{\n  "token": "vercel-token",\n  "expiresAt": 1700000000\n}\n',
-      },
-      {
-        path: "/vercel/sandbox/.vercel/project.json",
-        content:
-          '{\n  "orgId": "team-1",\n  "projectId": "project-1",\n  "projectName": "open-harness-web"\n}\n',
-      },
-    ]);
+    expect(writeFileCalls).toEqual([]);
   });
 
   test("new sandboxes install global skills", async () => {

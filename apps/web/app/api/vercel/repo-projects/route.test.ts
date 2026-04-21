@@ -55,7 +55,7 @@ describe("/api/vercel/repo-projects", () => {
 
     const response = await GET(
       new Request(
-        "http://localhost/api/vercel/repo-projects?repoOwner=vercel&repoName=open-harness",
+        "http://localhost/api/vercel/repo-projects?repoOwner=vercel&repoName=open-agents",
       ),
     );
     const body = (await response.json()) as {
@@ -82,7 +82,7 @@ describe("/api/vercel/repo-projects", () => {
 
     const response = await GET(
       new Request(
-        "http://localhost/api/vercel/repo-projects?repoOwner=vercel&repoName=open-harness",
+        "http://localhost/api/vercel/repo-projects?repoOwner=vercel&repoName=open-agents",
       ),
     );
     const body = (await response.json()) as {

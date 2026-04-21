@@ -1,5 +1,4 @@
 import { Octokit } from "@octokit/rest";
-import { getUserGitHubToken } from "./user-token";
 
 type OctokitResult =
   | { octokit: Octokit; authenticated: true }
@@ -61,15 +60,13 @@ type MergePullRequestResult = {
 };
 
 export async function getOctokit(token?: string): Promise<OctokitResult> {
-  const resolvedToken = token ?? (await getUserGitHubToken());
-
-  if (!resolvedToken) {
+  if (!token) {
     console.warn("No GitHub token - user needs to connect GitHub");
     return { octokit: null, authenticated: false };
   }
 
   return {
-    octokit: new Octokit({ auth: resolvedToken }),
+    octokit: new Octokit({ auth: token }),
     authenticated: true,
   };
 }

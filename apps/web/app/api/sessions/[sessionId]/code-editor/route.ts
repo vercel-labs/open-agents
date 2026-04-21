@@ -1,4 +1,4 @@
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-agents/sandbox";
 import {
   requireAuthenticatedUser,
   requireOwnedSessionWithSandboxGuard,
@@ -30,7 +30,7 @@ export type CodeEditorStopResponse = {
   stopped: boolean;
 };
 
-const CODE_SERVER_PIDFILE = "/tmp/open-harness-code-server.pid";
+const CODE_SERVER_PIDFILE = "/tmp/open-agents-code-server.pid";
 
 type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 

@@ -1,5 +1,5 @@
 import * as path from "path";
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-agents/sandbox";
 import {
   skillFrontmatterSchema,
   frontmatterToOptions,

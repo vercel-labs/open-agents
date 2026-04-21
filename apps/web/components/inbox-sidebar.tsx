@@ -3,7 +3,9 @@
 import {
   Archive,
   ChevronDown,
+  CircleDashed,
   FolderGit2,
+  MessageSquare,
   GitBranch,
   GitMerge,
   GitPullRequest,
@@ -160,6 +162,14 @@ function getSessionStatusIcon(session: SessionWithUnread) {
     );
   }
 
+  // No repository — plain chat session
+  const isChat = !session.repoName?.trim();
+  if (isChat) {
+    return (
+      <CircleDashed className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+    );
+  }
+
   // Creating / instantiating sandbox (no branch yet)
   if (session.status === "running") {
     return (
@@ -304,7 +314,7 @@ function getRepoGroupLabel(session: SessionWithUnread): string {
   const repoOwner = session.repoOwner?.trim();
 
   if (!repoName) {
-    return "No repository";
+    return "Chats";
   }
 
   return repoOwner ? `${repoOwner}/${repoName}` : repoName;
@@ -331,7 +341,13 @@ function groupSessionsByRepo(
     });
   }
 
-  return Array.from(groups.values());
+  const result = Array.from(groups.values());
+  const unscopedIndex = result.findIndex((g) => g.id === "repo:unscoped");
+  if (unscopedIndex > 0) {
+    const [unscoped] = result.splice(unscopedIndex, 1);
+    result.unshift(unscoped);
+  }
+  return result;
 }
 
 function getRepoGroupContentId(groupId: string): string {
@@ -1039,7 +1055,11 @@ export function InboxSidebar({
                         className="flex min-w-0 flex-1 items-center gap-1.5"
                       >
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground/80">
-                          <FolderGit2 className="h-3.5 w-3.5 group-hover/repo:hidden" />
+                          {group.id === "repo:unscoped" ? (
+                            <MessageSquare className="h-3.5 w-3.5 group-hover/repo:hidden" />
+                          ) : (
+                            <FolderGit2 className="h-3.5 w-3.5 group-hover/repo:hidden" />
+                          )}
                           <ChevronDown
                             className={`hidden h-3.5 w-3.5 text-muted-foreground/70 transition-transform duration-200 group-hover/repo:block ${
                               isCollapsed ? "-rotate-90" : "rotate-0"

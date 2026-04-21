@@ -1,5 +1,5 @@
 {
-  "name": "@open-harness/tsconfig",
+  "name": "@open-agents/tsconfig",
   "version": "0.0.0",
   "private": true,
   "files": [

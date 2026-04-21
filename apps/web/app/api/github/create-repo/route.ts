@@ -1,8 +1,7 @@
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-agents/sandbox";
 import { runCreateRepoWorkflow } from "@/app/api/github/create-repo/_lib/create-repo-workflow";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -69,14 +68,14 @@ export async function POST(req: Request) {
   }
 
   // 4. Resolve GitHub OAuth token for repo creation
-  const githubAccount = await getGitHubAccount(session.user.id);
+  const ghProfile = await getGitHubUserProfile(session.user.id);
   const repoToken = await getUserGitHubToken(session.user.id);
 
   if (!repoToken) {
     return Response.json({ error: "GitHub not connected" }, { status: 401 });
   }
 
-  const githubUsername = githubAccount?.username?.trim();
+  const githubUsername = ghProfile?.username?.trim();
   let accountType: "User" | "Organization" | undefined;
 
   if (owner) {

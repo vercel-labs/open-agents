@@ -6,7 +6,7 @@ import {
   GitBranch,
   GitCommitHorizontal,
   Loader2,
-  Plus,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -228,8 +228,8 @@ export function SessionStarter({
                 : "text-muted-foreground hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-300",
             )}
           >
-            <Plus className="h-3.5 w-3.5" />
-            Empty sandbox
+            <MessageSquare className="h-3.5 w-3.5" />
+            New Chat
           </button>
           <button
             type="button"
@@ -242,7 +242,7 @@ export function SessionStarter({
             )}
           >
             <GitBranch className="h-3.5 w-3.5" />
-            From repository
+            Start Session
           </button>
         </div>
 
@@ -282,7 +282,7 @@ export function SessionStarter({
 
         {mode === "empty" && (
           <p className="text-center text-sm text-muted-foreground dark:text-neutral-500">
-            Start with a blank sandbox -- no repository required.
+            Start a new chat -- no repository required.
           </p>
         )}
 

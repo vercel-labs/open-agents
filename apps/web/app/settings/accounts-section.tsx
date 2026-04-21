@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
+import { unlinkGitHub } from "@/lib/github/actions";
 import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 import { fetcher } from "@/lib/swr";
 
@@ -318,11 +319,13 @@ export function AccountsSection() {
   async function handleUnlink() {
     setUnlinking(true);
     try {
-      const res = await fetch("/api/auth/github/unlink", { method: "POST" });
-      if (res.ok) {
+      const result = await unlinkGitHub();
+      if (result.success) {
         await mutate("/api/auth/info");
         await Promise.all([mutateConnection(), refreshConnectionStatus()]);
         toast.success("GitHub disconnected");
+      } else {
+        toast.error(result.error ?? "Failed to disconnect GitHub");
       }
     } catch (error) {
       console.error("Failed to unlink GitHub:", error);

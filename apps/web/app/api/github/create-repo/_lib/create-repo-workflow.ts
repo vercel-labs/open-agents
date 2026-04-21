@@ -1,6 +1,6 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { getGitHubUserProfile } from "@/lib/github/token";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
 
@@ -123,13 +123,13 @@ export async function runCreateRepoWorkflow({
   }
 
   // 9. Configure git user (in case not already configured)
-  const githubAccount = await getGitHubAccount(sessionUser.id);
+  const ghProfile = await getGitHubUserProfile(sessionUser.id);
   const githubNoreplyEmail =
-    githubAccount?.externalUserId && githubAccount.username
-      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
+    ghProfile?.externalUserId && ghProfile.username
+      ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
       : undefined;
   const userName =
-    sessionUser.name ?? githubAccount?.username ?? sessionUser.username;
+    sessionUser.name ?? ghProfile?.username ?? sessionUser.username;
   const userEmail =
     githubNoreplyEmail ??
     sessionUser.email ??

@@ -4,6 +4,11 @@ import * as path from "path";
 import * as fs from "fs";
 import { getSandbox, toDisplayPath } from "./utils";
 
+function isDotEnvFilePath(filePath: string): boolean {
+  const basename = path.basename(filePath.replaceAll("\\", "/")).toLowerCase();
+  return basename.startsWith(".env");
+}
+
 const readInputSchema = z.object({
   filePath: z
     .string()
@@ -54,6 +59,7 @@ function resolveFilePath(filePath: string, workingDirectory: string): string {
 
 export const readFileTool = () =>
   tool({
+    needsApproval: ({ filePath }) => isDotEnvFilePath(filePath),
     description: `Read a file from the filesystem.
 
 USAGE:
@@ -80,7 +86,6 @@ EXAMPLES:
       const workingDirectory = sandbox.workingDirectory;
 
       try {
-        // Use the same path resolution logic as needsApproval
         const absolutePath = resolveFilePath(filePath, workingDirectory);
 
         const stats = await sandbox.stat(absolutePath);

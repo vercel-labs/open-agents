@@ -1,10 +1,9 @@
-import type { Sandbox } from "@open-harness/sandbox";
+import type { Sandbox } from "@open-agents/sandbox";
 import { generateText } from "ai";
-import { gateway } from "@open-harness/agent";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { gateway } from "@open-agents/agent";
+import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 
 export interface AutoCommitParams {
   sandbox: Sandbox;
@@ -68,11 +67,11 @@ export async function performAutoCommit(
   const commitMessage = await generateCommitMessage(sandbox, cwd, sessionTitle);
 
   // 5. Set git author identity
-  const githubAccount = await getGitHubAccount(userId);
-  if (githubAccount?.externalUserId && githubAccount.username) {
-    const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
+  const ghProfile = await getGitHubUserProfile(userId);
+  if (ghProfile?.externalUserId && ghProfile.username) {
+    const userEmail = `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`;
     await sandbox.exec(
-      `git config user.name '${githubAccount.username.replace(/'/g, "'\\''")}'`,
+      `git config user.name '${ghProfile.username.replace(/'/g, "'\\''")}'`,
       cwd,
       5000,
     );

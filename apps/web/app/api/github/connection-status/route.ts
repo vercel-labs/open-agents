@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import type { GitHubConnectionStatusResponse } from "@/lib/github/connection-status";
 import {
   isGitHubInstallationsAuthError,
   syncUserInstallations,
 } from "@/lib/github/installations-sync";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import {
+  getUserGitHubToken,
+  getGitHubUsername,
+  hasGitHubAccount,
+} from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET() {
@@ -16,12 +19,12 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const [ghAccount, installations] = await Promise.all([
-    getGitHubAccount(session.user.id),
+  const [linked, installations] = await Promise.all([
+    hasGitHubAccount(session.user.id),
     getInstallationsByUserId(session.user.id),
   ]);
 
-  if (!ghAccount) {
+  if (!linked) {
     return NextResponse.json({
       status: "not_connected",
       reason: null,
@@ -41,10 +44,20 @@ export async function GET() {
   }
 
   try {
+    const username = await getGitHubUsername(session.user.id);
+    if (!username) {
+      return NextResponse.json({
+        status: "reconnect_required",
+        reason: "sync_auth_failed",
+        hasInstallations: installations.length > 0,
+        syncedInstallationsCount: null,
+      } satisfies GitHubConnectionStatusResponse);
+    }
+
     const syncedInstallationsCount = await syncUserInstallations(
       session.user.id,
       token,
-      ghAccount.username,
+      username,
     );
     const reconnectRequired =
       installations.length > 0 && syncedInstallationsCount === 0;
