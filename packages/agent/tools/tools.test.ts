@@ -66,7 +66,7 @@ mock.module("@open-agents/sandbox", () => ({
 
 const { askUserQuestionTool } = await import("./ask-user-question");
 const { bashTool, commandNeedsApproval } = await import("./bash");
-const { webFetchTool } = await import("./fetch");
+const { MAX_BODY_LENGTH, webFetchTool } = await import("./fetch");
 const { globTool } = await import("./glob");
 const { grepTool } = await import("./grep");
 const { readFileTool } = await import("./read");
@@ -164,6 +164,34 @@ describe("tools execute behavior", () => {
       success: false,
       error: "Cannot read a directory. Use glob or ls command instead.",
     });
+  });
+
+  test("readFileTool requires approval for dotenv files", async () => {
+    const baseContext = {
+      sandbox: { workingDirectory: "/repo" },
+      model: "test-model",
+    };
+
+    const dotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: ".env.local" },
+      baseContext,
+    );
+    expect(dotenvApproval).toBe(true);
+
+    const nestedDotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "apps/web/.env.example" },
+      baseContext,
+    );
+    expect(nestedDotenvApproval).toBe(true);
+
+    const regularFileApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "README.md" },
+      baseContext,
+    );
+    expect(regularFileApproval).toBe(false);
   });
 
   test("writeFileTool creates parent directories and writes content", async () => {
@@ -371,7 +399,7 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags only rm -rf commands", () => {
+  test("commandNeedsApproval flags rm -rf and dotenv commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(false);
@@ -380,9 +408,13 @@ describe("tools execute behavior", () => {
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
     expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
     expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
+    expect(commandNeedsApproval("cat .env.local")).toBe(true);
+    expect(commandNeedsApproval("grep API_KEY apps/web/.env.example")).toBe(
+      true,
+    );
   });
 
-  test("bashTool needsApproval blocks dangerous commands by default", async () => {
+  test("bashTool needsApproval blocks dangerous and dotenv commands by default", async () => {
     const baseContext = {
       sandbox: { workingDirectory: "/repo" },
       model: "test-model",
@@ -406,6 +438,15 @@ describe("tools execute behavior", () => {
     );
     expect(dangerousCommand).toBe(true);
 
+    const dotenvCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "cat .env.local" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(dotenvCommand).toBe(true);
+
     const allowedBuildCommand = await getNeedsApprovalResult(
       bashTool().needsApproval,
       { command: "bun run ci" },
@@ -416,43 +457,51 @@ describe("tools execute behavior", () => {
     expect(allowedBuildCommand).toBe(false);
   });
 
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool truncates oversized response bodies", async () => {
-    globalThis.fetch = ((..._args: Parameters<typeof fetch>) =>
-      Promise.resolve(
-        new Response("x".repeat(20_050), {
-          status: 200,
-          statusText: "OK",
-          headers: { "x-test": "1" },
-        }),
-      )) as unknown as typeof fetch;
+  test("webFetchTool treats curl exit 23 as a truncated success", async () => {
+    let executedCommand = "";
+    const responseBody = "x".repeat(MAX_BODY_LENGTH);
+
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async (command: string) => {
+        executedCommand = command;
+        return {
+          success: false,
+          exitCode: 23,
+          stdout: `${responseBody}\n200`,
+          stderr: "",
+          truncated: false,
+        };
+      },
+    };
+
+    const context = createContext(sandbox);
 
     const result = await webFetchTool.execute?.(
       {
         url: "https://example.com",
         method: "GET",
       },
-      executionOptions(),
+      executionOptions(context),
     );
 
+    expect(executedCommand).toContain("curl");
+    expect(executedCommand).toContain(`head -c ${MAX_BODY_LENGTH}`);
     expect(result).toMatchObject({
       success: true,
       status: 200,
-      statusText: "OK",
       truncated: true,
-      headers: { "x-test": "1" },
     });
 
     const body =
       result && typeof result === "object" && "body" in result
         ? (result.body as string)
         : "";
-    expect(body.length).toBe(20_000);
+    expect(body.length).toBe(MAX_BODY_LENGTH);
   });
 
   test("askUserQuestionTool formats structured answers", () => {

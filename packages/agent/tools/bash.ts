@@ -33,10 +33,11 @@ const DANGEROUS_COMMAND_PATTERNS = [/\brm\s+-rf\b/];
 
 /**
  * Check if a command should require approval.
- * Returns true only for dangerous patterns.
+ * Returns true for dangerous patterns or commands that reference dotenv files.
  */
 export function commandNeedsApproval(command: string): boolean {
   const trimmedCommand = command.trim();
+  const lowerCommand = trimmedCommand.toLowerCase();
 
   for (const pattern of DANGEROUS_COMMAND_PATTERNS) {
     if (pattern.test(trimmedCommand)) {
@@ -44,7 +45,7 @@ export function commandNeedsApproval(command: string): boolean {
     }
   }
 
-  return false;
+  return lowerCommand.includes(".env");
 }
 
 export const bashTool = (options?: ToolOptions) =>

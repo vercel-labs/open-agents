@@ -347,7 +347,7 @@ describe("GitHub credential brokering", () => {
     await sandboxModule.VercelSandbox.create({
       githubToken: "github-user-token",
       source: {
-        url: "https://github.com/open-harness/example",
+        url: "https://github.com/open-agents/example",
         branch: "main",
       },
     });
@@ -391,7 +391,7 @@ describe("GitHub credential brokering", () => {
     });
     expect(createCalls[0]?.source).toEqual({
       type: "git",
-      url: "https://github.com/open-harness/example",
+      url: "https://github.com/open-agents/example",
       revision: "main",
     });
   });

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
+import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import {
   normalizeGlobalSkillRefs,
   type GlobalSkillRef,
@@ -27,7 +28,7 @@ export interface UserPreferencesData {
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
-  defaultModelId: "anthropic/claude-opus-4.6",
+  defaultModelId: APP_DEFAULT_MODEL_ID,
   defaultSubagentModelId: null,
   defaultSandboxType: "vercel",
   defaultDiffMode: "unified",

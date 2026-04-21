@@ -1,6 +1,6 @@
 import type { Sandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { getGitHubUserProfile } from "@/lib/github/token";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
 
@@ -123,13 +123,13 @@ export async function runCreateRepoWorkflow({
   }
 
   // 9. Configure git user (in case not already configured)
-  const githubAccount = await getGitHubAccount(sessionUser.id);
+  const ghProfile = await getGitHubUserProfile(sessionUser.id);
   const githubNoreplyEmail =
-    githubAccount?.externalUserId && githubAccount.username
-      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
+    ghProfile?.externalUserId && ghProfile.username
+      ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
       : undefined;
   const userName =
-    sessionUser.name ?? githubAccount?.username ?? sessionUser.username;
+    sessionUser.name ?? ghProfile?.username ?? sessionUser.username;
   const userEmail =
     githubNoreplyEmail ??
     sessionUser.email ??
@@ -239,10 +239,9 @@ Respond with ONLY the commit message, nothing else.`,
   // 15. Push to remote
   const pushResult = await sandbox.exec("git push -u origin main", cwd, 60000);
   if (!pushResult.success) {
-    const pushOutput = pushResult.stdout + (pushResult.stderr ?? "");
     return {
       ok: false,
-      response: repoCreatedError(`Failed to push: ${pushOutput.slice(0, 100)}`),
+      response: repoCreatedError("Failed to push to remote"),
     };
   }
 

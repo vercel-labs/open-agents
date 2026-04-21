@@ -174,9 +174,9 @@ describe("persistUserMessage", () => {
     });
   });
 
-  test("truncates title when text exceeds 30 chars", async () => {
+  test("truncates title when text exceeds 80 chars", async () => {
     isFirstChatMessageResult = true;
-    const longText = "A".repeat(50);
+    const longText = "A".repeat(100);
     const msg = makeUserMessage({
       parts: [{ type: "text", text: longText }],
     });
@@ -184,7 +184,7 @@ describe("persistUserMessage", () => {
     await persistUserMessage("chat-1", msg);
 
     expect(spies.updateChat).toHaveBeenCalledWith("chat-1", {
-      title: `${"A".repeat(30)}...`,
+      title: `${"A".repeat(80)}...`,
     });
   });
 

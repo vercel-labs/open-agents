@@ -13,62 +13,61 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const users = pgTable(
-  "users",
-  {
-    id: text("id").primaryKey(),
-    provider: text("provider", {
-      enum: ["github", "vercel"],
-    }).notNull(),
-    externalId: text("external_id").notNull(),
-    accessToken: text("access_token").notNull(),
-    refreshToken: text("refresh_token"),
-    scope: text("scope"),
-    username: text("username").notNull(),
-    email: text("email"),
-    name: text("name"),
-    avatarUrl: text("avatar_url"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    tokenExpiresAt: timestamp("token_expires_at"),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    lastLoginAt: timestamp("last_login_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("users_provider_external_id_idx").on(
-      table.provider,
-      table.externalId,
-    ),
-  ],
-);
+// users
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull(),
+  email: text("email"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastLoginAt: timestamp("last_login_at").defaultNow().notNull(),
+});
 
-export const accounts = pgTable(
-  "accounts",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider", {
-      enum: ["github"],
-    })
-      .notNull()
-      .default("github"),
-    externalUserId: text("external_user_id").notNull(),
-    accessToken: text("access_token").notNull(),
-    refreshToken: text("refresh_token"),
-    expiresAt: timestamp("expires_at"),
-    scope: text("scope"),
-    username: text("username").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("accounts_user_id_provider_idx").on(
-      table.userId,
-      table.provider,
-    ),
-  ],
-);
+// oauth provider accounts
+export const accounts = pgTable("accounts", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at"),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// better-auth sessions
+export const authSessions = pgTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  expiresAt: timestamp("expires_at").notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+});
+
+// better-auth verification tokens
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 export const githubInstallations = pgTable(
   "github_installations",
@@ -332,35 +331,6 @@ export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
 export type GitHubInstallation = typeof githubInstallations.$inferSelect;
 export type NewGitHubInstallation = typeof githubInstallations.$inferInsert;
-
-// Linked accounts for external platforms (Slack, Discord, etc.)
-export const linkedAccounts = pgTable(
-  "linked_accounts",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider", {
-      enum: ["slack", "discord", "whatsapp", "telegram"],
-    }).notNull(),
-    externalId: text("external_id").notNull(),
-    workspaceId: text("workspace_id"), // For Slack workspaces, Discord servers
-    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("linked_accounts_provider_external_workspace_idx").on(
-      table.provider,
-      table.externalId,
-      table.workspaceId,
-    ),
-  ],
-);
-
-export type LinkedAccount = typeof linkedAccounts.$inferSelect;
-export type NewLinkedAccount = typeof linkedAccounts.$inferInsert;
 
 // User preferences for settings
 export const userPreferences = pgTable("user_preferences", {

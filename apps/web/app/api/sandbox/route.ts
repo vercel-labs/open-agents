@@ -1,13 +1,14 @@
+import { checkBotId } from "botid/server";
 import { connectSandbox, type SandboxState } from "@open-agents/sandbox";
 import {
   requireAuthenticatedUser,
   requireOwnedSession,
   type SessionRecord,
 } from "@/app/api/sessions/_lib/session-context";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { botIdConfig } from "@/lib/botid";
+import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
 import { updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
@@ -18,10 +19,6 @@ import {
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
-import {
-  getVercelCliSandboxSetup,
-  syncVercelCliAuthToSandbox,
-} from "@/lib/sandbox/vercel-cli-auth";
 import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
 import {
   canOperateOnSandbox,
@@ -71,22 +68,6 @@ interface CreateSandboxRequest {
 //   );
 // }
 
-async function syncVercelCliAuthForSandbox(params: {
-  userId: string;
-  sessionRecord: SessionRecord;
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
-}): Promise<void> {
-  const setup = await getVercelCliSandboxSetup({
-    userId: params.userId,
-    sessionRecord: params.sessionRecord,
-  });
-
-  await syncVercelCliAuthToSandbox({
-    sandbox: params.sandbox,
-    setup,
-  });
-}
-
 async function installSessionGlobalSkills(params: {
   sessionRecord: SessionRecord;
   sandbox: Awaited<ReturnType<typeof connectSandbox>>;
@@ -120,6 +101,11 @@ export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const botVerification = await checkBotId(botIdConfig);
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
   const githubToken = await getUserGitHubToken(session.user.id);
@@ -156,14 +142,14 @@ export async function POST(req: Request) {
   }
 
   const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
-  const githubAccount = await getGitHubAccount(session.user.id);
+  const ghProfile = await getGitHubUserProfile(session.user.id);
   const githubNoreplyEmail =
-    githubAccount?.externalUserId && githubAccount.username
-      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
+    ghProfile?.externalUserId && ghProfile.username
+      ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
       : undefined;
 
   const gitUser = {
-    name: session.user.name ?? githubAccount?.username ?? session.user.username,
+    name: session.user.name ?? ghProfile?.username ?? session.user.username,
     email:
       githubNoreplyEmail ??
       session.user.email ??
@@ -227,19 +213,6 @@ export async function POST(req: Request) {
       //     error,
       //   );
       // }
-
-      try {
-        await syncVercelCliAuthForSandbox({
-          userId: session.user.id,
-          sessionRecord,
-          sandbox,
-        });
-      } catch (error) {
-        console.error(
-          `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
-          error,
-        );
-      }
 
       try {
         await installSessionGlobalSkills({

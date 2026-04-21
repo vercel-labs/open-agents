@@ -132,6 +132,7 @@ export function useInlineQuestion({
   ]);
 
   const buttonLabel = isLastQuestion ? "Submit answers" : "Next question";
+  const compactButtonLabel = isLastQuestion ? "Submit" : "Next";
 
   const placeholder =
     "Type your own answer, or leave this blank to use the selected option";
@@ -241,6 +242,7 @@ export function useInlineQuestion({
     handleNext,
     hasCurrentAnswer,
     buttonLabel,
+    compactButtonLabel,
     placeholder,
   };
 }

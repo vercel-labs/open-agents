@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { WebAgentUIMessage } from "@/app/types";
 import { DiffsProvider } from "@/components/diffs-provider";
@@ -13,6 +14,16 @@ import {
   buildSessionChatModelOptions,
   withMissingModelOption,
 } from "@/lib/model-options";
+import {
+  filterModelVariantsForSession,
+  filterModelsForSession,
+  sanitizeSelectedModelIdForSession,
+  sanitizeUserPreferencesForSession,
+} from "@/lib/model-access";
+import {
+  isManagedTemplateTrialUser,
+  MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR,
+} from "@/lib/managed-template-trial";
 import { getAllVariants } from "@/lib/model-variants";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -102,8 +113,10 @@ export default async function SessionChatPage({
     redirect("/");
   }
 
+  const requestHost = (await headers()).get("host") ?? "";
+
   // Fetch chat, messages, models, and preferences in parallel
-  const [chat, dbMessages, initialModels, preferences, sessionChats] =
+  const [chat, dbMessages, initialModels, rawPreferences, sessionChats] =
     await Promise.all([
       getChatByIdWithRetry(chatId, sessionId),
       getChatMessages(chatId),
@@ -149,12 +162,37 @@ export default async function SessionChatPage({
   const lastUserMessageSentAt = lastUserMessage
     ? lastUserMessage.createdAt.toISOString()
     : null;
+  const codeEditorDisabledReason = isManagedTemplateTrialUser(
+    session,
+    requestHost,
+  )
+    ? MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR
+    : null;
+  const preferences = sanitizeUserPreferencesForSession(
+    rawPreferences,
+    session,
+    requestHost,
+  );
+  const modelVariants = filterModelVariantsForSession(
+    getAllVariants(preferences.modelVariants),
+    session,
+    requestHost,
+  );
+  const filteredModels = filterModelsForSession(
+    initialModels,
+    session,
+    requestHost,
+  );
+  const chatModelId =
+    sanitizeSelectedModelIdForSession(
+      chat.modelId,
+      modelVariants,
+      session,
+      requestHost,
+    ) ?? chat.modelId;
   const initialModelOptions = withMissingModelOption(
-    buildSessionChatModelOptions(
-      initialModels,
-      getAllVariants(preferences.modelVariants),
-    ),
-    chat.modelId,
+    buildSessionChatModelOptions(filteredModels, modelVariants),
+    chatModelId,
   );
 
   const initialIsOnlyChatInSession = getInitialIsOnlyChatInSession(
@@ -166,7 +204,7 @@ export default async function SessionChatPage({
     <DiffsProvider>
       <SessionChatProvider
         session={sessionRecord}
-        chat={chat}
+        chat={{ ...chat, modelId: chatModelId }}
         initialMessages={initialMessages}
         initialModelOptions={initialModelOptions}
       >
@@ -175,6 +213,7 @@ export default async function SessionChatPage({
           messageDurationMap={messageDurationMap}
           messageStartedAtMap={messageStartedAtMap}
           lastUserMessageSentAt={lastUserMessageSentAt}
+          codeEditorDisabledReason={codeEditorDisabledReason}
         />
       </SessionChatProvider>
     </DiffsProvider>

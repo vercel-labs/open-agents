@@ -19,8 +19,14 @@ export type WebAgentStepFinishMetadata = {
 };
 
 export type WebAgentMessageMetadata = {
+  selectedModelId?: string;
+  modelId?: string;
   lastStepUsage?: LanguageModelUsage;
   totalMessageUsage?: LanguageModelUsage;
+  /** Gateway-reported cost of the most recent step, in USD. */
+  lastStepCost?: number;
+  /** Cumulative gateway-reported cost across every step of the message, in USD. */
+  totalMessageCost?: number;
   lastStepFinishReason?: FinishReason;
   lastStepRawFinishReason?: string;
   stepFinishReasons?: WebAgentStepFinishMetadata[];

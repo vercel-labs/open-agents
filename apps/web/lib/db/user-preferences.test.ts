@@ -11,7 +11,7 @@ describe("toUserPreferencesData", () => {
     const { toUserPreferencesData } = await userPreferencesModulePromise;
 
     expect(toUserPreferencesData()).toEqual({
-      defaultModelId: "anthropic/claude-opus-4.6",
+      defaultModelId: "openai/gpt-5.4",
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
       defaultDiffMode: "unified",

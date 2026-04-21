@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { signOut } from "@/lib/auth/actions";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import {
   Sheet,
@@ -94,14 +95,6 @@ const sidebarItems = [
   },
 ];
 
-function handleSignOut() {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/api/auth/signout";
-  document.body.appendChild(form);
-  form.submit();
-}
-
 function SettingsLayout({
   children,
   pathname,
@@ -159,7 +152,7 @@ function SettingsLayout({
           <div className="border-t border-border px-2 py-3">
             <button
               type="button"
-              onClick={handleSignOut}
+              onClick={signOut}
               className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />
@@ -193,7 +186,7 @@ function SettingsLayout({
           <div className="border-t border-border px-2 py-3">
             <button
               type="button"
-              onClick={handleSignOut}
+              onClick={signOut}
               className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />

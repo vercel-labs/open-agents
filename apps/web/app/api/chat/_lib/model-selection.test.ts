@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BUILT_IN_VARIANTS, type ModelVariant } from "@/lib/model-variants";
-import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import { resolveChatModelSelection } from "./model-selection";
 
 describe("resolveChatModelSelection", () => {
@@ -79,7 +79,7 @@ describe("resolveChatModelSelection", () => {
       });
 
       expect(selection).toEqual({
-        id: DEFAULT_MODEL_ID,
+        id: APP_DEFAULT_MODEL_ID,
       });
       expect(warnings).toEqual([
         [
@@ -99,7 +99,7 @@ describe("resolveChatModelSelection", () => {
     });
 
     expect(selection).toEqual({
-      id: DEFAULT_MODEL_ID,
+      id: APP_DEFAULT_MODEL_ID,
     });
   });
 });

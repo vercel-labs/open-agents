@@ -1,5 +1,7 @@
+import { checkBotId } from "botid/server";
 import { connectSandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
+import { botIdConfig } from "@/lib/botid";
 import {
   ensureForkExists,
   extractGitHubOwnerFromRemoteUrl,
@@ -11,11 +13,10 @@ import {
   redactGitHubToken,
   sleepForForkRetry,
 } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
-import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -40,6 +41,11 @@ export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const botVerification = await checkBotId(botIdConfig);
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
   // 2. Parse request
@@ -339,11 +345,11 @@ Respond with ONLY the commit message, nothing else.`,
     // Set the git author identity to the authenticated user so the commit is
     // attributed to them. A Co-Authored-By trailer is appended for the GitHub
     // App bot so the agent's involvement is visible in the commit history.
-    const githubAccount = await getGitHubAccount(session.user.id);
-    if (githubAccount?.externalUserId && githubAccount.username) {
-      const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
+    const ghProfile = await getGitHubUserProfile(session.user.id);
+    if (ghProfile?.externalUserId && ghProfile.username) {
+      const userEmail = `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`;
       await sandbox.exec(
-        `git config user.name '${githubAccount.username.replace(/'/g, "'\\''")}'`,
+        `git config user.name '${ghProfile.username.replace(/'/g, "'\\''")}'`,
         cwd,
         5000,
       );
@@ -461,10 +467,10 @@ Respond with ONLY the commit message, nothing else.`,
         sessionRecord.repoOwner &&
         sessionRecord.repoName
       ) {
-        const githubAccount = await getGitHubAccount(session.user.id);
+        const ghProfile = await getGitHubUserProfile(session.user.id);
 
-        if (userToken && githubAccount?.username) {
-          const forkOwner = githubAccount.username;
+        if (userToken && ghProfile?.username) {
+          const forkOwner = ghProfile.username;
           const forkResult = await ensureForkExists({
             token: userToken,
             upstreamOwner: sessionRecord.repoOwner,

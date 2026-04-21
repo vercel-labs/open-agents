@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { FeatureAgent } from "./feature-agent";
 import { FeatureSandbox } from "./feature-sandbox";
 import { FeatureWorkflow } from "./feature-workflow";
@@ -23,25 +24,35 @@ function Spotlight({
   readonly window: ReactNode;
 }) {
   return (
-    <div className="grid items-center gap-8 md:grid-cols-2 md:gap-16">
-      <div className={flip ? "order-1 md:order-2" : "order-1 md:order-1"}>
-        <h2 className="text-2xl font-semibold tracking-tighter sm:text-3xl md:text-4xl">
+    <div className="grid items-center md:grid-cols-2">
+      <div
+        className={cn(
+          "px-6 py-16 sm:px-10 md:py-20 lg:py-24",
+          flip ? "order-1 md:order-2" : "order-1 md:order-1",
+        )}
+      >
+        <h2 className="text-balance text-2xl font-semibold tracking-tighter sm:text-3xl md:text-4xl">
           {title}
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-(--l-fg-3) sm:mt-5 sm:text-lg">
+        <p className="mt-4 text-balance text-base leading-relaxed text-(--l-fg-2) sm:mt-5 sm:text-lg">
           {description}
         </p>
-        <ul className="mt-6 space-y-3 sm:mt-8">
+        <ul className="mt-4 space-y-3 sm:mt-5">
           {bullets.map((b) => (
-            <li key={b} className="flex items-center gap-3 text-(--l-fg-2)">
-              <span className="h-1.5 w-1.5 rounded-full bg-(--l-fg-3)" />
+            <li
+              key={b}
+              className="flex items-center gap-3 text-(--l-fg-2) sm:text-lg"
+            >
+              <span className="h-1.5 w-1.5 bg-(--l-fg-2)" />
               {b}
             </li>
           ))}
         </ul>
       </div>
 
-      <div className={flip ? "order-2 md:order-1" : "order-2 md:order-2"}>
+      <div
+        className={flip ? "order-2 md:order-1 -mr-px" : "order-2 md:order-2"}
+      >
         <Stage tone={tone}>
           <div className="mx-auto w-full max-w-[1160px]">
             <Window>{windowContent}</Window>
@@ -55,8 +66,12 @@ function Spotlight({
 export function LandingFeatures() {
   return (
     <section>
-      <div className="mx-auto max-w-[1320px] px-4 pb-14 pt-14 sm:px-6 md:pb-28 md:pt-28">
-        <div className="space-y-12 sm:space-y-16 md:space-y-28">
+      <div className="relative mx-auto max-w-[1320px] overflow-hidden">
+        <div
+          className="absolute left-1/2 top-0 hidden h-full w-px md:block"
+          style={{ backgroundColor: "var(--l-border)" }}
+        />
+        <div>
           <Spotlight
             tone="slate"
             title="Agents that ship real code."

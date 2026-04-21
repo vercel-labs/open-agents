@@ -58,7 +58,13 @@ function applyRedisQueryOptions(
 }
 
 export function getRedisUrl(): string | null {
-  return process.env.REDIS_URL ?? process.env.KV_URL ?? null;
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (redisUrl) return redisUrl;
+
+  const kvUrl = process.env.KV_URL?.trim();
+  if (kvUrl) return kvUrl;
+
+  return null;
 }
 
 export function getRedisConnectionOptions(url: string): RedisConnectionOptions {

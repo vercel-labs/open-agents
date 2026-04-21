@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-let currentSession: { user: { id: string } } | null = {
+let currentSession: {
+  authProvider?: "vercel" | "github";
+  user: { id: string; email?: string };
+} | null = {
   user: { id: "user-1" },
 };
 
@@ -52,6 +55,10 @@ function createJsonRequest(method: "PATCH" | "GET", body?: unknown): Request {
 describe("/api/settings/preferences", () => {
   beforeEach(() => {
     currentSession = { user: { id: "user-1" } };
+    preferencesState.defaultModelId = "anthropic/claude-haiku-4.5";
+    preferencesState.defaultSubagentModelId = null;
+    preferencesState.modelVariants = [];
+    preferencesState.enabledModelIds = [];
     updateCalls.length = 0;
   });
 
@@ -59,7 +66,7 @@ describe("/api/settings/preferences", () => {
     currentSession = null;
     const { GET } = await routeModulePromise;
 
-    const response = await GET();
+    const response = await GET(createJsonRequest("GET"));
     const body = (await response.json()) as { error: string };
 
     expect(response.status).toBe(401);
@@ -69,7 +76,7 @@ describe("/api/settings/preferences", () => {
   test("GET returns preferences including autoCommitPush and autoCreatePr", async () => {
     const { GET } = await routeModulePromise;
 
-    const response = await GET();
+    const response = await GET(createJsonRequest("GET"));
     const body = (await response.json()) as {
       preferences: typeof preferencesState;
     };
@@ -79,6 +86,37 @@ describe("/api/settings/preferences", () => {
     expect(body.preferences.autoCreatePr).toBe(false);
     expect(body.preferences.defaultSandboxType).toBe("vercel");
     expect(body.preferences.globalSkillRefs).toEqual([]);
+  });
+
+  test("GET hides Opus defaults for managed trial users", async () => {
+    const { GET } = await routeModulePromise;
+
+    currentSession = {
+      authProvider: "vercel",
+      user: { id: "user-1", email: "person@example.com" },
+    };
+    preferencesState.defaultModelId = "anthropic/claude-opus-4.6";
+    preferencesState.defaultSubagentModelId =
+      "variant:builtin:claude-opus-4.6-high";
+    preferencesState.modelVariants = [
+      {
+        id: "variant:user-opus",
+        name: "User Opus",
+        baseModelId: "anthropic/claude-opus-4.6",
+        providerOptions: {},
+      },
+    ];
+
+    const response = await GET(
+      new Request("https://open-agents.dev/api/settings/preferences"),
+    );
+    const body = (await response.json()) as {
+      preferences: typeof preferencesState;
+    };
+
+    expect(body.preferences.defaultModelId).toBe("openai/gpt-5.4");
+    expect(body.preferences.defaultSubagentModelId).toBe("openai/gpt-5.4");
+    expect(body.preferences.modelVariants).toEqual([]);
   });
 
   test("PATCH rejects invalid sandbox types", async () => {

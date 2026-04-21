@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
+import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { CodespaceProvider } from "./codespace-context";
 
@@ -30,6 +32,11 @@ export default async function CodespaceLayout({
 
   if (sessionRecord.userId !== session.user.id) {
     redirect("/");
+  }
+
+  const requestHost = (await headers()).get("host") ?? "";
+  if (isManagedTemplateTrialUser(session, requestHost)) {
+    redirect(`/sessions/${sessionId}`);
   }
 
   return (

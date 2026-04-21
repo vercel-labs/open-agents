@@ -33,6 +33,8 @@ const sandbox = {
 
 // ── Module mocks ───────────────────────────────────────────────────
 
+mock.module("server-only", () => ({}));
+
 mock.module("ai", () => ({
   generateText: async () => generateTextResult,
 }));
@@ -41,12 +43,9 @@ mock.module("@open-agents/agent", () => ({
   gateway: () => "mock-model",
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccountResult,
-}));
-
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: async () => repoTokenResult.token,
+  getGitHubUserProfile: async () => githubAccountResult,
 }));
 
 const { performAutoCommit } = await import("./auto-commit-direct");

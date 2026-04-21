@@ -9,6 +9,10 @@ import {
   getChatsBySessionId,
   updateChat,
 } from "@/lib/db/sessions";
+import { getUserPreferences } from "@/lib/db/user-preferences";
+import { sanitizeSelectedModelIdForSession } from "@/lib/model-access";
+import { getAllVariants } from "@/lib/model-variants";
+import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
@@ -29,12 +33,13 @@ export interface ChatRefreshResponse {
   messages: WebAgentUIMessage[];
 }
 
-export async function GET(_req: Request, context: RouteContext) {
+export async function GET(req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
   }
 
+  const session = await getServerSession();
   const { sessionId, chatId } = await context.params;
 
   const chatContext = await requireOwnedSessionChat({
@@ -46,12 +51,24 @@ export async function GET(_req: Request, context: RouteContext) {
     return chatContext.response;
   }
 
-  const messages = await getChatMessages(chatId);
+  const [messages, preferences] = await Promise.all([
+    getChatMessages(chatId),
+    getUserPreferences(authResult.userId),
+  ]);
+  const modelId =
+    sanitizeSelectedModelIdForSession(
+      chatContext.chat.modelId,
+      getAllVariants(preferences.modelVariants),
+      session,
+      req.url,
+    ) ??
+    chatContext.chat.modelId ??
+    null;
 
   return Response.json({
     chat: {
       id: chatContext.chat.id,
-      modelId: chatContext.chat.modelId,
+      modelId,
       activeStreamId: chatContext.chat.activeStreamId,
     },
     isStreaming: chatContext.chat.activeStreamId !== null,
@@ -65,6 +82,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     return authResult.response;
   }
 
+  const session = await getServerSession();
   const { sessionId, chatId } = await context.params;
 
   const chatContext = await requireOwnedSessionChat({
@@ -98,7 +116,14 @@ export async function PATCH(req: Request, context: RouteContext) {
     updatePayload.title = nextTitle;
   }
   if (nextModelId) {
-    updatePayload.modelId = nextModelId;
+    const preferences = await getUserPreferences(authResult.userId);
+    const sanitizedModelId = sanitizeSelectedModelIdForSession(
+      nextModelId,
+      getAllVariants(preferences.modelVariants),
+      session,
+      req.url,
+    );
+    updatePayload.modelId = sanitizedModelId ?? nextModelId;
   }
 
   const updatedChat = await updateChat(chatId, updatePayload);
@@ -106,7 +131,19 @@ export async function PATCH(req: Request, context: RouteContext) {
     return Response.json({ error: "Chat not found" }, { status: 404 });
   }
 
-  return Response.json({ chat: updatedChat });
+  const preferences = await getUserPreferences(authResult.userId);
+  return Response.json({
+    chat: {
+      ...updatedChat,
+      modelId:
+        sanitizeSelectedModelIdForSession(
+          updatedChat.modelId,
+          getAllVariants(preferences.modelVariants),
+          session,
+          req.url,
+        ) ?? updatedChat.modelId,
+    },
+  });
 }
 
 export async function DELETE(_req: Request, context: RouteContext) {

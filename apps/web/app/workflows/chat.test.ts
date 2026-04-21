@@ -243,6 +243,7 @@ function makeOptions(overrides?: Record<string, unknown>) {
     chatId: "chat-1",
     sessionId: "session-1",
     userId: "user-1",
+    selectedModelId: "gpt-4",
     modelId: "gpt-4",
     agentOptions: {
       sandbox: { state: { type: "vercel" } },
@@ -306,6 +307,121 @@ describe("runAgentWorkflow", () => {
     const rwCalls = spies.recordWorkflowUsage.mock.calls as unknown[][];
     expect(rwCalls[0][0]).toBe("user-1");
     expect(rwCalls[0][1]).toBe("gpt-4");
+  });
+
+  test("persists model metadata even without a finish-step chunk", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+    });
+  });
+
+  test("streams model metadata in finish-step chunks", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(
+      makeOptions({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          selectedModelId?: string;
+          modelId?: string;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(metadataChunks.at(-1)?.messageMetadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+    });
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+    });
+  });
+
+  test("overwrites model metadata when resuming an assistant message", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(
+      makeOptions({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant" as const,
+            parts: [{ type: "text", text: "Need your approval" }],
+            metadata: {
+              selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+              modelId: "openai/gpt-5.4",
+            },
+          },
+        ],
+        selectedModelId: "anthropic/claude-opus-4.6",
+        modelId: "anthropic/claude-opus-4.6",
+      }),
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "anthropic/claude-opus-4.6",
+      modelId: "anthropic/claude-opus-4.6",
+    });
   });
 
   test("marks workflow run as failed when maxSteps is exhausted", async () => {
@@ -582,6 +698,160 @@ describe("runAgentWorkflow", () => {
       outputTokens: 10,
       totalTokens: 30,
     });
+  });
+
+  test("streams and persists cumulative gateway cost", async () => {
+    agentFinishReason = "tool-calls";
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        rawFinishReason: "provider_tool_use",
+        usage: agentTotalUsage,
+        providerMetadata: {
+          gateway: { cost: "0.0025" },
+        },
+      },
+    ];
+    agentProviderMetadata = {
+      gateway: { cost: "0.0025" },
+    };
+
+    await runAgentWorkflow(
+      makeOptions({
+        maxSteps: 2,
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          lastStepCost?: number;
+          totalMessageCost?: number;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(
+      metadataChunks.map((chunk) => ({
+        lastStepCost: chunk.messageMetadata.lastStepCost,
+        totalMessageCost: chunk.messageMetadata.totalMessageCost,
+      })),
+    ).toEqual([
+      { lastStepCost: 0.0025, totalMessageCost: 0.0025 },
+      { lastStepCost: 0.0025, totalMessageCost: 0.005 },
+    ]);
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBe(0.0025);
+    expect(persistedMessage.metadata?.totalMessageCost).toBeCloseTo(0.005, 10);
+  });
+
+  test("preserves previously accumulated gateway cost when resuming an assistant message", async () => {
+    const existingTotalMessageCost = 0.0025;
+    const resumedStepCost = 0.001;
+    const expectedTotalMessageCost = existingTotalMessageCost + resumedStepCost;
+
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+        providerMetadata: {
+          gateway: { cost: String(resumedStepCost) },
+        },
+      },
+    ];
+    agentProviderMetadata = {
+      gateway: { cost: String(resumedStepCost) },
+    };
+
+    await runAgentWorkflow(
+      makeOptions({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant",
+            parts: [{ type: "text", text: "Need your approval" }],
+            metadata: {
+              totalMessageCost: existingTotalMessageCost,
+            },
+          },
+        ],
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          lastStepCost?: number;
+          totalMessageCost?: number;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(metadataChunks.at(-1)?.messageMetadata.lastStepCost).toBe(
+      resumedStepCost,
+    );
+    expect(metadataChunks.at(-1)?.messageMetadata.totalMessageCost).toBeCloseTo(
+      expectedTotalMessageCost,
+      10,
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBe(resumedStepCost);
+    expect(persistedMessage.metadata?.totalMessageCost).toBeCloseTo(
+      expectedTotalMessageCost,
+      10,
+    );
+  });
+
+  test("omits cost metadata when provider does not report gateway cost", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(makeOptions());
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBeUndefined();
+    expect(persistedMessage.metadata?.totalMessageCost).toBeUndefined();
   });
 
   test("refreshes lifecycle activity before clearing the active stream", async () => {

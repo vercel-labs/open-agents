@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 
 const DISABLED_MODEL_IDS = new Set(["openai/gpt-5.4-pro"]);
 
@@ -14,7 +14,7 @@ export function filterDisabledModels<T extends { id: string }>(
 
 export function resolveAvailableModelId(modelId: string): string {
   if (isModelDisabled(modelId)) {
-    return DEFAULT_MODEL_ID;
+    return APP_DEFAULT_MODEL_ID;
   }
 
   return modelId;

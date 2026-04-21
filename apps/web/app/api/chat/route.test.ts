@@ -41,7 +41,16 @@ let getRunShouldThrow = false;
 let compareAndSetDefaultResult = true;
 let compareAndSetResults: boolean[] = [];
 let startCalls: unknown[][] = [];
-let preferencesState = {
+let preferencesState: {
+  autoCommitPush: boolean;
+  autoCreatePr: boolean;
+  modelVariants: Array<{
+    id: string;
+    name: string;
+    baseModelId: string;
+    providerOptions: Record<string, unknown>;
+  }>;
+} = {
   autoCommitPush: true,
   autoCreatePr: false,
   modelVariants: [],
@@ -175,20 +184,12 @@ mock.module("@/lib/skills-cache", () => ({
   setCachedSkills: async () => {},
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: async () => null,
 }));
 
 mock.module("@/lib/sandbox/config", () => ({
   DEFAULT_SANDBOX_PORTS: [],
-}));
-
-mock.module("@/lib/sandbox/vercel-cli-auth", () => ({
-  getVercelCliSandboxSetup: async () => ({
-    auth: null,
-    projectLink: null,
-  }),
-  syncVercelCliAuthToSandbox: async () => {},
 }));
 
 mock.module("@/lib/sandbox/lifecycle", () => ({
@@ -322,7 +323,7 @@ describe("/api/chat route", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment includes 5 trial messages for non-Vercel accounts. Deploy your own copy for more.",
+      "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.",
     );
     expect(startCalls).toHaveLength(0);
   });
@@ -340,6 +341,34 @@ describe("/api/chat route", () => {
         agentOptions: expect.objectContaining({
           customInstructions: assistantFileLinkPrompt,
         }),
+      }),
+    ]);
+  });
+
+  test("passes selected and resolved model ids to the workflow", async () => {
+    const { POST } = await routeModulePromise;
+    if (!chatRecord) {
+      throw new Error("chatRecord must be set");
+    }
+
+    chatRecord.modelId = "variant:test-model";
+    preferencesState.modelVariants = [
+      {
+        id: "variant:test-model",
+        name: "Test model",
+        baseModelId: "openai/gpt-5",
+        providerOptions: {},
+      },
+    ];
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        selectedModelId: "variant:test-model",
+        modelId: "openai/gpt-5",
       }),
     ]);
   });

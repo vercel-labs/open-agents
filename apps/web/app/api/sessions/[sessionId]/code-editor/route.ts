@@ -3,7 +3,12 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionWithSandboxGuard,
 } from "@/app/api/sessions/_lib/session-context";
+import {
+  isManagedTemplateTrialUser,
+  MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR,
+} from "@/lib/managed-template-trial";
 import { CODE_SERVER_PORT, DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
+import { getServerSession } from "@/lib/session/get-server-session";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 
 type RouteContext = {
@@ -232,10 +237,18 @@ export async function GET(_req: Request, context: RouteContext) {
   }
 }
 
-export async function POST(_req: Request, context: RouteContext) {
+export async function POST(req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
+  }
+
+  const session = await getServerSession();
+  if (isManagedTemplateTrialUser(session, req.url)) {
+    return Response.json(
+      { error: MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR },
+      { status: 403 },
+    );
   }
 
   const { sessionId } = await context.params;

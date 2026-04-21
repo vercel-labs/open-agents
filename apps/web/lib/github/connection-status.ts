@@ -16,6 +16,6 @@ export interface GitHubConnectionStatusResponse {
 }
 
 export function buildGitHubReconnectUrl(next: string): string {
-  const params = new URLSearchParams({ next });
-  return `/api/auth/github/reconnect?${params.toString()}`;
+  const params = new URLSearchParams({ step: "github", next });
+  return `/get-started?${params.toString()}`;
 }

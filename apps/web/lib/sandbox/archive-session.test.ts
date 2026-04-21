@@ -127,7 +127,7 @@ mock.module("@open-agents/sandbox", () => ({
   connectSandbox: spies.connectSandbox,
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: spies.getUserGitHubToken,
 }));
 

@@ -68,7 +68,7 @@ export function ThemeToggle() {
             style={{
               backgroundColor: active ? "var(--l-surface)" : "transparent",
               boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              color: active ? "var(--l-fg)" : "var(--l-fg-4)",
+              color: active ? "var(--l-fg)" : "var(--l-fg-2)",
             }}
             aria-label={`${option.value} theme`}
           >

@@ -284,18 +284,12 @@ You MUST keep working until the problem is completely solved. Do not end your tu
 Follow existing code conventions strictly. Never assume a library is available -- verify its usage in the project before employing it.`;
 
 const GPT_5_4_OVERLAY = `
-# Conciseness (GPT-5.4-specific)
-
-You are extremely verbose by default. Actively fight this tendency. Your responses MUST be concise.
-
-- Aim for the shortest correct answer. If something can be said in 50 words, do NOT use 500.
-- Do not repeat back what the user said or restate the problem.
-- Do not explain what you are about to do before doing it -- just do it.
-- Do not narrate each step ("First, I will...", "Next, I'll..."). Use tool calls silently and report results briefly.
-- After making code changes, give a 1-3 sentence summary of what changed. Do not dump entire file contents or large diffs into your response text.
-- Do not add filler phrases, caveats, or "let me know if you need anything else" closers.
-- When answering questions, give the direct answer first. Only elaborate if the user asks for more detail.
-- Omit pleasantries, affirmations ("Great question!"), and transitional fluff.`;
+# GPT-5.4 style
+- Be concise and direct.
+- No preamble, recap, filler, or pleasantries.
+- Do not restate the request or narrate routine steps.
+- Use flat bullets only when helpful.
+- After code changes, reply in 1-3 sentences with what changed and verification status.`;
 
 function getModelOverlay(family: ModelFamily, modelId?: string): string {
   let overlay: string;

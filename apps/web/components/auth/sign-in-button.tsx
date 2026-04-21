@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useState, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth/client";
 
 function VercelIcon({ className }: { className?: string }) {
   return (
@@ -52,14 +53,11 @@ export function SignInButton({
 
     const fallback = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
-    const encodedRedirect = encodeURIComponent(redirectPath);
-    const destination = `/api/auth/signin/vercel?next=${encodedRedirect}`;
 
     setIsLoading(true);
-    window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        window.location.assign(destination);
-      }, 0);
+    authClient.signIn.social({
+      provider: "vercel",
+      callbackURL: redirectPath,
     });
   }
 
@@ -70,11 +68,7 @@ export function SignInButton({
       disabled={disabled || isLoading}
       onClick={handleSignIn}
     >
-      {isLoading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <VercelIcon className="mr-2 h-4 w-4" />
-      )}
+      {isLoading ? <Loader2 className="animate-spin" /> : <VercelIcon />}
       {isLoading ? "Signing in..." : "Sign in with Vercel"}
     </Button>
   );

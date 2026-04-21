@@ -40,6 +40,41 @@ describe("shouldApplyOpenAIReasoningDefaults", () => {
 });
 
 describe("getProviderOptionsForModel", () => {
+  test("applies adaptive thinking defaults to Anthropic 4.6 models", () => {
+    const result = getProviderOptionsForModel("anthropic/claude-sonnet-4.6");
+
+    expect(result).toEqual({
+      anthropic: {
+        effort: "medium",
+        thinking: { type: "adaptive" },
+      },
+    });
+  });
+
+  test("applies adaptive thinking defaults to Anthropic 4.7 models", () => {
+    const result = getProviderOptionsForModel("anthropic/claude-opus-4.7");
+
+    expect(result).toEqual({
+      anthropic: {
+        effort: "medium",
+        thinking: { type: "adaptive" },
+      },
+    });
+  });
+
+  test("preserves legacy thinking defaults for older Anthropic models", () => {
+    const result = getProviderOptionsForModel("anthropic/claude-opus-4.5");
+
+    expect(result).toEqual({
+      anthropic: {
+        thinking: {
+          type: "enabled",
+          budgetTokens: 8000,
+        },
+      },
+    });
+  });
+
   test("merges OpenAI defaults with custom variant options", () => {
     const result = getProviderOptionsForModel("openai/gpt-5", {
       openai: {

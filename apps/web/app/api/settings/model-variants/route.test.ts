@@ -5,7 +5,20 @@ mock.module("server-only", () => ({}));
 
 const PROVIDER_OPTIONS_MAX_BYTES = 16 * 1024;
 
-let isAuthenticated = true;
+let currentSession: {
+  authProvider?: "vercel" | "github";
+  user: {
+    id: string;
+    username: string;
+    email?: string;
+  };
+} | null = {
+  user: {
+    id: "user-1",
+    username: "alice",
+    email: "alice@example.com",
+  },
+};
 
 interface MockPreferences {
   defaultModelId: string;
@@ -42,16 +55,7 @@ function createProviderOptionsWithExactSize(
 }
 
 mock.module("@/lib/session/get-server-session", () => ({
-  getServerSession: async () =>
-    isAuthenticated
-      ? {
-          user: {
-            id: "user-1",
-            username: "alice",
-            email: "alice@example.com",
-          },
-        }
-      : null,
+  getServerSession: async () => currentSession,
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
@@ -73,17 +77,54 @@ const routeModulePromise = import("./route");
 
 describe("/api/settings/model-variants", () => {
   beforeEach(() => {
-    isAuthenticated = true;
+    currentSession = {
+      user: {
+        id: "user-1",
+        username: "alice",
+        email: "alice@example.com",
+      },
+    };
     resetPreferences();
   });
 
   test("GET returns 401 when unauthenticated", async () => {
-    isAuthenticated = false;
+    currentSession = null;
 
     const { GET } = await routeModulePromise;
-    const response = await GET();
+    const response = await GET(
+      new Request("http://localhost/api/settings/model-variants"),
+    );
 
     expect(response.status).toBe(401);
+  });
+
+  test("GET hides Opus-backed variants for managed trial users", async () => {
+    preferences.modelVariants = [
+      {
+        id: "variant:user-opus",
+        name: "User Opus",
+        baseModelId: "anthropic/claude-opus-4.6",
+        providerOptions: {},
+      },
+    ];
+    currentSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        username: "alice",
+        email: "alice@example.com",
+      },
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET(
+      new Request("https://open-agents.dev/api/settings/model-variants"),
+    );
+    const body = (await response.json()) as { modelVariants: ModelVariant[] };
+
+    expect(body.modelVariants.map((variant) => variant.id)).toEqual([
+      "variant:builtin:gpt-5.4-xhigh",
+    ]);
   });
 
   test("POST rejects invalid JSON body", async () => {
@@ -123,6 +164,32 @@ describe("/api/settings/model-variants", () => {
     expect(body.modelVariants).toHaveLength(3);
     expect(body.modelVariants[2]?.id.startsWith("variant:")).toBe(true);
     expect(body.modelVariants[2]?.name).toBe("OpenAI Medium");
+  });
+
+  test("POST rejects Opus-backed variants for managed trial users", async () => {
+    currentSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        username: "alice",
+        email: "alice@example.com",
+      },
+    };
+
+    const { POST } = await routeModulePromise;
+    const response = await POST(
+      new Request("https://open-agents.dev/api/settings/model-variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "User Opus",
+          baseModelId: "anthropic/claude-opus-4.6",
+          providerOptions: {},
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
   });
 
   test("POST accepts provider options exactly at 16KB", async () => {

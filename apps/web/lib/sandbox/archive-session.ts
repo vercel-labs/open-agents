@@ -6,7 +6,7 @@ import {
   findPullRequestByBranch,
   getPullRequestStatus,
 } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
 type SessionRecord = NonNullable<Awaited<ReturnType<typeof getSessionById>>>;

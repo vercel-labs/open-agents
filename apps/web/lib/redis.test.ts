@@ -1,5 +1,26 @@
-import { describe, expect, test } from "bun:test";
-import { getRedisConnectionOptions } from "./redis";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  getRedisConnectionOptions,
+  getRedisUrl,
+  isRedisConfigured,
+} from "./redis";
+
+const originalRedisUrl = process.env.REDIS_URL;
+const originalKvUrl = process.env.KV_URL;
+
+afterEach(() => {
+  if (originalRedisUrl === undefined) {
+    delete process.env.REDIS_URL;
+  } else {
+    process.env.REDIS_URL = originalRedisUrl;
+  }
+
+  if (originalKvUrl === undefined) {
+    delete process.env.KV_URL;
+  } else {
+    process.env.KV_URL = originalKvUrl;
+  }
+});
 
 describe("getRedisConnectionOptions", () => {
   test("parses bare host and port values without requiring a scheme", () => {
@@ -62,5 +83,23 @@ describe("getRedisConnectionOptions", () => {
       db: 3,
       connectionName: "skills-cache",
     });
+  });
+});
+
+describe("redis configuration", () => {
+  test("treats blank environment values as not configured", () => {
+    process.env.REDIS_URL = "";
+    process.env.KV_URL = "   ";
+
+    expect(getRedisUrl()).toBeNull();
+    expect(isRedisConfigured()).toBe(false);
+  });
+
+  test("falls back to KV_URL when REDIS_URL is blank", () => {
+    process.env.REDIS_URL = " ";
+    process.env.KV_URL = "redis://localhost:6379";
+
+    expect(getRedisUrl()).toBe("redis://localhost:6379");
+    expect(isRedisConfigured()).toBe(true);
   });
 });

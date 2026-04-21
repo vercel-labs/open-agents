@@ -15,9 +15,9 @@ export function FetchRenderer({
   const method = input?.method ?? "GET";
 
   const output = part.state === "output-available" ? part.output : undefined;
-  const status = output?.status;
+  const status = output?.success === true ? output.status : undefined;
   const outputError =
-    output?.success === false ? (output?.error ?? "Fetch failed") : undefined;
+    output?.success === false ? (output.error ?? "Fetch failed") : undefined;
 
   const mergedState = outputError
     ? { ...state, error: state.error ?? outputError }
@@ -26,10 +26,7 @@ export function FetchRenderer({
   const displayUrl = url.length > 60 ? `${url.slice(0, 57)}...` : url;
   const summary = method === "GET" ? displayUrl : `${method} ${displayUrl}`;
 
-  const meta =
-    status !== undefined
-      ? `${status}${output?.statusText ? ` ${output.statusText}` : ""}`
-      : undefined;
+  const meta = status !== undefined ? `${status}` : undefined;
 
   return (
     <ToolLayout

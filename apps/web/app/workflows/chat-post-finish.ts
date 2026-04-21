@@ -124,7 +124,7 @@ export async function persistUserMessage(
     }
 
     const title =
-      textContent.length > 30 ? `${textContent.slice(0, 30)}...` : textContent;
+      textContent.length > 80 ? `${textContent.slice(0, 80)}...` : textContent;
     await updateChat(chatId, { title });
   } catch (error) {
     console.error("[workflow] Failed to persist user message:", error);
