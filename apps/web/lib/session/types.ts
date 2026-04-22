@@ -13,6 +13,7 @@ export interface Session {
 export interface SessionUserInfo {
   user: Session["user"] | undefined;
   authProvider?: "vercel" | "github";
+  isAdmin?: boolean;
   hasGitHub?: boolean;
   hasGitHubAccount?: boolean;
   hasGitHubInstallations?: boolean;

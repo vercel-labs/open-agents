@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   name: text("name"),
   avatarUrl: text("avatar_url"),
+  isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at").defaultNow().notNull(),

@@ -239,6 +239,20 @@
       "when": 1776848655619,
       "tag": "0033_drop_legacy_github_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1776850000000,
+      "tag": "0034_add_is_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1776850100000,
+      "tag": "0035_secret_peter_parker",
+      "breakpoints": true
     }
   ]
 }

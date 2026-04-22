@@ -15,6 +15,7 @@ let session: TestSession;
 let exists = true;
 let hasGitHubLinked = false;
 let installations: Array<{ installationId: number }> = [];
+let isAdmin = false;
 
 mock.module("server-only", () => ({}));
 
@@ -24,6 +25,7 @@ mock.module("@/lib/session/server", () => ({
 
 mock.module("@/lib/db/users", () => ({
   userExists: async () => exists,
+  isUserAdmin: async () => isAdmin,
 }));
 
 mock.module("@/lib/github/token", () => ({
@@ -57,6 +59,7 @@ describe("GET /api/auth/info", () => {
     exists = true;
     hasGitHubLinked = false;
     installations = [];
+    isAdmin = false;
   });
 
   test("returns unauthenticated when there is no session", async () => {
@@ -90,6 +93,7 @@ describe("GET /api/auth/info", () => {
     expect(await response.json()).toEqual({
       user: session?.user,
       authProvider: "vercel",
+      isAdmin: false,
       hasGitHub: true,
       hasGitHubAccount: true,
       hasGitHubInstallations: true,
@@ -105,6 +109,7 @@ describe("GET /api/auth/info", () => {
     expect(await response.json()).toEqual({
       user: session?.user,
       authProvider: "vercel",
+      isAdmin: false,
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,

@@ -29,11 +29,9 @@ function getReconnectDescription(
 
 export function GitHubReconnectDialog({
   open,
-  reconnectUrl,
   reason,
 }: {
   open: boolean;
-  reconnectUrl: string;
   reason: GitHubConnectionReason | null;
 }) {
   return (
@@ -48,7 +46,7 @@ export function GitHubReconnectDialog({
         </DialogHeader>
         <DialogFooter>
           <Button asChild>
-            <Link href={reconnectUrl}>Reconnect GitHub</Link>
+            <Link href="/settings/connections">Reconnect GitHub</Link>
           </Button>
         </DialogFooter>
       </DialogContent>

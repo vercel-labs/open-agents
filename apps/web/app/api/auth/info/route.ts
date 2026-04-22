@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { hasGitHubAccount as checkGitHubLinked } from "@/lib/github/token";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { userExists } from "@/lib/db/users";
+import { isUserAdmin, userExists } from "@/lib/db/users";
 import { getSessionFromReq } from "@/lib/session/server";
 import type { SessionUserInfo } from "@/lib/session/types";
 
@@ -16,10 +16,11 @@ export async function GET(req: NextRequest) {
 
   // run the user-existence check in parallel with the github queries
   // so there is zero added latency on the happy path.
-  const [exists, hasGitHubAccount, installations] = await Promise.all([
+  const [exists, hasGitHubAccount, installations, isAdmin] = await Promise.all([
     userExists(session.user.id),
     checkGitHubLinked(session.user.id),
     getInstallationsByUserId(session.user.id),
+    isUserAdmin(session.user.id),
   ]);
 
   if (!exists) {
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
   const data: SessionUserInfo = {
     user: session.user,
     authProvider: session.authProvider,
+    isAdmin,
     hasGitHub,
     hasGitHubAccount,
     hasGitHubInstallations,
