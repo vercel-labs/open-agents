@@ -232,6 +232,13 @@
       "when": 1776696625627,
       "tag": "0032_funny_tag",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1776848655619,
+      "tag": "0033_drop_legacy_github_accounts",
+      "breakpoints": true
     }
   ]
 }
