@@ -348,6 +348,12 @@ Your sandbox is ephemeral. All work is lost when the session ends unless committ
 // Public API
 // ---------------------------------------------------------------------------
 
+export interface MCPConnectionDescription {
+  name: string;
+  description: string;
+  toolNames: string[];
+}
+
 export interface BuildSystemPromptOptions {
   cwd?: string;
   currentBranch?: string;
@@ -355,6 +361,29 @@ export interface BuildSystemPromptOptions {
   environmentDetails?: string;
   skills?: SkillMetadata[];
   modelId?: string;
+  mcpConnectionDescriptions?: MCPConnectionDescription[];
+}
+
+/**
+ * Build the MCP connections section for the system prompt.
+ * Lists available MCP tools from external services.
+ */
+function buildMCPPrompt(descriptions: MCPConnectionDescription[]): string {
+  if (descriptions.length === 0) return "";
+
+  const lines = descriptions.map(
+    (c) =>
+      `- **${c.name}**${c.description ? `: ${c.description}` : ""}\n  Tools: ${c.toolNames.map((t) => `\`${t}\``).join(", ")}`,
+  );
+
+  return `
+## MCP Connections
+
+The following external service connections are available in this session:
+
+${lines.join("\n")}
+
+Use these tools when the user's request relates to the connected service. MCP tools work like any other tool — call them directly.`;
 }
 
 /**
@@ -451,6 +480,17 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     const skillsPrompt = buildSkillsPrompt(options.skills);
     if (skillsPrompt) {
       parts.push(skillsPrompt);
+    }
+  }
+
+  // Add MCP connections section if any are active
+  if (
+    options.mcpConnectionDescriptions &&
+    options.mcpConnectionDescriptions.length > 0
+  ) {
+    const mcpPrompt = buildMCPPrompt(options.mcpConnectionDescriptions);
+    if (mcpPrompt) {
+      parts.push(mcpPrompt);
     }
   }
 

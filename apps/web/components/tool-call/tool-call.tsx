@@ -22,6 +22,7 @@ import { TodoRenderer } from "./renderers/todo-renderer";
 import { AskUserQuestionRenderer } from "./renderers/ask-user-question-renderer";
 import { FetchRenderer } from "./renderers/fetch-renderer";
 import { SkillRenderer } from "./renderers/skill-renderer";
+import { McpRenderer } from "./renderers/mcp";
 
 export type ToolCallProps = {
   part: WebAgentUIToolPart;
@@ -76,15 +77,20 @@ export function ToolCall({
       return <FetchRenderer part={part} state={state} {...approvalProps} />;
     case "tool-skill":
       return <SkillRenderer part={part} state={state} {...approvalProps} />;
-    default:
+    default: {
+      const toolName = getToolName(part);
+      if (toolName.startsWith("mcp_")) {
+        return <McpRenderer part={part} state={state} {...approvalProps} />;
+      }
       return (
         <DefaultRenderer
           part={part}
           state={state}
-          toolName={getToolName(part)}
+          toolName={toolName}
           {...approvalProps}
         />
       );
+    }
   }
 }
 

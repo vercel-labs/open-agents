@@ -38,12 +38,20 @@ export interface AgentSandboxContext {
   environmentDetails?: string;
 }
 
+export interface MCPConnectionDescription {
+  name: string;
+  description: string;
+  toolNames: string[];
+}
+
 const callOptionsSchema = z.object({
   sandbox: z.custom<AgentSandboxContext>(),
   model: z.custom<OpenAgentModelInput>().optional(),
   subagentModel: z.custom<OpenAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
+  mcpTools: z.custom<ToolSet>().optional(),
+  mcpConnectionDescriptions: z.custom<MCPConnectionDescription[]>().optional(),
 });
 
 export type OpenAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -115,6 +123,9 @@ export const openAgent = new ToolLoopAgent({
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
 
+    const mcpTools = options.mcpTools ?? {};
+    const mcpConnectionDescriptions = options.mcpConnectionDescriptions ?? [];
+
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
       currentBranch: sandbox.currentBranch,
@@ -122,13 +133,19 @@ export const openAgent = new ToolLoopAgent({
       environmentDetails: sandbox.environmentDetails,
       skills,
       modelId: mainSelection.id,
+      mcpConnectionDescriptions,
     });
+
+    const allTools =
+      Object.keys(mcpTools).length > 0
+        ? { ...(settings.tools ?? tools), ...mcpTools }
+        : (settings.tools ?? tools);
 
     return {
       ...settings,
       model: callModel,
       tools: addCacheControl({
-        tools: settings.tools ?? tools,
+        tools: allTools,
         model: callModel,
       }),
       instructions,

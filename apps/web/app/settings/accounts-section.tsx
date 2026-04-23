@@ -2,18 +2,20 @@
 
 import {
   AlertCircle,
-  Ban,
+  Check,
   ChevronDown,
   ExternalLink,
-  Globe,
-  ListFilter,
   Loader2,
+  RefreshCw,
+  TriangleAlert,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
+import { McpConnectionsSection } from "./mcp-connections-section";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,22 +27,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
-import { unlinkGitHub } from "@/lib/github/actions";
+import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 import { fetcher } from "@/lib/swr";
 
 interface GitHubUserProfile {
@@ -90,6 +80,10 @@ function startGitHubInstallForOrg(githubId: number) {
   window.location.href = `/api/github/app/install?${params.toString()}`;
 }
 
+function getCurrentPathWithSearch(): string {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function startGitHubInstallFromSettings() {
   const params = new URLSearchParams({
     next: "/settings/connections",
@@ -98,11 +92,20 @@ function startGitHubInstallFromSettings() {
 }
 
 function startGitHubReconnectFromSettings() {
-  // Go directly to GitHub app install instead of through get-started
-  const params = new URLSearchParams({
-    next: "/settings/connections",
-  });
-  window.location.href = `/api/github/app/install?${params.toString()}`;
+  window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
+}
+
+function getReconnectDescription(
+  reconnectReason: string | null,
+  tokenExpired: boolean,
+): string {
+  if (tokenExpired || reconnectReason === "token_unavailable") {
+    return "Your GitHub session expired. Reconnect to restore repository and installation access.";
+  }
+  if (reconnectReason === "installations_missing") {
+    return "GitHub no longer reports any app installations for this account. Reconnect to refresh access.";
+  }
+  return "Your saved GitHub connection is no longer valid. Reconnect to restore account and repository access.";
 }
 
 function useGitHubReturnToast() {
@@ -171,24 +174,26 @@ function useGitHubReturnToast() {
 
 export function AccountsSectionSkeleton() {
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/10">
-      <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-5 w-5 rounded" />
-          <Skeleton className="h-4 w-16" />
-        </div>
-        <Skeleton className="h-8 w-24" />
-      </div>
-      <div className="p-4">
-        <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border/50 bg-muted/10">
+        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
           <div className="flex items-center gap-3">
-            <Skeleton className="h-9 w-9 rounded-full" />
-            <div className="space-y-1">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-32" />
-            </div>
+            <Skeleton className="h-5 w-5 rounded" />
+            <Skeleton className="h-4 w-16" />
           </div>
           <Skeleton className="h-8 w-20" />
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-full" />
+              <div className="space-y-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+            <Skeleton className="h-8 w-20" />
+          </div>
         </div>
       </div>
     </div>
@@ -198,45 +203,31 @@ export function AccountsSectionSkeleton() {
 function InstallBadge({
   status,
   repositorySelection,
-  className = "size-4",
 }: {
   status: "installed" | "not_installed";
   repositorySelection: "all" | "selected" | null;
-  className?: string;
 }) {
   if (status === "installed" && repositorySelection === "all") {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Globe
-            className={`${className} shrink-0 text-green-600 dark:text-green-400`}
-          />
-        </TooltipTrigger>
-        <TooltipContent>All Repositories</TooltipContent>
-      </Tooltip>
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-green-600 dark:text-green-400">
+        <Check className="size-2.5" />
+        All Repositories
+      </span>
     );
   }
   if (status === "installed") {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <ListFilter
-            className={`${className} shrink-0 text-amber-600 dark:text-amber-400`}
-          />
-        </TooltipTrigger>
-        <TooltipContent>Select Repositories</TooltipContent>
-      </Tooltip>
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-600 dark:text-amber-400">
+        <TriangleAlert className="size-2.5" />
+        Select Repositories
+      </span>
     );
   }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Ban
-          className={`${className} shrink-0 text-red-600 dark:text-red-400`}
-        />
-      </TooltipTrigger>
-      <TooltipContent>No Repository Access</TooltipContent>
-    </Tooltip>
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-red-600 dark:text-red-400">
+      <X className="size-2.5" />
+      Not Installed
+    </span>
   );
 }
 
@@ -246,142 +237,47 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
     org.avatarUrl ||
     `https://avatars.githubusercontent.com/${org.login}?s=40&v=4`;
 
-  if (!isInstalled) {
-    return (
-      <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="size-6 rounded-full text-[9px]">
-            <AvatarImage src={avatarSrc} alt={org.login} />
-            <AvatarFallback className="rounded-full text-[9px]">
-              {org.login.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-medium">{org.login}</span>
-            <InstallBadge
-              status={org.installStatus}
-              repositorySelection={org.repositorySelection}
-              className="size-3"
-            />
-          </div>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-[11px]"
-          onClick={() => startGitHubInstallForOrg(org.githubId)}
-        >
-          Install
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <Link
-      href={org.installationUrl ?? "#"}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex w-full items-center gap-3 rounded-md -mx-2 px-2 py-2 first:mt-0 last:mb-0 transition-colors hover:bg-muted/40"
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <Avatar className="size-5 rounded-full text-[8px]">
+    <div className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 items-center gap-2">
+        <Avatar className="size-5 rounded-sm text-[8px]">
           <AvatarImage src={avatarSrc} alt={org.login} />
-          <AvatarFallback className="rounded-full text-[8px]">
+          <AvatarFallback className="rounded-sm text-[8px]">
             {org.login.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-xs font-medium">{org.login}</span>
-          <InstallBadge
-            status={org.installStatus}
-            repositorySelection={org.repositorySelection}
-            className="size-3"
-          />
-        </div>
+        <span className="truncate text-xs font-medium">{org.login}</span>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground/0 transition-all group-hover:text-muted-foreground">
-        <span>Configure</span>
-        <ExternalLink className="size-3" />
-      </div>
-    </Link>
-  );
-}
-
-/**
- * Connection status dropdown button – mirrors Linear's pattern:
- * • Connected  → green dot, dropdown with Configure + Disconnect
- * • Reconnect  → amber dot, dropdown with Reconnect + Disconnect
- * • Not connected → "Connect →" link-style button
- */
-function ConnectionStatusButton({
-  status,
-  configureUrl,
-  onReconnect,
-  onDisconnect,
-  unlinking,
-}: {
-  status: "connected" | "reconnect" | "not_connected";
-  configureUrl?: string | null;
-  onReconnect?: () => void;
-  onDisconnect: () => void;
-  unlinking: boolean;
-}) {
-  if (status === "not_connected") {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1 text-xs"
-        onClick={startGitHubInstallFromSettings}
-      >
-        Connect
-        <ExternalLink className="size-3" />
-      </Button>
-    );
-  }
-
-  const isConnected = status === "connected";
-  const dotColor = isConnected ? "bg-green-500" : "bg-amber-500";
-  const label = isConnected ? "Connected" : "Reconnect";
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs">
-          <span className={`size-2 rounded-full ${dotColor}`} />
-          {label}
-          <ChevronDown className="size-3 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        {isConnected && configureUrl ? (
-          <DropdownMenuItem asChild>
-            <Link href={configureUrl} target="_blank" rel="noreferrer">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <InstallBadge
+          status={org.installStatus}
+          repositorySelection={org.repositorySelection}
+        />
+        {isInstalled && org.installationUrl ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            asChild
+          >
+            <Link href={org.installationUrl} target="_blank" rel="noreferrer">
               Configure
+              <ExternalLink className="ml-1 size-2.5" />
             </Link>
-          </DropdownMenuItem>
-        ) : isConnected ? (
-          <DropdownMenuItem onClick={startGitHubInstallFromSettings}>
-            Configure
-          </DropdownMenuItem>
+          </Button>
+        ) : !isInstalled ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => startGitHubInstallForOrg(org.githubId)}
+          >
+            Install
+          </Button>
         ) : null}
-        {!isConnected && (
-          <DropdownMenuItem onClick={onReconnect}>Reconnect</DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={onDisconnect}
-          disabled={unlinking}
-        >
-          {unlinking ? <Loader2 className="size-4 animate-spin" /> : null}
-          Disconnect
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </div>
+    </div>
   );
 }
 
@@ -389,10 +285,11 @@ export function AccountsSection() {
   const { hasGitHubAccount, hasGitHub, loading } = useSession();
   const { mutate } = useSWRConfig();
   const [unlinking, setUnlinking] = useState(false);
-  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const {
     reconnectRequired,
-    reason: _reason,
+    reason,
+    isLoading: connectionStatusLoading,
     refresh: refreshConnectionStatus,
   } = useGitHubConnectionStatus({ enabled: hasGitHub });
 
@@ -411,19 +308,22 @@ export function AccountsSection() {
   const tokenExpired = connectionData?.tokenExpired ?? false;
 
   const handleRefresh = useCallback(async () => {
-    await Promise.all([mutateConnection(), refreshConnectionStatus()]);
+    setIsRefreshing(true);
+    try {
+      await Promise.all([mutateConnection(), refreshConnectionStatus()]);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [mutateConnection, refreshConnectionStatus]);
 
   async function handleUnlink() {
     setUnlinking(true);
     try {
-      const result = await unlinkGitHub();
-      if (result.success) {
+      const res = await fetch("/api/auth/github/unlink", { method: "POST" });
+      if (res.ok) {
         await mutate("/api/auth/info");
         await Promise.all([mutateConnection(), refreshConnectionStatus()]);
         toast.success("GitHub disconnected");
-      } else {
-        toast.error(result.error ?? "Failed to disconnect GitHub");
       }
     } catch (error) {
       console.error("Failed to unlink GitHub:", error);
@@ -437,67 +337,60 @@ export function AccountsSection() {
     return <AccountsSectionSkeleton />;
   }
 
-  const requiresReconnect = hasGitHub && (reconnectRequired || tokenExpired);
-
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/10">
-      {/* Header */}
-      <div className="border-b border-border/50 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <GitHubIcon className="h-5 w-5" />
-          <span className="text-sm font-medium">GitHub</span>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Open Agents uses a GitHub App to access your repositories
-        </p>
-      </div>
-
-      {/* Body */}
-      <div className="space-y-4 p-4">
-        {!hasGitHub ? (
-          <NotConnectedState />
-        ) : connectionLoading && !connectionData ? (
-          <ConnectionLoadingSkeleton />
-        ) : connectionError && !connectionData ? (
-          <ConnectionErrorState onRetry={handleRefresh} />
-        ) : connectionData ? (
-          <ConnectedState
-            data={connectionData}
-            reconnectRequired={requiresReconnect}
-            onDisconnect={() => setDisconnectOpen(true)}
-            unlinking={unlinking}
-          />
-        ) : (
-          <NotConnectedState />
-        )}
-      </div>
-
-      {/* Disconnect confirmation dialog */}
-      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Disconnect GitHub?</DialogTitle>
-            <DialogDescription>
-              This will unlink your GitHub account and remove all app
-              installations. You can reconnect at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
+    <div className="space-y-6">
+      <div className="rounded-lg border border-border/50 bg-muted/10">
+        <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <GitHubIcon className="h-5 w-5" />
+            <span className="text-sm font-medium">GitHub</span>
+          </div>
+          {hasGitHub && (
             <Button
-              variant="destructive"
-              onClick={() => {
-                setDisconnectOpen(false);
-                handleUnlink();
-              }}
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={
+                isRefreshing || connectionLoading || connectionStatusLoading
+              }
+              className="h-7 w-7 p-0"
             >
-              Disconnect
+              <RefreshCw
+                className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+              />
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
+
+        <div className="space-y-4 p-4">
+          {!hasGitHub ? (
+            <NotConnectedState />
+          ) : connectionLoading && !connectionData ? (
+            <ConnectionLoadingSkeleton />
+          ) : reconnectRequired && !connectionData ? (
+            <ReconnectRequiredState
+              reconnectReason={reason}
+              tokenExpired={tokenExpired}
+            />
+          ) : connectionError && !connectionData ? (
+            <ConnectionErrorState onRetry={handleRefresh} />
+          ) : connectionData ? (
+            <ConnectedState
+              data={connectionData}
+              reconnectRequired={reconnectRequired}
+              reconnectReason={reason}
+              tokenExpired={tokenExpired}
+              unlinking={unlinking}
+              onUnlink={handleUnlink}
+            />
+          ) : (
+            <NotConnectedState />
+          )}
+        </div>
+      </div>
+
+      {/* ── MCP connections ── */}
+      <McpConnectionsSection />
     </div>
   );
 }
@@ -511,11 +404,10 @@ function NotConnectedState() {
       <Button
         variant="outline"
         size="sm"
-        className="shrink-0 gap-1"
+        className="shrink-0"
         onClick={startGitHubInstallFromSettings}
       >
         Connect
-        <ExternalLink className="size-3" />
       </Button>
     </div>
   );
@@ -555,43 +447,65 @@ function ConnectionLoadingSkeleton() {
   );
 }
 
+function ReconnectRequiredState({
+  reconnectReason,
+  tokenExpired,
+}: {
+  reconnectReason: string | null;
+  tokenExpired: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+      <p className="text-sm font-medium text-foreground">
+        Reconnect GitHub to continue
+      </p>
+      <p className="text-sm text-muted-foreground">
+        {getReconnectDescription(reconnectReason, tokenExpired)}
+      </p>
+      <div>
+        <Button size="sm" onClick={startGitHubReconnectFromSettings}>
+          Reconnect GitHub
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ConnectedState({
   data,
   reconnectRequired,
-  onDisconnect,
+  reconnectReason,
+  tokenExpired,
   unlinking,
+  onUnlink,
 }: {
   data: ConnectionStatusResponse;
   reconnectRequired: boolean;
-  onDisconnect: () => void;
+  reconnectReason: string | null;
+  tokenExpired: boolean;
   unlinking: boolean;
+  onUnlink: () => void;
 }) {
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [orgsExpanded, setOrgsExpanded] = useState(false);
+  const requiresReconnect = reconnectRequired || tokenExpired;
   const installedOrgCount = data.orgs.filter(
     (org) => org.installStatus === "installed",
   ).length;
 
   return (
     <>
-      {/* User info row */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar className="size-9 rounded-full">
+          <Avatar className="size-9 rounded-sm">
             <AvatarImage src={data.user.avatarUrl} alt={data.user.login} />
-            <AvatarFallback className="rounded-full">
+            <AvatarFallback className="rounded-sm">
               {data.user.login.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-medium">{data.user.login}</p>
-              <InstallBadge
-                status={data.personalInstallStatus}
-                repositorySelection={data.personalRepositorySelection}
-                className="size-3"
-              />
-            </div>
-            {reconnectRequired ? (
+            <p className="truncate text-sm font-medium">{data.user.login}</p>
+            {requiresReconnect ? (
               <p className="text-xs">
                 <span className="inline-flex items-center gap-1 text-amber-500">
                   <AlertCircle className="size-3" />
@@ -602,30 +516,78 @@ function ConnectedState({
           </div>
         </div>
 
-        <ConnectionStatusButton
-          status={reconnectRequired ? "reconnect" : "connected"}
-          configureUrl={data.personalInstallationUrl}
-          onReconnect={startGitHubReconnectFromSettings}
-          onDisconnect={onDisconnect}
-          unlinking={unlinking}
-        />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {requiresReconnect ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={startGitHubReconnectFromSettings}
+              >
+                Reconnect
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDisconnectOpen(true)}
+                disabled={unlinking}
+                className="h-7 text-xs text-destructive hover:text-destructive"
+              >
+                {unlinking ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  "Disconnect"
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <InstallBadge
+                status={data.personalInstallStatus}
+                repositorySelection={data.personalRepositorySelection}
+              />
+              {data.personalInstallationUrl ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  asChild
+                >
+                  <Link
+                    href={data.personalInstallationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Configure
+                    <ExternalLink className="ml-1 size-3" />
+                  </Link>
+                </Button>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDisconnectOpen(true)}
+                disabled={unlinking}
+                className="h-7 text-xs text-destructive hover:text-destructive"
+              >
+                {unlinking ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  "Disconnect"
+                )}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Reconnect banner */}
-      {reconnectRequired ? (
-        <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-          <p className="text-sm font-medium text-foreground">
-            Reconnect GitHub to continue
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Your GitHub connection needs to be refreshed. Use the Reconnect
-            option above to restore access.
-          </p>
-        </div>
-      ) : null}
-
-      {/* Org list */}
-      {!reconnectRequired && data.orgs.length > 0 ? (
+      {requiresReconnect ? (
+        <ReconnectRequiredState
+          reconnectReason={reconnectReason}
+          tokenExpired={tokenExpired}
+        />
+      ) : data.orgs.length > 0 ? (
         <div className="-mx-4 border-t border-border/50 px-4 pt-3">
           <button
             type="button"
@@ -678,6 +640,32 @@ function ConnectedState({
           ) : null}
         </div>
       ) : null}
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Disconnect GitHub?</DialogTitle>
+            <DialogDescription>
+              This will unlink your GitHub account and remove all app
+              installations. You can reconnect at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setDisconnectOpen(false);
+                onUnlink();
+              }}
+            >
+              Disconnect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
