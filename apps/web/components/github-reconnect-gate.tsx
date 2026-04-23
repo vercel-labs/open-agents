@@ -17,7 +17,8 @@ export function GitHubReconnectGate() {
     !isAuthenticated ||
     isLoading ||
     !reconnectRequired ||
-    pathname === "/get-started"
+    pathname === "/get-started" ||
+    pathname === "/settings/connections"
   ) {
     return null;
   }

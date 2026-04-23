@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { syncUserInstallations } from "@/lib/github/installations-sync";
 import {
+  getGitHubAccountId,
   getUserGitHubToken,
   getGitHubUsername,
   hasGitHubAccount,
@@ -79,6 +80,20 @@ export async function GET(req: NextRequest): Promise<Response> {
     connectUrl.searchParams.set("github", "not_linked");
     connectUrl.searchParams.set("next", redirectTo);
     return NextResponse.redirect(connectUrl);
+  }
+
+  // reconnect mode — skip account picker, target the user's personal account
+  const reconnect = req.nextUrl.searchParams.get("reconnect");
+  if (reconnect === "1") {
+    const accountId = await getGitHubAccountId(session.user.id);
+    if (accountId) {
+      const installUrl = new URL(
+        `https://github.com/apps/${appSlug}/installations/new/permissions`,
+      );
+      installUrl.searchParams.set("state", state);
+      installUrl.searchParams.set("target_id", accountId);
+      return redirectWithInstallCookies(installUrl, redirectTo, state);
+    }
   }
 
   // try to sync installations

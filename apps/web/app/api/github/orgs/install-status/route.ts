@@ -118,6 +118,39 @@ export async function GET() {
     ]);
 
     if (!userResponse.ok || !orgsResponse.ok) {
+      // token revoked/expired — fall back to DB-cached installations
+      const isAuthError =
+        userResponse.status === 401 ||
+        userResponse.status === 403 ||
+        orgsResponse.status === 401 ||
+        orgsResponse.status === 403;
+
+      if (isAuthError) {
+        const installations = await getInstallationsByUserId(session.user.id);
+        const orgs: OrgInstallStatus[] = installations.map((i) => ({
+          githubId: 0,
+          login: i.accountLogin,
+          avatarUrl: "",
+          installStatus: "installed" as const,
+          installationId: i.installationId,
+          installationUrl: getInstallationManageUrl(
+            i.installationId,
+            i.installationUrl,
+          ),
+          repositorySelection: i.repositorySelection,
+        }));
+
+        const response: ConnectionStatusResponse = {
+          user: { githubId: 0, login: "", avatarUrl: "" },
+          personalInstallStatus: "not_installed",
+          personalInstallationUrl: null,
+          personalRepositorySelection: null,
+          orgs,
+          tokenExpired: true,
+        };
+        return NextResponse.json(response);
+      }
+
       const [userBody, orgsBody] = await Promise.all([
         userResponse.ok
           ? Promise.resolve("OK")

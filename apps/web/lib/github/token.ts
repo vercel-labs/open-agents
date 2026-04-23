@@ -99,6 +99,21 @@ export async function getGitHubUserProfile(
 }
 
 /**
+ * Get the GitHub numeric account ID stored in better-auth's accounts table.
+ * Available even when the token is revoked.
+ */
+export async function getGitHubAccountId(
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ accountId: accounts.accountId })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "github")))
+    .limit(1);
+  return row?.accountId ?? null;
+}
+
+/**
  * Delete the GitHub account link from better-auth's accounts table.
  */
 export async function deleteGitHubAccountLink(userId: string): Promise<void> {

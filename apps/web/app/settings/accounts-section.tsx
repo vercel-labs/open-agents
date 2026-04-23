@@ -98,9 +98,9 @@ function startGitHubInstallFromSettings() {
 }
 
 function startGitHubReconnectFromSettings() {
-  // Go directly to GitHub app install instead of through get-started
   const params = new URLSearchParams({
     next: "/settings/connections",
+    reconnect: "1",
   });
   window.location.href = `/api/github/app/install?${params.toString()}`;
 }
@@ -439,6 +439,11 @@ export function AccountsSection() {
 
   const requiresReconnect = hasGitHub && (reconnectRequired || tokenExpired);
 
+  // show disconnected state when reconnect is needed but we have no usable profile
+  const showDisconnected =
+    reconnectRequired &&
+    (!connectionData || !connectionData.user.login);
+
   return (
     <div className="rounded-lg border border-border/50 bg-muted/10">
       {/* Header */}
@@ -458,6 +463,12 @@ export function AccountsSection() {
           <NotConnectedState />
         ) : connectionLoading && !connectionData ? (
           <ConnectionLoadingSkeleton />
+        ) : showDisconnected ? (
+          <DisconnectedState
+            onReconnect={startGitHubReconnectFromSettings}
+            onDisconnect={() => setDisconnectOpen(true)}
+            unlinking={unlinking}
+          />
         ) : connectionError && !connectionData ? (
           <ConnectionErrorState onRetry={handleRefresh} />
         ) : connectionData ? (
@@ -517,6 +528,31 @@ function NotConnectedState() {
         Connect
         <ExternalLink className="size-3" />
       </Button>
+    </div>
+  );
+}
+
+function DisconnectedState({
+  onReconnect,
+  onDisconnect,
+  unlinking,
+}: {
+  onReconnect: () => void;
+  onDisconnect: () => void;
+  unlinking: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <AlertCircle className="size-4 shrink-0 text-amber-500" />
+        <span>Your GitHub connection has been disconnected.</span>
+      </div>
+      <ConnectionStatusButton
+        status="reconnect"
+        onReconnect={onReconnect}
+        onDisconnect={onDisconnect}
+        unlinking={unlinking}
+      />
     </div>
   );
 }
