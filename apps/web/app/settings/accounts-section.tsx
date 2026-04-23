@@ -441,8 +441,7 @@ export function AccountsSection() {
 
   // show disconnected state when reconnect is needed but we have no usable profile
   const showDisconnected =
-    reconnectRequired &&
-    (!connectionData || !connectionData.user.login);
+    reconnectRequired && (!connectionData || !connectionData.user.login);
 
   return (
     <div className="rounded-lg border border-border/50 bg-muted/10">
