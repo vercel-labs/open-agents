@@ -25,6 +25,7 @@ mock.module("@/lib/github/token", () => ({
   hasGitHubAccount: async () => hasLinkedGitHub,
   getUserGitHubToken: async () => userToken,
   getGitHubUsername: async () => githubUsername,
+  getGitHubAccountId: async () => null,
 }));
 
 mock.module("@/lib/db/installations", () => ({
