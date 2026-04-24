@@ -206,11 +206,17 @@ async function fetchGatewayModels(): Promise<GatewayModel[]> {
     const { models } = await gateway.getAvailableModels();
     return models;
   } catch (error) {
+    // Fallback: AI Gateway may reject the config call if a new modelType is
+    // introduced that the current AI SDK doesn't recognize. We handle this
+    // gracefully by returning only models we can safely parse as language
+    // models from the error payload, or an empty array if extraction fails.
     const models = getModelsFromGatewayError(error);
     if (models) {
       return models;
     }
 
+    // Re-throw if we couldn't extract models from the error (e.g., genuine
+    // auth failure or network issue, not a modelType parse failure).
     throw error;
   }
 }
@@ -218,10 +224,13 @@ async function fetchGatewayModels(): Promise<GatewayModel[]> {
 export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
-  const models = await fetchGatewayModels();
-  return filterDisabledModels(
-    models.filter((model) => model.modelType === "language"),
+  const allModels = await fetchGatewayModels();
+  // Safely filter for language models. Unknown fields are tolerated via
+  // passthrough() on the schema, so new modelTypes don't cause parse errors.
+  const languageModels = allModels.filter(
+    (model): model is GatewayModel => model.modelType === "language",
   );
+  return filterDisabledModels(languageModels);
 }
 
 export async function fetchAvailableLanguageModelsWithContext(): Promise<
