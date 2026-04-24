@@ -1,4 +1,9 @@
-export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
+export {
+  type GatewayConfig,
+  type GatewayOptions,
+  gateway,
+  shouldApplyMiniMaxDefaults,
+} from "./models";
 export type {
   AgentModelSelection,
   AgentSandboxContext,

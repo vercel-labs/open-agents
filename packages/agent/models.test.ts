@@ -22,6 +22,7 @@ const {
   getProviderOptionsForModel,
   mergeProviderOptions,
   shouldApplyOpenAIReasoningDefaults,
+  shouldApplyMiniMaxDefaults,
 } = await import("./models");
 
 describe("shouldApplyOpenAIReasoningDefaults", () => {
@@ -231,5 +232,35 @@ describe("mergeProviderOptions", () => {
         include: ["reasoning.summary"],
       },
     });
+  });
+});
+
+describe("shouldApplyMiniMaxDefaults", () => {
+  test("returns true for MiniMax-M2.7", () => {
+    expect(shouldApplyMiniMaxDefaults("minimax/minimax-m2.7")).toBe(true);
+  });
+
+  test("returns true for MiniMax-M2.7-highspeed", () => {
+    expect(shouldApplyMiniMaxDefaults("minimax/minimax-m2.7-highspeed")).toBe(
+      true,
+    );
+  });
+
+  test("returns false for non-MiniMax models", () => {
+    expect(shouldApplyMiniMaxDefaults("openai/gpt-5")).toBe(false);
+    expect(shouldApplyMiniMaxDefaults("anthropic/claude-opus-4.6")).toBe(false);
+    expect(shouldApplyMiniMaxDefaults("google/gemini-2.5-pro")).toBe(false);
+  });
+});
+
+describe("getProviderOptionsForModel (MiniMax)", () => {
+  test("returns empty provider options for MiniMax models", () => {
+    const result = getProviderOptionsForModel("minimax/minimax-m2.7");
+    expect(result).toEqual({});
+  });
+
+  test("returns empty provider options for MiniMax-M2.7-highspeed", () => {
+    const result = getProviderOptionsForModel("minimax/minimax-m2.7-highspeed");
+    expect(result).toEqual({});
   });
 });

@@ -104,6 +104,12 @@ export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5");
 }
 
+// MiniMax requires temperature > 0; the API rejects temperature === 0.
+// Apply a default of 1.0 so callers that omit temperature get a valid value.
+export function shouldApplyMiniMaxDefaults(modelId: string): boolean {
+  return modelId.startsWith("minimax/");
+}
+
 function shouldApplyOpenAITextVerbosityDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5.4");
 }
@@ -186,11 +192,18 @@ export function gateway(
     providerOptionsOverrides,
   );
 
-  if (Object.keys(providerOptions).length > 0) {
+  const hasProviderOptions = Object.keys(providerOptions).length > 0;
+  const hasMiniMaxDefaults = shouldApplyMiniMaxDefaults(modelId);
+
+  if (hasProviderOptions || hasMiniMaxDefaults) {
     model = wrapLanguageModel({
       model,
       middleware: defaultSettingsMiddleware({
-        settings: { providerOptions },
+        settings: {
+          ...(hasProviderOptions ? { providerOptions } : {}),
+          // MiniMax rejects temperature === 0; default to 1 when unset.
+          ...(hasMiniMaxDefaults ? { temperature: 1 } : {}),
+        },
       }),
     });
   }
