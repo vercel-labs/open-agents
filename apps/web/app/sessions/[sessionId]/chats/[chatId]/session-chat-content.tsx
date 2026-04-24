@@ -1126,22 +1126,23 @@ export function SessionChatContent({
       }
     };
   }, []);
+  const handleAudioTranscription = useCallback((transcribedText: string) => {
+    setInput((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+    inputRef.current?.focus();
+  }, []);
+
   const {
     state: recordingState,
     error: recordingError,
     clearError: clearRecordingError,
     toggleRecording,
-  } = useAudioRecording();
+  } = useAudioRecording({
+    onTranscription: handleAudioTranscription,
+  });
 
   const handleMicClick = async () => {
     clearRecordingError();
-    const transcribedText = await toggleRecording();
-    if (transcribedText) {
-      setInput((prev) =>
-        prev ? `${prev} ${transcribedText}` : transcribedText,
-      );
-      inputRef.current?.focus();
-    }
+    await toggleRecording();
   };
 
   const handleCopyAssistantMessage = useCallback(
