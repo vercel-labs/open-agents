@@ -81,7 +81,6 @@ export function CommitDialog({
   const [mode, setMode] = useState<CommitMode>("ai");
   const [manualTitle, setManualTitle] = useState("");
   const [manualBody, setManualBody] = useState("");
-  const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [statusSnapshot, setStatusSnapshot] = useState<SessionGitStatus | null>(
     null,
   );
@@ -162,7 +161,6 @@ export function CommitDialog({
     setMode("ai");
     setManualTitle("");
     setManualBody("");
-    setPrHeadOwner(null);
     setStatusSnapshot(gitStatus);
 
     void fetchBranches();
@@ -285,17 +283,9 @@ export function CommitDialog({
         setResolvedBranch(response.branchName);
       }
 
-      if (response.prHeadOwner) {
-        setPrHeadOwner(response.prHeadOwner);
-      }
-
-      const commitOwner =
-        response.gitActions?.pushedToFork && response.prHeadOwner
-          ? response.prHeadOwner
-          : session.repoOwner;
       const commitUrl =
-        response.gitActions?.commitSha && commitOwner && session.repoName
-          ? `https://github.com/${commitOwner}/${session.repoName}/commit/${response.gitActions.commitSha}`
+        response.gitActions?.commitSha && session.repoOwner && session.repoName
+          ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${response.gitActions.commitSha}`
           : undefined;
 
       await onGitMessage?.({
@@ -357,11 +347,9 @@ export function CommitDialog({
     : "Push commits";
   const isDisabled = isCheckingStatus || isCreatingBranch || isSubmitting;
 
-  const commitOwner =
-    gitActions?.pushedToFork && prHeadOwner ? prHeadOwner : session.repoOwner;
   const commitUrl =
-    gitActions?.commitSha && commitOwner && session.repoName
-      ? `https://github.com/${commitOwner}/${session.repoName}/commit/${gitActions.commitSha}`
+    gitActions?.commitSha && session.repoOwner && session.repoName
+      ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${gitActions.commitSha}`
       : null;
   const prUrl =
     session.prNumber && session.repoOwner && session.repoName
@@ -537,11 +525,7 @@ export function CommitDialog({
                 )}
 
                 {gitActions?.pushed && (
-                  <p className="text-muted-foreground">
-                    {gitActions.pushedToFork
-                      ? "Pushed to fork remote"
-                      : "Pushed to origin"}
-                  </p>
+                  <p className="text-muted-foreground">Pushed to origin</p>
                 )}
 
                 {commitUrl && (

@@ -105,8 +105,4 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Public upstream repositories may reject direct branch pushes; PR generation should fall back to creating/pushing to the user's fork and PR creation must use a qualified head ref (`forkOwner:branch`).
 - GitHub fork creation can take longer than a few seconds to become pushable; PR fallback should retry fork push on transient `repository not found` errors instead of failing immediately.
 - Git push failures from Vercel sandboxes can return empty output even when auth/write is denied; PR fallback logic should not rely only on matching "permission" text before attempting fork fallback.
-- GitHub App user/integration tokens may return `403 Resource not accessible by integration` for fork creation; PR fallback should surface a manual-fork guidance path instead of assuming automatic fork creation is always allowed.
-- For PR/push flows, installation tokens can fail on repos outside selected installation scope even when the user's GitHub token has write access; retry origin push/PR creation with user token before forcing fork fallback.
-- Even when branch push succeeds, GitHub PR creation can still return `403 Resource not accessible by integration`; expose a compare URL fallback so users can complete PR creation manually in the browser.
-- For manual compare fallback, include `title` and `body` query params on the GitHub compare URL so PR details are prefilled when API creation is unavailable.
-- Preserve fork PR metadata across retries: if a branch already tracks `fork/<branch>` and no new push is needed, derive and return `prHeadOwner` from fork upstream/remote state so later PR creation still uses a qualified head ref.
+- When the GitHub App lacks push access (e.g. repo removed from installation scope), fail fast with a 403 directing users to /settings/connections rather than silently forking.

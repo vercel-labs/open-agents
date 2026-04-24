@@ -96,13 +96,11 @@ describe("git-flow-client", () => {
           ok: true,
           json: async () => ({
             branchName: "feature/test",
-            prHeadOwner: "alice",
             gitActions: {
               committed: true,
               commitMessage: "feat: test",
               commitSha: "abc123",
               pushed: true,
-              pushedToFork: false,
             },
           }),
         }),
@@ -134,7 +132,6 @@ describe("git-flow-client", () => {
 
     expect(result.gitActions?.commitMessage).toBe("feat: test");
     expect(result.branchName).toBe("feature/test");
-    expect(result.prHeadOwner).toBe("alice");
   });
 
   test("requestGeneratePr throws API error message", async () => {

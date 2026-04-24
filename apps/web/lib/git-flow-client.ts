@@ -20,14 +20,12 @@ export interface GitActionsResult {
   commitMessage?: string;
   commitSha?: string;
   pushed?: boolean;
-  pushedToFork?: boolean;
 }
 
 export interface GeneratePrResult {
   title?: string;
   body?: string;
   branchName?: string;
-  prHeadOwner?: string;
   gitActions?: GitActionsResult;
   error?: string;
 }
@@ -54,7 +52,6 @@ function parseGitActions(value: unknown): GitActionsResult | undefined {
     commitMessage: readString(value.commitMessage),
     commitSha: readString(value.commitSha),
     pushed: readBoolean(value.pushed),
-    pushedToFork: readBoolean(value.pushedToFork),
   };
 }
 
@@ -67,7 +64,6 @@ function parseGeneratePrResult(value: unknown): GeneratePrResult {
     title: readString(value.title),
     body: readString(value.body),
     branchName: readString(value.branchName),
-    prHeadOwner: readString(value.prHeadOwner),
     gitActions: parseGitActions(value.gitActions),
     error: readString(value.error),
   };

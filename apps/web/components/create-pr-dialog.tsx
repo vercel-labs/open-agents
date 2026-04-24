@@ -61,33 +61,6 @@ type GitActions = GitActionsResult;
 type WizardStep = "create-branch" | "generate";
 type PrCreationMode = "ready" | "draft";
 
-function buildCompareUrl(params: {
-  owner: string;
-  repo: string;
-  baseBranch: string;
-  headRef: string;
-  title?: string;
-  body?: string;
-}): string {
-  const { owner, repo, baseBranch, headRef, title, body } = params;
-  const compareUrl = new URL(
-    `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headRef)}`,
-  );
-  compareUrl.searchParams.set("expand", "1");
-
-  const trimmedTitle = title?.trim();
-  if (trimmedTitle) {
-    compareUrl.searchParams.set("title", trimmedTitle);
-  }
-
-  const trimmedBody = body?.trim();
-  if (trimmedBody) {
-    compareUrl.searchParams.set("body", trimmedBody);
-  }
-
-  return compareUrl.toString();
-}
-
 export function CreatePRDialog({
   open,
   onOpenChange,
@@ -118,7 +91,6 @@ export function CreatePRDialog({
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [step, setStep] = useState<WizardStep>("generate");
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
   const [enableAutoMerge, setEnableAutoMerge] = useState(false);
   const isDraft = prCreationMode === "draft";
@@ -137,7 +109,6 @@ export function CreatePRDialog({
       setIsDetachedHead(false);
       setStep("generate");
       setHasGenerated(false);
-      setPrHeadOwner(null);
       setPrCreationMode("ready");
       setEnableAutoMerge(false);
     }
@@ -179,15 +150,7 @@ export function CreatePRDialog({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isOnBaseBranch = displayBranch === baseBranch;
   const needsNewBranch = isOnBaseBranch || isDetachedHead;
-  const normalizedRepoOwner = session.repoOwner?.toLowerCase() ?? null;
-  const normalizedHeadOwner = prHeadOwner?.toLowerCase() ?? null;
-  const shouldOpenCompareInsteadOfApi = Boolean(
-    gitActions?.pushedToFork ||
-    (normalizedRepoOwner &&
-      normalizedHeadOwner &&
-      normalizedHeadOwner !== normalizedRepoOwner),
-  );
-  const canEnableAutoMerge = !isDraft && !shouldOpenCompareInsteadOfApi;
+  const canEnableAutoMerge = !isDraft;
 
   useEffect(() => {
     if (!canEnableAutoMerge) {
@@ -277,9 +240,6 @@ export function CreatePRDialog({
       if (data.gitActions) {
         setGitActions(data.gitActions);
       }
-      if (typeof data.prHeadOwner === "string" && data.prHeadOwner.length > 0) {
-        setPrHeadOwner(data.prHeadOwner);
-      }
       if (data.branchName && data.branchName !== "HEAD") {
         setResolvedBranch(data.branchName);
       }
@@ -311,54 +271,6 @@ export function CreatePRDialog({
         ],
       });
 
-      if (
-        shouldOpenCompareInsteadOfApi &&
-        session.repoOwner &&
-        session.repoName
-      ) {
-        const headOwner = prHeadOwner?.trim() || session.repoOwner;
-        const sameOwner =
-          headOwner.toLowerCase() === session.repoOwner.toLowerCase();
-        const headRef = sameOwner
-          ? displayBranch
-          : `${headOwner}:${displayBranch}`;
-        const compareUrl = buildCompareUrl({
-          owner: session.repoOwner,
-          repo: session.repoName,
-          baseBranch,
-          headRef,
-          title,
-          body,
-        });
-
-        window.open(compareUrl, "_blank", "noopener,noreferrer");
-        setResult({
-          prUrl: compareUrl,
-          requiresManualCreation: true,
-          autoMergeEnabled: false,
-          autoMergeError: enableAutoMerge
-            ? "Auto-merge can only be enabled for pull requests created through the GitHub API."
-            : undefined,
-        });
-        await onGitMessage?.({
-          id: gitMessageId,
-          role: "assistant",
-          metadata: {},
-          parts: [
-            {
-              type: "data-pr",
-              id: prPartId,
-              data: {
-                status: "success",
-                url: compareUrl,
-                requiresManualCreation: true,
-              },
-            },
-          ],
-        });
-        return;
-      }
-
       const res = await fetch("/api/pr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -369,7 +281,6 @@ export function CreatePRDialog({
           title,
           body,
           baseBranch,
-          headOwner: prHeadOwner ?? undefined,
           isDraft,
           enableAutoMerge,
         }),
@@ -571,33 +482,12 @@ export function CreatePRDialog({
                           )}
                           {gitActions.pushed && (
                             <p className="text-muted-foreground">
-                              {gitActions.pushedToFork && prHeadOwner
-                                ? `Branch pushed to fork ${prHeadOwner}`
-                                : "Branch pushed to origin"}
+                              Branch pushed to origin
                             </p>
                           )}
                         </div>
                       </div>
                     )}
-
-                  {shouldOpenCompareInsteadOfApi && (
-                    <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-800 dark:text-blue-300">
-                      We pushed your branch, but this repository does not allow
-                      API-based PR creation for the current app token. Open
-                      GitHub to create the PR from the compare page.
-                      {isDraft && (
-                        <p className="mt-2">
-                          GitHub will still open the standard compare flow.
-                          Choose
-                          <span className="font-medium">
-                            {" "}
-                            Create draft pull request
-                          </span>
-                          on GitHub to keep it in draft mode.
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   {/* Title Input */}
                   <div className="grid gap-2">
@@ -629,11 +519,9 @@ export function CreatePRDialog({
                     <div className="space-y-0.5 pr-4">
                       <Label htmlFor="pr-auto-merge">Enable auto-merge</Label>
                       <p className="text-xs text-muted-foreground">
-                        {shouldOpenCompareInsteadOfApi
-                          ? "Unavailable when the pull request must be created from GitHub's compare page."
-                          : isDraft
-                            ? "Unavailable for draft pull requests."
-                            : "Automatically merge once required checks pass."}
+                        {isDraft
+                          ? "Unavailable for draft pull requests."
+                          : "Automatically merge once required checks pass."}
                       </p>
                     </div>
                     <Switch
@@ -720,12 +608,6 @@ export function CreatePRDialog({
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
                         </>
-                      ) : shouldOpenCompareInsteadOfApi ? (
-                        isDraft ? (
-                          "Open Compare for Draft"
-                        ) : (
-                          "Open Compare Page"
-                        )
                       ) : isDraft ? (
                         "Create Draft PR"
                       ) : (
