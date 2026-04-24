@@ -208,10 +208,31 @@ Create a GitHub App for installation-based repo access and configure:
 - Homepage URL: `https://YOUR_DOMAIN`
 - Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
 - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
+- Webhook URL: `https://YOUR_DOMAIN/api/github/webhook`
 - enable "Request user authorization (OAuth) during installation"
 - make the app public if you want org installs to work cleanly
 
-For local development, use `http://localhost:3000/api/github/app/callback` for the callback/setup URL and `http://localhost:3000` as the homepage URL.
+For local development, use `http://localhost:3000/api/github/app/callback` for the callback/setup URL, `http://localhost:3000/api/github/webhook` for the webhook URL, and `http://localhost:3000` as the homepage URL.
+
+For webhook settings:
+
+- generate a webhook secret and store the same value in `GITHUB_WEBHOOK_SECRET`
+
+Under GitHub App `Permissions & events`, set:
+
+- Repository permissions:
+  - Metadata: Read-only
+  - Contents: Read and write
+  - Pull requests: Read and write
+- Optional repository permissions for extra features:
+  - Issues: Read-only for reading PR comments and deployment URLs
+  - Checks: Read-only and Actions: Read-only for fixing failing checks
+- Optional organization permissions:
+  - Members: Read-only if you want org install status to be fully accurate
+- Subscribe to events:
+  - Installation
+  - Installation repositories
+  - Pull request
 
 Then set:
 
