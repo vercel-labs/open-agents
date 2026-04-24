@@ -19,7 +19,16 @@ let currentSession: {
 let existingSessionCount = 0;
 let savedLink: VercelProjectSelection | null = null;
 let currentVercelToken: string | null = "vercel-token";
+let currentGitHubToken: string | null = "github-token";
 let matchingProjects: VercelProjectSelection[] = [];
+let currentInstallation: {
+  installationId: number;
+  accountLogin: string;
+} | null = {
+  installationId: 123,
+  accountLogin: "vercel",
+};
+let hasInstallationRepoAccess = true;
 const createCalls: Array<Record<string, unknown>> = [];
 const upsertCalls: Array<Record<string, unknown>> = [];
 
@@ -55,8 +64,20 @@ mock.module("@/lib/db/vercel-project-links", () => ({
   },
 }));
 
+mock.module("@/lib/db/installations", () => ({
+  getInstallationByAccountLogin: async () => currentInstallation,
+}));
+
 mock.module("@/lib/vercel/token", () => ({
   getUserVercelToken: async () => currentVercelToken,
+}));
+
+mock.module("@/lib/github/user-token", () => ({
+  getUserGitHubToken: async () => currentGitHubToken,
+}));
+
+mock.module("@/lib/github/installation-repos", () => ({
+  isInstallationRepositoryAccessible: async () => hasInstallationRepoAccess,
 }));
 
 mock.module("@/lib/vercel/projects", () => ({
@@ -116,7 +137,13 @@ describe("/api/sessions POST vercel project linking", () => {
     existingSessionCount = 0;
     savedLink = null;
     currentVercelToken = "vercel-token";
+    currentGitHubToken = "github-token";
     matchingProjects = [];
+    currentInstallation = {
+      installationId: 123,
+      accountLogin: "vercel",
+    };
+    hasInstallationRepoAccess = true;
     createCalls.length = 0;
     upsertCalls.length = 0;
   });
@@ -326,6 +353,48 @@ describe("/api/sessions POST vercel project linking", () => {
     expect(createCalls[0]).toMatchObject({
       globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
     });
+  });
+
+  test("rejects repo-backed session creation when the repo is not accessible through the installation", async () => {
+    const { POST } = await routeModulePromise;
+
+    hasInstallationRepoAccess = false;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        branch: "main",
+        cloneUrl: "https://github.com/vercel/open-harness",
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "Repository is not available through your GitHub App installation",
+    );
+    expect(createCalls).toHaveLength(0);
+  });
+
+  test("rejects repo-backed session creation when GitHub is not connected", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentGitHubToken = null;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        branch: "main",
+        cloneUrl: "https://github.com/vercel/open-harness",
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("GitHub not connected");
+    expect(createCalls).toHaveLength(0);
   });
 
   test("rejects invalid repository owners", async () => {

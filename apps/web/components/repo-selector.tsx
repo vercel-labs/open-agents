@@ -3,6 +3,8 @@
 import {
   BookIcon,
   CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   ChevronsUpDownIcon,
   LockIcon,
   RefreshCw,
@@ -24,6 +26,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useInstallationRecentRepos } from "@/hooks/use-installation-recent-repos";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useInstallationRepos } from "@/hooks/use-installation-repos";
 import { useSession } from "@/hooks/use-session";
@@ -70,6 +73,8 @@ export function RepoSelector({
   const [repoSearch, setRepoSearch] = useState("");
   const [debouncedRepoSearch, setDebouncedRepoSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recentExpanded, setRecentExpanded] = useState(true);
+  const [allReposExpanded, setAllReposExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const startGitHubInstall = useCallback(() => {
@@ -96,6 +101,12 @@ export function RepoSelector({
     installationId: selectedInstallation?.installationId ?? null,
     query: debouncedRepoSearch,
     limit: 25,
+  });
+  const showRecentRepos = repoSearch.trim().length === 0;
+  const { repos: recentRepos } = useInstallationRecentRepos({
+    installationId: selectedInstallation?.installationId ?? null,
+    enabled: showRecentRepos,
+    limit: 5,
   });
 
   useEffect(() => {
@@ -164,6 +175,11 @@ export function RepoSelector({
 
   useEffect(() => {
     setRepoSearch("");
+  }, [selectedOwner]);
+
+  useEffect(() => {
+    setRecentExpanded(true);
+    setAllReposExpanded(true);
   }, [selectedOwner]);
 
   const handleOwnerSelect = (ownerLogin: string) => {
@@ -321,33 +337,91 @@ export function RepoSelector({
                     ? "Loading..."
                     : "No repositories found."}
               </CommandEmpty>
-              <CommandGroup>
-                {repos.slice(0, 25).map((repo) => (
-                  <CommandItem
-                    key={repo.full_name}
-                    value={repo.name}
-                    onSelect={() => handleRepoSelect(repo.name)}
+              {showRecentRepos && recentRepos.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRecentExpanded((expanded) => !expanded)}
+                    className="text-muted-foreground flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium uppercase tracking-[0.12em] transition-colors hover:bg-accent hover:text-foreground"
                   >
-                    <CheckIcon
-                      className={cn(
-                        "mr-2 size-4",
-                        selectedRepo === repo.name
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                    />
-                    <span className="truncate">{repo.name}</span>
-                    {repo.private && (
-                      <LockIcon className="ml-auto size-3 text-muted-foreground" />
+                    {recentExpanded ? (
+                      <ChevronDownIcon className="size-3" />
+                    ) : (
+                      <ChevronRightIcon className="size-3" />
                     )}
-                  </CommandItem>
-                ))}
-                {repos.length === 25 && !debouncedRepoSearch && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                    Showing first 25 results. Use search to narrow.
-                  </div>
+                    <span>Recent repos</span>
+                  </button>
+                  {recentExpanded && (
+                    <CommandGroup>
+                      {recentRepos.map((repo) => (
+                        <CommandItem
+                          key={`recent-${repo.full_name}`}
+                          value={repo.name}
+                          onSelect={() => handleRepoSelect(repo.name)}
+                        >
+                          <CheckIcon
+                            className={cn(
+                              "mr-2 size-4",
+                              selectedRepo === repo.name
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">{repo.name}</span>
+                          {repo.private && (
+                            <LockIcon className="ml-auto size-3 text-muted-foreground" />
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </>
+              )}
+              {showRecentRepos &&
+                recentRepos.length > 0 &&
+                repos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAllReposExpanded((expanded) => !expanded)}
+                    className="text-muted-foreground flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium uppercase tracking-[0.12em] transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    {allReposExpanded ? (
+                      <ChevronDownIcon className="size-3" />
+                    ) : (
+                      <ChevronRightIcon className="size-3" />
+                    )}
+                    <span>All repositories</span>
+                  </button>
                 )}
-              </CommandGroup>
+              {(recentRepos.length === 0 || allReposExpanded) && (
+                <CommandGroup>
+                  {repos.slice(0, 25).map((repo) => (
+                    <CommandItem
+                      key={repo.full_name}
+                      value={repo.name}
+                      onSelect={() => handleRepoSelect(repo.name)}
+                    >
+                      <CheckIcon
+                        className={cn(
+                          "mr-2 size-4",
+                          selectedRepo === repo.name
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      <span className="truncate">{repo.name}</span>
+                      {repo.private && (
+                        <LockIcon className="ml-auto size-3 text-muted-foreground" />
+                      )}
+                    </CommandItem>
+                  ))}
+                  {repos.length === 25 && !debouncedRepoSearch && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                      Showing first 25 results. Use search to narrow.
+                    </div>
+                  )}
+                </CommandGroup>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
