@@ -1941,8 +1941,12 @@ export function GitPanel(props: GitPanelProps) {
         {gitPanelTab === "files" && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             {filesLoading ? (
-              <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
-                <p className="text-xs text-muted-foreground">Loading files…</p>
+              <div className="p-3">
+                <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    Loading files…
+                  </p>
+                </div>
               </div>
             ) : sessionFiles && sessionFiles.length > 0 ? (
               <FileTree
@@ -1951,10 +1955,12 @@ export function GitPanel(props: GitPanelProps) {
                 onFileClick={(filePath) => openFileTab(filePath)}
               />
             ) : (
-              <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
-                <p className="text-xs text-muted-foreground">
-                  {!hasSandbox ? "Waiting for sandbox…" : "No files found"}
-                </p>
+              <div className="p-3">
+                <div className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/25 py-8 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    {!hasSandbox ? "Waiting for sandbox…" : "No files found"}
+                  </p>
+                </div>
               </div>
             )}
           </div>

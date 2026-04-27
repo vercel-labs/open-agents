@@ -14,21 +14,27 @@ export function FileTree({ files, repoName, onFileClick }: FileTreeProps) {
   const onFileClickRef = useRef(onFileClick);
   onFileClickRef.current = onFileClick;
 
-  const paths = useMemo(
-    () =>
-      files.map((f) =>
-        f.isDirectory ? f.value.replace(/\/?$/, "/") : f.value,
-      ),
-    [files],
-  );
+  const repoNameRef = useRef(repoName);
+  repoNameRef.current = repoName;
+
+  const paths = useMemo(() => {
+    const prefix = repoName ? `${repoName}/` : "";
+    return files.map((f) => {
+      const normalized = f.isDirectory ? f.value.replace(/\/?$/, "/") : f.value;
+      return `${prefix}${normalized}`;
+    });
+  }, [files, repoName]);
 
   const handleSelectionChange = useCallback(
     (selectedPaths: readonly string[]) => {
       if (selectedPaths.length === 0) return;
       const path = selectedPaths[selectedPaths.length - 1];
-      // Only fire for files, not directories
+      // only fire for files, not directories
       if (!path.endsWith("/")) {
-        onFileClickRef.current(path);
+        const prefix = repoNameRef.current ? `${repoNameRef.current}/` : "";
+        const stripped =
+          prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+        onFileClickRef.current(stripped);
       }
     },
     [],
@@ -37,12 +43,13 @@ export function FileTree({ files, repoName, onFileClick }: FileTreeProps) {
   const { model } = useFileTree({
     paths,
     density: "compact",
-    initialExpansion: "closed",
+    // expand root folder (level 1) so repo name is open by default
+    initialExpansion: 1,
     flattenEmptyDirectories: true,
     onSelectionChange: handleSelectionChange,
   });
 
-  // Keep paths in sync when files change
+  // keep paths in sync when files change
   const prevPathsRef = useRef(paths);
   useEffect(() => {
     if (prevPathsRef.current !== paths) {
@@ -62,18 +69,13 @@ export function FileTree({ files, repoName, onFileClick }: FileTreeProps) {
   return (
     <PierreFileTree
       model={model}
-      header={
-        repoName ? (
-          <span className="text-xs font-medium text-muted-foreground">
-            {repoName}
-          </span>
-        ) : undefined
-      }
       style={
         {
           "--trees-fg-override": "var(--foreground)",
           "--trees-border-color-override": "var(--border)",
           "--trees-selected-bg-override": "var(--muted)",
+          "--trees-padding-inline-override": "6px",
+          paddingTop: "8px",
           height: "100%",
         } as React.CSSProperties
       }
