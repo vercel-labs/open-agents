@@ -74,6 +74,8 @@ export function FileTree({ files, repoName, onFileClick }: FileTreeProps) {
           "--trees-fg-override": "var(--foreground)",
           "--trees-border-color-override": "var(--border)",
           "--trees-selected-bg-override": "var(--muted)",
+          "--trees-bg-muted-override":
+            "color-mix(in oklch, var(--muted) 50%, transparent)",
           "--trees-padding-inline-override": "6px",
           paddingTop: "8px",
           height: "100%",
