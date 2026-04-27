@@ -24,8 +24,19 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { WebAgentUIMessage } from "@/app/types";
-import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
-import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
+import { createBranch } from "@/lib/git/actions/branch";
+import { discardChanges } from "@/lib/git/actions/discard";
+import { commitChanges } from "@/lib/github/actions/commit";
+import {
+  generatePrContent,
+  openPullRequest,
+  mergePr,
+  type MergePullRequestResult,
+} from "@/lib/github/actions/pr";
+import {
+  getMergeReadiness,
+  type MergeReadinessResponse,
+} from "@/lib/github/queries/pr";
 import type { Session } from "@/lib/db/schema";
 import type { CheckRun, MergeMethod } from "@/lib/github/pulls";
 import { Button } from "@/components/ui/button";
@@ -59,13 +70,7 @@ import {
   shouldPollMergeReadiness,
 } from "@/lib/merge-readiness-polling";
 import { cn } from "@/lib/utils";
-import {
-  commitAndPushSessionChanges,
-  createSessionBranch,
-  discardSessionUncommittedChanges,
-  fetchRepoBranches,
-  generatePullRequestContent,
-} from "@/lib/git-flow-client";
+import { fetchRepoBranches } from "@/lib/git/branches";
 import type { SessionGitStatus } from "@/hooks/use-session-git-status";
 import { useSessionFiles } from "@/hooks/use-session-files";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
@@ -128,7 +133,7 @@ type GitPanelProps = {
   refreshDiff: () => Promise<void>;
 
   // Merge
-  onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
+  onMerged: (result: MergePullRequestResult) => Promise<void> | void;
   onCloseAndArchiveClick: () => void;
   onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
   onFixConflicts?: (baseBranchRef: string) => Promise<void> | void;
@@ -372,7 +377,7 @@ function InlineCommitPanel({
     setIsCreatingBranch(true);
     setCommitError(null);
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -425,7 +430,7 @@ function InlineCommitPanel({
       const commitTitle = lines[0] ?? "";
       const commitBody = lines.slice(1).join("\n").trim();
 
-      const response = await commitAndPushSessionChanges({
+      const result = await commitChanges({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -433,14 +438,17 @@ function InlineCommitPanel({
         ...(commitTitle ? { commitTitle, commitBody } : {}),
       });
 
-      if (response.branchName && response.branchName !== "HEAD") {
-        setResolvedBranch(response.branchName);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      if (result.branchName && result.branchName !== "HEAD") {
+        setResolvedBranch(result.branchName);
       }
 
       setCommitSuccess({
-        commitSha: response.gitActions?.commitSha,
-        commitMessage:
-          response.gitActions?.commitMessage ?? "Changes committed & pushed",
+        commitSha: result.commitSha,
+        commitMessage: result.commitMessage ?? "Changes committed & pushed",
       });
       setCommitMessage("");
 
@@ -671,7 +679,7 @@ function InlinePrCreatePanel({
     setIsCreatingBranch(true);
     setPrError(null);
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -697,7 +705,7 @@ function InlinePrCreatePanel({
   const handleGenerateContent = async () => {
     setIsGenerating(true);
     try {
-      const generated = await generatePullRequestContent({
+      const generated = await generatePrContent({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -730,7 +738,7 @@ function InlinePrCreatePanel({
       if (!finalTitle) {
         setIsGenerating(true);
         try {
-          const generated = await generatePullRequestContent({
+          const generated = await generatePrContent({
             sessionId: session.id,
             sessionTitle: session.title,
             baseBranch,
@@ -760,29 +768,23 @@ function InlinePrCreatePanel({
         ],
       });
 
-      const res = await fetch("/api/pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          repoUrl: session.cloneUrl,
-          branchName: displayBranch,
-          title: finalTitle,
-          body: finalBody,
-          baseBranch,
-          isDraft,
-          shouldAutoMerge: !isDraft && enableAutoMerge,
-        }),
+      const data = await openPullRequest({
+        sessionId: session.id,
+        repoUrl: session.cloneUrl ?? "",
+        branchName: displayBranch,
+        title: finalTitle,
+        body: finalBody,
+        baseBranch,
+        isDraft,
+        shouldAutoMerge: !isDraft && enableAutoMerge,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create PR");
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setPrSuccess({
-        prUrl: data.prUrl,
+        prUrl: data.prUrl ?? "",
         requiresManualCreation: Boolean(data.requiresManualCreation),
         isDraft,
         autoMergeEnabled: Boolean(data.autoMergeEnabled),
@@ -1100,7 +1102,7 @@ function InlineMergePanel({
   isAgentWorking,
 }: {
   session: Session;
-  onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
+  onMerged: (result: MergePullRequestResult) => Promise<void> | void;
   onCloseAndArchiveClick: () => void;
   canCloseAndArchive: boolean;
   onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
@@ -1132,27 +1134,14 @@ function InlineMergePanel({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/sessions/${session.id}/merge-readiness`,
-      );
-
-      const payload = (await response.json()) as
-        | MergeReadinessResponse
-        | { error?: string };
-
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "Failed to load merge readiness",
-        );
-      }
+      const readinessPayload = await getMergeReadiness({
+        sessionId: session.id,
+      });
 
       if (readinessRequestIdRef.current !== requestId) {
         return;
       }
 
-      const readinessPayload = payload as MergeReadinessResponse;
       setReadiness(readinessPayload);
       setMergeMethod((currentMergeMethod) =>
         readinessPayload.allowedMethods.includes(currentMergeMethod)
@@ -1235,41 +1224,14 @@ function InlineMergePanel({
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${session.id}/merge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          mergeMethod,
-          deleteBranch,
-          expectedHeadSha: readiness.pr.headSha,
-          ...(force ? { force: true } : {}),
-        }),
+      const mergeResult = await mergePr({
+        sessionId: session.id,
+        mergeMethod,
+        deleteBranch,
+        expectedHeadSha: readiness.pr.headSha ?? undefined,
+        ...(force ? { force: true } : {}),
       });
 
-      const payload = (await response.json()) as
-        | MergePullRequestResponse
-        | { error?: string; reasons?: string[] };
-
-      if (!response.ok) {
-        const reasonsText =
-          "reasons" in payload && Array.isArray(payload.reasons)
-            ? payload.reasons.filter((reason) => typeof reason === "string")
-            : [];
-
-        const fallback =
-          reasonsText.length > 0
-            ? reasonsText.join(". ")
-            : "Failed to merge pull request";
-
-        throw new Error(
-          "error" in payload && payload.error ? payload.error : fallback,
-        );
-      }
-
-      const mergeResult = payload as MergePullRequestResponse;
       if (mergeResult.merged !== true) {
         throw new Error("Failed to merge pull request");
       }
@@ -1680,7 +1642,7 @@ export function GitPanel(props: GitPanelProps) {
     setDiscardError(null);
 
     try {
-      await discardSessionUncommittedChanges({
+      await discardChanges({
         sessionId: session.id,
         ...(discardTarget ? { filePath: discardTarget.filePath } : {}),
         ...(discardTarget?.oldPath ? { oldPath: discardTarget.oldPath } : {}),

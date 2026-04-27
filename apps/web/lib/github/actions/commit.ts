@@ -9,8 +9,6 @@ import {
   syncToRemote,
   hasUncommittedChanges as checkUncommitted,
 } from "@open-agents/sandbox";
-import { generateText } from "ai";
-import { gateway } from "@open-agents/agent";
 import { getInstallationOctokit } from "@/lib/github/app";
 import {
   verifyRepoAccess,
@@ -21,9 +19,11 @@ import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
+  SAFE_BRANCH_PATTERN,
   generateBranchName,
+  generateCommitMessage,
   looksLikeCommitHash,
-} from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+} from "@/lib/git/helpers";
 
 export interface CommitResult {
   committed: boolean;
@@ -32,39 +32,6 @@ export interface CommitResult {
   commitMessage?: string;
   commitSha?: string;
   error?: string;
-}
-
-const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
-
-async function generateCommitMessage(
-  diff: string,
-  sessionTitle: string,
-): Promise<string> {
-  const fallback = "chore: update repository changes";
-  if (!diff.trim()) return fallback;
-
-  try {
-    const result = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
-      prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
-
-Session context: ${sessionTitle}
-
-Diff:
-${diff.slice(0, 8000)}
-
-Respond with ONLY the commit message, nothing else.`,
-    });
-
-    const generated = result.text.trim().split("\n")[0]?.trim();
-    if (generated && generated.length > 0) {
-      return generated.slice(0, 72);
-    }
-  } catch (error) {
-    console.warn("[commit] failed to generate commit message:", error);
-  }
-
-  return fallback;
 }
 
 /**

@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
-import { unlinkGitHub } from "@/lib/github/actions";
+import { unlinkGitHub } from "@/lib/github/actions/connection";
 import { authClient } from "@/lib/auth/client";
 import { fetcher } from "@/lib/swr";
 

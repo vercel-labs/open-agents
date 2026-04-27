@@ -8,6 +8,7 @@ import { getGitHubUserProfile } from "@/lib/github/users";
 import { db } from "@/lib/db/client";
 import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
 import { users } from "@/lib/db/schema";
+import { SAFE_BRANCH_PATTERN } from "@/lib/git/helpers";
 
 const prContentSchema = z.object({
   title: z
@@ -21,8 +22,6 @@ const prContentSchema = z.object({
       "A markdown PR body with a ## Summary section (1-2 sentences) followed by a ## Changes section grouping changes by area with file paths, e.g. **API (`path/to/file.ts`)** with bullet points. Use real newlines for line breaks, NEVER literal backslash-n sequences.",
     ),
 });
-
-const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
 
 function normalizePullRequestAppBaseUrl(
   value: string | null | undefined,

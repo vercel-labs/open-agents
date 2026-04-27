@@ -1,5 +1,5 @@
 import type { Sandbox } from "@open-agents/sandbox";
-import { looksLikeCommitHash } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+import { looksLikeCommitHash } from "@/lib/git/helpers";
 import { updateSession } from "@/lib/db/sessions";
 import { openPullRequest, findPullRequest } from "@/lib/github/pulls";
 import { fetchGitHubBranches } from "@/lib/github/repos";
@@ -8,7 +8,7 @@ import {
   isValidGitHubRepoOwner,
 } from "@/lib/github/urls";
 import { getUserGitHubToken } from "@/lib/github/token";
-import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
+import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 
 const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
 

@@ -9,8 +9,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
-import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
+import { mergePr, type MergePullRequestResult } from "@/lib/github/actions/pr";
+import {
+  getMergeReadiness,
+  type MergeReadinessResponse,
+} from "@/lib/github/queries/pr";
 import type { Session } from "@/lib/db/schema";
 import type { CheckRun, MergeMethod } from "@/lib/github/pulls";
 import { Button } from "@/components/ui/button";
@@ -41,7 +44,7 @@ interface MergePrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: Session;
-  onMerged?: (result: MergePullRequestResponse) => Promise<void> | void;
+  onMerged?: (result: MergePullRequestResult) => Promise<void> | void;
   onViewDiff?: () => void;
   canViewDiff?: boolean;
   isAgentWorking?: boolean;
@@ -104,27 +107,13 @@ export function MergePrDialog({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/sessions/${session.id}/merge-readiness`,
-      );
-
-      const payload = (await response.json()) as
-        | MergeReadinessResponse
-        | { error?: string };
-
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "Failed to load merge readiness",
-        );
-      }
+      const readinessPayload = await getMergeReadiness({
+        sessionId: session.id,
+      });
 
       if (readinessRequestIdRef.current !== requestId) {
         return;
       }
-
-      const readinessPayload = payload as MergeReadinessResponse;
       setReadiness(readinessPayload);
       setMergeMethod((currentMergeMethod) =>
         readinessPayload.allowedMethods.includes(currentMergeMethod)
@@ -218,41 +207,13 @@ export function MergePrDialog({
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${session.id}/merge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          mergeMethod,
-          deleteBranch,
-          expectedHeadSha: readiness.pr.headSha,
-          ...(force ? { force: true } : {}),
-        }),
+      const mergeResult = await mergePr({
+        sessionId: session.id,
+        mergeMethod,
+        deleteBranch,
+        expectedHeadSha: readiness.pr.headSha ?? undefined,
+        ...(force ? { force: true } : {}),
       });
-
-      const payload = (await response.json()) as
-        | MergePullRequestResponse
-        | { error?: string; reasons?: string[] };
-
-      if (!response.ok) {
-        const reasonsText =
-          "reasons" in payload && Array.isArray(payload.reasons)
-            ? payload.reasons.filter((reason) => typeof reason === "string")
-            : [];
-
-        const fallback =
-          reasonsText.length > 0
-            ? reasonsText.join(". ")
-            : "Failed to merge pull request";
-
-        throw new Error(
-          "error" in payload && payload.error ? payload.error : fallback,
-        );
-      }
-
-      const mergeResult = payload as MergePullRequestResponse;
       if (mergeResult.merged !== true) {
         throw new Error("Failed to merge pull request");
       }

@@ -32,12 +32,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type SessionGitStatus } from "@/hooks/use-session-git-status";
 import type { Session } from "@/lib/db/schema";
-import {
-  commitAndPushSessionChanges,
-  createSessionBranch,
-  fetchRepoBranches,
-  type GitActionsResult,
-} from "@/lib/git-flow-client";
+import { createBranch } from "@/lib/git/actions/branch";
+import { commitChanges, type CommitResult } from "@/lib/github/actions/commit";
+import { fetchRepoBranches } from "@/lib/git/branches";
 
 interface CommitDialogProps {
   open: boolean;
@@ -51,7 +48,10 @@ interface CommitDialogProps {
   onOpenCreatePr?: () => void;
 }
 
-type GitActions = GitActionsResult;
+type GitActions = Pick<
+  CommitResult,
+  "committed" | "pushed" | "commitMessage" | "commitSha"
+>;
 
 type CommitStep = "loading" | "create-branch" | "commit" | "success";
 type CommitMode = "ai" | "manual";
@@ -210,7 +210,7 @@ export function CommitDialog({
     setError(null);
 
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -264,7 +264,7 @@ export function CommitDialog({
         ],
       });
 
-      const response = await commitAndPushSessionChanges({
+      const result = await commitChanges({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -277,15 +277,24 @@ export function CommitDialog({
           : {}),
       });
 
-      setGitActions(response.gitActions ?? null);
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
-      if (response.branchName && response.branchName !== "HEAD") {
-        setResolvedBranch(response.branchName);
+      setGitActions({
+        committed: result.committed,
+        pushed: result.pushed,
+        commitMessage: result.commitMessage,
+        commitSha: result.commitSha,
+      });
+
+      if (result.branchName && result.branchName !== "HEAD") {
+        setResolvedBranch(result.branchName);
       }
 
       const commitUrl =
-        response.gitActions?.commitSha && session.repoOwner && session.repoName
-          ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${response.gitActions.commitSha}`
+        result.commitSha && session.repoOwner && session.repoName
+          ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${result.commitSha}`
           : undefined;
 
       await onGitMessage?.({
@@ -298,10 +307,10 @@ export function CommitDialog({
             id: commitPartId,
             data: {
               status: "success",
-              committed: response.gitActions?.committed,
-              pushed: response.gitActions?.pushed,
-              commitMessage: response.gitActions?.commitMessage,
-              commitSha: response.gitActions?.commitSha,
+              committed: result.committed,
+              pushed: result.pushed,
+              commitMessage: result.commitMessage,
+              commitSha: result.commitSha,
               url: commitUrl,
             },
           },

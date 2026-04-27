@@ -1,12 +1,9 @@
 import { checkBotId } from "botid/server";
 import { connectSandbox } from "@open-agents/sandbox";
 import { botIdConfig } from "@/lib/botid";
-import {
-  generateBranchName,
-  looksLikeCommitHash,
-} from "@/app/api/generate-pr/_lib/generate-pr-helpers";
+import { generateBranchName, looksLikeCommitHash } from "@/lib/git/helpers";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
+import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 

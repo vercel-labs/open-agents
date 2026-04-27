@@ -1,13 +1,24 @@
-import { connectSandbox } from "@open-agents/sandbox";
-import {
-  requireAuthenticatedUser,
-  requireOwnedSessionWithSandboxGuard,
-} from "@/app/api/sessions/_lib/session-context";
-import { isSandboxActive } from "@/lib/sandbox/utils";
+"use server";
 
-interface GitStatusRequest {
-  sessionId: string;
+import { connectSandbox } from "@open-agents/sandbox";
+import { getSessionById } from "@/lib/db/sessions";
+import { isSandboxActive } from "@/lib/sandbox/utils";
+import { getServerSession } from "@/lib/session/get-server-session";
+
+// ---- types ----
+
+export interface SessionGitStatus {
+  branch: string;
+  isDetachedHead: boolean;
+  hasUncommittedChanges: boolean;
+  hasUnpushedCommits: boolean;
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  uncommittedFiles: number;
 }
+
+// ---- helpers ----
 
 function parsePorcelainStatus(output: string): {
   stagedCount: number;
@@ -58,52 +69,55 @@ function parsePorcelainStatus(output: string): {
 function parseRemoteRef(output: string): string | null {
   const trimmed = output.trim();
   const match = trimmed.match(/^refs\/remotes\/(.+)$/);
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return null;
   }
   return match[1];
 }
 
-export async function POST(req: Request) {
-  const authResult = await requireAuthenticatedUser();
-  if (!authResult.ok) {
-    return authResult.response;
+async function requireAuth() {
+  const session = await getServerSession();
+  if (!session?.user) {
+    throw new Error("Not authenticated");
+  }
+  return session;
+}
+
+async function requireOwnedSession(userId: string, sessionId: string) {
+  const sessionRecord = await getSessionById(sessionId);
+  if (!sessionRecord) {
+    throw new Error("Session not found");
+  }
+  if (sessionRecord.userId !== userId) {
+    throw new Error("Forbidden");
+  }
+  return sessionRecord;
+}
+
+// ---- server action ----
+
+export async function getGitStatus(params: {
+  sessionId: string;
+}): Promise<SessionGitStatus | null> {
+  const { sessionId } = params;
+
+  const session = await requireAuth();
+  const sessionRecord = await requireOwnedSession(session.user.id, sessionId);
+
+  if (!isSandboxActive(sessionRecord.sandboxState)) {
+    throw new Error("Sandbox not initialized");
   }
 
-  let body: GitStatusRequest;
-  try {
-    body = (await req.json()) as GitStatusRequest;
-  } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const { sessionId } = body;
-
-  if (!sessionId) {
-    return Response.json({ error: "sessionId is required" }, { status: 400 });
-  }
-
-  const sessionContext = await requireOwnedSessionWithSandboxGuard({
-    userId: authResult.userId,
-    sessionId,
-    sandboxGuard: isSandboxActive,
-    sandboxErrorMessage: "Sandbox not initialized",
-  });
-  if (!sessionContext.ok) {
-    return sessionContext.response;
-  }
-
-  const { sessionRecord } = sessionContext;
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
-    return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
+    throw new Error("Sandbox not initialized");
   }
 
   try {
     const sandbox = await connectSandbox(sandboxState);
     const cwd = sandbox.workingDirectory;
 
-    // Get current branch - detect detached HEAD explicitly
+    // get current branch - detect detached HEAD explicitly
     const symbolicRefResult = await sandbox.exec(
       "git symbolic-ref --short HEAD",
       cwd,
@@ -116,7 +130,7 @@ export async function POST(req: Request) {
     if (symbolicRefResult.success && symbolicRefResult.stdout.trim()) {
       branch = symbolicRefResult.stdout.trim();
     } else {
-      // Detached HEAD - get short commit hash for display
+      // detached HEAD - get short commit hash for display
       const revParseResult = await sandbox.exec(
         "git rev-parse --short HEAD",
         cwd,
@@ -126,7 +140,7 @@ export async function POST(req: Request) {
       isDetachedHead = true;
     }
 
-    // Check for uncommitted changes
+    // check for uncommitted changes
     const statusResult = await sandbox.exec(
       "git status --porcelain",
       cwd,
@@ -136,7 +150,7 @@ export async function POST(req: Request) {
       parsePorcelainStatus(statusResult.stdout);
     const hasUncommittedChanges = uncommittedFiles > 0;
 
-    // Check for commits ahead of upstream or default remote branch
+    // check for commits ahead of upstream or default remote branch
     let hasUnpushedCommits = false;
     const upstreamRefResult = await sandbox.exec(
       "git rev-parse --abbrev-ref --symbolic-full-name @{upstream}",
@@ -167,7 +181,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return Response.json({
+    return {
       branch,
       isDetachedHead,
       hasUncommittedChanges,
@@ -176,12 +190,9 @@ export async function POST(req: Request) {
       unstagedCount,
       untrackedCount,
       uncommittedFiles: hasUncommittedChanges ? uncommittedFiles : 0,
-    });
+    };
   } catch (error) {
     console.error("Failed to get git status:", error);
-    return Response.json(
-      { error: "Failed to connect to sandbox" },
-      { status: 500 },
-    );
+    return null;
   }
 }

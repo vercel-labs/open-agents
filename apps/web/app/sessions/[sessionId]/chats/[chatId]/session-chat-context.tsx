@@ -19,6 +19,7 @@ import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/route";
 import type { WebAgentUIMessage } from "@/app/types";
+import { checkPullRequest } from "@/lib/github/queries/pr";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useSessionDiff } from "@/hooks/use-session-diff";
@@ -657,23 +658,12 @@ export function SessionChatProvider({
   );
 
   const checkBranchAndPr = useCallback(async () => {
-    // Only check if the session has repo info. The API will return a 400
+    // Only check if the session has repo info. The server action will throw
     // if the sandbox is not active, which we silently ignore.
     if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
 
     try {
-      const res = await fetch("/api/check-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: sessionRecord.id }),
-      });
-      if (!res.ok) return;
-
-      const data = (await res.json()) as {
-        branch: string | null;
-        prNumber: number | null;
-        prStatus: "open" | "merged" | "closed" | null;
-      };
+      const data = await checkPullRequest({ sessionId: sessionRecord.id });
       const nextPrFields =
         data.prNumber && data.prStatus
           ? { prNumber: data.prNumber, prStatus: data.prStatus }

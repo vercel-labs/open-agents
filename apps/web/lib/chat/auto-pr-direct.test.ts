@@ -78,7 +78,7 @@ const sandbox = {
   exec: execSpy,
 };
 
-mock.module("@/app/api/generate-pr/_lib/generate-pr-helpers", () => ({
+mock.module("@/lib/git/helpers", () => ({
   looksLikeCommitHash: (value: string) => /^[0-9a-f]{7,40}$/i.test(value),
 }));
 
@@ -99,7 +99,7 @@ mock.module("@/lib/github/pulls", () => ({
   openPullRequest: openPullRequestSpy,
 }));
 
-mock.module("@/lib/git/pr-content", () => ({
+mock.module("@/lib/github/pr-content", () => ({
   generatePullRequestContentFromSandbox:
     generatePullRequestContentFromSandboxSpy,
 }));
