@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ExternalLink,
   LockIcon,
+  Plus,
   RefreshCw,
   SearchIcon,
 } from "lucide-react";
@@ -29,7 +30,7 @@ import {
 } from "@/hooks/use-installation-repos";
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useSession } from "@/hooks/use-session";
-import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
+import { buildGitHubReconnectUrl } from "@/lib/github/urls";
 import { cn } from "@/lib/utils";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -364,8 +365,8 @@ export function RepoSelectorCompact({
                       }}
                       className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     >
-                      <ExternalLink className="size-3.5" />
-                      Add organization
+                      <Plus className="size-3.5" />
+                      Add GitHub account
                     </button>
                   </div>
                 </CommandList>
@@ -459,8 +460,8 @@ export function RepoSelectorCompact({
                     }}
                     className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    <ExternalLink className="size-3.5" />
-                    Add organization
+                    <Plus className="size-3.5" />
+                    Add GitHub account
                   </button>
                 </div>
               </CommandList>

@@ -2,7 +2,7 @@
 
 import { GitPullRequestClosed, Loader2 } from "lucide-react";
 import { useState } from "react";
-import type { ClosePullRequestResponse } from "@/app/api/sessions/[sessionId]/close-pr/route";
+import { closePr, type ClosePullRequestResult } from "@/lib/github/actions/pr";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,7 +18,7 @@ interface ClosePrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: Session;
-  onClosed?: (result: ClosePullRequestResponse) => Promise<void> | void;
+  onClosed?: (result: ClosePullRequestResult) => Promise<void> | void;
 }
 
 export function ClosePrDialog({
@@ -35,26 +35,7 @@ export function ClosePrDialog({
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${session.id}/close-pr`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      const payload = (await response.json()) as
-        | ClosePullRequestResponse
-        | { error?: string };
-
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "Failed to close pull request",
-        );
-      }
-
-      const closeResult = payload as ClosePullRequestResponse;
+      const closeResult = await closePr({ sessionId: session.id });
       if (!closeResult.closed) {
         throw new Error("Failed to close pull request");
       }

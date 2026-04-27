@@ -1,8 +1,8 @@
 import type { Sandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
-import { getGitHubUserProfile } from "@/lib/github/token";
-import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
-import { createRepository } from "@/lib/github/client";
+import { getGitHubUserProfile } from "@/lib/github/users";
+import { getAppCoAuthorTrailer } from "@/lib/github/app";
+import { createRepository } from "@/lib/github/repos";
 
 // Escape shell metacharacters to prevent command injection
 const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;

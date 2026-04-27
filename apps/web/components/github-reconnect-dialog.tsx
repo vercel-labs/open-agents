@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { GitHubConnectionReason } from "@/lib/github/connection-status";
+import type { GitHubConnectionReason } from "@/lib/github/status";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

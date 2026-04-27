@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserGitHubToken } from "@/lib/github/token";
-import { fetchGitHubOrgs } from "@/lib/github/api";
+import { fetchGitHubOrgs } from "@/lib/github/users";
 
 export async function GET() {
   const session = await getServerSession();

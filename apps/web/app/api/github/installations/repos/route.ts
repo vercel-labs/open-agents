@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInstallationByUserAndId } from "@/lib/db/installations";
-import { listUserInstallationRepositories } from "@/lib/github/installation-repos";
+import { listUserInstallationRepositories } from "@/lib/github/repos";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 

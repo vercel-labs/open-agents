@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { hasGitHubAccount as checkGitHubLinked } from "@/lib/github/token";
+import { hasGitHubAccount as checkGitHubLinked } from "@/lib/github/users";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { isUserAdmin, userExists } from "@/lib/db/users";
 import { getSessionFromReq } from "@/lib/session/server";

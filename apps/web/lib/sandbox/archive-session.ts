@@ -2,10 +2,7 @@ import "server-only";
 
 import { connectSandbox } from "@open-agents/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import {
-  findPullRequestByBranch,
-  getPullRequestStatus,
-} from "@/lib/github/client";
+import { findPullRequest, getPullRequestStatus } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { canOperateOnSandbox, clearSandboxState } from "./utils";
 
@@ -96,7 +93,7 @@ async function refreshArchiveGitState(
       return updates;
     }
 
-    const prResult = await findPullRequestByBranch({
+    const prResult = await findPullRequest({
       owner: currentSession.repoOwner,
       repo: currentSession.repoName,
       branchName: branch,

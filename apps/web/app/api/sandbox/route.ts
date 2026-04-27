@@ -6,9 +6,15 @@ import {
   type SessionRecord,
 } from "@/app/api/sessions/_lib/session-context";
 import { botIdConfig } from "@/lib/botid";
-import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubUserProfile } from "@/lib/github/users";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
+import {
+  verifyRepoAccess,
+  getRepoAccessErrorMessage,
+} from "@/lib/github/access";
+import { getInstallationToken } from "@/lib/github/app";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
@@ -110,6 +116,10 @@ export async function POST(req: Request) {
 
   const githubToken = await getUserGitHubToken(session.user.id);
 
+  // verify repo access (user permissions ∩ installation scope) and get
+  // an installation token for cloning when a repo is provided
+  let cloneToken: string | undefined;
+
   if (repoUrl) {
     const parsedRepo = parseGitHubUrl(repoUrl);
     if (!parsedRepo) {
@@ -124,6 +134,27 @@ export async function POST(req: Request) {
         { error: "Connect GitHub to access repositories" },
         { status: 403 },
       );
+    }
+
+    const access = await verifyRepoAccess({
+      userId: session.user.id,
+      owner: parsedRepo.owner,
+      repo: parsedRepo.repo,
+    });
+
+    if (!access.ok) {
+      return Response.json(
+        { error: getRepoAccessErrorMessage(access.reason) },
+        { status: 403 },
+      );
+    }
+
+    // use installation token for clone (scoped to admin-approved repos)
+    try {
+      cloneToken = await getInstallationToken(access.installationId);
+    } catch {
+      // fall back to user token if installation token fails
+      cloneToken = githubToken;
     }
   }
 
@@ -176,7 +207,9 @@ export async function POST(req: Request) {
       source,
     },
     options: {
-      githubToken: githubToken ?? undefined,
+      // installation token for clone (scoped to admin-approved repos),
+      // user token for credential brokering (api calls from sandbox)
+      githubToken: cloneToken ?? githubToken ?? undefined,
       gitUser,
       timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
       ports: DEFAULT_SANDBOX_PORTS,

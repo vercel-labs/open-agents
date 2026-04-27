@@ -1,6 +1,7 @@
 import { connectSandbox } from "@open-agents/sandbox";
 import { runCreateRepoWorkflow } from "@/app/api/github/create-repo/_lib/create-repo-workflow";
-import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubUserProfile } from "@/lib/github/users";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";

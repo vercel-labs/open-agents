@@ -9,13 +9,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
-import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
+import { mergePr, type MergePullRequestResult } from "@/lib/github/actions/pr";
+import {
+  getMergeReadiness,
+  type MergeReadinessResponse,
+} from "@/lib/github/queries/pr";
 import type { Session } from "@/lib/db/schema";
-import type {
-  PullRequestCheckRun,
-  PullRequestMergeMethod,
-} from "@/lib/github/client";
+import type { CheckRun, MergeMethod } from "@/lib/github/pulls";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,29 +44,29 @@ interface MergePrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: Session;
-  onMerged?: (result: MergePullRequestResponse) => Promise<void> | void;
+  onMerged?: (result: MergePullRequestResult) => Promise<void> | void;
   onViewDiff?: () => void;
   canViewDiff?: boolean;
   isAgentWorking?: boolean;
   /** Called when the user clicks "Fix errors" — receives all failing check runs */
-  onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
+  onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
   /** Called when the user clicks "Fix conflicts" — receives the base branch ref */
   onFixConflicts?: (baseBranchRef: string) => Promise<void> | void;
 }
 
-const mergeMethodLabels: Record<PullRequestMergeMethod, string> = {
+const mergeMethodLabels: Record<MergeMethod, string> = {
   squash: "Squash and merge",
   merge: "Create a merge commit",
   rebase: "Rebase and merge",
 };
 
-const mergeMethodButtonLabels: Record<PullRequestMergeMethod, string> = {
+const mergeMethodButtonLabels: Record<MergeMethod, string> = {
   squash: "Squash & Archive",
   merge: "Merge & Archive",
   rebase: "Rebase & Archive",
 };
 
-const mergeMethodDescriptions: Record<PullRequestMergeMethod, string> = {
+const mergeMethodDescriptions: Record<MergeMethod, string> = {
   squash: "Combine all commits into one commit in the base branch.",
   merge: "All commits will be added to the base branch via a merge commit.",
   rebase: "All commits will be rebased and added to the base branch.",
@@ -86,8 +86,7 @@ export function MergePrDialog({
   const [readiness, setReadiness] = useState<MergeReadinessResponse | null>(
     null,
   );
-  const [mergeMethod, setMergeMethod] =
-    useState<PullRequestMergeMethod>("squash");
+  const [mergeMethod, setMergeMethod] = useState<MergeMethod>("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
   const [isLoadingReadiness, setIsLoadingReadiness] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -108,27 +107,13 @@ export function MergePrDialog({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/sessions/${session.id}/merge-readiness`,
-      );
-
-      const payload = (await response.json()) as
-        | MergeReadinessResponse
-        | { error?: string };
-
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "Failed to load merge readiness",
-        );
-      }
+      const readinessPayload = await getMergeReadiness({
+        sessionId: session.id,
+      });
 
       if (readinessRequestIdRef.current !== requestId) {
         return;
       }
-
-      const readinessPayload = payload as MergeReadinessResponse;
       setReadiness(readinessPayload);
       setMergeMethod((currentMergeMethod) =>
         readinessPayload.allowedMethods.includes(currentMergeMethod)
@@ -222,41 +207,13 @@ export function MergePrDialog({
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${session.id}/merge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          mergeMethod,
-          deleteBranch,
-          expectedHeadSha: readiness.pr.headSha,
-          ...(force ? { force: true } : {}),
-        }),
+      const mergeResult = await mergePr({
+        sessionId: session.id,
+        mergeMethod,
+        deleteBranch,
+        expectedHeadSha: readiness.pr.headSha ?? undefined,
+        ...(force ? { force: true } : {}),
       });
-
-      const payload = (await response.json()) as
-        | MergePullRequestResponse
-        | { error?: string; reasons?: string[] };
-
-      if (!response.ok) {
-        const reasonsText =
-          "reasons" in payload && Array.isArray(payload.reasons)
-            ? payload.reasons.filter((reason) => typeof reason === "string")
-            : [];
-
-        const fallback =
-          reasonsText.length > 0
-            ? reasonsText.join(". ")
-            : "Failed to merge pull request";
-
-        throw new Error(
-          "error" in payload && payload.error ? payload.error : fallback,
-        );
-      }
-
-      const mergeResult = payload as MergePullRequestResponse;
       if (mergeResult.merged !== true) {
         throw new Error("Failed to merge pull request");
       }

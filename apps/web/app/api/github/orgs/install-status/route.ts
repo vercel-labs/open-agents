@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { isGitHubAppConfigured } from "@/lib/github/app-auth";
-import { getInstallationManageUrl } from "@/lib/github/installation-url";
-import { syncUserInstallations } from "@/lib/github/installations-sync";
-import { getUserGitHubToken, hasGitHubAccount } from "@/lib/github/token";
+import { isGitHubAppConfigured } from "@/lib/github/app";
+import { getInstallationManageUrl } from "@/lib/github/urls";
+import { syncUserInstallations } from "@/lib/github/sync";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { hasGitHubAccount } from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface GitHubOrg {

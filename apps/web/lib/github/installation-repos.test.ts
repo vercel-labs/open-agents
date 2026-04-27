@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { listUserInstallationRepositories } from "./installation-repos";
+import { listUserInstallationRepositories } from "./repos";
 
 const originalFetch = globalThis.fetch;
 

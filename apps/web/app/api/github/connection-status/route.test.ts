@@ -22,8 +22,11 @@ mock.module("@/lib/session/get-server-session", () => ({
 }));
 
 mock.module("@/lib/github/token", () => ({
-  hasGitHubAccount: async () => hasLinkedGitHub,
   getUserGitHubToken: async () => userToken,
+}));
+
+mock.module("@/lib/github/users", () => ({
+  hasGitHubAccount: async () => hasLinkedGitHub,
   getGitHubUsername: async () => githubUsername,
   getGitHubAccountId: async () => null,
 }));
@@ -32,7 +35,7 @@ mock.module("@/lib/db/installations", () => ({
   getInstallationsByUserId: async () => installations,
 }));
 
-mock.module("@/lib/github/installations-sync", () => ({
+mock.module("@/lib/github/sync", () => ({
   syncUserInstallations: async () => {
     if (syncError) {
       throw syncError;

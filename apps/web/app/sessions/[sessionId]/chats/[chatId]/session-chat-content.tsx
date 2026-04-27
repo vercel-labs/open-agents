@@ -45,9 +45,12 @@ import {
 import { createPortal } from "react-dom";
 import useSWR from "swr";
 import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[chatId]/route";
-import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
-import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
-import type { PullRequestCheckRun } from "@/lib/github/client";
+import type { MergePullRequestResult } from "@/lib/github/actions/pr";
+import {
+  getDeploymentUrl,
+  type PrDeploymentResponse,
+} from "@/lib/github/queries/deployment";
+import type { CheckRun } from "@/lib/github/pulls";
 import type {
   WebAgentCommitDataPart,
   WebAgentPrDataPart,
@@ -119,7 +122,7 @@ import {
   estimateModelUsageCost,
 } from "@/lib/models";
 import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
-import { fetcher } from "@/lib/swr";
+
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import {
@@ -1944,7 +1947,7 @@ export function SessionChatContent({
   );
 
   const handleFixChecks = useCallback(
-    async (failedRuns: PullRequestCheckRun[]) => {
+    async (failedRuns: CheckRun[]) => {
       const names = failedRuns.map((run) => run.name).join(", ");
       const fallbackPrompt = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
       let messagePayload: Parameters<typeof sendMessageWithPendingState>[0] = {
@@ -2895,7 +2898,14 @@ export function SessionChatContent({
             prDeploymentQuery ? `?${prDeploymentQuery}` : ""
           }`
         : null,
-      fetcher,
+      async () =>
+        getDeploymentUrl({
+          sessionId: session.id,
+          ...(hasExistingPr && session.prNumber
+            ? { prNumber: session.prNumber }
+            : {}),
+          ...(previewLookupBranch ? { branch: previewLookupBranch } : {}),
+        }),
       {
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
@@ -3037,7 +3047,7 @@ export function SessionChatContent({
   ]);
 
   const handleMerged = useCallback(
-    async (mergeResult: MergePullRequestResponse) => {
+    async (mergeResult: MergePullRequestResult) => {
       updateSessionPullRequest({
         prNumber: mergeResult.prNumber,
         prStatus: "merged",

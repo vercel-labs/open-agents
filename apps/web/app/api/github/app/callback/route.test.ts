@@ -22,11 +22,14 @@ mock.module("@/lib/session/get-server-session", () => ({
 
 mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: async () => githubToken,
+}));
+
+mock.module("@/lib/github/users", () => ({
   getGitHubUsername: async () => githubUsername,
   getGitHubAccountId: async () => null,
 }));
 
-mock.module("@/lib/github/installations-sync", () => ({
+mock.module("@/lib/github/sync", () => ({
   syncUserInstallations: async () => {
     if (syncInstallationsError) {
       throw syncInstallationsError;
@@ -87,7 +90,7 @@ describe("GET /api/github/app/callback", () => {
     expect(redirectUrl.searchParams.get("missing_installation_id")).toBeNull();
   });
 
-  test("returns connected only after at least one installation syncs", async () => {
+  test("returns app_installed only after at least one installation syncs", async () => {
     syncedInstallationsCount = 1;
     const { GET } = await routeModulePromise;
 
@@ -99,7 +102,7 @@ describe("GET /api/github/app/callback", () => {
 
     expect(response.status).toBe(307);
     const redirectUrl = getRedirectUrl(response);
-    expect(redirectUrl.searchParams.get("github")).toBe("connected");
+    expect(redirectUrl.searchParams.get("github")).toBe("app_installed");
     expect(redirectUrl.searchParams.get("missing_installation_id")).toBeNull();
   });
 });

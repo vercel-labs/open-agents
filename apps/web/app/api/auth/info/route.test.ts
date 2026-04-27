@@ -28,7 +28,7 @@ mock.module("@/lib/db/users", () => ({
   isUserAdmin: async () => isAdmin,
 }));
 
-mock.module("@/lib/github/token", () => ({
+mock.module("@/lib/github/users", () => ({
   hasGitHubAccount: async () => hasGitHubLinked,
 }));
 

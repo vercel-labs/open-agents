@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { syncUserInstallations } from "@/lib/github/installations-sync";
-import { getUserGitHubToken, getGitHubUsername } from "@/lib/github/token";
+import { syncUserInstallations } from "@/lib/github/sync";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubUsername } from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
@@ -86,7 +87,7 @@ export async function GET(req: Request): Promise<Response> {
   if (setupAction === "request") {
     githubStatus = "request_sent";
   } else if ((syncedInstallationsCount ?? 0) > 0) {
-    githubStatus = "connected";
+    githubStatus = "app_installed";
   } else if (!installationId) {
     githubStatus = "no_action";
     redirectUrl.searchParams.set("missing_installation_id", "1");

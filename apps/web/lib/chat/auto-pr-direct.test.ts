@@ -24,7 +24,7 @@ let findPullRequestResult: {
   prUrl?: string;
   error?: string;
 } = { found: false };
-let createPullRequestResult: {
+let openPullRequestResult: {
   success: boolean;
   prUrl?: string;
   prNumber?: number;
@@ -66,8 +66,8 @@ const execSpy = mock(async (command: string): Promise<ExecResult> => {
 
 const updateSessionSpy = mock(async () => {});
 const fetchGitHubBranchesSpy = mock(async () => cachedBranchesResult);
-const findPullRequestByBranchSpy = mock(async () => findPullRequestResult);
-const createPullRequestSpy = mock(async () => createPullRequestResult);
+const findPullRequestSpy = mock(async () => findPullRequestResult);
+const openPullRequestSpy = mock(async () => openPullRequestResult);
 const generatePullRequestContentFromSandboxSpy = mock(
   async () => prContentResult,
 );
@@ -78,7 +78,7 @@ const sandbox = {
   exec: execSpy,
 };
 
-mock.module("@/app/api/generate-pr/_lib/generate-pr-helpers", () => ({
+mock.module("@/lib/git/helpers", () => ({
   looksLikeCommitHash: (value: string) => /^[0-9a-f]{7,40}$/i.test(value),
 }));
 
@@ -86,7 +86,7 @@ mock.module("@/lib/db/sessions", () => ({
   updateSession: updateSessionSpy,
 }));
 
-mock.module("@/lib/github/api", () => ({
+mock.module("@/lib/github/repos", () => ({
   fetchGitHubBranches: fetchGitHubBranchesSpy,
 }));
 
@@ -94,12 +94,12 @@ mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenSpy,
 }));
 
-mock.module("@/lib/github/client", () => ({
-  findPullRequestByBranch: findPullRequestByBranchSpy,
-  createPullRequest: createPullRequestSpy,
+mock.module("@/lib/github/pulls", () => ({
+  findPullRequest: findPullRequestSpy,
+  openPullRequest: openPullRequestSpy,
 }));
 
-mock.module("@/lib/git/pr-content", () => ({
+mock.module("@/lib/github/pr-content", () => ({
   generatePullRequestContentFromSandbox:
     generatePullRequestContentFromSandboxSpy,
 }));
@@ -144,8 +144,8 @@ beforeEach(() => {
   execSpy.mockClear();
   updateSessionSpy.mockClear();
   fetchGitHubBranchesSpy.mockClear();
-  findPullRequestByBranchSpy.mockClear();
-  createPullRequestSpy.mockClear();
+  findPullRequestSpy.mockClear();
+  openPullRequestSpy.mockClear();
   generatePullRequestContentFromSandboxSpy.mockClear();
   getUserGitHubTokenSpy.mockClear();
 
@@ -156,7 +156,7 @@ beforeEach(() => {
     defaultBranch: "main",
   };
   findPullRequestResult = { found: false };
-  createPullRequestResult = {
+  openPullRequestResult = {
     success: true,
     prNumber: 42,
     prUrl: "https://github.com/acme/repo/pull/42",
@@ -187,7 +187,7 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch is detached",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("skips when the current branch matches the default branch", async () => {
@@ -204,7 +204,7 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch matches the default branch",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("skips when the repository owner is not a safe GitHub path segment", async () => {
@@ -257,8 +257,8 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch is not fully pushed to origin",
     } satisfies AutoCreatePrResult);
-    expect(findPullRequestByBranchSpy).not.toHaveBeenCalled();
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(findPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("syncs an existing open pull request instead of creating a new one", async () => {
@@ -282,7 +282,7 @@ describe("performAutoCreatePr", () => {
       prNumber: 7,
       prStatus: "open",
     });
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("creates a new pull request and persists PR metadata", async () => {
@@ -297,7 +297,7 @@ describe("performAutoCreatePr", () => {
     } satisfies AutoCreatePrResult);
     expect(getUserGitHubTokenSpy).toHaveBeenCalledWith("user-1");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
-    expect(createPullRequestSpy).toHaveBeenCalledWith(
+    expect(openPullRequestSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         repoUrl: "https://github.com/acme/repo",
         branchName: "feature-branch",
@@ -324,6 +324,6 @@ describe("performAutoCreatePr", () => {
       skipped: false,
       error: "Failed to resolve the repository default branch",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   ExternalLink,
-  GitCommit,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -37,12 +36,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
-import {
-  createSessionBranch,
-  fetchRepoBranches,
-  generatePullRequestContent,
-  type GitActionsResult,
-} from "@/lib/git-flow-client";
+import { createBranch } from "@/lib/git/actions/branch";
+import { generatePrContent, openPullRequest } from "@/lib/github/actions/pr";
+import { getGitStatus } from "@/lib/git/queries/status";
+import { fetchRepoBranches } from "@/lib/git/branches";
 
 interface CreatePRDialogProps {
   open: boolean;
@@ -55,8 +52,6 @@ interface CreatePRDialogProps {
     prStatus: "open" | "merged" | "closed";
   }) => void;
 }
-
-type GitActions = GitActionsResult;
 
 type WizardStep = "create-branch" | "generate";
 type PrCreationMode = "ready" | "draft";
@@ -84,7 +79,6 @@ export function CreatePRDialog({
     autoMergeError?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [gitActions, setGitActions] = useState<GitActions | null>(null);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false);
   const [isDetachedHead, setIsDetachedHead] = useState(false);
@@ -102,7 +96,6 @@ export function CreatePRDialog({
       setBody("");
       setResult(null);
       setError(null);
-      setGitActions(null);
       setResolvedBranch(null);
       setIsCreatingBranch(false);
       setHasUncommittedChanges(false);
@@ -119,15 +112,10 @@ export function CreatePRDialog({
     if (!hasSandbox) return;
     setIsCheckingStatus(true);
     try {
-      const res = await fetch("/api/git-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHasUncommittedChanges(data.hasUncommittedChanges ?? false);
-        setIsDetachedHead(data.isDetachedHead ?? false);
+      const data = await getGitStatus({ sessionId: session.id });
+      if (data) {
+        setHasUncommittedChanges(data.hasUncommittedChanges);
+        setIsDetachedHead(data.isDetachedHead);
         if (data.branch && data.branch !== "HEAD") {
           setResolvedBranch(data.branch);
         }
@@ -202,7 +190,7 @@ export function CreatePRDialog({
     setIsCreatingBranch(true);
     setError(null);
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -227,19 +215,19 @@ export function CreatePRDialog({
     setIsGenerating(true);
     setError(null);
     try {
-      const data = await generatePullRequestContent({
+      const data = await generatePrContent({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
         branchName: displayBranch,
       });
 
+      if (data.error) {
+        throw new Error(data.error);
+      }
       setTitle(data.title ?? "");
       setBody(data.body ?? "");
       setHasGenerated(true);
-      if (data.gitActions) {
-        setGitActions(data.gitActions);
-      }
       if (data.branchName && data.branchName !== "HEAD") {
         setResolvedBranch(data.branchName);
       }
@@ -271,29 +259,23 @@ export function CreatePRDialog({
         ],
       });
 
-      const res = await fetch("/api/pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          repoUrl: session.cloneUrl,
-          branchName: displayBranch,
-          title,
-          body,
-          baseBranch,
-          isDraft,
-          enableAutoMerge,
-        }),
+      const data = await openPullRequest({
+        sessionId: session.id,
+        repoUrl: session.cloneUrl ?? "",
+        branchName: displayBranch,
+        title,
+        body,
+        baseBranch,
+        isDraft,
+        shouldAutoMerge: enableAutoMerge,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create PR");
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setResult({
-        prUrl: data.prUrl,
+        prUrl: data.prUrl ?? "",
         requiresManualCreation: Boolean(data.requiresManualCreation),
         autoMergeEnabled: Boolean(data.autoMergeEnabled),
         autoMergeError:
@@ -465,29 +447,6 @@ export function CreatePRDialog({
                       Commit your changes before creating a pull request.
                     </div>
                   )}
-
-                  {/* Git Actions Banner */}
-                  {gitActions &&
-                    (gitActions.committed || gitActions.pushed) && (
-                      <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
-                        <GitCommit className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <div className="space-y-1">
-                          {gitActions.committed && (
-                            <p>
-                              <span className="font-medium">Committed:</span>{" "}
-                              <code className="rounded bg-background px-1 py-0.5 text-xs">
-                                {gitActions.commitMessage}
-                              </code>
-                            </p>
-                          )}
-                          {gitActions.pushed && (
-                            <p className="text-muted-foreground">
-                              Branch pushed to origin
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
 
                   {/* Title Input */}
                   <div className="grid gap-2">
