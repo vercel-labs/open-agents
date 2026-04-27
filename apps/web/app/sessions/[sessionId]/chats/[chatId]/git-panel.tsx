@@ -27,10 +27,7 @@ import type { WebAgentUIMessage } from "@/app/types";
 import type { MergeReadinessResponse } from "@/app/api/sessions/[sessionId]/merge-readiness/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { Session } from "@/lib/db/schema";
-import type {
-  PullRequestCheckRun,
-  PullRequestMergeMethod,
-} from "@/lib/github/client";
+import type { CheckRun, MergeMethod } from "@/lib/github/pulls";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -80,19 +77,19 @@ import { useSessionChatWorkspaceContext } from "./session-chat-context";
 /* Merge method labels / descriptions                                  */
 /* ------------------------------------------------------------------ */
 
-const mergeMethodLabels: Record<PullRequestMergeMethod, string> = {
+const mergeMethodLabels: Record<MergeMethod, string> = {
   squash: "Squash and merge",
   merge: "Create a merge commit",
   rebase: "Rebase and merge",
 };
 
-const mergeMethodButtonLabels: Record<PullRequestMergeMethod, string> = {
+const mergeMethodButtonLabels: Record<MergeMethod, string> = {
   squash: "Squash & Archive",
   merge: "Merge & Archive",
   rebase: "Rebase & Archive",
 };
 
-const mergeMethodDescriptions: Record<PullRequestMergeMethod, string> = {
+const mergeMethodDescriptions: Record<MergeMethod, string> = {
   squash: "Combine all commits into one commit in the base branch.",
   merge: "All commits will be added to the base branch via a merge commit.",
   rebase: "All commits will be rebased and added to the base branch.",
@@ -133,7 +130,7 @@ type GitPanelProps = {
   // Merge
   onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
   onCloseAndArchiveClick: () => void;
-  onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
+  onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
   onFixConflicts?: (baseBranchRef: string) => Promise<void> | void;
 
   // For inline commit
@@ -416,7 +413,7 @@ function InlineCommitPanel({
     }
   };
 
-  const handleCommit = async (skipPush = false) => {
+  const handleCommit = async () => {
     if (!hasSandbox || !hasPendingGitWork) return;
     setIsCommitting(true);
     setCommitError(null);
@@ -434,7 +431,6 @@ function InlineCommitPanel({
         baseBranch,
         branchName: displayBranch,
         ...(commitTitle ? { commitTitle, commitBody } : {}),
-        skipPush,
       });
 
       if (response.branchName && response.branchName !== "HEAD") {
@@ -444,8 +440,7 @@ function InlineCommitPanel({
       setCommitSuccess({
         commitSha: response.gitActions?.commitSha,
         commitMessage:
-          response.gitActions?.commitMessage ??
-          (skipPush ? "Changes committed" : "Changes committed & pushed"),
+          response.gitActions?.commitMessage ?? "Changes committed & pushed",
       });
       setCommitMessage("");
 
@@ -550,51 +545,28 @@ function InlineCommitPanel({
         </div>
       ) : (
         <>
-          <div className="flex w-full">
-            <Button
-              size="sm"
-              className="min-w-0 flex-1 rounded-r-none text-xs"
-              onClick={() => void handleCommit()}
-              disabled={commitDisabled}
-            >
-              {isCommitting ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Committing...
-                </>
-              ) : (
-                <>
-                  {isExpanded ? (
-                    <GitCommit className="mr-1.5 h-3.5 w-3.5" />
-                  ) : (
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  )}
-                  Commit & Push
-                </>
-              )}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-8 w-8 rounded-l-none border-l border-l-primary-foreground/25"
-                  disabled={commitDisabled}
-                  aria-label="Commit options"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[10rem]">
-                <DropdownMenuItem
-                  onSelect={() => void handleCommit(true)}
-                  className="gap-2 text-xs"
-                >
-                  Commit only
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <Button
+            size="sm"
+            className="w-full text-xs"
+            onClick={() => void handleCommit()}
+            disabled={commitDisabled}
+          >
+            {isCommitting ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Committing...
+              </>
+            ) : (
+              <>
+                {commitMessage.trim() ? (
+                  <GitCommit className="mr-1.5 h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Commit & Push
+              </>
+            )}
+          </Button>
           {!isExpanded && (
             <button
               type="button"
@@ -799,7 +771,7 @@ function InlinePrCreatePanel({
           body: finalBody,
           baseBranch,
           isDraft,
-          enableAutoMerge: !isDraft && enableAutoMerge,
+          shouldAutoMerge: !isDraft && enableAutoMerge,
         }),
       });
 
@@ -1052,7 +1024,7 @@ function InlinePrCreatePanel({
             </>
           ) : (
             <>
-              {isExpanded ? (
+              {prTitle.trim() ? (
                 <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
               ) : (
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -1131,15 +1103,14 @@ function InlineMergePanel({
   onMerged: (result: MergePullRequestResponse) => Promise<void> | void;
   onCloseAndArchiveClick: () => void;
   canCloseAndArchive: boolean;
-  onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
+  onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
   onFixConflicts?: (baseBranchRef: string) => Promise<void> | void;
   isAgentWorking: boolean;
 }) {
   const [readiness, setReadiness] = useState<MergeReadinessResponse | null>(
     null,
   );
-  const [mergeMethod, setMergeMethod] =
-    useState<PullRequestMergeMethod>("squash");
+  const [mergeMethod, setMergeMethod] = useState<MergeMethod>("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
   const [isLoadingReadiness, setIsLoadingReadiness] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

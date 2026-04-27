@@ -1,13 +1,11 @@
+import { commitChanges } from "@/lib/git/actions";
+
 interface GeneratePrRequest {
   sessionId: string;
   sessionTitle: string;
   baseBranch: string;
   branchName: string;
   createBranchOnly?: boolean;
-  commitOnly?: boolean;
-  skipPush?: boolean;
-  commitTitle?: string;
-  commitBody?: string;
 }
 
 export interface RepoBranchesResponse {
@@ -143,12 +141,22 @@ export async function commitAndPushSessionChanges(params: {
   branchName: string;
   commitTitle?: string;
   commitBody?: string;
-  skipPush?: boolean;
 }): Promise<GeneratePrResult> {
-  return requestGeneratePr({
-    ...params,
-    commitOnly: true,
-  });
+  const result = await commitChanges(params);
+
+  if (!result.committed && result.error) {
+    throw new Error(result.error);
+  }
+
+  return {
+    branchName: result.branchName,
+    gitActions: {
+      committed: result.committed,
+      pushed: result.pushed,
+      commitMessage: result.commitMessage,
+      commitSha: result.commitSha,
+    },
+  };
 }
 
 export async function discardSessionUncommittedChanges(params: {

@@ -3,7 +3,7 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
-import { closePullRequest } from "@/lib/github/client";
+import { closePullRequest } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 
 type RouteContext = {

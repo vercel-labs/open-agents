@@ -47,7 +47,7 @@ import useSWR from "swr";
 import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[chatId]/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
 import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
-import type { PullRequestCheckRun } from "@/lib/github/client";
+import type { CheckRun } from "@/lib/github/pulls";
 import type {
   WebAgentCommitDataPart,
   WebAgentPrDataPart,
@@ -1944,7 +1944,7 @@ export function SessionChatContent({
   );
 
   const handleFixChecks = useCallback(
-    async (failedRuns: PullRequestCheckRun[]) => {
+    async (failedRuns: CheckRun[]) => {
       const names = failedRuns.map((run) => run.name).join(", ");
       const fallbackPrompt = `# Fix Failing Checks\n\nThe following checks are failing: ${names}. Please investigate and push a fix.`;
       let messagePayload: Parameters<typeof sendMessageWithPendingState>[0] = {

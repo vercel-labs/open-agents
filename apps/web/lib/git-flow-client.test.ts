@@ -1,11 +1,24 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import {
+
+let commitChangesResult = {
+  committed: true,
+  pushed: true,
+  branchName: "feature/test",
+  commitMessage: "feat: test",
+  commitSha: "abc123",
+};
+
+mock.module("@/lib/git/actions", () => ({
+  commitChanges: async () => commitChangesResult,
+}));
+
+const {
   commitAndPushSessionChanges,
   createSessionBranch,
   fetchRepoBranches,
   generatePullRequestContent,
   requestGeneratePr,
-} from "./git-flow-client";
+} = await import("./git-flow-client");
 
 const originalFetch = globalThis.fetch;
 
@@ -112,7 +125,6 @@ describe("git-flow-client", () => {
       sessionTitle: "My session",
       baseBranch: "main",
       branchName: "feature/test",
-      commitOnly: true,
     });
 
     expect(String(fetchCalls[0]?.input)).toBe("/api/generate-pr");
@@ -126,7 +138,6 @@ describe("git-flow-client", () => {
         sessionTitle: "My session",
         baseBranch: "main",
         branchName: "feature/test",
-        commitOnly: true,
       }),
     );
 
@@ -200,16 +211,14 @@ describe("git-flow-client", () => {
     ).rejects.toThrow("Failed to determine branch name");
   });
 
-  test("commitAndPushSessionChanges sets commitOnly", async () => {
-    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      fetchCalls.push({ input, init });
-      return Promise.resolve(
-        createMockResponse({
-          ok: true,
-          json: async () => ({ gitActions: { pushed: true } }),
-        }),
-      );
-    }) as unknown as typeof fetch;
+  test("commitAndPushSessionChanges calls server action", async () => {
+    commitChangesResult = {
+      committed: true,
+      pushed: true,
+      branchName: "feature/test",
+      commitMessage: "feat: test",
+      commitSha: "abc123",
+    };
 
     const result = await commitAndPushSessionChanges({
       sessionId: "session-1",
@@ -220,16 +229,9 @@ describe("git-flow-client", () => {
       commitBody: "details",
     });
 
-    const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
-      commitOnly?: boolean;
-      commitTitle?: string;
-      commitBody?: string;
-    };
-
-    expect(body.commitOnly).toBe(true);
-    expect(body.commitTitle).toBe("feat: test");
-    expect(body.commitBody).toBe("details");
     expect(result.gitActions?.pushed).toBe(true);
+    expect(result.gitActions?.commitMessage).toBe("feat: test");
+    expect(result.branchName).toBe("feature/test");
   });
 
   test("generatePullRequestContent passes payload without commit flags", async () => {
@@ -251,11 +253,9 @@ describe("git-flow-client", () => {
     });
 
     const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
-      commitOnly?: boolean;
       createBranchOnly?: boolean;
     };
 
-    expect(body.commitOnly).toBeUndefined();
     expect(body.createBranchOnly).toBeUndefined();
     expect(result.title).toBe("feat: improve flow");
   });

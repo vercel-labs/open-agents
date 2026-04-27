@@ -79,11 +79,23 @@ mock.module("@/lib/session/get-server-session", () => ({
 }));
 
 mock.module("@/lib/github/token", () => ({
+  getUserGitHubToken: async () => currentGitHubToken,
+}));
+
+mock.module("@/lib/github/users", () => ({
   getGitHubUserProfile: async () => ({
     externalUserId: "12345",
     username: "nico-gh",
   }),
-  getUserGitHubToken: async () => currentGitHubToken,
+}));
+
+mock.module("@/lib/github/access", () => ({
+  verifyRepoAccess: async () => ({ ok: true, installationId: 999 }),
+  getRepoAccessErrorMessage: () => "Access denied",
+}));
+
+mock.module("@/lib/github/app", () => ({
+  getInstallationToken: async () => "installation-token-mock",
 }));
 
 mock.module("@/lib/vercel/token", () => ({
@@ -261,7 +273,8 @@ describe("/api/sandbox lifecycle kicks", () => {
         },
       },
       options: {
-        githubToken: "github-user-token",
+        // installation token for clone (scoped to admin-approved repos)
+        githubToken: "installation-token-mock",
       },
     });
     expect(connectConfigs[0]?.state.source).not.toHaveProperty("token");

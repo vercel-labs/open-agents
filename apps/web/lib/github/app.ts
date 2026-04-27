@@ -92,6 +92,53 @@ export async function getAppCoAuthorTrailer(): Promise<string | null> {
   return cachedTrailer;
 }
 
+export interface BotIdentity {
+  name: string;
+  email: string;
+}
+
+/**
+ * Cached bot identity for the committer field of API commits.
+ */
+let cachedBotIdentity: BotIdentity | null | undefined;
+
+/**
+ * Returns the bot identity for use as the committer in API commits.
+ * Returns null if the app is not configured.
+ */
+export async function getBotIdentity(): Promise<BotIdentity | null> {
+  if (cachedBotIdentity !== undefined) return cachedBotIdentity;
+
+  const slug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
+  if (!slug) {
+    cachedBotIdentity = null;
+    return null;
+  }
+
+  const botName = `${slug}[bot]`;
+  let botUserId: number | null = null;
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/users/${encodeURIComponent(botName)}`,
+      { headers: { Accept: "application/vnd.github+json" } },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { id?: number };
+      botUserId = data.id ?? null;
+    }
+  } catch {
+    // Fall back to email without numeric prefix
+  }
+
+  const email = botUserId
+    ? `${botUserId}+${botName}@users.noreply.github.com`
+    : `${botName}@users.noreply.github.com`;
+
+  cachedBotIdentity = { name: botName, email };
+  return cachedBotIdentity;
+}
+
 export async function getInstallationToken(
   installationId: number,
 ): Promise<string> {

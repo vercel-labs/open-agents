@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { getUserGitHubToken, getGitHubUsername } from "@/lib/github/token";
-import { syncUserInstallations } from "@/lib/github/installations-sync";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubUsername } from "@/lib/github/users";
+import { syncUserInstallations } from "@/lib/github/sync";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
@@ -47,7 +48,7 @@ export async function GET(req: Request): Promise<Response> {
       );
 
       if (count > 0) {
-        redirectUrl.searchParams.set("github", "connected");
+        redirectUrl.searchParams.set("github", "account_connected");
         return NextResponse.redirect(redirectUrl);
       }
     } catch (error) {
@@ -58,7 +59,7 @@ export async function GET(req: Request): Promise<Response> {
   // no installations found — check if any exist in DB from a previous install
   const existingInstallations = await getInstallationsByUserId(session.user.id);
   if (existingInstallations.length > 0) {
-    redirectUrl.searchParams.set("github", "connected");
+    redirectUrl.searchParams.set("github", "account_connected");
     return NextResponse.redirect(redirectUrl);
   }
 

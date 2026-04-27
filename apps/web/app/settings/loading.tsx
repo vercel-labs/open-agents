@@ -50,16 +50,11 @@ function ProfilePageLoading() {
 
 function ConnectionsPageLoading() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">Connections</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your connected accounts and integrations.
-        </p>
-      </div>
+    <>
+      <h1 className="text-2xl font-semibold">Connections</h1>
       <VercelSectionSkeleton />
       <AccountsSectionSkeleton />
-    </div>
+    </>
   );
 }
 

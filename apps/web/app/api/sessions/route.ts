@@ -15,7 +15,7 @@ import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
-} from "@/lib/github/repo-identifiers";
+} from "@/lib/github/urls";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {

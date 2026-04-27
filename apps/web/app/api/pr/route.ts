@@ -1,9 +1,6 @@
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import {
-  createPullRequest,
-  enablePullRequestAutoMerge,
-  parseGitHubUrl,
-} from "@/lib/github/client";
+import { openPullRequest, enableAutoMerge } from "@/lib/github/pulls";
+import { parseGitHubUrl } from "@/lib/github/client";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -16,7 +13,7 @@ interface CreatePRRequest {
   baseBranch: string;
   headOwner?: string;
   isDraft?: boolean;
-  enableAutoMerge?: boolean;
+  shouldAutoMerge?: boolean;
 }
 
 function buildGitHubCompareUrl(params: {
@@ -70,7 +67,7 @@ export async function POST(req: Request) {
     baseBranch,
     headOwner,
     isDraft = false,
-    enableAutoMerge = false,
+    shouldAutoMerge = false,
   } = body;
 
   if (!sessionId || !repoUrl || !title || !baseBranch) {
@@ -81,11 +78,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid draft flag" }, { status: 400 });
   }
 
-  if (typeof enableAutoMerge !== "boolean") {
+  if (typeof shouldAutoMerge !== "boolean") {
     return Response.json({ error: "Invalid auto-merge flag" }, { status: 400 });
   }
 
-  if (isDraft && enableAutoMerge) {
+  if (isDraft && shouldAutoMerge) {
     return Response.json(
       { error: "Auto-merge is not available for draft pull requests" },
       { status: 400 },
@@ -153,7 +150,7 @@ export async function POST(req: Request) {
 
   // 4. Create PR using existing function
   const tokenUsedForCreation = userToken;
-  const result = await createPullRequest({
+  const result = await openPullRequest({
     repoUrl,
     branchName: resolvedBranch,
     headRef,
@@ -181,7 +178,7 @@ export async function POST(req: Request) {
         success: true,
         prUrl: compareUrl,
         requiresManualCreation: true,
-        ...(enableAutoMerge
+        ...(shouldAutoMerge
           ? {
               autoMergeEnabled: false,
               autoMergeError:
@@ -206,12 +203,12 @@ export async function POST(req: Request) {
   let autoMergeEnabled = false;
   let autoMergeError: string | undefined;
 
-  if (enableAutoMerge) {
+  if (shouldAutoMerge) {
     if (typeof result.prNumber !== "number") {
       autoMergeError =
         "The pull request was created, but auto-merge could not be enabled.";
     } else {
-      const autoMergeResult = await enablePullRequestAutoMerge({
+      const autoMergeResult = await enableAutoMerge({
         repoUrl,
         prNumber: result.prNumber,
         nodeId: result.nodeId,
@@ -243,6 +240,6 @@ export async function POST(req: Request) {
     prUrl: result.prUrl,
     prNumber: result.prNumber,
     prStatus: "open",
-    ...(enableAutoMerge ? { autoMergeEnabled, autoMergeError } : {}),
+    ...(shouldAutoMerge ? { autoMergeEnabled, autoMergeError } : {}),
   });
 }

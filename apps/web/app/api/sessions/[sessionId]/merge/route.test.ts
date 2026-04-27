@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { PullRequestMergeReadiness } from "@/lib/github/client";
+import type { MergeReadiness } from "@/lib/github/pulls";
 
 mock.module("server-only", () => ({}));
 
@@ -33,7 +33,7 @@ const updateCalls: Array<{
 const mergeCalls: Array<Record<string, unknown>> = [];
 const deleteCalls: Array<Record<string, unknown>> = [];
 
-let readinessResult: PullRequestMergeReadiness = {
+let readinessResult: MergeReadiness = {
   success: true,
   canMerge: true,
   reasons: [],
@@ -138,8 +138,8 @@ function registerRouteMocks() {
     getUserGitHubToken: async () => "token-123",
   }));
 
-  mock.module("@/lib/github/client", () => ({
-    getPullRequestMergeReadiness: async () => readinessResult,
+  mock.module("@/lib/github/pulls", () => ({
+    getMergeReadiness: async () => readinessResult,
     mergePullRequest: async (input: Record<string, unknown>) => {
       mergeCalls.push(input);
       return mergeResult;

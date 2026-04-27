@@ -83,11 +83,14 @@ function registerRouteMocks() {
 
   mock.module("@/lib/github/client", () => ({
     parseGitHubUrl,
-    createPullRequest: async (input: Record<string, unknown>) => {
+  }));
+
+  mock.module("@/lib/github/pulls", () => ({
+    openPullRequest: async (input: Record<string, unknown>) => {
       createCalls.push(input);
       return createPullRequestResult;
     },
-    enablePullRequestAutoMerge: async (input: Record<string, unknown>) => {
+    enableAutoMerge: async (input: Record<string, unknown>) => {
       autoMergeCalls.push(input);
       return enableAutoMergeResult;
     },
@@ -139,7 +142,7 @@ describe("/api/pr", () => {
           title: "Ship auto-merge",
           body: "Lets go",
           baseBranch: "main",
-          enableAutoMerge: true,
+          shouldAutoMerge: true,
         }),
       }),
     );
@@ -198,7 +201,7 @@ describe("/api/pr", () => {
           branchName: "feature/auto-merge",
           title: "Ship auto-merge",
           baseBranch: "main",
-          enableAutoMerge: true,
+          shouldAutoMerge: true,
         }),
       }),
     );
@@ -238,7 +241,7 @@ describe("/api/pr", () => {
           title: "Ship auto-merge",
           baseBranch: "main",
           isDraft: true,
-          enableAutoMerge: true,
+          shouldAutoMerge: true,
         }),
       }),
     );

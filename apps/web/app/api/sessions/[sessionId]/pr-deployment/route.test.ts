@@ -34,7 +34,7 @@ const findLatestFailedDeploymentInspectorUrlForBranchMock = mock(
   async () => currentFailedDeploymentInspectorUrl,
 );
 const getUserGitHubTokenMock = mock(async () => "repo-token");
-const findLatestVercelDeploymentUrlForPullRequestMock = mock(
+const findDeploymentUrlMock = mock(
   async () => currentPullRequestDeploymentResult,
 );
 
@@ -66,9 +66,8 @@ mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenMock,
 }));
 
-mock.module("@/lib/github/client", () => ({
-  findLatestVercelDeploymentUrlForPullRequest:
-    findLatestVercelDeploymentUrlForPullRequestMock,
+mock.module("@/lib/github/pulls", () => ({
+  findDeploymentUrl: findDeploymentUrlMock,
 }));
 
 const routeModulePromise = import("./route");
@@ -97,7 +96,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     findLatestBuildingDeploymentUrlForBranchMock.mockClear();
     findLatestFailedDeploymentInspectorUrlForBranchMock.mockClear();
     getUserGitHubTokenMock.mockClear();
-    findLatestVercelDeploymentUrlForPullRequestMock.mockClear();
+    findDeploymentUrlMock.mockClear();
   });
 
   test("returns the latest branch preview directly from Vercel without requiring a PR", async () => {
@@ -121,9 +120,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
       teamId: "team-1",
     });
     expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(0);
-    expect(
-      findLatestVercelDeploymentUrlForPullRequestMock,
-    ).toHaveBeenCalledTimes(0);
+    expect(findDeploymentUrlMock).toHaveBeenCalledTimes(0);
   });
 
   test("returns buildingDeploymentUrl when a deployment is still building", async () => {
@@ -219,9 +216,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     );
     // Vercel API returned a result so GitHub fallback is not needed
     expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(0);
-    expect(
-      findLatestVercelDeploymentUrlForPullRequestMock,
-    ).toHaveBeenCalledTimes(0);
+    expect(findDeploymentUrlMock).toHaveBeenCalledTimes(0);
   });
 
   test("falls back to PR comment lookup when Vercel API has no deployment", async () => {
@@ -247,9 +242,7 @@ describe("/api/sessions/[sessionId]/pr-deployment", () => {
     expect(response.status).toBe(200);
     expect(body.deploymentUrl).toBe("https://pr-preview.vercel.app");
     expect(getUserGitHubTokenMock).toHaveBeenCalledTimes(1);
-    expect(
-      findLatestVercelDeploymentUrlForPullRequestMock,
-    ).toHaveBeenCalledWith({
+    expect(findDeploymentUrlMock).toHaveBeenCalledWith({
       owner: "vercel",
       repo: "open-agents",
       prNumber: 42,

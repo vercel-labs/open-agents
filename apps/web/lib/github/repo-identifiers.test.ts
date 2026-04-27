@@ -4,7 +4,7 @@ import {
   buildGitHubAuthRemoteUrl,
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
-} from "./repo-identifiers";
+} from "./urls";
 
 describe("repo-identifiers", () => {
   test("accepts safe GitHub owner and repo segments", () => {

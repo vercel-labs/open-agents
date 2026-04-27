@@ -4,7 +4,7 @@ import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getConversationContext } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
-import { getGitHubUserProfile } from "@/lib/github/token";
+import { getGitHubUserProfile } from "@/lib/github/users";
 import { db } from "@/lib/db/client";
 import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
 import { users } from "@/lib/db/schema";

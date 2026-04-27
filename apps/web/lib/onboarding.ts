@@ -1,6 +1,6 @@
 import "server-only";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { hasGitHubAccount } from "@/lib/github/token";
+import { hasGitHubAccount } from "@/lib/github/users";
 
 /**
  * Check whether a user needs to go through onboarding.

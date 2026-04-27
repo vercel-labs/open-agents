@@ -5,10 +5,10 @@ import {
 import { updateSession } from "@/lib/db/sessions";
 import {
   deleteBranchRef,
-  getPullRequestMergeReadiness,
+  getMergeReadiness,
   mergePullRequest,
-  type PullRequestMergeMethod,
-} from "@/lib/github/client";
+  type MergeMethod,
+} from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 
 type RouteContext = {
@@ -16,7 +16,7 @@ type RouteContext = {
 };
 
 interface MergePullRequestRequest {
-  mergeMethod?: PullRequestMergeMethod;
+  mergeMethod?: MergeMethod;
   commitTitle?: string;
   commitMessage?: string;
   deleteBranch?: boolean;
@@ -32,7 +32,7 @@ export type MergePullRequestResponse = {
   branchDeleteError: string | null;
 };
 
-function isMergeMethod(value: unknown): value is PullRequestMergeMethod {
+function isMergeMethod(value: unknown): value is MergeMethod {
   return value === "merge" || value === "squash" || value === "rebase";
 }
 
@@ -150,7 +150,7 @@ export async function POST(req: Request, context: RouteContext) {
     );
   }
 
-  const readiness = await getPullRequestMergeReadiness({
+  const readiness = await getMergeReadiness({
     repoUrl: sessionRecord.cloneUrl,
     prNumber: sessionRecord.prNumber,
     token,

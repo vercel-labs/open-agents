@@ -4,7 +4,7 @@ import {
   requireOwnedSessionWithSandboxGuard,
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
-import { findPullRequestByBranch } from "@/lib/github/client";
+import { findPullRequest } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const prResult = await findPullRequestByBranch({
+    const prResult = await findPullRequest({
       owner: sessionRecord.repoOwner,
       repo: sessionRecord.repoName,
       branchName: branch,

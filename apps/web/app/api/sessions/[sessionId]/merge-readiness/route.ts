@@ -3,10 +3,10 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import {
-  getPullRequestMergeReadiness,
-  type PullRequestCheckRun,
-  type PullRequestMergeMethod,
-} from "@/lib/github/client";
+  getMergeReadiness,
+  type CheckRun,
+  type MergeMethod,
+} from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 
 type RouteContext = {
@@ -27,7 +27,7 @@ const DEFAULT_CHECKS: MergeReadinessChecks = {
   failed: 0,
 };
 
-const DEFAULT_METHOD: PullRequestMergeMethod = "squash";
+const DEFAULT_METHOD: MergeMethod = "squash";
 
 export type MergeReadinessResponse = {
   canMerge: boolean;
@@ -45,10 +45,10 @@ export type MergeReadinessResponse = {
     changedFiles: number;
     commits: number;
   } | null;
-  allowedMethods: PullRequestMergeMethod[];
-  defaultMethod: PullRequestMergeMethod;
+  allowedMethods: MergeMethod[];
+  defaultMethod: MergeMethod;
   checks: MergeReadinessChecks;
-  checkRuns: PullRequestCheckRun[];
+  checkRuns: CheckRun[];
 };
 
 function buildUnavailableResponse(
@@ -157,7 +157,7 @@ export async function GET(_req: Request, context: RouteContext) {
     );
   }
 
-  const readiness = await getPullRequestMergeReadiness({
+  const readiness = await getMergeReadiness({
     repoUrl: cloneUrl,
     prNumber: sessionRecord.prNumber,
     token,

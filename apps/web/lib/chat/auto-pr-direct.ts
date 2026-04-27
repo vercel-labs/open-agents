@@ -1,16 +1,12 @@
 import type { Sandbox } from "@open-agents/sandbox";
 import { looksLikeCommitHash } from "@/app/api/generate-pr/_lib/generate-pr-helpers";
 import { updateSession } from "@/lib/db/sessions";
+import { openPullRequest, findPullRequest } from "@/lib/github/pulls";
+import { fetchGitHubBranches } from "@/lib/github/repos";
 import {
-  createPullRequest,
-  findPullRequestByBranch,
-} from "@/lib/github/client";
-import { fetchGitHubBranches } from "@/lib/github/api";
-import {
-  buildGitHubAuthRemoteUrl,
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
-} from "@/lib/github/repo-identifiers";
+} from "@/lib/github/urls";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 
@@ -78,10 +74,10 @@ async function findExistingOpenPullRequest(params: {
   repoName: string;
   branchName: string;
   token: string;
-}): Promise<Awaited<ReturnType<typeof findPullRequestByBranch>> | null> {
+}): Promise<Awaited<ReturnType<typeof findPullRequest>> | null> {
   const { repoOwner, repoName, branchName, token } = params;
 
-  const prResult = await findPullRequestByBranch({
+  const prResult = await findPullRequest({
     owner: repoOwner,
     repo: repoName,
     branchName,
@@ -147,23 +143,7 @@ export async function performAutoCreatePr(
     };
   }
 
-  const authUrl = buildGitHubAuthRemoteUrl({
-    token: userToken,
-    owner: repoOwner,
-    repo: repoName,
-  });
-
-  if (!authUrl) {
-    return {
-      created: false,
-      syncedExisting: false,
-      skipped: true,
-      skipReason:
-        "Repository owner or name is not supported for auto PR creation",
-    };
-  }
-
-  await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 10000);
+  // credential brokering handles remote auth — no manual remote set-url needed
 
   const defaultBranch = await resolveDefaultBranch({
     sandbox,
@@ -302,7 +282,7 @@ export async function performAutoCreatePr(
   }
 
   const repoUrl = `https://github.com/${repoOwner}/${repoName}`;
-  const createResult = await createPullRequest({
+  const createResult = await openPullRequest({
     repoUrl,
     branchName,
     title: prContentResult.title,

@@ -1,13 +1,13 @@
 import { generateState } from "arctic";
 import { NextResponse, type NextRequest } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { syncUserInstallations } from "@/lib/github/installations-sync";
+import { syncUserInstallations } from "@/lib/github/sync";
+import { getUserGitHubToken } from "@/lib/github/token";
 import {
   getGitHubAccountId,
-  getUserGitHubToken,
   getGitHubUsername,
   hasGitHubAccount,
-} from "@/lib/github/token";
+} from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null): string {

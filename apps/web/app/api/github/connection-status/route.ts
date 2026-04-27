@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import type { GitHubConnectionStatusResponse } from "@/lib/github/connection-status";
+import type { GitHubConnectionStatusResponse } from "@/lib/github/status";
 import {
   isGitHubInstallationsAuthError,
   syncUserInstallations,
-} from "@/lib/github/installations-sync";
-import {
-  getUserGitHubToken,
-  getGitHubUsername,
-  hasGitHubAccount,
-} from "@/lib/github/token";
+} from "@/lib/github/sync";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubUsername, hasGitHubAccount } from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET() {

@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
-import { findLatestVercelDeploymentUrlForPullRequest } from "@/lib/github/client";
+import { findDeploymentUrl } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 import {
   findLatestBuildingDeploymentUrlForBranch,
@@ -117,7 +117,7 @@ export async function GET(req: Request, context: RouteContext) {
     } satisfies PrDeploymentResponse);
   }
 
-  const deploymentResult = await findLatestVercelDeploymentUrlForPullRequest({
+  const deploymentResult = await findDeploymentUrl({
     owner: sessionRecord.repoOwner,
     repo: sessionRecord.repoName,
     prNumber: sessionRecord.prNumber,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchGitHubBranches } from "@/lib/github/api";
+import { fetchGitHubBranches } from "@/lib/github/repos";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 

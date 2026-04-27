@@ -282,7 +282,7 @@ export function CreatePRDialog({
           body,
           baseBranch,
           isDraft,
-          enableAutoMerge,
+          shouldAutoMerge: enableAutoMerge,
         }),
       });
 

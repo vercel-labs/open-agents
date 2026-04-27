@@ -2,11 +2,8 @@
 
 import { cookies } from "next/headers";
 import { deleteInstallationsByUserId } from "@/lib/db/installations";
-import {
-  deleteGitHubAccountLink,
-  getUserGitHubToken,
-  hasGitHubAccount,
-} from "@/lib/github/token";
+import { deleteGitHubAccountLink, hasGitHubAccount } from "@/lib/github/users";
+import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function unlinkGitHub(): Promise<{

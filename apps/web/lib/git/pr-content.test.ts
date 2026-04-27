@@ -42,7 +42,7 @@ mock.module("@/lib/db/sessions", () => ({
   getChatsBySessionId: async () => chats,
 }));
 
-mock.module("@/lib/github/token", () => ({
+mock.module("@/lib/github/users", () => ({
   getGitHubUserProfile: async () => githubProfile,
 }));
 

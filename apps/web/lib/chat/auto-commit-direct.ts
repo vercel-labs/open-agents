@@ -1,9 +1,18 @@
 import type { Sandbox } from "@open-agents/sandbox";
+import {
+  hasUncommittedChanges,
+  stageAll,
+  getCurrentBranch,
+  getStagedDiff,
+  getChangedFiles,
+  readFileContents,
+  syncToRemote,
+} from "@open-agents/sandbox";
 import { generateText } from "ai";
 import { gateway } from "@open-agents/agent";
-import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
-import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
-import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
+import { getInstallationOctokit } from "@/lib/github/app";
+import { verifyRepoAccess } from "@/lib/github/access";
+import { createCommit, buildCoAuthor } from "@/lib/github/commit";
 
 export interface AutoCommitParams {
   sandbox: Sandbox;
@@ -12,6 +21,8 @@ export interface AutoCommitParams {
   sessionTitle: string;
   repoOwner: string;
   repoName: string;
+  /** base branch for new branches that don't exist on remote yet */
+  baseBranch?: string;
 }
 
 export interface AutoCommitResult {
@@ -23,39 +34,32 @@ export interface AutoCommitResult {
 }
 
 /**
- * Performs an auto-commit directly using the sandbox.
- * Stages all changes, generates a commit message, commits, and pushes.
+ * Performs an auto-commit via the GitHub API (verified/signed commits).
+ * Stages changes, generates a commit message, creates the commit via API,
+ * then syncs the sandbox to match the new remote HEAD.
  */
 export async function performAutoCommit(
   params: AutoCommitParams,
 ): Promise<AutoCommitResult> {
-  const { sandbox, userId, sessionTitle, repoOwner, repoName } = params;
-  const cwd = sandbox.workingDirectory;
+  const {
+    sandbox,
+    userId,
+    sessionId,
+    sessionTitle,
+    repoOwner,
+    repoName,
+    baseBranch,
+  } = params;
 
-  // 1. Check for uncommitted changes
-  const statusResult = await sandbox.exec("git status --porcelain", cwd, 10000);
-  if (!statusResult.success || !statusResult.stdout.trim()) {
+  // 1. check for uncommitted changes
+  if (!(await hasUncommittedChanges(sandbox))) {
     return { committed: false, pushed: false };
   }
 
-  // 2. Set up auth on the remote
-  const repoToken = await getUserGitHubToken(userId);
-
-  if (repoToken) {
-    const authUrl = buildGitHubAuthRemoteUrl({
-      token: repoToken,
-      owner: repoOwner,
-      repo: repoName,
-    });
-
-    if (authUrl) {
-      await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 10000);
-    }
-  }
-
-  // 3. Stage all changes
-  const addResult = await sandbox.exec("git add -A", cwd, 10000);
-  if (!addResult.success) {
+  // 2. stage all changes
+  try {
+    await stageAll(sandbox);
+  } catch {
     return {
       committed: false,
       pushed: false,
@@ -63,95 +67,91 @@ export async function performAutoCommit(
     };
   }
 
-  // 4. Generate commit message
-  const commitMessage = await generateCommitMessage(sandbox, cwd, sessionTitle);
+  // 3. generate commit message from staged diff
+  const commitMessage = await generateCommitMessage(sandbox, sessionTitle);
 
-  // 5. Set git author identity
-  const ghProfile = await getGitHubUserProfile(userId);
-  if (ghProfile?.externalUserId && ghProfile.username) {
-    const userEmail = `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`;
-    await sandbox.exec(
-      `git config user.name '${ghProfile.username.replace(/'/g, "'\\''")}'`,
-      cwd,
-      5000,
-    );
-    await sandbox.exec(`git config user.email '${userEmail}'`, cwd, 5000);
-  }
+  // 4. verify repo access and get installation
+  const access = await verifyRepoAccess({
+    userId,
+    owner: repoOwner,
+    repo: repoName,
+  });
 
-  // 6. Commit with Co-Authored-By trailer for the agent app
-  const escapedMessage = commitMessage.replace(/'/g, "'\\''");
-  const coAuthorTrailer = await getAppCoAuthorTrailer();
-  const trailerArg = coAuthorTrailer
-    ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
-    : "";
-  const commitResult = await sandbox.exec(
-    `git commit -m '${escapedMessage}'${trailerArg}`,
-    cwd,
-    10000,
-  );
-
-  if (!commitResult.success) {
+  if (!access.ok) {
     return {
       committed: false,
       pushed: false,
-      error: `Failed to commit: ${commitResult.stdout}`,
+      error: `Cannot commit: ${access.reason}`,
     };
   }
 
-  const headResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
-  const commitSha = headResult.stdout.trim() || undefined;
+  // 5. resolve user for co-author attribution
+  const coAuthor = await buildCoAuthor(userId);
 
-  // 7. Push
-  const branchResult = await sandbox.exec(
-    "git symbolic-ref --short HEAD",
-    cwd,
-    5000,
-  );
-  const currentBranch = branchResult.stdout.trim() || "HEAD";
+  const changes = await getChangedFiles(sandbox);
+  if (changes.length === 0) {
+    return { committed: false, pushed: false };
+  }
 
-  const pushResult = await sandbox.exec(
-    `GIT_TERMINAL_PROMPT=0 git push -u origin ${currentBranch}`,
-    cwd,
-    60000,
-  );
+  const files = await readFileContents(sandbox, changes);
 
-  if (!pushResult.success) {
-    console.warn(`[auto-commit] Push failed for session ${params.sessionId}`);
+  // 6. create verified commit via github api
+  const branch = await getCurrentBranch(sandbox);
+  const octokit = getInstallationOctokit(access.installationId);
+
+  const result = await createCommit({
+    octokit,
+    owner: repoOwner,
+    repo: repoName,
+    branch,
+    baseBranch,
+    message: commitMessage,
+    files,
+    coAuthor: coAuthor ?? undefined,
+  });
+
+  if (!result.ok) {
+    console.warn(
+      `[auto-commit] API commit failed for session ${sessionId}: ${result.error}`,
+    );
     return {
-      committed: true,
+      committed: false,
       pushed: false,
-      commitMessage,
-      commitSha,
-      error: "Commit succeeded but push failed",
+      error: result.error,
     };
+  }
+
+  // 8. sync sandbox to match the new remote head
+  try {
+    await syncToRemote(sandbox, branch);
+  } catch (error) {
+    console.warn(
+      `[auto-commit] Sandbox sync failed for session ${sessionId}:`,
+      error,
+    );
+    // commit succeeded on remote even if sandbox sync fails
   }
 
   console.log(
-    `[auto-commit] Successfully committed and pushed for session ${params.sessionId}`,
+    `[auto-commit] Successfully committed (verified) for session ${sessionId}`,
   );
 
   return {
     committed: true,
     pushed: true,
     commitMessage,
-    commitSha,
+    commitSha: result.commitSha,
   };
 }
 
 async function generateCommitMessage(
   sandbox: Sandbox,
-  cwd: string,
   sessionTitle: string,
 ): Promise<string> {
   const fallback = "chore: update repository changes";
 
   try {
-    const stagedDiffResult = await sandbox.exec(
-      "git diff --cached",
-      cwd,
-      30000,
-    );
-    const diffForCommit = stagedDiffResult.stdout;
+    const diffForCommit = await getStagedDiff(sandbox);
 
     if (!diffForCommit.trim()) {
       return fallback;
