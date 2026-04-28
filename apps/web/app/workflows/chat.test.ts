@@ -475,6 +475,64 @@ describe("runAgentWorkflow", () => {
     });
   });
 
+  test("streams a user-visible message when workspace setup fails", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
+      writtenChunks.push({ type: "start", messageId: params.assistantId });
+      throw new Error("Connect GitHub to access repositories");
+    });
+
+    await expect(runAgentWorkflow(makeOptions())).rejects.toThrow(
+      "Connect GitHub to access repositories",
+    );
+
+    expect(writtenChunks).toEqual(
+      expect.arrayContaining([
+        { type: "start", messageId: "gen-id-1" },
+        { type: "text-start", id: "setup-error" },
+        {
+          type: "text-delta",
+          id: "setup-error",
+          delta: "Connect GitHub to access this repository, then try again.",
+        },
+        { type: "text-end", id: "setup-error" },
+      ]),
+    );
+    expect(spies.persistAssistantMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        id: "gen-id-1",
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "Connect GitHub to access this repository, then try again.",
+          },
+        ],
+      }),
+    );
+  });
+
+  test("streams an archived-session setup message when runtime rejects", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
+      writtenChunks.push({ type: "start", messageId: params.assistantId });
+      throw new Error("Session is archived");
+    });
+
+    await expect(runAgentWorkflow(makeOptions())).rejects.toThrow(
+      "Session is archived",
+    );
+
+    expect(writtenChunks).toEqual(
+      expect.arrayContaining([
+        {
+          type: "text-delta",
+          id: "setup-error",
+          delta: "This session is archived. Unarchive it to continue.",
+        },
+      ]),
+    );
+  });
+
   test("persists assistant message after run", async () => {
     await runAgentWorkflow(makeOptions());
 

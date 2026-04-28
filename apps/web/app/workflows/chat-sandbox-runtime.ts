@@ -184,6 +184,9 @@ export async function resolveChatSandboxRuntime(params: {
   if (session.userId !== params.userId) {
     throw new Error("Unauthorized");
   }
+  if (session.status === "archived") {
+    throw new Error("Session is archived");
+  }
 
   const didSetupWorkspace = !isSandboxActive(session.sandboxState);
   if (didSetupWorkspace) {

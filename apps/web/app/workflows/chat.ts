@@ -275,6 +275,22 @@ function withModelMetadata(
   };
 }
 
+function getSetupErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Workspace setup failed. Try again in a moment.";
+  }
+
+  if (error.message.includes("Connect GitHub")) {
+    return "Connect GitHub to access this repository, then try again.";
+  }
+
+  if (error.message === "Session is archived") {
+    return "This session is archived. Unarchive it to continue.";
+  }
+
+  return "Workspace setup failed. Try again in a moment.";
+}
+
 function isStepTimingError(
   error: unknown,
 ): error is Error & { stepTiming: WorkflowRunStepTiming } {
@@ -946,6 +962,16 @@ export async function runAgentWorkflow(options: Options) {
   } catch (error) {
     workflowStatus = wasAborted ? "aborted" : "failed";
     caughtError = error;
+
+    if (pendingAssistantResponse.parts.length === 0 && !streamClosed) {
+      const errorText = getSetupErrorMessage(error);
+      pendingAssistantResponse = {
+        ...pendingAssistantResponse,
+        parts: [{ type: "text", text: errorText }],
+      };
+      await sendTextMessage(writable, "setup-error", errorText);
+      await persistAssistantMessage(options.chatId, pendingAssistantResponse);
+    }
   } finally {
     try {
       // On unexpected errors, still clear the active stream and close
@@ -1303,6 +1329,18 @@ async function sendFinish(writable: Writable) {
   const writer = writable.getWriter();
   try {
     await writer.write({ type: "finish", finishReason: "stop" });
+  } finally {
+    writer.releaseLock();
+  }
+}
+
+async function sendTextMessage(writable: Writable, id: string, text: string) {
+  "use step";
+  const writer = writable.getWriter();
+  try {
+    await writer.write({ type: "text-start", id });
+    await writer.write({ type: "text-delta", id, delta: text });
+    await writer.write({ type: "text-end", id });
   } finally {
     writer.releaseLock();
   }
