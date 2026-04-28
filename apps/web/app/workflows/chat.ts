@@ -16,13 +16,16 @@ import { addLanguageModelUsage } from "./usage-utils";
 import { extractGatewayCost } from "./gateway-metadata";
 import type {
   WebAgentCommitData,
+  WebAgentCommitDataPart,
   WebAgentMessageMetadata,
   WebAgentPrData,
+  WebAgentPrDataPart,
   WebAgentStepFinishMetadata,
   WebAgentUIMessage,
 } from "@/app/types";
 import {
   claimActiveStream,
+  closeStream,
   clearActiveStream,
   hasAutoCommitChangesStep,
   persistAssistantMessage,
@@ -34,6 +37,7 @@ import {
   refreshLifecycleActivity,
   runAutoCommitStep,
   runAutoCreatePrStep,
+  sendFinish,
 } from "./chat-post-finish";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { getChatById, getSessionById } from "@/lib/db/sessions";
@@ -556,17 +560,7 @@ function buildPrData(
 
 function upsertAssistantDataPart(
   message: WebAgentUIMessage,
-  part:
-    | {
-        type: "data-commit";
-        id: string;
-        data: WebAgentCommitData;
-      }
-    | {
-        type: "data-pr";
-        id: string;
-        data: WebAgentPrData;
-      },
+  part: WebAgentCommitDataPart | WebAgentPrDataPart,
 ): WebAgentUIMessage {
   const nextParts = [...message.parts];
   const existingIndex = nextParts.findIndex(
@@ -588,17 +582,7 @@ function upsertAssistantDataPart(
 
 async function sendDataPart(
   writable: Writable,
-  part:
-    | {
-        type: "data-commit";
-        id: string;
-        data: WebAgentCommitData;
-      }
-    | {
-        type: "data-pr";
-        id: string;
-        data: WebAgentPrData;
-      },
+  part: WebAgentCommitDataPart | WebAgentPrDataPart,
 ) {
   "use step";
   const writer = writable.getWriter();
@@ -800,14 +784,14 @@ export async function runAgentWorkflow(options: Options) {
       };
     }
 
-    // Persist the assistant message immediately so completed model output is not
-    // lost if later post-finish work fails.
-    await persistAssistantMessage(options.chatId, pendingAssistantResponse);
-
-    // Persist the sandbox state so lifecycle timers stay accurate.
-    if (sandboxState) {
-      await persistSandboxState(options.sessionId, sandboxState);
-    }
+    // Persist completed model output before post-finish work so it is not lost
+    // if later automation fails. Sandbox state can persist in parallel.
+    await Promise.all([
+      persistAssistantMessage(options.chatId, pendingAssistantResponse),
+      ...(sandboxState
+        ? [persistSandboxState(options.sessionId, sandboxState)]
+        : []),
+    ]);
 
     const finishedNaturally =
       !wasAborted &&
@@ -835,36 +819,30 @@ export async function runAgentWorkflow(options: Options) {
       });
 
       if (hasAutoCommitChanges) {
-        const pendingCommitPart = {
-          type: "data-commit" as const,
+        const pendingCommitPart: WebAgentCommitDataPart = {
+          type: "data-commit",
           id: commitPartId,
-          data: { status: "pending" as const },
+          data: { status: "pending" },
         };
         pendingAssistantResponse = upsertAssistantDataPart(
           pendingAssistantResponse,
           pendingCommitPart,
         );
-        await sendDataPart(writable, pendingCommitPart);
-        didUpdateGitData = true;
-      }
-
-      autoCommitResult = hasAutoCommitChanges
-        ? await runAutoCommitStep({
+        const [nextAutoCommitResult] = await Promise.all([
+          runAutoCommitStep({
             userId: options.userId,
             sessionId: options.sessionId,
             sessionTitle: runtime.sessionTitle,
             repoOwner,
             repoName,
             sandboxState,
-          })
-        : {
-            committed: false,
-            pushed: false,
-          };
+          }),
+          sendDataPart(writable, pendingCommitPart),
+        ]);
+        autoCommitResult = nextAutoCommitResult;
 
-      if (hasAutoCommitChanges) {
-        const resolvedCommitPart = {
-          type: "data-commit" as const,
+        const resolvedCommitPart: WebAgentCommitDataPart = {
+          type: "data-commit",
           id: commitPartId,
           data: buildCommitData(autoCommitResult, repoOwner, repoName),
         };
@@ -873,7 +851,13 @@ export async function runAgentWorkflow(options: Options) {
           resolvedCommitPart,
         );
         await sendDataPart(writable, resolvedCommitPart);
+        didUpdateGitData = true;
         shouldRefreshCachedDiff = true;
+      } else {
+        autoCommitResult = {
+          committed: false,
+          pushed: false,
+        };
       }
     }
 
@@ -887,29 +871,29 @@ export async function runAgentWorkflow(options: Options) {
       (options.autoCreatePrEnabled ?? modelRuntime.autoCreatePrEnabled)
     ) {
       if (canAutoCreatePr) {
-        const pendingPrPart = {
-          type: "data-pr" as const,
+        const pendingPrPart: WebAgentPrDataPart = {
+          type: "data-pr",
           id: prPartId,
-          data: { status: "pending" as const },
+          data: { status: "pending" },
         };
         pendingAssistantResponse = upsertAssistantDataPart(
           pendingAssistantResponse,
           pendingPrPart,
         );
-        await sendDataPart(writable, pendingPrPart);
-        didUpdateGitData = true;
+        const [autoPrResult] = await Promise.all([
+          runAutoCreatePrStep({
+            userId: options.userId,
+            sessionId: options.sessionId,
+            sessionTitle: runtime.sessionTitle,
+            repoOwner,
+            repoName,
+            sandboxState,
+          }),
+          sendDataPart(writable, pendingPrPart),
+        ]);
 
-        const autoPrResult = await runAutoCreatePrStep({
-          userId: options.userId,
-          sessionId: options.sessionId,
-          sessionTitle: runtime.sessionTitle,
-          repoOwner,
-          repoName,
-          sandboxState,
-        });
-
-        const resolvedPrPart = {
-          type: "data-pr" as const,
+        const resolvedPrPart: WebAgentPrDataPart = {
+          type: "data-pr",
           id: prPartId,
           data: buildPrData(autoPrResult),
         };
@@ -918,13 +902,14 @@ export async function runAgentWorkflow(options: Options) {
           resolvedPrPart,
         );
         await sendDataPart(writable, resolvedPrPart);
+        didUpdateGitData = true;
         shouldRefreshCachedDiff = true;
       } else {
-        const skippedPrPart = {
-          type: "data-pr" as const,
+        const skippedPrPart: WebAgentPrDataPart = {
+          type: "data-pr",
           id: prPartId,
           data: {
-            status: "skipped" as const,
+            status: "skipped",
             skipReason:
               autoCommitResult?.error ??
               "Auto-commit did not leave origin in sync with HEAD",
@@ -946,13 +931,11 @@ export async function runAgentWorkflow(options: Options) {
     await Promise.all([
       clearActiveStream(options.chatId, workflowRunId),
       sendFinish(writable).then(() => closeStream(writable)),
+      ...(sandboxState && shouldRefreshCachedDiff
+        ? [refreshDiffCache(options.sessionId, sandboxState)]
+        : []),
     ]);
     streamClosed = true;
-
-    // Refresh the diff cache so the UI shows current changes.
-    if (sandboxState && shouldRefreshCachedDiff) {
-      await refreshDiffCache(options.sessionId, sandboxState);
-    }
 
     workflowStatus = wasAborted
       ? "aborted"
@@ -1324,16 +1307,6 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
-async function sendFinish(writable: Writable) {
-  "use step";
-  const writer = writable.getWriter();
-  try {
-    await writer.write({ type: "finish", finishReason: "stop" });
-  } finally {
-    writer.releaseLock();
-  }
-}
-
 async function sendTextMessage(writable: Writable, id: string, text: string) {
   "use step";
   const writer = writable.getWriter();
@@ -1344,9 +1317,4 @@ async function sendTextMessage(writable: Writable, id: string, text: string) {
   } finally {
     writer.releaseLock();
   }
-}
-
-async function closeStream(writable: Writable) {
-  "use step";
-  await writable.close();
 }

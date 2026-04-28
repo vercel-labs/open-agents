@@ -1,4 +1,4 @@
-import { isToolUIPart, type LanguageModelUsage } from "ai";
+import { isToolUIPart, type LanguageModelUsage, type UIMessageChunk } from "ai";
 import type { SandboxState, Sandbox } from "@open-agents/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { AutoCommitResult } from "@/lib/chat/auto-commit-direct";
@@ -462,6 +462,25 @@ export async function refreshDiffCache(
     await computeAndCacheDiff({ sandbox, sessionId });
   } catch (error) {
     console.error("[workflow] Failed to refresh diff cache:", error);
+  }
+}
+
+export async function closeStream(
+  writable: WritableStream<UIMessageChunk>,
+): Promise<void> {
+  "use step";
+  await writable.close();
+}
+
+export async function sendFinish(
+  writable: WritableStream<UIMessageChunk>,
+): Promise<void> {
+  "use step";
+  const writer = writable.getWriter();
+  try {
+    await writer.write({ type: "finish", finishReason: "stop" });
+  } finally {
+    writer.releaseLock();
   }
 }
 

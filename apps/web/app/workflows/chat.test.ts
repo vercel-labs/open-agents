@@ -46,16 +46,35 @@ function createResolvedChatSandboxRuntime(
 const spies = {
   persistUserMessage: mock(() => Promise.resolve()),
   persistAssistantMessageWithToolResults: mock(() => Promise.resolve()),
-  persistAssistantMessage: mock(() => Promise.resolve()),
-  persistSandboxState: mock(() => Promise.resolve()),
+  persistAssistantMessage: mock((_chatId?: unknown, _message?: unknown) =>
+    Promise.resolve(),
+  ),
+  persistSandboxState: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
+    Promise.resolve(),
+  ),
   resolveChatSandboxRuntime: mock((params: { assistantId: string }) => {
     writtenChunks.push({ type: "start", messageId: params.assistantId });
     return Promise.resolve(createResolvedChatSandboxRuntime());
   }),
   claimActiveStream: mock(() => Promise.resolve("claimed")),
-  clearActiveStream: mock(() => Promise.resolve()),
+  closeStream: mock((writable: WritableStream<UIMessageChunk>) =>
+    writable.close(),
+  ),
+  clearActiveStream: mock((_chatId?: unknown, _workflowRunId?: unknown) =>
+    Promise.resolve(),
+  ),
+  sendFinish: mock(async (writable: WritableStream<UIMessageChunk>) => {
+    const writer = writable.getWriter();
+    try {
+      await writer.write({ type: "finish", finishReason: "stop" });
+    } finally {
+      writer.releaseLock();
+    }
+  }),
   recordWorkflowUsage: mock(() => Promise.resolve()),
-  refreshDiffCache: mock(() => Promise.resolve()),
+  refreshDiffCache: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
+    Promise.resolve(),
+  ),
   refreshLifecycleActivity: mock(() => Promise.resolve()),
   hasAutoCommitChangesStep: mock(() => Promise.resolve(true)),
   runAutoCommitStep: mock(() =>
