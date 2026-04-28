@@ -159,11 +159,23 @@ async function sendWorkspaceStatus(data: WebAgentWorkspaceStatusData) {
   }
 }
 
+async function sendStart(messageId: string) {
+  const writer = getWritable<UIMessageChunk>().getWriter();
+  try {
+    await writer.write({ type: "start", messageId });
+  } finally {
+    writer.releaseLock();
+  }
+}
+
 export async function resolveChatSandboxRuntime(params: {
   userId: string;
   sessionId: string;
+  assistantId: string;
 }): Promise<ResolvedChatSandboxRuntime> {
   "use step";
+
+  await sendStart(params.assistantId);
 
   const session = await getSessionById(params.sessionId);
   if (!session) {

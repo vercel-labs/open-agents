@@ -522,6 +522,7 @@ export async function runAgentWorkflow(options: Options) {
       resolveChatSandboxRuntime({
         userId: options.userId,
         sessionId: options.sessionId,
+        assistantId,
       }),
       modelMessagesPromise,
     ]);
@@ -537,8 +538,6 @@ export async function runAgentWorkflow(options: Options) {
       ...(runtime.skills.length > 0 ? { skills: runtime.skills } : {}),
     };
     sandboxState = runtime.sandboxState;
-
-    await sendStart(writable, assistantId);
 
     for (
       let step = 0;
@@ -1119,16 +1118,6 @@ function delay(ms: number) {
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
-}
-
-async function sendStart(writable: Writable, messageId: string) {
-  "use step";
-  const writer = writable.getWriter();
-  try {
-    await writer.write({ type: "start", messageId });
-  } finally {
-    writer.releaseLock();
-  }
 }
 
 async function sendFinish(writable: Writable) {

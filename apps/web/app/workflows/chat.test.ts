@@ -46,9 +46,10 @@ function createResolvedChatSandboxRuntime(
 const spies = {
   persistAssistantMessage: mock(() => Promise.resolve()),
   persistSandboxState: mock(() => Promise.resolve()),
-  resolveChatSandboxRuntime: mock(() =>
-    Promise.resolve(createResolvedChatSandboxRuntime()),
-  ),
+  resolveChatSandboxRuntime: mock((params: { assistantId: string }) => {
+    writtenChunks.push({ type: "start", messageId: params.assistantId });
+    return Promise.resolve(createResolvedChatSandboxRuntime());
+  }),
   claimActiveStream: mock(() => Promise.resolve("claimed")),
   clearActiveStream: mock(() => Promise.resolve()),
   recordWorkflowUsage: mock(() => Promise.resolve()),
@@ -362,8 +363,9 @@ describe("runAgentWorkflow", () => {
     expect(types[types.length - 1]).toBe("finish");
   });
 
-  test("streams transient workspace setup status before assistant start", async () => {
-    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
+  test("streams transient workspace setup status from runtime prep", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
+      writtenChunks.push({ type: "start", messageId: params.assistantId });
       writtenChunks.push({
         type: "data-workspace-status",
         id: "workspace-status",
@@ -380,7 +382,8 @@ describe("runAgentWorkflow", () => {
 
     await runAgentWorkflow(makeOptions());
 
-    expect(writtenChunks[0]).toEqual({
+    expect(writtenChunks[0]).toEqual({ type: "start", messageId: "gen-id-1" });
+    expect(writtenChunks[1]).toEqual({
       type: "data-workspace-status",
       id: "workspace-status",
       data: {
@@ -389,7 +392,6 @@ describe("runAgentWorkflow", () => {
       },
       transient: true,
     });
-    expect(writtenChunks[1]?.type).toBe("start");
   });
 
   test("persists assistant message after run", async () => {
