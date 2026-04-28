@@ -70,6 +70,34 @@ const spies = {
   ),
 };
 
+let testSessionRecord: {
+  id: string;
+  userId: string;
+  autoCommitPushOverride: boolean | null;
+  autoCreatePrOverride: boolean | null;
+  repoOwner: string | null;
+  repoName: string | null;
+};
+let testChatRecord: {
+  id: string;
+  sessionId: string;
+  modelId: string | null;
+};
+let testPreferences: {
+  defaultModelId: string;
+  defaultSubagentModelId: string | null;
+  defaultSandboxType: "vercel";
+  defaultDiffMode: "unified";
+  autoCommitPush: boolean;
+  autoCreatePr: boolean;
+  alertsEnabled: boolean;
+  alertSoundEnabled: boolean;
+  publicUsageEnabled: boolean;
+  globalSkillRefs: never[];
+  modelVariants: never[];
+  enabledModelIds: string[];
+};
+
 // Track what the agent stream yields
 let agentStreamParts: Array<Record<string, unknown>> = [];
 let agentFinishReason = "stop";
@@ -269,6 +297,15 @@ mock.module("ai", () => ({
 
 mock.module("@open-agents/agent", () => ({}));
 
+mock.module("@/lib/db/sessions", () => ({
+  getChatById: async () => testChatRecord,
+  getSessionById: async () => testSessionRecord,
+}));
+
+mock.module("@/lib/db/user-preferences", () => ({
+  getUserPreferences: async () => testPreferences,
+}));
+
 mock.module("./chat-sandbox-runtime", () => ({
   resolveChatSandboxRuntime: spies.resolveChatSandboxRuntime,
 }));
@@ -289,6 +326,16 @@ function makeOptions(overrides?: Record<string, unknown>) {
     chatId: "chat-1",
     sessionId: "session-1",
     userId: "user-1",
+    requestUrl: "http://localhost/api/chat",
+    authSession: {
+      authProvider: "vercel" as const,
+      user: {
+        id: "user-1",
+        username: "user",
+        email: "user@example.com",
+        avatar: "",
+      },
+    },
     selectedModelId: "gpt-4",
     modelId: "gpt-4",
     agentOptions: {},
@@ -315,6 +362,33 @@ beforeEach(() => {
   agentProviderMetadata = undefined;
   agentInputMessages = undefined;
   streamOnFinishCallback = undefined;
+  testSessionRecord = {
+    id: "session-1",
+    userId: "user-1",
+    autoCommitPushOverride: null,
+    autoCreatePrOverride: null,
+    repoOwner: "acme",
+    repoName: "repo",
+  };
+  testChatRecord = {
+    id: "chat-1",
+    sessionId: "session-1",
+    modelId: null,
+  };
+  testPreferences = {
+    defaultModelId: "anthropic/claude-haiku-4.5",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
+    autoCommitPush: false,
+    autoCreatePr: false,
+    alertsEnabled: true,
+    alertSoundEnabled: true,
+    publicUsageEnabled: false,
+    globalSkillRefs: [],
+    modelVariants: [],
+    enabledModelIds: [],
+  };
   Object.values(spies).forEach((s) => s.mockClear());
 });
 

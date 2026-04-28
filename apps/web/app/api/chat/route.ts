@@ -14,15 +14,7 @@ import {
   touchChat,
   updateChat,
 } from "@/lib/db/sessions";
-import { getUserPreferences } from "@/lib/db/user-preferences";
-import {
-  filterModelVariantsForSession,
-  sanitizeSelectedModelIdForSession,
-  sanitizeUserPreferencesForSession,
-} from "@/lib/model-access";
-import { getAllVariants } from "@/lib/model-variants";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
-import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   isManagedTemplateTrialUser,
@@ -33,7 +25,6 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
 } from "./_lib/chat-context";
-import { resolveChatModelSelection } from "./_lib/model-selection";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { runAgentWorkflow } from "@/app/workflows/chat";
 import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-results";
@@ -92,7 +83,7 @@ export async function POST(req: Request) {
     return chatContext.response;
   }
 
-  const { sessionRecord, chat } = chatContext;
+  const { chat } = chatContext;
 
   if (isManagedTemplateTrialUser(session, req.url)) {
     const latestUserMessage = getLatestUserMessage(messages);
@@ -145,57 +136,6 @@ export async function POST(req: Request) {
   // would lose the tool result.
   void persistAssistantMessagesWithToolResults(chatId, messages);
 
-  const preferencesPromise = getUserPreferences(userId).catch((error) => {
-    console.error("Failed to load user preferences:", error);
-    return null;
-  });
-
-  const rawPreferences = await preferencesPromise;
-
-  const preferences = rawPreferences
-    ? sanitizeUserPreferencesForSession(rawPreferences, session, req.url)
-    : null;
-  const modelVariants = filterModelVariantsForSession(
-    getAllVariants(preferences?.modelVariants ?? []),
-    session,
-    req.url,
-  );
-  const selectedModelId =
-    sanitizeSelectedModelIdForSession(
-      chat.modelId,
-      modelVariants,
-      session,
-      req.url,
-    ) ??
-    chat.modelId ??
-    null;
-  const mainModelSelection = resolveChatModelSelection({
-    selectedModelId,
-    modelVariants,
-    missingVariantLabel: "Selected model variant",
-  });
-  const subagentModelSelection = preferences?.defaultSubagentModelId
-    ? resolveChatModelSelection({
-        selectedModelId: sanitizeSelectedModelIdForSession(
-          preferences.defaultSubagentModelId,
-          modelVariants,
-          session,
-          req.url,
-        ),
-        modelVariants,
-        missingVariantLabel: "Subagent model variant",
-      })
-    : undefined;
-
-  // Determine if auto-commit and auto-PR should run after a natural finish.
-  const shouldAutoCommitPush =
-    sessionRecord.autoCommitPushOverride ??
-    preferences?.autoCommitPush ??
-    false;
-  const shouldAutoCreatePr =
-    shouldAutoCommitPush &&
-    (sessionRecord.autoCreatePrOverride ?? preferences?.autoCreatePr ?? false);
-
   // Start the durable workflow
   const run = await start(runAgentWorkflow, [
     {
@@ -203,22 +143,9 @@ export async function POST(req: Request) {
       chatId,
       sessionId,
       userId,
-      selectedModelId: selectedModelId ?? mainModelSelection.id,
-      modelId: mainModelSelection.id,
+      requestUrl: req.url,
+      authSession: session ?? null,
       maxSteps: 500,
-      agentOptions: {
-        model: mainModelSelection,
-        ...(subagentModelSelection
-          ? { subagentModel: subagentModelSelection }
-          : {}),
-        customInstructions: assistantFileLinkPrompt,
-      },
-      ...(shouldAutoCommitPush &&
-        sessionRecord.repoOwner &&
-        sessionRecord.repoName && {
-          autoCommitEnabled: true,
-          autoCreatePrEnabled: shouldAutoCreatePr,
-        }),
     },
   ]);
 

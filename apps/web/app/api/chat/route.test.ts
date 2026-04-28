@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 
 mock.module("server-only", () => ({}));
 
@@ -346,14 +345,13 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         maxSteps: 500,
-        agentOptions: expect.objectContaining({
-          customInstructions: assistantFileLinkPrompt,
-        }),
+        requestUrl: "http://localhost/api/chat",
+        authSession: currentAuthSession,
       }),
     ]);
   });
 
-  test("passes selected and resolved model ids to the workflow", async () => {
+  test("defers selected model resolution to the workflow", async () => {
     const { POST } = await routeModulePromise;
     if (!chatRecord) {
       throw new Error("chatRecord must be set");
@@ -374,9 +372,9 @@ describe("/api/chat route", () => {
     expect(response.ok).toBe(true);
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]?.[1]).toEqual([
-      expect.objectContaining({
-        selectedModelId: "variant:test-model",
-        modelId: "openai/gpt-5",
+      expect.not.objectContaining({
+        selectedModelId: expect.anything(),
+        modelId: expect.anything(),
       }),
     ]);
   });
@@ -389,11 +387,8 @@ describe("/api/chat route", () => {
     expect(response.ok).toBe(true);
     expect(discoverSkillDirsCalls).toEqual([]);
     expect(startCalls[0]?.[1]).toEqual([
-      expect.objectContaining({
-        agentOptions: expect.not.objectContaining({
-          sandbox: expect.anything(),
-          skills: expect.anything(),
-        }),
+      expect.not.objectContaining({
+        agentOptions: expect.anything(),
       }),
     ]);
   });
@@ -407,7 +402,7 @@ describe("/api/chat route", () => {
     expect(response.ok).toBe(true);
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]?.[1]).toEqual([
-      expect.objectContaining({
+      expect.not.objectContaining({
         autoCommitEnabled: true,
         autoCreatePrEnabled: true,
       }),
@@ -427,7 +422,7 @@ describe("/api/chat route", () => {
     expect(response.ok).toBe(true);
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]?.[1]).toEqual([
-      expect.objectContaining({
+      expect.not.objectContaining({
         autoCommitEnabled: true,
         autoCreatePrEnabled: true,
       }),

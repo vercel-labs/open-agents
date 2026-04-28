@@ -11,6 +11,7 @@ import {
 import type { OpenAgentCallOptions } from "@open-agents/agent";
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
+import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { addLanguageModelUsage } from "./usage-utils";
 import { extractGatewayCost } from "./gateway-metadata";
 import type {
@@ -33,25 +34,46 @@ import {
   runAutoCreatePrStep,
 } from "./chat-post-finish";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
+import { getChatById, getSessionById } from "@/lib/db/sessions";
+import { getUserPreferences } from "@/lib/db/user-preferences";
+import {
+  filterModelVariantsForSession,
+  sanitizeSelectedModelIdForSession,
+  sanitizeUserPreferencesForSession,
+} from "@/lib/model-access";
+import { getAllVariants } from "@/lib/model-variants";
+import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
+import type { Session as AuthSession } from "@/lib/session/types";
 import type {
   WorkflowRunStatus,
   WorkflowRunStepTiming,
 } from "@/lib/db/workflow-runs";
+import { resolveChatModelSelection } from "../api/chat/_lib/model-selection";
 import { resolveChatSandboxRuntime } from "./chat-sandbox-runtime";
+
+type AuthSessionContext = Pick<AuthSession, "authProvider" | "user"> | null;
 
 type Options = {
   messages: WebAgentUIMessage[];
   chatId: string;
   sessionId: string;
   userId: string;
+  requestUrl: string;
+  authSession: AuthSessionContext;
+  selectedModelId?: string;
+  modelId?: string;
+  agentOptions?: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
+  maxSteps?: number;
+  autoCommitEnabled?: boolean;
+  autoCreatePrEnabled?: boolean;
+};
+
+type ChatModelRuntime = {
   selectedModelId: string;
   modelId: string;
   agentOptions: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
-  maxSteps?: number;
-  /** Whether auto-commit+push should run after a natural finish. */
-  autoCommitEnabled?: boolean;
-  /** Whether auto PR creation should run after auto-commit on a natural finish. */
-  autoCreatePrEnabled?: boolean;
+  autoCommitEnabled: boolean;
+  autoCreatePrEnabled: boolean;
 };
 
 type Writable = WritableStream<UIMessageChunk>;
@@ -92,6 +114,96 @@ const convertMessages = async (
     emptyMessages: "remove",
   });
 };
+
+async function resolveChatModelRuntime(params: {
+  userId: string;
+  sessionId: string;
+  chatId: string;
+  requestUrl: string;
+  authSession: AuthSessionContext;
+}): Promise<ChatModelRuntime> {
+  "use step";
+
+  const [sessionRecord, chat, rawPreferences] = await Promise.all([
+    getSessionById(params.sessionId),
+    getChatById(params.chatId),
+    getUserPreferences(params.userId).catch((error) => {
+      console.error("Failed to load user preferences:", error);
+      return null;
+    }),
+  ]);
+
+  if (!sessionRecord) {
+    throw new Error("Session not found");
+  }
+  if (sessionRecord.userId !== params.userId) {
+    throw new Error("Unauthorized");
+  }
+  if (!chat || chat.sessionId !== params.sessionId) {
+    throw new Error("Chat not found");
+  }
+
+  const preferences = rawPreferences
+    ? sanitizeUserPreferencesForSession(
+        rawPreferences,
+        params.authSession,
+        params.requestUrl,
+      )
+    : null;
+  const modelVariants = filterModelVariantsForSession(
+    getAllVariants(preferences?.modelVariants ?? []),
+    params.authSession,
+    params.requestUrl,
+  );
+  const selectedModelId =
+    sanitizeSelectedModelIdForSession(
+      chat.modelId,
+      modelVariants,
+      params.authSession,
+      params.requestUrl,
+    ) ??
+    chat.modelId ??
+    null;
+  const mainModelSelection = resolveChatModelSelection({
+    selectedModelId,
+    modelVariants,
+    missingVariantLabel: "Selected model variant",
+  });
+  const subagentModelSelection = preferences?.defaultSubagentModelId
+    ? resolveChatModelSelection({
+        selectedModelId: sanitizeSelectedModelIdForSession(
+          preferences.defaultSubagentModelId,
+          modelVariants,
+          params.authSession,
+          params.requestUrl,
+        ),
+        modelVariants,
+        missingVariantLabel: "Subagent model variant",
+      })
+    : undefined;
+  const autoCommitEnabled =
+    (sessionRecord.autoCommitPushOverride ??
+      preferences?.autoCommitPush ??
+      false) &&
+    Boolean(sessionRecord.repoOwner && sessionRecord.repoName);
+  const autoCreatePrEnabled =
+    autoCommitEnabled &&
+    (sessionRecord.autoCreatePrOverride ?? preferences?.autoCreatePr ?? false);
+
+  return {
+    selectedModelId: selectedModelId ?? mainModelSelection.id,
+    modelId: mainModelSelection.id,
+    agentOptions: {
+      model: mainModelSelection,
+      ...(subagentModelSelection
+        ? { subagentModel: subagentModelSelection }
+        : {}),
+      customInstructions: assistantFileLinkPrompt,
+    },
+    autoCommitEnabled,
+    autoCreatePrEnabled,
+  };
+}
 
 const generateId = async () => {
   "use step";
@@ -479,6 +591,8 @@ export async function runAgentWorkflow(options: Options) {
   const modelMessagesPromise = convertMessages(options.messages);
   const assistantId =
     latestMessage.role === "assistant" ? latestMessage.id : await generateId();
+  let selectedModelId = APP_DEFAULT_MODEL_ID;
+  let modelId = APP_DEFAULT_MODEL_ID;
 
   let pendingAssistantResponse: WebAgentUIMessage =
     latestMessage.role === "assistant"
@@ -486,8 +600,8 @@ export async function runAgentWorkflow(options: Options) {
           ...latestMessage,
           metadata: withModelMetadata(
             latestMessage.metadata,
-            options.selectedModelId,
-            options.modelId,
+            selectedModelId,
+            modelId,
           ),
           parts: [...latestMessage.parts],
         }
@@ -495,11 +609,7 @@ export async function runAgentWorkflow(options: Options) {
           role: "assistant",
           id: assistantId,
           parts: [],
-          metadata: withModelMetadata(
-            undefined,
-            options.selectedModelId,
-            options.modelId,
-          ),
+          metadata: withModelMetadata(undefined, selectedModelId, modelId),
         };
 
   let originalMessagesForStep: WebAgentUIMessage[] = [latestMessage];
@@ -518,16 +628,34 @@ export async function runAgentWorkflow(options: Options) {
   let sandboxState: OpenAgentCallOptions["sandbox"]["state"] | undefined;
 
   try {
-    const [runtime, modelMessages] = await Promise.all([
+    const [runtime, modelRuntime, modelMessages] = await Promise.all([
       resolveChatSandboxRuntime({
         userId: options.userId,
         sessionId: options.sessionId,
         assistantId,
       }),
+      resolveChatModelRuntime({
+        userId: options.userId,
+        sessionId: options.sessionId,
+        chatId: options.chatId,
+        requestUrl: options.requestUrl,
+        authSession: options.authSession,
+      }),
       modelMessagesPromise,
     ]);
+    selectedModelId = options.selectedModelId ?? modelRuntime.selectedModelId;
+    modelId = options.modelId ?? modelRuntime.modelId;
+    pendingAssistantResponse = {
+      ...pendingAssistantResponse,
+      metadata: withModelMetadata(
+        pendingAssistantResponse.metadata,
+        selectedModelId,
+        modelId,
+      ),
+    };
 
     const agentOptions: OpenAgentCallOptions = {
+      ...modelRuntime.agentOptions,
       ...options.agentOptions,
       sandbox: {
         state: runtime.sandboxState,
@@ -555,8 +683,8 @@ export async function runAgentWorkflow(options: Options) {
           workflowRunId,
           options.chatId,
           options.sessionId,
-          options.selectedModelId,
-          options.modelId,
+          selectedModelId,
+          modelId,
           agentOptions,
           step + 1,
         );
@@ -635,7 +763,7 @@ export async function runAgentWorkflow(options: Options) {
 
     const canAutoCommit =
       finishedNaturally &&
-      options.autoCommitEnabled &&
+      (options.autoCommitEnabled ?? modelRuntime.autoCommitEnabled) &&
       sandboxState != null &&
       repoOwner != null &&
       repoName != null;
@@ -692,7 +820,10 @@ export async function runAgentWorkflow(options: Options) {
       !autoCommitResult.error &&
       (autoCommitResult.pushed || !autoCommitResult.committed);
 
-    if (canAutoCommit && options.autoCreatePrEnabled) {
+    if (
+      canAutoCommit &&
+      (options.autoCreatePrEnabled ?? modelRuntime.autoCreatePrEnabled)
+    ) {
       if (canAutoCreatePr) {
         const pendingPrPart = {
           type: "data-pr" as const,
@@ -782,7 +913,7 @@ export async function runAgentWorkflow(options: Options) {
       const runFinishedAt = new Date();
       await recordWorkflowUsage(
         options.userId,
-        options.modelId,
+        modelId,
         totalUsage,
         pendingAssistantResponse,
         previousResponseMessage,
