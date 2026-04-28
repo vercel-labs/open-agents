@@ -26,7 +26,9 @@ import {
   clearActiveStream,
   hasAutoCommitChangesStep,
   persistAssistantMessage,
+  persistAssistantMessageWithToolResults,
   persistSandboxState,
+  persistUserMessage,
   recordWorkflowUsage,
   refreshDiffCache,
   refreshLifecycleActivity,
@@ -209,6 +211,23 @@ const generateId = async () => {
   "use step";
   return generateIdAi();
 };
+
+async function persistInputMessages(
+  chatId: string,
+  messages: WebAgentUIMessage[],
+): Promise<void> {
+  "use step";
+
+  const latestMessage = messages[messages.length - 1];
+  if (!latestMessage) {
+    return;
+  }
+
+  await Promise.all([
+    persistUserMessage(chatId, latestMessage),
+    persistAssistantMessageWithToolResults(chatId, latestMessage),
+  ]);
+}
 
 function buildStepTiming(
   stepNumber: number,
@@ -589,6 +608,10 @@ export async function runAgentWorkflow(options: Options) {
   }
 
   const modelMessagesPromise = convertMessages(options.messages);
+  const inputMessagesPersistPromise = persistInputMessages(
+    options.chatId,
+    options.messages,
+  );
   const assistantId =
     latestMessage.role === "assistant" ? latestMessage.id : await generateId();
   let selectedModelId = APP_DEFAULT_MODEL_ID;
@@ -642,6 +665,7 @@ export async function runAgentWorkflow(options: Options) {
         authSession: options.authSession,
       }),
       modelMessagesPromise,
+      inputMessagesPersistPromise,
     ]);
     selectedModelId = options.selectedModelId ?? modelRuntime.selectedModelId;
     modelId = options.modelId ?? modelRuntime.modelId;

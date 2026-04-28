@@ -44,6 +44,8 @@ function createResolvedChatSandboxRuntime(
 }
 
 const spies = {
+  persistUserMessage: mock(() => Promise.resolve()),
+  persistAssistantMessageWithToolResults: mock(() => Promise.resolve()),
   persistAssistantMessage: mock(() => Promise.resolve()),
   persistSandboxState: mock(() => Promise.resolve()),
   resolveChatSandboxRuntime: mock((params: { assistantId: string }) => {
@@ -474,6 +476,19 @@ describe("runAgentWorkflow", () => {
     expect(spies.persistAssistantMessage).toHaveBeenCalledTimes(1);
     const paCalls = spies.persistAssistantMessage.mock.calls as unknown[][];
     expect(paCalls[0][0]).toBe("chat-1");
+  });
+
+  test("persists incoming messages during workflow startup", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.persistUserMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({ id: "user-1", role: "user" }),
+    );
+    expect(spies.persistAssistantMessageWithToolResults).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({ id: "user-1", role: "user" }),
+    );
   });
 
   test("records usage after run", async () => {

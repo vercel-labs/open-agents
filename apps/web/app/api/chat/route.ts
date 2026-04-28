@@ -7,12 +7,8 @@ import {
   claimChatActiveStreamId,
   compareAndSetChatActiveStreamId,
   countUserMessagesByUserId,
-  createChatMessageIfNotExists,
   getChatById,
   getChatMessageById,
-  isFirstChatMessage,
-  touchChat,
-  updateChat,
 } from "@/lib/db/sessions";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -27,7 +23,6 @@ import {
 } from "./_lib/chat-context";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { runAgentWorkflow } from "@/app/workflows/chat";
-import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-results";
 
 export const maxDuration = 800;
 
@@ -124,17 +119,6 @@ export async function POST(req: Request) {
       );
     }
   }
-
-  // Persist the latest user message immediately (fire-and-forget) so it's
-  // in the DB before the workflow starts. This ensures a page refresh
-  // during workflow queue time still shows the message.
-  void persistLatestUserMessage(chatId, messages);
-
-  // Also persist any assistant messages that contain client-side tool results
-  // (e.g. ask_user_question responses). Without this, tool results are only
-  // persisted when the workflow finishes, so switching devices mid-stream
-  // would lose the tool result.
-  void persistAssistantMessagesWithToolResults(chatId, messages);
 
   // Start the durable workflow
   const run = await start(runAgentWorkflow, [
@@ -237,52 +221,4 @@ async function reconcileExistingActiveStream(
   }
 
   return currentStreamId ? { action: "conflict" } : { action: "ready" };
-}
-
-async function persistLatestUserMessage(
-  chatId: string,
-  messages: WebAgentUIMessage[],
-): Promise<void> {
-  const latestMessage = messages[messages.length - 1];
-  if (!latestMessage || latestMessage.role !== "user") {
-    return;
-  }
-
-  try {
-    const created = await createChatMessageIfNotExists({
-      id: latestMessage.id,
-      chatId,
-      role: "user",
-      parts: latestMessage,
-    });
-
-    if (!created) {
-      return;
-    }
-
-    await touchChat(chatId);
-
-    const shouldSetTitle = await isFirstChatMessage(chatId, created.id);
-    if (!shouldSetTitle) {
-      return;
-    }
-
-    const textContent = latestMessage.parts
-      .filter(
-        (part): part is { type: "text"; text: string } => part.type === "text",
-      )
-      .map((part) => part.text)
-      .join(" ")
-      .trim();
-
-    if (textContent.length > 0) {
-      const title =
-        textContent.length > 80
-          ? `${textContent.slice(0, 80)}...`
-          : textContent;
-      await updateChat(chatId, { title });
-    }
-  } catch (error) {
-    console.error("Failed to persist user message:", error);
-  }
 }

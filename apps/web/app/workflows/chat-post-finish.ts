@@ -1,4 +1,4 @@
-import type { LanguageModelUsage } from "ai";
+import { isToolUIPart, type LanguageModelUsage } from "ai";
 import type { SandboxState, Sandbox } from "@open-agents/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { AutoCommitResult } from "@/lib/chat/auto-commit-direct";
@@ -129,6 +129,50 @@ export async function persistUserMessage(
     await updateChat(chatId, { title });
   } catch (error) {
     console.error("[workflow] Failed to persist user message:", error);
+  }
+}
+
+export async function persistAssistantMessageWithToolResults(
+  chatId: string,
+  message: WebAgentUIMessage,
+): Promise<void> {
+  "use step";
+
+  if (message.role !== "assistant") {
+    return;
+  }
+
+  const hasToolResults = message.parts.some(
+    (part) =>
+      isToolUIPart(part) &&
+      (part.state === "output-available" ||
+        part.state === "output-error" ||
+        part.state === "approval-responded"),
+  );
+
+  if (!hasToolResults) {
+    return;
+  }
+
+  try {
+    const dedupedMessage = dedupeMessageReasoning(message);
+    const result = await upsertChatMessageScoped({
+      id: dedupedMessage.id,
+      chatId,
+      role: "assistant",
+      parts: dedupedMessage,
+    });
+
+    if (result.status === "conflict") {
+      console.warn(
+        `[workflow] Skipped assistant tool-result upsert due to ID scope conflict: ${message.id}`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[workflow] Failed to persist assistant message with tool results:",
+      error,
+    );
   }
 }
 
