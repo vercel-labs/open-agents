@@ -828,18 +828,15 @@ export async function runAgentWorkflow(options: Options) {
           pendingAssistantResponse,
           pendingCommitPart,
         );
-        const [nextAutoCommitResult] = await Promise.all([
-          runAutoCommitStep({
-            userId: options.userId,
-            sessionId: options.sessionId,
-            sessionTitle: runtime.sessionTitle,
-            repoOwner,
-            repoName,
-            sandboxState,
-          }),
-          sendDataPart(writable, pendingCommitPart),
-        ]);
-        autoCommitResult = nextAutoCommitResult;
+        await sendDataPart(writable, pendingCommitPart);
+        autoCommitResult = await runAutoCommitStep({
+          userId: options.userId,
+          sessionId: options.sessionId,
+          sessionTitle: runtime.sessionTitle,
+          repoOwner,
+          repoName,
+          sandboxState,
+        });
 
         const resolvedCommitPart: WebAgentCommitDataPart = {
           type: "data-commit",
@@ -880,17 +877,15 @@ export async function runAgentWorkflow(options: Options) {
           pendingAssistantResponse,
           pendingPrPart,
         );
-        const [autoPrResult] = await Promise.all([
-          runAutoCreatePrStep({
-            userId: options.userId,
-            sessionId: options.sessionId,
-            sessionTitle: runtime.sessionTitle,
-            repoOwner,
-            repoName,
-            sandboxState,
-          }),
-          sendDataPart(writable, pendingPrPart),
-        ]);
+        await sendDataPart(writable, pendingPrPart);
+        const autoPrResult = await runAutoCreatePrStep({
+          userId: options.userId,
+          sessionId: options.sessionId,
+          sessionTitle: runtime.sessionTitle,
+          repoOwner,
+          repoName,
+          sandboxState,
+        });
 
         const resolvedPrPart: WebAgentPrDataPart = {
           type: "data-pr",
