@@ -2,16 +2,19 @@ import {
   abortChatInstanceTransport,
   removeChatInstance,
 } from "@/lib/chat-instance-manager";
+import { clearChatWorkspaceStatus } from "@/lib/workspace-status-store";
 
 type ChatRouteCleanupDependencies = {
   abortTransport: (chatId: string) => void;
   removeInstance: (chatId: string) => void;
+  clearWorkspaceStatus?: (chatId: string) => void;
   stopStream?: (chatId: string) => void;
 };
 
 const defaultDependencies: ChatRouteCleanupDependencies = {
   abortTransport: abortChatInstanceTransport,
   removeInstance: removeChatInstance,
+  clearWorkspaceStatus: clearChatWorkspaceStatus,
 };
 
 /**
@@ -26,4 +29,5 @@ export function cleanupChatRouteOnUnmount(
 ): void {
   dependencies.abortTransport(chatId);
   dependencies.removeInstance(chatId);
+  dependencies.clearWorkspaceStatus?.(chatId);
 }

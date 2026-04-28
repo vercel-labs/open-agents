@@ -3,11 +3,16 @@ import { describe, expect, mock, test } from "bun:test";
 const spies = {
   abortChatInstanceTransport: mock((_chatId: string) => {}),
   removeChatInstance: mock((_chatId: string) => {}),
+  clearChatWorkspaceStatus: mock((_chatId: string) => {}),
 };
 
 mock.module("@/lib/chat-instance-manager", () => ({
   abortChatInstanceTransport: spies.abortChatInstanceTransport,
   removeChatInstance: spies.removeChatInstance,
+}));
+
+mock.module("@/lib/workspace-status-store", () => ({
+  clearChatWorkspaceStatus: spies.clearChatWorkspaceStatus,
 }));
 
 const cleanupModulePromise = import("./chat-route-cleanup");
@@ -23,15 +28,32 @@ describe("cleanupChatRouteOnUnmount", () => {
     const removeInstance = mock((chatId: string) => {
       calls.push(`remove:${chatId}`);
     });
+    const clearWorkspaceStatus = mock((chatId: string) => {
+      calls.push(`clear:${chatId}`);
+    });
 
     cleanupChatRouteOnUnmount("chat-123", {
       abortTransport,
       removeInstance,
+      clearWorkspaceStatus,
     });
 
     expect(abortTransport).toHaveBeenCalledWith("chat-123");
     expect(removeInstance).toHaveBeenCalledWith("chat-123");
-    expect(calls).toEqual(["abort:chat-123", "remove:chat-123"]);
+    expect(clearWorkspaceStatus).toHaveBeenCalledWith("chat-123");
+    expect(calls).toEqual([
+      "abort:chat-123",
+      "remove:chat-123",
+      "clear:chat-123",
+    ]);
+  });
+
+  test("clears workspace status with default dependencies", async () => {
+    const { cleanupChatRouteOnUnmount } = await cleanupModulePromise;
+
+    cleanupChatRouteOnUnmount("chat-789");
+
+    expect(spies.clearChatWorkspaceStatus).toHaveBeenCalledWith("chat-789");
   });
 
   test("never issues a server stop signal during route teardown", async () => {
