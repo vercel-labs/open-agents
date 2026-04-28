@@ -46,7 +46,6 @@ function createResolvedChatSandboxRuntime(
 const spies = {
   persistAssistantMessage: mock(() => Promise.resolve()),
   persistSandboxState: mock(() => Promise.resolve()),
-  shouldEmitWorkspaceSetupStatus: mock(() => Promise.resolve(false)),
   resolveChatSandboxRuntime: mock(() =>
     Promise.resolve(createResolvedChatSandboxRuntime()),
   ),
@@ -270,7 +269,6 @@ mock.module("ai", () => ({
 mock.module("@open-agents/agent", () => ({}));
 
 mock.module("./chat-sandbox-runtime", () => ({
-  shouldEmitWorkspaceSetupStatus: spies.shouldEmitWorkspaceSetupStatus,
   resolveChatSandboxRuntime: spies.resolveChatSandboxRuntime,
 }));
 
@@ -365,9 +363,20 @@ describe("runAgentWorkflow", () => {
   });
 
   test("streams transient workspace setup status before assistant start", async () => {
-    spies.shouldEmitWorkspaceSetupStatus.mockImplementationOnce(() =>
-      Promise.resolve(true),
-    );
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
+      writtenChunks.push({
+        type: "data-workspace-status",
+        id: "workspace-status",
+        data: {
+          status: "setting-up",
+          message: "Setting up the workspace...",
+        },
+        transient: true,
+      });
+      return createResolvedChatSandboxRuntime({
+        didSetupWorkspace: true,
+      });
+    });
 
     await runAgentWorkflow(makeOptions());
 

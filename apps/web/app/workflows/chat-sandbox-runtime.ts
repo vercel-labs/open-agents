@@ -4,6 +4,9 @@ import {
   type Sandbox,
   type SandboxState,
 } from "@open-agents/sandbox";
+import type { UIMessageChunk } from "ai";
+import { getWritable } from "workflow";
+import type { WebAgentWorkspaceStatusData } from "@/app/types";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
 import {
@@ -142,13 +145,18 @@ async function loadSessionSkills(params: {
   return discoveredSkills;
 }
 
-export async function shouldEmitWorkspaceSetupStatus(
-  sessionId: string,
-): Promise<boolean> {
-  "use step";
-
-  const session = await getSessionById(sessionId);
-  return !isSandboxActive(session?.sandboxState);
+async function sendWorkspaceStatus(data: WebAgentWorkspaceStatusData) {
+  const writer = getWritable<UIMessageChunk>().getWriter();
+  try {
+    await writer.write({
+      type: "data-workspace-status",
+      id: "workspace-status",
+      data,
+      transient: true,
+    });
+  } finally {
+    writer.releaseLock();
+  }
 }
 
 export async function resolveChatSandboxRuntime(params: {
@@ -165,13 +173,22 @@ export async function resolveChatSandboxRuntime(params: {
     throw new Error("Unauthorized");
   }
 
-  const githubToken = await getUserGitHubToken(params.userId);
+  const didSetupWorkspace = !isSandboxActive(session.sandboxState);
+  if (didSetupWorkspace) {
+    await sendWorkspaceStatus({
+      status: "setting-up",
+      message: "Setting up the workspace...",
+    });
+  }
+
+  const [githubToken, gitUser] = await Promise.all([
+    getUserGitHubToken(params.userId),
+    getGitUser(params.userId),
+  ]);
   if (session.cloneUrl && !githubToken) {
     throw new Error("Connect GitHub to access repositories");
   }
 
-  const didSetupWorkspace = !isSandboxActive(session.sandboxState);
-  const gitUser = await getGitUser(params.userId);
   const sandbox = await connectSandbox({
     state: buildSandboxState(session),
     options: {
@@ -186,24 +203,25 @@ export async function resolveChatSandboxRuntime(params: {
     },
   });
 
-  await installSessionGlobalSkills({
-    session,
-    sandbox,
-    didSetupWorkspace,
-  });
-
   const rawSandboxState = sandbox.getState?.();
   const sandboxState = isSandboxState(rawSandboxState)
     ? rawSandboxState
     : buildSandboxState(session);
 
-  await updateSession(params.sessionId, {
-    sandboxState,
-    snapshotUrl: null,
-    snapshotCreatedAt: null,
-    lifecycleVersion: getNextLifecycleVersion(session.lifecycleVersion),
-    ...buildActiveLifecycleUpdate(sandboxState),
-  });
+  await Promise.all([
+    updateSession(params.sessionId, {
+      sandboxState,
+      snapshotUrl: null,
+      snapshotCreatedAt: null,
+      lifecycleVersion: getNextLifecycleVersion(session.lifecycleVersion),
+      ...buildActiveLifecycleUpdate(sandboxState),
+    }),
+    installSessionGlobalSkills({
+      session,
+      sandbox,
+      didSetupWorkspace,
+    }),
+  ]);
 
   kickSandboxLifecycleWorkflow({
     sessionId: params.sessionId,

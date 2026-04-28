@@ -19,7 +19,6 @@ import type {
   WebAgentPrData,
   WebAgentStepFinishMetadata,
   WebAgentUIMessage,
-  WebAgentWorkspaceStatusData,
 } from "@/app/types";
 import {
   claimActiveStream,
@@ -38,10 +37,7 @@ import type {
   WorkflowRunStatus,
   WorkflowRunStepTiming,
 } from "@/lib/db/workflow-runs";
-import {
-  resolveChatSandboxRuntime,
-  shouldEmitWorkspaceSetupStatus,
-} from "./chat-sandbox-runtime";
+import { resolveChatSandboxRuntime } from "./chat-sandbox-runtime";
 
 type Options = {
   messages: WebAgentUIMessage[];
@@ -449,24 +445,6 @@ async function sendDataPart(
   }
 }
 
-async function sendWorkspaceStatus(
-  writable: Writable,
-  data: WebAgentWorkspaceStatusData,
-) {
-  "use step";
-  const writer = writable.getWriter();
-  try {
-    await writer.write({
-      type: "data-workspace-status",
-      id: "workspace-status",
-      data,
-      transient: true,
-    });
-  } finally {
-    writer.releaseLock();
-  }
-}
-
 export async function runAgentWorkflow(options: Options) {
   "use workflow";
 
@@ -498,6 +476,7 @@ export async function runAgentWorkflow(options: Options) {
     return;
   }
 
+  const modelMessagesPromise = convertMessages(options.messages);
   const assistantId =
     latestMessage.role === "assistant" ? latestMessage.id : await generateId();
 
@@ -539,30 +518,13 @@ export async function runAgentWorkflow(options: Options) {
   let sandboxState: OpenAgentCallOptions["sandbox"]["state"] | undefined;
 
   try {
-    const shouldShowWorkspaceSetup = await shouldEmitWorkspaceSetupStatus(
-      options.sessionId,
-    );
-    if (shouldShowWorkspaceSetup) {
-      await sendWorkspaceStatus(writable, {
-        status: "setting-up",
-        message: "Setting up the workspace...",
-      });
-    }
-
     const [runtime, modelMessages] = await Promise.all([
       resolveChatSandboxRuntime({
         userId: options.userId,
         sessionId: options.sessionId,
       }),
-      convertMessages(options.messages),
+      modelMessagesPromise,
     ]);
-
-    if (!shouldShowWorkspaceSetup && runtime.didSetupWorkspace) {
-      await sendWorkspaceStatus(writable, {
-        status: "setting-up",
-        message: "Setting up the workspace...",
-      });
-    }
 
     const agentOptions: OpenAgentCallOptions = {
       ...options.agentOptions,
