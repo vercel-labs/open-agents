@@ -472,6 +472,106 @@ const SessionRow = memo(function SessionRow({
     };
   }, []);
 
+  const actionButtons = showActionButtons ? (
+    <>
+      {onRenameSession ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+              aria-label="Rename session"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (hoverTimeoutRef.current) {
+                  clearTimeout(hoverTimeoutRef.current);
+                  hoverTimeoutRef.current = null;
+                }
+                setPopoverOpen(false);
+                setRenameValue(session.title);
+                setIsRenaming(true);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            Rename session
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+            aria-label={
+              session.status === "archived"
+                ? "Unarchive session"
+                : "Archive session"
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              if (session.status === "archived") {
+                onUnarchiveSession(session);
+                return;
+              }
+              onArchiveSession(session);
+            }}
+          >
+            <Archive className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {session.status === "archived"
+            ? "Unarchive session"
+            : "Archive session"}
+        </TooltipContent>
+      </Tooltip>
+    </>
+  ) : null;
+
+  const actionButtonsContainer = actionButtons ? (
+    <span className="absolute top-1/2 right-2 flex shrink-0 -translate-y-1/2 items-center justify-end gap-0.5">
+      {actionButtons}
+    </span>
+  ) : null;
+
+  const sessionButton = (
+    <button
+      type="button"
+      className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] cursor-pointer ${
+        isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
+      } ${isPending ? "opacity-80" : "opacity-100"} ${actionButtons ? "pr-12" : ""}`}
+      onClick={() => onSessionClick(session)}
+      onFocus={() => onSessionPrefetch(session)}
+      aria-busy={isPending}
+    >
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+        {getSessionStatusIcon(session)}
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <p
+          className={`truncate text-[13px] leading-5 ${
+            session.hasUnread && !isActive
+              ? "font-semibold text-foreground"
+              : "font-normal text-foreground/75"
+          }`}
+        >
+          {session.title}
+        </p>
+      </span>
+      {actionButtons ? null : hasDiff ? (
+        <span className="flex shrink-0 items-center justify-end gap-0.5">
+          <DiffStats
+            added={session.linesAdded}
+            removed={session.linesRemoved}
+          />
+        </span>
+      ) : null}
+    </button>
+  );
+
   const rowButton = isRenaming ? (
     <div
       className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] ${
@@ -508,98 +608,15 @@ const SessionRow = memo(function SessionRow({
       </span>
     </div>
   ) : (
-    <button
-      type="button"
-      className={`group relative flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left outline-none transition-[background-color,opacity] cursor-pointer ${
-        isActive ? "bg-sidebar-active" : "hover:bg-muted/50"
-      } ${isPending ? "opacity-80" : "opacity-100"}`}
+    <div
+      className="relative"
       style={sessionRowPerformanceStyle}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={() => onSessionClick(session)}
-      onFocus={() => onSessionPrefetch(session)}
-      aria-busy={isPending}
     >
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-        {getSessionStatusIcon(session)}
-      </span>
-      <span className="min-w-0 flex-1 text-left">
-        <p
-          className={`truncate text-[13px] leading-5 ${
-            session.hasUnread && !isActive
-              ? "font-semibold text-foreground"
-              : "font-normal text-foreground/75"
-          }`}
-        >
-          {session.title}
-        </p>
-      </span>
-      <span className="flex shrink-0 items-center justify-end gap-0.5">
-        {showActionButtons ? (
-          <>
-            {onRenameSession ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
-                    aria-label="Rename session"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (hoverTimeoutRef.current) {
-                        clearTimeout(hoverTimeoutRef.current);
-                        hoverTimeoutRef.current = null;
-                      }
-                      setPopoverOpen(false);
-                      setRenameValue(session.title);
-                      setIsRenaming(true);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  Rename session
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
-                  aria-label={
-                    session.status === "archived"
-                      ? "Unarchive session"
-                      : "Archive session"
-                  }
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (session.status === "archived") {
-                      onUnarchiveSession(session);
-                      return;
-                    }
-                    onArchiveSession(session);
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {session.status === "archived"
-                  ? "Unarchive session"
-                  : "Archive session"}
-              </TooltipContent>
-            </Tooltip>
-          </>
-        ) : hasDiff ? (
-          <DiffStats
-            added={session.linesAdded}
-            removed={session.linesRemoved}
-          />
-        ) : null}
-      </span>
-    </button>
+      {sessionButton}
+      {actionButtonsContainer}
+    </div>
   );
 
   if (isMobile || isRenaming) {
@@ -608,7 +625,15 @@ const SessionRow = memo(function SessionRow({
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-      <PopoverTrigger asChild>{rowButton}</PopoverTrigger>
+      <div
+        className="relative"
+        style={sessionRowPerformanceStyle}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <PopoverTrigger asChild>{sessionButton}</PopoverTrigger>
+        {actionButtonsContainer}
+      </div>
       <PopoverContent
         side="right"
         align="start"
