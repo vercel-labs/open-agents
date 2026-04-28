@@ -87,6 +87,23 @@ const shouldPauseForToolInteraction = (parts: WebAgentUIMessage["parts"]) =>
       (part.state === "input-available" || part.state === "approval-requested"),
   );
 
+const DIFF_REFRESHING_TOOL_TYPES = new Set([
+  "tool-write",
+  "tool-edit",
+  "tool-bash",
+]);
+
+function shouldRefreshDiffCacheForParts(
+  parts: WebAgentUIMessage["parts"],
+): boolean {
+  return parts.some(
+    (part) =>
+      isToolUIPart(part) &&
+      DIFF_REFRESHING_TOOL_TYPES.has(part.type) &&
+      (part.state === "output-available" || part.state === "output-error"),
+  );
+}
+
 const convertMessages = async (
   messages: WebAgentUIMessage[],
 ): Promise<ModelMessage[]> => {
@@ -649,6 +666,7 @@ export async function runAgentWorkflow(options: Options) {
   let workflowStatus: WorkflowRunStatus = "completed";
   let caughtError: unknown;
   let sandboxState: OpenAgentCallOptions["sandbox"]["state"] | undefined;
+  let shouldRefreshCachedDiff = false;
 
   try {
     const [runtime, modelRuntime, modelMessages] = await Promise.all([
@@ -722,6 +740,9 @@ export async function runAgentWorkflow(options: Options) {
       stepTimings.push(result.stepTiming);
       pendingAssistantResponse =
         result.responseMessage ?? pendingAssistantResponse;
+      shouldRefreshCachedDiff =
+        shouldRefreshCachedDiff ||
+        shouldRefreshDiffCacheForParts(pendingAssistantResponse.parts);
       originalMessagesForStep = [pendingAssistantResponse];
       modelMessages.push(...result.responseMessages);
       wasAborted = wasAborted || result.stepWasAborted;
@@ -836,6 +857,7 @@ export async function runAgentWorkflow(options: Options) {
           resolvedCommitPart,
         );
         await sendDataPart(writable, resolvedCommitPart);
+        shouldRefreshCachedDiff = true;
       }
     }
 
@@ -880,6 +902,7 @@ export async function runAgentWorkflow(options: Options) {
           resolvedPrPart,
         );
         await sendDataPart(writable, resolvedPrPart);
+        shouldRefreshCachedDiff = true;
       } else {
         const skippedPrPart = {
           type: "data-pr" as const,
@@ -911,7 +934,7 @@ export async function runAgentWorkflow(options: Options) {
     streamClosed = true;
 
     // Refresh the diff cache so the UI shows current changes.
-    if (sandboxState) {
+    if (sandboxState && shouldRefreshCachedDiff) {
       await refreshDiffCache(options.sessionId, sandboxState);
     }
 

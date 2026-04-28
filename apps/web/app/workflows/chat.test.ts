@@ -102,6 +102,7 @@ let testPreferences: {
 
 // Track what the agent stream yields
 let agentStreamParts: Array<Record<string, unknown>> = [];
+let agentAssistantParts: Array<Record<string, unknown>> | undefined;
 let agentFinishReason = "stop";
 let agentRawFinishReason: string | undefined = "provider_stop";
 let agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
@@ -203,7 +204,9 @@ mock.module("@/app/config", () => ({
               : {
                   id: "assistant-1",
                   role: "assistant",
-                  parts: [{ type: "text", text: "Hello!" }],
+                  parts: agentAssistantParts ?? [
+                    { type: "text", text: "Hello!" },
+                  ],
                   metadata: {},
                 }
           ) as {
@@ -289,7 +292,8 @@ mock.module("ai", () => ({
       };
     }),
   generateId: () => "gen-id-1",
-  isToolUIPart: (part: { type: string }) => part.type === "tool-invocation",
+  isToolUIPart: (part: { type: string }) =>
+    part.type === "tool-invocation" || part.type.startsWith("tool-"),
   pruneMessages: ({ messages }: { messages: Array<Record<string, unknown>> }) =>
     messages.filter((message) => {
       const content = message.content;
@@ -352,6 +356,7 @@ beforeEach(() => {
   writtenChunks.length = 0;
   runStatus = "running";
   agentStreamParts = [{ type: "text-delta", textDelta: "Hi" }];
+  agentAssistantParts = undefined;
   agentFinishReason = "stop";
   agentRawFinishReason = "provider_stop";
   agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
@@ -1075,7 +1080,26 @@ describe("runAgentWorkflow", () => {
     );
   });
 
-  test("refreshes diff cache after run", async () => {
+  test("skips diff cache refresh when no file-changing tools ran", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.refreshDiffCache).not.toHaveBeenCalled();
+  });
+
+  test("refreshes diff cache after a write tool runs", async () => {
+    agentStreamParts = [];
+    agentResponseMessages = [];
+    agentResponse = { messages: agentResponseMessages };
+    streamOnFinishCallback = undefined;
+    const writeToolPart = {
+      type: "tool-write",
+      toolCallId: "write-1",
+      state: "output-available",
+      input: { filePath: "app/page.tsx" },
+      output: { success: true },
+    };
+    agentAssistantParts = [writeToolPart];
+
     await runAgentWorkflow(makeOptions());
 
     expect(spies.refreshDiffCache).toHaveBeenCalledTimes(1);
