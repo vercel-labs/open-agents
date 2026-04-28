@@ -29,7 +29,11 @@ interface ToolOptions {
 }
 
 // Commands that should require approval
-const DANGEROUS_COMMAND_PATTERNS = [/\brm\s+-rf\b/];
+// Matches rm with both recursive (-r/-R/--recursive) and force (-f/--force) flags
+// in any order or combination, e.g.: rm -rf, rm -fr, rm -Rf, rm -r -f, rm --recursive --force
+const DANGEROUS_COMMAND_PATTERNS = [
+  /\brm\b(?=[^\n]*(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive))(?=[^\n]*(?:-[a-zA-Z]*f[a-zA-Z]*|--force))/,
+];
 
 /**
  * Check if a command should require approval.
