@@ -767,29 +767,11 @@ function _SandboxHeaderBadge({
 }
 
 function SandboxInputOverlay({
-  isSandboxActive,
-  isCreating,
-  isRestoring,
-  isReconnecting,
-  isHibernating,
   isArchived,
-  isInitializing,
   snapshotPending,
-  hasSnapshot,
-  onRestore,
-  onCreateNew,
 }: {
-  isSandboxActive: boolean;
-  isCreating: boolean;
-  isRestoring: boolean;
-  isReconnecting: boolean;
-  isHibernating: boolean;
   isArchived: boolean;
-  isInitializing: boolean;
   snapshotPending: boolean;
-  hasSnapshot: boolean;
-  onRestore: () => void;
-  onCreateNew: () => void;
 }) {
   if (isArchived) {
     return (
@@ -806,40 +788,7 @@ function SandboxInputOverlay({
     );
   }
 
-  // During sandbox creation/restoration/reconnection/initialization, don't block the input.
-  // The submit button is disabled separately, and the header badge shows status.
-  if (
-    isSandboxActive ||
-    isCreating ||
-    isRestoring ||
-    isReconnecting ||
-    isHibernating ||
-    isInitializing
-  ) {
-    return null;
-  }
-
-  // Sandbox is fully inactive and not transitioning -- show resume/create buttons
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/60 backdrop-blur-[2px]">
-      <div className="flex items-center gap-2">
-        {hasSnapshot ? (
-          <Button onClick={onRestore} size="sm" className="shadow-sm">
-            Resume sandbox
-          </Button>
-        ) : (
-          <Button
-            onClick={onCreateNew}
-            size="sm"
-            variant="outline"
-            className="shadow-sm"
-          >
-            Create sandbox
-          </Button>
-        )}
-      </div>
-    </div>
-  );
+  return null;
 }
 
 function ShareDialog({
@@ -1249,6 +1198,7 @@ export function SessionChatContent({
     contextLimit,
     stopChatStream,
     retryChatStream,
+    workspaceStatus,
     hadInitialMessages,
     initialMessages,
   } = useSessionChatRuntimeContext();
@@ -2214,7 +2164,7 @@ export function SessionChatContent({
     checkBranchAndPr,
   ]);
 
-  const handleRestoreSnapshot = useCallback(async () => {
+  const _handleRestoreSnapshot = useCallback(async () => {
     setIsRestoringSnapshot(true);
     setRestoreError(null);
 
@@ -2292,7 +2242,7 @@ export function SessionChatContent({
     waitForSandboxReady,
   ]);
 
-  const handleCreateNewSandbox = useCallback(async () => {
+  const _handleCreateNewSandbox = useCallback(async () => {
     setIsCreatingSandbox(true);
     setSandboxCreateError(null);
 
@@ -2430,20 +2380,9 @@ export function SessionChatContent({
     userStopped,
   ]);
 
-  // Track whether we've auto-attempted sandbox startup for this page load.
-  const hasAutoStartedSandboxRef = useRef(false);
-  const hasHandledInitialSandboxEntryRef = useRef(false);
   const shouldRefreshRestoredWorkspaceRef = useRef(false);
 
   const isArchived = session.status === "archived";
-  const isAutoRestoringOnEntry =
-    !hasHandledInitialSandboxEntryRef.current &&
-    !isArchived &&
-    hasSnapshot &&
-    !sandboxInfo &&
-    !isCreatingSandbox &&
-    !isRestoringSnapshot &&
-    reconnectionStatus === "no_sandbox";
 
   // After a snapshot restore, wait for the live workspace hooks to be active
   // again before forcing refreshes. Calling the pre-restore callbacks inside
@@ -2483,29 +2422,6 @@ export function SessionChatContent({
     attemptReconnection,
   ]);
 
-  useEffect(() => {
-    if (isArchived) {
-      return;
-    }
-    if (hasHandledInitialSandboxEntryRef.current) {
-      return;
-    }
-    if (reconnectionStatus === "idle" || reconnectionStatus === "checking") {
-      return;
-    }
-
-    hasHandledInitialSandboxEntryRef.current = true;
-
-    if (isAutoRestoringOnEntry) {
-      void handleRestoreSnapshot();
-    }
-  }, [
-    handleRestoreSnapshot,
-    isArchived,
-    isAutoRestoringOnEntry,
-    reconnectionStatus,
-  ]);
-
   // Server-authoritative lifecycle state: lightweight status poll every 15s.
   useEffect(() => {
     if (isCreatingSandbox || isRestoringSnapshot) return;
@@ -2529,89 +2445,6 @@ export function SessionChatContent({
     isRestoringSnapshot,
     reconnectionStatus,
     requestStatusSync,
-  ]);
-
-  const ensureSandboxReady = useCallback(async () => {
-    if (isSandboxValid(sandboxInfo)) {
-      return true;
-    }
-    if (isCreatingSandbox) {
-      return false;
-    }
-
-    try {
-      setIsCreatingSandbox(true);
-      setSandboxCreateError(null);
-
-      const branchExistsOnOrigin = session.prNumber != null;
-      const shouldCreateNewBranch =
-        session.isNewBranch && !branchExistsOnOrigin;
-      const newSandbox = await createSandbox(
-        session.cloneUrl ?? undefined,
-        session.branch ?? undefined,
-        shouldCreateNewBranch,
-        session.id,
-        preferredSandboxType,
-      );
-      setSandboxInfo(newSandbox);
-      setSandboxTypeFromUnknown(newSandbox.type);
-      setSandboxCreateError(null);
-      void requestStatusSync("force");
-      return true;
-    } catch (err) {
-      const details = getSandboxCreateErrorDetails(err);
-      setSandboxCreateError(details);
-      console.error("Failed to create sandbox:", err);
-      return false;
-    } finally {
-      setIsCreatingSandbox(false);
-    }
-  }, [
-    sandboxInfo,
-    isCreatingSandbox,
-    session.prNumber,
-    session.isNewBranch,
-    session.cloneUrl,
-    session.branch,
-    session.id,
-    preferredSandboxType,
-    setSandboxInfo,
-    setSandboxTypeFromUnknown,
-    requestStatusSync,
-  ]);
-
-  // Auto-create sandbox right away for new sessions/chats.
-  // Skip for archived sessions.
-  useEffect(() => {
-    if (isArchived) return;
-    if (sandboxInfo || isCreatingSandbox || isRestoringSnapshot) return;
-
-    // If we have stored sandbox state, wait for reconnect attempt first.
-    if (session.sandboxState && reconnectionStatus === "idle") return;
-    if (session.sandboxState && reconnectionStatus === "checking") return;
-    if (session.sandboxState && reconnectionStatus === "connected") {
-      hasAutoStartedSandboxRef.current = true;
-      return;
-    }
-
-    // Paused sessions require an explicit Resume action.
-    if (hasSnapshot) {
-      return;
-    }
-
-    if (hasAutoStartedSandboxRef.current) return;
-    hasAutoStartedSandboxRef.current = true;
-
-    void ensureSandboxReady();
-  }, [
-    isArchived,
-    session.sandboxState,
-    hasSnapshot,
-    reconnectionStatus,
-    sandboxInfo,
-    isCreatingSandbox,
-    isRestoringSnapshot,
-    ensureSandboxReady,
   ]);
 
   // Track tool completions to trigger diff refresh
@@ -3370,22 +3203,9 @@ export function SessionChatContent({
                         {groupedRenderMessages.length === 0 &&
                           !hasPendingResponse && (
                             <div className="flex h-full min-h-[40vh] items-center justify-center">
-                              {!isArchived &&
-                              (isCreatingSandbox ||
-                                isRestoringSnapshot ||
-                                isReconnectingSandbox ||
-                                isHibernatingUi ||
-                                isServerRestoring ||
-                                !isSandboxActive) ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  <p>Sandbox is initializing…</p>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">
-                                  Send a message to get started
-                                </p>
-                              )}
+                              <p className="text-sm text-muted-foreground">
+                                Send a message to get started
+                              </p>
                             </div>
                           )}
                         {groupedRenderMessages.map(
@@ -3834,7 +3654,9 @@ export function SessionChatContent({
                               <span className="flex size-3.5 shrink-0 items-center justify-center">
                                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-muted-foreground" />
                               </span>
-                              <span className="leading-none">Thinking…</span>
+                              <span className="leading-none">
+                                {workspaceStatus?.message ?? "Thinking…"}
+                              </span>
                             </div>
                           </div>
                         )}
@@ -3948,7 +3770,6 @@ export function SessionChatContent({
                           if (showInlineQuestion) return;
                           if (
                             isArchived ||
-                            !isSandboxActive ||
                             isChatInFlight ||
                             hasPendingResponse
                           ) {
@@ -4113,22 +3934,8 @@ export function SessionChatContent({
                       >
                         {/* Sandbox overlay when inactive */}
                         <SandboxInputOverlay
-                          isSandboxActive={isSandboxActive}
-                          isCreating={isCreatingSandbox}
-                          isRestoring={isRestoringSnapshot}
-                          isReconnecting={
-                            isReconnectingSandbox && !isHibernatingUi
-                          }
-                          isHibernating={isHibernatingUi}
                           isArchived={isArchived}
-                          isInitializing={
-                            reconnectionStatus === "idle" ||
-                            isAutoRestoringOnEntry
-                          }
                           snapshotPending={isArchiveSnapshotPending}
-                          hasSnapshot={hasSnapshot}
-                          onRestore={handleRestoreSnapshot}
-                          onCreateNew={handleCreateNewSandbox}
                         />
 
                         {/* Attachments preview */}
@@ -4199,7 +4006,7 @@ export function SessionChatContent({
                                 !hasPendingResponse
                               ) {
                                 e.preventDefault();
-                                if (!isArchived && isSandboxActive) {
+                                if (!isArchived) {
                                   e.currentTarget.form?.requestSubmit();
                                 }
                               }
@@ -4396,8 +4203,7 @@ export function SessionChatContent({
                                         (!input.trim() &&
                                           images.length === 0 &&
                                           textAttachments.length === 0) ||
-                                        isUpdatingModel ||
-                                        !isSandboxActive
+                                        isUpdatingModel
                                       }
                                       className="h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
                                     >
@@ -4405,11 +4211,6 @@ export function SessionChatContent({
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                {!isSandboxActive && !isArchived && (
-                                  <TooltipContent side="top" sideOffset={8}>
-                                    Waiting for sandbox...
-                                  </TooltipContent>
-                                )}
                               </Tooltip>
                             )}
                           </div>

@@ -13,7 +13,6 @@ import {
   isFirstChatMessage,
   touchChat,
   updateChat,
-  updateSession,
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import {
@@ -30,14 +29,12 @@ import {
   MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT,
   MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR,
 } from "@/lib/managed-template-trial";
-import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
 } from "./_lib/chat-context";
 import { resolveChatModelSelection } from "./_lib/model-selection";
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
-import { createChatRuntime } from "./_lib/runtime";
 import { runAgentWorkflow } from "@/app/workflows/chat";
 import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-results";
 
@@ -90,18 +87,12 @@ export async function POST(req: Request) {
     sessionId,
     chatId,
     forbiddenMessage: "Unauthorized",
-    requireActiveSandbox: true,
-    sandboxInactiveMessage: "Sandbox not initialized",
   });
   if (!chatContext.ok) {
     return chatContext.response;
   }
 
   const { sessionRecord, chat } = chatContext;
-  const activeSandboxState = sessionRecord.sandboxState;
-  if (!activeSandboxState) {
-    throw new Error("Sandbox not initialized");
-  }
 
   if (isManagedTemplateTrialUser(session, req.url)) {
     const latestUserMessage = getLatestUserMessage(messages);
@@ -143,15 +134,6 @@ export async function POST(req: Request) {
     }
   }
 
-  const requestStartedAt = new Date();
-
-  // Refresh lifecycle activity so long-running responses don't look idle.
-  await updateSession(sessionId, {
-    ...buildActiveLifecycleUpdate(sessionRecord.sandboxState, {
-      activityAt: requestStartedAt,
-    }),
-  });
-
   // Persist the latest user message immediately (fire-and-forget) so it's
   // in the DB before the workflow starts. This ensures a page refresh
   // during workflow queue time still shows the message.
@@ -163,20 +145,12 @@ export async function POST(req: Request) {
   // would lose the tool result.
   void persistAssistantMessagesWithToolResults(chatId, messages);
 
-  const runtimePromise = createChatRuntime({
-    userId,
-    sessionId,
-    sessionRecord,
-  });
   const preferencesPromise = getUserPreferences(userId).catch((error) => {
     console.error("Failed to load user preferences:", error);
     return null;
   });
 
-  const [{ sandbox, skills }, rawPreferences] = await Promise.all([
-    runtimePromise,
-    preferencesPromise,
-  ]);
+  const rawPreferences = await preferencesPromise;
 
   const preferences = rawPreferences
     ? sanitizeUserPreferencesForSession(rawPreferences, session, req.url)
@@ -233,17 +207,10 @@ export async function POST(req: Request) {
       modelId: mainModelSelection.id,
       maxSteps: 500,
       agentOptions: {
-        sandbox: {
-          state: activeSandboxState,
-          workingDirectory: sandbox.workingDirectory,
-          currentBranch: sandbox.currentBranch,
-          environmentDetails: sandbox.environmentDetails,
-        },
         model: mainModelSelection,
         ...(subagentModelSelection
           ? { subagentModel: subagentModelSelection }
           : {}),
-        ...(skills.length > 0 && { skills }),
         customInstructions: assistantFileLinkPrompt,
       },
       ...(shouldAutoCommitPush &&
@@ -251,9 +218,6 @@ export async function POST(req: Request) {
         sessionRecord.repoName && {
           autoCommitEnabled: true,
           autoCreatePrEnabled: shouldAutoCreatePr,
-          sessionTitle: sessionRecord.title,
-          repoOwner: sessionRecord.repoOwner,
-          repoName: sessionRecord.repoName,
         }),
     },
   ]);

@@ -19,6 +19,7 @@ import type {
   WebAgentPrData,
   WebAgentStepFinishMetadata,
   WebAgentUIMessage,
+  WebAgentWorkspaceStatusData,
 } from "@/app/types";
 import {
   claimActiveStream,
@@ -37,6 +38,10 @@ import type {
   WorkflowRunStatus,
   WorkflowRunStepTiming,
 } from "@/lib/db/workflow-runs";
+import {
+  resolveChatSandboxRuntime,
+  shouldEmitWorkspaceSetupStatus,
+} from "./chat-sandbox-runtime";
 
 type Options = {
   messages: WebAgentUIMessage[];
@@ -45,18 +50,12 @@ type Options = {
   userId: string;
   selectedModelId: string;
   modelId: string;
-  agentOptions: OpenAgentCallOptions;
+  agentOptions: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
   maxSteps?: number;
   /** Whether auto-commit+push should run after a natural finish. */
   autoCommitEnabled?: boolean;
   /** Whether auto PR creation should run after auto-commit on a natural finish. */
   autoCreatePrEnabled?: boolean;
-  /** Session title for commit message generation. */
-  sessionTitle?: string;
-  /** GitHub repo owner (required for auto-commit and diff refresh). */
-  repoOwner?: string;
-  /** GitHub repo name (required for auto-commit). */
-  repoName?: string;
 };
 
 type Writable = WritableStream<UIMessageChunk>;
@@ -450,6 +449,24 @@ async function sendDataPart(
   }
 }
 
+async function sendWorkspaceStatus(
+  writable: Writable,
+  data: WebAgentWorkspaceStatusData,
+) {
+  "use step";
+  const writer = writable.getWriter();
+  try {
+    await writer.write({
+      type: "data-workspace-status",
+      id: "workspace-status",
+      data,
+      transient: true,
+    });
+  } finally {
+    writer.releaseLock();
+  }
+}
+
 export async function runAgentWorkflow(options: Options) {
   "use workflow";
 
@@ -481,12 +498,8 @@ export async function runAgentWorkflow(options: Options) {
     return;
   }
 
-  const [modelMessages, assistantId] = await Promise.all([
-    convertMessages(options.messages),
-    latestMessage.role === "assistant"
-      ? Promise.resolve(latestMessage.id)
-      : generateId(),
-  ]);
+  const assistantId =
+    latestMessage.role === "assistant" ? latestMessage.id : await generateId();
 
   let pendingAssistantResponse: WebAgentUIMessage =
     latestMessage.role === "assistant"
@@ -512,8 +525,6 @@ export async function runAgentWorkflow(options: Options) {
 
   let originalMessagesForStep: WebAgentUIMessage[] = [latestMessage];
 
-  await sendStart(writable, assistantId);
-
   const runStartedAt = new Date();
   const previousResponseMessage =
     latestMessage.role === "assistant" ? latestMessage : undefined;
@@ -525,9 +536,48 @@ export async function runAgentWorkflow(options: Options) {
   let streamClosed = false;
   let workflowStatus: WorkflowRunStatus = "completed";
   let caughtError: unknown;
-  const sandboxState = options.agentOptions.sandbox?.state;
+  let sandboxState: OpenAgentCallOptions["sandbox"]["state"] | undefined;
 
   try {
+    const shouldShowWorkspaceSetup = await shouldEmitWorkspaceSetupStatus(
+      options.sessionId,
+    );
+    if (shouldShowWorkspaceSetup) {
+      await sendWorkspaceStatus(writable, {
+        status: "setting-up",
+        message: "Setting up the workspace...",
+      });
+    }
+
+    const [runtime, modelMessages] = await Promise.all([
+      resolveChatSandboxRuntime({
+        userId: options.userId,
+        sessionId: options.sessionId,
+      }),
+      convertMessages(options.messages),
+    ]);
+
+    if (!shouldShowWorkspaceSetup && runtime.didSetupWorkspace) {
+      await sendWorkspaceStatus(writable, {
+        status: "setting-up",
+        message: "Setting up the workspace...",
+      });
+    }
+
+    const agentOptions: OpenAgentCallOptions = {
+      ...options.agentOptions,
+      sandbox: {
+        state: runtime.sandboxState,
+        workingDirectory: runtime.workingDirectory,
+        currentBranch: runtime.currentBranch,
+        environmentDetails: runtime.environmentDetails,
+      },
+      ...(runtime.skills.length > 0 ? { skills: runtime.skills } : {}),
+    };
+    sandboxState = runtime.sandboxState;
+
+    await sendStart(writable, assistantId);
+
     for (
       let step = 0;
       options.maxSteps === undefined || step < options.maxSteps;
@@ -546,7 +596,7 @@ export async function runAgentWorkflow(options: Options) {
           options.sessionId,
           options.selectedModelId,
           options.modelId,
-          options.agentOptions,
+          agentOptions,
           step + 1,
         );
       } catch (error) {
@@ -615,8 +665,8 @@ export async function runAgentWorkflow(options: Options) {
       finalFinishReason !== "tool-calls";
     const commitPartId = `${assistantId}:commit`;
     const prPartId = `${assistantId}:pr`;
-    const repoOwner = options.repoOwner;
-    const repoName = options.repoName;
+    const repoOwner = runtime.repoOwner;
+    const repoName = runtime.repoName;
     let didUpdateGitData = false;
 
     let autoCommitResult: Awaited<ReturnType<typeof runAutoCommitStep>> | null =
@@ -652,7 +702,7 @@ export async function runAgentWorkflow(options: Options) {
         ? await runAutoCommitStep({
             userId: options.userId,
             sessionId: options.sessionId,
-            sessionTitle: options.sessionTitle ?? "",
+            sessionTitle: runtime.sessionTitle,
             repoOwner,
             repoName,
             sandboxState,
@@ -698,7 +748,7 @@ export async function runAgentWorkflow(options: Options) {
         const autoPrResult = await runAutoCreatePrStep({
           userId: options.userId,
           sessionId: options.sessionId,
-          sessionTitle: options.sessionTitle ?? "",
+          sessionTitle: runtime.sessionTitle,
           repoOwner,
           repoName,
           sandboxState,

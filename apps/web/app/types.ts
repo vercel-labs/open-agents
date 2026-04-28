@@ -60,10 +60,16 @@ export type WebAgentSnippetData = {
   filename: string;
 };
 
+export type WebAgentWorkspaceStatusData = {
+  status: "setting-up";
+  message: string;
+};
+
 export type WebAgentDataParts = {
   commit: WebAgentCommitData;
   pr: WebAgentPrData;
   snippet: WebAgentSnippetData;
+  "workspace-status": WebAgentWorkspaceStatusData;
 };
 
 // All types derived from the agent

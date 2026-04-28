@@ -381,18 +381,20 @@ describe("/api/chat route", () => {
     ]);
   });
 
-  test("discovers global sandbox skills after repo-local skill directories", async () => {
+  test("does not connect to the sandbox before starting the workflow", async () => {
     const { POST } = await routeModulePromise;
 
     const response = await POST(createValidRequest());
 
     expect(response.ok).toBe(true);
-    expect(discoverSkillDirsCalls).toEqual([
-      [
-        "/vercel/sandbox/.claude/skills",
-        "/vercel/sandbox/.agents/skills",
-        "/root/.agents/skills",
-      ],
+    expect(discoverSkillDirsCalls).toEqual([]);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        agentOptions: expect.not.objectContaining({
+          sandbox: expect.anything(),
+          skills: expect.anything(),
+        }),
+      }),
     ]);
   });
 
@@ -522,16 +524,14 @@ describe("/api/chat route", () => {
     });
   });
 
-  test("returns 400 when sandbox is not active", async () => {
+  test("starts a workflow when sandbox is not active", async () => {
     isSandboxActive = false;
     const { POST } = await routeModulePromise;
 
     const response = await POST(createValidRequest());
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "Sandbox not initialized",
-    });
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
   });
 
   test("reconnects to existing running workflow instead of starting new one", async () => {

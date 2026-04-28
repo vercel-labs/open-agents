@@ -18,7 +18,10 @@ import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
 import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/route";
-import type { WebAgentUIMessage } from "@/app/types";
+import type {
+  WebAgentUIMessage,
+  WebAgentWorkspaceStatusData,
+} from "@/app/types";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useSessionDiff } from "@/hooks/use-session-diff";
@@ -107,6 +110,8 @@ type SessionChatContextValue = {
   contextLimit: number | null;
   stopChatStream: () => void;
   sandboxInfo: SandboxInfo | null;
+  workspaceStatus: WebAgentWorkspaceStatusData | null;
+  clearWorkspaceStatus: () => void;
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   archiveSession: () => Promise<void>;
@@ -204,6 +209,8 @@ type SessionChatRuntimeContextValue = Pick<
   | "chat"
   | "contextLimit"
   | "stopChatStream"
+  | "workspaceStatus"
+  | "clearWorkspaceStatus"
   | "retryChatStream"
   | "hadInitialMessages"
   | "initialMessages"
@@ -331,7 +338,13 @@ export function SessionChatProvider({
     [modelOptions, chatInfo.modelId],
   );
   const hadInitialMessages = initialMessages.length > 0;
-  const { chat, stopChatStream, retryChatStream } = useSessionChatRuntime({
+  const {
+    chat,
+    stopChatStream,
+    retryChatStream,
+    workspaceStatus,
+    clearWorkspaceStatus,
+  } = useSessionChatRuntime({
     sessionId: sessionRecord.id,
     chatId: chatInfo.id,
     initialMessages,
@@ -1017,6 +1030,8 @@ export function SessionChatProvider({
       contextLimit,
       stopChatStream,
       retryChatStream,
+      workspaceStatus,
+      clearWorkspaceStatus,
       hadInitialMessages,
       initialMessages,
     }),
@@ -1025,6 +1040,8 @@ export function SessionChatProvider({
       contextLimit,
       stopChatStream,
       retryChatStream,
+      workspaceStatus,
+      clearWorkspaceStatus,
       hadInitialMessages,
       initialMessages,
     ],

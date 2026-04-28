@@ -2,8 +2,11 @@
 
 import { type UseChatHelpers, useChat } from "@ai-sdk/react";
 import { isToolUIPart } from "ai";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { WebAgentUIMessage } from "@/app/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  WebAgentUIMessage,
+  WebAgentWorkspaceStatusData,
+} from "@/app/types";
 import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
   abortChatInstanceTransport,
@@ -30,6 +33,8 @@ type UseSessionChatRuntimeReturn = {
   chat: UseChatHelpers<WebAgentUIMessage>;
   stopChatStream: () => void;
   retryChatStream: (opts?: RetryChatStreamOptions) => void;
+  workspaceStatus: WebAgentWorkspaceStatusData | null;
+  clearWorkspaceStatus: () => void;
 };
 
 /**
@@ -80,6 +85,8 @@ export function useSessionChatRuntime({
   contextLimit,
 }: UseSessionChatRuntimeParams): UseSessionChatRuntimeReturn {
   const contextLimitRef = useRef<number | null>(contextLimit);
+  const [workspaceStatus, setWorkspaceStatus] =
+    useState<WebAgentWorkspaceStatusData | null>(null);
 
   useEffect(() => {
     contextLimitRef.current = contextLimit;
@@ -116,6 +123,11 @@ export function useSessionChatRuntime({
         id: chatId,
         transport,
         messages: initialMessages,
+        onData: (dataPart) => {
+          if (dataPart.type === "data-workspace-status") {
+            setWorkspaceStatus(dataPart.data);
+          }
+        },
         sendAutomaticallyWhen: shouldAutoSubmit,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only create once per chatId; init values are only used at creation time
@@ -223,8 +235,29 @@ export function useSessionChatRuntime({
   useEffect(() => {
     if (chat.status === "submitted") {
       userStoppedRef.current = false;
+      setWorkspaceStatus(null);
+      return;
+    }
+
+    if (chat.status === "ready" || chat.status === "error") {
+      setWorkspaceStatus(null);
     }
   }, [chat.status]);
+
+  useEffect(() => {
+    if (!workspaceStatus) {
+      return;
+    }
+
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    if (lastMessage?.role === "assistant" && lastMessage.parts.length > 0) {
+      setWorkspaceStatus(null);
+    }
+  }, [chat.messages, workspaceStatus]);
+
+  const clearWorkspaceStatus = useCallback(() => {
+    setWorkspaceStatus(null);
+  }, []);
 
   // Reactive resume fallback.
   //
@@ -319,5 +352,7 @@ export function useSessionChatRuntime({
     chat,
     stopChatStream,
     retryChatStream,
+    workspaceStatus,
+    clearWorkspaceStatus,
   };
 }

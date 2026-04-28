@@ -6,9 +6,50 @@ import type { UIMessageChunk } from "ai";
 const writtenChunks: UIMessageChunk[] = [];
 let runStatus: string = "running";
 
+type TestResolvedChatSandboxRuntime = {
+  sandboxState: {
+    type: "vercel";
+    sandboxName: string;
+    expiresAt: number;
+  };
+  workingDirectory: string;
+  currentBranch: string;
+  environmentDetails: string;
+  skills: never[];
+  didSetupWorkspace: boolean;
+  sessionTitle: string;
+  repoOwner?: string;
+  repoName?: string;
+};
+
+function createResolvedChatSandboxRuntime(
+  overrides: Partial<TestResolvedChatSandboxRuntime> = {},
+): TestResolvedChatSandboxRuntime {
+  return {
+    sandboxState: {
+      type: "vercel",
+      sandboxName: "session_session-1",
+      expiresAt: Date.now() + 60_000,
+    },
+    workingDirectory: "/vercel/sandbox",
+    currentBranch: "main",
+    environmentDetails: "test sandbox",
+    skills: [],
+    didSetupWorkspace: false,
+    sessionTitle: "Session title",
+    repoOwner: "acme",
+    repoName: "repo",
+    ...overrides,
+  };
+}
+
 const spies = {
   persistAssistantMessage: mock(() => Promise.resolve()),
   persistSandboxState: mock(() => Promise.resolve()),
+  shouldEmitWorkspaceSetupStatus: mock(() => Promise.resolve(false)),
+  resolveChatSandboxRuntime: mock(() =>
+    Promise.resolve(createResolvedChatSandboxRuntime()),
+  ),
   claimActiveStream: mock(() => Promise.resolve("claimed")),
   clearActiveStream: mock(() => Promise.resolve()),
   recordWorkflowUsage: mock(() => Promise.resolve()),
@@ -228,6 +269,11 @@ mock.module("ai", () => ({
 
 mock.module("@open-agents/agent", () => ({}));
 
+mock.module("./chat-sandbox-runtime", () => ({
+  shouldEmitWorkspaceSetupStatus: spies.shouldEmitWorkspaceSetupStatus,
+  resolveChatSandboxRuntime: spies.resolveChatSandboxRuntime,
+}));
+
 const { runAgentWorkflow } = await import("./chat");
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -246,9 +292,7 @@ function makeOptions(overrides?: Record<string, unknown>) {
     userId: "user-1",
     selectedModelId: "gpt-4",
     modelId: "gpt-4",
-    agentOptions: {
-      sandbox: { state: { type: "vercel" } },
-    },
+    agentOptions: {},
     maxSteps: 1,
     ...overrides,
   } as Parameters<typeof runAgentWorkflow>[0];
@@ -318,6 +362,25 @@ describe("runAgentWorkflow", () => {
     const types = writtenChunks.map((c) => c.type);
     expect(types[0]).toBe("start");
     expect(types[types.length - 1]).toBe("finish");
+  });
+
+  test("streams transient workspace setup status before assistant start", async () => {
+    spies.shouldEmitWorkspaceSetupStatus.mockImplementationOnce(() =>
+      Promise.resolve(true),
+    );
+
+    await runAgentWorkflow(makeOptions());
+
+    expect(writtenChunks[0]).toEqual({
+      type: "data-workspace-status",
+      id: "workspace-status",
+      data: {
+        status: "setting-up",
+        message: "Setting up the workspace...",
+      },
+      transient: true,
+    });
+    expect(writtenChunks[1]?.type).toBe("start");
   });
 
   test("persists assistant message after run", async () => {
@@ -903,16 +966,6 @@ describe("runAgentWorkflow", () => {
     expect(spies.persistSandboxState).toHaveBeenCalledTimes(1);
   });
 
-  test("skips sandbox state when no sandbox", async () => {
-    await runAgentWorkflow(
-      makeOptions({
-        agentOptions: {},
-      }),
-    );
-
-    expect(spies.persistSandboxState).not.toHaveBeenCalled();
-  });
-
   test("clears active stream in finally block", async () => {
     await runAgentWorkflow(makeOptions());
 
@@ -1212,8 +1265,6 @@ describe("runAgentWorkflow", () => {
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: false,
-        repoOwner: "acme",
-        repoName: "repo",
       }),
     );
 
@@ -1221,11 +1272,18 @@ describe("runAgentWorkflow", () => {
   });
 
   test("skips auto-commit when repoOwner is missing", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(() =>
+      Promise.resolve(
+        createResolvedChatSandboxRuntime({
+          repoOwner: undefined,
+          repoName: "repo",
+        }),
+      ),
+    );
+
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: true,
-        repoOwner: undefined,
-        repoName: "repo",
       }),
     );
 
@@ -1233,11 +1291,18 @@ describe("runAgentWorkflow", () => {
   });
 
   test("skips auto-commit when repoName is missing", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(() =>
+      Promise.resolve(
+        createResolvedChatSandboxRuntime({
+          repoOwner: "acme",
+          repoName: undefined,
+        }),
+      ),
+    );
+
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: true,
-        repoOwner: "acme",
-        repoName: undefined,
       }),
     );
 

@@ -1,0 +1,230 @@
+import { discoverSkills } from "@open-agents/agent";
+import {
+  connectSandbox,
+  type Sandbox,
+  type SandboxState,
+} from "@open-agents/sandbox";
+import { getSessionById, updateSession } from "@/lib/db/sessions";
+import { getGitHubUserProfile, getUserGitHubToken } from "@/lib/github/token";
+import {
+  buildActiveLifecycleUpdate,
+  getNextLifecycleVersion,
+} from "@/lib/sandbox/lifecycle";
+import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
+import {
+  DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+  DEFAULT_SANDBOX_PORTS,
+  DEFAULT_SANDBOX_TIMEOUT_MS,
+} from "@/lib/sandbox/config";
+import {
+  getResumableSandboxName,
+  getSessionSandboxName,
+  isSandboxActive,
+} from "@/lib/sandbox/utils";
+import { getSandboxSkillDirectories } from "@/lib/skills/directories";
+import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
+import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
+
+type SessionRecord = NonNullable<Awaited<ReturnType<typeof getSessionById>>>;
+type DiscoveredSkills = Awaited<ReturnType<typeof discoverSkills>>;
+
+export type ResolvedChatSandboxRuntime = {
+  sandboxState: SandboxState;
+  workingDirectory: string;
+  currentBranch?: string;
+  environmentDetails?: string;
+  skills: DiscoveredSkills;
+  didSetupWorkspace: boolean;
+  sessionTitle: string;
+  repoOwner?: string;
+  repoName?: string;
+};
+
+function isSandboxState(value: unknown): value is SandboxState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "vercel"
+  );
+}
+
+function buildSandboxSource(session: SessionRecord): SandboxState["source"] {
+  if (!session.cloneUrl) {
+    return undefined;
+  }
+
+  const branchExistsOnOrigin = session.prNumber != null;
+  const shouldCreateNewBranch = session.isNewBranch && !branchExistsOnOrigin;
+
+  return {
+    repo: session.cloneUrl,
+    ...(shouldCreateNewBranch
+      ? { newBranch: session.branch ?? undefined }
+      : { branch: session.branch ?? "main" }),
+  };
+}
+
+function buildSandboxState(session: SessionRecord): SandboxState {
+  const existingState = session.sandboxState;
+  const sandboxName =
+    getResumableSandboxName(existingState) ?? getSessionSandboxName(session.id);
+  const source = buildSandboxSource(session);
+
+  return {
+    type: "vercel",
+    ...(isSandboxState(existingState) ? existingState : {}),
+    sandboxName,
+    ...(source ? { source } : {}),
+  };
+}
+
+async function getGitUser(userId: string) {
+  const profile = await getGitHubUserProfile(userId);
+  const githubNoreplyEmail =
+    profile?.externalUserId && profile.username
+      ? `${profile.externalUserId}+${profile.username}@users.noreply.github.com`
+      : undefined;
+
+  return {
+    name: profile?.username ?? "Open Harness",
+    email: githubNoreplyEmail ?? `${userId}@users.noreply.github.com`,
+  };
+}
+
+async function installSessionGlobalSkills(params: {
+  session: SessionRecord;
+  sandbox: Sandbox;
+  didSetupWorkspace: boolean;
+}): Promise<void> {
+  if (!params.didSetupWorkspace) {
+    return;
+  }
+
+  const globalSkillRefs = params.session.globalSkillRefs ?? [];
+  if (globalSkillRefs.length === 0) {
+    return;
+  }
+
+  try {
+    await installGlobalSkills({
+      sandbox: params.sandbox,
+      globalSkillRefs,
+    });
+  } catch (error) {
+    console.error(
+      `Failed to install global skills for session ${params.session.id}:`,
+      error,
+    );
+  }
+}
+
+async function loadSessionSkills(params: {
+  sessionId: string;
+  sandboxState: SandboxState;
+  sandbox: Sandbox;
+}): Promise<DiscoveredSkills> {
+  const cachedSkills = await getCachedSkills(
+    params.sessionId,
+    params.sandboxState,
+  );
+  if (cachedSkills !== null) {
+    return cachedSkills;
+  }
+
+  const skillDirs = await getSandboxSkillDirectories(params.sandbox);
+  const discoveredSkills = await discoverSkills(params.sandbox, skillDirs);
+  await setCachedSkills(
+    params.sessionId,
+    params.sandboxState,
+    discoveredSkills,
+  );
+  return discoveredSkills;
+}
+
+export async function shouldEmitWorkspaceSetupStatus(
+  sessionId: string,
+): Promise<boolean> {
+  "use step";
+
+  const session = await getSessionById(sessionId);
+  return !isSandboxActive(session?.sandboxState);
+}
+
+export async function resolveChatSandboxRuntime(params: {
+  userId: string;
+  sessionId: string;
+}): Promise<ResolvedChatSandboxRuntime> {
+  "use step";
+
+  const session = await getSessionById(params.sessionId);
+  if (!session) {
+    throw new Error("Session not found");
+  }
+  if (session.userId !== params.userId) {
+    throw new Error("Unauthorized");
+  }
+
+  const githubToken = await getUserGitHubToken(params.userId);
+  if (session.cloneUrl && !githubToken) {
+    throw new Error("Connect GitHub to access repositories");
+  }
+
+  const didSetupWorkspace = !isSandboxActive(session.sandboxState);
+  const gitUser = await getGitUser(params.userId);
+  const sandbox = await connectSandbox({
+    state: buildSandboxState(session),
+    options: {
+      githubToken: githubToken ?? undefined,
+      gitUser,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      ports: DEFAULT_SANDBOX_PORTS,
+      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+      persistent: true,
+      resume: true,
+      createIfMissing: true,
+    },
+  });
+
+  await installSessionGlobalSkills({
+    session,
+    sandbox,
+    didSetupWorkspace,
+  });
+
+  const rawSandboxState = sandbox.getState?.();
+  const sandboxState = isSandboxState(rawSandboxState)
+    ? rawSandboxState
+    : buildSandboxState(session);
+
+  await updateSession(params.sessionId, {
+    sandboxState,
+    snapshotUrl: null,
+    snapshotCreatedAt: null,
+    lifecycleVersion: getNextLifecycleVersion(session.lifecycleVersion),
+    ...buildActiveLifecycleUpdate(sandboxState),
+  });
+
+  kickSandboxLifecycleWorkflow({
+    sessionId: params.sessionId,
+    reason: "sandbox-created",
+  });
+
+  const skills = await loadSessionSkills({
+    sessionId: params.sessionId,
+    sandboxState,
+    sandbox,
+  });
+
+  return {
+    sandboxState,
+    workingDirectory: sandbox.workingDirectory,
+    currentBranch: sandbox.currentBranch,
+    environmentDetails: sandbox.environmentDetails,
+    skills,
+    didSetupWorkspace,
+    sessionTitle: session.title,
+    repoOwner: session.repoOwner ?? undefined,
+    repoName: session.repoName ?? undefined,
+  };
+}
