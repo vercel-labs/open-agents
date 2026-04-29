@@ -245,11 +245,14 @@ describe("gateway attribution headers", () => {
     createGatewayCalls.length = 0;
     gateway("anthropic/claude-sonnet-4.6" as never);
 
-    expect(createGatewayCalls).toHaveLength(1);
-    expect(createGatewayCalls[0].headers).toEqual({
-      "http-referer": "https://open-agents.dev",
-      "x-title": "Open Agents",
-    });
+    expect(createGatewayCalls).toEqual([
+      {
+        headers: {
+          "http-referer": "https://open-agents.dev",
+          "x-title": "Open Agents",
+        },
+      },
+    ]);
   });
 
   test("allows overriding attribution via appName and appUrl", () => {
@@ -259,11 +262,14 @@ describe("gateway attribution headers", () => {
       appUrl: "https://myapp.com",
     });
 
-    expect(createGatewayCalls).toHaveLength(1);
-    expect(createGatewayCalls[0].headers).toEqual({
-      "http-referer": "https://myapp.com",
-      "x-title": "My App",
-    });
+    expect(createGatewayCalls).toEqual([
+      {
+        headers: {
+          "http-referer": "https://myapp.com",
+          "x-title": "My App",
+        },
+      },
+    ]);
   });
 
   test("passes attribution headers with custom gateway config", () => {
@@ -272,14 +278,15 @@ describe("gateway attribution headers", () => {
       config: { baseURL: "https://custom.api", apiKey: "sk-test" },
     });
 
-    expect(createGatewayCalls).toHaveLength(1);
-    expect(createGatewayCalls[0]).toEqual({
-      baseURL: "https://custom.api",
-      apiKey: "sk-test",
-      headers: {
-        "http-referer": "https://open-agents.dev",
-        "x-title": "Open Agents",
+    expect(createGatewayCalls).toEqual([
+      {
+        baseURL: "https://custom.api",
+        apiKey: "sk-test",
+        headers: {
+          "http-referer": "https://open-agents.dev",
+          "x-title": "Open Agents",
+        },
       },
-    });
+    ]);
   });
 });
