@@ -671,8 +671,8 @@ export function SessionChatProvider({
   );
 
   const checkBranchAndPr = useCallback(async () => {
-    // Only check if the session has repo info. The server action will throw
-    // if the sandbox is not active, which we silently ignore.
+    // Only check if the session has repo info. While provisioning, the server
+    // action returns the current DB metadata without touching the sandbox.
     if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
 
     try {

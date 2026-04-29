@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -85,6 +86,9 @@ function TextAttachmentPreviewDialog({
               {meta}
             </span>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview the attached text file content.
+          </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-4">
           <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">

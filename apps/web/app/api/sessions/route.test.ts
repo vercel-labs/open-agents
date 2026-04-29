@@ -20,6 +20,7 @@ let existingSessionCount = 0;
 let savedLink: VercelProjectSelection | null = null;
 let currentVercelToken: string | null = "vercel-token";
 let matchingProjects: VercelProjectSelection[] = [];
+let matchingProjectsError: Error | null = null;
 const createCalls: Array<Record<string, unknown>> = [];
 const upsertCalls: Array<Record<string, unknown>> = [];
 
@@ -60,7 +61,14 @@ mock.module("@/lib/vercel/token", () => ({
 }));
 
 mock.module("@/lib/vercel/projects", () => ({
-  listMatchingVercelProjects: async () => matchingProjects,
+  isVercelInvalidTokenError: (error: unknown) =>
+    matchingProjectsError !== null && error === matchingProjectsError,
+  listMatchingVercelProjects: async () => {
+    if (matchingProjectsError) {
+      throw matchingProjectsError;
+    }
+    return matchingProjects;
+  },
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -117,6 +125,7 @@ describe("/api/sessions POST vercel project linking", () => {
     savedLink = null;
     currentVercelToken = "vercel-token";
     matchingProjects = [];
+    matchingProjectsError = null;
     createCalls.length = 0;
     upsertCalls.length = 0;
   });

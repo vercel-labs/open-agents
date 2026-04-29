@@ -117,7 +117,11 @@ export async function checkPullRequest(params: { sessionId: string }): Promise<{
   const sessionRecord = await requireOwnedSession(session.user.id, sessionId);
 
   if (!isSandboxActive(sessionRecord.sandboxState)) {
-    throw new Error("Sandbox not active");
+    return {
+      branch: sessionRecord.branch ?? null,
+      prNumber: sessionRecord.prNumber ?? null,
+      prStatus: sessionRecord.prStatus ?? null,
+    };
   }
 
   const sandboxState = sessionRecord.sandboxState;

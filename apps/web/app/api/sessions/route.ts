@@ -23,7 +23,10 @@ import {
   MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT,
   MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR,
 } from "@/lib/managed-template-trial";
-import { listMatchingVercelProjects } from "@/lib/vercel/projects";
+import {
+  isVercelInvalidTokenError,
+  listMatchingVercelProjects,
+} from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
 import {
   vercelProjectSelectionSchema,
@@ -359,6 +362,16 @@ export async function POST(req: Request) {
 
     return Response.json(result);
   } catch (error) {
+    if (isVercelInvalidTokenError(error)) {
+      console.warn(
+        `Vercel token is invalid for user ${session.user.id}; reconnect required to create a session with env sync.`,
+      );
+      return Response.json(
+        { error: "Reconnect Vercel to select a Vercel project" },
+        { status: 403 },
+      );
+    }
+
     console.error("Failed to create session:", error);
     return Response.json(
       { error: "Failed to create session" },

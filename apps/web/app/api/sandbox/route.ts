@@ -1,11 +1,10 @@
-import { checkBotId } from "botid/server";
 import { connectSandbox, type SandboxState } from "@open-agents/sandbox";
 import {
   requireAuthenticatedUser,
   requireOwnedSession,
   type SessionRecord,
 } from "@/app/api/sessions/_lib/session-context";
-import { botIdConfig } from "@/lib/botid";
+import { checkBotProtection } from "@/lib/botid";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import { updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
@@ -112,7 +111,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const botVerification = await checkBotId(botIdConfig);
+  const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }

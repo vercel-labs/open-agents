@@ -1,5 +1,4 @@
-import { checkBotId } from "botid/server";
-import { botIdConfig } from "@/lib/botid";
+import { checkBotProtection } from "@/lib/botid";
 import { experimental_transcribe as transcribe } from "ai";
 import { elevenlabs } from "@ai-sdk/elevenlabs";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -15,7 +14,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const botVerification = await checkBotId(botIdConfig);
+  const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }

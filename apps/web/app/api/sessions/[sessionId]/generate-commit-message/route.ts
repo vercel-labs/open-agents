@@ -1,7 +1,6 @@
-import { checkBotId } from "botid/server";
 import { connectSandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
-import { botIdConfig } from "@/lib/botid";
+import { checkBotProtection } from "@/lib/botid";
 import { getSessionById } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -17,7 +16,7 @@ export async function POST(
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const botVerification = await checkBotId(botIdConfig);
+  const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
