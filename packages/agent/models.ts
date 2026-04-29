@@ -181,7 +181,11 @@ export function gateway(
   };
 
   const baseGateway = config
-    ? createGateway({ baseURL: config.baseURL, apiKey: config.apiKey, headers: attributionHeaders })
+    ? createGateway({
+        baseURL: config.baseURL,
+        apiKey: config.apiKey,
+        headers: attributionHeaders,
+      })
     : createGateway({ headers: attributionHeaders });
 
   let model: LanguageModel = baseGateway(modelId);
