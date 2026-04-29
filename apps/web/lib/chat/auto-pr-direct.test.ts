@@ -11,7 +11,7 @@ type ExecResult = {
 };
 
 let execResults: Map<string, ExecResult>;
-let userTokenResult: string | null = "ghp_user";
+let userTokenResult: string | null = "ghu_user";
 let cachedBranchesResult: { branches: string[]; defaultBranch: string } | null =
   {
     branches: ["main", "feature-branch"],
@@ -72,6 +72,15 @@ const generatePullRequestContentFromSandboxSpy = mock(
   async () => prContentResult,
 );
 const getUserGitHubTokenSpy = mock(async (_userId?: string) => userTokenResult);
+const getGitHubAppUserTokenSpy = mock(async (_userId?: string) =>
+  getUserGitHubTokenSpy(_userId),
+);
+const verifyRepoAccessSpy = mock(async () => ({
+  ok: true,
+  installationId: 999,
+  repositoryId: 123,
+  defaultBranch: "main",
+}));
 
 const sandbox = {
   workingDirectory: "/vercel/sandbox",
@@ -83,6 +92,8 @@ mock.module("@/lib/git/helpers", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
+  getSessionById: async () => null,
   updateSession: updateSessionSpy,
 }));
 
@@ -92,6 +103,12 @@ mock.module("@/lib/github/repos", () => ({
 
 mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenSpy,
+  getGitHubAppUserToken: getGitHubAppUserTokenSpy,
+}));
+
+mock.module("@/lib/github/access", () => ({
+  verifyRepoAccess: verifyRepoAccessSpy,
+  getRepoAccessErrorMessage: () => "Access denied",
 }));
 
 mock.module("@/lib/github/pulls", () => ({
@@ -112,7 +129,6 @@ function defaultExecResults(): Map<string, ExecResult> {
       "git symbolic-ref --short HEAD",
       { success: true, stdout: "feature-branch" },
     ],
-    ["git remote set-url", { success: true, stdout: "" }],
     ["git fetch origin", { success: true, stdout: "" }],
     ["git rev-parse HEAD", { success: true, stdout: "abc123" }],
     [
@@ -148,9 +164,11 @@ beforeEach(() => {
   openPullRequestSpy.mockClear();
   generatePullRequestContentFromSandboxSpy.mockClear();
   getUserGitHubTokenSpy.mockClear();
+  getGitHubAppUserTokenSpy.mockClear();
+  verifyRepoAccessSpy.mockClear();
 
   execResults = defaultExecResults();
-  userTokenResult = "ghp_user";
+  userTokenResult = "ghu_user";
   cachedBranchesResult = {
     branches: ["main", "feature-branch"],
     defaultBranch: "main",
@@ -220,10 +238,7 @@ describe("performAutoCreatePr", () => {
       skipReason:
         "Repository owner or name is not supported for auto PR creation",
     } satisfies AutoCreatePrResult);
-    const setUrlCall = execSpy.mock.calls.find((call) =>
-      String(call[0]).includes("git remote set-url"),
-    );
-    expect(setUrlCall).toBeUndefined();
+    expect(execSpy).toHaveBeenCalledTimes(1);
   });
 
   test("skips when the current branch is not available on origin", async () => {
@@ -295,6 +310,7 @@ describe("performAutoCreatePr", () => {
       prNumber: 42,
       prUrl: "https://github.com/acme/repo/pull/42",
     } satisfies AutoCreatePrResult);
+    expect(getGitHubAppUserTokenSpy).toHaveBeenCalledWith("user-1");
     expect(getUserGitHubTokenSpy).toHaveBeenCalledWith("user-1");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
     expect(openPullRequestSpy).toHaveBeenCalledWith(
@@ -302,6 +318,7 @@ describe("performAutoCreatePr", () => {
         repoUrl: "https://github.com/acme/repo",
         branchName: "feature-branch",
         baseBranch: "main",
+        token: "ghu_user",
       }),
     );
     expect(updateSessionSpy).toHaveBeenCalledWith("session-1", {

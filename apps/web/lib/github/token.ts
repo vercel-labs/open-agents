@@ -25,3 +25,9 @@ export async function getUserGitHubToken(
     return null;
   }
 }
+
+export async function getGitHubAppUserToken(
+  userId: string,
+): Promise<string | null> {
+  return getUserGitHubToken(userId);
+}

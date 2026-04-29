@@ -143,7 +143,7 @@ type GitPanelProps = {
   gitStatus: SessionGitStatus | null;
   gitStatusLoading: boolean;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
-  onCommitted?: () => void;
+  onCommitted?: () => Promise<void> | void;
   isAgentWorking: boolean;
 
   // For inline PR creation
@@ -321,6 +321,7 @@ function InlineCommitPanel({
   gitStatus,
   refreshGitStatus,
   onCommitted,
+  onGitMessage,
   isAgentWorking,
   baseBranch,
   connectionStatus,
@@ -330,7 +331,8 @@ function InlineCommitPanel({
   hasSandbox: boolean;
   gitStatus: SessionGitStatus | null;
   refreshGitStatus: () => Promise<SessionGitStatus | undefined>;
-  onCommitted?: () => void;
+  onCommitted?: () => Promise<void> | void;
+  onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   isAgentWorking: boolean;
   baseBranch: string;
   connectionStatus: string | null;
@@ -424,7 +426,23 @@ function InlineCommitPanel({
     setCommitError(null);
     setCommitSuccess(null);
 
+    const gitMessageId = crypto.randomUUID();
+    const commitPartId = `${gitMessageId}:commit`;
+
     try {
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: { status: "pending" },
+          },
+        ],
+      });
+
       const trimmed = commitMessage.trim();
       const lines = trimmed.split("\n");
       const commitTitle = lines[0] ?? "";
@@ -452,16 +470,57 @@ function InlineCommitPanel({
       });
       setCommitMessage("");
 
-      onCommitted?.();
+      const commitUrl =
+        result.commitSha && session.repoOwner && session.repoName
+          ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${result.commitSha}`
+          : undefined;
+
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: {
+              status: "success",
+              committed: result.committed,
+              pushed: result.pushed,
+              commitMessage: result.commitMessage,
+              commitSha: result.commitSha,
+              url: commitUrl,
+            },
+          },
+        ],
+      });
+
+      await refreshGitStatus().catch(() => undefined);
+      await onCommitted?.();
 
       // Clear success after 3 seconds
       successTimeoutRef.current = setTimeout(() => {
         setCommitSuccess(null);
       }, 3000);
     } catch (err) {
-      setCommitError(
-        err instanceof Error ? err.message : "Failed to commit and push",
-      );
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to commit and push";
+      await onGitMessage?.({
+        id: gitMessageId,
+        role: "assistant",
+        metadata: {},
+        parts: [
+          {
+            type: "data-commit",
+            id: commitPartId,
+            data: {
+              status: "error",
+              error: errorMessage,
+            },
+          },
+        ],
+      });
+      setCommitError(errorMessage);
     } finally {
       setIsCommitting(false);
     }
@@ -1911,6 +1970,7 @@ export function GitPanel(props: GitPanelProps) {
                     gitStatus={gitStatus}
                     refreshGitStatus={refreshGitStatus}
                     onCommitted={onCommitted}
+                    onGitMessage={onGitMessage}
                     isAgentWorking={isAgentWorking}
                     baseBranch={baseBranch}
                     connectionStatus={connectionStatus}

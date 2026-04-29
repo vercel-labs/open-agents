@@ -11,7 +11,12 @@ import {
   type MergeMethod,
 } from "@/lib/github/pulls";
 import { parseGitHubUrl } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/token";
+import {
+  verifyRepoAccess,
+  getRepoAccessErrorMessage,
+} from "@/lib/github/access";
+import { withScopedInstallationOctokit } from "@/lib/github/app";
+import { getGitHubAppUserToken, getUserGitHubToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -54,33 +59,6 @@ function resolveAppBaseUrl(): string | undefined {
   return process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
     : undefined;
-}
-
-function buildGitHubCompareUrl(params: {
-  owner: string;
-  repo: string;
-  baseBranch: string;
-  headRef: string;
-  title?: string;
-  body?: string;
-}): string {
-  const { owner, repo, baseBranch, headRef, title, body } = params;
-  const compareUrl = new URL(
-    `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headRef)}`,
-  );
-  compareUrl.searchParams.set("expand", "1");
-
-  const trimmedTitle = title?.trim();
-  if (trimmedTitle) {
-    compareUrl.searchParams.set("title", trimmedTitle);
-  }
-
-  const trimmedBody = body?.trim();
-  if (trimmedBody) {
-    compareUrl.searchParams.set("body", trimmedBody);
-  }
-
-  return compareUrl.toString();
 }
 
 function isMergeMethod(value: unknown): value is MergeMethod {
@@ -284,17 +262,28 @@ export async function openPullRequest(params: {
     throw new Error("Invalid head owner");
   }
 
-  const userToken = await getUserGitHubToken(session.user.id);
-  if (!userToken) {
-    throw new Error("No GitHub token available for this repository");
-  }
-
-  let headRef = resolvedBranch;
+  const headRef = resolvedBranch;
   const normalizedBaseOwner = parsedRepoUrl.owner.toLowerCase();
   const normalizedHeadOwner = headOwner?.trim().toLowerCase();
 
   if (normalizedHeadOwner && normalizedHeadOwner !== normalizedBaseOwner) {
-    headRef = `${headOwner}:${resolvedBranch}`;
+    throw new Error("Fork pull requests are not supported for brokered writes");
+  }
+
+  const access = await verifyRepoAccess({
+    userId: session.user.id,
+    owner: parsedRepoUrl.owner,
+    repo: parsedRepoUrl.repo,
+    requiredUserPermission: shouldAutoMerge ? "write" : "read",
+  });
+
+  if (!access.ok) {
+    throw new Error(getRepoAccessErrorMessage(access.reason));
+  }
+
+  const userToken = await getGitHubAppUserToken(session.user.id);
+  if (!userToken) {
+    throw new Error("No GitHub token available for pull request creation");
   }
 
   const result = await openPullRequestOnGitHub({
@@ -311,30 +300,6 @@ export async function openPullRequest(params: {
   if (!result.success) {
     const error = result.error || "Failed to create pull request";
 
-    if (error === "Permission denied") {
-      const compareUrl = buildGitHubCompareUrl({
-        owner: parsedRepoUrl.owner,
-        repo: parsedRepoUrl.repo,
-        baseBranch,
-        headRef,
-        title,
-        body: prBody,
-      });
-
-      return {
-        success: true,
-        prUrl: compareUrl,
-        requiresManualCreation: true,
-        ...(shouldAutoMerge
-          ? {
-              autoMergeEnabled: false,
-              autoMergeError:
-                "Auto-merge can only be enabled for pull requests created through the GitHub API.",
-            }
-          : {}),
-      };
-    }
-
     return { success: false, error };
   }
 
@@ -346,11 +311,18 @@ export async function openPullRequest(params: {
       autoMergeError =
         "The pull request was created, but auto-merge could not be enabled.";
     } else {
-      const autoMergeResult = await enableAutoMerge({
-        repoUrl,
-        prNumber: result.prNumber,
-        nodeId: result.nodeId,
-        token: userToken,
+      const prNumber = result.prNumber;
+      const autoMergeResult = await withScopedInstallationOctokit({
+        installationId: access.installationId,
+        repositoryId: access.repositoryId,
+        permissions: { contents: "read", pull_requests: "write" },
+        operation: async (octokit) =>
+          enableAutoMerge({
+            repoUrl,
+            prNumber,
+            octokit,
+            ...(result.nodeId ? { nodeId: result.nodeId } : {}),
+          }),
       });
 
       if (autoMergeResult.success) {
@@ -422,11 +394,15 @@ export async function mergePr(params: {
   if (!sessionRecord.prNumber) {
     throw new Error("No pull request found for this session");
   }
+  const repoUrl = sessionRecord.cloneUrl;
+  const repoOwner = sessionRecord.repoOwner;
+  const repoName = sessionRecord.repoName;
+  const prNumber = sessionRecord.prNumber;
 
   if (sessionRecord.prStatus === "merged") {
     return {
       merged: true,
-      prNumber: sessionRecord.prNumber,
+      prNumber,
       mergeCommitSha: null,
       branchDeleted: false,
       branchDeleteError: null,
@@ -450,9 +426,20 @@ export async function mergePr(params: {
     throw new Error("No GitHub token available for this repository");
   }
 
+  const access = await verifyRepoAccess({
+    userId: session.user.id,
+    owner: repoOwner,
+    repo: repoName,
+    requiredUserPermission: "write",
+  });
+
+  if (!access.ok) {
+    throw new Error(getRepoAccessErrorMessage(access.reason));
+  }
+
   const readiness = await getMergeReadinessFromGitHub({
-    repoUrl: sessionRecord.cloneUrl,
-    prNumber: sessionRecord.prNumber,
+    repoUrl,
+    prNumber,
     token,
   });
 
@@ -461,10 +448,11 @@ export async function mergePr(params: {
       readiness.error ?? "Failed to check pull request readiness",
     );
   }
+  const pullRequest = readiness.pr;
 
-  const expectedHeadSha = rawExpectedHeadSha ?? readiness.pr.headSha;
+  const expectedHeadSha = rawExpectedHeadSha ?? pullRequest.headSha;
 
-  if (expectedHeadSha !== readiness.pr.headSha) {
+  if (expectedHeadSha !== pullRequest.headSha) {
     throw new Error(
       "Pull request has new commits. Refresh and review before merging.",
     );
@@ -494,14 +482,20 @@ export async function mergePr(params: {
     throw new Error("Selected merge method is not allowed for this repository");
   }
 
-  const mergeResult = await mergePullRequest({
-    repoUrl: sessionRecord.cloneUrl,
-    prNumber: sessionRecord.prNumber,
-    mergeMethod: requestedMethod,
-    expectedHeadSha,
-    commitTitle,
-    commitMessage,
-    token,
+  const mergeResult = await withScopedInstallationOctokit({
+    installationId: access.installationId,
+    repositoryId: access.repositoryId,
+    permissions: { contents: "write", pull_requests: "write" },
+    operation: async (octokit) =>
+      mergePullRequest({
+        repoUrl,
+        prNumber,
+        mergeMethod: requestedMethod,
+        expectedHeadSha,
+        octokit,
+        ...(commitTitle ? { commitTitle } : {}),
+        ...(commitMessage ? { commitMessage } : {}),
+      }),
   });
 
   if (!mergeResult.success) {
@@ -512,9 +506,10 @@ export async function mergePr(params: {
   let branchDeleteError: string | null = null;
   const shouldDeleteBranch = deleteBranch ?? true;
 
-  if (shouldDeleteBranch && readiness.pr.headBranch) {
-    const normalizedRepoOwner = sessionRecord.repoOwner.toLowerCase();
-    const normalizedHeadOwner = readiness.pr.headOwner?.toLowerCase() ?? null;
+  if (shouldDeleteBranch && pullRequest.headBranch) {
+    const headBranch = pullRequest.headBranch;
+    const normalizedRepoOwner = repoOwner.toLowerCase();
+    const normalizedHeadOwner = pullRequest.headOwner?.toLowerCase() ?? null;
 
     if (!normalizedHeadOwner) {
       branchDeleteError =
@@ -522,10 +517,16 @@ export async function mergePr(params: {
     } else if (normalizedHeadOwner !== normalizedRepoOwner) {
       branchDeleteError = "Source branch belongs to a fork and was not deleted";
     } else {
-      const deleteResult = await deleteBranchRef({
-        repoUrl: sessionRecord.cloneUrl,
-        branchName: readiness.pr.headBranch,
-        token,
+      const deleteResult = await withScopedInstallationOctokit({
+        installationId: access.installationId,
+        repositoryId: access.repositoryId,
+        permissions: { contents: "write" },
+        operation: async (octokit) =>
+          deleteBranchRef({
+            repoUrl,
+            branchName: headBranch,
+            octokit,
+          }),
       });
 
       if (deleteResult.success || deleteResult.statusCode === 404) {
@@ -540,7 +541,7 @@ export async function mergePr(params: {
 
   return {
     merged: true,
-    prNumber: sessionRecord.prNumber,
+    prNumber,
     mergeCommitSha: mergeResult.sha ?? null,
     branchDeleted,
     branchDeleteError,
@@ -578,6 +579,10 @@ export async function closePr(params: {
   if (!sessionRecord.prNumber) {
     throw new Error("No pull request found for this session");
   }
+  const repoUrl = sessionRecord.cloneUrl;
+  const repoOwner = sessionRecord.repoOwner;
+  const repoName = sessionRecord.repoName;
+  const prNumber = sessionRecord.prNumber;
 
   if (sessionRecord.prStatus === "merged") {
     throw new Error("Pull request is already merged");
@@ -586,19 +591,31 @@ export async function closePr(params: {
   if (sessionRecord.prStatus === "closed") {
     return {
       closed: true,
-      prNumber: sessionRecord.prNumber,
+      prNumber,
     };
   }
 
-  const token = await getUserGitHubToken(session.user.id);
-  if (!token) {
-    throw new Error("No GitHub token available for this repository");
+  const access = await verifyRepoAccess({
+    userId: session.user.id,
+    owner: repoOwner,
+    repo: repoName,
+    requiredUserPermission: "write",
+  });
+
+  if (!access.ok) {
+    throw new Error(getRepoAccessErrorMessage(access.reason));
   }
 
-  const closeResult = await closePullRequestOnGitHub({
-    repoUrl: sessionRecord.cloneUrl,
-    prNumber: sessionRecord.prNumber,
-    token,
+  const closeResult = await withScopedInstallationOctokit({
+    installationId: access.installationId,
+    repositoryId: access.repositoryId,
+    permissions: { pull_requests: "write" },
+    operation: async (octokit) =>
+      closePullRequestOnGitHub({
+        repoUrl,
+        prNumber,
+        octokit,
+      }),
   });
 
   if (!closeResult.success) {
@@ -609,6 +626,6 @@ export async function closePr(params: {
 
   return {
     closed: true,
-    prNumber: sessionRecord.prNumber,
+    prNumber,
   };
 }

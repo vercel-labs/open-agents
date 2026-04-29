@@ -3,6 +3,17 @@ import { gateway } from "@open-agents/agent";
 
 export const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
 
+export function isSafeBranchName(branch: string): boolean {
+  return (
+    SAFE_BRANCH_PATTERN.test(branch) &&
+    !branch.includes("..") &&
+    !branch.includes("//") &&
+    !branch.startsWith("/") &&
+    !branch.endsWith("/") &&
+    !branch.endsWith(".lock")
+  );
+}
+
 export function generateBranchName(
   username: string,
   name?: string | null,

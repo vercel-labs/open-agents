@@ -1,10 +1,42 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
+import { z } from "zod";
 
 interface GitHubAppConfig {
   appId: number;
   privateKey: string;
 }
+
+export type GitHubInstallationPermissionValue = "read" | "write";
+
+export type GitHubInstallationTokenPermissions = Partial<
+  Record<
+    | "actions"
+    | "administration"
+    | "checks"
+    | "contents"
+    | "deployments"
+    | "issues"
+    | "metadata"
+    | "pull_requests"
+    | "statuses"
+    | "workflows",
+    GitHubInstallationPermissionValue
+  >
+>;
+
+export interface ScopedInstallationToken {
+  token: string;
+  expiresAt: string | null;
+  installationId: number;
+  repositoryIds: number[];
+  permissions: GitHubInstallationTokenPermissions;
+}
+
+const installationTokenResponseSchema = z.object({
+  token: z.string(),
+  expires_at: z.string().nullable().optional(),
+});
 
 function parsePrivateKey(value: string): string {
   const unescaped = value.replace(/\\n/g, "\n").trim();
@@ -44,127 +76,105 @@ export function isGitHubAppConfigured(): boolean {
   );
 }
 
-/**
- * Cached co-author trailer so we only hit the GitHub API once per process.
- * `undefined` = not yet fetched.
- */
-let cachedTrailer: string | null | undefined;
-
-/**
- * Returns a git commit trailer for co-authoring with the GitHub App bot, e.g.:
- *   Co-Authored-By: open-agents[bot] <260704009+open-agents[bot]@users.noreply.github.com>
- *
- * The numeric prefix is the bot's **user** ID (not the app ID) so that GitHub
- * can resolve the account and display the bot avatar inline on PR commits.
- *
- * The result is cached for the lifetime of the process.
- * Returns null if the app is not configured.
- */
-export async function getAppCoAuthorTrailer(): Promise<string | null> {
-  if (cachedTrailer !== undefined) return cachedTrailer;
-
-  const slug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-  if (!slug) {
-    cachedTrailer = null;
-    return null;
-  }
-
-  const botName = `${slug}[bot]`;
-  let botUserId: number | null = null;
-
-  try {
-    const res = await fetch(
-      `https://api.github.com/users/${encodeURIComponent(botName)}`,
-      { headers: { Accept: "application/vnd.github+json" } },
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { id?: number };
-      botUserId = data.id ?? null;
-    }
-  } catch {
-    // Fall back to email without numeric prefix
-  }
-
-  const botEmail = botUserId
-    ? `${botUserId}+${botName}@users.noreply.github.com`
-    : `${botName}@users.noreply.github.com`;
-  cachedTrailer = `Co-Authored-By: ${botName} <${botEmail}>`;
-  return cachedTrailer;
-}
-
-export interface BotIdentity {
-  name: string;
-  email: string;
-}
-
-/**
- * Cached bot identity for the committer field of API commits.
- */
-let cachedBotIdentity: BotIdentity | null | undefined;
-
-/**
- * Returns the bot identity for use as the committer in API commits.
- * Returns null if the app is not configured.
- */
-export async function getBotIdentity(): Promise<BotIdentity | null> {
-  if (cachedBotIdentity !== undefined) return cachedBotIdentity;
-
-  const slug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-  if (!slug) {
-    cachedBotIdentity = null;
-    return null;
-  }
-
-  const botName = `${slug}[bot]`;
-  let botUserId: number | null = null;
-
-  try {
-    const res = await fetch(
-      `https://api.github.com/users/${encodeURIComponent(botName)}`,
-      { headers: { Accept: "application/vnd.github+json" } },
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { id?: number };
-      botUserId = data.id ?? null;
-    }
-  } catch {
-    // Fall back to email without numeric prefix
-  }
-
-  const email = botUserId
-    ? `${botUserId}+${botName}@users.noreply.github.com`
-    : `${botName}@users.noreply.github.com`;
-
-  cachedBotIdentity = { name: botName, email };
-  return cachedBotIdentity;
-}
-
-export async function getInstallationToken(
-  installationId: number,
-): Promise<string> {
+async function getAppJwt(): Promise<string> {
   const { appId, privateKey } = getGitHubAppConfig();
 
   const auth = createAppAuth({
     appId,
     privateKey,
-    installationId,
   });
 
-  const authResult = await auth({ type: "installation", installationId });
+  const authResult = await auth({ type: "app" });
   return authResult.token;
 }
 
-export function getInstallationOctokit(installationId: number): Octokit {
-  const { appId, privateKey } = getGitHubAppConfig();
+export async function mintInstallationToken(params: {
+  installationId: number;
+  repositoryIds: number[];
+  permissions: GitHubInstallationTokenPermissions;
+}): Promise<ScopedInstallationToken> {
+  const { installationId, repositoryIds, permissions } = params;
 
-  return new Octokit({
-    authStrategy: createAppAuth,
-    auth: {
-      appId,
-      privateKey,
-      installationId,
+  if (repositoryIds.length !== 1) {
+    throw new Error("Installation tokens must be scoped to exactly one repo");
+  }
+
+  const appJwt = await getAppJwt();
+  const response = await fetch(
+    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${appJwt}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        repository_ids: repositoryIds,
+        permissions,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Failed to mint GitHub installation token: ${response.status} ${body}`,
+    );
+  }
+
+  const payload: unknown = await response.json();
+  const parsed = installationTokenResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error("Invalid GitHub installation token response");
+  }
+
+  return {
+    token: parsed.data.token,
+    expiresAt: parsed.data.expires_at ?? null,
+    installationId,
+    repositoryIds,
+    permissions,
+  };
+}
+
+export async function revokeInstallationToken(token: string): Promise<void> {
+  const response = await fetch("https://api.github.com/installation/token", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
     },
   });
+
+  if (!response.ok && response.status !== 404) {
+    const body = await response.text();
+    console.warn(
+      `Failed to revoke GitHub installation token: ${response.status} ${body}`,
+    );
+  }
+}
+
+export async function withScopedInstallationOctokit<T>(params: {
+  installationId: number;
+  repositoryId: number;
+  permissions: GitHubInstallationTokenPermissions;
+  operation: (octokit: Octokit) => Promise<T>;
+}): Promise<T> {
+  const scopedToken = await mintInstallationToken({
+    installationId: params.installationId,
+    repositoryIds: [params.repositoryId],
+    permissions: params.permissions,
+  });
+
+  const octokit = new Octokit({ auth: scopedToken.token });
+
+  try {
+    return await params.operation(octokit);
+  } finally {
+    await revokeInstallationToken(scopedToken.token);
+  }
 }
 
 export function getAppOctokit(): Octokit {

@@ -14,10 +14,17 @@ let changedFiles = [
   },
 ];
 let verifyResult:
-  | { ok: true; installationId: number }
+  | {
+      ok: true;
+      installationId: number;
+      repositoryId: number;
+      defaultBranch: string;
+    }
   | { ok: false; reason: string } = {
   ok: true,
   installationId: 999,
+  repositoryId: 123,
+  defaultBranch: "main",
 };
 let coAuthorResult: { name: string; email: string } | null = {
   name: "octocat",
@@ -44,6 +51,7 @@ mock.module("@open-agents/agent", () => ({
 }));
 
 mock.module("@open-agents/sandbox", () => ({
+  connectSandbox: async () => ({}),
   hasUncommittedChanges: async () => hasChanges,
   stageAll: async () => {
     if (stageFails) throw new Error("staging failed");
@@ -51,22 +59,55 @@ mock.module("@open-agents/sandbox", () => ({
   getStagedDiff: async () => stagedDiff,
   getChangedFiles: async () =>
     changedFiles.map(({ path, status }) => ({ path, status })),
-  readFileContents: async () => changedFiles,
+  detectBinaryFiles: async () => new Set<string>(),
+  getFileModes: async () => new Map([["file.ts", "100644"]]),
+  getHeadSha: async () => "base-sha",
   getCurrentBranch: async () => "feature-branch",
   syncToRemote: async () => {},
+  withTemporaryGitHubAuth: async (
+    _sandbox: unknown,
+    _token: string | undefined,
+    operation: () => Promise<unknown>,
+  ) => operation(),
+}));
+
+mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
+  getSessionById: async () => null,
+  updateSession: async () => {},
 }));
 
 mock.module("@/lib/github/access", () => ({
   verifyRepoAccess: async () => verifyResult,
+  getRepoAccessErrorMessage: () => "Access denied",
 }));
 
 mock.module("@/lib/github/commit", () => ({
   createCommit: async () => apiCommitResult,
   buildCoAuthor: async () => coAuthorResult,
+  buildCommitMessageWithCoAuthor: (
+    message: string,
+    coAuthor?: { name: string; email: string },
+  ) =>
+    coAuthor
+      ? `${message}\n\nCo-Authored-By: ${coAuthor.name} <${coAuthor.email}>`
+      : message,
 }));
 
 mock.module("@/lib/github/app", () => ({
-  getInstallationOctokit: () => ({}),
+  withScopedInstallationOctokit: async ({
+    operation,
+  }: {
+    operation: (octokit: Record<string, never>) => Promise<unknown>;
+  }) => operation({}),
+  mintInstallationToken: async () => ({
+    token: "read-token",
+    expiresAt: null,
+    installationId: 999,
+    repositoryIds: [123],
+    permissions: { contents: "read" },
+  }),
+  revokeInstallationToken: async () => {},
 }));
 
 const { performAutoCommit } = await import("./auto-commit-direct");
@@ -75,7 +116,12 @@ const { performAutoCommit } = await import("./auto-commit-direct");
 
 function makeParams() {
   return {
-    sandbox: {} as never,
+    sandbox: {
+      workingDirectory: "/sandbox",
+      readFile: async () => changedFiles[0]?.content ?? "",
+      readFileBuffer: async () => Buffer.from(changedFiles[0]?.content ?? ""),
+      exec: async () => ({ success: true, stdout: "" }),
+    } as never,
     userId: "user-1",
     sessionId: "session-1",
     sessionTitle: "Fix bug",
@@ -98,7 +144,12 @@ beforeEach(() => {
       encoding: "utf-8",
     },
   ];
-  verifyResult = { ok: true, installationId: 999 };
+  verifyResult = {
+    ok: true,
+    installationId: 999,
+    repositoryId: 123,
+    defaultBranch: "main",
+  };
   coAuthorResult = {
     name: "octocat",
     email: "12345+octocat@users.noreply.github.com",

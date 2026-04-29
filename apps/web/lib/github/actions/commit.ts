@@ -4,24 +4,28 @@ import {
   connectSandbox,
   stageAll,
   getStagedDiff,
-  getChangedFiles,
-  readFileContents,
   syncToRemote,
+  withTemporaryGitHubAuth,
   hasUncommittedChanges as checkUncommitted,
 } from "@open-agents/sandbox";
-import { getInstallationOctokit } from "@/lib/github/app";
+import {
+  mintInstallationToken,
+  revokeInstallationToken,
+  withScopedInstallationOctokit,
+} from "@/lib/github/app";
 import {
   verifyRepoAccess,
   getRepoAccessErrorMessage,
 } from "@/lib/github/access";
+import { buildCommitIntentFromSandbox } from "@/lib/github/commit-intent";
 import { createCommit, buildCoAuthor } from "@/lib/github/commit";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
-  SAFE_BRANCH_PATTERN,
   generateBranchName,
   generateCommitMessage,
+  isSafeBranchName,
   looksLikeCommitHash,
 } from "@/lib/git/helpers";
 
@@ -80,7 +84,7 @@ export async function commitChanges(params: {
     return { committed: false, pushed: false, error: "No repository linked" };
   }
 
-  if (!baseBranch || !SAFE_BRANCH_PATTERN.test(baseBranch)) {
+  if (!baseBranch || !isSafeBranchName(baseBranch)) {
     return { committed: false, pushed: false, error: "Invalid base branch" };
   }
 
@@ -124,7 +128,7 @@ export async function commitChanges(params: {
     resolvedBranch = generatedBranch;
   }
 
-  if (!SAFE_BRANCH_PATTERN.test(resolvedBranch)) {
+  if (!isSafeBranchName(resolvedBranch)) {
     return { committed: false, pushed: false, error: "Invalid branch name" };
   }
 
@@ -166,6 +170,7 @@ export async function commitChanges(params: {
     userId: session.user.id,
     owner: sessionRecord.repoOwner,
     repo: sessionRecord.repoName,
+    requiredUserPermission: "write",
   });
 
   if (!access.ok) {
@@ -176,13 +181,6 @@ export async function commitChanges(params: {
     };
   }
 
-  // read changed files
-  const changes = await getChangedFiles(sandbox);
-  if (changes.length === 0) {
-    return { committed: false, pushed: false, branchName: resolvedBranch };
-  }
-
-  const files = await readFileContents(sandbox, changes);
   const coAuthor = await buildCoAuthor(session.user.id);
 
   // build message
@@ -192,17 +190,46 @@ export async function commitChanges(params: {
   }
   const fullMessage = messageParts.join("\n\n");
 
-  // commit
-  const octokit = getInstallationOctokit(access.installationId);
-  const result = await createCommit({
-    octokit,
+  const intentResult = await buildCommitIntentFromSandbox({
+    sandbox,
     owner: sessionRecord.repoOwner,
     repo: sessionRecord.repoName,
+    repositoryId: access.repositoryId,
+    installationId: access.installationId,
     branch: resolvedBranch,
     baseBranch,
     message: fullMessage,
-    files,
-    coAuthor: coAuthor ?? undefined,
+    ...(coAuthor ? { coAuthor } : {}),
+  });
+
+  if (!intentResult.ok) {
+    if (intentResult.empty) {
+      return { committed: false, pushed: false, branchName: resolvedBranch };
+    }
+    return { committed: false, pushed: false, error: intentResult.error };
+  }
+
+  // commit
+  const result = await withScopedInstallationOctokit({
+    installationId: intentResult.intent.installationId,
+    repositoryId: intentResult.intent.repositoryId,
+    permissions: { contents: "write" },
+    operation: async (octokit) =>
+      createCommit({
+        octokit,
+        owner: intentResult.intent.owner,
+        repo: intentResult.intent.repo,
+        branch: intentResult.intent.branch,
+        expectedHeadSha: intentResult.intent.expectedHeadSha,
+        message: intentResult.intent.message,
+        files: intentResult.intent.files,
+        ...(intentResult.intent.baseBranch
+          ? { baseBranch: intentResult.intent.baseBranch }
+          : {}),
+        ...(intentResult.intent.coAuthor
+          ? { coAuthor: intentResult.intent.coAuthor }
+          : {}),
+      }),
   });
 
   if (!result.ok) {
@@ -211,7 +238,18 @@ export async function commitChanges(params: {
 
   // sync sandbox
   try {
-    await syncToRemote(sandbox, resolvedBranch);
+    const syncToken = await mintInstallationToken({
+      installationId: intentResult.intent.installationId,
+      repositoryIds: [intentResult.intent.repositoryId],
+      permissions: { contents: "read" },
+    });
+    try {
+      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+        syncToRemote(sandbox, resolvedBranch),
+      );
+    } finally {
+      await revokeInstallationToken(syncToken.token);
+    }
   } catch (error) {
     console.warn("[commit] sandbox sync failed:", error);
   }

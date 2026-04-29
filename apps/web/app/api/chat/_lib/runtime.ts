@@ -1,6 +1,5 @@
 import { discoverSkills } from "@open-agents/agent";
 import { connectSandbox } from "@open-agents/sandbox";
-import { getUserGitHubToken } from "@/lib/github/token";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { getSandboxSkillDirectories } from "@/lib/skills/directories";
 import { getCachedSkills, setCachedSkills } from "@/lib/skills-cache";
@@ -38,17 +37,14 @@ export async function createChatRuntime(params: {
   sandbox: ConnectedSandbox;
   skills: DiscoveredSkills;
 }> {
-  const { userId, sessionId, sessionRecord } = params;
+  const { sessionId, sessionRecord } = params;
 
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
     throw new Error("Sandbox state is required to create chat runtime");
   }
 
-  const githubToken = await getUserGitHubToken(userId);
-
   const sandbox = await connectSandbox(sandboxState, {
-    githubToken: githubToken ?? undefined,
     ports: DEFAULT_SANDBOX_PORTS,
   });
 

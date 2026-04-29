@@ -1,4 +1,4 @@
-import { getOctokit, parseGitHubUrl } from "./client";
+import { getOctokit, parseGitHubUrl, type Octokit } from "./client";
 
 export type MergeMethod = "merge" | "squash" | "rebase";
 
@@ -55,7 +55,22 @@ type MergePullRequestResult = {
   statusCode?: number;
 };
 
+type ResolvedOctokit =
+  | { octokit: Octokit; authenticated: true }
+  | { octokit: null; authenticated: false };
+
 // ---- internal helpers ----
+
+async function resolveOctokit(params: {
+  token?: string;
+  octokit?: Octokit;
+}): Promise<ResolvedOctokit> {
+  if (params.octokit) {
+    return { octokit: params.octokit, authenticated: true };
+  }
+
+  return getOctokit(params.token);
+}
 
 function getGitHubHttpStatus(error: unknown): number | null {
   if (!error || typeof error !== "object") {
@@ -710,6 +725,7 @@ export async function openPullRequest(params: {
   baseBranch?: string;
   isDraft?: boolean;
   token?: string;
+  octokit?: Octokit;
 }): Promise<{
   success: boolean;
   prUrl?: string;
@@ -726,10 +742,11 @@ export async function openPullRequest(params: {
     baseBranch = "main",
     isDraft = false,
     token,
+    octokit,
   } = params;
 
   try {
-    const result = await getOctokit(token);
+    const result = await resolveOctokit({ token, octokit });
 
     if (!result.authenticated) {
       return { success: false, error: "GitHub account not connected" };
@@ -795,16 +812,17 @@ export async function enableAutoMerge(params: {
   nodeId?: string;
   mergeMethod?: MergeMethod;
   token?: string;
+  octokit?: Octokit;
 }): Promise<{
   success: boolean;
   mergeMethod?: MergeMethod;
   error?: string;
   statusCode?: number;
 }> {
-  const { repoUrl, prNumber, nodeId, mergeMethod, token } = params;
+  const { repoUrl, prNumber, nodeId, mergeMethod, token, octokit } = params;
 
   try {
-    const result = await getOctokit(token);
+    const result = await resolveOctokit({ token, octokit });
 
     if (!result.authenticated) {
       return {
@@ -961,6 +979,7 @@ export async function mergePullRequest(params: {
   commitTitle?: string;
   commitMessage?: string;
   token?: string;
+  octokit?: Octokit;
 }): Promise<MergePullRequestResult> {
   const {
     repoUrl,
@@ -970,10 +989,11 @@ export async function mergePullRequest(params: {
     commitTitle,
     commitMessage,
     token,
+    octokit,
   } = params;
 
   try {
-    const result = await getOctokit(token);
+    const result = await resolveOctokit({ token, octokit });
 
     if (!result.authenticated) {
       return {
@@ -1057,13 +1077,14 @@ export async function closePullRequest(params: {
   repoUrl: string;
   prNumber: number;
   token?: string;
+  octokit?: Octokit;
 }): Promise<
   { success: true } | { success: false; error: string; statusCode?: number }
 > {
-  const { repoUrl, prNumber, token } = params;
+  const { repoUrl, prNumber, token, octokit } = params;
 
   try {
-    const result = await getOctokit(token);
+    const result = await resolveOctokit({ token, octokit });
 
     if (!result.authenticated) {
       return {
@@ -1130,11 +1151,12 @@ export async function deleteBranchRef(params: {
   repoUrl: string;
   branchName: string;
   token?: string;
+  octokit?: Octokit;
 }): Promise<{ success: boolean; error?: string; statusCode?: number }> {
-  const { repoUrl, branchName, token } = params;
+  const { repoUrl, branchName, token, octokit } = params;
 
   try {
-    const result = await getOctokit(token);
+    const result = await resolveOctokit({ token, octokit });
 
     if (!result.authenticated) {
       return {

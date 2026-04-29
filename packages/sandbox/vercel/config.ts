@@ -15,7 +15,7 @@ export interface VercelSandboxConfig {
     url: string;
     /** Branch to clone (defaults to "main") */
     branch?: string;
-    /** Token for authenticated git access (e.g., GitHub PAT). Enables push operations. */
+    /** Deprecated: do not embed GitHub tokens in sandbox remotes. */
     token?: string;
     /**
      * Create and checkout a new branch after cloning.
@@ -43,7 +43,7 @@ export interface VercelSandboxConfig {
    * Useful for API keys and other secrets that must exist inside the sandbox.
    */
   env?: Record<string, string>;
-  /** GitHub token used for credential brokering; never exposed inside the sandbox. */
+  /** GitHub token used only during setup clone/fetch, then cleared. */
   githubToken?: string;
   /**
    * Number of vCPUs (1-8). Each vCPU provides 2048 MB of memory.
@@ -101,7 +101,7 @@ export interface VercelSandboxConnectConfig {
   sandboxName: string;
   /** Environment variables to make available to commands */
   env?: Record<string, string>;
-  /** GitHub token used for credential brokering; never exposed inside the sandbox. */
+  /** GitHub token used only during setup clone/fetch, then cleared. */
   githubToken?: string;
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;

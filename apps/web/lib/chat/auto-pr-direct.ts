@@ -4,10 +4,14 @@ import { updateSession } from "@/lib/db/sessions";
 import { openPullRequest, findPullRequest } from "@/lib/github/pulls";
 import { fetchGitHubBranches } from "@/lib/github/repos";
 import {
+  verifyRepoAccess,
+  getRepoAccessErrorMessage,
+} from "@/lib/github/access";
+import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/urls";
-import { getUserGitHubToken } from "@/lib/github/token";
+import { getGitHubAppUserToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 
 const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
@@ -133,7 +137,7 @@ export async function performAutoCreatePr(
     };
   }
 
-  const userToken = await getUserGitHubToken(userId);
+  const userToken = await getGitHubAppUserToken(userId);
   if (!userToken) {
     return {
       created: false,
@@ -142,8 +146,6 @@ export async function performAutoCreatePr(
       skipReason: "No GitHub token available for this repository",
     };
   }
-
-  // credential brokering handles remote auth — no manual remote set-url needed
 
   const defaultBranch = await resolveDefaultBranch({
     sandbox,
@@ -282,6 +284,21 @@ export async function performAutoCreatePr(
   }
 
   const repoUrl = `https://github.com/${repoOwner}/${repoName}`;
+  const access = await verifyRepoAccess({
+    userId,
+    owner: repoOwner,
+    repo: repoName,
+  });
+
+  if (!access.ok) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: getRepoAccessErrorMessage(access.reason),
+    };
+  }
+
   const createResult = await openPullRequest({
     repoUrl,
     branchName,

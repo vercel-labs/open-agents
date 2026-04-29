@@ -337,8 +337,8 @@ describe("VercelSandbox persistence", () => {
   });
 });
 
-describe("GitHub credential brokering", () => {
-  test("applies a brokered GitHub network policy when creating a sandbox", async () => {
+describe("GitHub setup credential brokering", () => {
+  test("applies setup GitHub auth when creating a sandbox and then clears it", async () => {
     const basicAuthToken = Buffer.from(
       "x-access-token:github-user-token",
       "utf-8",
@@ -394,53 +394,16 @@ describe("GitHub credential brokering", () => {
       url: "https://github.com/open-agents/example",
       revision: "main",
     });
+    expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 
-  test("refreshes brokered GitHub auth when reconnecting to a sandbox", async () => {
+  test("clears GitHub auth when reconnecting to a sandbox", async () => {
     await sandboxModule.VercelSandbox.connect("session_123", {
       githubToken: "github-user-token",
       remainingTimeout: 0,
     });
 
-    expect(updateNetworkPolicyCalls).toEqual([
-      {
-        allow: {
-          "api.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "uploads.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "codeload.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "github.com": [
-            {
-              transform: [
-                {
-                  headers: {
-                    Authorization: `Basic ${Buffer.from("x-access-token:github-user-token", "utf-8").toString("base64")}`,
-                  },
-                },
-              ],
-            },
-          ],
-          "*": [],
-        },
-      },
-    ]);
+    expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 });
 

@@ -8,7 +8,15 @@ import type { UIMessageChunk } from "ai";
 import { getWritable } from "workflow";
 import type { WebAgentWorkspaceStatusData } from "@/app/types";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
-import { getUserGitHubToken } from "@/lib/github/token";
+import {
+  verifyRepoAccess,
+  getRepoAccessErrorMessage,
+} from "@/lib/github/access";
+import {
+  mintInstallationToken,
+  revokeInstallationToken,
+  type ScopedInstallationToken,
+} from "@/lib/github/app";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import {
   buildActiveLifecycleUpdate,
@@ -197,27 +205,50 @@ export async function resolveChatSandboxRuntime(params: {
     });
   }
 
-  const [githubToken, gitUser] = await Promise.all([
-    getUserGitHubToken(params.userId),
-    getGitUser(params.userId),
-  ]);
-  if (session.cloneUrl && !githubToken) {
-    throw new Error("Connect GitHub to access repositories");
+  const gitUser = await getGitUser(params.userId);
+  let setupToken: ScopedInstallationToken | undefined;
+
+  if (session.cloneUrl) {
+    if (!session.repoOwner || !session.repoName) {
+      throw new Error("Session is missing repository metadata");
+    }
+
+    const access = await verifyRepoAccess({
+      userId: params.userId,
+      owner: session.repoOwner,
+      repo: session.repoName,
+    });
+    if (!access.ok) {
+      throw new Error(getRepoAccessErrorMessage(access.reason));
+    }
+
+    setupToken = await mintInstallationToken({
+      installationId: access.installationId,
+      repositoryIds: [access.repositoryId],
+      permissions: { contents: "read" },
+    });
   }
 
-  const sandbox = await connectSandbox({
-    state: buildSandboxState(session),
-    options: {
-      githubToken: githubToken ?? undefined,
-      gitUser,
-      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      ports: DEFAULT_SANDBOX_PORTS,
-      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-      persistent: true,
-      resume: true,
-      createIfMissing: true,
-    },
-  });
+  let sandbox: Sandbox;
+  try {
+    sandbox = await connectSandbox({
+      state: buildSandboxState(session),
+      options: {
+        githubToken: setupToken?.token,
+        gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+        ports: DEFAULT_SANDBOX_PORTS,
+        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+        persistent: true,
+        resume: true,
+        createIfMissing: true,
+      },
+    });
+  } finally {
+    if (setupToken) {
+      await revokeInstallationToken(setupToken.token);
+    }
+  }
 
   const rawSandboxState = sandbox.getState?.();
   const sandboxState = isSandboxState(rawSandboxState)

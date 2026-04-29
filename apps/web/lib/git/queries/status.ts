@@ -2,6 +2,7 @@
 
 import { connectSandbox } from "@open-agents/sandbox";
 import { getSessionById } from "@/lib/db/sessions";
+import { isSafeBranchName } from "@/lib/git/helpers";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -161,7 +162,18 @@ export async function getGitStatus(params: {
     let aheadBaseRef: string | null = null;
     if (upstreamRefResult.success && upstreamRefResult.stdout.trim()) {
       aheadBaseRef = upstreamRefResult.stdout.trim();
-    } else {
+    } else if (!isDetachedHead && isSafeBranchName(branch)) {
+      const remoteBranchResult = await sandbox.exec(
+        `git rev-parse --verify origin/${branch}`,
+        cwd,
+        10000,
+      );
+      if (remoteBranchResult.success && remoteBranchResult.stdout.trim()) {
+        aheadBaseRef = `origin/${branch}`;
+      }
+    }
+
+    if (!aheadBaseRef) {
       const defaultRemoteRefResult = await sandbox.exec(
         "git symbolic-ref refs/remotes/origin/HEAD",
         cwd,

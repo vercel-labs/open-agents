@@ -107,20 +107,20 @@ async function syncGitHubCredentialBrokering(
   );
 }
 
-function buildAuthenticatedGitHubUrl(
-  repoUrl: string,
-  token: string,
-): string | null {
-  const githubUrlMatch = repoUrl.match(
-    /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/,
-  );
+async function clearGitHubCredentialBrokering(
+  sdk: VercelSandboxSDK,
+): Promise<void> {
+  await syncGitHubCredentialBrokering(sdk, undefined);
+}
 
-  if (!githubUrlMatch) {
-    return null;
+async function clearGitHubCredentialBrokeringBestEffort(
+  sdk: VercelSandboxSDK,
+): Promise<void> {
+  try {
+    await clearGitHubCredentialBrokering(sdk);
+  } catch (error) {
+    console.warn("[VercelSandbox] failed to clear GitHub setup auth:", error);
   }
-
-  const [, owner, repo] = githubUrlMatch;
-  return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
 }
 
 type VercelSandboxSession = ReturnType<
@@ -420,10 +420,9 @@ export class VercelSandbox implements Sandbox {
 - All bash commands already run in the working directory by default — never prepend \`cd <working-directory> &&\`; just run the command directly
 - Do NOT prefix any bash command with a \`cd\` to the working directory — commands like \`cd <working-directory> && npm test\` are WRONG; just use \`npm test\`
 - Use workspace-relative paths for read/write/search/edit operations
-- Git is already configured (user, email, remote auth) - no setup or verification needed
-- GitHub CLI (gh) is NOT available - use curl with the GitHub API directly
-  GitHub API and git HTTPS requests are authenticated automatically via credential brokering; do not pass tokens into commands.
-  Example: curl -X POST -H "Accept: application/vnd.github+json" https://api.github.com/repos/OWNER/REPO/pulls -d '{"title":"...","head":"branch","base":"main","body":"..."}'
+- Git is available for local inspection only; do not configure remotes or credentials
+- GitHub CLI (gh) is NOT available; do not call GitHub write APIs from this sandbox
+- GitHub writes are handled by the broker outside this sandbox. Do not configure credentials, commit, or push from inside the sandbox.
 - Node.js runtime with npm/pnpm available
 - Bun and jq are preinstalled
 - Dependencies may not be installed. Before running project scripts (build, typecheck, lint, test), check if \`node_modules\` exists and run the package manager install command if needed (e.g. \`bun install\`, \`npm install\`)
@@ -547,19 +546,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     } else if (source) {
       sdk = await VercelSandboxSDK.create({
         ...createBaseConfig,
-        source: source.token
-          ? {
-              type: "git",
-              url: source.url,
-              username: "x-access-token",
-              password: source.token,
-              ...(source.branch && { revision: source.branch }),
-            }
-          : {
-              type: "git",
-              url: source.url,
-              ...(source.branch && { revision: source.branch }),
-            },
+        source: {
+          type: "git",
+          url: source.url,
+          ...(source.branch && { revision: source.branch }),
+        },
       });
     } else {
       sdk = await VercelSandboxSDK.create(createBaseConfig);
@@ -572,14 +563,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     // clone will fail. Consider using git init + remote add + fetch + checkout
     // instead, which works regardless of existing directory contents.
     if (source && baseSnapshotId) {
-      const cloneUrl = source.token
-        ? (buildAuthenticatedGitHubUrl(source.url, source.token) ?? source.url)
-        : source.url;
       const cloneArgs = ["clone"];
       if (source.branch) {
         cloneArgs.push("--branch", source.branch);
       }
-      cloneArgs.push(cloneUrl, ".");
+      cloneArgs.push(source.url, ".");
 
       const cloneResult = await sdk.runCommand({
         cmd: "git",
@@ -588,6 +576,9 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       });
 
       if (cloneResult.exitCode !== 0) {
+        if (githubToken) {
+          await clearGitHubCredentialBrokeringBestEffort(sdk);
+        }
         throw new Error(
           `Failed to clone repository '${source.url}' (exit code ${cloneResult.exitCode})`,
         );
@@ -602,24 +593,6 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
         args: ["init"],
         cwd: workingDirectory,
       });
-    }
-
-    // Configure git to use the token for push operations if provided
-    // We modify the remote URL to embed credentials directly (standard CI/CD approach)
-    // TODO: When baseSnapshotId is set, the token is already embedded in the
-    // clone URL above, making this set-url call redundant for that path.
-    if (source?.token) {
-      const authenticatedUrl = buildAuthenticatedGitHubUrl(
-        source.url,
-        source.token,
-      );
-      if (authenticatedUrl) {
-        await sdk.runCommand({
-          cmd: "git",
-          args: ["remote", "set-url", "origin", authenticatedUrl],
-          cwd: workingDirectory,
-        });
-      }
     }
 
     // Configure git user for commits if provided (skip when no repo was created)
@@ -664,6 +637,9 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       });
 
       if (checkoutResult.exitCode !== 0) {
+        if (githubToken) {
+          await clearGitHubCredentialBrokeringBestEffort(sdk);
+        }
         throw new Error(
           `Failed to create branch '${source.newBranch}': ${await checkoutResult.stderr()}`,
         );
@@ -672,6 +648,10 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       currentBranch = source.newBranch;
     } else if (source?.branch) {
       currentBranch = source.branch;
+    }
+
+    if (githubToken) {
+      await clearGitHubCredentialBrokering(sdk);
     }
 
     // Capture startTime AFTER all setup operations so users get their full timeout duration.
@@ -723,7 +703,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       name: sandboxName,
       resume: options.resume ?? false,
     });
-    await syncGitHubCredentialBrokering(sdk, options.githubToken);
+    await syncGitHubCredentialBrokering(sdk, undefined);
     const session = sdk.currentSession();
 
     // Use provided remainingTimeout when available; otherwise derive it from the
@@ -770,6 +750,16 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     }
 
     return buffer.toString("utf-8");
+  }
+
+  async readFileBuffer(path: string): Promise<Buffer> {
+    const buffer = await this.session.readFileToBuffer({ path });
+
+    if (buffer === null) {
+      throw new Error(`Failed to read file: ${path}`);
+    }
+
+    return buffer;
   }
 
   async writeFile(
@@ -1013,6 +1003,10 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
    */
   domain(port: number): string {
     return this.session.domain(port);
+  }
+
+  async setGitHubAuthToken(token?: string): Promise<void> {
+    await syncGitHubCredentialBrokering(this.sdk, token);
   }
 
   /**

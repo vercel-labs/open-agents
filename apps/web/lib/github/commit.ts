@@ -1,5 +1,4 @@
-import type { Octokit } from "@octokit/rest";
-import type { FileWithContent } from "@open-agents/sandbox";
+import type { CommitIntentFile, GitTreeFileMode } from "./commit-intent";
 import { getGitHubUserProfile } from "./users";
 
 export interface GitIdentity {
@@ -8,14 +7,16 @@ export interface GitIdentity {
 }
 
 export interface CommitParams {
-  octokit: Octokit;
+  octokit: CommitOctokit;
   owner: string;
   repo: string;
   branch: string;
   /** fallback branch when target branch doesn't exist on remote yet */
   baseBranch?: string;
+  /** sandbox HEAD SHA captured before building the commit bundle */
+  expectedHeadSha?: string;
   message: string;
-  files: FileWithContent[];
+  files: CommitIntentFile[];
   /** user identity appended as co-authored-by trailer */
   coAuthor?: GitIdentity;
 }
@@ -24,8 +25,85 @@ export type CommitResult =
   | { ok: true; commitSha: string }
   | { ok: false; error: string };
 
+export function buildCommitMessageWithCoAuthor(
+  message: string,
+  coAuthor?: GitIdentity,
+): string {
+  return coAuthor
+    ? `${message}\n\nCo-Authored-By: ${coAuthor.name} <${coAuthor.email}>`
+    : message;
+}
+
+type GitTreeEntry = {
+  path: string;
+  mode: GitTreeFileMode;
+  type: "blob";
+  sha: string | null;
+};
+
+export interface CommitOctokit {
+  rest: {
+    git: {
+      getRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+      }): Promise<{ data: { object: { sha: string } } }>;
+      createRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+        sha: string;
+      }): Promise<unknown>;
+      getCommit(params: {
+        owner: string;
+        repo: string;
+        commit_sha: string;
+      }): Promise<{ data: { tree: { sha: string } } }>;
+      createBlob(params: {
+        owner: string;
+        repo: string;
+        content: string;
+        encoding: "utf-8" | "base64";
+      }): Promise<{ data: { sha: string } }>;
+      createTree(params: {
+        owner: string;
+        repo: string;
+        base_tree: string;
+        tree: GitTreeEntry[];
+      }): Promise<{ data: { sha: string } }>;
+      createCommit(params: {
+        owner: string;
+        repo: string;
+        message: string;
+        tree: string;
+        parents: string[];
+      }): Promise<{ data: { sha: string } }>;
+      updateRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+        sha: string;
+        force: boolean;
+      }): Promise<unknown>;
+    };
+  };
+}
+
+function getGitHubHttpStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  if ("status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+
+  return null;
+}
+
 async function getBranchHead(
-  octokit: Octokit,
+  octokit: CommitOctokit,
   owner: string,
   repo: string,
   branch: string,
@@ -38,7 +116,7 @@ async function getBranchHead(
     });
     return ref.object.sha;
   } catch (error: unknown) {
-    const status = (error as { status?: number }).status;
+    const status = getGitHubHttpStatus(error);
     if (status === 404) return null;
     throw error;
   }
@@ -52,8 +130,17 @@ async function getBranchHead(
 export async function createCommit(
   params: CommitParams,
 ): Promise<CommitResult> {
-  const { octokit, owner, repo, branch, baseBranch, message, files, coAuthor } =
-    params;
+  const {
+    octokit,
+    owner,
+    repo,
+    branch,
+    baseBranch,
+    expectedHeadSha,
+    message,
+    files,
+    coAuthor,
+  } = params;
 
   const additions = files.filter((f) => f.status !== "deleted");
   const deletions = files.filter((f) => f.status === "deleted");
@@ -68,14 +155,17 @@ export async function createCommit(
     let branchIsNew = false;
 
     if (!headSha) {
-      if (!baseBranch) {
+      if (!baseBranch && !expectedHeadSha) {
         return {
           ok: false,
           error: `Branch '${branch}' not found on remote. Pass baseBranch to create it.`,
         };
       }
 
-      headSha = await getBranchHead(octokit, owner, repo, baseBranch);
+      headSha = expectedHeadSha ?? null;
+      if (!headSha && baseBranch) {
+        headSha = await getBranchHead(octokit, owner, repo, baseBranch);
+      }
       if (!headSha) {
         return {
           ok: false,
@@ -91,6 +181,13 @@ export async function createCommit(
         sha: headSha,
       });
       branchIsNew = true;
+    }
+
+    if (!branchIsNew && expectedHeadSha && headSha !== expectedHeadSha) {
+      return {
+        ok: false,
+        error: "Remote branch changed before commit could be created",
+      };
     }
 
     // 2. get base tree
@@ -123,15 +220,15 @@ export async function createCommit(
     }
 
     // 4. build tree
-    const treeEntries = [];
+    const treeEntries: GitTreeEntry[] = [];
 
     for (const file of additions) {
       const sha = blobShas.get(file.path);
       if (!sha) continue;
       treeEntries.push({
         path: file.path,
-        mode: "100644" as const,
-        type: "blob" as const,
+        mode: file.mode,
+        type: "blob",
         sha,
       });
     }
@@ -139,8 +236,8 @@ export async function createCommit(
     for (const file of deletions) {
       treeEntries.push({
         path: file.path,
-        mode: "100644" as const,
-        type: "blob" as const,
+        mode: file.mode,
+        type: "blob",
         sha: null,
       });
     }
@@ -150,8 +247,8 @@ export async function createCommit(
       if (file.status === "renamed" && file.oldPath) {
         treeEntries.push({
           path: file.oldPath,
-          mode: "100644" as const,
-          type: "blob" as const,
+          mode: file.mode,
+          type: "blob",
           sha: null,
         });
       }
@@ -165,9 +262,7 @@ export async function createCommit(
     });
 
     // 5. create commit — omit author/committer so github auto-signs
-    const fullMessage = coAuthor
-      ? `${message}\n\nCo-Authored-By: ${coAuthor.name} <${coAuthor.email}>`
-      : message;
+    const fullMessage = buildCommitMessageWithCoAuthor(message, coAuthor);
     // with the app's bot identity (per github docs, custom author/committer
     // info disables automatic signature verification for bots)
     const { data: commit } = await octokit.rest.git.createCommit({

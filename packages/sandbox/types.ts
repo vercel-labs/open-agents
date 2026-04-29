@@ -6,7 +6,7 @@ export interface Source {
   repo: string;
   /** Branch to clone (defaults to "main") */
   branch?: string;
-  /** Token for authenticated git access (e.g., GitHub PAT). Enables push operations. */
+  /** Deprecated: do not embed GitHub tokens in sandbox remotes. */
   token?: string;
   /** If set, create and checkout a new branch with this name after cloning */
   newBranch?: string;

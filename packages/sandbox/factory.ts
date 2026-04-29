@@ -18,7 +18,7 @@ export type SandboxState = { type: "vercel" } & VercelState;
 export interface ConnectOptions {
   /** Environment variables available to sandbox commands */
   env?: Record<string, string>;
-  /** GitHub token used for credential brokering; never exposed inside the sandbox */
+  /** GitHub token used only during setup clone/fetch, then cleared */
   githubToken?: string;
   /** Git user for commits */
   gitUser?: { name: string; email: string };

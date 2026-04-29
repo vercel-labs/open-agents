@@ -16,6 +16,16 @@ export interface FileWithContent extends FileChange {
   encoding: "utf-8" | "base64";
 }
 
+function isSafeBranchName(branch: string): boolean {
+  return (
+    /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) &&
+    !branch.includes("..") &&
+    !branch.includes("//") &&
+    !branch.endsWith("/") &&
+    !branch.endsWith(".lock")
+  );
+}
+
 // ---- helpers ----
 
 function exec(
@@ -185,15 +195,10 @@ export async function readFileContents(
     const fullPath = `${cwd}/${change.path}`;
 
     if (binaryFiles.has(change.path)) {
-      // read binary as base64
-      const b64Result = await sandbox.exec(
-        `base64 -w0 "${fullPath}"`,
-        cwd,
-        30000,
-      );
+      const buffer = await sandbox.readFileBuffer(fullPath);
       results.push({
         ...change,
-        content: b64Result.stdout.trim(),
+        content: buffer.toString("base64"),
         encoding: "base64",
       });
     } else {
@@ -236,6 +241,10 @@ export async function syncToRemote(
   sandbox: Sandbox,
   branch: string,
 ): Promise<void> {
+  if (!isSafeBranchName(branch)) {
+    throw new Error("Invalid branch name");
+  }
+
   const fetchResult = await exec(sandbox, `git fetch origin ${branch}`, 30000);
   if (!fetchResult.success) {
     throw new Error(`Failed to fetch after commit: ${fetchResult.stdout}`);
@@ -248,5 +257,37 @@ export async function syncToRemote(
   );
   if (!resetResult.success) {
     throw new Error(`Failed to reset after API commit: ${resetResult.stdout}`);
+  }
+
+  const upstreamResult = await exec(
+    sandbox,
+    `git branch --set-upstream-to=origin/${branch} ${branch}`,
+    10000,
+  );
+  if (!upstreamResult.success) {
+    throw new Error(
+      `Failed to set upstream after API commit: ${upstreamResult.stdout}`,
+    );
+  }
+}
+
+export async function withTemporaryGitHubAuth<T>(
+  sandbox: Sandbox,
+  token: string | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (!token) {
+    return operation();
+  }
+
+  if (!sandbox.setGitHubAuthToken) {
+    throw new Error("Sandbox does not support temporary GitHub auth");
+  }
+
+  await sandbox.setGitHubAuthToken(token);
+  try {
+    return await operation();
+  } finally {
+    await sandbox.setGitHubAuthToken(undefined);
   }
 }

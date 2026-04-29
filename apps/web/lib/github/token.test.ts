@@ -67,3 +67,19 @@ describe("getUserGitHubToken", () => {
     expect(token).toBeNull();
   });
 });
+
+describe("getGitHubAppUserToken", () => {
+  beforeEach(() => {
+    getAccessTokenSpy.mockClear();
+    getAccessTokenResult = { accessToken: "ghu_test" };
+    getAccessTokenError = null;
+  });
+
+  test("returns GitHub App user-to-server tokens", async () => {
+    const { getGitHubAppUserToken } = await tokenModulePromise;
+
+    const token = await getGitHubAppUserToken("user-1");
+
+    expect(token).toBe("ghu_test");
+  });
+});

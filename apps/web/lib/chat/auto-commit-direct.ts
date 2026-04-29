@@ -4,14 +4,20 @@ import {
   stageAll,
   getCurrentBranch,
   getStagedDiff,
-  getChangedFiles,
-  readFileContents,
   syncToRemote,
+  withTemporaryGitHubAuth,
 } from "@open-agents/sandbox";
 import { generateText } from "ai";
 import { gateway } from "@open-agents/agent";
-import { getInstallationOctokit } from "@/lib/github/app";
+import { updateSession } from "@/lib/db/sessions";
+import { generateBranchName, isSafeBranchName } from "@/lib/git/helpers";
+import {
+  mintInstallationToken,
+  revokeInstallationToken,
+  withScopedInstallationOctokit,
+} from "@/lib/github/app";
 import { verifyRepoAccess } from "@/lib/github/access";
+import { buildCommitIntentFromSandbox } from "@/lib/github/commit-intent";
 import { createCommit, buildCoAuthor } from "@/lib/github/commit";
 
 export interface AutoCommitParams {
@@ -75,6 +81,7 @@ export async function performAutoCommit(
     userId,
     owner: repoOwner,
     repo: repoName,
+    requiredUserPermission: "write",
   });
 
   if (!access.ok) {
@@ -85,29 +92,76 @@ export async function performAutoCommit(
     };
   }
 
-  // 5. resolve user for co-author attribution
-  const coAuthor = await buildCoAuthor(userId);
+  const resolvedBaseBranch = baseBranch ?? access.defaultBranch;
+  let branch = await getCurrentBranch(sandbox);
 
-  const changes = await getChangedFiles(sandbox);
-  if (changes.length === 0) {
-    return { committed: false, pushed: false };
+  if (!isSafeBranchName(branch) || branch === "HEAD") {
+    return {
+      committed: false,
+      pushed: false,
+      error: "Current branch is not supported for auto-commit",
+    };
   }
 
-  const files = await readFileContents(sandbox, changes);
+  if (branch === resolvedBaseBranch) {
+    branch = generateBranchName("agent");
+    const checkoutResult = await sandbox.exec(
+      `git checkout -b ${branch}`,
+      sandbox.workingDirectory,
+      10000,
+    );
+    if (!checkoutResult.success) {
+      return {
+        committed: false,
+        pushed: false,
+        error: `Failed to create branch: ${checkoutResult.stdout}`,
+      };
+    }
+    await updateSession(sessionId, { branch }).catch(() => {});
+  }
 
-  // 6. create verified commit via github api
-  const branch = await getCurrentBranch(sandbox);
-  const octokit = getInstallationOctokit(access.installationId);
+  const coAuthor = await buildCoAuthor(userId);
 
-  const result = await createCommit({
-    octokit,
+  const intentResult = await buildCommitIntentFromSandbox({
+    sandbox,
     owner: repoOwner,
     repo: repoName,
+    repositoryId: access.repositoryId,
+    installationId: access.installationId,
     branch,
-    baseBranch,
+    baseBranch: resolvedBaseBranch,
     message: commitMessage,
-    files,
-    coAuthor: coAuthor ?? undefined,
+    ...(coAuthor ? { coAuthor } : {}),
+  });
+
+  if (!intentResult.ok) {
+    if (intentResult.empty) {
+      return { committed: false, pushed: false };
+    }
+    return { committed: false, pushed: false, error: intentResult.error };
+  }
+
+  // 6. create verified commit via github api
+  const result = await withScopedInstallationOctokit({
+    installationId: intentResult.intent.installationId,
+    repositoryId: intentResult.intent.repositoryId,
+    permissions: { contents: "write" },
+    operation: async (octokit) =>
+      createCommit({
+        octokit,
+        owner: intentResult.intent.owner,
+        repo: intentResult.intent.repo,
+        branch: intentResult.intent.branch,
+        expectedHeadSha: intentResult.intent.expectedHeadSha,
+        message: intentResult.intent.message,
+        files: intentResult.intent.files,
+        ...(intentResult.intent.baseBranch
+          ? { baseBranch: intentResult.intent.baseBranch }
+          : {}),
+        ...(intentResult.intent.coAuthor
+          ? { coAuthor: intentResult.intent.coAuthor }
+          : {}),
+      }),
   });
 
   if (!result.ok) {
@@ -123,7 +177,18 @@ export async function performAutoCommit(
 
   // 8. sync sandbox to match the new remote head
   try {
-    await syncToRemote(sandbox, branch);
+    const syncToken = await mintInstallationToken({
+      installationId: intentResult.intent.installationId,
+      repositoryIds: [intentResult.intent.repositoryId],
+      permissions: { contents: "read" },
+    });
+    try {
+      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+        syncToRemote(sandbox, branch),
+      );
+    } finally {
+      await revokeInstallationToken(syncToken.token);
+    }
   } catch (error) {
     console.warn(
       `[auto-commit] Sandbox sync failed for session ${sessionId}:`,
