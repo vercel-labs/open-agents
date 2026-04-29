@@ -1,4 +1,3 @@
-import type { Octokit } from "@octokit/rest";
 import type { CommitIntentFile, GitTreeFileMode } from "./commit-intent";
 import { getGitHubUserProfile } from "./users";
 
@@ -8,13 +7,13 @@ export interface GitIdentity {
 }
 
 export interface CommitParams {
-  octokit: Octokit;
+  octokit: CommitOctokit;
   owner: string;
   repo: string;
   branch: string;
   /** fallback branch when target branch doesn't exist on remote yet */
   baseBranch?: string;
-  /** remote ref SHA that was validated before building the commit bundle */
+  /** sandbox HEAD SHA captured before building the commit bundle */
   expectedHeadSha?: string;
   message: string;
   files: CommitIntentFile[];
@@ -42,6 +41,55 @@ type GitTreeEntry = {
   sha: string | null;
 };
 
+export interface CommitOctokit {
+  rest: {
+    git: {
+      getRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+      }): Promise<{ data: { object: { sha: string } } }>;
+      createRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+        sha: string;
+      }): Promise<unknown>;
+      getCommit(params: {
+        owner: string;
+        repo: string;
+        commit_sha: string;
+      }): Promise<{ data: { tree: { sha: string } } }>;
+      createBlob(params: {
+        owner: string;
+        repo: string;
+        content: string;
+        encoding: "utf-8" | "base64";
+      }): Promise<{ data: { sha: string } }>;
+      createTree(params: {
+        owner: string;
+        repo: string;
+        base_tree: string;
+        tree: GitTreeEntry[];
+      }): Promise<{ data: { sha: string } }>;
+      createCommit(params: {
+        owner: string;
+        repo: string;
+        message: string;
+        tree: string;
+        parents: string[];
+      }): Promise<{ data: { sha: string } }>;
+      updateRef(params: {
+        owner: string;
+        repo: string;
+        ref: string;
+        sha: string;
+        force: boolean;
+      }): Promise<unknown>;
+    };
+  };
+}
+
 function getGitHubHttpStatus(error: unknown): number | null {
   if (!error || typeof error !== "object") {
     return null;
@@ -55,7 +103,7 @@ function getGitHubHttpStatus(error: unknown): number | null {
 }
 
 async function getBranchHead(
-  octokit: Octokit,
+  octokit: CommitOctokit,
   owner: string,
   repo: string,
   branch: string,
@@ -107,25 +155,21 @@ export async function createCommit(
     let branchIsNew = false;
 
     if (!headSha) {
-      if (!baseBranch) {
+      if (!baseBranch && !expectedHeadSha) {
         return {
           ok: false,
           error: `Branch '${branch}' not found on remote. Pass baseBranch to create it.`,
         };
       }
 
-      headSha = await getBranchHead(octokit, owner, repo, baseBranch);
+      headSha = expectedHeadSha ?? null;
+      if (!headSha && baseBranch) {
+        headSha = await getBranchHead(octokit, owner, repo, baseBranch);
+      }
       if (!headSha) {
         return {
           ok: false,
           error: `Base branch '${baseBranch}' not found on remote`,
-        };
-      }
-
-      if (expectedHeadSha && headSha !== expectedHeadSha) {
-        return {
-          ok: false,
-          error: "Remote branch changed before commit could be created",
         };
       }
 
