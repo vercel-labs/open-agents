@@ -117,6 +117,30 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
+  // Validate session ownership before minting any short-lived setup tokens.
+  let sessionRecord: SessionRecord | undefined;
+  if (sessionId) {
+    const sessionContext = await requireOwnedSession({
+      userId: session.user.id,
+      sessionId,
+    });
+    if (!sessionContext.ok) {
+      return sessionContext.response;
+    }
+
+    sessionRecord = sessionContext.sessionRecord;
+  }
+
+  const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
+
+  const source = repoUrl
+    ? {
+        repo: repoUrl,
+        branch: isNewBranch ? undefined : branch,
+        newBranch: isNewBranch ? branch : undefined,
+      }
+    : undefined;
+
   // verify repo access (user permissions ∩ installation scope) and get
   // a repo-scoped read token for clone/setup when a repo is provided
   let setupToken: ScopedInstallationToken | undefined;
@@ -150,50 +174,27 @@ export async function POST(req: Request) {
     });
   }
 
-  // Validate session ownership
-  let sessionRecord: SessionRecord | undefined;
-  if (sessionId) {
-    const sessionContext = await requireOwnedSession({
-      userId: session.user.id,
-      sessionId,
-    });
-    if (!sessionContext.ok) {
-      return sessionContext.response;
-    }
-
-    sessionRecord = sessionContext.sessionRecord;
-  }
-
-  const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
-  const ghProfile = await getGitHubUserProfile(session.user.id);
-  const githubNoreplyEmail =
-    ghProfile?.externalUserId && ghProfile.username
-      ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
-      : undefined;
-
-  const gitUser = {
-    name: session.user.name ?? ghProfile?.username ?? session.user.username,
-    email:
-      githubNoreplyEmail ??
-      session.user.email ??
-      `${session.user.username}@users.noreply.github.com`,
-  };
-
   // ============================================
   // CREATE OR RESUME: Create a named persistent sandbox for this session.
   // ============================================
   const startTime = Date.now();
 
-  const source = repoUrl
-    ? {
-        repo: repoUrl,
-        branch: isNewBranch ? undefined : branch,
-        newBranch: isNewBranch ? branch : undefined,
-      }
-    : undefined;
-
   let sandbox: Awaited<ReturnType<typeof connectSandbox>>;
   try {
+    const ghProfile = await getGitHubUserProfile(session.user.id);
+    const githubNoreplyEmail =
+      ghProfile?.externalUserId && ghProfile.username
+        ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
+        : undefined;
+
+    const gitUser = {
+      name: session.user.name ?? ghProfile?.username ?? session.user.username,
+      email:
+        githubNoreplyEmail ??
+        session.user.email ??
+        `${session.user.username}@users.noreply.github.com`,
+    };
+
     sandbox = await connectSandbox({
       state: {
         type: "vercel",
