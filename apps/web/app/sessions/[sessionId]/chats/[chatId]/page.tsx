@@ -31,6 +31,8 @@ import { getInitialIsOnlyChatInSession } from "./only-chat-in-session";
 import { SessionChatContent } from "./session-chat-content";
 import { SessionChatProvider } from "./session-chat-context";
 
+export const maxDuration = 120;
+
 interface SessionChatPageProps {
   params: Promise<{ sessionId: string; chatId: string }>;
 }

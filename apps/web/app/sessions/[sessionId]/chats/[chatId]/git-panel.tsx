@@ -100,6 +100,9 @@ const mergeMethodDescriptions: Record<MergeMethod, string> = {
   rebase: "All commits will be rebased and added to the base branch.",
 };
 
+const createRepoDisabledReason =
+  "Creating repositories from Open Harness is temporarily disabled. Create the repository on GitHub first, then connect it to a session.";
+
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
@@ -763,6 +766,7 @@ function InlinePrCreatePanel({
 
   const handleGenerateContent = async () => {
     setIsGenerating(true);
+    setPrError(null);
     try {
       const generated = await generatePrContent({
         sessionId: session.id,
@@ -770,13 +774,20 @@ function InlinePrCreatePanel({
         baseBranch,
         branchName: displayBranch,
       });
+      if (generated.error) {
+        throw new Error(generated.error);
+      }
       setPrTitle(generated.title ?? session.title);
       setPrBody(generated.body ?? "");
       if (generated.branchName && generated.branchName !== "HEAD") {
         setResolvedBranch(generated.branchName);
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      setPrError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate pull request content",
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -803,6 +814,9 @@ function InlinePrCreatePanel({
             baseBranch,
             branchName: displayBranch,
           });
+          if (generated.error) {
+            throw new Error(generated.error);
+          }
           finalTitle = generated.title ?? session.title;
           finalBody = finalBody || (generated.body ?? "");
           if (generated.branchName && generated.branchName !== "HEAD") {
@@ -1874,7 +1888,9 @@ export function GitPanel(props: GitPanelProps) {
               size="sm"
               variant="outline"
               className="h-7 text-xs"
+              disabled
               onClick={onCreateRepoClick}
+              title={createRepoDisabledReason}
             >
               <FolderGit2 className="mr-1.5 h-3.5 w-3.5" />
               Create Repo

@@ -1,4 +1,4 @@
-import type { Sandbox } from "@open-agents/sandbox";
+import { withTemporaryGitHubAuth, type Sandbox } from "@open-agents/sandbox";
 import { looksLikeCommitHash } from "@/lib/git/helpers";
 import { updateSession } from "@/lib/db/sessions";
 import { openPullRequest, findPullRequest } from "@/lib/github/pulls";
@@ -11,6 +11,10 @@ import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/urls";
+import {
+  mintInstallationToken,
+  revokeInstallationToken,
+} from "@/lib/github/app";
 import { getGitHubAppUserToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 
@@ -181,17 +185,49 @@ export async function performAutoCreatePr(
     };
   }
 
-  await sandbox.exec(
-    `git fetch origin ${defaultBranch}:refs/remotes/origin/${defaultBranch}`,
-    cwd,
-    30000,
-  );
+  const access = await verifyRepoAccess({
+    userId,
+    owner: repoOwner,
+    repo: repoName,
+  });
 
-  const remoteBranchResult = await sandbox.exec(
-    `git ls-remote --heads origin ${branchName}`,
-    cwd,
-    10000,
-  );
+  if (!access.ok) {
+    return {
+      created: false,
+      syncedExisting: false,
+      skipped: false,
+      error: getRepoAccessErrorMessage(access.reason),
+    };
+  }
+
+  const readToken = await mintInstallationToken({
+    installationId: access.installationId,
+    repositoryIds: [access.repositoryId],
+    permissions: { contents: "read" },
+  });
+
+  let remoteBranchResult: Awaited<ReturnType<typeof sandbox.exec>>;
+  try {
+    remoteBranchResult = await withTemporaryGitHubAuth(
+      sandbox,
+      readToken.token,
+      async () => {
+        await sandbox.exec(
+          `git fetch origin ${defaultBranch}:refs/remotes/origin/${defaultBranch}`,
+          cwd,
+          30000,
+        );
+
+        return sandbox.exec(
+          `git ls-remote --heads origin ${branchName}`,
+          cwd,
+          10000,
+        );
+      },
+    );
+  } finally {
+    await revokeInstallationToken(readToken.token);
+  }
 
   if (!remoteBranchResult.success || !remoteBranchResult.stdout.trim()) {
     return {
@@ -284,21 +320,6 @@ export async function performAutoCreatePr(
   }
 
   const repoUrl = `https://github.com/${repoOwner}/${repoName}`;
-  const access = await verifyRepoAccess({
-    userId,
-    owner: repoOwner,
-    repo: repoName,
-  });
-
-  if (!access.ok) {
-    return {
-      created: false,
-      syncedExisting: false,
-      skipped: false,
-      error: getRepoAccessErrorMessage(access.reason),
-    };
-  }
-
   const createResult = await openPullRequest({
     repoUrl,
     branchName,

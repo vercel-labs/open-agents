@@ -75,6 +75,21 @@ const getUserGitHubTokenSpy = mock(async (_userId?: string) => userTokenResult);
 const getGitHubAppUserTokenSpy = mock(async (_userId?: string) =>
   getUserGitHubTokenSpy(_userId),
 );
+const withTemporaryGitHubAuthSpy = mock(
+  async (
+    _sandbox: unknown,
+    _token: string | undefined,
+    operation: () => Promise<unknown>,
+  ) => operation(),
+);
+const mintInstallationTokenSpy = mock(async () => ({
+  token: "ghs_read",
+  expiresAt: null,
+  installationId: 999,
+  repositoryIds: [123],
+  permissions: { contents: "read" },
+}));
+const revokeInstallationTokenSpy = mock(async () => {});
 const verifyRepoAccessSpy = mock(async () => ({
   ok: true,
   installationId: 999,
@@ -86,6 +101,10 @@ const sandbox = {
   workingDirectory: "/vercel/sandbox",
   exec: execSpy,
 };
+
+mock.module("@open-agents/sandbox", () => ({
+  withTemporaryGitHubAuth: withTemporaryGitHubAuthSpy,
+}));
 
 mock.module("@/lib/git/helpers", () => ({
   looksLikeCommitHash: (value: string) => /^[0-9a-f]{7,40}$/i.test(value),
@@ -109,6 +128,11 @@ mock.module("@/lib/github/token", () => ({
 mock.module("@/lib/github/access", () => ({
   verifyRepoAccess: verifyRepoAccessSpy,
   getRepoAccessErrorMessage: () => "Access denied",
+}));
+
+mock.module("@/lib/github/app", () => ({
+  mintInstallationToken: mintInstallationTokenSpy,
+  revokeInstallationToken: revokeInstallationTokenSpy,
 }));
 
 mock.module("@/lib/github/pulls", () => ({
@@ -165,6 +189,9 @@ beforeEach(() => {
   generatePullRequestContentFromSandboxSpy.mockClear();
   getUserGitHubTokenSpy.mockClear();
   getGitHubAppUserTokenSpy.mockClear();
+  withTemporaryGitHubAuthSpy.mockClear();
+  mintInstallationTokenSpy.mockClear();
+  revokeInstallationTokenSpy.mockClear();
   verifyRepoAccessSpy.mockClear();
 
   execResults = defaultExecResults();
@@ -312,6 +339,22 @@ describe("performAutoCreatePr", () => {
     } satisfies AutoCreatePrResult);
     expect(getGitHubAppUserTokenSpy).toHaveBeenCalledWith("user-1");
     expect(getUserGitHubTokenSpy).toHaveBeenCalledWith("user-1");
+    expect(verifyRepoAccessSpy).toHaveBeenCalledWith({
+      userId: "user-1",
+      owner: "acme",
+      repo: "repo",
+    });
+    expect(mintInstallationTokenSpy).toHaveBeenCalledWith({
+      installationId: 999,
+      repositoryIds: [123],
+      permissions: { contents: "read" },
+    });
+    expect(withTemporaryGitHubAuthSpy).toHaveBeenCalledWith(
+      sandbox,
+      "ghs_read",
+      expect.any(Function),
+    );
+    expect(revokeInstallationTokenSpy).toHaveBeenCalledWith("ghs_read");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
     expect(openPullRequestSpy).toHaveBeenCalledWith(
       expect.objectContaining({
