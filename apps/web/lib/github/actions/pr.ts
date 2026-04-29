@@ -21,7 +21,7 @@ import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { SAFE_BRANCH_PATTERN } from "@/lib/git/helpers";
+import { isSafeBranchName } from "@/lib/git/helpers";
 
 // ---------------------------------------------------------------------------
 // types
@@ -65,6 +65,58 @@ function isMergeMethod(value: unknown): value is MergeMethod {
   return value === "merge" || value === "squash" || value === "rebase";
 }
 
+function buildGitHubCompareUrl(params: {
+  owner: string;
+  repo: string;
+  baseBranch: string;
+  headRef: string;
+  title?: string;
+  body?: string;
+}): string {
+  const { owner, repo, baseBranch, headRef, title, body } = params;
+  const encodedBaseBranch = encodeURIComponent(baseBranch);
+  const encodedHeadRef = encodeURIComponent(headRef);
+  const compareUrl = new URL(
+    `https://github.com/${owner}/${repo}/compare/${encodedBaseBranch}...${encodedHeadRef}`,
+  );
+  compareUrl.searchParams.set("expand", "1");
+
+  const trimmedTitle = title?.trim();
+  if (trimmedTitle) {
+    compareUrl.searchParams.set("title", trimmedTitle);
+  }
+
+  const trimmedBody = body?.trim();
+  if (trimmedBody) {
+    compareUrl.searchParams.set("body", trimmedBody);
+  }
+
+  return compareUrl.toString();
+}
+
+function buildManualPullRequestResponse(params: {
+  owner: string;
+  repo: string;
+  baseBranch: string;
+  headRef: string;
+  title: string;
+  body?: string;
+  shouldAutoMerge: boolean;
+}) {
+  return {
+    success: true,
+    prUrl: buildGitHubCompareUrl(params),
+    requiresManualCreation: true,
+    ...(params.shouldAutoMerge
+      ? {
+          autoMergeEnabled: false,
+          autoMergeError:
+            "Auto-merge can only be enabled for pull requests created through the GitHub API.",
+        }
+      : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // server actions
 // ---------------------------------------------------------------------------
@@ -94,6 +146,12 @@ export async function generatePrContent(params: {
   }
   if (!isSandboxActive(sessionRecord.sandboxState)) {
     throw new Error("Sandbox not initialized");
+  }
+  if (!baseBranch || !isSafeBranchName(baseBranch)) {
+    throw new Error("Invalid base branch name");
+  }
+  if (!branchName || (branchName !== "HEAD" && !isSafeBranchName(branchName))) {
+    throw new Error("Invalid branch name");
   }
 
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
@@ -238,7 +296,7 @@ export async function openPullRequest(params: {
     throw new Error("Invalid repository URL");
   }
 
-  if (!SAFE_BRANCH_PATTERN.test(baseBranch)) {
+  if (!isSafeBranchName(baseBranch)) {
     throw new Error("Invalid base branch name");
   }
 
@@ -255,30 +313,62 @@ export async function openPullRequest(params: {
   if (!resolvedBranch) {
     throw new Error("Branch name is required");
   }
-  if (!SAFE_BRANCH_PATTERN.test(resolvedBranch)) {
+  if (!isSafeBranchName(resolvedBranch)) {
     throw new Error("Invalid branch name");
   }
-  if (headOwner && !SAFE_BRANCH_PATTERN.test(headOwner)) {
+  if (headOwner && !isSafeBranchName(headOwner)) {
     throw new Error("Invalid head owner");
   }
 
-  const headRef = resolvedBranch;
+  let headRef = resolvedBranch;
   const normalizedBaseOwner = parsedRepoUrl.owner.toLowerCase();
   const normalizedHeadOwner = headOwner?.trim().toLowerCase();
 
   if (normalizedHeadOwner && normalizedHeadOwner !== normalizedBaseOwner) {
-    throw new Error("Fork pull requests are not supported for brokered writes");
+    headRef = `${headOwner}:${resolvedBranch}`;
+    return buildManualPullRequestResponse({
+      owner: parsedRepoUrl.owner,
+      repo: parsedRepoUrl.repo,
+      baseBranch,
+      headRef,
+      title,
+      body: prBody,
+      shouldAutoMerge,
+    });
   }
 
   const access = await verifyRepoAccess({
     userId: session.user.id,
     owner: parsedRepoUrl.owner,
     repo: parsedRepoUrl.repo,
-    requiredUserPermission: shouldAutoMerge ? "write" : "read",
+    requiredUserPermission: "read",
   });
 
   if (!access.ok) {
     throw new Error(getRepoAccessErrorMessage(access.reason));
+  }
+
+  let autoMergeAccess: {
+    ok: true;
+    installationId: number;
+    repositoryId: number;
+    defaultBranch: string;
+  } | null = null;
+  let autoMergeAccessError: string | undefined;
+
+  if (shouldAutoMerge) {
+    const writeAccess = await verifyRepoAccess({
+      userId: session.user.id,
+      owner: parsedRepoUrl.owner,
+      repo: parsedRepoUrl.repo,
+      requiredUserPermission: "write",
+    });
+
+    if (writeAccess.ok) {
+      autoMergeAccess = writeAccess;
+    } else {
+      autoMergeAccessError = getRepoAccessErrorMessage(writeAccess.reason);
+    }
   }
 
   const userToken = await getGitHubAppUserToken(session.user.id);
@@ -300,6 +390,18 @@ export async function openPullRequest(params: {
   if (!result.success) {
     const error = result.error || "Failed to create pull request";
 
+    if (error === "Permission denied") {
+      return buildManualPullRequestResponse({
+        owner: parsedRepoUrl.owner,
+        repo: parsedRepoUrl.repo,
+        baseBranch,
+        headRef,
+        title,
+        body: prBody,
+        shouldAutoMerge,
+      });
+    }
+
     return { success: false, error };
   }
 
@@ -310,11 +412,15 @@ export async function openPullRequest(params: {
     if (typeof result.prNumber !== "number") {
       autoMergeError =
         "The pull request was created, but auto-merge could not be enabled.";
+    } else if (autoMergeAccessError) {
+      autoMergeError = autoMergeAccessError;
+    } else if (!autoMergeAccess) {
+      autoMergeError = "Auto-merge could not be enabled.";
     } else {
       const prNumber = result.prNumber;
       const autoMergeResult = await withScopedInstallationOctokit({
-        installationId: access.installationId,
-        repositoryId: access.repositoryId,
+        installationId: autoMergeAccess.installationId,
+        repositoryId: autoMergeAccess.repositoryId,
         permissions: { contents: "read", pull_requests: "write" },
         operation: async (octokit) =>
           enableAutoMerge({

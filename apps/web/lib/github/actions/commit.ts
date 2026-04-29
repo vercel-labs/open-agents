@@ -29,6 +29,63 @@ import {
   looksLikeCommitHash,
 } from "@/lib/git/helpers";
 
+function toGitErrorMessage(result: {
+  stderr?: string;
+  stdout?: string;
+}): string {
+  return result.stderr?.trim() || result.stdout?.trim() || "Git command failed";
+}
+
+async function hasCommitsToPush(params: {
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+  cwd: string;
+}): Promise<boolean> {
+  const result = await params.sandbox.exec(
+    "git rev-list @{upstream}..HEAD 2>/dev/null || echo 'needs-push'",
+    params.cwd,
+    10000,
+  );
+
+  return (
+    result.stdout.includes("needs-push") || result.stdout.trim().length > 0
+  );
+}
+
+async function pushBranchToRemote(params: {
+  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+  cwd: string;
+  branch: string;
+  installationId: number;
+  repositoryId: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const syncToken = await mintInstallationToken({
+    installationId: params.installationId,
+    repositoryIds: [params.repositoryId],
+    permissions: { contents: "write" },
+  });
+
+  try {
+    const pushResult = await withTemporaryGitHubAuth(
+      params.sandbox,
+      syncToken.token,
+      () =>
+        params.sandbox.exec(
+          `GIT_TERMINAL_PROMPT=0 git push -u origin ${params.branch}`,
+          params.cwd,
+          60000,
+        ),
+    );
+
+    if (!pushResult.success) {
+      return { ok: false, error: toGitErrorMessage(pushResult) };
+    }
+
+    return { ok: true };
+  } finally {
+    await revokeInstallationToken(syncToken.token);
+  }
+}
+
 export interface CommitResult {
   committed: boolean;
   pushed: boolean;
@@ -113,6 +170,13 @@ export async function commitChanges(params: {
       session.user.username,
       session.user.name,
     );
+    if (!isSafeBranchName(generatedBranch)) {
+      return {
+        committed: false,
+        pushed: false,
+        error: "Invalid generated branch name",
+      };
+    }
     const checkoutResult = await sandbox.exec(
       `git checkout -b ${generatedBranch}`,
       cwd,
@@ -138,7 +202,44 @@ export async function commitChanges(params: {
 
   // check for changes
   if (!(await checkUncommitted(sandbox))) {
-    return { committed: false, pushed: false, branchName: resolvedBranch };
+    if (!(await hasCommitsToPush({ sandbox, cwd }))) {
+      return { committed: false, pushed: false, branchName: resolvedBranch };
+    }
+
+    const access = await verifyRepoAccess({
+      userId: session.user.id,
+      owner: sessionRecord.repoOwner,
+      repo: sessionRecord.repoName,
+      requiredUserPermission: "write",
+    });
+
+    if (!access.ok) {
+      return {
+        committed: false,
+        pushed: false,
+        branchName: resolvedBranch,
+        error: getRepoAccessErrorMessage(access.reason),
+      };
+    }
+
+    const pushResult = await pushBranchToRemote({
+      sandbox,
+      cwd,
+      branch: resolvedBranch,
+      installationId: access.installationId,
+      repositoryId: access.repositoryId,
+    });
+
+    if (!pushResult.ok) {
+      return {
+        committed: false,
+        pushed: false,
+        branchName: resolvedBranch,
+        error: `Failed to push commits: ${pushResult.error}`,
+      };
+    }
+
+    return { committed: false, pushed: true, branchName: resolvedBranch };
   }
 
   // stage

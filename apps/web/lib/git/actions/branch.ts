@@ -5,8 +5,8 @@ import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
-  SAFE_BRANCH_PATTERN,
   generateBranchName,
+  isSafeBranchName,
   looksLikeCommitHash,
 } from "@/lib/git/helpers";
 
@@ -35,6 +35,12 @@ export async function createBranch(params: {
   }
   if (!isSandboxActive(sessionRecord.sandboxState)) {
     throw new Error("Sandbox not initialized");
+  }
+  if (!baseBranch || !isSafeBranchName(baseBranch)) {
+    throw new Error("Invalid base branch name");
+  }
+  if (!branchName || (branchName !== "HEAD" && !isSafeBranchName(branchName))) {
+    throw new Error("Invalid branch name");
   }
 
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
@@ -68,6 +74,9 @@ export async function createBranch(params: {
       session.user.username,
       session.user.name,
     );
+    if (!isSafeBranchName(generatedBranch)) {
+      throw new Error("Invalid generated branch name");
+    }
     const checkoutResult = await sandbox.exec(
       `git checkout -b ${generatedBranch}`,
       cwd,
@@ -79,7 +88,7 @@ export async function createBranch(params: {
     resolvedBranch = generatedBranch;
   }
 
-  if (!SAFE_BRANCH_PATTERN.test(resolvedBranch)) {
+  if (!isSafeBranchName(resolvedBranch)) {
     throw new Error("Invalid branch name");
   }
 

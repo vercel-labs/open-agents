@@ -245,7 +245,11 @@ export async function syncToRemote(
     throw new Error("Invalid branch name");
   }
 
-  const fetchResult = await exec(sandbox, `git fetch origin ${branch}`, 30000);
+  const fetchResult = await exec(
+    sandbox,
+    `git fetch origin ${branch}:refs/remotes/origin/${branch}`,
+    30000,
+  );
   if (!fetchResult.success) {
     throw new Error(`Failed to fetch after commit: ${fetchResult.stdout}`);
   }

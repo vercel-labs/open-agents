@@ -43,6 +43,7 @@ import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status"
 import { useSession } from "@/hooks/use-session";
 import { unlinkGitHub } from "@/lib/github/actions/connection";
 import { authClient } from "@/lib/auth/client";
+import type { GitHubConnectionReason } from "@/lib/github/status";
 import { fetcher } from "@/lib/swr";
 
 const GITHUB_OAUTH_CALLBACK =
@@ -100,6 +101,22 @@ function startGitHubInstallFromSettings() {
     next: "/settings/connections",
   });
   window.location.href = `/api/github/app/install?${params.toString()}`;
+}
+
+async function startGitHubReconnect(reason: GitHubConnectionReason | null) {
+  if (reason === "installations_missing") {
+    const params = new URLSearchParams({
+      next: "/settings/connections",
+      reconnect: "1",
+    });
+    window.location.href = `/api/github/app/install?${params.toString()}`;
+    return;
+  }
+
+  await authClient.linkSocial({
+    provider: "github",
+    callbackURL: GITHUB_OAUTH_CALLBACK,
+  });
 }
 
 function useGitHubReturnToast() {
@@ -397,6 +414,7 @@ export function AccountsSection() {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const {
     reconnectRequired,
+    reason,
     isLoading: connectionStatusLoading,
     refresh: refreshConnectionStatus,
   } = useGitHubConnectionStatus({ enabled: hasGitHub });
@@ -471,6 +489,7 @@ export function AccountsSection() {
           <ConnectionLoadingSkeleton />
         ) : showDisconnected ? (
           <DisconnectedState
+            reconnectReason={reason}
             onDisconnect={() => setDisconnectOpen(true)}
             unlinking={unlinking}
           />
@@ -480,6 +499,7 @@ export function AccountsSection() {
           <ConnectedState
             data={connectionData}
             reconnectRequired={requiresReconnect}
+            reconnectReason={reason}
             onDisconnect={() => setDisconnectOpen(true)}
             unlinking={unlinking}
           />
@@ -551,9 +571,11 @@ function NotConnectedState() {
 }
 
 function DisconnectedState({
+  reconnectReason,
   onDisconnect,
   unlinking,
 }: {
+  reconnectReason: GitHubConnectionReason | null;
   onDisconnect: () => void;
   unlinking: boolean;
 }) {
@@ -565,12 +587,7 @@ function DisconnectedState({
       </div>
       <ConnectionStatusButton
         status="reconnect"
-        onReconnect={() => {
-          authClient.linkSocial({
-            provider: "github",
-            callbackURL: GITHUB_OAUTH_CALLBACK,
-          });
-        }}
+        onReconnect={() => void startGitHubReconnect(reconnectReason)}
         onDisconnect={onDisconnect}
         unlinking={unlinking}
       />
@@ -615,11 +632,13 @@ function ConnectionLoadingSkeleton() {
 function ConnectedState({
   data,
   reconnectRequired,
+  reconnectReason,
   onDisconnect,
   unlinking,
 }: {
   data: ConnectionStatusResponse;
   reconnectRequired: boolean;
+  reconnectReason: GitHubConnectionReason | null;
   onDisconnect: () => void;
   unlinking: boolean;
 }) {
@@ -666,12 +685,7 @@ function ConnectedState({
 
         <ConnectionStatusButton
           status={reconnectRequired ? "reconnect" : "connected"}
-          onReconnect={() => {
-            authClient.linkSocial({
-              provider: "github",
-              callbackURL: GITHUB_OAUTH_CALLBACK,
-            });
-          }}
+          onReconnect={() => void startGitHubReconnect(reconnectReason)}
           onDisconnect={onDisconnect}
           unlinking={unlinking}
         />

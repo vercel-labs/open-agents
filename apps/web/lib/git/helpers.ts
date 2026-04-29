@@ -25,9 +25,16 @@ export function generateBranchName(
         .split(" ")
         .map((part) => part[0]?.toLowerCase() ?? "")
         .join("")
+        .replace(/[^a-z0-9]/g, "")
         .slice(0, 2) || "nb";
   } else if (username) {
-    initials = username.slice(0, 2).toLowerCase();
+    initials = username
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 2);
+    if (!initials) {
+      initials = "nb";
+    }
   }
   const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   return `${initials}/${randomSuffix}`;
