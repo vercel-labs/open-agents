@@ -31,6 +31,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { defaultDiffOptions, splitDiffOptions } from "@/lib/diffs-config";
 import { cn } from "@/lib/utils";
+import { DownloadDiffDialog } from "./download-diff-dialog";
 import { useSessionChatWorkspaceContext } from "./session-chat-context";
 
 type DiffStyle = DiffMode;
@@ -58,6 +59,26 @@ function getFilenameFromContentDisposition(header: string | null): string {
 
   const match = header.match(/filename="([^"]+)"/);
   return match?.[1] ?? "changes.diff";
+}
+
+function sanitizeDiffFilename(value: string): string {
+  const sanitized = value
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return sanitized || "changes";
+}
+
+function createDownloadHash(): string {
+  const bytes = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
+function createDownloadFilename(value: string): string {
+  return `${sanitizeDiffFilename(value)}-${createDownloadHash()}.diff`;
 }
 
 function StaleBanner({ cachedAt }: { cachedAt: Date | null }) {
@@ -214,12 +235,15 @@ export function DiffTabView() {
     diffCachedAt,
     sandboxInfo,
     refreshDiff,
+    gitStatus,
   } = useSessionChatWorkspaceContext();
   const { focusedDiffFile, focusedDiffRequestId, diffScope } = useGitPanel();
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
   const [diffDownloading, setDiffDownloading] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadFilename, setDownloadFilename] = useState<string | null>(null);
 
   // Track which files are expanded (by path)
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -307,9 +331,11 @@ export function DiffTabView() {
       }
 
       const blob = await response.blob();
-      const filename = getFilenameFromContentDisposition(
-        response.headers.get("Content-Disposition"),
-      );
+      const filename =
+        downloadFilename ??
+        getFilenameFromContentDisposition(
+          response.headers.get("Content-Disposition"),
+        );
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -318,6 +344,7 @@ export function DiffTabView() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      toast.success("Diff downloaded");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to download diff",
@@ -325,15 +352,34 @@ export function DiffTabView() {
     } finally {
       setDiffDownloading(false);
     }
-  }, [params.sessionId]);
+  }, [params.sessionId, downloadFilename]);
+
+  const openDownloadDialog = useCallback(() => {
+    setDownloadFilename(
+      createDownloadFilename(
+        gitStatus?.branch ?? sandboxInfo?.currentBranch ?? "changes",
+      ),
+    );
+    setDownloadDialogOpen(true);
+  }, [gitStatus?.branch, sandboxInfo?.currentBranch]);
 
   // Summary stats
   const summaryAdds = visibleFiles.reduce((sum, f) => sum + f.additions, 0);
   const summaryDels = visibleFiles.reduce((sum, f) => sum + f.deletions, 0);
   const hasDownloadableDiff = (diff?.files.length ?? 0) > 0;
-
+  const canDownloadDiff = Boolean(
+    params.sessionId && sandboxInfo && hasDownloadableDiff,
+  );
   return (
     <div className="flex h-full flex-col">
+      <DownloadDiffDialog
+        open={downloadDialogOpen}
+        onOpenChange={setDownloadDialogOpen}
+        onDownload={downloadDiff}
+        downloading={diffDownloading}
+        canDownload={canDownloadDiff}
+        filename={downloadFilename ?? "changes.diff"}
+      />
       {/* Toolbar */}
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -379,11 +425,10 @@ export function DiffTabView() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={downloadDiff}
-                disabled={
-                  diffDownloading || !sandboxInfo || !hasDownloadableDiff
-                }
+                onClick={openDownloadDialog}
+                disabled={!canDownloadDiff || diffDownloading}
                 className="h-7 w-7 px-0"
+                aria-label="Download diff"
               >
                 {diffDownloading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
