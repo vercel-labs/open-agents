@@ -122,8 +122,8 @@ async function getUntrackedDiff(
         diffs.push(entry.file.diff);
       }
     } catch {
-      // Unreadable or binary untracked files cannot be represented as a
-      // regular text diff that the `patch` command can apply.
+      // Unreadable or binary untracked files cannot be represented as a text
+      // patch.
     }
   }
 

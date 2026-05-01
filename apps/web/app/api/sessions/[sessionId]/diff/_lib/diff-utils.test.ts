@@ -122,6 +122,52 @@ describe("diff utils", () => {
     expect(result.file.diff).toContain("+line2");
   });
 
+  test("buildUntrackedDiffFile builds a valid diff for empty files", () => {
+    const result = buildUntrackedDiffFile("src/empty.ts", "");
+
+    expect(result).not.toBeNull();
+    if (!result) {
+      return;
+    }
+
+    expect(result.lineCount).toBe(0);
+    expect(result.file.additions).toBe(0);
+    expect(result.file.diff).toBe(
+      [
+        "diff --git a/src/empty.ts b/src/empty.ts",
+        "new file mode 100644",
+        "index 0000000..e69de29",
+      ].join("\n"),
+    );
+  });
+
+  test("buildUntrackedDiffFile preserves trailing blank lines", () => {
+    const result = buildUntrackedDiffFile("src/new.ts", "line1\n\n");
+
+    expect(result).not.toBeNull();
+    if (!result) {
+      return;
+    }
+
+    expect(result.lineCount).toBe(2);
+    expect(result.file.additions).toBe(2);
+    expect(result.file.diff).toContain("@@ -0,0 +1,2 @@\n+line1\n+");
+  });
+
+  test("buildUntrackedDiffFile marks files without a final newline", () => {
+    const result = buildUntrackedDiffFile("src/new.ts", "line1");
+
+    expect(result).not.toBeNull();
+    if (!result) {
+      return;
+    }
+
+    expect(result.lineCount).toBe(1);
+    expect(result.file.diff).toContain(
+      "@@ -0,0 +1 @@\n+line1\n\\ No newline at end of file",
+    );
+  });
+
   test("isGeneratedFile detects lock files", () => {
     expect(isGeneratedFile("pnpm-lock.yaml")).toBe(true);
     expect(isGeneratedFile("src/index.ts")).toBe(false);

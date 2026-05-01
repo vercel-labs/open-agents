@@ -150,17 +150,38 @@ export function buildUntrackedDiffFile(
 ): { file: DiffFileShape; lineCount: number } | null {
   if (content === null) return null;
 
-  const trimmed = content.trimEnd();
-  const lines = trimmed.length === 0 ? [] : trimmed.split("\n");
+  if (content.length === 0) {
+    return {
+      file: {
+        path,
+        status: "added",
+        stagingStatus: "unstaged",
+        additions: 0,
+        deletions: 0,
+        diff: `diff --git a/${path} b/${path}
+new file mode 100644
+index 0000000..e69de29`,
+      },
+      lineCount: 0,
+    };
+  }
+
+  const hasFinalNewline = content.endsWith("\n");
+  const body = hasFinalNewline ? content.slice(0, -1) : content;
+  const lines = body.length === 0 ? [""] : body.split("\n");
   const lineCount = lines.length;
 
   const diffLines = lines.map((line) => `+${line}`).join("\n");
+  const noFinalNewlineMarker = hasFinalNewline
+    ? ""
+    : "\n\\ No newline at end of file";
+  const newRange = lineCount === 1 ? "+1" : `+1,${lineCount}`;
   const syntheticDiff = `diff --git a/${path} b/${path}
 new file mode 100644
 --- /dev/null
 +++ b/${path}
-@@ -0,0 +1,${lineCount} @@
-${diffLines}`;
+@@ -0,0 ${newRange} @@
+${diffLines}${noFinalNewlineMarker}`;
 
   return {
     file: {

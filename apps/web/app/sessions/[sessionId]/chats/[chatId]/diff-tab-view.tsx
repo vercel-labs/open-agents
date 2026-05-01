@@ -290,8 +290,8 @@ export function DiffTabView() {
 
     setDiffDownloading(true);
     try {
-      // The server returns one regular unified diff for the full chat/session
-      // changes, including readable untracked files for `patch -p1`.
+      // The server returns one unified diff for the full chat/session changes,
+      // including readable untracked files.
       const response = await fetch(
         `/api/sessions/${encodeURIComponent(sessionId)}/diff/patch`,
       );

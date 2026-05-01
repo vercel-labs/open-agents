@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Sandbox } from "@open-agents/sandbox";
 import { createDownloadDiff, DownloadDiffError } from "./download-diff";
 
 type ExecResult = {
@@ -10,16 +11,18 @@ type ExecResult = {
 function createSandbox(params: {
   exec: (command: string) => Promise<ExecResult>;
   readFile?: (path: string, encoding: "utf-8") => Promise<string>;
-}) {
+}): Sandbox {
   return {
+    type: "cloud",
     workingDirectory: "/repo",
     exec: async (command: string, _cwd: string, _timeout: number) => {
       const result = await params.exec(command);
       return {
+        success: result.success,
         exitCode: result.success ? 0 : 1,
+        stdout: result.stdout,
         stderr: result.stderr ?? "",
         truncated: false,
-        ...result,
       };
     },
     readFile:
@@ -27,6 +30,18 @@ function createSandbox(params: {
       (async () => {
         throw new Error("not found");
       }),
+    readFileBuffer: async () => Buffer.from(""),
+    writeFile: async () => {},
+    stat: async () => ({
+      isDirectory: () => false,
+      isFile: () => true,
+      size: 0,
+      mtimeMs: 0,
+    }),
+    access: async () => {},
+    mkdir: async () => {},
+    readdir: async () => [],
+    stop: async () => {},
   };
 }
 
@@ -61,7 +76,7 @@ describe("createDownloadDiff", () => {
 
           return { success: true, stdout: "" };
         },
-      }) as never,
+      }),
     );
 
     expect(result.filename).toBe("feature-download-diff.diff");
@@ -92,11 +107,44 @@ describe("createDownloadDiff", () => {
           return { success: true, stdout: "" };
         },
         readFile: async () => "export const value = 1;\n",
-      }) as never,
+      }),
     );
 
     expect(result.content).toContain("diff --git a/src/new.ts b/src/new.ts");
     expect(result.content).toContain("+export const value = 1;");
+  });
+
+  test("includes empty untracked files as valid git patches", async () => {
+    const result = await createDownloadDiff(
+      createSandbox({
+        exec: async (command) => {
+          if (command === "git symbolic-ref refs/remotes/origin/HEAD") {
+            return { success: false, stdout: "" };
+          }
+          if (command === "git rev-parse HEAD") {
+            return { success: true, stdout: "head123\n" };
+          }
+          if (command === "git diff HEAD") {
+            return { success: true, stdout: "" };
+          }
+          if (command === "git ls-files --others --exclude-standard") {
+            return { success: true, stdout: "src/empty.ts\n" };
+          }
+          if (command === "git branch --show-current") {
+            return { success: true, stdout: "main\n" };
+          }
+
+          return { success: true, stdout: "" };
+        },
+        readFile: async () => "",
+      }),
+    );
+
+    expect(result.content).toContain(
+      "diff --git a/src/empty.ts b/src/empty.ts",
+    );
+    expect(result.content).toContain("index 0000000..e69de29");
+    expect(result.content).not.toContain("@@ -0,0 +1,0 @@");
   });
 
   test("throws when there are no downloadable changes", async () => {
@@ -118,7 +166,7 @@ describe("createDownloadDiff", () => {
             }
             return { success: true, stdout: "" };
           },
-        }) as never,
+        }),
       ),
     ).rejects.toBeInstanceOf(DownloadDiffError);
   });
