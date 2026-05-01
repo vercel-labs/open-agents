@@ -5,6 +5,7 @@ import {
   AlignJustify,
   ChevronRight,
   Columns2,
+  Download,
   FileText,
   Loader2,
   RefreshCw,
@@ -12,7 +13,9 @@ import {
   SquareMinus,
   SquarePlus,
 } from "lucide-react";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { DiffFile } from "@/app/api/sessions/[sessionId]/diff/route";
 import { useGitPanel } from "./git-panel-context";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,13 @@ function formatTimestamp(date: Date) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function getFilenameFromContentDisposition(header: string | null): string {
+  if (!header) return "changes.diff";
+
+  const match = header.match(/filename="([^"]+)"/);
+  return match?.[1] ?? "changes.diff";
 }
 
 function StaleBanner({ cachedAt }: { cachedAt: Date | null }) {
@@ -195,6 +205,7 @@ function FileDiffSection({
  * When a file is clicked in the git panel sidebar, it is expanded and scrolled into view.
  */
 export function DiffTabView() {
+  const params = useParams<{ sessionId?: string }>();
   const {
     diff,
     diffLoading,
@@ -208,6 +219,7 @@ export function DiffTabView() {
   const isMobile = useIsMobile();
   const { preferences } = useUserPreferences();
   const [diffStyle, setDiffStyle] = useState<DiffStyle>("unified");
+  const [diffDownloading, setDiffDownloading] = useState(false);
 
   // Track which files are expanded (by path)
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -272,9 +284,53 @@ export function DiffTabView() {
     [],
   );
 
+  const downloadDiff = useCallback(async () => {
+    const sessionId = params.sessionId;
+    if (!sessionId) return;
+
+    setDiffDownloading(true);
+    try {
+      // The server returns one regular unified diff for the full chat/session
+      // changes, including readable untracked files for `patch -p1`.
+      const response = await fetch(
+        `/api/sessions/${encodeURIComponent(sessionId)}/diff/patch`,
+      );
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : "Failed to download diff";
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const filename = getFilenameFromContentDisposition(
+        response.headers.get("Content-Disposition"),
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to download diff",
+      );
+    } finally {
+      setDiffDownloading(false);
+    }
+  }, [params.sessionId]);
+
   // Summary stats
   const summaryAdds = visibleFiles.reduce((sum, f) => sum + f.additions, 0);
   const summaryDels = visibleFiles.reduce((sum, f) => sum + f.deletions, 0);
+  const hasDownloadableDiff = (diff?.files.length ?? 0) > 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -317,6 +373,26 @@ export function DiffTabView() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Refresh</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={downloadDiff}
+                disabled={
+                  diffDownloading || !sandboxInfo || !hasDownloadableDiff
+                }
+                className="h-7 w-7 px-0"
+              >
+                {diffDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Download diff</TooltipContent>
           </Tooltip>
           {/* Expand / Collapse all */}
           <div className="flex items-center gap-0.5">
