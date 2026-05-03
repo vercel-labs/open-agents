@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { hasGitHubAccount as checkGitHubLinked } from "@/lib/github/users";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { isUserAdmin, userExists } from "@/lib/db/users";
+import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { getSessionFromReq } from "@/lib/session/server";
 import type { SessionUserInfo } from "@/lib/session/types";
 
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
     user: session.user,
     authProvider: session.authProvider,
     isAdmin,
+    isManagedTemplateTrialUser: isManagedTemplateTrialUser(session, req.url),
     hasGitHub,
     hasGitHubAccount,
     hasGitHubInstallations,

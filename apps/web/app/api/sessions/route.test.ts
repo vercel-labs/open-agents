@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: {
@@ -23,6 +23,8 @@ let matchingProjects: VercelProjectSelection[] = [];
 let matchingProjectsError: Error | null = null;
 const createCalls: Array<Record<string, unknown>> = [];
 const upsertCalls: Array<Record<string, unknown>> = [];
+
+const originalNodeEnv = process.env.NODE_ENV;
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
@@ -113,6 +115,10 @@ function createJsonRequest(
 }
 
 describe("/api/sessions POST vercel project linking", () => {
+  afterEach(() => {
+    Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+  });
+
   beforeEach(() => {
     currentSession = {
       user: {
@@ -160,6 +166,37 @@ describe("/api/sessions POST vercel project linking", () => {
     expect(response.status).toBe(403);
     expect(body.error).toBe(
       "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.",
+    );
+    expect(createCalls).toHaveLength(0);
+  });
+
+  test("blocks repo-backed sessions for trial users", async () => {
+    Object.assign(process.env, { NODE_ENV: "development" });
+    const { POST } = await routeModulePromise;
+
+    currentSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        username: "nico",
+        name: "Nico",
+        email: "person@example.com",
+      },
+    };
+
+    const response = await POST(
+      createJsonRequest({
+        branch: "main",
+        cloneUrl: "https://github.com/vercel-labs/open-agents",
+        repoOwner: "vercel-labs",
+        repoName: "open-agents",
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "This hosted deployment does not allow GitHub-backed sessions for non-Vercel trial accounts. Start a new chat without a repository.",
     );
     expect(createCalls).toHaveLength(0);
   });

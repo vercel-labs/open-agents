@@ -20,6 +20,7 @@ import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   isManagedTemplateTrialUser,
+  MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR,
   MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT,
   MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR,
 } from "@/lib/managed-template-trial";
@@ -175,7 +176,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (isManagedTemplateTrialUser(session, req.url)) {
+  const isTrialUser = isManagedTemplateTrialUser(session, req.url);
+  if (isTrialUser) {
     const existingSessionCount = await countSessionsByUserId(session.user.id);
     if (existingSessionCount >= MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT) {
       return Response.json(
@@ -190,6 +192,13 @@ export async function POST(req: Request) {
     body = (await req.json()) as CreateSessionRequest;
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (isTrialUser && (body.repoOwner || body.repoName || body.cloneUrl)) {
+    return Response.json(
+      { error: MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR },
+      { status: 403 },
+    );
   }
 
   if (body.sandboxType && body.sandboxType !== "vercel") {

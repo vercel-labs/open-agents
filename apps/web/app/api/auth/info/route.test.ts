@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
 
 type TestSession = {
@@ -17,6 +17,8 @@ let hasGitHubLinked = false;
 let installations: Array<{ installationId: number }> = [];
 let isAdmin = false;
 
+const originalNodeEnv = process.env.NODE_ENV;
+
 mock.module("server-only", () => ({}));
 
 mock.module("@/lib/session/server", () => ({
@@ -30,6 +32,9 @@ mock.module("@/lib/db/users", () => ({
 
 mock.module("@/lib/github/users", () => ({
   hasGitHubAccount: async () => hasGitHubLinked,
+  getGitHubAccountId: async () => null,
+  getGitHubUsername: async () => null,
+  deleteGitHubAccountLink: async () => undefined,
 }));
 
 mock.module("@/lib/db/installations", () => ({
@@ -38,14 +43,18 @@ mock.module("@/lib/db/installations", () => ({
 
 const routeModulePromise = import("./route");
 
-function createRequest(): NextRequest {
+function createRequest(url = "http://localhost/api/auth/info"): NextRequest {
   return {
-    nextUrl: new URL("http://localhost/api/auth/info"),
-    url: "http://localhost/api/auth/info",
+    nextUrl: new URL(url),
+    url,
   } as NextRequest;
 }
 
 describe("GET /api/auth/info", () => {
+  afterEach(() => {
+    Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+  });
+
   beforeEach(() => {
     session = {
       authProvider: "vercel",
@@ -94,6 +103,7 @@ describe("GET /api/auth/info", () => {
       user: session?.user,
       authProvider: "vercel",
       isAdmin: false,
+      isManagedTemplateTrialUser: false,
       hasGitHub: true,
       hasGitHubAccount: true,
       hasGitHubInstallations: true,
@@ -110,6 +120,44 @@ describe("GET /api/auth/info", () => {
       user: session?.user,
       authProvider: "vercel",
       isAdmin: false,
+      isManagedTemplateTrialUser: false,
+      hasGitHub: false,
+      hasGitHubAccount: false,
+      hasGitHubInstallations: false,
+    });
+  });
+
+  test("reports managed template trial users", async () => {
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      createRequest("https://open-agents.dev/api/auth/info"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: session?.user,
+      authProvider: "vercel",
+      isAdmin: false,
+      isManagedTemplateTrialUser: true,
+      hasGitHub: false,
+      hasGitHubAccount: false,
+      hasGitHubInstallations: false,
+    });
+  });
+
+  test("reports local development non-Vercel users as managed template trial users", async () => {
+    Object.assign(process.env, { NODE_ENV: "development" });
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(createRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: session?.user,
+      authProvider: "vercel",
+      isAdmin: false,
+      isManagedTemplateTrialUser: true,
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,

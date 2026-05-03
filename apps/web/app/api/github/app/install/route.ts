@@ -8,6 +8,7 @@ import {
   getGitHubUsername,
   hasGitHubAccount,
 } from "@/lib/github/users";
+import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null): string {
@@ -51,6 +52,12 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (isManagedTemplateTrialUser(session, req.url)) {
+    const fallbackUrl = new URL(redirectTo, req.url);
+    fallbackUrl.searchParams.set("github", "trial_blocked");
+    return NextResponse.redirect(fallbackUrl);
   }
 
   const appSlug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;

@@ -63,6 +63,7 @@ export function SessionStarter({
   >(undefined);
 
   const { session, loading: sessionLoading, hasGitHub } = useSession();
+  const isTrialUser = session?.isManagedTemplateTrialUser ?? false;
   const { reconnectRequired, isLoading: githubConnectionLoading } =
     useGitHubConnectionStatus({
       enabled: hasGitHub,
@@ -76,9 +77,11 @@ export function SessionStarter({
   const sandboxType = preferences?.defaultSandboxType ?? DEFAULT_SANDBOX_TYPE;
   const sandboxName =
     SANDBOX_OPTIONS.find((s) => s.id === sandboxType)?.name ?? sandboxType;
+  const isRepoModeDisabled = sessionLoading || isTrialUser;
 
   const shouldLoadVercelProjects =
     mode === "repo" &&
+    !isTrialUser &&
     !githubConnectionLoading &&
     !reconnectRequired &&
     !!selectedOwner &&
@@ -93,6 +96,18 @@ export function SessionStarter({
     repoOwner: selectedOwner,
     repoName: selectedRepo,
   });
+
+  useEffect(() => {
+    if (!isTrialUser || mode === "empty") return;
+
+    setMode("empty");
+    setSelectedOwner("");
+    setSelectedRepo("");
+    setSelectedBranch(null);
+    setIsNewBranch(false);
+    setVercelProjectChoice(undefined);
+    setGitSettingsExpanded(false);
+  }, [isTrialUser, mode]);
 
   useEffect(() => {
     if (!shouldLoadVercelProjects) {
@@ -133,6 +148,8 @@ export function SessionStarter({
   };
 
   const handleModeChange = (newMode: SessionMode) => {
+    if (isRepoModeDisabled && newMode === "repo") return;
+
     setMode(newMode);
     if (newMode === "empty") handleRepoClear();
   };
@@ -155,6 +172,7 @@ export function SessionStarter({
   const controlsDisabled = isLoading || preferencesLoading;
   const isSubmitDisabled =
     controlsDisabled ||
+    (isRepoModeDisabled && mode === "repo") ||
     (mode === "repo" && (githubConnectionLoading || reconnectRequired)) ||
     !isRepoSelectionComplete ||
     isVercelLookupPending ||
@@ -163,6 +181,7 @@ export function SessionStarter({
   const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
   const showVercelProjectSection =
     mode === "repo" &&
+    !isTrialUser &&
     !githubConnectionLoading &&
     !reconnectRequired &&
     !!selectedOwner &&
@@ -234,11 +253,14 @@ export function SessionStarter({
           <button
             type="button"
             onClick={() => handleModeChange("repo")}
+            disabled={isRepoModeDisabled}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
-              mode === "repo"
-                ? "border border-border/70 bg-background text-foreground shadow-sm dark:border-transparent dark:bg-white/10 dark:text-neutral-100"
-                : "text-muted-foreground hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-300",
+              isRepoModeDisabled
+                ? "cursor-not-allowed text-muted-foreground/50 dark:text-neutral-600"
+                : mode === "repo"
+                  ? "border border-border/70 bg-background text-foreground shadow-sm dark:border-transparent dark:bg-white/10 dark:text-neutral-100"
+                  : "text-muted-foreground hover:text-foreground dark:text-neutral-400 dark:hover:text-neutral-300",
             )}
           >
             <GitBranch className="h-3.5 w-3.5" />
@@ -282,7 +304,9 @@ export function SessionStarter({
 
         {mode === "empty" && (
           <p className="text-center text-sm text-muted-foreground dark:text-neutral-500">
-            Start a new chat -- no repository required.
+            {isTrialUser
+              ? "Hosted trial accounts can start chats without connecting GitHub."
+              : "Start a new chat -- no repository required."}
           </p>
         )}
 

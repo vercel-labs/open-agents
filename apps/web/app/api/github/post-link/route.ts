@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { getInstallationsByUserId } from "@/lib/db/installations";
+import {
+  deleteInstallationsByUserId,
+  getInstallationsByUserId,
+} from "@/lib/db/installations";
 import { getUserGitHubToken } from "@/lib/github/token";
-import { getGitHubUsername } from "@/lib/github/users";
+import { deleteGitHubAccountLink, getGitHubUsername } from "@/lib/github/users";
 import { syncUserInstallations } from "@/lib/github/sync";
+import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
@@ -30,6 +34,15 @@ export async function GET(req: Request): Promise<Response> {
   const requestUrl = new URL(req.url);
   const next = sanitizeRedirectTo(requestUrl.searchParams.get("next"));
   const redirectUrl = new URL(next, req.url);
+
+  if (isManagedTemplateTrialUser(session, req.url)) {
+    await Promise.all([
+      deleteGitHubAccountLink(session.user.id),
+      deleteInstallationsByUserId(session.user.id),
+    ]);
+    redirectUrl.searchParams.set("github", "trial_blocked");
+    return NextResponse.redirect(redirectUrl);
+  }
 
   const token = await getUserGitHubToken(session.user.id);
   if (!token) {

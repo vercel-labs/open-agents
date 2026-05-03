@@ -58,6 +58,7 @@ export function GetStartedFlow() {
     hasGitHubAccount,
     hasGitHubInstallations,
   } = useSession();
+  const isTrialUser = session?.isManagedTemplateTrialUser ?? false;
   const isGitHubReconnect = searchParams.get("step") === "github";
   const redirectPath = sanitizeRedirectPath(searchParams.get("next"));
   const [activeStep, setActiveStep] = useState<StepId>(
@@ -185,6 +186,7 @@ export function GetStartedFlow() {
                             hasGitHubAccount={hasGitHubAccount}
                             hasGitHubInstallations={hasGitHubInstallations}
                             forceReconnect={isGitHubReconnect}
+                            connectionDisabled={isTrialUser}
                             redirectPath={redirectPath}
                             onComplete={() => {
                               markComplete(2);
@@ -267,6 +269,7 @@ function GitHubConnectStep({
   hasGitHubAccount,
   hasGitHubInstallations,
   forceReconnect,
+  connectionDisabled,
   redirectPath,
   onComplete,
 }: {
@@ -275,6 +278,7 @@ function GitHubConnectStep({
   hasGitHubAccount: boolean;
   hasGitHubInstallations: boolean;
   forceReconnect: boolean;
+  connectionDisabled: boolean;
   redirectPath: string;
   onComplete: () => void;
 }) {
@@ -288,6 +292,23 @@ function GitHubConnectStep({
 
   if (loading) {
     return <Skeleton className="h-10 w-full rounded bg-white/5" />;
+  }
+
+  if (connectionDisabled) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-zinc-500">
+          Hosted trial accounts can start chats without connecting GitHub.
+        </p>
+        <Button
+          size="sm"
+          onClick={onComplete}
+          className="gap-2 bg-white text-black hover:bg-zinc-200"
+        >
+          Continue without GitHub
+        </Button>
+      </div>
+    );
   }
 
   if (isConnected) {

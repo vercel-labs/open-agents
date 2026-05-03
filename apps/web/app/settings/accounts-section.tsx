@@ -175,6 +175,12 @@ function useGitHubReturnToast() {
           description: "Contact the administrator.",
         });
         break;
+      case "trial_blocked":
+        toast.error("GitHub connections are disabled", {
+          description:
+            "Hosted trial accounts can start chats without connecting GitHub.",
+        });
+        break;
       case "invalid_state":
         toast.error("Callback expired", {
           description: "Please start the installation again.",
@@ -258,7 +264,13 @@ function InstallBadge({
   );
 }
 
-function OrgRow({ org }: { org: OrgInstallStatus }) {
+function OrgRow({
+  org,
+  connectionDisabled,
+}: {
+  org: OrgInstallStatus;
+  connectionDisabled: boolean;
+}) {
   const isInstalled = org.installStatus === "installed";
   const avatarSrc =
     org.avatarUrl ||
@@ -288,6 +300,7 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
           variant="ghost"
           size="sm"
           className="h-6 px-2 text-[11px]"
+          disabled={connectionDisabled}
           onClick={() => startGitHubInstallForOrg(org.githubId)}
         >
           Install
@@ -339,12 +352,14 @@ function ConnectionStatusButton({
   onReconnect,
   onDisconnect,
   unlinking,
+  connectionDisabled,
 }: {
   status: "connected" | "reconnect" | "not_connected";
   configureUrl?: string | null;
   onReconnect?: () => void;
   onDisconnect: () => void;
   unlinking: boolean;
+  connectionDisabled: boolean;
 }) {
   if (status === "not_connected") {
     return (
@@ -352,6 +367,7 @@ function ConnectionStatusButton({
         variant="ghost"
         size="sm"
         className="h-8 gap-1 text-xs"
+        disabled={connectionDisabled}
         onClick={startGitHubInstallFromSettings}
       >
         Connect
@@ -391,7 +407,7 @@ function ConnectionStatusButton({
             </Link>
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem onClick={onReconnect}>
+        <DropdownMenuItem onClick={onReconnect} disabled={connectionDisabled}>
           Re-authenticate
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -408,7 +424,8 @@ function ConnectionStatusButton({
 }
 
 export function AccountsSection() {
-  const { hasGitHubAccount, hasGitHub, loading } = useSession();
+  const { hasGitHubAccount, hasGitHub, loading, session } = useSession();
+  const isTrialUser = session?.isManagedTemplateTrialUser ?? false;
   const { mutate } = useSWRConfig();
   const [unlinking, setUnlinking] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -483,7 +500,7 @@ export function AccountsSection() {
       {/* Body */}
       <div className="space-y-4 p-4">
         {!hasGitHub ? (
-          <NotConnectedState />
+          <NotConnectedState connectionDisabled={isTrialUser} />
         ) : (connectionLoading || connectionStatusLoading || !connectionData) &&
           !connectionError ? (
           <ConnectionLoadingSkeleton />
@@ -492,6 +509,7 @@ export function AccountsSection() {
             reconnectReason={reason}
             onDisconnect={() => setDisconnectOpen(true)}
             unlinking={unlinking}
+            connectionDisabled={isTrialUser}
           />
         ) : connectionError && !connectionData ? (
           <ConnectionErrorState onRetry={handleRefresh} />
@@ -502,9 +520,10 @@ export function AccountsSection() {
             reconnectReason={reason}
             onDisconnect={() => setDisconnectOpen(true)}
             unlinking={unlinking}
+            connectionDisabled={isTrialUser}
           />
         ) : (
-          <NotConnectedState />
+          <NotConnectedState connectionDisabled={isTrialUser} />
         )}
       </div>
 
@@ -538,20 +557,28 @@ export function AccountsSection() {
   );
 }
 
-function NotConnectedState() {
+function NotConnectedState({
+  connectionDisabled,
+}: {
+  connectionDisabled: boolean;
+}) {
   const [isLinking, setIsLinking] = useState(false);
 
   return (
     <div className="flex items-center justify-between">
       <p className="text-sm text-muted-foreground">
-        No GitHub account connected
+        {connectionDisabled
+          ? "GitHub connections are disabled for hosted trial accounts"
+          : "No GitHub account connected"}
       </p>
       <Button
         variant="outline"
         size="sm"
         className="shrink-0 gap-1"
-        disabled={isLinking}
+        disabled={isLinking || connectionDisabled}
         onClick={async () => {
+          if (connectionDisabled) return;
+
           setIsLinking(true);
           await authClient.linkSocial({
             provider: "github",
@@ -574,10 +601,12 @@ function DisconnectedState({
   reconnectReason,
   onDisconnect,
   unlinking,
+  connectionDisabled,
 }: {
   reconnectReason: GitHubConnectionReason | null;
   onDisconnect: () => void;
   unlinking: boolean;
+  connectionDisabled: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -590,6 +619,7 @@ function DisconnectedState({
         onReconnect={() => void startGitHubReconnect(reconnectReason)}
         onDisconnect={onDisconnect}
         unlinking={unlinking}
+        connectionDisabled={connectionDisabled}
       />
     </div>
   );
@@ -635,12 +665,14 @@ function ConnectedState({
   reconnectReason,
   onDisconnect,
   unlinking,
+  connectionDisabled,
 }: {
   data: ConnectionStatusResponse;
   reconnectRequired: boolean;
   reconnectReason: GitHubConnectionReason | null;
   onDisconnect: () => void;
   unlinking: boolean;
+  connectionDisabled: boolean;
 }) {
   const [orgsExpanded, setOrgsExpanded] = useState(false);
 
@@ -688,6 +720,7 @@ function ConnectedState({
           onReconnect={() => void startGitHubReconnect(reconnectReason)}
           onDisconnect={onDisconnect}
           unlinking={unlinking}
+          connectionDisabled={connectionDisabled}
         />
       </div>
 
@@ -711,7 +744,11 @@ function ConnectedState({
           {orgsExpanded ? (
             <div className="mt-2 space-y-0 divide-y divide-border/30">
               {allAccounts.map((org) => (
-                <OrgRow key={org.login} org={org} />
+                <OrgRow
+                  key={org.login}
+                  org={org}
+                  connectionDisabled={connectionDisabled}
+                />
               ))}
 
               <div className="flex items-center py-1.5">
@@ -719,6 +756,7 @@ function ConnectedState({
                   variant="ghost"
                   size="sm"
                   className="h-6 px-2 text-[11px] text-muted-foreground"
+                  disabled={connectionDisabled}
                   onClick={startGitHubInstallFromSettings}
                 >
                   <Plus className="size-3.5" />

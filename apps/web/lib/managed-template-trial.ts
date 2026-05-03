@@ -5,6 +5,7 @@ const MANAGED_TEMPLATE_HOSTS = new Set([
   "open-agents.dev",
   "www.open-agents.dev",
 ]);
+const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT = 5;
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT = 1;
@@ -16,6 +17,8 @@ export const MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR =
   "This hosted deployment does not allow message deletion for non-Vercel trial accounts. Deploy your own copy for full controls.";
 export const MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR =
   "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+export const MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR =
+  "This hosted deployment does not allow GitHub-backed sessions for non-Vercel trial accounts. Start a new chat without a repository.";
 
 function normalizeHost(value?: string | URL) {
   const rawValue =
@@ -40,6 +43,14 @@ function normalizeHost(value?: string | URL) {
 export function isManagedTemplateDeployment(url: string | URL) {
   const requestHost = normalizeHost(url);
   if (requestHost && MANAGED_TEMPLATE_HOSTS.has(requestHost)) {
+    return true;
+  }
+
+  if (
+    process.env.NODE_ENV === "development" &&
+    requestHost &&
+    LOCAL_DEVELOPMENT_HOSTS.has(requestHost)
+  ) {
     return true;
   }
 
