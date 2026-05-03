@@ -8,9 +8,9 @@ import {
   updateChatActiveStreamId,
 } from "@/lib/db/sessions";
 import {
-  isManagedTemplateTrialUser,
-  MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR,
-} from "@/lib/managed-template-trial";
+  MANAGED_TEMPLATE_ACCESS_DENIED_ERROR,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
@@ -35,9 +35,9 @@ export async function DELETE(req: Request, context: RouteContext) {
     return chatContext.response;
   }
 
-  if (isManagedTemplateTrialUser(session, req.url)) {
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
     return Response.json(
-      { error: MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR },
+      { error: MANAGED_TEMPLATE_ACCESS_DENIED_ERROR },
       { status: 403 },
     );
   }

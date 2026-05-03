@@ -17,4 +17,6 @@ export interface SessionUserInfo {
   hasGitHub?: boolean;
   hasGitHubAccount?: boolean;
   hasGitHubInstallations?: boolean;
+  managedTemplateAccessDenied?: boolean;
+  accessDeniedRedirect?: string;
 }

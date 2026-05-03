@@ -4,9 +4,9 @@ import {
   requireOwnedSessionWithSandboxGuard,
 } from "@/app/api/sessions/_lib/session-context";
 import {
-  isManagedTemplateTrialUser,
-  MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR,
-} from "@/lib/managed-template-trial";
+  MANAGED_TEMPLATE_ACCESS_DENIED_ERROR,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import { CODE_SERVER_PORT, DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { isSandboxActive } from "@/lib/sandbox/utils";
@@ -244,9 +244,9 @@ export async function POST(req: Request, context: RouteContext) {
   }
 
   const session = await getServerSession();
-  if (isManagedTemplateTrialUser(session, req.url)) {
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
     return Response.json(
-      { error: MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR },
+      { error: MANAGED_TEMPLATE_ACCESS_DENIED_ERROR },
       { status: 403 },
     );
   }

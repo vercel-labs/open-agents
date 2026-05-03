@@ -8,6 +8,10 @@ import {
   getGitHubUsername,
   hasGitHubAccount,
 } from "@/lib/github/users";
+import {
+  MANAGED_TEMPLATE_DEPLOY_YOUR_OWN_PATH,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null): string {
@@ -51,6 +55,12 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
+    return NextResponse.redirect(
+      new URL(MANAGED_TEMPLATE_DEPLOY_YOUR_OWN_PATH, req.url),
+    );
   }
 
   const appSlug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;

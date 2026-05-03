@@ -5,6 +5,7 @@ import {
   getArchivedSessionCountByUserId,
   getSessionsWithUnreadByUserId,
 } from "@/lib/db/sessions";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionsRouteShell } from "./sessions-route-shell";
 
@@ -19,6 +20,7 @@ export default async function SessionsLayout({
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   const [lastRepo, sessions, archivedCount] = await Promise.all([
     getLastRepoByUserId(session.user.id),

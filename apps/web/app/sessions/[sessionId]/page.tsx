@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getChatsBySessionId } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface SessionPageProps {
@@ -17,6 +18,7 @@ export default async function SessionPage({ params }: SessionPageProps) {
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   const sessionRecord = await sessionRecordPromise;
   if (!sessionRecord) {

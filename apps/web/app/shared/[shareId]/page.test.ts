@@ -100,6 +100,10 @@ mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => viewerSession,
 }));
 
+mock.module("@/lib/managed-template-page-access", () => ({
+  redirectManagedTemplateUser: async () => {},
+}));
+
 mock.module("./shared-chat-content", () => ({
   SharedChatContent: (_props: unknown) => null,
 }));

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { needsOnboarding } from "@/lib/onboarding";
 import { GetStartedFlow } from "./get-started-flow";
@@ -32,6 +33,7 @@ export default async function GetStartedPage({
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   const resolvedSearchParams = await searchParams;
   const requestedStep = getSingleSearchParam(resolvedSearchParams.step);

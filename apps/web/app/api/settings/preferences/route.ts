@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/user-preferences";
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
+import { getManagedTemplateAccessDeniedResponse } from "@/lib/managed-template-access";
 import {
   globalSkillRefsSchema,
   type GlobalSkillRef,
@@ -31,6 +32,14 @@ export async function GET(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
+  }
+
   const preferences = sanitizeUserPreferencesForSession(
     await getUserPreferences(session.user.id),
     session,
@@ -43,6 +52,14 @@ export async function PATCH(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
   }
 
   let body: UpdatePreferencesRequest;

@@ -347,7 +347,7 @@ describe("/api/chat route", () => {
     );
   });
 
-  test("blocks a sixth message for non-Vercel trial users on the managed deployment", async () => {
+  test("denies hosted managed-template access for non-allowed domains", async () => {
     const { POST } = await routeModulePromise;
     currentAuthSession = {
       authProvider: "vercel",
@@ -356,8 +356,6 @@ describe("/api/chat route", () => {
         email: "person@example.com",
       },
     };
-    existingUserMessageCount = 5;
-
     const response = await POST(
       createRequest(
         JSON.stringify({
@@ -378,7 +376,7 @@ describe("/api/chat route", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.",
+      "This hosted deployment only supports approved email domains. Deploy your own copy to use Open Agents with your account.",
     );
     expect(startCalls).toHaveLength(0);
   });

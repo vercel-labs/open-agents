@@ -5,10 +5,8 @@ import type { WebAgentUIMessage } from "@/app/types";
 import {
   claimChatActiveStreamId,
   compareAndSetChatActiveStreamId,
-  countUserMessagesByUserId,
   createChatMessageIfNotExists,
   getChatById,
-  getChatMessageById,
   isFirstChatMessage,
   touchChat,
   updateChat,
@@ -16,10 +14,9 @@ import {
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
-  isManagedTemplateTrialUser,
-  MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT,
-  MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR,
-} from "@/lib/managed-template-trial";
+  MANAGED_TEMPLATE_ACCESS_DENIED_ERROR,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
@@ -31,17 +28,6 @@ import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-res
 export const maxDuration = 800;
 
 type WebAgentUIMessageChunk = InferUIMessageChunk<WebAgentUIMessage>;
-
-function getLatestUserMessage(messages: WebAgentUIMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role === "user") {
-      return message;
-    }
-  }
-
-  return null;
-}
 
 export async function POST(req: Request) {
   // 1. Validate session
@@ -88,20 +74,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Session is archived" }, { status: 400 });
   }
 
-  if (isManagedTemplateTrialUser(session, req.url)) {
-    const latestUserMessage = getLatestUserMessage(messages);
-    if (latestUserMessage) {
-      const existingMessage = await getChatMessageById(latestUserMessage.id);
-      if (!existingMessage) {
-        const userMessageCount = await countUserMessagesByUserId(userId);
-        if (userMessageCount >= MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT) {
-          return Response.json(
-            { error: MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR },
-            { status: 403 },
-          );
-        }
-      }
-    }
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
+    return Response.json(
+      { error: MANAGED_TEMPLATE_ACCESS_DENIED_ERROR },
+      { status: 403 },
+    );
   }
 
   // Guard: if a workflow is already running for this chat, reconnect to it

@@ -10,6 +10,7 @@ import {
   getShareByIdCached,
 } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { redactSharedEnvContent } from "./redact-shared-env-content";
@@ -64,6 +65,8 @@ export default async function SharedPage({ params }: SharedPageProps) {
     viewerSessionPromise,
     sharePromise,
   ]);
+  await redirectManagedTemplateUser(viewerSession);
+
   if (!share) {
     notFound();
   }

@@ -3,6 +3,10 @@ import { getInstallationsByUserId } from "@/lib/db/installations";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getGitHubUsername } from "@/lib/github/users";
 import { syncUserInstallations } from "@/lib/github/sync";
+import {
+  MANAGED_TEMPLATE_DEPLOY_YOUR_OWN_PATH,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
@@ -25,6 +29,12 @@ export async function GET(req: Request): Promise<Response> {
   const session = await getServerSession();
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
+    return NextResponse.redirect(
+      new URL(MANAGED_TEMPLATE_DEPLOY_YOUR_OWN_PATH, req.url),
+    );
   }
 
   const requestUrl = new URL(req.url);

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
 
-let authSession: { user: { id: string } } | null;
+let authSession: { user: { id: string; email?: string } } | null;
 let hasLinkedGitHub = false;
 let installations: Array<{ installationId: number }> = [];
 
@@ -88,6 +88,23 @@ describe("GET /api/github/app/install", () => {
     const redirectUrl = new URL(location as string);
     expect(redirectUrl.pathname).toBe("/get-started");
     expect(redirectUrl.searchParams.get("next")).toBe("/settings/connections");
+  });
+
+  test("redirects hosted users from non-allowed domains to deploy-your-own", async () => {
+    authSession = { user: { id: "user-1", email: "person@example.com" } };
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      createRequest(
+        "https://open-agents.dev/api/github/app/install?next=/settings/connections",
+      ),
+    );
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location");
+    expect(location).toBeTruthy();
+    const redirectUrl = new URL(location as string);
+    expect(redirectUrl.pathname).toBe("/deploy-your-own");
   });
 
   test("redirects to github install when linked but no installations", async () => {

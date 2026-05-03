@@ -38,10 +38,10 @@ mock.module("@/lib/db/installations", () => ({
 
 const routeModulePromise = import("./route");
 
-function createRequest(): NextRequest {
+function createRequest(url = "http://localhost/api/auth/info"): NextRequest {
   return {
-    nextUrl: new URL("http://localhost/api/auth/info"),
-    url: "http://localhost/api/auth/info",
+    nextUrl: new URL(url),
+    url,
   } as NextRequest;
 }
 
@@ -113,6 +113,21 @@ describe("GET /api/auth/info", () => {
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,
+    });
+  });
+
+  test("reports managed-template access denial for non-allowed hosted users", async () => {
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      createRequest("https://open-agents.dev/api/auth/info"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: undefined,
+      managedTemplateAccessDenied: true,
+      accessDeniedRedirect: "/deploy-your-own",
     });
   });
 });

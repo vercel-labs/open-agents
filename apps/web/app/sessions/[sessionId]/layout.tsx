@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { getChatSummariesBySessionId } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SessionLayoutShell } from "./session-layout-shell";
@@ -26,6 +27,7 @@ export default async function SessionLayout({
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   const sessionRecord = await sessionRecordPromise;
   if (!sessionRecord) {

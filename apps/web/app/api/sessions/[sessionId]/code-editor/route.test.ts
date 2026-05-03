@@ -234,7 +234,7 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
     expect(execDetachedMock).toHaveBeenCalledTimes(0);
   });
 
-  test("POST returns 403 for managed-template trial users", async () => {
+  test("POST returns 403 for hosted users from non-allowed domains", async () => {
     currentAuthSession = {
       authProvider: "vercel",
       user: {
@@ -244,7 +244,7 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
     };
     const { POST } = await routeModulePromise;
     const expectedError =
-      "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+      "This hosted deployment only supports approved email domains. Deploy your own copy to use Open Agents with your account.";
 
     const response = await POST(
       new Request(

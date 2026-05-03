@@ -159,7 +159,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]", () => 
     expect(deleteCalls).toHaveLength(0);
   });
 
-  test("returns 403 for managed-template trial users", async () => {
+  test("returns 403 for hosted users from non-allowed domains", async () => {
     currentAuthSession = {
       authProvider: "vercel",
       user: {
@@ -182,7 +182,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/messages/[messageId]", () => 
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment does not allow message deletion for non-Vercel trial accounts. Deploy your own copy for full controls.",
+      "This hosted deployment only supports approved email domains. Deploy your own copy to use Open Agents with your account.",
     );
     expect(deleteCalls).toHaveLength(0);
   });

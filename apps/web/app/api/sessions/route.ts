@@ -1,6 +1,5 @@
 import { nanoid } from "nanoid";
 import {
-  countSessionsByUserId,
   createSessionWithInitialChat,
   getArchivedSessionCountByUserId,
   getSessionsWithUnreadByUserId,
@@ -19,10 +18,9 @@ import {
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
-  isManagedTemplateTrialUser,
-  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT,
-  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR,
-} from "@/lib/managed-template-trial";
+  MANAGED_TEMPLATE_ACCESS_DENIED_ERROR,
+  shouldRedirectManagedTemplateUser,
+} from "@/lib/managed-template-access";
 import {
   isVercelInvalidTokenError,
   listMatchingVercelProjects,
@@ -175,14 +173,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (isManagedTemplateTrialUser(session, req.url)) {
-    const existingSessionCount = await countSessionsByUserId(session.user.id);
-    if (existingSessionCount >= MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT) {
-      return Response.json(
-        { error: MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR },
-        { status: 403 },
-      );
-    }
+  if (shouldRedirectManagedTemplateUser(session, req.url)) {
+    return Response.json(
+      { error: MANAGED_TEMPLATE_ACCESS_DENIED_ERROR },
+      { status: 403 },
+    );
   }
 
   let body: CreateSessionRequest;

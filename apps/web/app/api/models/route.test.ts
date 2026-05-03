@@ -133,7 +133,7 @@ describe("/api/models context window enrichment", () => {
     expect(requestedUrls).toContain("https://models.dev/api.json");
   });
 
-  test("hides Claude Opus models for managed trial users", async () => {
+  test("denies hosted users from non-allowed domains", async () => {
     gatewayModels.push(
       {
         id: "anthropic/claude-opus-4.6",
@@ -153,13 +153,12 @@ describe("/api/models context window enrichment", () => {
     const response = await GET(
       new Request("https://open-agents.dev/api/models"),
     );
-    const body = (await response.json()) as {
-      models: Array<{ id: string }>;
-    };
+    const body = (await response.json()) as { error: string };
 
-    expect(body.models.map((model) => model.id)).toEqual([
-      "anthropic/claude-haiku-4.5",
-    ]);
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "This hosted deployment only supports approved email domains. Deploy your own copy to use Open Agents with your account.",
+    );
   });
 
   test("keeps gateway context window when models.dev only has related ids", async () => {

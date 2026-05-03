@@ -15,8 +15,9 @@ function extractUsername(user: {
 
 export const getServerSession = cache(
   async (): Promise<Session | undefined> => {
+    const requestHeaders = await headers();
     const baSession = await auth.api.getSession({
-      headers: await headers(),
+      headers: requestHeaders,
     });
 
     if (!baSession?.user) {

@@ -14,11 +14,8 @@ import {
   getUserPreferences,
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
-import {
-  filterModelVariantsForSession,
-  isRestrictedModelIdForSession,
-  MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR,
-} from "@/lib/model-access";
+import { filterModelVariantsForSession } from "@/lib/model-access";
+import { getManagedTemplateAccessDeniedResponse } from "@/lib/managed-template-access";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 const PROVIDER_OPTIONS_MAX_BYTES = 16 * 1024;
@@ -48,6 +45,14 @@ export async function GET(req: Request) {
     return jsonError("Not authenticated", 401);
   }
 
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
+  }
+
   const preferences = await getUserPreferences(session.user.id);
   return Response.json({
     modelVariants: filterModelVariantsForSession(
@@ -64,6 +69,14 @@ export async function POST(req: Request) {
     return jsonError("Not authenticated", 401);
   }
 
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -74,12 +87,6 @@ export async function POST(req: Request) {
   const parsedBody = createModelVariantInputSchema.safeParse(body);
   if (!parsedBody.success) {
     return jsonError("Invalid model variant payload", 400);
-  }
-
-  if (
-    isRestrictedModelIdForSession(parsedBody.data.baseModelId, session, req.url)
-  ) {
-    return jsonError(MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR, 403);
   }
 
   if (isProviderOptionsTooLarge(parsedBody.data.providerOptions)) {
@@ -119,6 +126,14 @@ export async function PATCH(req: Request) {
     return jsonError("Not authenticated", 401);
   }
 
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -133,13 +148,6 @@ export async function PATCH(req: Request) {
 
   if (isBuiltInVariant(parsedBody.data.id)) {
     return jsonError("Built-in variants cannot be modified", 403);
-  }
-
-  if (
-    parsedBody.data.baseModelId &&
-    isRestrictedModelIdForSession(parsedBody.data.baseModelId, session, req.url)
-  ) {
-    return jsonError(MANAGED_TEMPLATE_TRIAL_MODEL_ACCESS_ERROR, 403);
   }
 
   try {
@@ -190,6 +198,14 @@ export async function DELETE(req: Request) {
   const session = await getServerSession();
   if (!session?.user) {
     return jsonError("Not authenticated", 401);
+  }
+
+  const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+    session,
+    req.url,
+  );
+  if (managedTemplateAccessDenied) {
+    return managedTemplateAccessDenied;
   }
 
   let body: unknown;

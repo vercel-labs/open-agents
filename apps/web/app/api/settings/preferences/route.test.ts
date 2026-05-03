@@ -88,7 +88,7 @@ describe("/api/settings/preferences", () => {
     expect(body.preferences.globalSkillRefs).toEqual([]);
   });
 
-  test("GET hides Opus defaults for managed trial users", async () => {
+  test("GET denies hosted users from non-allowed domains", async () => {
     const { GET } = await routeModulePromise;
 
     currentSession = {
@@ -110,13 +110,12 @@ describe("/api/settings/preferences", () => {
     const response = await GET(
       new Request("https://open-agents.dev/api/settings/preferences"),
     );
-    const body = (await response.json()) as {
-      preferences: typeof preferencesState;
-    };
+    const body = (await response.json()) as { error: string };
 
-    expect(body.preferences.defaultModelId).toBe("openai/gpt-5.4");
-    expect(body.preferences.defaultSubagentModelId).toBe("openai/gpt-5.4");
-    expect(body.preferences.modelVariants).toEqual([]);
+    expect(response.status).toBe(403);
+    expect(body.error).toBe(
+      "This hosted deployment only supports approved email domains. Deploy your own copy to use Open Agents with your account.",
+    );
   });
 
   test("PATCH rejects invalid sandbox types", async () => {

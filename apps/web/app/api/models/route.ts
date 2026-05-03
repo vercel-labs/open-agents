@@ -1,3 +1,4 @@
+import { getManagedTemplateAccessDeniedResponse } from "@/lib/managed-template-access";
 import { filterModelsForSession } from "@/lib/model-access";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -10,6 +11,14 @@ export async function GET(req: Request) {
       getServerSession(),
       fetchAvailableLanguageModelsWithContext(),
     ]);
+
+    const managedTemplateAccessDenied = getManagedTemplateAccessDeniedResponse(
+      session,
+      req.url,
+    );
+    if (managedTemplateAccessDenied) {
+      return managedTemplateAccessDenied;
+    }
 
     return Response.json(
       { models: filterModelsForSession(models, session, req.url) },

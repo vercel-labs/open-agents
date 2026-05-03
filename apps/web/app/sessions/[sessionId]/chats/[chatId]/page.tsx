@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/sessions";
 import { getSessionByIdCached } from "@/lib/db/sessions-cache";
 import { getUserPreferences } from "@/lib/db/user-preferences";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import {
   buildSessionChatModelOptions,
   withMissingModelOption,
@@ -20,10 +21,6 @@ import {
   sanitizeSelectedModelIdForSession,
   sanitizeUserPreferencesForSession,
 } from "@/lib/model-access";
-import {
-  isManagedTemplateTrialUser,
-  MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR,
-} from "@/lib/managed-template-trial";
 import { getAllVariants } from "@/lib/model-variants";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -103,6 +100,7 @@ export default async function SessionChatPage({
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   // Fetch session record
   const sessionRecord = await sessionRecordPromise;
@@ -164,12 +162,6 @@ export default async function SessionChatPage({
   const lastUserMessageSentAt = lastUserMessage
     ? lastUserMessage.createdAt.toISOString()
     : null;
-  const codeEditorDisabledReason = isManagedTemplateTrialUser(
-    session,
-    requestHost,
-  )
-    ? MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR
-    : null;
   const preferences = sanitizeUserPreferencesForSession(
     rawPreferences,
     session,
@@ -215,7 +207,7 @@ export default async function SessionChatPage({
           messageDurationMap={messageDurationMap}
           messageStartedAtMap={messageStartedAtMap}
           lastUserMessageSentAt={lastUserMessageSentAt}
-          codeEditorDisabledReason={codeEditorDisabledReason}
+          codeEditorDisabledReason={null}
         />
       </SessionChatProvider>
     </DiffsProvider>

@@ -8,6 +8,7 @@ import {
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getUserGitHubToken } from "@/lib/github/token";
+import { redirectManagedTemplateUser } from "@/lib/managed-template-page-access";
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -56,6 +57,7 @@ export default async function RepoPage({ params }: RepoPageProps) {
   if (!session?.user) {
     redirect("/");
   }
+  await redirectManagedTemplateUser(session);
 
   const preferencesPromise = getUserPreferences(session.user.id);
   const savedVercelProjectPromise = getVercelProjectLinkByRepo(

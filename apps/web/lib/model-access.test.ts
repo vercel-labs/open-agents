@@ -8,7 +8,7 @@ import {
   sanitizeUserPreferencesForSession,
 } from "./model-access";
 
-const managedTrialSession = {
+const hostedSession = {
   authProvider: "vercel" as const,
   user: {
     id: "user-1",
@@ -52,21 +52,24 @@ const basePreferences: UserPreferencesData = {
   enabledModelIds: ["anthropic/claude-opus-4.6", "openai/gpt-5"],
 };
 
-describe("model access gating", () => {
-  test("filters Claude Opus base models for managed trial users", () => {
+describe("model access helpers", () => {
+  test("leaves base models unchanged for hosted users", () => {
     const result = filterModelsForSession(
       [
         { id: "anthropic/claude-opus-4.6" },
         { id: "anthropic/claude-haiku-4.5" },
       ],
-      managedTrialSession,
+      hostedSession,
       requestUrl,
     );
 
-    expect(result).toEqual([{ id: "anthropic/claude-haiku-4.5" }]);
+    expect(result).toEqual([
+      { id: "anthropic/claude-opus-4.6" },
+      { id: "anthropic/claude-haiku-4.5" },
+    ]);
   });
 
-  test("filters Opus-backed variants for managed trial users", () => {
+  test("leaves model variants unchanged for hosted users", () => {
     const result = filterModelVariantsForSession(
       [
         userOpusVariant,
@@ -77,37 +80,35 @@ describe("model access gating", () => {
           providerOptions: {},
         },
       ],
-      managedTrialSession,
+      hostedSession,
       requestUrl,
     );
 
-    expect(result.map((variant) => variant.id)).toEqual(["variant:user-gpt"]);
+    expect(result.map((variant) => variant.id)).toEqual([
+      "variant:user-opus",
+      "variant:user-gpt",
+    ]);
   });
 
-  test("falls back to the app default when a managed trial user selects an Opus variant", () => {
+  test("keeps selected models unchanged for hosted users", () => {
     const result = sanitizeSelectedModelIdForSession(
       "variant:builtin:claude-opus-4.6-high",
       [userOpusVariant],
-      managedTrialSession,
+      hostedSession,
       requestUrl,
     );
 
-    expect(result).toBe("openai/gpt-5.4");
+    expect(result).toBe("variant:builtin:claude-opus-4.6-high");
   });
 
-  test("sanitizes managed trial preferences without mutating the database shape", () => {
+  test("returns preferences unchanged for hosted users", () => {
     const result = sanitizeUserPreferencesForSession(
       basePreferences,
-      managedTrialSession,
+      hostedSession,
       requestUrl,
     );
 
-    expect(result).toMatchObject({
-      defaultModelId: "openai/gpt-5.4",
-      defaultSubagentModelId: "openai/gpt-5.4",
-      modelVariants: [],
-      enabledModelIds: ["openai/gpt-5"],
-    });
+    expect(result).toEqual(basePreferences);
   });
 
   test("leaves Vercel users unchanged", () => {

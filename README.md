@@ -95,12 +95,14 @@ KV_URL=
 VERCEL_PROJECT_PRODUCTION_URL=
 NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=
 VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
+MANAGED_TEMPLATE_ALLOWED_EMAIL_DOMAINS=
 ELEVENLABS_API_KEY=
 ```
 
 - `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
 - `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.
 - `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: override the default sandbox snapshot.
+- `MANAGED_TEMPLATE_ALLOWED_EMAIL_DOMAINS`: comma-separated email domains allowed to use the hosted managed template. Defaults to `vercel.com`; set to `*` to allow every domain.
 - `ELEVENLABS_API_KEY`: voice transcription.
 
 ## Deploy your own copy on Vercel

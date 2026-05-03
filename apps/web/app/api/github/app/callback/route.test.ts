@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-let authSession: { user: { id: string } } | null;
+let authSession: { user: { id: string; email?: string } } | null;
 let cookieValues: Record<string, string>;
 let githubToken: string | null;
 let githubUsername: string | null;
@@ -104,5 +104,18 @@ describe("GET /api/github/app/callback", () => {
     const redirectUrl = getRedirectUrl(response);
     expect(redirectUrl.searchParams.get("github")).toBe("app_installed");
     expect(redirectUrl.searchParams.get("missing_installation_id")).toBeNull();
+  });
+
+  test("redirects hosted users from non-allowed domains to deploy-your-own", async () => {
+    authSession = { user: { id: "user-1", email: "person@example.com" } };
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      new Request("https://open-agents.dev/api/github/app/callback"),
+    );
+
+    expect(response.status).toBe(307);
+    const redirectUrl = getRedirectUrl(response);
+    expect(redirectUrl.pathname).toBe("/deploy-your-own");
   });
 });
