@@ -65,9 +65,7 @@ export default function DeployYourOwnPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-24 text-foreground">
       <div className="flex max-w-xl flex-col items-center text-center">
-        <p className="text-sm font-medium text-muted-foreground">
-          Open Agents
-        </p>
+        <p className="text-sm font-medium text-muted-foreground">Open Agents</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight">
           Deploy your own
         </h1>
