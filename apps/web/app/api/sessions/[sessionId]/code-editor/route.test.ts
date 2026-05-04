@@ -244,7 +244,7 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
     };
     const { POST } = await routeModulePromise;
     const expectedError =
-      "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+      "The code editor is disabled in the hosted demo. Deploy your own copy to unlock the full Open Agents template.";
 
     const response = await POST(
       new Request(

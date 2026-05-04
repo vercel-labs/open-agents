@@ -10,15 +10,15 @@ const LOCAL_DEVELOPMENT_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT = 5;
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT = 1;
 export const MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT_ERROR =
-  "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.";
+  "This hosted demo has a 5 message limit. Deploy your own copy to unlock the full Open Agents template.";
 export const MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR =
-  "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.";
+  "This hosted demo includes 1 trial session. Deploy your own copy to unlock the full Open Agents template.";
 export const MANAGED_TEMPLATE_TRIAL_DELETE_MESSAGE_ERROR =
-  "This hosted deployment does not allow message deletion for non-Vercel trial accounts. Deploy your own copy for full controls.";
+  "Message deletion is disabled in the hosted demo. Deploy your own copy to unlock full controls.";
 export const MANAGED_TEMPLATE_TRIAL_CODE_EDITOR_ERROR =
-  "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+  "The code editor is disabled in the hosted demo. Deploy your own copy to unlock the full Open Agents template.";
 export const MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR =
-  "This hosted deployment does not allow GitHub-backed sessions for non-Vercel trial accounts. Start a new chat without a repository.";
+  "GitHub-backed sessions are disabled in the hosted demo. Deploy your own copy to unlock repository support, or start a new chat without a repository.";
 
 function normalizeHost(value?: string | URL) {
   const rawValue =

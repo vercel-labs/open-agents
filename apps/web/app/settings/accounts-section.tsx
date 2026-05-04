@@ -178,7 +178,7 @@ function useGitHubReturnToast() {
       case "trial_blocked":
         toast.error("GitHub connections are disabled", {
           description:
-            "Hosted trial accounts can start chats without connecting GitHub.",
+            "In the hosted demo, you can start chats without connecting GitHub.",
         });
         break;
       case "invalid_state":
@@ -568,7 +568,7 @@ function NotConnectedState({
     <div className="flex items-center justify-between">
       <p className="text-sm text-muted-foreground">
         {connectionDisabled
-          ? "GitHub connections are disabled for hosted trial accounts"
+          ? "GitHub connections are disabled in the hosted demo. Deploy your own copy to connect repositories."
           : "No GitHub account connected"}
       </p>
       <Button

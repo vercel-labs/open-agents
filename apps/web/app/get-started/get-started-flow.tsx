@@ -298,7 +298,7 @@ function GitHubConnectStep({
     return (
       <div className="space-y-3">
         <p className="text-xs text-zinc-500">
-          Hosted trial accounts can start chats without connecting GitHub.
+          In the hosted demo, you can start chats without connecting GitHub.
         </p>
         <Button
           size="sm"

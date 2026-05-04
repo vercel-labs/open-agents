@@ -347,7 +347,7 @@ describe("/api/chat route", () => {
     );
   });
 
-  test("blocks a sixth message for non-Vercel trial users on the managed deployment", async () => {
+  test("blocks a sixth message for managed template trial users", async () => {
     const { POST } = await routeModulePromise;
     currentAuthSession = {
       authProvider: "vercel",
@@ -378,7 +378,7 @@ describe("/api/chat route", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment has a 5 message limit. Deploy your own copy for no limit at open-agents.dev/deploy-your-own.",
+      "This hosted demo has a 5 message limit. Deploy your own copy to unlock the full Open Agents template.",
     );
     expect(startCalls).toHaveLength(0);
   });

@@ -305,7 +305,7 @@ export function SessionStarter({
         {mode === "empty" && (
           <p className="text-center text-sm text-muted-foreground dark:text-neutral-500">
             {isTrialUser
-              ? "Hosted trial accounts can start chats without connecting GitHub."
+              ? "In the hosted demo, you can start chats without connecting GitHub."
               : "Start a new chat -- no repository required."}
           </p>
         )}

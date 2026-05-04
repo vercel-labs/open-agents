@@ -146,7 +146,7 @@ describe("GET /api/auth/info", () => {
     });
   });
 
-  test("reports local development non-Vercel users as managed template trial users", async () => {
+  test("reports local development managed template trial users", async () => {
     Object.assign(process.env, { NODE_ENV: "development" });
     const { GET } = await routeModulePromise;
 

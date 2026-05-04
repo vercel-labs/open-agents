@@ -101,7 +101,7 @@ const mergeMethodDescriptions: Record<MergeMethod, string> = {
 };
 
 const createRepoDisabledReason =
-  "Creating repositories from Open Harness is temporarily disabled. Create the repository on GitHub first, then connect it to a session.";
+  "Creating repositories from Open Agents is temporarily disabled. Create the repository on GitHub first, then connect it to a session.";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */

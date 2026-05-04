@@ -136,7 +136,7 @@ describe("/api/sessions POST vercel project linking", () => {
     upsertCalls.length = 0;
   });
 
-  test("blocks additional sessions for non-Vercel trial users on the managed deployment", async () => {
+  test("blocks additional sessions for managed template trial users", async () => {
     const { POST } = await routeModulePromise;
 
     currentSession = {
@@ -165,7 +165,7 @@ describe("/api/sessions POST vercel project linking", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.",
+      "This hosted demo includes 1 trial session. Deploy your own copy to unlock the full Open Agents template.",
     );
     expect(createCalls).toHaveLength(0);
   });
@@ -196,7 +196,7 @@ describe("/api/sessions POST vercel project linking", () => {
 
     expect(response.status).toBe(403);
     expect(body.error).toBe(
-      "This hosted deployment does not allow GitHub-backed sessions for non-Vercel trial accounts. Start a new chat without a repository.",
+      "GitHub-backed sessions are disabled in the hosted demo. Deploy your own copy to unlock repository support, or start a new chat without a repository.",
     );
     expect(createCalls).toHaveLength(0);
   });

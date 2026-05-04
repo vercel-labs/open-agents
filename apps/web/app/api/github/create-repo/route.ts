@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   return Response.json(
     {
       error:
-        "Creating repositories from Open Harness is temporarily disabled. Create the repository on GitHub first, then connect it to a session.",
+        "Creating repositories from Open Agents is temporarily disabled. Create the repository on GitHub first, then connect it to a session.",
     },
     { status: 501 },
   );
