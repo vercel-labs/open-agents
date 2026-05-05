@@ -23,7 +23,6 @@ function getSharedRedisClient(): Redis | null {
   sharedRedisClient = new Redis({
     ...(getRedisConnectionOptions(redisUrl) as RedisOptions),
     connectTimeout: 500,
-    enableOfflineQueue: false,
     maxRetriesPerRequest: 1,
   });
   sharedRedisClient.on("error", (error) => {
@@ -60,10 +59,15 @@ async function checkRedisRateLimit(
     .pexpire(key, options.windowMs, "NX")
     .exec()
     .then((results) => {
-      const [incrementResult] = results ?? [];
+      const [incrementResult, expireResult] = results ?? [];
       const [error, value] = incrementResult ?? [];
       if (error) {
         throw error;
+      }
+
+      const [expireError] = expireResult ?? [];
+      if (expireError) {
+        throw expireError;
       }
 
       const count = typeof value === "number" ? value : Number(value);
