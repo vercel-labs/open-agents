@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 type RedisOptions = Record<string, unknown>;
 type RedisTransactionResult = [Error | null, unknown];
+type RedisExecResults = RedisTransactionResult[] | null;
 
 const redisInstances: MockRedis[] = [];
 const redisState: {
-  execResults: RedisTransactionResult[] | null;
+  execResults: RedisExecResults | Promise<RedisExecResults>;
   ttl: number;
 } = {
   execResults: [
@@ -45,6 +46,7 @@ mock.module("ioredis", () => ({
 const originalRedisUrl = process.env.REDIS_URL;
 const originalKvUrl = process.env.KV_URL;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalRateLimitTimeoutMs = process.env.RATE_LIMIT_TIMEOUT_MS;
 const nodeEnvKey = "NODE_ENV" as keyof NodeJS.ProcessEnv;
 let moduleVersion = 0;
 
@@ -73,6 +75,12 @@ afterEach(() => {
     delete process.env.KV_URL;
   } else {
     process.env.KV_URL = originalKvUrl;
+  }
+
+  if (originalRateLimitTimeoutMs === undefined) {
+    delete process.env.RATE_LIMIT_TIMEOUT_MS;
+  } else {
+    process.env.RATE_LIMIT_TIMEOUT_MS = originalRateLimitTimeoutMs;
   }
 
   process.env[nodeEnvKey] = originalNodeEnv;
@@ -140,6 +148,50 @@ describe("checkRateLimit", () => {
         [null, 1],
         [new Error("ERR syntax error"), null],
       ];
+      const { checkRateLimit } = await loadRateLimitModule();
+
+      const response = await checkRateLimit({
+        key: `test:${crypto.randomUUID()}`,
+        limit: 2,
+        windowMs: 60_000,
+      });
+
+      expect(response?.status).toBe(503);
+      expect(response?.headers.get("Retry-After")).toBe("30");
+      expect(redisInstances[0]?.disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  test("returns a retry response when the Redis count exceeds the limit", async () => {
+    process.env.REDIS_URL = "redis://localhost:6379";
+    process.env[nodeEnvKey] = "production";
+    redisState.execResults = [
+      [null, 3],
+      [null, 0],
+    ];
+    redisState.ttl = 12_345;
+    const { checkRateLimit } = await loadRateLimitModule();
+
+    const response = await checkRateLimit({
+      key: `test:${crypto.randomUUID()}`,
+      limit: 2,
+      windowMs: 60_000,
+    });
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("Retry-After")).toBe("13");
+  });
+
+  test("fails closed when the Redis check times out", async () => {
+    const originalConsoleError = console.error;
+    console.error = mock(() => undefined) as unknown as typeof console.error;
+    try {
+      process.env.REDIS_URL = "redis://localhost:6379";
+      process.env.RATE_LIMIT_TIMEOUT_MS = "1";
+      process.env[nodeEnvKey] = "production";
+      redisState.execResults = new Promise<RedisExecResults>(() => undefined);
       const { checkRateLimit } = await loadRateLimitModule();
 
       const response = await checkRateLimit({

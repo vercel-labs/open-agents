@@ -7,7 +7,43 @@ type RateLimitOptions = {
   windowMs: number;
 };
 
+const DEFAULT_RATE_LIMIT_TIMEOUT_MS = 1000;
+
 let sharedRedisClient: Redis | null | undefined;
+
+function getRateLimitTimeoutMs(): number {
+  const configuredTimeoutMs = process.env.RATE_LIMIT_TIMEOUT_MS;
+  if (!configuredTimeoutMs) {
+    return DEFAULT_RATE_LIMIT_TIMEOUT_MS;
+  }
+
+  const timeoutMs = Number.parseInt(configuredTimeoutMs, 10);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return DEFAULT_RATE_LIMIT_TIMEOUT_MS;
+  }
+
+  return timeoutMs;
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(
+        new Error(`Redis rate limit check timed out after ${timeoutMs}ms`),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  });
+}
 
 function getSharedRedisClient(): Redis | null {
   if (sharedRedisClient !== undefined) {
@@ -106,7 +142,10 @@ export async function checkRateLimit(
   }
 
   try {
-    return await checkRedisRateLimit(redisClient, options);
+    return await withTimeout(
+      checkRedisRateLimit(redisClient, options),
+      getRateLimitTimeoutMs(),
+    );
   } catch (error) {
     resetRedisClient();
     console.error("[rate-limit] Redis check failed:", error);
