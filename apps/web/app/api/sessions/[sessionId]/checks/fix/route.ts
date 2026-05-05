@@ -200,7 +200,7 @@ export async function POST(req: Request, context: RouteContext) {
     return sessionContext.response;
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["fix-checks", authResult.userId, sessionId]),
     limit: 5,
     windowMs: 60_000,

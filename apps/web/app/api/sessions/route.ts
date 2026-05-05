@@ -16,6 +16,7 @@ import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
+  parseGitHubHttpsUrl,
 } from "@/lib/github/urls";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getRandomCityName } from "@/lib/random-city";
@@ -183,7 +184,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["sessions-create", session.user.id]),
     limit: 10,
     windowMs: 60_000,
@@ -264,31 +265,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "Invalid clone URL" }, { status: 400 });
     }
 
-    let parsedCloneUrl: URL;
-    try {
-      parsedCloneUrl = new URL(body.cloneUrl);
-    } catch {
-      return Response.json({ error: "Invalid clone URL" }, { status: 400 });
-    }
-
+    const parsedCloneUrl = parseGitHubHttpsUrl(body.cloneUrl);
     if (
-      parsedCloneUrl.protocol !== "https:" ||
-      parsedCloneUrl.hostname.toLowerCase() !== "github.com"
-    ) {
-      return Response.json({ error: "Invalid clone URL" }, { status: 400 });
-    }
-
-    const clonePathParts = parsedCloneUrl.pathname
-      .replace(/^\/+/, "")
-      .split("/");
-    const [cloneOwner, cloneRepoWithSuffix] = clonePathParts;
-    const cloneRepo = cloneRepoWithSuffix?.replace(/\.git$/, "");
-    if (
-      clonePathParts.length !== 2 ||
-      !cloneOwner ||
-      !cloneRepo ||
-      cloneOwner !== body.repoOwner ||
-      cloneRepo !== body.repoName
+      !parsedCloneUrl ||
+      parsedCloneUrl.owner !== body.repoOwner ||
+      parsedCloneUrl.repo !== body.repoName
     ) {
       return Response.json(
         { error: "Clone URL must match repository owner and name" },

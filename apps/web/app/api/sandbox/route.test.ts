@@ -84,9 +84,18 @@ mock.module("@/lib/github/users", () => ({
   }),
 }));
 
-mock.module("@/lib/github/client", () => ({
-  parseGitHubUrl: (repoUrl: string) => {
-    const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(\.git)?$/);
+mock.module("@/lib/github/urls", () => ({
+  parseGitHubHttpsUrl: (repoUrl: string) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(repoUrl);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
+      return null;
+    }
+    const match = parsed.pathname.match(/^\/([^/]+)\/([^/]+?)(\.git)?$/);
     if (!match?.[1] || !match[2]) {
       return null;
     }
@@ -329,6 +338,28 @@ describe("/api/sandbox lifecycle kicks", () => {
       },
     });
     expect(connectConfigs[0]?.state.source).not.toHaveProperty("token");
+  });
+
+  test("rejects repo URLs that only contain github.com in the path", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      new Request("http://localhost/api/sandbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "session-1",
+          repoUrl: "https://attacker.example/github.com/acme/private-repo",
+          branch: "main",
+          sandboxType: "vercel",
+        }),
+      }),
+    );
+
+    const payload = (await response.json()) as { error: string };
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe("Invalid GitHub repository URL");
+    expect(connectConfigs).toHaveLength(0);
   });
 
   test("new vercel sandbox does not sync linked Development env vars while code is commented out", async () => {

@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["sandbox-extend", authResult.userId]),
     limit: 3,
     windowMs: 60_000,

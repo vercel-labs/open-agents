@@ -7,7 +7,7 @@ import {
 import { checkBotProtection } from "@/lib/botid";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import { updateSession } from "@/lib/db/sessions";
-import { parseGitHubUrl } from "@/lib/github/client";
+import { parseGitHubHttpsUrl } from "@/lib/github/urls";
 import {
   verifyRepoAccess,
   getRepoAccessErrorMessage,
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["sandbox-create", session.user.id]),
     limit: 20,
     windowMs: 60_000,
@@ -157,7 +157,7 @@ export async function POST(req: Request) {
   let setupToken: ScopedInstallationToken | undefined;
 
   if (repoUrl) {
-    const parsedRepo = parseGitHubUrl(repoUrl);
+    const parsedRepo = parseGitHubHttpsUrl(repoUrl);
     if (!parsedRepo) {
       return Response.json(
         { error: "Invalid GitHub repository URL" },
@@ -297,7 +297,7 @@ export async function DELETE(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["sandbox-delete", authResult.userId]),
     limit: 10,
     windowMs: 60_000,

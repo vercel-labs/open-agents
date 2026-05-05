@@ -239,18 +239,12 @@ function extractVercelDeploymentUrl(commentBody: string): string | null {
 }
 
 function isTrustedVercelCommentAuthor(comment: {
-  author_association?: string | null;
   user?: { login?: string | null; type?: string | null } | null;
 }): boolean {
-  const association = comment.author_association;
   const login = comment.user?.login?.toLowerCase() ?? "";
+  const type = comment.user?.type;
 
-  return (
-    association === "OWNER" ||
-    association === "MEMBER" ||
-    login === "vercel[bot]" ||
-    login.endsWith("[bot]")
-  );
+  return login === "vercel[bot]" && type === "Bot";
 }
 
 const SUCCESSFUL_CHECK_CONCLUSIONS = new Set(["success", "neutral", "skipped"]);

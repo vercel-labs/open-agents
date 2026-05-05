@@ -407,9 +407,13 @@ describe("tools execute behavior", () => {
     expect(commandNeedsApproval("bun install")).toBe(false);
     expect(commandNeedsApproval("custom-command --help")).toBe(false);
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
-    expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
+    expect(commandNeedsApproval("rm -fr tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -r -f tmp")).toBe(true);
+    expect(commandNeedsApproval("find . -delete")).toBe(true);
     expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
     expect(commandNeedsApproval("cat .env.local")).toBe(true);
+    expect(commandNeedsApproval("cat .e''nv.local")).toBe(true);
+    expect(commandNeedsApproval("cat .e$(printf nv).local")).toBe(true);
     expect(commandNeedsApproval("grep API_KEY apps/web/.env.example")).toBe(
       true,
     );
@@ -470,6 +474,17 @@ describe("tools execute behavior", () => {
       workingDirectory: "/repo",
       exec: async (command: string) => {
         executedCommand = command;
+
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "93.184.216.34\n",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
         return {
           success: false,
           exitCode: 23,
@@ -503,6 +518,38 @@ describe("tools execute behavior", () => {
         ? (result.body as string)
         : "";
     expect(body.length).toBe(MAX_BODY_LENGTH);
+  });
+
+  test("webFetchTool rejects public hostnames that resolve to private addresses", async () => {
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async (command: string) => {
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "127.0.0.1\n",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
+        throw new Error("curl should not run for private DNS results");
+      },
+    };
+
+    const result = await webFetchTool.execute?.(
+      {
+        url: "https://internal.example",
+        method: "GET",
+      },
+      executionOptions(createContext(sandbox)),
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Fetch failed: URL resolves to a private or internal host",
+    });
   });
 
   test("webFetchTool rejects private and internal URL hosts", () => {

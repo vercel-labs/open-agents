@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["transcribe", session.user.id]),
     limit: 5,
     windowMs: 60_000,

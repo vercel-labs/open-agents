@@ -183,6 +183,34 @@ export function isAllowedWebUrl(value: string): boolean {
   return !isPrivateHost(parsed.hostname);
 }
 
+async function resolvesToPrivateHost(params: {
+  hostname: string;
+  sandbox: Awaited<ReturnType<typeof getSandbox>>;
+  workingDirectory: string;
+  abortSignal?: AbortSignal;
+}): Promise<boolean> {
+  if (isPrivateHost(params.hostname)) {
+    return true;
+  }
+
+  const result = await params.sandbox.exec(
+    `getent ahosts ${shellEscape(params.hostname)} | awk '{print $1}' | sort -u`,
+    params.workingDirectory,
+    5000,
+    { signal: params.abortSignal },
+  );
+
+  if (!result.success) {
+    return false;
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((address) => address.trim())
+    .filter(Boolean)
+    .some(isPrivateHost);
+}
+
 const fetchInputSchema = z.object({
   url: z
     .string()
@@ -236,6 +264,21 @@ EXAMPLES:
   ) => {
     const sandbox = await getSandbox(experimental_context, "web_fetch");
     const workingDirectory = sandbox.workingDirectory;
+
+    const parsedUrl = new URL(url);
+    if (
+      await resolvesToPrivateHost({
+        hostname: parsedUrl.hostname,
+        sandbox,
+        workingDirectory,
+        abortSignal,
+      })
+    ) {
+      return {
+        success: false,
+        error: "Fetch failed: URL resolves to a private or internal host",
+      };
+    }
 
     const args: string[] = [
       "curl",

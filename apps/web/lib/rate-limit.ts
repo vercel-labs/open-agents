@@ -1,7 +1,5 @@
-type RateLimitBucket = {
-  count: number;
-  resetAt: number;
-};
+import Redis, { type RedisOptions } from "ioredis";
+import { getRedisConnectionOptions, getRedisUrl } from "./redis";
 
 type RateLimitOptions = {
   key: string;
@@ -9,37 +7,93 @@ type RateLimitOptions = {
   windowMs: number;
 };
 
-const buckets = new Map<string, RateLimitBucket>();
+let sharedRedisClient: Redis | null | undefined;
 
-export function checkRateLimit(options: RateLimitOptions): Response | null {
-  const now = Date.now();
-  const existing = buckets.get(options.key);
+function getSharedRedisClient(): Redis | null {
+  if (sharedRedisClient !== undefined) {
+    return sharedRedisClient;
+  }
 
-  if (!existing || existing.resetAt <= now) {
-    buckets.set(options.key, {
-      count: 1,
-      resetAt: now + options.windowMs,
-    });
+  const redisUrl = getRedisUrl();
+  if (!redisUrl) {
+    sharedRedisClient = null;
+    return sharedRedisClient;
+  }
+
+  sharedRedisClient = new Redis({
+    ...(getRedisConnectionOptions(redisUrl) as RedisOptions),
+    connectTimeout: 500,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+  });
+  sharedRedisClient.on("error", (error) => {
+    console.error("[redis] rate-limit error:", error);
+  });
+  return sharedRedisClient;
+}
+
+function resetRedisClient(): void {
+  sharedRedisClient?.disconnect();
+  sharedRedisClient = undefined;
+}
+
+function rateLimitResponse(retryAfterMs: number): Response {
+  const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+
+  return Response.json(
+    { error: "Too many requests" },
+    {
+      status: 429,
+      headers: { "Retry-After": String(retryAfterSeconds) },
+    },
+  );
+}
+
+async function checkRedisRateLimit(
+  client: Redis,
+  options: RateLimitOptions,
+): Promise<Response | null> {
+  const key = `rate-limit:${options.key}`;
+  const count = await client.incr(key);
+
+  if (count === 1) {
+    await client.pexpire(key, options.windowMs);
+  }
+
+  if (count <= options.limit) {
     return null;
   }
 
-  if (existing.count >= options.limit) {
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((existing.resetAt - now) / 1000),
-    );
+  const ttl = await client.pttl(key);
+  return rateLimitResponse(ttl > 0 ? ttl : options.windowMs);
+}
 
-    return Response.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-        headers: { "Retry-After": String(retryAfterSeconds) },
-      },
-    );
+function rateLimitUnavailableResponse(): Response | null {
+  if (process.env.NODE_ENV !== "production") {
+    return null;
   }
 
-  existing.count += 1;
-  return null;
+  return Response.json(
+    { error: "Rate limit unavailable" },
+    { status: 503, headers: { "Retry-After": "30" } },
+  );
+}
+
+export async function checkRateLimit(
+  options: RateLimitOptions,
+): Promise<Response | null> {
+  const redisClient = getSharedRedisClient();
+  if (!redisClient) {
+    return rateLimitUnavailableResponse();
+  }
+
+  try {
+    return await checkRedisRateLimit(redisClient, options);
+  } catch (error) {
+    resetRedisClient();
+    console.error("[rate-limit] Redis check failed:", error);
+    return rateLimitUnavailableResponse();
+  }
 }
 
 export function rateLimitKey(parts: (number | string | null | undefined)[]) {

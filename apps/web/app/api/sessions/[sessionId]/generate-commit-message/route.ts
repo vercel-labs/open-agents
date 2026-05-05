@@ -22,7 +22,7 @@ export async function POST(
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkRateLimit({
     key: rateLimitKey(["generate-commit-message", session.user.id]),
     limit: 10,
     windowMs: 60_000,

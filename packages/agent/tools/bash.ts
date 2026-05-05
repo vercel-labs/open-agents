@@ -30,13 +30,16 @@ interface ToolOptions {
 
 // Commands that should require approval
 const DANGEROUS_COMMAND_PATTERNS = [
-  /\brm\s+(?:-[A-Za-z]*r[A-Za-z]*f|-{1,2}recursive\b.*-{1,2}force\b|-{1,2}force\b.*-{1,2}recursive\b)/,
+  /\brm\s+(?:[^\n;&|]*\s)?(?:-[A-Za-z]*r[A-Za-z]*f|-[A-Za-z]*f[A-Za-z]*r|-r\s+-f|-f\s+-r|-{1,2}recursive\b.*-{1,2}force\b|-{1,2}force\b.*-{1,2}recursive\b)/,
+  /\bfind\b[^\n;&|]*(?:-delete|-exec\s+rm\b)/,
   /\b(?:shred|mkfs|dd)\b/,
   /:\(\)\s*\{\s*:\|:/,
 ];
 
 const SENSITIVE_FILE_PATTERNS = [
   /\.\s*env/i,
+  /\.e(?:['"]{2}|\\|\$\{[^}]*\}|\$\([^)]*\))?nv/i,
+  /\.e\$\([^)]*nv[^)]*\)/i,
   /\$\([^)]*env[^)]*\)/i,
   /`[^`]*env[^`]*`/i,
   /\b(?:aws\/credentials|id_rsa|id_ed25519|\.ssh|proc\/self\/environ)\b/i,
