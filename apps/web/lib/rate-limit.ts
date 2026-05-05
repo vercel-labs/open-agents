@@ -54,11 +54,25 @@ async function checkRedisRateLimit(
   options: RateLimitOptions,
 ): Promise<Response | null> {
   const key = `rate-limit:${options.key}`;
-  const count = await client.incr(key);
+  const count = await client
+    .multi()
+    .incr(key)
+    .pexpire(key, options.windowMs, "NX")
+    .exec()
+    .then((results) => {
+      const [incrementResult] = results ?? [];
+      const [error, value] = incrementResult ?? [];
+      if (error) {
+        throw error;
+      }
 
-  if (count === 1) {
-    await client.pexpire(key, options.windowMs);
-  }
+      const count = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(count)) {
+        throw new Error("Redis rate limit increment returned an invalid count");
+      }
+
+      return count;
+    });
 
   if (count <= options.limit) {
     return null;

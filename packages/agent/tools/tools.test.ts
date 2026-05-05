@@ -552,6 +552,38 @@ describe("tools execute behavior", () => {
     });
   });
 
+  test("webFetchTool rejects when DNS resolution fails", async () => {
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async (command: string) => {
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: false,
+            exitCode: 2,
+            stdout: "",
+            stderr: "resolution failed",
+            truncated: false,
+          };
+        }
+
+        throw new Error("curl should not run when DNS validation fails");
+      },
+    };
+
+    const result = await webFetchTool.execute?.(
+      {
+        url: "https://unresolved.example",
+        method: "GET",
+      },
+      executionOptions(createContext(sandbox)),
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Fetch failed: URL resolves to a private or internal host",
+    });
+  });
+
   test("webFetchTool rejects private and internal URL hosts", () => {
     const blockedUrls = [
       "http://localhost",

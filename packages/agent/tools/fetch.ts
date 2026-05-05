@@ -201,7 +201,7 @@ async function resolvesToPrivateHost(params: {
   );
 
   if (!result.success) {
-    return false;
+    return true;
   }
 
   return result.stdout
