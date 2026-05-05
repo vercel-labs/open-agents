@@ -238,6 +238,21 @@ function extractVercelDeploymentUrl(commentBody: string): string | null {
   return extractVercelDeploymentUrlFromMetadata(commentBody);
 }
 
+function isTrustedVercelCommentAuthor(comment: {
+  author_association?: string | null;
+  user?: { login?: string | null; type?: string | null } | null;
+}): boolean {
+  const association = comment.author_association;
+  const login = comment.user?.login?.toLowerCase() ?? "";
+
+  return (
+    association === "OWNER" ||
+    association === "MEMBER" ||
+    login === "vercel[bot]" ||
+    login.endsWith("[bot]")
+  );
+}
+
 const SUCCESSFUL_CHECK_CONCLUSIONS = new Set(["success", "neutral", "skipped"]);
 
 const FAILED_CHECK_CONCLUSIONS = new Set([
@@ -1358,6 +1373,10 @@ export async function findDeploymentUrl(params: {
     for (let i = response.data.length - 1; i >= 0; i--) {
       const comment = response.data[i];
       if (!comment.body) {
+        continue;
+      }
+
+      if (!isTrustedVercelCommentAuthor(comment)) {
         continue;
       }
 

@@ -29,7 +29,18 @@ interface ToolOptions {
 }
 
 // Commands that should require approval
-const DANGEROUS_COMMAND_PATTERNS = [/\brm\s+-rf\b/];
+const DANGEROUS_COMMAND_PATTERNS = [
+  /\brm\s+(?:-[A-Za-z]*r[A-Za-z]*f|-{1,2}recursive\b.*-{1,2}force\b|-{1,2}force\b.*-{1,2}recursive\b)/,
+  /\b(?:shred|mkfs|dd)\b/,
+  /:\(\)\s*\{\s*:\|:/,
+];
+
+const SENSITIVE_FILE_PATTERNS = [
+  /\.\s*env/i,
+  /\$\([^)]*env[^)]*\)/i,
+  /`[^`]*env[^`]*`/i,
+  /\b(?:aws\/credentials|id_rsa|id_ed25519|\.ssh|proc\/self\/environ)\b/i,
+];
 
 /**
  * Check if a command should require approval.
@@ -45,7 +56,7 @@ export function commandNeedsApproval(command: string): boolean {
     }
   }
 
-  return lowerCommand.includes(".env");
+  return SENSITIVE_FILE_PATTERNS.some((pattern) => pattern.test(lowerCommand));
 }
 
 export const bashTool = (options?: ToolOptions) =>

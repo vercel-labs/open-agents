@@ -1,6 +1,7 @@
 import { checkBotProtection } from "@/lib/botid";
 import { gateway, generateText } from "ai";
 import { z } from "zod";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 /**
@@ -48,6 +49,15 @@ export async function POST(req: Request) {
   const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["generate-title", session.user.id]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: unknown;

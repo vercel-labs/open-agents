@@ -4,19 +4,8 @@ import { syncUserInstallations } from "@/lib/github/sync";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getGitHubUsername } from "@/lib/github/users";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
+import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
-  if (!rawRedirectTo) {
-    return "/get-started";
-  }
-
-  if (!rawRedirectTo.startsWith("/") || rawRedirectTo.startsWith("//")) {
-    return "/get-started";
-  }
-
-  return rawRedirectTo;
-}
 
 function parseInstallationId(value: string | null): number | null {
   if (!value) {
@@ -45,8 +34,10 @@ function redirectAndClearCookies(url: string | URL): NextResponse {
  */
 export async function GET(req: Request): Promise<Response> {
   const cookieStore = await cookies();
-  const redirectTo = sanitizeRedirectTo(
+  const redirectTo = sanitizeInternalRedirect(
     cookieStore.get("github_app_install_redirect_to")?.value,
+    "/get-started",
+    req.url,
   );
 
   const session = await getServerSession();

@@ -1,6 +1,7 @@
 import { checkBotProtection } from "@/lib/botid";
 import { experimental_transcribe as transcribe } from "ai";
 import { elevenlabs } from "@ai-sdk/elevenlabs";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface TranscribeRequestBody {
@@ -17,6 +18,15 @@ export async function POST(req: Request) {
   const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["transcribe", session.user.id]),
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: TranscribeRequestBody;
@@ -66,9 +76,6 @@ export async function POST(req: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Transcription failed:", message);
-    return Response.json(
-      { error: "Transcription failed", details: message },
-      { status: 500 },
-    );
+    return Response.json({ error: "Transcription failed" }, { status: 500 });
   }
 }

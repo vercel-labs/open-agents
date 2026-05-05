@@ -67,7 +67,7 @@ async function revokeVercelToken(token: string): Promise<boolean> {
   if (!clientId || !clientSecret) return false;
 
   try {
-    await fetch(VERCEL_REVOKE_URL, {
+    const res = await fetch(VERCEL_REVOKE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -76,7 +76,7 @@ async function revokeVercelToken(token: string): Promise<boolean> {
         client_secret: clientSecret,
       }),
     });
-    return true;
+    return res.ok;
   } catch (err) {
     console.error("Vercel token revocation failed:", err);
     return false;
@@ -189,17 +189,18 @@ export async function revokeAllVercelTokens(): Promise<{
     let revokedTokens = 0;
     const revokeResults = await Promise.allSettled(
       vercelAccounts.map(async (acct) => {
-        try {
-          const result = await auth.api.getAccessToken({
-            body: { providerId: "vercel", userId: acct.userId },
-          });
-          if (result?.accessToken) {
-            const ok = await revokeVercelToken(result.accessToken);
-            if (ok) revokedTokens++;
+        const result = await auth.api.getAccessToken({
+          body: { providerId: "vercel", userId: acct.userId },
+        });
+        if (result?.accessToken) {
+          const ok = await revokeVercelToken(result.accessToken);
+          if (ok) {
+            revokedTokens++;
+            return;
           }
-        } catch {
-          // Token may already be expired/invalid — that's fine
         }
+
+        throw new Error("Token revocation failed");
       }),
     );
 

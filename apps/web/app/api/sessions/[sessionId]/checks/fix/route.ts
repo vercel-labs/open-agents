@@ -4,6 +4,7 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import type { CheckRun } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { Octokit } from "@octokit/rest";
 import { gateway, generateText } from "ai";
 
@@ -197,6 +198,15 @@ export async function POST(req: Request, context: RouteContext) {
   });
   if (!sessionContext.ok) {
     return sessionContext.response;
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["fix-checks", authResult.userId, sessionId]),
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   const { sessionRecord } = sessionContext;

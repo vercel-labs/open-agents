@@ -2,6 +2,7 @@ import { connectSandbox } from "@open-agents/sandbox";
 import { gateway, generateText } from "ai";
 import { checkBotProtection } from "@/lib/botid";
 import { getSessionById } from "@/lib/db/sessions";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -19,6 +20,15 @@ export async function POST(
   const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["generate-commit-message", session.user.id]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   const { sessionId } = await params;

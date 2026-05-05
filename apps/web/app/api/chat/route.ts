@@ -8,7 +8,7 @@ import {
   countUserMessagesByUserId,
   createChatMessageIfNotExists,
   getChatById,
-  getChatMessageById,
+  getChatMessageByIdForChat,
   isFirstChatMessage,
   touchChat,
   updateChat,
@@ -91,7 +91,10 @@ export async function POST(req: Request) {
   if (isManagedTemplateTrialUser(session, req.url)) {
     const latestUserMessage = getLatestUserMessage(messages);
     if (latestUserMessage) {
-      const existingMessage = await getChatMessageById(latestUserMessage.id);
+      const existingMessage = await getChatMessageByIdForChat(
+        latestUserMessage.id,
+        chatId,
+      );
       if (!existingMessage) {
         const userMessageCount = await countUserMessagesByUserId(userId);
         if (userMessageCount >= MANAGED_TEMPLATE_TRIAL_MESSAGE_LIMIT) {

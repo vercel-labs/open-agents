@@ -124,7 +124,7 @@ const convertMessages = async (
           const { filename, content } = part.data;
           return {
             type: "text",
-            text: `<snippet filename="${filename}">\n${content}\n</snippet>`,
+            text: JSON.stringify({ type: "snippet", filename, content }),
           };
         }
         return undefined;

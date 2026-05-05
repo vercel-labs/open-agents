@@ -306,6 +306,7 @@ describe("/api/sandbox lifecycle kicks", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sessionId: "session-1",
           repoUrl: "https://github.com/acme/private-repo",
           branch: "main",
           sandboxType: "vercel",
@@ -317,6 +318,7 @@ describe("/api/sandbox lifecycle kicks", () => {
     expect(connectConfigs[0]).toMatchObject({
       state: {
         type: "vercel",
+        sandboxName: "session_session-1",
         source: {
           repo: "https://github.com/acme/private-repo",
           branch: "main",

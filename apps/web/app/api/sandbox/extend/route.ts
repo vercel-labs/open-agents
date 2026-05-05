@@ -11,6 +11,8 @@ import {
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { isSandboxActive } from "@/lib/sandbox/utils";
+import { checkBotProtection } from "@/lib/botid";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 interface ExtendRequest {
   sessionId: string;
@@ -20,6 +22,20 @@ export async function POST(req: Request) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
+  }
+
+  const botVerification = await checkBotProtection();
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["sandbox-extend", authResult.userId]),
+    limit: 3,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: ExtendRequest;
@@ -87,6 +103,10 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: message }, { status: 500 });
+    console.error("Failed to extend sandbox timeout:", message);
+    return Response.json(
+      { error: "Failed to extend sandbox timeout" },
+      { status: 500 },
+    );
   }
 }

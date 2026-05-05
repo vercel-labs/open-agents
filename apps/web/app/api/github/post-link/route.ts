@@ -7,19 +7,8 @@ import { getUserGitHubToken } from "@/lib/github/token";
 import { deleteGitHubAccountLink, getGitHubUsername } from "@/lib/github/users";
 import { syncUserInstallations } from "@/lib/github/sync";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
+import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-function sanitizeRedirectTo(rawRedirectTo: string | null | undefined): string {
-  if (!rawRedirectTo) {
-    return "/sessions";
-  }
-
-  if (!rawRedirectTo.startsWith("/") || rawRedirectTo.startsWith("//")) {
-    return "/sessions";
-  }
-
-  return rawRedirectTo;
-}
 
 /**
  * After better-auth completes the GitHub OAuth link, it redirects here.
@@ -32,7 +21,11 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const requestUrl = new URL(req.url);
-  const next = sanitizeRedirectTo(requestUrl.searchParams.get("next"));
+  const next = sanitizeInternalRedirect(
+    requestUrl.searchParams.get("next"),
+    "/sessions",
+    req.url,
+  );
   const redirectUrl = new URL(next, req.url);
 
   if (isManagedTemplateTrialUser(session, req.url)) {

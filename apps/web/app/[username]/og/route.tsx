@@ -11,7 +11,8 @@ interface OgRouteContext {
 export async function GET(request: Request, context: OgRouteContext) {
   const { username } = await context.params;
   const { searchParams } = new URL(request.url);
-  const date = searchParams.get("date");
+  const rawDate = searchParams.get("date") ?? "30d";
+  const date = ["7d", "30d", "all"].includes(rawDate) ? rawDate : "30d";
   const profile = await getPublicUsageProfile(username, date);
 
   if (!profile) {

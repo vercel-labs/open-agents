@@ -4,9 +4,38 @@ import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
 export const MAX_BODY_LENGTH = 10_000;
+const PRIVATE_HOST_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[0-1])\./,
+  /^169\.254\./,
+  /^\[?::1\]?$/,
+];
+
+function isAllowedWebUrl(value: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  return !PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(hostname));
+}
 
 const fetchInputSchema = z.object({
-  url: z.string().url().describe("The URL to fetch"),
+  url: z
+    .string()
+    .url({ protocol: /^https?$/ })
+    .refine(isAllowedWebUrl, "URL must use http(s) and a public host")
+    .describe("The URL to fetch"),
   method: z
     .enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
     .optional()
@@ -58,6 +87,10 @@ EXAMPLES:
     const args: string[] = [
       "curl",
       "-sS",
+      "--proto",
+      shellEscape("=http,https"),
+      "--proto-redir",
+      shellEscape("=http,https"),
       "-X",
       method,
       "--max-time",

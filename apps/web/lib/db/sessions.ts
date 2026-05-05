@@ -704,6 +704,15 @@ export async function getChatMessageById(messageId: string) {
   });
 }
 
+export async function getChatMessageByIdForChat(
+  messageId: string,
+  chatId: string,
+) {
+  return db.query.chatMessages.findFirst({
+    where: and(eq(chatMessages.id, messageId), eq(chatMessages.chatId, chatId)),
+  });
+}
+
 export async function getChatMessages(chatId: string) {
   return db.query.chatMessages.findMany({
     where: eq(chatMessages.chatId, chatId),

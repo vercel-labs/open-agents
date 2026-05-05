@@ -35,6 +35,7 @@ let currentAuthSession: {
 } | null;
 let existingUserMessageCount = 0;
 let existingChatMessage: { id: string } | null = null;
+let existingScopedChatMessage: { id: string } | null = null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let getRunShouldThrow = false;
@@ -177,6 +178,7 @@ mock.module("@/lib/db/sessions", () => ({
   createChatMessageIfNotExists: createChatMessageIfNotExistsSpy,
   getChatById: async () => chatRecord,
   getChatMessageById: async () => existingChatMessage,
+  getChatMessageByIdForChat: async () => existingScopedChatMessage,
   getSessionById: async () => sessionRecord,
   isFirstChatMessage: isFirstChatMessageSpy,
   touchChat: touchChatSpy,
@@ -264,6 +266,7 @@ describe("/api/chat route", () => {
     discoverSkillDirsCalls = [];
     existingUserMessageCount = 0;
     existingChatMessage = null;
+    existingScopedChatMessage = null;
     preferencesState = {
       autoCommitPush: true,
       autoCreatePr: false,
@@ -380,6 +383,40 @@ describe("/api/chat route", () => {
     expect(body.error).toBe(
       "This hosted demo has a 5 message limit. Deploy your own copy to unlock the full Open Agents template.",
     );
+    expect(startCalls).toHaveLength(0);
+  });
+
+  test("does not let trial users replay a message id from another chat", async () => {
+    const { POST } = await routeModulePromise;
+    currentAuthSession = {
+      authProvider: "vercel",
+      user: {
+        id: "user-1",
+        email: "person@example.com",
+      },
+    };
+    existingUserMessageCount = 5;
+    existingChatMessage = { id: "user-1" };
+    existingScopedChatMessage = null;
+
+    const response = await POST(
+      createRequest(
+        JSON.stringify({
+          sessionId: "session-1",
+          chatId: "chat-1",
+          messages: [
+            {
+              id: "user-1",
+              role: "user",
+              parts: [{ type: "text", text: "Replay this" }],
+            },
+          ],
+        }),
+        "https://open-agents.dev/api/chat",
+      ),
+    );
+
+    expect(response.status).toBe(403);
     expect(startCalls).toHaveLength(0);
   });
 

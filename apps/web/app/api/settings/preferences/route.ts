@@ -52,6 +52,8 @@ export async function PATCH(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const updates: UpdatePreferencesRequest = {};
+
   if (body.defaultSandboxType !== undefined) {
     const validTypes = ["vercel"];
     if (
@@ -60,6 +62,7 @@ export async function PATCH(req: Request) {
     ) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
     }
+    updates.defaultSandboxType = body.defaultSandboxType;
   }
 
   if (body.defaultDiffMode !== undefined) {
@@ -70,6 +73,30 @@ export async function PATCH(req: Request) {
     ) {
       return Response.json({ error: "Invalid diff mode" }, { status: 400 });
     }
+    updates.defaultDiffMode = body.defaultDiffMode;
+  }
+
+  if (body.defaultModelId !== undefined) {
+    if (typeof body.defaultModelId !== "string") {
+      return Response.json(
+        { error: "Invalid defaultModelId" },
+        { status: 400 },
+      );
+    }
+    updates.defaultModelId = body.defaultModelId;
+  }
+
+  if (body.defaultSubagentModelId !== undefined) {
+    if (
+      body.defaultSubagentModelId !== null &&
+      typeof body.defaultSubagentModelId !== "string"
+    ) {
+      return Response.json(
+        { error: "Invalid defaultSubagentModelId" },
+        { status: 400 },
+      );
+    }
+    updates.defaultSubagentModelId = body.defaultSubagentModelId;
   }
 
   if (
@@ -81,6 +108,9 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (body.autoCommitPush !== undefined) {
+    updates.autoCommitPush = body.autoCommitPush;
+  }
 
   if (
     body.autoCreatePr !== undefined &&
@@ -90,6 +120,9 @@ export async function PATCH(req: Request) {
       { error: "Invalid autoCreatePr value" },
       { status: 400 },
     );
+  }
+  if (body.autoCreatePr !== undefined) {
+    updates.autoCreatePr = body.autoCreatePr;
   }
 
   if (
@@ -101,6 +134,9 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (body.alertsEnabled !== undefined) {
+    updates.alertsEnabled = body.alertsEnabled;
+  }
 
   if (
     body.alertSoundEnabled !== undefined &&
@@ -111,6 +147,9 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (body.alertSoundEnabled !== undefined) {
+    updates.alertSoundEnabled = body.alertSoundEnabled;
+  }
 
   if (
     body.publicUsageEnabled !== undefined &&
@@ -120,6 +159,9 @@ export async function PATCH(req: Request) {
       { error: "Invalid publicUsageEnabled value" },
       { status: 400 },
     );
+  }
+  if (body.publicUsageEnabled !== undefined) {
+    updates.publicUsageEnabled = body.publicUsageEnabled;
   }
 
   if (body.globalSkillRefs !== undefined) {
@@ -132,8 +174,7 @@ export async function PATCH(req: Request) {
         { status: 400 },
       );
     }
-
-    body.globalSkillRefs = parsedGlobalSkillRefs.data;
+    updates.globalSkillRefs = parsedGlobalSkillRefs.data;
   }
 
   if (body.enabledModelIds !== undefined) {
@@ -146,11 +187,12 @@ export async function PATCH(req: Request) {
         { status: 400 },
       );
     }
+    updates.enabledModelIds = body.enabledModelIds;
   }
 
   try {
     const preferences = sanitizeUserPreferencesForSession(
-      await updateUserPreferences(session.user.id, body),
+      await updateUserPreferences(session.user.id, updates),
       session,
       req.url,
     );

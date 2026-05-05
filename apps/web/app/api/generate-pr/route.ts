@@ -3,6 +3,7 @@ import { checkBotProtection } from "@/lib/botid";
 import { generateBranchName, looksLikeCommitHash } from "@/lib/git/helpers";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -27,6 +28,15 @@ export async function POST(req: Request) {
   const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = checkRateLimit({
+    key: rateLimitKey(["generate-pr", session.user.id]),
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   // 2. parse request
