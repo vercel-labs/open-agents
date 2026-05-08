@@ -1,13 +1,12 @@
 import { tool } from "ai";
 import { z } from "zod";
-import * as path from "path";
-import * as fs from "fs";
 import { getSandbox, toDisplayPath } from "./utils";
-
-function isDotEnvFilePath(filePath: string): boolean {
-  const basename = path.basename(filePath.replaceAll("\\", "/")).toLowerCase();
-  return basename.startsWith(".env");
-}
+import {
+  isDotEnvFilePath,
+  isSensitiveDotEnvPath,
+  resolveSandboxRealPath,
+  resolveWorkspacePath,
+} from "./path-security";
 
 const readInputSchema = z.object({
   filePath: z
@@ -25,41 +24,37 @@ const readInputSchema = z.object({
     .describe("Maximum number of lines to read. Default: 2000"),
 });
 
-/**
- * Resolve file path with fallback for root-like paths.
- * If a path like "/README.md" doesn't exist, try resolving it relative to workingDirectory.
- */
-function resolveFilePath(filePath: string, workingDirectory: string): string {
-  let absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workingDirectory, filePath);
-
-  // If path doesn't exist and looks like a root-relative path (e.g., /README.md),
-  // try resolving it relative to the working directory
-  try {
-    fs.accessSync(absolutePath);
-  } catch {
-    if (
-      filePath.startsWith("/") &&
-      !filePath.startsWith("/Users/") &&
-      !filePath.startsWith("/home/")
-    ) {
-      const workspaceRelativePath = path.join(workingDirectory, filePath);
-      try {
-        fs.accessSync(workspaceRelativePath);
-        absolutePath = workspaceRelativePath;
-      } catch {
-        // Neither path exists - return original
-      }
-    }
-  }
-
-  return absolutePath;
-}
-
 export const readFileTool = () =>
   tool({
-    needsApproval: ({ filePath }) => isDotEnvFilePath(filePath),
+    needsApproval: async ({ filePath }, { experimental_context }) => {
+      if (isDotEnvFilePath(filePath)) {
+        return true;
+      }
+
+      let sandbox;
+      try {
+        sandbox = await getSandbox(experimental_context, "read");
+      } catch {
+        return false;
+      }
+      const workingDirectory = sandbox.workingDirectory;
+      const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+      if (!absolutePath) {
+        return false;
+      }
+
+      const realPath = await resolveSandboxRealPath({
+        sandbox,
+        absolutePath,
+        workingDirectory,
+      });
+
+      return isSensitiveDotEnvPath({
+        requestedPath: filePath,
+        absolutePath,
+        realPath,
+      });
+    },
     description: `Read a file from the filesystem.
 
 USAGE:
@@ -86,7 +81,25 @@ EXAMPLES:
       const workingDirectory = sandbox.workingDirectory;
 
       try {
-        const absolutePath = resolveFilePath(filePath, workingDirectory);
+        const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+        if (!absolutePath) {
+          return {
+            success: false,
+            error: "Path must stay within the workspace.",
+          };
+        }
+
+        const realPath = await resolveSandboxRealPath({
+          sandbox,
+          absolutePath,
+          workingDirectory,
+        });
+        if (realPath && !resolveWorkspacePath(realPath, workingDirectory)) {
+          return {
+            success: false,
+            error: "Path resolves outside the workspace.",
+          };
+        }
 
         const stats = await sandbox.stat(absolutePath);
         if (stats.isDirectory()) {

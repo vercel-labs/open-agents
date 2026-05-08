@@ -31,6 +31,7 @@ export type CodeEditorStopResponse = {
 };
 
 const CODE_SERVER_PIDFILE = "/tmp/open-agents-code-server.pid";
+const CODE_SERVER_LOCKDIR = "/tmp/open-agents-code-server.lock";
 
 type ConnectedSandbox = Awaited<ReturnType<typeof connectSandbox>>;
 
@@ -202,6 +203,25 @@ async function stopCodeServer(sandbox: ConnectedSandbox): Promise<boolean> {
   return !checkResult.success;
 }
 
+async function acquireCodeServerLaunchLock(
+  sandbox: ConnectedSandbox,
+): Promise<boolean> {
+  const result = await sandbox.exec(
+    `mkdir ${shellQuote(CODE_SERVER_LOCKDIR)}`,
+    "/tmp",
+    5_000,
+  );
+  return result.success;
+}
+
+async function releaseCodeServerLaunchLock(
+  sandbox: ConnectedSandbox,
+): Promise<void> {
+  await sandbox
+    .exec(`rmdir ${shellQuote(CODE_SERVER_LOCKDIR)}`, "/tmp", 5_000)
+    .catch(() => undefined);
+}
+
 export async function GET(_req: Request, context: RouteContext) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
@@ -280,44 +300,56 @@ export async function POST(req: Request, context: RouteContext) {
     const port = CODE_SERVER_PORT;
     const workingDirectory = sandbox.workingDirectory;
 
-    // Reuse an existing code-server process when we can positively identify it.
-    if (await isCodeServerRunning(sandbox)) {
-      return Response.json({
-        url: sandbox.domain(port),
-        port,
-      } satisfies CodeEditorLaunchResponse);
-    }
-
-    if (await isPortInUse(sandbox, port)) {
+    const hasLaunchLock = await acquireCodeServerLaunchLock(sandbox);
+    if (!hasLaunchLock) {
       return Response.json(
-        { error: `Port ${port} is already in use by another process` },
+        { error: "Code editor is already launching" },
         { status: 409 },
       );
     }
 
-    // Launch code-server in detached mode
-    const launchCommand = [
-      `printf '%s' "$$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
-      `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry ${shellQuote(workingDirectory)}`,
-    ].join(" && ");
-
     try {
-      await sandbox.execDetached(launchCommand, workingDirectory);
-    } catch (error) {
-      await sandbox
-        .exec(
-          `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
-          workingDirectory,
-          5_000,
-        )
-        .catch(() => undefined);
-      throw error;
-    }
+      // Reuse an existing code-server process when we can positively identify it.
+      if (await isCodeServerRunning(sandbox)) {
+        return Response.json({
+          url: sandbox.domain(port),
+          port,
+        } satisfies CodeEditorLaunchResponse);
+      }
 
-    return Response.json({
-      url: sandbox.domain(port),
-      port,
-    } satisfies CodeEditorLaunchResponse);
+      if (await isPortInUse(sandbox, port)) {
+        return Response.json(
+          { error: `Port ${port} is already in use by another process` },
+          { status: 409 },
+        );
+      }
+
+      // Launch code-server in detached mode
+      const launchCommand = [
+        `printf '%s' "$$" > ${shellQuote(CODE_SERVER_PIDFILE)}`,
+        `exec code-server --port ${port} --auth none --bind-addr 0.0.0.0:${port} --disable-telemetry ${shellQuote(workingDirectory)}`,
+      ].join(" && ");
+
+      try {
+        await sandbox.execDetached(launchCommand, workingDirectory);
+      } catch (error) {
+        await sandbox
+          .exec(
+            `rm -f ${shellQuote(CODE_SERVER_PIDFILE)}`,
+            workingDirectory,
+            5_000,
+          )
+          .catch(() => undefined);
+        throw error;
+      }
+
+      return Response.json({
+        url: sandbox.domain(port),
+        port,
+      } satisfies CodeEditorLaunchResponse);
+    } finally {
+      await releaseCodeServerLaunchLock(sandbox);
+    }
   } catch (error) {
     console.error("Failed to launch code editor:", error);
     return Response.json(

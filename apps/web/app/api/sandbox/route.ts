@@ -7,7 +7,7 @@ import {
 import { checkBotProtection } from "@/lib/botid";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import { updateSession } from "@/lib/db/sessions";
-import { parseGitHubUrl } from "@/lib/github/client";
+import { parseGitHubHttpsUrl } from "@/lib/github/urls";
 import {
   verifyRepoAccess,
   getRepoAccessErrorMessage,
@@ -36,6 +36,7 @@ import {
   hasResumableSandboxState,
 } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 // import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
 // import { getUserVercelToken } from "@/lib/vercel/token";
 
@@ -106,6 +107,10 @@ export async function POST(req: Request) {
 
   const { repoUrl, branch = "main", isNewBranch = false, sessionId } = body;
 
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
+  }
+
   // Get session for auth
   const session = await getServerSession();
   if (!session?.user) {
@@ -117,21 +122,28 @@ export async function POST(req: Request) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  // Validate session ownership before minting any short-lived setup tokens.
-  let sessionRecord: SessionRecord | undefined;
-  if (sessionId) {
-    const sessionContext = await requireOwnedSession({
-      userId: session.user.id,
-      sessionId,
-    });
-    if (!sessionContext.ok) {
-      return sessionContext.response;
-    }
-
-    sessionRecord = sessionContext.sessionRecord;
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["sandbox-create", session.user.id]),
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
-  const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
+  // Validate session ownership before minting any short-lived setup tokens.
+  let sessionRecord: SessionRecord | undefined;
+  const sessionContext = await requireOwnedSession({
+    userId: session.user.id,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
+  }
+
+  sessionRecord = sessionContext.sessionRecord;
+
+  const sandboxName = getSessionSandboxName(sessionId);
 
   const source = repoUrl
     ? {
@@ -146,7 +158,7 @@ export async function POST(req: Request) {
   let setupToken: ScopedInstallationToken | undefined;
 
   if (repoUrl) {
-    const parsedRepo = parseGitHubUrl(repoUrl);
+    const parsedRepo = parseGitHubHttpsUrl(repoUrl);
     if (!parsedRepo) {
       return Response.json(
         { error: "Invalid GitHub repository URL" },
@@ -280,6 +292,20 @@ export async function DELETE(req: Request) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
+  }
+
+  const botVerification = await checkBotProtection();
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["sandbox-delete", authResult.userId]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: unknown;

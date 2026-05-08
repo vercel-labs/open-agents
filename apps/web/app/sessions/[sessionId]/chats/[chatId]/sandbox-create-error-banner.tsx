@@ -1,18 +1,14 @@
 import { X } from "lucide-react";
 import Link from "next/link";
 import type { SandboxCreateErrorDetails } from "./sandbox-create";
+import { isSafeHttpUrl, sanitizeInternalRedirect } from "@/lib/redirect-safety";
 
 function isSafeActionUrl(url: string): boolean {
-  if (url.startsWith("/")) {
+  if (sanitizeInternalRedirect(url, "") === url) {
     return true;
   }
 
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
+  return isSafeHttpUrl(url);
 }
 
 export function SandboxCreateErrorBanner({

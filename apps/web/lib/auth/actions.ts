@@ -24,15 +24,23 @@ async function revokeVercelToken(params: {
   });
 }
 
+async function getRevocableVercelToken(userId: string): Promise<string | null> {
+  try {
+    return await getUserVercelToken(userId);
+  } catch {
+    return null;
+  }
+}
+
 export async function signOut(): Promise<void> {
   const session = await getServerSession();
 
-  if (session?.user?.id && session.authProvider === "vercel") {
+  if (session?.user?.id) {
     try {
       const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
       const clientSecret = process.env.VERCEL_APP_CLIENT_SECRET;
       if (clientId && clientSecret) {
-        const token = await getUserVercelToken(session.user.id);
+        const token = await getRevocableVercelToken(session.user.id);
         if (token) {
           await revokeVercelToken({ token, clientId, clientSecret });
         }

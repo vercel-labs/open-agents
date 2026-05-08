@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { checkBotProtection } from "@/lib/botid";
 import {
   countSessionsByUserId,
   createSessionWithInitialChat,
@@ -15,7 +16,9 @@ import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
+  parseGitHubHttpsUrl,
 } from "@/lib/github/urls";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
@@ -176,6 +179,20 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const botVerification = await checkBotProtection();
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["sessions-create", session.user.id]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
+  }
+
   const isTrialUser = isManagedTemplateTrialUser(session, req.url);
   if (isTrialUser) {
     const existingSessionCount = await countSessionsByUserId(session.user.id);
@@ -241,6 +258,24 @@ export async function POST(req: Request) {
     (typeof body.repoName !== "string" || !isValidGitHubRepoName(body.repoName))
   ) {
     return Response.json({ error: "Invalid repository name" }, { status: 400 });
+  }
+
+  if (body.cloneUrl !== undefined) {
+    if (typeof body.cloneUrl !== "string") {
+      return Response.json({ error: "Invalid clone URL" }, { status: 400 });
+    }
+
+    const parsedCloneUrl = parseGitHubHttpsUrl(body.cloneUrl);
+    if (
+      !parsedCloneUrl ||
+      parsedCloneUrl.owner !== body.repoOwner ||
+      parsedCloneUrl.repo !== body.repoName
+    ) {
+      return Response.json(
+        { error: "Clone URL must match repository owner and name" },
+        { status: 400 },
+      );
+    }
   }
 
   let explicitVercelProject: VercelProjectSelection | null | undefined;

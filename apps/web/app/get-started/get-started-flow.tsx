@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/hooks/use-session";
 import { authClient } from "@/lib/auth/client";
+import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 
 type StepId = 1 | 2;
 
@@ -37,18 +38,6 @@ function OpenAgentsLogo({ className }: { className?: string }) {
   );
 }
 
-function sanitizeRedirectPath(rawPath: string | null): string {
-  if (!rawPath) {
-    return "/sessions";
-  }
-
-  if (!rawPath.startsWith("/") || rawPath.startsWith("//")) {
-    return "/sessions";
-  }
-
-  return rawPath;
-}
-
 export function GetStartedFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,7 +49,10 @@ export function GetStartedFlow() {
   } = useSession();
   const isTrialUser = session?.isManagedTemplateTrialUser ?? false;
   const isGitHubReconnect = searchParams.get("step") === "github";
-  const redirectPath = sanitizeRedirectPath(searchParams.get("next"));
+  const redirectPath = sanitizeInternalRedirect(
+    searchParams.get("next"),
+    "/sessions",
+  );
   const [activeStep, setActiveStep] = useState<StepId>(
     isGitHubReconnect ? 2 : 1,
   );

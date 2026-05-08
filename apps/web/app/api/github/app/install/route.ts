@@ -9,19 +9,8 @@ import {
   hasGitHubAccount,
 } from "@/lib/github/users";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
+import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
-
-function sanitizeRedirectTo(rawRedirectTo: string | null): string {
-  if (!rawRedirectTo) {
-    return "/get-started";
-  }
-
-  if (!rawRedirectTo.startsWith("/") || rawRedirectTo.startsWith("//")) {
-    return "/get-started";
-  }
-
-  return rawRedirectTo;
-}
 
 const COOKIE_OPTIONS = {
   path: "/",
@@ -48,7 +37,11 @@ function redirectWithInstallCookies(
 
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await getServerSession();
-  const redirectTo = sanitizeRedirectTo(req.nextUrl.searchParams.get("next"));
+  const redirectTo = sanitizeInternalRedirect(
+    req.nextUrl.searchParams.get("next"),
+    "/get-started",
+    req.url,
+  );
 
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));

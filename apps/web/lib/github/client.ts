@@ -1,6 +1,8 @@
 import { Octokit } from "@octokit/rest";
+import { parseGitHubHttpsUrl, parseGitHubUrl } from "./urls";
 
 export type { Octokit } from "@octokit/rest";
+export { parseGitHubHttpsUrl, parseGitHubUrl };
 
 type OctokitResult =
   | { octokit: Octokit; authenticated: true }
@@ -32,18 +34,4 @@ export async function getUserOctokit(userId: string): Promise<Octokit | null> {
   const token = await getUserGitHubToken(userId);
   if (!token) return null;
   return new Octokit({ auth: token });
-}
-
-/**
- * Parse a GitHub URL into owner/repo.
- * Supports https://github.com/owner/repo and git@github.com:owner/repo.git
- */
-export function parseGitHubUrl(
-  repoUrl: string,
-): { owner: string; repo: string } | null {
-  const match = repoUrl.match(/github\.com[/:]([.\w-]+)\/([.\w-]+?)(\.git)?$/);
-  if (match && match[1] && match[2]) {
-    return { owner: match[1], repo: match[2] };
-  }
-  return null;
 }
