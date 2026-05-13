@@ -95,6 +95,33 @@ async function resetToFetchedRemoteBranch(
   }
 }
 
+async function getCurrentHead(sandbox: Sandbox): Promise<string> {
+  const headResult = await exec(sandbox, "git rev-parse HEAD", 10000);
+  if (!headResult.success) {
+    throw new Error(
+      `Failed to inspect current HEAD: ${commandOutput(headResult)}`,
+    );
+  }
+
+  return headResult.stdout.trim();
+}
+
+async function resetToCommit(sandbox: Sandbox, commit: string): Promise<void> {
+  const resetResult = await exec(sandbox, `git reset --hard ${commit}`, 10000);
+  if (!resetResult.success) {
+    throw new Error(
+      `Failed to restore original HEAD after sync failure: ${commandOutput(resetResult)}`,
+    );
+  }
+
+  const cleanResult = await exec(sandbox, "git clean -fd", 10000);
+  if (!cleanResult.success) {
+    throw new Error(
+      `Failed to clean worktree after sync failure: ${commandOutput(cleanResult)}`,
+    );
+  }
+}
+
 // ---- public functions ----
 
 /**
@@ -343,6 +370,8 @@ export async function syncToRemotePreservingChanges(
     return;
   }
 
+  const originalHead = await getCurrentHead(sandbox);
+
   const stashResult = await exec(
     sandbox,
     "git stash push --include-untracked -m open-agents-pre-commit-sync",
@@ -357,12 +386,21 @@ export async function syncToRemotePreservingChanges(
   try {
     await resetToFetchedRemoteBranch(sandbox, branch);
   } catch (error) {
+    await resetToCommit(sandbox, originalHead);
     await exec(sandbox, "git stash pop", 30000).catch(() => {});
     throw error;
   }
 
   const popResult = await exec(sandbox, "git stash pop", 30000);
   if (!popResult.success) {
+    await resetToCommit(sandbox, originalHead);
+    const restoreResult = await exec(sandbox, "git stash pop", 30000);
+    if (!restoreResult.success) {
+      throw new Error(
+        `Failed to restore local changes after rolling back sync failure: ${commandOutput(restoreResult)}`,
+      );
+    }
+
     throw new Error(
       `Failed to restore local changes after syncing remote branch: ${commandOutput(popResult)}`,
     );

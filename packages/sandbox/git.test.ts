@@ -46,6 +46,7 @@ describe("syncToRemotePreservingChanges", () => {
     const sandbox = createSandbox([
       result(),
       result({ stdout: " M file.ts\n" }),
+      result({ stdout: "original-head\n" }),
       result(),
       result(),
       result(),
@@ -57,6 +58,7 @@ describe("syncToRemotePreservingChanges", () => {
     expect(sandbox.commands).toEqual([
       "git fetch origin feature:refs/remotes/origin/feature",
       "git status --porcelain",
+      "git rev-parse HEAD",
       "git stash push --include-untracked -m open-agents-pre-commit-sync",
       "git reset --hard origin/feature",
       "git branch --set-upstream-to=origin/feature feature",
@@ -77,6 +79,44 @@ describe("syncToRemotePreservingChanges", () => {
 
     expect(sandbox.commands).toEqual([
       "git fetch origin feature:refs/remotes/origin/feature",
+    ]);
+  });
+
+  test("rolls back and restores local changes when stash restore conflicts after sync", async () => {
+    const sandbox = createSandbox([
+      result(),
+      result({ stdout: " M file.ts\n" }),
+      result({ stdout: "original-head\n" }),
+      result(),
+      result(),
+      result(),
+      result({
+        success: false,
+        exitCode: 1,
+        stderr: "CONFLICT (content): Merge conflict in file.ts\n",
+      }),
+      result(),
+      result(),
+      result(),
+    ]) as Sandbox & { commands: string[] };
+
+    await expect(
+      syncToRemotePreservingChanges(sandbox, "feature"),
+    ).rejects.toThrow(
+      "Failed to restore local changes after syncing remote branch",
+    );
+
+    expect(sandbox.commands).toEqual([
+      "git fetch origin feature:refs/remotes/origin/feature",
+      "git status --porcelain",
+      "git rev-parse HEAD",
+      "git stash push --include-untracked -m open-agents-pre-commit-sync",
+      "git reset --hard origin/feature",
+      "git branch --set-upstream-to=origin/feature feature",
+      "git stash pop",
+      "git reset --hard original-head",
+      "git clean -fd",
+      "git stash pop",
     ]);
   });
 });
