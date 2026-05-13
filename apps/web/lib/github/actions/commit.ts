@@ -5,6 +5,7 @@ import {
   stageAll,
   getStagedDiff,
   syncToRemote,
+  syncToRemotePreservingChanges,
   withTemporaryGitHubAuth,
   hasUncommittedChanges as checkUncommitted,
 } from "@open-agents/sandbox";
@@ -200,6 +201,47 @@ export async function commitChanges(params: {
     await updateSession(sessionId, { branch: resolvedBranch }).catch(() => {});
   }
 
+  if (await checkUncommitted(sandbox)) {
+    const access = await verifyRepoAccess({
+      userId: session.user.id,
+      owner: sessionRecord.repoOwner,
+      repo: sessionRecord.repoName,
+      requiredUserPermission: "write",
+    });
+
+    if (!access.ok) {
+      return {
+        committed: false,
+        pushed: false,
+        branchName: resolvedBranch,
+        error: getRepoAccessErrorMessage(access.reason),
+      };
+    }
+
+    try {
+      const syncToken = await mintInstallationToken({
+        installationId: access.installationId,
+        repositoryIds: [access.repositoryId],
+        permissions: { contents: "read" },
+      });
+      try {
+        await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+          syncToRemotePreservingChanges(sandbox, resolvedBranch),
+        );
+      } finally {
+        await revokeInstallationToken(syncToken.token);
+      }
+    } catch (error) {
+      console.warn("[commit] pre-commit sandbox sync failed:", error);
+      return {
+        committed: false,
+        pushed: false,
+        branchName: resolvedBranch,
+        error: "Failed to sync latest remote changes before committing",
+      };
+    }
+  }
+
   // check for changes
   if (!(await checkUncommitted(sandbox))) {
     if (!(await hasCommitsToPush({ sandbox, cwd }))) {
@@ -266,7 +308,6 @@ export async function commitChanges(params: {
     commitMessage = await generateCommitMessage(diff, sessionTitle);
   }
 
-  // verify access
   const access = await verifyRepoAccess({
     userId: session.user.id,
     owner: sessionRecord.repoOwner,

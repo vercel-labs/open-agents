@@ -36,6 +36,65 @@ function exec(
   return sandbox.exec(command, sandbox.workingDirectory, timeoutMs);
 }
 
+function commandOutput(result: ExecResult): string {
+  return result.stderr?.trim() || result.stdout?.trim() || "Git command failed";
+}
+
+function isMissingRemoteRef(result: ExecResult): boolean {
+  const output = `${result.stderr}\n${result.stdout}`;
+  return output.includes("couldn't find remote ref");
+}
+
+async function fetchRemoteBranch(
+  sandbox: Sandbox,
+  branch: string,
+): Promise<"fetched" | "missing"> {
+  const fetchResult = await exec(
+    sandbox,
+    `git fetch origin ${branch}:refs/remotes/origin/${branch}`,
+    30000,
+  );
+
+  if (fetchResult.success) {
+    return "fetched";
+  }
+
+  if (isMissingRemoteRef(fetchResult)) {
+    return "missing";
+  }
+
+  throw new Error(
+    `Failed to fetch remote branch: ${commandOutput(fetchResult)}`,
+  );
+}
+
+async function resetToFetchedRemoteBranch(
+  sandbox: Sandbox,
+  branch: string,
+): Promise<void> {
+  const resetResult = await exec(
+    sandbox,
+    `git reset --hard origin/${branch}`,
+    10000,
+  );
+  if (!resetResult.success) {
+    throw new Error(
+      `Failed to reset to remote branch: ${commandOutput(resetResult)}`,
+    );
+  }
+
+  const upstreamResult = await exec(
+    sandbox,
+    `git branch --set-upstream-to=origin/${branch} ${branch}`,
+    10000,
+  );
+  if (!upstreamResult.success) {
+    throw new Error(
+      `Failed to set upstream after remote sync: ${commandOutput(upstreamResult)}`,
+    );
+  }
+}
+
 // ---- public functions ----
 
 /**
@@ -245,32 +304,67 @@ export async function syncToRemote(
     throw new Error("Invalid branch name");
   }
 
-  const fetchResult = await exec(
+  const fetchStatus = await fetchRemoteBranch(sandbox, branch);
+  if (fetchStatus === "missing") {
+    throw new Error(`Remote branch '${branch}' not found`);
+  }
+
+  await resetToFetchedRemoteBranch(sandbox, branch);
+}
+
+/**
+ * Refresh the sandbox branch from remote before building an API commit.
+ * Local edits are stashed and restored so commits are based on the latest
+ * remote head even when a previous broker-created commit was not synced back.
+ */
+export async function syncToRemotePreservingChanges(
+  sandbox: Sandbox,
+  branch: string,
+): Promise<void> {
+  if (!isSafeBranchName(branch)) {
+    throw new Error("Invalid branch name");
+  }
+
+  const fetchStatus = await fetchRemoteBranch(sandbox, branch);
+  if (fetchStatus === "missing") {
+    return;
+  }
+
+  const statusResult = await exec(sandbox, "git status --porcelain", 10000);
+  if (!statusResult.success) {
+    throw new Error(
+      `Failed to inspect local changes: ${commandOutput(statusResult)}`,
+    );
+  }
+
+  const hasLocalChanges = statusResult.stdout.trim().length > 0;
+  if (!hasLocalChanges) {
+    await resetToFetchedRemoteBranch(sandbox, branch);
+    return;
+  }
+
+  const stashResult = await exec(
     sandbox,
-    `git fetch origin ${branch}:refs/remotes/origin/${branch}`,
+    "git stash push --include-untracked -m open-agents-pre-commit-sync",
     30000,
   );
-  if (!fetchResult.success) {
-    throw new Error(`Failed to fetch after commit: ${fetchResult.stdout}`);
-  }
-
-  const resetResult = await exec(
-    sandbox,
-    `git reset --hard origin/${branch}`,
-    10000,
-  );
-  if (!resetResult.success) {
-    throw new Error(`Failed to reset after API commit: ${resetResult.stdout}`);
-  }
-
-  const upstreamResult = await exec(
-    sandbox,
-    `git branch --set-upstream-to=origin/${branch} ${branch}`,
-    10000,
-  );
-  if (!upstreamResult.success) {
+  if (!stashResult.success) {
     throw new Error(
-      `Failed to set upstream after API commit: ${upstreamResult.stdout}`,
+      `Failed to stash local changes: ${commandOutput(stashResult)}`,
+    );
+  }
+
+  try {
+    await resetToFetchedRemoteBranch(sandbox, branch);
+  } catch (error) {
+    await exec(sandbox, "git stash pop", 30000).catch(() => {});
+    throw error;
+  }
+
+  const popResult = await exec(sandbox, "git stash pop", 30000);
+  if (!popResult.success) {
+    throw new Error(
+      `Failed to restore local changes after syncing remote branch: ${commandOutput(popResult)}`,
     );
   }
 }

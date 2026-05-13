@@ -37,6 +37,7 @@ let apiCommitResult:
   commitSha: "abc123def456",
 };
 let generateTextResult = { text: "feat: implement new feature" };
+let syncPreservingChangesCalls = 0;
 
 // ── module mocks ───────────────────────────────────────────────────
 
@@ -64,6 +65,9 @@ mock.module("@open-agents/sandbox", () => ({
   getHeadSha: async () => "base-sha",
   getCurrentBranch: async () => "feature-branch",
   syncToRemote: async () => {},
+  syncToRemotePreservingChanges: async () => {
+    syncPreservingChangesCalls += 1;
+  },
   withTemporaryGitHubAuth: async (
     _sandbox: unknown,
     _token: string | undefined,
@@ -156,6 +160,7 @@ beforeEach(() => {
   };
   apiCommitResult = { ok: true, commitSha: "abc123def456" };
   generateTextResult = { text: "feat: implement new feature" };
+  syncPreservingChangesCalls = 0;
 });
 
 describe("performAutoCommit", () => {
@@ -205,6 +210,7 @@ describe("performAutoCommit", () => {
     expect(result.commitMessage).toBeDefined();
     expect(result.commitSha).toBe("abc123def456");
     expect(result.error).toBeUndefined();
+    expect(syncPreservingChangesCalls).toBe(1);
   });
 
   test("uses fallback commit message when diff is empty", async () => {

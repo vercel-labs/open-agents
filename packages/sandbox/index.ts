@@ -32,6 +32,7 @@ export {
   readFileContents,
   getFileModes,
   syncToRemote,
+  syncToRemotePreservingChanges,
   withTemporaryGitHubAuth,
   type FileChange,
   type FileChangeStatus,

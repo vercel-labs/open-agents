@@ -5,6 +5,7 @@ import {
   getCurrentBranch,
   getStagedDiff,
   syncToRemote,
+  syncToRemotePreservingChanges,
   withTemporaryGitHubAuth,
 } from "@open-agents/sandbox";
 import { generateText } from "ai";
@@ -62,21 +63,7 @@ export async function performAutoCommit(
     return { committed: false, pushed: false };
   }
 
-  // 2. stage all changes
-  try {
-    await stageAll(sandbox);
-  } catch {
-    return {
-      committed: false,
-      pushed: false,
-      error: "Failed to stage changes",
-    };
-  }
-
-  // 3. generate commit message from staged diff
-  const commitMessage = await generateCommitMessage(sandbox, sessionTitle);
-
-  // 4. verify repo access and get installation
+  // 2. verify repo access and get installation
   const access = await verifyRepoAccess({
     userId,
     owner: repoOwner,
@@ -119,6 +106,47 @@ export async function performAutoCommit(
     }
     await updateSession(sessionId, { branch }).catch(() => {});
   }
+
+  // Keep the sandbox parent aligned with broker-created remote commits before
+  // staging, while preserving the current uncommitted edits.
+  try {
+    const syncToken = await mintInstallationToken({
+      installationId: access.installationId,
+      repositoryIds: [access.repositoryId],
+      permissions: { contents: "read" },
+    });
+    try {
+      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+        syncToRemotePreservingChanges(sandbox, branch),
+      );
+    } finally {
+      await revokeInstallationToken(syncToken.token);
+    }
+  } catch (error) {
+    console.warn(
+      `[auto-commit] Pre-commit sandbox sync failed for session ${sessionId}:`,
+      error,
+    );
+    return {
+      committed: false,
+      pushed: false,
+      error: "Failed to sync latest remote changes before committing",
+    };
+  }
+
+  // 3. stage all changes after syncing the branch parent
+  try {
+    await stageAll(sandbox);
+  } catch {
+    return {
+      committed: false,
+      pushed: false,
+      error: "Failed to stage changes",
+    };
+  }
+
+  // 4. generate commit message from staged diff
+  const commitMessage = await generateCommitMessage(sandbox, sessionTitle);
 
   const coAuthor = await buildCoAuthor(userId);
 
