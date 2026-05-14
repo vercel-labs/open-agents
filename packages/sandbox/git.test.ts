@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { ExecResult, Sandbox } from "./interface";
 import { syncToRemotePreservingChanges } from "./git";
 
+const fetchFeatureCommand =
+  "GIT_TERMINAL_PROMPT=0 git fetch --force origin feature:refs/remotes/origin/feature";
+
 function result(params: Partial<ExecResult> = {}): ExecResult {
   return {
     success: true,
@@ -56,7 +59,7 @@ describe("syncToRemotePreservingChanges", () => {
     await syncToRemotePreservingChanges(sandbox, "feature");
 
     expect(sandbox.commands).toEqual([
-      "git fetch origin feature:refs/remotes/origin/feature",
+      fetchFeatureCommand,
       "git status --porcelain",
       "git rev-parse HEAD",
       "git stash push --include-untracked -m open-agents-pre-commit-sync",
@@ -77,9 +80,7 @@ describe("syncToRemotePreservingChanges", () => {
 
     await syncToRemotePreservingChanges(sandbox, "feature");
 
-    expect(sandbox.commands).toEqual([
-      "git fetch origin feature:refs/remotes/origin/feature",
-    ]);
+    expect(sandbox.commands).toEqual([fetchFeatureCommand]);
   });
 
   test("rolls back and restores local changes when stash restore conflicts after sync", async () => {
@@ -107,7 +108,7 @@ describe("syncToRemotePreservingChanges", () => {
     );
 
     expect(sandbox.commands).toEqual([
-      "git fetch origin feature:refs/remotes/origin/feature",
+      fetchFeatureCommand,
       "git status --porcelain",
       "git rev-parse HEAD",
       "git stash push --include-untracked -m open-agents-pre-commit-sync",

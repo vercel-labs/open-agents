@@ -51,7 +51,7 @@ async function fetchRemoteBranch(
 ): Promise<"fetched" | "missing"> {
   const fetchResult = await exec(
     sandbox,
-    `git fetch origin ${branch}:refs/remotes/origin/${branch}`,
+    `GIT_TERMINAL_PROMPT=0 git fetch --force origin ${branch}:refs/remotes/origin/${branch}`,
     30000,
   );
 

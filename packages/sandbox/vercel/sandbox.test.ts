@@ -11,7 +11,7 @@ type MockRunCommandResult = {
   exitCode?: number;
   cmdId: string;
   stdout: () => Promise<string>;
-  stderr?: () => Promise<string>;
+  stderr: () => Promise<string>;
   wait?: (params?: { signal?: AbortSignal }) => Promise<MockWaitResult>;
 };
 type MockRunCommandParams = {
@@ -48,6 +48,7 @@ let runCommandMock = async (
   exitCode: 0,
   cmdId: "cmd-1",
   stdout: async () => "",
+  stderr: async () => "",
 });
 let lastRunCommandEnv: Record<string, string> | undefined;
 let currentSessionStateFactory = (_name: string): MockSessionState => ({});
@@ -167,6 +168,7 @@ beforeEach(() => {
     exitCode: 0,
     cmdId: "cmd-1",
     stdout: async () => "",
+    stderr: async () => "",
   });
   lastRunCommandEnv = undefined;
   currentSessionStateFactory = () => ({});
@@ -246,6 +248,36 @@ describe("VercelSandbox.environmentDetails", () => {
     expect(lastRunCommandEnv?.SANDBOX_URL_3000).toBe(
       "https://sbx-3000.vercel.run",
     );
+  });
+});
+
+describe("VercelSandbox.exec", () => {
+  test("preserves stderr output from failed commands", async () => {
+    runCommandMock = async () => ({
+      exitCode: 128,
+      cmdId: "cmd-fetch-failed",
+      stdout: async () => "",
+      stderr: async () => "fatal: couldn't find remote ref feature\n",
+    });
+
+    const sandbox = await sandboxModule.VercelSandbox.connect("sbx-test", {
+      ports: [3000],
+      remainingTimeout: 0,
+    });
+
+    const result = await sandbox.exec(
+      "git fetch origin feature",
+      "/vercel/sandbox",
+      5_000,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      exitCode: 128,
+      stdout: "",
+      stderr: "fatal: couldn't find remote ref feature\n",
+      truncated: false,
+    });
   });
 });
 
@@ -472,6 +504,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-running",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => await new Promise<MockWaitResult>(() => {}),
     });
 
@@ -508,6 +541,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-error",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => {
         throw new Error("wait failed");
       },
@@ -527,6 +561,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-fail",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => ({
         exitCode: 1,
         stdout: async () => "",

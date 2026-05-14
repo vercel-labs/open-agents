@@ -156,6 +156,20 @@ function getRemainingTimeoutFromSession(
   return remaining > 10_000 ? remaining : undefined;
 }
 
+function truncateCommandOutput(output: string): {
+  output: string;
+  truncated: boolean;
+} {
+  if (output.length <= MAX_OUTPUT_LENGTH) {
+    return { output, truncated: false };
+  }
+
+  return {
+    output: output.slice(0, MAX_OUTPUT_LENGTH),
+    truncated: true,
+  };
+}
+
 /**
  * Vercel Sandbox implementation using the @vercel/sandbox SDK.
  * Runs code in isolated Firecracker MicroVMs.
@@ -901,20 +915,19 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
         signal,
       });
 
-      let stdout = await result.stdout();
-      let truncated = false;
-
-      if (stdout.length > MAX_OUTPUT_LENGTH) {
-        stdout = stdout.slice(0, MAX_OUTPUT_LENGTH);
-        truncated = true;
-      }
+      const [rawStdout, rawStderr] = await Promise.all([
+        result.stdout(),
+        result.stderr(),
+      ]);
+      const stdout = truncateCommandOutput(rawStdout);
+      const stderr = truncateCommandOutput(rawStderr);
 
       return {
         success: result.exitCode === 0,
         exitCode: result.exitCode,
-        stdout,
-        stderr: "", // Vercel SDK combines stdout/stderr
-        truncated,
+        stdout: stdout.output,
+        stderr: stderr.output,
+        truncated: stdout.truncated || stderr.truncated,
       };
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError") {
