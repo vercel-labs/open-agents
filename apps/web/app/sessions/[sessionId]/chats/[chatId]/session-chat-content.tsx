@@ -198,6 +198,8 @@ type ReasoningMessagePart = Extract<
   { type: "reasoning" }
 >;
 
+type SandboxReadinessResult = "connected" | "no_sandbox" | "failed";
+
 type MessageRenderGroup =
   | {
       type: "part";
@@ -2152,6 +2154,17 @@ export function SessionChatContent({
     [attemptReconnection, syncSandboxStatus],
   );
 
+  const checkSandboxReadiness =
+    useCallback(async (): Promise<SandboxReadinessResult> => {
+      const result = await attemptReconnection();
+      if (result === "connected" || result === "no_sandbox") {
+        return result;
+      }
+
+      await syncSandboxStatus();
+      return "failed";
+    }, [attemptReconnection, syncSandboxStatus]);
+
   const refreshWorkspaceAfterRestore = useCallback(async () => {
     await requestStatusSync("force").catch(() => undefined);
     await Promise.all([
@@ -2709,8 +2722,18 @@ export function SessionChatContent({
       }
 
       const readyPromise = (async () => {
-        if (isCreatingSandbox || isRestoringSnapshot || isReconnectingSandbox) {
+        if (isCreatingSandbox || isRestoringSnapshot) {
           return waitForSandboxReady(12);
+        }
+
+        if (isReconnectingSandbox) {
+          const readiness = await checkSandboxReadiness();
+          if (readiness === "connected") {
+            return true;
+          }
+          if (readiness === "failed") {
+            return false;
+          }
         }
 
         if (hasSnapshot || hasRuntimeSandboxState || isHibernatingUi) {
@@ -2731,6 +2754,7 @@ export function SessionChatContent({
     }, [
       _handleCreateNewSandbox,
       _handleRestoreSnapshot,
+      checkSandboxReadiness,
       hasRuntimeSandboxState,
       hasSnapshot,
       isArchived,
