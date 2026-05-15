@@ -19,6 +19,8 @@ export interface DevServerControls {
   handleStopAction: () => Promise<void>;
 }
 
+type EnsureSandboxReady = () => Promise<boolean>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -56,9 +58,11 @@ function parseLaunchResponse(body: unknown): DevServerLaunchResponse | null {
 export function useDevServer({
   sessionId,
   canRun,
+  ensureSandboxReady,
 }: {
   sessionId: string;
   canRun: boolean;
+  ensureSandboxReady?: EnsureSandboxReady;
 }): DevServerControls {
   const [state, setState] = useState<DevServerLaunchState>({ status: "idle" });
 
@@ -78,6 +82,12 @@ export function useDevServer({
 
   const handlePrimaryAction = useCallback(async () => {
     if (state.status === "ready") {
+      const sandboxReady = await ensureSandboxReady?.();
+      if (sandboxReady === false) {
+        setState({ status: "error", message: "Failed to start sandbox" });
+        return;
+      }
+
       openDevServerUrl(state.info.url);
       return;
     }
@@ -89,6 +99,11 @@ export function useDevServer({
     setState({ status: "starting" });
 
     try {
+      const sandboxReady = await ensureSandboxReady?.();
+      if (sandboxReady === false) {
+        throw new Error("Failed to start sandbox");
+      }
+
       const response = await fetch(`/api/sessions/${sessionId}/dev-server`, {
         method: "POST",
       });
@@ -117,7 +132,7 @@ export function useDevServer({
             : "Failed to launch dev server",
       });
     }
-  }, [openDevServerUrl, sessionId, state]);
+  }, [ensureSandboxReady, openDevServerUrl, sessionId, state]);
 
   const handleStopAction = useCallback(async () => {
     if (state.status !== "ready") {

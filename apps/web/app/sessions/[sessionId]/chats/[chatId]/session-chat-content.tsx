@@ -1631,6 +1631,7 @@ export function SessionChatContent({
     lastAt: 0,
   });
   const shouldSkipServerSnapshotOverwriteRef = useRef(false);
+  const sandboxActionReadyPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const refreshCurrentChatSnapshot = useCallback(async (): Promise<void> => {
     if (shouldSkipServerSnapshotOverwriteRef.current) {
@@ -2691,14 +2692,64 @@ export function SessionChatContent({
     !isRestoringSnapshot &&
     !isReconnectingSandbox &&
     !isHibernatingUi;
+  const canUseSandboxActions = !isArchived;
   const canUseCodeEditor = codeEditorDisabledReason === null;
+  const ensureSandboxReadyForAction =
+    useCallback(async (): Promise<boolean> => {
+      if (isSandboxActive) {
+        return true;
+      }
+
+      if (isArchived) {
+        return false;
+      }
+
+      if (sandboxActionReadyPromiseRef.current) {
+        return sandboxActionReadyPromiseRef.current;
+      }
+
+      const readyPromise = (async () => {
+        if (isCreatingSandbox || isRestoringSnapshot || isReconnectingSandbox) {
+          return waitForSandboxReady(12);
+        }
+
+        if (hasSnapshot || hasRuntimeSandboxState || isHibernatingUi) {
+          await _handleRestoreSnapshot();
+        } else {
+          await _handleCreateNewSandbox();
+        }
+
+        return waitForSandboxReady(12);
+      })();
+
+      sandboxActionReadyPromiseRef.current = readyPromise;
+      try {
+        return await readyPromise;
+      } finally {
+        sandboxActionReadyPromiseRef.current = null;
+      }
+    }, [
+      _handleCreateNewSandbox,
+      _handleRestoreSnapshot,
+      hasRuntimeSandboxState,
+      hasSnapshot,
+      isArchived,
+      isCreatingSandbox,
+      isHibernatingUi,
+      isReconnectingSandbox,
+      isRestoringSnapshot,
+      isSandboxActive,
+      waitForSandboxReady,
+    ]);
   const devServer = useDevServer({
     sessionId: session.id,
     canRun: canRunDevServer,
+    ensureSandboxReady: ensureSandboxReadyForAction,
   });
   const codeEditor = useCodeEditor({
     sessionId: session.id,
     canRun: canRunDevServer && canUseCodeEditor,
+    ensureSandboxReady: ensureSandboxReadyForAction,
   });
   const isCodeEditorActionDisabled =
     !canUseCodeEditor ||
@@ -2792,7 +2843,7 @@ export function SessionChatContent({
     prDeploymentUrl ??
     (isDeploymentFailed ? failedDeploymentUrl : null);
   const showHeaderActions =
-    canRunDevServer || Boolean(previewDeploymentTargetUrl);
+    canUseSandboxActions || Boolean(previewDeploymentTargetUrl);
 
   // When auto-commit lands (transitions from committing to clean), mark the
   // current preview deployment as stale so the UI shows "Deploying…" until
@@ -2988,7 +3039,7 @@ export function SessionChatContent({
         showHeaderActions &&
         createPortal(
           <div className="flex items-center gap-1">
-            {canRunDevServer && (
+            {canUseSandboxActions && (
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>

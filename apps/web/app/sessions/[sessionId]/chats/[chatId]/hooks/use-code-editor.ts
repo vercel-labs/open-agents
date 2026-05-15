@@ -24,6 +24,8 @@ export interface CodeEditorControls {
   handleStop: () => Promise<void>;
 }
 
+type EnsureSandboxReady = () => Promise<boolean>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -56,9 +58,11 @@ function parseLaunchResponse(body: unknown): CodeEditorLaunchResponse | null {
 export function useCodeEditor({
   sessionId,
   canRun,
+  ensureSandboxReady,
 }: {
   sessionId: string;
   canRun: boolean;
+  ensureSandboxReady?: EnsureSandboxReady;
 }): CodeEditorControls {
   const router = useRouter();
   const [state, setState] = useState<CodeEditorState>({ status: "idle" });
@@ -134,6 +138,11 @@ export function useCodeEditor({
       setState({ status: "starting" });
 
       try {
+        const sandboxReady = await ensureSandboxReady?.();
+        if (sandboxReady === false) {
+          throw new Error("Failed to start sandbox");
+        }
+
         const response = await fetch(`/api/sessions/${sessionId}/code-editor`, {
           method: "POST",
         });
@@ -167,17 +176,39 @@ export function useCodeEditor({
         });
         return null;
       }
-    }, [sessionId, state]);
+    }, [ensureSandboxReady, sessionId, state]);
 
   const handleOpen = useCallback(async () => {
+    if (state.status === "ready") {
+      const sandboxReady = await ensureSandboxReady?.();
+      if (sandboxReady === false) {
+        setState({ status: "error", message: "Failed to start sandbox" });
+        return;
+      }
+
+      openEditorPage();
+      return;
+    }
+
     const info = await ensureRunning();
     if (info) {
       openEditorPage();
     }
-  }, [ensureRunning, openEditorPage]);
+  }, [ensureRunning, ensureSandboxReady, openEditorPage, state]);
 
   const handleOpenFile = useCallback(
     async (_filePath: string) => {
+      if (state.status === "ready") {
+        const sandboxReady = await ensureSandboxReady?.();
+        if (sandboxReady === false) {
+          setState({ status: "error", message: "Failed to start sandbox" });
+          return;
+        }
+
+        openEditorPage();
+        return;
+      }
+
       const info = await ensureRunning();
       if (info) {
         // Open the codespace page; file-specific deep linking can be added
@@ -185,7 +216,7 @@ export function useCodeEditor({
         openEditorPage();
       }
     },
-    [ensureRunning, openEditorPage],
+    [ensureRunning, ensureSandboxReady, openEditorPage, state],
   );
 
   const handleStop = useCallback(async () => {
