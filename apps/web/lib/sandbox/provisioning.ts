@@ -7,7 +7,7 @@ import {
 } from "@open-agents/sandbox";
 import {
   getSessionById,
-  updateSession,
+  updateSessionIfNotArchived,
   type SessionRecord,
 } from "@/lib/db/sessions";
 import { db } from "@/lib/db/client";
@@ -56,6 +56,13 @@ export type ProvisionSessionSandboxResult = {
   didSetupWorkspace: boolean;
   session: SessionRecord;
 };
+
+export class SessionArchivedDuringProvisioningError extends Error {
+  constructor(sessionId: string) {
+    super(`Session ${sessionId} was archived during sandbox provisioning`);
+    this.name = "SessionArchivedDuringProvisioningError";
+  }
+}
 
 function isSandboxState(value: unknown): value is SandboxState {
   return (
@@ -181,6 +188,22 @@ async function installSessionGlobalSkills(params: {
   }
 }
 
+async function stopSandboxAfterArchiveRace(params: {
+  sessionId: string;
+  sandbox: Sandbox;
+}): Promise<never> {
+  try {
+    await params.sandbox.stop();
+  } catch (error) {
+    console.error(
+      `Failed to stop sandbox after session ${params.sessionId} was archived during provisioning:`,
+      error,
+    );
+  }
+
+  throw new SessionArchivedDuringProvisioningError(params.sessionId);
+}
+
 export async function provisionSessionSandbox(params: {
   sessionId: string;
   userId?: string;
@@ -235,7 +258,7 @@ export async function provisionSessionSandbox(params: {
     ? rawSandboxState
     : buildSandboxState(session);
 
-  const updatedSession = await updateSession(params.sessionId, {
+  const updatedSession = await updateSessionIfNotArchived(params.sessionId, {
     sandboxState,
     snapshotUrl: null,
     snapshotCreatedAt: null,
@@ -243,6 +266,13 @@ export async function provisionSessionSandbox(params: {
     lifecycleError: null,
     ...buildActiveLifecycleUpdate(sandboxState),
   });
+
+  if (!updatedSession) {
+    await stopSandboxAfterArchiveRace({
+      sessionId: params.sessionId,
+      sandbox,
+    });
+  }
 
   await installSessionGlobalSkills({
     session,

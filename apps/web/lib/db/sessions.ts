@@ -315,6 +315,28 @@ export async function updateSession(
   return session ? normalizeSessionRecord(session) : session;
 }
 
+export async function updateSessionIfNotArchived(
+  sessionId: string,
+  data: Partial<Omit<NewSession, "id" | "userId" | "createdAt">>,
+) {
+  const [session] = await db
+    .update(sessions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        ne(sessions.status, "archived"),
+        or(
+          isNull(sessions.lifecycleState),
+          ne(sessions.lifecycleState, "archived"),
+        ),
+      ),
+    )
+    .returning();
+
+  return session ? normalizeSessionRecord(session) : session;
+}
+
 /**
  * Atomically claims the session lifecycle lease when no run is currently
  * recorded. Returns true when the claim succeeds.

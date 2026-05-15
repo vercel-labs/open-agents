@@ -3,6 +3,7 @@ import "server-only";
 import { start, getRun } from "workflow/api";
 import { sandboxProvisioningWorkflow } from "@/app/workflows/sandbox-provisioning";
 import {
+  clearSessionSandboxProvisioningRunIdIfOwned,
   claimSessionSandboxProvisioningRunId,
   getSessionById,
   updateSession,
@@ -54,7 +55,22 @@ export async function kickSandboxProvisioningWorkflow(
         runId: session.sandboxProvisioningRunId,
       };
     }
-    await updateSession(sessionId, { sandboxProvisioningRunId: null });
+    const cleared = await clearSessionSandboxProvisioningRunIdIfOwned(
+      sessionId,
+      session.sandboxProvisioningRunId,
+    );
+    if (!cleared) {
+      const latest = await getSessionById(sessionId);
+      if (!latest || latest.status === "archived") {
+        return { status: "skipped" };
+      }
+      if (isSandboxActive(latest.sandboxState)) {
+        return { status: "active" };
+      }
+      if (latest.sandboxProvisioningRunId) {
+        return { status: "existing", runId: latest.sandboxProvisioningRunId };
+      }
+    }
   }
 
   const run = await start(sandboxProvisioningWorkflow, [sessionId]);

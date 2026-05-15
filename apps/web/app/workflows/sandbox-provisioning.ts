@@ -5,7 +5,10 @@ import {
   getSessionById,
   updateSession,
 } from "@/lib/db/sessions";
-import { provisionSessionSandbox } from "@/lib/sandbox/provisioning";
+import {
+  provisionSessionSandbox,
+  SessionArchivedDuringProvisioningError,
+} from "@/lib/sandbox/provisioning";
 
 async function runProvisioning(sessionId: string, runId: string) {
   "use step";
@@ -34,6 +37,11 @@ async function runProvisioning(sessionId: string, runId: string) {
       sandboxState: result.sandboxState,
     };
   } catch (error) {
+    if (error instanceof SessionArchivedDuringProvisioningError) {
+      await clearSessionSandboxProvisioningRunIdIfOwned(sessionId, runId);
+      return { skipped: true, reason: "session-archived" };
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     await updateSession(sessionId, {
       lifecycleState: "failed",
