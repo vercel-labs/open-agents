@@ -110,6 +110,10 @@ export async function getSessionById(sessionId: string) {
   return session ? normalizeSessionRecord(session) : session;
 }
 
+export type SessionRecord = NonNullable<
+  Awaited<ReturnType<typeof getSessionById>>
+>;
+
 export async function getShareById(shareId: string) {
   return db.query.shares.findFirst({
     where: eq(shares.id, shareId),
@@ -323,6 +327,46 @@ export async function claimSessionLifecycleRunId(
     .update(sessions)
     .set({ lifecycleRunId: runId, updatedAt: new Date() })
     .where(and(eq(sessions.id, sessionId), isNull(sessions.lifecycleRunId)))
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
+/**
+ * Atomically claims the session sandbox provisioning lease when no run is
+ * currently recorded. Returns true when the claim succeeds.
+ */
+export async function claimSessionSandboxProvisioningRunId(
+  sessionId: string,
+  runId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({ sandboxProvisioningRunId: runId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        isNull(sessions.sandboxProvisioningRunId),
+      ),
+    )
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
+export async function clearSessionSandboxProvisioningRunIdIfOwned(
+  sessionId: string,
+  runId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({ sandboxProvisioningRunId: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        eq(sessions.sandboxProvisioningRunId, runId),
+      ),
+    )
     .returning({ id: sessions.id });
 
   return Boolean(updated);

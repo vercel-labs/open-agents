@@ -253,6 +253,13 @@
       "when": 1776850100000,
       "tag": "0035_secret_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778835412125,
+      "tag": "0036_faulty_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

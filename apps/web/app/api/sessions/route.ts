@@ -19,6 +19,7 @@ import {
   parseGitHubHttpsUrl,
 } from "@/lib/github/urls";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { kickSandboxProvisioningWorkflow } from "@/lib/sandbox/provisioning-kick";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
@@ -402,6 +403,13 @@ export async function POST(req: Request) {
         title: "New chat",
         modelId: preferences.defaultModelId,
       },
+    });
+
+    await kickSandboxProvisioningWorkflow(result.session.id).catch((error) => {
+      console.error(
+        `Failed to kick sandbox provisioning for session ${result.session.id}:`,
+        error,
+      );
     });
 
     return Response.json(result);

@@ -23,6 +23,7 @@ let matchingProjects: VercelProjectSelection[] = [];
 let matchingProjectsError: Error | null = null;
 const createCalls: Array<Record<string, unknown>> = [];
 const upsertCalls: Array<Record<string, unknown>> = [];
+const provisioningKickCalls: string[] = [];
 
 const originalNodeEnv = process.env.NODE_ENV;
 
@@ -101,6 +102,13 @@ mock.module("@/lib/db/sessions", () => ({
   getUsedSessionTitles: async () => new Set<string>(),
 }));
 
+mock.module("@/lib/sandbox/provisioning-kick", () => ({
+  kickSandboxProvisioningWorkflow: async (sessionId: string) => {
+    provisioningKickCalls.push(sessionId);
+    return { status: "started", runId: `provision-${sessionId}` };
+  },
+}));
+
 const routeModulePromise = import("./route");
 
 function createJsonRequest(
@@ -134,6 +142,7 @@ describe("/api/sessions POST vercel project linking", () => {
     matchingProjectsError = null;
     createCalls.length = 0;
     upsertCalls.length = 0;
+    provisioningKickCalls.length = 0;
   });
 
   test("blocks additional sessions for managed template trial users", async () => {
@@ -251,6 +260,7 @@ describe("/api/sessions POST vercel project linking", () => {
     });
     expect(body.session.vercelProjectId).toBe("project-1");
     expect(body.session.vercelProjectName).toBe("app");
+    expect(provisioningKickCalls).toEqual([String(body.session.id)]);
   });
 
   test("rejects explicit Vercel projects that are not a live match for the repo", async () => {
