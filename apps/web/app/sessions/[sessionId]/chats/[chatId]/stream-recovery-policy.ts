@@ -31,12 +31,9 @@ export function getStreamRecoveryDecision(options: {
     now,
     lastRecoveryAt,
     status,
-    hasAssistantRenderableContent,
-    inFlightStartedAt,
     isProbeInFlight,
     isVisibilityRecovery = false,
     minIntervalMs = STREAM_RECOVERY_MIN_INTERVAL_MS,
-    stallMs = STREAM_RECOVERY_STALL_MS,
   } = options;
 
   if (now - lastRecoveryAt < minIntervalMs) {
@@ -57,19 +54,7 @@ export function getStreamRecoveryDecision(options: {
     return "probe";
   }
 
-  if (status !== "submitted" || hasAssistantRenderableContent) {
-    return "none";
-  }
-
-  if (inFlightStartedAt === null || now - inFlightStartedAt < stallMs) {
-    return "none";
-  }
-
-  if (isProbeInFlight) {
-    return "none";
-  }
-
-  return "probe";
+  return "none";
 }
 
 export function shouldScheduleStallRecovery(options: {
@@ -77,10 +62,9 @@ export function shouldScheduleStallRecovery(options: {
   hasAssistantRenderableContent: boolean;
   isDocumentVisible: boolean;
 }): boolean {
-  const { isChatInFlight, hasAssistantRenderableContent, isDocumentVisible } =
-    options;
+  void options;
 
-  return isChatInFlight && !hasAssistantRenderableContent && isDocumentVisible;
+  return false;
 }
 
 export function getStreamRecoveryDelayMs(options: {
