@@ -431,7 +431,6 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         assistantId: "gen-id-1",
-        inputMessagesPersisted: true,
         maxSteps: 500,
         requestUrl: "http://localhost/api/chat",
         authSession: currentAuthSession,

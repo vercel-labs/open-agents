@@ -608,9 +608,9 @@ export async function runAgentWorkflow(options: Options) {
       : (options.assistantId ?? generateIdAi());
 
   const modelMessagesPromise = convertMessages(options.messages);
-  let inputMessagesPersistPromise = options.inputMessagesPersisted
+  const inputMessagesPersistPromise = options.inputMessagesPersisted
     ? Promise.resolve()
-    : undefined;
+    : persistInputMessages(options.chatId, options.messages);
   const modelRuntimePromise = resolveChatModelRuntime({
     userId: options.userId,
     sessionId: options.sessionId,
@@ -644,17 +644,12 @@ export async function runAgentWorkflow(options: Options) {
     await Promise.allSettled([
       runtimePromise,
       modelMessagesPromise,
-      ...(inputMessagesPersistPromise ? [inputMessagesPersistPromise] : []),
+      inputMessagesPersistPromise,
       modelRuntimePromise,
     ]);
     await closeStream(writable);
     return;
   }
-
-  inputMessagesPersistPromise ??= persistInputMessages(
-    options.chatId,
-    options.messages,
-  );
 
   let selectedModelId = APP_DEFAULT_MODEL_ID;
   let modelId = APP_DEFAULT_MODEL_ID;

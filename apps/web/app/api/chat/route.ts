@@ -148,7 +148,6 @@ export async function POST(req: Request) {
       requestUrl: req.url,
       authSession: session ?? null,
       assistantId: generateId(),
-      inputMessagesPersisted: true,
       maxSteps: 500,
     },
   ]);
