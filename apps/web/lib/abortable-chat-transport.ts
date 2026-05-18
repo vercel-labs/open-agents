@@ -1,16 +1,47 @@
 import type { UIMessage } from "ai";
-import { DefaultChatTransport } from "ai";
+import {
+  WorkflowChatTransport,
+  type WorkflowChatTransportOptions,
+} from "@workflow/ai";
+
+type RequestBody = Record<string, unknown>;
+type RequestBodyFactory = () => RequestBody;
 
 type FetchFunction = typeof globalThis.fetch;
+type AbortableWorkflowChatTransportOptions<UI_MESSAGE extends UIMessage> =
+  WorkflowChatTransportOptions<UI_MESSAGE> & {
+    body?: RequestBody | RequestBodyFactory;
+  };
+
+function resolveBody(body: RequestBody | RequestBodyFactory | undefined) {
+  return typeof body === "function" ? body() : body;
+}
+
+function mergeHeaders(...headerInits: Array<HeadersInit | undefined>) {
+  const headers = new Headers();
+  for (const headerInit of headerInits) {
+    if (!headerInit) continue;
+
+    new Headers(headerInit).forEach((value, key) => {
+      headers.set(key, value);
+    });
+  }
+
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return headers;
+}
 
 /**
  * A chat transport that allows aborting ALL active fetch connections,
  * including `reconnectToStream` requests.
  *
- * The AI SDK's `reconnectToStream` does not pass an abort signal to its
- * internal fetch call, so `chatInstance.stop()` cannot cancel resumed
- * streams. This transport wraps every fetch with a transport-level abort
- * signal so that `abort()` reliably tears down any active connection.
+ * The Workflow transport tracks stream chunk indexes across reconnects so the
+ * client resumes from the last received chunk instead of replaying the stream
+ * from the beginning. This wrapper keeps that behavior while adding a
+ * transport-level abort signal for route cleanup and explicit stops.
  *
  * After `abort()` the transport is immediately reusable — a fresh controller
  * is created so that subsequent fetches are not affected. This makes it safe
@@ -18,29 +49,70 @@ type FetchFunction = typeof globalThis.fetch;
  */
 export class AbortableChatTransport<
   UI_MESSAGE extends UIMessage = UIMessage,
-> extends DefaultChatTransport<UI_MESSAGE> {
+> extends WorkflowChatTransport<UI_MESSAGE> {
   private _state: { controller: AbortController };
 
-  constructor(
-    options: ConstructorParameters<typeof DefaultChatTransport<UI_MESSAGE>>[0],
-  ) {
+  constructor(options: AbortableWorkflowChatTransportOptions<UI_MESSAGE>) {
     // Mutable ref so the fetch wrapper always reads the *current* controller,
     // even after abort() swaps it out.
     const state = { controller: new AbortController() };
     const outerFetch: FetchFunction = options?.fetch ?? globalThis.fetch;
 
-    super({
-      ...options,
-      fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+    const fetchWithAbort: FetchFunction = Object.assign(
+      (
+        input: Parameters<FetchFunction>[0],
+        init?: Parameters<FetchFunction>[1],
+      ) =>
         outerFetch(input, {
           ...init,
           signal: init?.signal
             ? AbortSignal.any([state.controller.signal, init.signal])
             : state.controller.signal,
-        })) as FetchFunction,
+        }),
+      {
+        preconnect: outerFetch.preconnect,
+      },
+    );
+
+    super({
+      ...options,
+      fetch: fetchWithAbort,
+      prepareSendMessagesRequest: async (request) => {
+        const prepared = await options.prepareSendMessagesRequest?.(request);
+        const configuredBody = resolveBody(options.body);
+        return {
+          ...prepared,
+          headers: mergeHeaders(request.headers, prepared?.headers),
+          body: {
+            ...configuredBody,
+            ...request.body,
+            messages: request.messages,
+            ...prepared?.body,
+          },
+        };
+      },
     });
 
     this._state = state;
+  }
+
+  override async reconnectToStream(
+    options: Parameters<
+      WorkflowChatTransport<UI_MESSAGE>["reconnectToStream"]
+    >[0],
+  ) {
+    try {
+      return await super.reconnectToStream(options);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Failed to fetch chat: 204")
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
   }
 
   /**

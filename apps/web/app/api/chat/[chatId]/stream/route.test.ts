@@ -24,6 +24,7 @@ let sessionRecord: {
 
 let workflowRunStatus: string = "running";
 let getRunShouldThrow = false;
+let lastStartIndex: number | undefined;
 
 const spies = {
   updateChatActiveStreamId: mock(() => Promise.resolve()),
@@ -39,21 +40,36 @@ globalThis.fetch = (async () =>
   })) as unknown as typeof fetch;
 
 mock.module("ai", () => ({
-  createUIMessageStreamResponse: ({ stream }: { stream: ReadableStream }) =>
-    new Response(stream, { status: 200 }),
+  createUIMessageStreamResponse: ({
+    stream,
+    headers,
+  }: {
+    stream: ReadableStream;
+    headers?: HeadersInit;
+  }) => new Response(stream, { status: 200, headers }),
 }));
+
+function createWorkflowReadableStream(startIndex?: number) {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.close();
+    },
+  });
+  return Object.assign(stream, {
+    getTailIndex: () => Promise.resolve(12),
+    startIndex,
+  });
+}
 
 mock.module("workflow/api", () => ({
   getRun: () => {
     if (getRunShouldThrow) throw new Error("Run not found");
     return {
       status: Promise.resolve(workflowRunStatus),
-      getReadable: () =>
-        new ReadableStream({
-          start(controller) {
-            controller.close();
-          },
-        }),
+      getReadable: (options?: { startIndex?: number }) => {
+        lastStartIndex = options?.startIndex;
+        return createWorkflowReadableStream(options?.startIndex);
+      },
     };
   },
 }));
@@ -87,6 +103,16 @@ function createStreamRequest() {
   });
 }
 
+function createStreamRequestWithStartIndex(startIndex: string) {
+  return new Request(
+    `http://localhost/api/chat/chat-1/stream?startIndex=${startIndex}`,
+    {
+      method: "GET",
+      headers: { cookie: "session=abc" },
+    },
+  );
+}
+
 const routeContext = {
   params: Promise.resolve({ chatId: "chat-1" }),
 };
@@ -102,6 +128,7 @@ beforeEach(() => {
   };
   workflowRunStatus = "running";
   getRunShouldThrow = false;
+  lastStartIndex = undefined;
   Object.values(spies).forEach((s) => s.mockClear());
 });
 
@@ -145,7 +172,35 @@ describe("GET /api/chat/[chatId]/stream", () => {
 
     const response = await GET(createStreamRequest(), routeContext);
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-workflow-stream-tail-index")).toBe("12");
+    expect(lastStartIndex).toBeUndefined();
     expect(spies.updateChatActiveStreamId).not.toHaveBeenCalled();
+  });
+
+  test("passes startIndex to workflow stream when reconnecting", async () => {
+    workflowRunStatus = "running";
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      createStreamRequestWithStartIndex("8"),
+      routeContext,
+    );
+
+    expect(response.status).toBe(200);
+    expect(lastStartIndex).toBe(8);
+    expect(response.headers.get("x-workflow-stream-tail-index")).toBe("12");
+  });
+
+  test("rejects invalid startIndex", async () => {
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      createStreamRequestWithStartIndex("invalid"),
+      routeContext,
+    );
+
+    expect(response.status).toBe(400);
+    expect(lastStartIndex).toBeUndefined();
   });
 
   test("returns stream response when workflow is pending", async () => {
