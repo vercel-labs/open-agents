@@ -107,6 +107,7 @@ mock.module("ai", () => ({
     stream: ReadableStream;
     headers?: Record<string, string>;
   }) => new Response(stream, { status: 200, headers }),
+  generateId: () => "gen-id-1",
   isToolUIPart: (part: { type: string }) =>
     part.type === "tool-invocation" || part.type.startsWith("tool-"),
 }));
@@ -429,6 +430,8 @@ describe("/api/chat route", () => {
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
+        assistantId: "gen-id-1",
+        inputMessagesPersisted: true,
         maxSteps: 500,
         requestUrl: "http://localhost/api/chat",
         authSession: currentAuthSession,

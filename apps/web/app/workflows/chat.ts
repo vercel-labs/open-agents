@@ -69,6 +69,8 @@ type Options = {
   selectedModelId?: string;
   modelId?: string;
   agentOptions?: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
+  assistantId?: string;
+  inputMessagesPersisted?: boolean;
   maxSteps?: number;
   autoCommitEnabled?: boolean;
   autoCreatePrEnabled?: boolean;
@@ -227,11 +229,6 @@ async function resolveChatModelRuntime(params: {
     autoCreatePrEnabled,
   };
 }
-
-const generateId = async () => {
-  "use step";
-  return generateIdAi();
-};
 
 async function persistInputMessages(
   chatId: string,
@@ -605,6 +602,27 @@ export async function runAgentWorkflow(options: Options) {
     throw new Error("runAgentWorkflow requires at least one message");
   }
 
+  const assistantId =
+    latestMessage.role === "assistant"
+      ? latestMessage.id
+      : (options.assistantId ?? generateIdAi());
+
+  const modelMessagesPromise = convertMessages(options.messages);
+  let inputMessagesPersistPromise = options.inputMessagesPersisted
+    ? Promise.resolve()
+    : undefined;
+  const modelRuntimePromise = resolveChatModelRuntime({
+    userId: options.userId,
+    sessionId: options.sessionId,
+    chatId: options.chatId,
+    requestUrl: options.requestUrl,
+    authSession: options.authSession,
+  });
+  const runtimePromise = resolveChatSandboxRuntime({
+    userId: options.userId,
+    sessionId: options.sessionId,
+  });
+
   // Self-register this workflow's runId onto the chat as the very first step.
   // The HTTP POST handler also writes this (via compareAndSetChatActiveStreamId
   // after `start()` returns), but that write is best-effort and can be lost
@@ -612,25 +630,32 @@ export async function runAgentWorkflow(options: Options) {
   // it runs. Persisting from inside the workflow guarantees that as long as
   // the workflow is running, the chat row points at it and the client can
   // resume on refresh.
-  const activeStreamClaim = await claimActiveStream(
+  const activeStreamClaimPromise = claimActiveStream(
     options.chatId,
     workflowRunId,
+    writable,
+    assistantId,
   );
+  const activeStreamClaim = await activeStreamClaimPromise;
   if (activeStreamClaim === "conflict") {
     // Another workflow claimed the slot while this run was queued or starting.
     // Exit before emitting chunks or persisting messages so only the owning
     // workflow can mutate this chat.
+    await Promise.allSettled([
+      runtimePromise,
+      modelMessagesPromise,
+      ...(inputMessagesPersistPromise ? [inputMessagesPersistPromise] : []),
+      modelRuntimePromise,
+    ]);
     await closeStream(writable);
     return;
   }
 
-  const modelMessagesPromise = convertMessages(options.messages);
-  const inputMessagesPersistPromise = persistInputMessages(
+  inputMessagesPersistPromise ??= persistInputMessages(
     options.chatId,
     options.messages,
   );
-  const assistantId =
-    latestMessage.role === "assistant" ? latestMessage.id : await generateId();
+
   let selectedModelId = APP_DEFAULT_MODEL_ID;
   let modelId = APP_DEFAULT_MODEL_ID;
 
@@ -669,19 +694,10 @@ export async function runAgentWorkflow(options: Options) {
   let shouldRefreshCachedDiff = false;
 
   try {
-    const [runtime, modelRuntime, modelMessages] = await Promise.all([
-      resolveChatSandboxRuntime({
-        userId: options.userId,
-        sessionId: options.sessionId,
-        assistantId,
-      }),
-      resolveChatModelRuntime({
-        userId: options.userId,
-        sessionId: options.sessionId,
-        chatId: options.chatId,
-        requestUrl: options.requestUrl,
-        authSession: options.authSession,
-      }),
+    const [, runtime, modelRuntime, modelMessages] = await Promise.all([
+      activeStreamClaimPromise,
+      runtimePromise,
+      modelRuntimePromise,
       modelMessagesPromise,
       inputMessagesPersistPromise,
     ]);

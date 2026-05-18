@@ -52,11 +52,27 @@ const spies = {
   persistSandboxState: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
     Promise.resolve(),
   ),
-  resolveChatSandboxRuntime: mock((params: { assistantId: string }) => {
-    writtenChunks.push({ type: "start", messageId: params.assistantId });
+  resolveChatSandboxRuntime: mock((_params: { assistantId?: string }) => {
     return Promise.resolve(createResolvedChatSandboxRuntime());
   }),
-  claimActiveStream: mock(() => Promise.resolve("claimed")),
+  claimActiveStream: mock(
+    async (
+      _chatId?: unknown,
+      _workflowRunId?: unknown,
+      writable?: WritableStream<UIMessageChunk>,
+      messageId?: string,
+    ) => {
+      if (writable && messageId) {
+        const writer = writable.getWriter();
+        try {
+          await writer.write({ type: "start", messageId });
+        } finally {
+          writer.releaseLock();
+        }
+      }
+      return "claimed";
+    },
+  ),
   closeStream: mock((writable: WritableStream<UIMessageChunk>) =>
     writable.close(),
   ),
@@ -443,8 +459,23 @@ describe("runAgentWorkflow", () => {
   });
 
   test("continues when claiming the stream errors", async () => {
-    spies.claimActiveStream.mockImplementationOnce(() =>
-      Promise.resolve("error"),
+    spies.claimActiveStream.mockImplementationOnce(
+      async (
+        _chatId?: unknown,
+        _workflowRunId?: unknown,
+        writable?: WritableStream<UIMessageChunk>,
+        messageId?: string,
+      ) => {
+        if (writable && messageId) {
+          const writer = writable.getWriter();
+          try {
+            await writer.write({ type: "start", messageId });
+          } finally {
+            writer.releaseLock();
+          }
+        }
+        return "error";
+      },
     );
 
     await runAgentWorkflow(makeOptions());
@@ -463,18 +494,8 @@ describe("runAgentWorkflow", () => {
     expect(types[types.length - 1]).toBe("finish");
   });
 
-  test("streams transient workspace setup status from runtime prep", async () => {
-    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
-      writtenChunks.push({ type: "start", messageId: params.assistantId });
-      writtenChunks.push({
-        type: "data-workspace-status",
-        id: "workspace-status",
-        data: {
-          status: "setting-up",
-          message: "Setting up the workspace...",
-        },
-        transient: true,
-      });
+  test("does not stream transient workspace setup status from runtime prep", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
       return createResolvedChatSandboxRuntime({
         didSetupWorkspace: true,
       });
@@ -483,20 +504,13 @@ describe("runAgentWorkflow", () => {
     await runAgentWorkflow(makeOptions());
 
     expect(writtenChunks[0]).toEqual({ type: "start", messageId: "gen-id-1" });
-    expect(writtenChunks[1]).toEqual({
-      type: "data-workspace-status",
-      id: "workspace-status",
-      data: {
-        status: "setting-up",
-        message: "Setting up the workspace...",
-      },
-      transient: true,
-    });
+    expect(
+      writtenChunks.some((chunk) => chunk.type === "data-workspace-status"),
+    ).toBe(false);
   });
 
   test("streams a user-visible message when workspace setup fails", async () => {
-    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
-      writtenChunks.push({ type: "start", messageId: params.assistantId });
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
       throw new Error("Connect GitHub to access repositories");
     });
 
@@ -532,8 +546,7 @@ describe("runAgentWorkflow", () => {
   });
 
   test("streams an archived-session setup message when runtime rejects", async () => {
-    spies.resolveChatSandboxRuntime.mockImplementationOnce(async (params) => {
-      writtenChunks.push({ type: "start", messageId: params.assistantId });
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
       throw new Error("Session is archived");
     });
 

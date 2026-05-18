@@ -1,4 +1,8 @@
-import { createUIMessageStreamResponse, type InferUIMessageChunk } from "ai";
+import {
+  createUIMessageStreamResponse,
+  generateId,
+  type InferUIMessageChunk,
+} from "ai";
 import { checkBotProtection } from "@/lib/botid";
 import { start } from "workflow/api";
 import type { WebAgentUIMessage } from "@/app/types";
@@ -143,6 +147,8 @@ export async function POST(req: Request) {
       userId,
       requestUrl: req.url,
       authSession: session ?? null,
+      assistantId: generateId(),
+      inputMessagesPersisted: true,
       maxSteps: 500,
     },
   ]);

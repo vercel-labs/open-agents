@@ -4,9 +4,6 @@ import {
   type Sandbox,
   type SandboxState,
 } from "@open-agents/sandbox";
-import type { UIMessageChunk } from "ai";
-import { getWritable } from "workflow";
-import type { WebAgentWorkspaceStatusData } from "@/app/types";
 import { getSessionById } from "@/lib/db/sessions";
 import {
   kickSandboxProvisioningWorkflow,
@@ -88,46 +85,11 @@ async function getReadySessionSandbox(params: {
   return { session, didSetupWorkspace: true };
 }
 
-async function sendWorkspaceStatus(data: WebAgentWorkspaceStatusData) {
-  const writer = getWritable<UIMessageChunk>().getWriter();
-  try {
-    await writer.write({
-      type: "data-workspace-status",
-      id: "workspace-status",
-      data,
-      transient: true,
-    });
-  } finally {
-    writer.releaseLock();
-  }
-}
-
-async function sendStart(messageId: string) {
-  const writer = getWritable<UIMessageChunk>().getWriter();
-  try {
-    await writer.write({ type: "start", messageId });
-  } finally {
-    writer.releaseLock();
-  }
-}
-
 export async function resolveChatSandboxRuntime(params: {
   userId: string;
   sessionId: string;
-  assistantId: string;
 }): Promise<ResolvedChatSandboxRuntime> {
   "use step";
-
-  await sendStart(params.assistantId);
-
-  const initialSession = await getSessionById(params.sessionId);
-  const shouldWaitForSetup = !isSandboxActive(initialSession?.sandboxState);
-  if (shouldWaitForSetup) {
-    await sendWorkspaceStatus({
-      status: "setting-up",
-      message: "Setting up the workspace...",
-    });
-  }
 
   const { session, didSetupWorkspace } = await getReadySessionSandbox({
     sessionId: params.sessionId,

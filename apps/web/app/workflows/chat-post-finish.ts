@@ -294,6 +294,8 @@ export type ClaimActiveStreamResult = "claimed" | "conflict" | "error";
 export async function claimActiveStream(
   chatId: string,
   workflowRunId: string,
+  writable?: WritableStream<UIMessageChunk>,
+  messageId?: string,
 ): Promise<ClaimActiveStreamResult> {
   "use step";
 
@@ -311,10 +313,26 @@ export async function claimActiveStream(
         );
         return "conflict";
       }
+      if (writable && messageId) {
+        const writer = writable.getWriter();
+        try {
+          await writer.write({ type: "start", messageId });
+        } finally {
+          writer.releaseLock();
+        }
+      }
       return "claimed";
     } catch (error) {
       if (attempt === ACTIVE_STREAM_CLAIM_MAX_ATTEMPTS) {
         console.error("[workflow] Failed to claim activeStreamId:", error);
+        if (writable && messageId) {
+          const writer = writable.getWriter();
+          try {
+            await writer.write({ type: "start", messageId });
+          } finally {
+            writer.releaseLock();
+          }
+        }
         // Non-fatal: workflow can still run, just won't be resumable.
         return "error";
       }
