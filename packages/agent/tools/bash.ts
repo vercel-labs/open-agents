@@ -30,6 +30,7 @@ interface ToolOptions {
 
 // Commands that should require approval
 const DANGEROUS_COMMAND_PATTERNS = [
+  /\bcurl\b/,
   /\brm\s+(?:[^\n;&|]*\s)?(?:-[A-Za-z]*r[A-Za-z]*f|-[A-Za-z]*f[A-Za-z]*r|-r\s+-f|-f\s+-r|-{1,2}recursive\b.*-{1,2}force\b|-{1,2}force\b.*-{1,2}recursive\b)/,
   /\bfind\b[^\n;&|]*(?:-delete|-exec\s+rm\b)/,
   /\b(?:shred|mkfs|dd)\b/,

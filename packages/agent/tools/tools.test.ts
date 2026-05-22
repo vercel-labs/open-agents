@@ -400,13 +400,17 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags rm -rf and dotenv commands", () => {
+  test("commandNeedsApproval flags curl, rm -rf, and dotenv commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(false);
     expect(commandNeedsApproval("bun install")).toBe(false);
     expect(commandNeedsApproval("custom-command --help")).toBe(false);
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
+    expect(commandNeedsApproval("curl -s https://example.com")).toBe(true);
+    expect(commandNeedsApproval("bash -c 'curl https://example.com'")).toBe(
+      true,
+    );
     expect(commandNeedsApproval("rm -fr tmp")).toBe(true);
     expect(commandNeedsApproval("rm -r -f tmp")).toBe(true);
     expect(commandNeedsApproval("find . -delete")).toBe(true);
