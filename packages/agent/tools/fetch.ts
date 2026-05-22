@@ -245,6 +245,7 @@ const fetchOutputSchema = z.union([
 ]);
 
 export const webFetchTool = tool({
+  needsApproval: true,
   description: `Fetch a URL from the web.
 
 USAGE:

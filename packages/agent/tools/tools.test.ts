@@ -520,6 +520,19 @@ describe("tools execute behavior", () => {
     expect(body.length).toBe(MAX_BODY_LENGTH);
   });
 
+  test("webFetchTool requires approval", async () => {
+    const needsApproval = await getNeedsApprovalResult(
+      webFetchTool.needsApproval,
+      { url: "https://example.com", method: "GET" },
+      {
+        sandbox: { workingDirectory: "/repo" },
+        model: "test-model",
+      },
+    );
+
+    expect(needsApproval).toBe(true);
+  });
+
   test("webFetchTool rejects public hostnames that resolve to private addresses", async () => {
     const sandbox = {
       workingDirectory: "/repo",
