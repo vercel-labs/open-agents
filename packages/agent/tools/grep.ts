@@ -69,7 +69,6 @@ EXAMPLES:
           : path.resolve(workingDirectory, searchPath);
 
         const maxTotal = 100;
-        const maxPerFile = 10;
 
         const args: string[] = ["grep", "-rn"];
         if (!caseSensitive) args.push("-i");
@@ -84,8 +83,6 @@ EXAMPLES:
         }
 
         args.push(
-          `-m`,
-          String(maxPerFile),
           "-E",
           shellEscape(pattern),
           shellEscape(absolutePath),
