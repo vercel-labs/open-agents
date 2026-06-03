@@ -14,6 +14,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - AI SDK stream handles may return `PromiseLike` values (not full `Promise`), so avoid methods like `.finally()` and use `then`/`catch` patterns that work with `PromiseLike`.
 - After schema edits, review generated Drizzle migrations for unrelated schema drift changes before committing (for example defaults on untouched columns), since `drizzle-kit generate` can include those alongside intended changes.
 - pnpm 11 requires an explicit `allowBuilds` map in `pnpm-workspace.yaml`; approve required native/tooling builds deliberately and keep non-functional lifecycle scripts disabled.
+- Keep pnpm release-age policy explicit in `pnpm-workspace.yaml`: enforce a strict one-day `minimumReleaseAge` and fail closed when publish timestamps are missing.
 - Use `pnpm run ci` for the repository verification script. `pnpm ci` invokes pnpm's built-in clean-install command instead of the package script.
 - Keep Kysely pinned to `0.28.x` until Better Auth's bundled Kysely adapter stops importing migration constants from Kysely's root entrypoint; Kysely `0.29.x` removed those root exports and breaks the Next production bundle.
 - Node 24's built-in TypeScript support uses native ESM resolution and ignores tsconfig path aliases, so utility-script dependency chains need explicit `.ts` extensions and relative imports.

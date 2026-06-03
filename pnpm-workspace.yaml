@@ -13,6 +13,10 @@ overrides:
   kysely: 0.28.17
   zod: ^4.3.6
 
+minimumReleaseAge: 1440
+minimumReleaseAgeIgnoreMissingTime: false
+minimumReleaseAgeStrict: true
+
 allowBuilds:
   "@nestjs/core": false
   "@swc/core": true
