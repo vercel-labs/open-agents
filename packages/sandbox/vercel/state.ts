@@ -1,4 +1,4 @@
-import type { Source } from "../types";
+import type { Source } from "../types.ts";
 
 /**
  * State configuration for creating, reconnecting, or restoring the current cloud sandbox provider.

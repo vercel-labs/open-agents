@@ -4,8 +4,10 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 
 ## Package Manager
 
-- Use **Bun exclusively** (not Node/npm/pnpm)
-- The monorepo uses `bun@1.2.14` as the package manager
+- Use **pnpm exclusively** for dependency management
+- The monorepo uses `pnpm@11.5.1` through Corepack
+- Use Node 24's built-in TypeScript support for utility scripts
+- Use Bun only as the test runner
 
 ## TypeScript Configuration
 
@@ -18,7 +20,7 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 
 - Indent: 2 spaces
 - Quote style: double quotes for JavaScript/TypeScript
-- Run `bun run fix` before committing
+- Run `pnpm fix` before committing
 
 ## Naming Conventions
 
@@ -32,6 +34,7 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 - **Do NOT use `.js` extensions** in imports (e.g., `import { foo } from "./utils"` not `"./utils.js"`)
   - The `.js` extension causes module resolution issues with Next.js/Turbopack
   - This applies to all packages and apps in the monorepo
+- Use explicit `.ts` extensions in modules loaded directly by Node 24 utility scripts
 - Prefer named exports over default exports
 - Group imports: external packages first, then internal packages, then relative imports
 - Use type imports when importing only types: `import type { Foo } from "./types"`
@@ -61,12 +64,10 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 - Test files use `.test.ts` suffix
 - Colocate tests with source files
 
-## Bun APIs
+## Runtime APIs
 
-- Prefer Bun APIs over Node when available:
-  - `Bun.file()` for file operations
-  - `Bun.serve()` for HTTP servers
-  - `Bun.$` for shell commands in scripts
+- Use Node APIs for utility scripts
+- Use Bun APIs only in tests when the Bun test runner requires them
 
 ## AI SDK Patterns
 

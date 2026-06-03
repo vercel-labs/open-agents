@@ -1,4 +1,4 @@
-import type { ExecResult, Sandbox } from "./interface";
+import type { ExecResult, Sandbox } from "./interface.ts";
 
 // ---- types ----
 

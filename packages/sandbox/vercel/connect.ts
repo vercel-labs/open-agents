@@ -1,7 +1,7 @@
-import type { Sandbox, SandboxHooks } from "../interface";
-import type { VercelSandboxConfig } from "./config";
-import { VercelSandbox } from "./sandbox";
-import type { VercelState } from "./state";
+import type { Sandbox, SandboxHooks } from "../interface.ts";
+import type { VercelSandboxConfig } from "./config.ts";
+import { VercelSandbox } from "./sandbox.ts";
+import type { VercelState } from "./state.ts";
 
 interface ConnectOptions {
   env?: Record<string, string>;

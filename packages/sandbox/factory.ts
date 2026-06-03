@@ -1,7 +1,7 @@
-import type { Sandbox, SandboxHooks } from "./interface";
-import type { SandboxStatus } from "./types";
-import { connectVercel } from "./vercel/connect";
-import type { VercelState } from "./vercel/state";
+import type { Sandbox, SandboxHooks } from "./interface.ts";
+import type { SandboxStatus } from "./types.ts";
+import { connectVercel } from "./vercel/connect.ts";
+import type { VercelState } from "./vercel/state.ts";
 
 // Re-export SandboxStatus from types for convenience
 export type { SandboxStatus };

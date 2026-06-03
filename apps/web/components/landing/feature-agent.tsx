@@ -8,7 +8,7 @@ const tools = [
   { name: "write", detail: "app/api/auth/route.ts" },
   { name: "write", detail: "app/api/auth/callback/route.ts" },
   { name: "edit", detail: "middleware.ts" },
-  { name: "bash", detail: "bun run typecheck" },
+  { name: "bash", detail: "pnpm typecheck" },
 ] as const;
 
 export function FeatureAgent() {

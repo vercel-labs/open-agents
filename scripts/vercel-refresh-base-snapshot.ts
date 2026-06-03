@@ -5,8 +5,8 @@
  * so the new image stays clone-ready (see `@open-agents/sandbox` snapshot-refresh).
  *
  * Usage:
- *   bun run scripts/vercel-refresh-base-snapshot.ts --command "apt-get update"
- *   bun run scripts/vercel-refresh-base-snapshot.ts --from snap_123 --command "apt-get install -y ripgrep"
+ *   pnpm sandbox:snapshot-base -- --command "apt-get update"
+ *   pnpm sandbox:snapshot-base -- --from snap_123 --command "apt-get install -y ripgrep"
  */
 
 import {
@@ -17,7 +17,7 @@ import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
-} from "../apps/web/lib/sandbox/config";
+} from "../apps/web/lib/sandbox/config.ts";
 
 const SANDBOX_BASE_SNAPSHOT_CONFIG_PATH = "apps/web/lib/sandbox/config.ts";
 
@@ -34,8 +34,8 @@ interface HelpResult {
 
 function printUsage() {
   console.log(`Usage:
-  bun run sandbox:snapshot-base -- --command "apt-get update"
-  bun run sandbox:snapshot-base -- --from snap_123 --command "apt-get install -y ripgrep"
+  pnpm sandbox:snapshot-base -- --command "apt-get update"
+  pnpm sandbox:snapshot-base -- --from snap_123 --command "apt-get install -y ripgrep"
 
 Options:
   --from <snapshot-id>         Override the starting snapshot id
