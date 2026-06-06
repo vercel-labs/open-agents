@@ -82,6 +82,7 @@ type ChatModelRuntime = {
   agentOptions: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
   autoCommitEnabled: boolean;
   autoCreatePrEnabled: boolean;
+  hasOpenPullRequest: boolean;
 };
 
 type Writable = WritableStream<UIMessageChunk>;
@@ -227,6 +228,8 @@ async function resolveChatModelRuntime(params: {
     },
     autoCommitEnabled,
     autoCreatePrEnabled,
+    hasOpenPullRequest:
+      sessionRecord.prNumber != null && sessionRecord.prStatus === "open",
   };
 }
 
@@ -577,6 +580,19 @@ function upsertAssistantDataPart(
   };
 }
 
+function removeAssistantDataPart(
+  message: WebAgentUIMessage,
+  part: WebAgentCommitDataPart | WebAgentPrDataPart,
+): WebAgentUIMessage {
+  return {
+    ...message,
+    parts: message.parts.filter(
+      (messagePart) =>
+        messagePart.type !== part.type || messagePart.id !== part.id,
+    ),
+  };
+}
+
 async function sendDataPart(
   writable: Writable,
   part: WebAgentCommitDataPart | WebAgentPrDataPart,
@@ -876,7 +892,8 @@ export async function runAgentWorkflow(options: Options) {
 
     if (
       canAutoCommit &&
-      (options.autoCreatePrEnabled ?? modelRuntime.autoCreatePrEnabled)
+      (options.autoCreatePrEnabled ?? modelRuntime.autoCreatePrEnabled) &&
+      !modelRuntime.hasOpenPullRequest
     ) {
       if (canAutoCreatePr) {
         const pendingPrPart: WebAgentPrDataPart = {
@@ -889,6 +906,7 @@ export async function runAgentWorkflow(options: Options) {
           pendingPrPart,
         );
         await sendDataPart(writable, pendingPrPart);
+
         const autoPrResult = await runAutoCreatePrStep({
           userId: options.userId,
           sessionId: options.sessionId,
@@ -898,18 +916,26 @@ export async function runAgentWorkflow(options: Options) {
           sandboxState,
         });
 
-        const resolvedPrPart: WebAgentPrDataPart = {
-          type: "data-pr",
-          id: prPartId,
-          data: buildPrData(autoPrResult),
-        };
-        pendingAssistantResponse = upsertAssistantDataPart(
-          pendingAssistantResponse,
-          resolvedPrPart,
-        );
-        await sendDataPart(writable, resolvedPrPart);
-        didUpdateGitData = true;
-        shouldRefreshCachedDiff = true;
+        if (autoPrResult.syncedExisting && !autoPrResult.error) {
+          pendingAssistantResponse = removeAssistantDataPart(
+            pendingAssistantResponse,
+            pendingPrPart,
+          );
+          shouldRefreshCachedDiff = true;
+        } else {
+          const resolvedPrPart: WebAgentPrDataPart = {
+            type: "data-pr",
+            id: prPartId,
+            data: buildPrData(autoPrResult),
+          };
+          pendingAssistantResponse = upsertAssistantDataPart(
+            pendingAssistantResponse,
+            resolvedPrPart,
+          );
+          await sendDataPart(writable, resolvedPrPart);
+          didUpdateGitData = true;
+          shouldRefreshCachedDiff = true;
+        }
       } else {
         const skippedPrPart: WebAgentPrDataPart = {
           type: "data-pr",

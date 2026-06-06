@@ -22,6 +22,14 @@ type TestResolvedChatSandboxRuntime = {
   repoName?: string;
 };
 
+type TestSuccessfulAutoCreatePrResult = {
+  created: boolean;
+  syncedExisting: boolean;
+  skipped: boolean;
+  prNumber: number;
+  prUrl: string;
+};
+
 function createResolvedChatSandboxRuntime(
   overrides: Partial<TestResolvedChatSandboxRuntime> = {},
 ): TestResolvedChatSandboxRuntime {
@@ -114,6 +122,8 @@ let testSessionRecord: {
   autoCreatePrOverride: boolean | null;
   repoOwner: string | null;
   repoName: string | null;
+  prNumber: number | null;
+  prStatus: "open" | "merged" | "closed" | null;
 };
 let testChatRecord: {
   id: string;
@@ -385,6 +395,30 @@ function makeOptions(overrides?: Record<string, unknown>) {
   } as Parameters<typeof runAgentWorkflow>[0];
 }
 
+async function waitForCondition(predicate: () => boolean) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 10);
+    });
+  }
+
+  throw new Error("Timed out waiting for condition");
+}
+
+function isPendingPrChunk(chunk: UIMessageChunk): boolean {
+  return (
+    chunk.type === "data-pr" &&
+    typeof chunk.data === "object" &&
+    chunk.data !== null &&
+    "status" in chunk.data &&
+    chunk.data.status === "pending"
+  );
+}
+
 // ── Tests ──────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -411,6 +445,8 @@ beforeEach(() => {
     autoCreatePrOverride: null,
     repoOwner: "acme",
     repoName: "repo",
+    prNumber: null,
+    prStatus: null,
   };
   testChatRecord = {
     id: "chat-1",
@@ -1422,6 +1458,178 @@ describe("runAgentWorkflow", () => {
 
     expect(spies.runAutoCommitStep).toHaveBeenCalledTimes(1);
     expect(spies.runAutoCreatePrStep).not.toHaveBeenCalled();
+  });
+
+  test("skips auto PR creation when the session already has an open PR", async () => {
+    testSessionRecord.prNumber = 42;
+    testSessionRecord.prStatus = "open";
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitSha: "abc123",
+      }),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCommitStep).toHaveBeenCalledTimes(1);
+    expect(spies.runAutoCreatePrStep).not.toHaveBeenCalled();
+    expect(writtenChunks.some((chunk) => chunk.type === "data-pr")).toBe(false);
+  });
+
+  test("allows auto PR creation when the existing PR is closed", async () => {
+    testSessionRecord.prNumber = 42;
+    testSessionRecord.prStatus = "closed";
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitSha: "abc123",
+      }),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledTimes(1);
+  });
+
+  test("allows auto PR creation when the existing PR is merged", async () => {
+    testSessionRecord.prNumber = 42;
+    testSessionRecord.prStatus = "merged";
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitSha: "abc123",
+      }),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledTimes(1);
+  });
+
+  test("streams pending PR data before auto PR creation resolves", async () => {
+    let resolveAutoPrResult:
+      | ((result: TestSuccessfulAutoCreatePrResult) => void)
+      | undefined;
+    const autoPrResultPromise = new Promise<TestSuccessfulAutoCreatePrResult>(
+      (resolve) => {
+        resolveAutoPrResult = resolve;
+      },
+    );
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitSha: "abc123",
+      }),
+    );
+    spies.runAutoCreatePrStep.mockImplementationOnce(() => autoPrResultPromise);
+
+    const workflowPromise = runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    await waitForCondition(() => writtenChunks.some(isPendingPrChunk));
+
+    expect(writtenChunks.filter((chunk) => chunk.type === "data-pr")).toEqual([
+      {
+        type: "data-pr",
+        id: "gen-id-1:pr",
+        data: { status: "pending" },
+      },
+    ]);
+
+    if (!resolveAutoPrResult) {
+      throw new Error("Auto PR promise resolver was not initialized");
+    }
+
+    resolveAutoPrResult({
+      created: true,
+      syncedExisting: false,
+      skipped: false,
+      prNumber: 42,
+      prUrl: "https://github.com/acme/repo/pull/42",
+    });
+
+    await workflowPromise;
+  });
+
+  test("does not persist PR data when auto PR only syncs an existing PR", async () => {
+    spies.runAutoCommitStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        committed: true,
+        pushed: true,
+        commitSha: "abc123",
+      }),
+    );
+    spies.runAutoCreatePrStep.mockImplementationOnce(() =>
+      Promise.resolve({
+        created: false,
+        syncedExisting: true,
+        skipped: false,
+        prNumber: 42,
+        prUrl: "https://github.com/acme/repo/pull/42",
+      }),
+    );
+
+    await runAgentWorkflow(
+      makeOptions({
+        autoCommitEnabled: true,
+        autoCreatePrEnabled: true,
+        repoOwner: "acme",
+        repoName: "repo",
+      }),
+    );
+
+    expect(spies.runAutoCreatePrStep).toHaveBeenCalledTimes(1);
+    expect(writtenChunks.filter((chunk) => chunk.type === "data-pr")).toEqual([
+      {
+        type: "data-pr",
+        id: "gen-id-1:pr",
+        data: { status: "pending" },
+      },
+    ]);
+    expect(spies.persistAssistantMessage).toHaveBeenLastCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        parts: expect.not.arrayContaining([
+          {
+            type: "data-pr",
+            id: "gen-id-1:pr",
+            data: { status: "pending" },
+          },
+        ]),
+      }),
+    );
   });
 
   test("skips post-finish automation when the agent pauses for tool input", async () => {
