@@ -20,7 +20,7 @@
         "REDIS_URL",
         "VERCEL_APP_CLIENT_SECRET"
       ],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": { "cache": false, "persistent": true },
     "typecheck": { "dependsOn": ["^typecheck"], "outputs": [] },

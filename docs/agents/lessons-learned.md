@@ -101,9 +101,10 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 
 ## GitHub App / PR Flows
 
-- GitHub App install flow uses a three-path strategy: (1) no linked account -- OAuth authorize URL with explicit `redirect_uri`, callback chains to install with `target_id`; (2) linked account but no installations -- `installations/new/permissions?target_id={githubId}` directly; (3) linked account with installations -- `select_target` for the account/org picker. Disable "Request user authorization (OAuth) during installation" on the GitHub App -- it causes auto-redirect loops for already-authorized users on both `select_target` and `installations/new/permissions`.
+- GitHub App install flow uses a three-path strategy: (1) no linked account -- OAuth authorize URL with explicit `redirect_uri`, callback chains to install with `target_id`; (2) linked account but no installations -- `installations/new` for the account picker; (3) linked account with installations -- `select_target` for the account/org picker. Disable "Request user authorization (OAuth) during installation" on the GitHub App -- it causes auto-redirect loops for already-authorized users on both `select_target` and `installations/new/permissions`.
+- GitHub's `/installations/new/permissions` URL requires a `target_id`; without one it 404s for authenticated users. Use `/installations/new` when the account still needs to be selected.
 - GitHub App must be made **public** for the org picker to appear during installation. While the app is private, `/installations/select_target` only shows the owner's personal account -- users cannot install on organizations. Use "Make public" in the GitHub App's Danger Zone when ready.
-- Use `/installations/select_target` instead of `/installations/new` for the GitHub App install URL; the latter silently redirects to an existing personal installation's settings page instead of showing the account/org picker.
+- When local installations already exist, use `/installations/select_target` instead of `/installations/new`; the latter silently redirects to an existing personal installation's settings page instead of showing the account/org picker.
 - GitHub App callbacks that process OAuth `code` or `installation_id` must validate a server-stored `state` nonce before linking accounts or syncing installations; never trust callback query params without CSRF/state verification.
 - Installation sync that prunes DB records must fetch all GitHub API pages first (`per_page=100` + pagination); pruning from a partial page can silently remove valid installations.
 - In the GitHub App install flow, do a user-token installation sync before redirecting after OAuth-only callbacks or treating zero local installation rows as "not installed"; GitHub can skip callback emissions for pre-existing installs.
@@ -111,3 +112,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - GitHub fork creation can take longer than a few seconds to become pushable; PR fallback should retry fork push on transient `repository not found` errors instead of failing immediately.
 - Git push failures from Vercel sandboxes can return empty output even when auth/write is denied; PR fallback logic should not rely only on matching "permission" text before attempting fork fallback.
 - When the GitHub App lacks push access (e.g. repo removed from installation scope), fail fast with a 403 directing users to /settings/connections rather than silently forking.
+
+## Deployment
+
+- Vercel imports should set **Root Directory** to `apps/web`, and `apps/web/vercel.json` should pin `"framework": "nextjs"`. A null framework preset can let the build command succeed without invoking the Next.js builder, leaving every deployed route returning the platform `NOT_FOUND` response.

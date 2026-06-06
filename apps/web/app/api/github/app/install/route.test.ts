@@ -109,7 +109,8 @@ describe("GET /api/github/app/install", () => {
     expect(location).toBeTruthy();
     const redirectUrl = new URL(location as string);
     expect(redirectUrl.origin).toBe("https://github.com");
-    expect(redirectUrl.pathname).toContain("open-agents");
+    expect(redirectUrl.pathname).toBe("/apps/open-agents/installations/new");
+    expect(redirectUrl.searchParams.get("target_id")).toBeNull();
   });
 
   test("blocks managed template trial users", async () => {

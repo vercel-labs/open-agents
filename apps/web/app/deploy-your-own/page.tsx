@@ -37,6 +37,7 @@ const DEPLOY_TEMPLATE_URL = (() => {
     ["project-name", "open-agents"],
     ["repository-name", "open-agents"],
     ["repository-url", "https://github.com/vercel-labs/open-agents"],
+    ["root-directory", "apps/web"],
     ["demo-title", "Open Agents"],
     [
       "demo-description",

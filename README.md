@@ -1,6 +1,6 @@
 # Open Agents
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&root-directory=apps%2Fweb&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
 
 Open Agents is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
 
@@ -99,7 +99,7 @@ ELEVENLABS_API_KEY=
 ## Deploy your own copy on Vercel
 
 1. Fork this repo.
-2. Import the repo into Vercel. Neon Postgres is auto-provisioned if you use the deploy button above.
+2. Import the repo into Vercel with **Root Directory** set to `apps/web`. Neon Postgres is auto-provisioned if you use the deploy button above.
 3. Generate a secret for session signing:
 
    ```bash
@@ -119,6 +119,8 @@ ELEVENLABS_API_KEY=
    ```text
    https://YOUR_DOMAIN/api/auth/callback/vercel
    ```
+
+   Enable the `openid`, `email`, `profile`, and `offline_access` scopes on the OAuth app.
 
 7. Add these env vars and redeploy:
 
@@ -182,6 +184,8 @@ For local development, use:
 http://localhost:3000/api/auth/callback/vercel
 ```
 
+Make sure the OAuth app has the following scopes enabled: `openid`, `email`, `profile`, and `offline_access`.
+
 Then set:
 
 ```env
@@ -201,6 +205,21 @@ Create a GitHub App for installation-based repo access and configure:
 - make the app public if you want org installs to work cleanly
 
 For local development, use `http://localhost:3000` as the homepage URL, `http://localhost:3000/api/auth/callback/github` as the callback URL, and `http://localhost:3000/api/github/app/callback` as the setup URL.
+
+#### Repository permissions
+
+Under **Permissions & events → Repository permissions**, enable the following. These are derived from the GitHub API calls the app actually makes:
+
+| Permission       | Level                       | Used by                                                                                   |
+| ---------------- | --------------------------- | ----------------------------------------------------------------------------------------- |
+| Contents         | Read and write              | committing changes — `git.createBlob`/`createTree`/`createCommit`/`createRef`/`updateRef`/`deleteRef` |
+| Pull requests    | Read and write              | `pulls.create`/`update`/`merge`/`list`/`get`                                               |
+| Metadata         | Read-only (mandatory)       | `repos.get`                                                                                |
+| Commit statuses  | Read-only                   | `repos.getCombinedStatusForRef`                                                            |
+| Checks           | Read-only                   | `checks.listForRef`                                                                        |
+| Issues           | Read-only                   | `issues.listComments` (PR conversation comments)                                           |
+| Administration   | Read-only                   | `repos.getStatusChecksProtection` (branch protection)                                      |
+| Workflows        | Read and write (recommended) | the agent can edit any file; pushes touching `.github/workflows/*` are rejected without this |
 
 Then set:
 

@@ -116,9 +116,11 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   if (installations.length === 0) {
-    // no installations — route to install page
+    // no installations — route to the install account picker.
+    // Use /installations/new (not /installations/new/permissions): the
+    // /permissions variant requires a target_id and 404s without one.
     const installUrl = new URL(
-      `https://github.com/apps/${appSlug}/installations/new/permissions`,
+      `https://github.com/apps/${appSlug}/installations/new`,
     );
     installUrl.searchParams.set("state", state);
     return redirectWithInstallCookies(installUrl, redirectTo, state);
