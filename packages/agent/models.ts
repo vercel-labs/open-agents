@@ -102,6 +102,7 @@ export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
 
 // MiniMax requires temperature > 0; the API rejects temperature === 0.
 // Apply a default of 1.0 so callers that omit temperature get a valid value.
+// Covers MiniMax-M3 (default), MiniMax-M2.7, and MiniMax-M2.7-highspeed.
 export function shouldApplyMiniMaxDefaults(modelId: string): boolean {
   return modelId.startsWith("minimax/");
 }

@@ -201,6 +201,10 @@ describe("mergeProviderOptions", () => {
 });
 
 describe("shouldApplyMiniMaxDefaults", () => {
+  test("returns true for MiniMax-M3 (default)", () => {
+    expect(shouldApplyMiniMaxDefaults("minimax/minimax-m3")).toBe(true);
+  });
+
   test("returns true for MiniMax-M2.7", () => {
     expect(shouldApplyMiniMaxDefaults("minimax/minimax-m2.7")).toBe(true);
   });
@@ -219,7 +223,12 @@ describe("shouldApplyMiniMaxDefaults", () => {
 });
 
 describe("getProviderOptionsForModel (MiniMax)", () => {
-  test("returns empty provider options for MiniMax models", () => {
+  test("returns empty provider options for MiniMax-M3 (default)", () => {
+    const result = getProviderOptionsForModel("minimax/minimax-m3");
+    expect(result).toEqual({});
+  });
+
+  test("returns empty provider options for MiniMax-M2.7", () => {
     const result = getProviderOptionsForModel("minimax/minimax-m2.7");
     expect(result).toEqual({});
   });
