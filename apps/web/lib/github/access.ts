@@ -1,5 +1,6 @@
 import { getInstallationByAccountLogin } from "@/lib/db/installations";
-import { withScopedInstallationOctokit } from "./app";
+import { GitHubInstallationMissingError } from "./connector";
+import { withScopedInstallationOctokit } from "./installation-tokens";
 import { getUserOctokit } from "./client";
 
 export type RepoAccessDeniedReason =
@@ -108,19 +109,18 @@ export async function verifyRepoAccess(params: {
       installationId: installation.installationId,
       repositoryId,
       permissions: { contents: "read" },
+      repoFullName: `${owner}/${repo}`,
       operation: async (installationOctokit) => {
         await installationOctokit.rest.repos.get({ owner, repo });
       },
     });
   } catch (error: unknown) {
+    if (error instanceof GitHubInstallationMissingError) {
+      return { ok: false, reason: "no_installation" };
+    }
+    // An installation token for an uncovered repo fails the repos.get probe.
     const status = getGitHubHttpStatus(error);
-    const message = error instanceof Error ? error.message : "";
-    if (
-      status === 404 ||
-      status === 403 ||
-      status === 422 ||
-      message.includes(": 422 ")
-    ) {
+    if (status === 404 || status === 403 || status === 422) {
       return { ok: false, reason: "app_no_access" };
     }
     throw error;

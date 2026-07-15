@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
@@ -11,6 +10,7 @@ import {
 import { updateSession } from "@/lib/db/sessions";
 import { db } from "@/lib/db/client";
 import { sessions } from "@/lib/db/schema";
+import { verifyConnectWebhook } from "@/lib/github/webhook-verification";
 import { archiveSession } from "@/lib/sandbox/archive-session";
 
 const installationWebhookSchema = z.object({
@@ -44,22 +44,6 @@ const pullRequestWebhookSchema = z.object({
 
 function normalizeAccountType(type: string): "User" | "Organization" {
   return type === "Organization" ? "Organization" : "User";
-}
-
-function verifySignature(
-  payload: string,
-  signatureHeader: string,
-  secret: string,
-): boolean {
-  const digest = createHmac("sha256", secret).update(payload).digest("hex");
-  const expected = Buffer.from(`sha256=${digest}`);
-  const provided = Buffer.from(signatureHeader);
-
-  if (expected.length !== provided.length) {
-    return false;
-  }
-
-  return timingSafeEqual(expected, provided);
 }
 
 async function handlePullRequestWebhook(
@@ -149,25 +133,17 @@ async function handlePullRequestWebhook(
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    return Response.json(
-      { error: "GITHUB_WEBHOOK_SECRET is not configured" },
-      { status: 500 },
-    );
-  }
-
+  // Events arrive via Vercel Connect trigger forwarding, authenticated with a
+  // Vercel OIDC token instead of GitHub's HMAC signature.
   const event = req.headers.get("x-github-event");
-  const signature = req.headers.get("x-hub-signature-256");
-
-  if (!event || !signature) {
+  if (!event) {
     return Response.json({ error: "Missing webhook headers" }, { status: 400 });
   }
 
   const payloadText = await req.text();
-  if (!verifySignature(payloadText, signature, webhookSecret)) {
+  if (!(await verifyConnectWebhook(req, payloadText))) {
     return Response.json(
-      { error: "Invalid webhook signature" },
+      { error: "Invalid webhook credentials" },
       { status: 401 },
     );
   }

@@ -1,6 +1,6 @@
 # Open Agents
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CGITHUB_CONNECTOR%2CNEXT_PUBLIC_GITHUB_APP_SLUG&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+credentials+and+Vercel+Connect+GitHub+connector+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
 
 Open Agents is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
 
@@ -69,13 +69,11 @@ VERCEL_APP_CLIENT_SECRET=
 
 ### Required for GitHub repo access, pushes, and PRs
 
+GitHub access runs through a [Vercel Connect](https://vercel.com/docs/connect) GitHub connector — Vercel creates and manages the GitHub App, so there is no client secret, private key, or webhook secret to store.
+
 ```env
-NEXT_PUBLIC_GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-GITHUB_APP_ID=
-GITHUB_APP_PRIVATE_KEY=
-NEXT_PUBLIC_GITHUB_APP_SLUG=
-GITHUB_WEBHOOK_SECRET=
+GITHUB_CONNECTOR=            # connector UID, e.g. github/open-agents
+NEXT_PUBLIC_GITHUB_APP_SLUG= # the Connect-created app's github.com slug
 ```
 
 ### Optional
@@ -127,17 +125,17 @@ ELEVENLABS_API_KEY=
    VERCEL_APP_CLIENT_SECRET=
    ```
 
-8. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
+8. If you want the full GitHub-enabled coding-agent flow, create a Vercel Connect GitHub connector and attach it to your project (run from `apps/web`):
 
-   - Homepage URL: `https://YOUR_DOMAIN`
-   - Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
-   - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
+   ```bash
+   vercel connect create github --name open-agents --triggers
+   vercel connect attach github/open-agents -e production -e preview \
+     -e development --triggers --trigger-path /api/github/webhook
+   ```
 
-   In the GitHub App settings:
-   - use the GitHub App's Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
-   - make the app public if you want org installs to work cleanly
+   In the connector's Advanced settings, grant Contents (read/write), Pull requests (read/write), Metadata (read-only), and Checks (read-only), enable the `pull_request` trigger event type (plus `installation` / `installation_repositories` if offered), and set the Setup URL to `https://YOUR_DOMAIN/api/github/app/callback` if editable.
 
-9. Add the GitHub App env vars and redeploy.
+9. Set `GITHUB_CONNECTOR` to the connector UID and `NEXT_PUBLIC_GITHUB_APP_SLUG` to the created app's github.com slug, then redeploy.
 10. Optionally add Redis/KV, `OPEN_AGENTS_RESOURCE_PROFILE=hobby` for Hobby-compatible resource defaults, the canonical production URL vars, and your own `VERCEL_SANDBOX_BASE_SNAPSHOT_ID` if you want fresh sandboxes to start from a preconfigured image.
 
 ## Local setup
@@ -193,27 +191,14 @@ VERCEL_APP_CLIENT_SECRET=...
 
 You do not need a separate GitHub OAuth app. Open Agents uses the GitHub App's OAuth credentials as a Better Auth social provider, plus the App's installation tokens for repo access.
 
-Create a GitHub App for installation-based repo access and configure:
-
-- Homepage URL: `https://YOUR_DOMAIN`
-- Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
-- Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- make the app public if you want org installs to work cleanly
-
-For local development, use `http://localhost:3000` as the homepage URL, `http://localhost:3000/api/auth/callback/github` as the callback URL, and `http://localhost:3000/api/github/app/callback` as the setup URL.
-
-Then set:
+Repo access is brokered by a Vercel Connect GitHub connector (see the deploy steps above for creation and attachment). Then set:
 
 ```env
-NEXT_PUBLIC_GITHUB_CLIENT_ID=...   # GitHub App Client ID
-GITHUB_CLIENT_SECRET=...           # GitHub App Client Secret
-GITHUB_APP_ID=...
-GITHUB_APP_PRIVATE_KEY=...
-NEXT_PUBLIC_GITHUB_APP_SLUG=...
-GITHUB_WEBHOOK_SECRET=...
+GITHUB_CONNECTOR=...             # connector UID, e.g. github/open-agents
+NEXT_PUBLIC_GITHUB_APP_SLUG=...  # the Connect-created app's github.com slug
 ```
 
-`GITHUB_APP_PRIVATE_KEY` can be stored as the PEM contents with escaped newlines or as a base64-encoded PEM.
+For local development, run `vercel env pull` after linking the project — the SDK authenticates Connect token requests with the pulled `VERCEL_OIDC_TOKEN` (expires after ~12 hours; re-pull when it does).
 
 ## Useful commands
 

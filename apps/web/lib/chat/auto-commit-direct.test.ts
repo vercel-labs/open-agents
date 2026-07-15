@@ -98,7 +98,7 @@ mock.module("@/lib/github/commit", () => ({
       : message,
 }));
 
-mock.module("@/lib/github/app", () => ({
+mock.module("@/lib/github/installation-tokens", () => ({
   withScopedInstallationOctokit: async ({
     operation,
   }: {
@@ -111,7 +111,6 @@ mock.module("@/lib/github/app", () => ({
     repositoryIds: [123],
     permissions: { contents: "read" },
   }),
-  revokeInstallationToken: async () => {},
 }));
 
 const { performAutoCommit } = await import("./auto-commit-direct");

@@ -48,6 +48,7 @@ import { fetcher } from "@/lib/swr";
 
 const GITHUB_OAUTH_CALLBACK =
   "/api/github/post-link?next=/settings/connections";
+const GITHUB_OAUTH_ERROR_CALLBACK = "/settings/connections?github=link_error";
 
 interface GitHubUserProfile {
   githubId: number;
@@ -113,9 +114,10 @@ async function startGitHubReconnect(reason: GitHubConnectionReason | null) {
     return;
   }
 
-  await authClient.linkSocial({
-    provider: "github",
+  await authClient.oauth2.link({
+    providerId: "github",
     callbackURL: GITHUB_OAUTH_CALLBACK,
+    errorCallbackURL: GITHUB_OAUTH_ERROR_CALLBACK,
   });
 }
 
@@ -379,10 +381,8 @@ function ConnectionStatusButton({
   const isConnected = status === "connected";
   const dotColor = isConnected ? "bg-green-500" : "bg-amber-500";
   const label = isConnected ? "Connected" : "Reconnect";
-  const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
-  const manageUrl = clientId
-    ? `https://github.com/settings/connections/applications/${clientId}`
-    : null;
+  const appSlug = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG;
+  const manageUrl = appSlug ? `https://github.com/apps/${appSlug}` : null;
 
   return (
     <DropdownMenu>
@@ -580,9 +580,10 @@ function NotConnectedState({
           if (connectionDisabled) return;
 
           setIsLinking(true);
-          await authClient.linkSocial({
-            provider: "github",
+          await authClient.oauth2.link({
+            providerId: "github",
             callbackURL: GITHUB_OAUTH_CALLBACK,
+            errorCallbackURL: GITHUB_OAUTH_ERROR_CALLBACK,
           });
         }}
       >

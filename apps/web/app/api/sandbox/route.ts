@@ -14,9 +14,8 @@ import {
 } from "@/lib/github/access";
 import {
   mintInstallationToken,
-  revokeInstallationToken,
   type ScopedInstallationToken,
-} from "@/lib/github/app";
+} from "@/lib/github/installation-tokens";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
@@ -183,6 +182,10 @@ export async function POST(req: Request) {
       installationId: access.installationId,
       repositoryIds: [access.repositoryId],
       permissions: { contents: "read" },
+      repoFullName: `${parsedRepo.owner}/${parsedRepo.repo}`,
+      // Clones of large repos can be slow; make sure the shared cached token
+      // has plenty of lifetime left when handed to the sandbox broker.
+      validityBufferMs: 10 * 60_000,
     });
   }
 
@@ -191,45 +194,38 @@ export async function POST(req: Request) {
   // ============================================
   const startTime = Date.now();
 
-  let sandbox: Awaited<ReturnType<typeof connectSandbox>>;
-  try {
-    const ghProfile = await getGitHubUserProfile(session.user.id);
-    const githubNoreplyEmail =
-      ghProfile?.externalUserId && ghProfile.username
-        ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
-        : undefined;
+  const ghProfile = await getGitHubUserProfile(session.user.id);
+  const githubNoreplyEmail =
+    ghProfile?.externalUserId && ghProfile.username
+      ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
+      : undefined;
 
-    const gitUser = {
-      name: session.user.name ?? ghProfile?.username ?? session.user.username,
-      email:
-        githubNoreplyEmail ??
-        session.user.email ??
-        `${session.user.username}@users.noreply.github.com`,
-    };
+  const gitUser = {
+    name: session.user.name ?? ghProfile?.username ?? session.user.username,
+    email:
+      githubNoreplyEmail ??
+      session.user.email ??
+      `${session.user.username}@users.noreply.github.com`,
+  };
 
-    sandbox = await connectSandbox({
-      state: {
-        type: "vercel",
-        ...(sandboxName ? { sandboxName } : {}),
-        source,
-      },
-      options: {
-        githubToken: setupToken?.token,
-        gitUser,
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-        vcpus: DEFAULT_SANDBOX_VCPUS,
-        ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-        persistent: !!sandboxName,
-        resume: !!sandboxName,
-        createIfMissing: !!sandboxName,
-      },
-    });
-  } finally {
-    if (setupToken) {
-      await revokeInstallationToken(setupToken.token);
-    }
-  }
+  const sandbox = await connectSandbox({
+    state: {
+      type: "vercel",
+      ...(sandboxName ? { sandboxName } : {}),
+      source,
+    },
+    options: {
+      githubToken: setupToken?.token,
+      gitUser,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      vcpus: DEFAULT_SANDBOX_VCPUS,
+      ports: DEFAULT_SANDBOX_PORTS,
+      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+      persistent: !!sandboxName,
+      resume: !!sandboxName,
+      createIfMissing: !!sandboxName,
+    },
+  });
 
   if (sessionId && sandbox.getState) {
     const nextState = sandbox.getState() as SandboxState;

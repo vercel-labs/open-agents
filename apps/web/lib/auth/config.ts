@@ -1,13 +1,13 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import type {
-  GithubProfile,
-  VercelProfile,
-} from "better-auth/social-providers";
+import { genericOAuth } from "better-auth/plugins";
+import type { VercelProfile } from "better-auth/social-providers";
 import { nanoid } from "nanoid";
+import { buildGitHubConnectProvider } from "@/lib/auth/github-provider";
 import { deriveAuthUsername } from "@/lib/auth/username";
 import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
+import { isGitHubConnectorConfigured } from "@/lib/github/connector";
 
 function normalizeHost(value?: string): string | null {
   if (!value) {
@@ -81,17 +81,6 @@ function mapVercelProfileToUser(profile: VercelProfile): { username: string } {
   };
 }
 
-function mapGitHubProfileToUser(profile: GithubProfile): { username: string } {
-  return {
-    username: deriveAuthUsername({
-      id: profile.id,
-      username: profile.login,
-      email: profile.email,
-      name: profile.name,
-    }),
-  };
-}
-
 const authBaseURLFallback = getAuthBaseURLFallback();
 const authAllowedHosts = getAllowedAuthHosts();
 
@@ -143,7 +132,7 @@ export const auth = betterAuth({
     encryptOAuthTokens: true,
     accountLinking: {
       enabled: true,
-      trustedProviders: ["vercel", "github"],
+      trustedProviders: ["vercel"],
       allowDifferentEmails: true,
     },
   },
@@ -156,12 +145,14 @@ export const auth = betterAuth({
       overrideUserInfoOnSignIn: true,
       mapProfileToUser: mapVercelProfileToUser,
     },
-    github: {
-      clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ?? "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-      mapProfileToUser: mapGitHubProfileToUser,
-    },
   },
+
+  // GitHub repo access is linked through the Vercel Connect GitHub connector
+  // (generic OAuth). Registered conditionally so the app still boots without
+  // GitHub configured, matching the old GitHub App behavior.
+  plugins: isGitHubConnectorConfigured()
+    ? [genericOAuth({ config: [buildGitHubConnectProvider()] })]
+    : [],
 
   advanced: {
     database: {

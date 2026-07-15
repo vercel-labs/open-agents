@@ -12,9 +12,9 @@ This file provides guidance for AI coding agents working in this repository.
 
 ## Authentication
 
-Authentication uses [Better Auth](https://www.better-auth.com/) with Vercel OAuth (sign-in) and GitHub OAuth (repo access). Config lives in `apps/web/lib/auth/config.ts`. Sessions are managed by better-auth's built-in session system — there is no manual JWE/encryption layer.
+Authentication uses [Better Auth](https://www.better-auth.com/) with Vercel OAuth (sign-in) and GitHub linked through a [Vercel Connect](https://vercel.com/docs/connect) GitHub connector (repo access, via the `genericOAuth` plugin). Config lives in `apps/web/lib/auth/config.ts` (GitHub provider in `apps/web/lib/auth/github-provider.ts`). Sessions are managed by better-auth's built-in session system — there is no manual JWE/encryption layer.
 
-Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` + `VERCEL_APP_CLIENT_SECRET` (Vercel OAuth), plus GitHub App credentials for repo access. See `apps/web/.env.example` for the full list.
+GitHub tokens are exchanged at runtime via `@vercel/connect` (`apps/web/lib/github/token.ts` for user tokens, `apps/web/lib/github/installation-tokens.ts` for installation tokens) — there are no GitHub App credentials in the environment. Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` + `VERCEL_APP_CLIENT_SECRET` (Vercel OAuth), `GITHUB_CONNECTOR` (Connect connector UID). See `apps/web/.env.example` for the full list.
 
 ## Database & Migrations
 

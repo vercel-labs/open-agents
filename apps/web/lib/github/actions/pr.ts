@@ -15,7 +15,7 @@ import {
   verifyRepoAccess,
   getRepoAccessErrorMessage,
 } from "@/lib/github/access";
-import { withScopedInstallationOctokit } from "@/lib/github/app";
+import { withScopedInstallationOctokit } from "@/lib/github/installation-tokens";
 import { getGitHubAppUserToken, getUserGitHubToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 import { getSessionById, updateSession } from "@/lib/db/sessions";

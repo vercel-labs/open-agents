@@ -4,7 +4,7 @@ import { getInstallationsByUserId } from "@/lib/db/installations";
 import { syncUserInstallations } from "@/lib/github/sync";
 import { getUserGitHubToken } from "@/lib/github/token";
 import {
-  getGitHubAccountId,
+  getGitHubUserProfile,
   getGitHubUsername,
   hasGitHubAccount,
 } from "@/lib/github/users";
@@ -82,10 +82,13 @@ export async function GET(req: NextRequest): Promise<Response> {
     return NextResponse.redirect(connectUrl);
   }
 
-  // reconnect mode — skip account picker, target the user's personal account
+  // reconnect mode — skip account picker, target the user's personal account.
+  // GitHub's target_id must be the numeric user id; `accounts.accountId` is
+  // the Connect OIDC subject, so resolve the id live from the GitHub API.
   const reconnect = req.nextUrl.searchParams.get("reconnect");
   if (reconnect === "1") {
-    const accountId = await getGitHubAccountId(session.user.id);
+    const accountId = (await getGitHubUserProfile(session.user.id))
+      ?.externalUserId;
     if (accountId) {
       const installUrl = new URL(
         `https://github.com/apps/${appSlug}/installations/new/permissions`,

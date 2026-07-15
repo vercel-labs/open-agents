@@ -11,10 +11,7 @@ import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/urls";
-import {
-  mintInstallationToken,
-  revokeInstallationToken,
-} from "@/lib/github/app";
+import { mintInstallationToken } from "@/lib/github/installation-tokens";
 import { getGitHubAppUserToken } from "@/lib/github/token";
 import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
 
@@ -204,30 +201,26 @@ export async function performAutoCreatePr(
     installationId: access.installationId,
     repositoryIds: [access.repositoryId],
     permissions: { contents: "read" },
+    repoFullName: `${repoOwner}/${repoName}`,
   });
 
-  let remoteBranchResult: Awaited<ReturnType<typeof sandbox.exec>>;
-  try {
-    remoteBranchResult = await withTemporaryGitHubAuth(
-      sandbox,
-      readToken.token,
-      async () => {
-        await sandbox.exec(
-          `git fetch origin ${defaultBranch}:refs/remotes/origin/${defaultBranch}`,
-          cwd,
-          30000,
-        );
+  const remoteBranchResult = await withTemporaryGitHubAuth(
+    sandbox,
+    readToken.token,
+    async () => {
+      await sandbox.exec(
+        `git fetch origin ${defaultBranch}:refs/remotes/origin/${defaultBranch}`,
+        cwd,
+        30000,
+      );
 
-        return sandbox.exec(
-          `git ls-remote --heads origin ${branchName}`,
-          cwd,
-          10000,
-        );
-      },
-    );
-  } finally {
-    await revokeInstallationToken(readToken.token);
-  }
+      return sandbox.exec(
+        `git ls-remote --heads origin ${branchName}`,
+        cwd,
+        10000,
+      );
+    },
+  );
 
   if (!remoteBranchResult.success || !remoteBranchResult.stdout.trim()) {
     return {

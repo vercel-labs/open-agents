@@ -1,66 +1,122 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-let getAccessTokenResult: { accessToken?: string | null } | null;
-let getAccessTokenError: Error | null;
+class MockConnectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MockConnectError";
+  }
+}
 
-const getAccessTokenSpy = mock(
-  async (_input: { body: { providerId: string; userId: string } }) => {
-    if (getAccessTokenError) {
-      throw getAccessTokenError;
+let accountRows: Array<{ accountId: string }>;
+let getTokenError: Error | null;
+
+const getTokenSpy = mock(
+  async (_connector: string, _params: Record<string, unknown>) => {
+    if (getTokenError) {
+      throw getTokenError;
     }
-
-    return getAccessTokenResult;
+    return "ghu_test";
   },
+);
+const revokeTokenSpy = mock(
+  async (_connector: string, _params: Record<string, unknown>) => {},
+);
+const deleteTokenCacheEntrySpy = mock(
+  (_connector: string, _params: Record<string, unknown>) => {},
 );
 
 mock.module("server-only", () => ({}));
 
-mock.module("next/headers", () => ({
-  headers: async () => {
-    throw new Error("headers should not be called");
-  },
+mock.module("@vercel/connect", () => ({
+  getToken: getTokenSpy,
+  revokeToken: revokeTokenSpy,
+  deleteTokenCacheEntry: deleteTokenCacheEntrySpy,
+  UserAuthorizationRequiredError: MockConnectError,
+  NoValidTokenError: MockConnectError,
 }));
 
-mock.module("@/lib/auth/config", () => ({
-  auth: {
-    api: {
-      getAccessToken: getAccessTokenSpy,
-    },
-  },
+mock.module("drizzle-orm", () => ({
+  and: () => ({}),
+  eq: () => ({}),
 }));
 
 mock.module("@/lib/db/client", () => ({
-  db: {},
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => accountRows,
+        }),
+      }),
+    }),
+  },
 }));
 
 mock.module("@/lib/db/schema", () => ({
-  accounts: {},
+  accounts: {
+    accountId: "accountId",
+    userId: "userId",
+    providerId: "providerId",
+  },
 }));
+
+process.env.GITHUB_CONNECTOR = "github/test-connector";
 
 const tokenModulePromise = import("./token");
 
-describe("getUserGitHubToken", () => {
-  beforeEach(() => {
-    getAccessTokenSpy.mockClear();
-    getAccessTokenResult = { accessToken: "ghu_test" };
-    getAccessTokenError = null;
-  });
+beforeEach(() => {
+  getTokenSpy.mockClear();
+  revokeTokenSpy.mockClear();
+  deleteTokenCacheEntrySpy.mockClear();
+  accountRows = [{ accountId: "connect-sub-1" }];
+  getTokenError = null;
+});
 
-  test("looks up access tokens by user id without request headers", async () => {
+describe("getUserGitHubToken", () => {
+  test("exchanges the stored Connect subject id for a GitHub token", async () => {
     const { getUserGitHubToken } = await tokenModulePromise;
 
     const token = await getUserGitHubToken("user-1");
 
     expect(token).toBe("ghu_test");
-    expect(getAccessTokenSpy).toHaveBeenCalledTimes(1);
-    expect(getAccessTokenSpy.mock.calls[0]?.[0]).toEqual({
-      body: { providerId: "github", userId: "user-1" },
+    expect(getTokenSpy).toHaveBeenCalledTimes(1);
+    expect(getTokenSpy.mock.calls[0]?.[0]).toBe("github/test-connector");
+    expect(getTokenSpy.mock.calls[0]?.[1]).toEqual({
+      subject: { type: "user", id: "connect-sub-1" },
     });
   });
 
-  test("returns null when better-auth token lookup fails", async () => {
+  test("returns null when the user has no linked GitHub account", async () => {
     const { getUserGitHubToken } = await tokenModulePromise;
-    getAccessTokenError = new Error("boom");
+    accountRows = [];
+
+    const token = await getUserGitHubToken("user-1");
+
+    expect(token).toBeNull();
+    expect(getTokenSpy).not.toHaveBeenCalled();
+  });
+
+  test("returns null when the user has not authorized the connector", async () => {
+    const { getUserGitHubToken } = await tokenModulePromise;
+    getTokenError = new MockConnectError("not authorized");
+
+    const token = await getUserGitHubToken("user-1");
+
+    expect(token).toBeNull();
+  });
+
+  test("returns null when the grant was revoked", async () => {
+    const { getUserGitHubToken } = await tokenModulePromise;
+    getTokenError = new MockConnectError("revoked");
+
+    const token = await getUserGitHubToken("user-1");
+
+    expect(token).toBeNull();
+  });
+
+  test("returns null on unexpected errors", async () => {
+    const { getUserGitHubToken } = await tokenModulePromise;
+    getTokenError = new Error("boom");
 
     const token = await getUserGitHubToken("user-1");
 
@@ -69,17 +125,36 @@ describe("getUserGitHubToken", () => {
 });
 
 describe("getGitHubAppUserToken", () => {
-  beforeEach(() => {
-    getAccessTokenSpy.mockClear();
-    getAccessTokenResult = { accessToken: "ghu_test" };
-    getAccessTokenError = null;
-  });
-
-  test("returns GitHub App user-to-server tokens", async () => {
+  test("aliases getUserGitHubToken", async () => {
     const { getGitHubAppUserToken } = await tokenModulePromise;
 
     const token = await getGitHubAppUserToken("user-1");
 
     expect(token).toBe("ghu_test");
+  });
+});
+
+describe("revokeUserGitHubGrant", () => {
+  test("revokes the grant and clears the cached token", async () => {
+    const { revokeUserGitHubGrant } = await tokenModulePromise;
+
+    const revoked = await revokeUserGitHubGrant("user-1");
+
+    expect(revoked).toBe(true);
+    expect(revokeTokenSpy).toHaveBeenCalledTimes(1);
+    expect(revokeTokenSpy.mock.calls[0]?.[1]).toEqual({
+      subject: { type: "user", id: "connect-sub-1" },
+    });
+    expect(deleteTokenCacheEntrySpy).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns false when the user has no linked GitHub account", async () => {
+    const { revokeUserGitHubGrant } = await tokenModulePromise;
+    accountRows = [];
+
+    const revoked = await revokeUserGitHubGrant("user-1");
+
+    expect(revoked).toBe(false);
+    expect(revokeTokenSpy).not.toHaveBeenCalled();
   });
 });

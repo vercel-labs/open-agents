@@ -379,9 +379,10 @@ function GitHubConnectStep({
         disabled={isLinking}
         onClick={async () => {
           setIsLinking(true);
-          await authClient.linkSocial({
-            provider: "github",
+          await authClient.oauth2.link({
+            providerId: "github",
             callbackURL: githubPostLinkCallback,
+            errorCallbackURL: "/get-started?github=link_error",
           });
         }}
         className="gap-2 border-zinc-700 bg-transparent text-zinc-300 hover:bg-white/5 hover:text-white"

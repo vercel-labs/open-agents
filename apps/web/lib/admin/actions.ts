@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { accounts, authSessions, githubInstallations } from "@/lib/db/schema";
 import { isUserAdmin } from "@/lib/db/users";
+import { revokeUserGitHubGrant } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 async function requireAdmin(): Promise<string> {
@@ -22,35 +23,6 @@ async function requireAdmin(): Promise<string> {
 // ---------------------------------------------------------------------------
 // GitHub revocation helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Revoke a single GitHub OAuth token via the GitHub Applications API.
- * Uses HTTP Basic auth with clientId:clientSecret.
- */
-async function revokeGitHubToken(token: string): Promise<boolean> {
-  const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return false;
-
-  try {
-    const res = await fetch(
-      `https://api.github.com/applications/${clientId}/token`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-        body: JSON.stringify({ access_token: token }),
-      },
-    );
-    // 204 = success, 422 = token already invalid — both are fine
-    return res.status === 204 || res.status === 422;
-  } catch (err) {
-    console.error("GitHub token revocation failed:", err);
-    return false;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Vercel revocation helpers
@@ -88,12 +60,12 @@ async function revokeVercelToken(token: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 /**
- * Revoke all GitHub tokens at the provider, then delete account links
+ * Revoke all GitHub grants in Vercel Connect, then delete account links
  * and installations from the DB.
  *
- * Flow: decrypt each token via better-auth → revoke at GitHub API → delete DB rows.
- * Failures to revoke individual tokens are logged but don't block the operation;
- * we still delete the DB rows so the app no longer considers them connected.
+ * Failures to revoke individual grants are logged but don't block the
+ * operation; we still delete the DB rows so the app no longer considers them
+ * connected.
  */
 export async function revokeAllGitHubTokens(): Promise<{
   success: boolean;
@@ -111,21 +83,12 @@ export async function revokeAllGitHubTokens(): Promise<{
       .from(accounts)
       .where(eq(accounts.providerId, "github"));
 
-    // 2. Decrypt + revoke each token at GitHub
+    // 2. Revoke each user's grant in Vercel Connect
     let revokedTokens = 0;
     const revokeResults = await Promise.allSettled(
       githubAccounts.map(async (acct) => {
-        try {
-          const result = await auth.api.getAccessToken({
-            body: { providerId: "github", userId: acct.userId },
-          });
-          if (result?.accessToken) {
-            const ok = await revokeGitHubToken(result.accessToken);
-            if (ok) revokedTokens++;
-          }
-        } catch {
-          // Token may already be expired/invalid — that's fine
-        }
+        const ok = await revokeUserGitHubGrant(acct.userId);
+        if (ok) revokedTokens++;
       }),
     );
 
@@ -134,7 +97,7 @@ export async function revokeAllGitHubTokens(): Promise<{
     ).length;
     if (failedRevocations > 0) {
       console.warn(
-        `${failedRevocations}/${githubAccounts.length} GitHub token revocations failed at the provider`,
+        `${failedRevocations}/${githubAccounts.length} GitHub grant revocations failed`,
       );
     }
 

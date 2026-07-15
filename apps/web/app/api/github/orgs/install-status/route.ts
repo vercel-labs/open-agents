@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { isGitHubAppConfigured } from "@/lib/github/app";
+import { isGitHubConnectorConfigured } from "@/lib/github/connector";
 import { getInstallationManageUrl } from "@/lib/github/urls";
 import { syncUserInstallations } from "@/lib/github/sync";
 import { getUserGitHubToken } from "@/lib/github/token";
@@ -52,9 +52,9 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!isGitHubAppConfigured()) {
+  if (!isGitHubConnectorConfigured()) {
     return NextResponse.json(
-      { error: "GitHub App not configured" },
+      { error: "GitHub connector not configured" },
       { status: 500 },
     );
   }

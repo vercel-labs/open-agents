@@ -14,9 +14,8 @@ import { updateSession } from "@/lib/db/sessions";
 import { generateBranchName, isSafeBranchName } from "@/lib/git/helpers";
 import {
   mintInstallationToken,
-  revokeInstallationToken,
   withScopedInstallationOctokit,
-} from "@/lib/github/app";
+} from "@/lib/github/installation-tokens";
 import { verifyRepoAccess } from "@/lib/github/access";
 import { buildCommitIntentFromSandbox } from "@/lib/github/commit-intent";
 import { createCommit, buildCoAuthor } from "@/lib/github/commit";
@@ -114,14 +113,11 @@ export async function performAutoCommit(
       installationId: access.installationId,
       repositoryIds: [access.repositoryId],
       permissions: { contents: "read" },
+      repoFullName: `${repoOwner}/${repoName}`,
     });
-    try {
-      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
-        syncToRemotePreservingChanges(sandbox, branch),
-      );
-    } finally {
-      await revokeInstallationToken(syncToken.token);
-    }
+    await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+      syncToRemotePreservingChanges(sandbox, branch),
+    );
   } catch (error) {
     console.warn(
       `[auto-commit] Pre-commit sandbox sync failed for session ${sessionId}:`,
@@ -174,6 +170,7 @@ export async function performAutoCommit(
     installationId: intentResult.intent.installationId,
     repositoryId: intentResult.intent.repositoryId,
     permissions: { contents: "write" },
+    repoFullName: `${intentResult.intent.owner}/${intentResult.intent.repo}`,
     operation: async (octokit) =>
       createCommit({
         octokit,
@@ -209,14 +206,11 @@ export async function performAutoCommit(
       installationId: intentResult.intent.installationId,
       repositoryIds: [intentResult.intent.repositoryId],
       permissions: { contents: "read" },
+      repoFullName: `${intentResult.intent.owner}/${intentResult.intent.repo}`,
     });
-    try {
-      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
-        syncToRemote(sandbox, branch),
-      );
-    } finally {
-      await revokeInstallationToken(syncToken.token);
-    }
+    await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+      syncToRemote(sandbox, branch),
+    );
   } catch (error) {
     console.warn(
       `[auto-commit] Sandbox sync failed for session ${sessionId}:`,

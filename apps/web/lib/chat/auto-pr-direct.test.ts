@@ -89,7 +89,6 @@ const mintInstallationTokenSpy = mock(async () => ({
   repositoryIds: [123],
   permissions: { contents: "read" },
 }));
-const revokeInstallationTokenSpy = mock(async () => {});
 const verifyRepoAccessSpy = mock(async () => ({
   ok: true,
   installationId: 999,
@@ -130,9 +129,8 @@ mock.module("@/lib/github/access", () => ({
   getRepoAccessErrorMessage: () => "Access denied",
 }));
 
-mock.module("@/lib/github/app", () => ({
+mock.module("@/lib/github/installation-tokens", () => ({
   mintInstallationToken: mintInstallationTokenSpy,
-  revokeInstallationToken: revokeInstallationTokenSpy,
 }));
 
 mock.module("@/lib/github/pulls", () => ({
@@ -191,7 +189,6 @@ beforeEach(() => {
   getGitHubAppUserTokenSpy.mockClear();
   withTemporaryGitHubAuthSpy.mockClear();
   mintInstallationTokenSpy.mockClear();
-  revokeInstallationTokenSpy.mockClear();
   verifyRepoAccessSpy.mockClear();
 
   execResults = defaultExecResults();
@@ -348,13 +345,13 @@ describe("performAutoCreatePr", () => {
       installationId: 999,
       repositoryIds: [123],
       permissions: { contents: "read" },
+      repoFullName: "acme/repo",
     });
     expect(withTemporaryGitHubAuthSpy).toHaveBeenCalledWith(
       sandbox,
       "ghs_read",
       expect.any(Function),
     );
-    expect(revokeInstallationTokenSpy).toHaveBeenCalledWith("ghs_read");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
     expect(openPullRequestSpy).toHaveBeenCalledWith(
       expect.objectContaining({

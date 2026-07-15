@@ -118,7 +118,7 @@ mock.module("@/lib/github/access", () => ({
   getRepoAccessErrorMessage: () => "Access denied",
 }));
 
-mock.module("@/lib/github/app", () => ({
+mock.module("@/lib/github/installation-tokens", () => ({
   mintInstallationToken: async () => ({
     token: "installation-token-mock",
     expiresAt: null,
@@ -126,7 +126,6 @@ mock.module("@/lib/github/app", () => ({
     repositoryIds: [123],
     permissions: { contents: "read" },
   }),
-  revokeInstallationToken: async () => {},
 }));
 
 mock.module("@/lib/vercel/token", () => ({

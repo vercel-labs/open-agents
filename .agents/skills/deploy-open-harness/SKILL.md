@@ -75,12 +75,8 @@ Use this checklist when guiding the user.
 
 ### Required for GitHub-enabled repo flows
 
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
-- `GITHUB_APP_ID`
-- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_CONNECTOR`
 - `NEXT_PUBLIC_GITHUB_APP_SLUG`
-- `GITHUB_WEBHOOK_SECRET`
 
 ### Optional
 
@@ -127,31 +123,26 @@ Store the credentials as:
 ### GitHub App
 Tell the user they do not need a separate GitHub OAuth app. Open Harness uses the GitHub App's user authorization flow.
 
-Tell the user to create a GitHub App and set:
+Tell the user to create a Vercel Connect GitHub connector and attach it to the project (run from `apps/web`, Vercel CLI >= 56):
 
-- Homepage URL: `https://YOUR_DOMAIN`
-- Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- For local dev: homepage `http://localhost:3000`, callback/setup `http://localhost:3000/api/github/app/callback`
+```bash
+vercel connect create github --name <name> --triggers
+vercel connect attach github/<name> -e production -e preview \
+  -e development --triggers --trigger-path /api/github/webhook
+```
 
-Also tell them to:
+Also tell them to, in the connector's Advanced settings:
 
-- enable "Request user authorization (OAuth) during installation"
-- use the GitHub App Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
-- make the app public if they want org installs to work cleanly
-- generate a webhook secret
-- download/generate the private key
+- grant permissions: Contents (read/write), Pull requests (read/write), Metadata (read-only), Checks (read-only)
+- enable the `pull_request` trigger event type (plus `installation` / `installation_repositories` if offered)
+- set the Setup URL to `https://YOUR_DOMAIN/api/github/app/callback` if editable
 
 Store the values as:
 
-- `NEXT_PUBLIC_GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
-- `GITHUB_APP_ID`
-- `GITHUB_APP_PRIVATE_KEY`
-- `NEXT_PUBLIC_GITHUB_APP_SLUG`
-- `GITHUB_WEBHOOK_SECRET`
+- `GITHUB_CONNECTOR` — the connector UID (e.g. `github/<name>`)
+- `NEXT_PUBLIC_GITHUB_APP_SLUG` — the Connect-created app's github.com slug
 
-Mention that `GITHUB_APP_PRIVATE_KEY` can be stored either as PEM contents with escaped newlines or as a base64-encoded PEM.
+Mention that Vercel creates and manages the GitHub App, so there is no client secret, private key, or webhook secret to store, and that local dev needs `vercel env pull` for the `VERCEL_OIDC_TOKEN` the Connect SDK authenticates with.
 
 ### Redis / KV
 Explain that Redis is optional. It improves resumable streams, stop signaling, and caching, but it is not required for the first deploy.

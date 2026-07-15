@@ -11,9 +11,8 @@ import {
 } from "@open-agents/sandbox";
 import {
   mintInstallationToken,
-  revokeInstallationToken,
   withScopedInstallationOctokit,
-} from "@/lib/github/app";
+} from "@/lib/github/installation-tokens";
 import {
   verifyRepoAccess,
   getRepoAccessErrorMessage,
@@ -65,26 +64,22 @@ async function pushBranchToRemote(params: {
     permissions: { contents: "write" },
   });
 
-  try {
-    const pushResult = await withTemporaryGitHubAuth(
-      params.sandbox,
-      syncToken.token,
-      () =>
-        params.sandbox.exec(
-          `GIT_TERMINAL_PROMPT=0 git push -u origin ${params.branch}`,
-          params.cwd,
-          60000,
-        ),
-    );
+  const pushResult = await withTemporaryGitHubAuth(
+    params.sandbox,
+    syncToken.token,
+    () =>
+      params.sandbox.exec(
+        `GIT_TERMINAL_PROMPT=0 git push -u origin ${params.branch}`,
+        params.cwd,
+        60000,
+      ),
+  );
 
-    if (!pushResult.success) {
-      return { ok: false, error: toGitErrorMessage(pushResult) };
-    }
-
-    return { ok: true };
-  } finally {
-    await revokeInstallationToken(syncToken.token);
+  if (!pushResult.success) {
+    return { ok: false, error: toGitErrorMessage(pushResult) };
   }
+
+  return { ok: true };
 }
 
 export interface CommitResult {
@@ -223,14 +218,11 @@ export async function commitChanges(params: {
         installationId: access.installationId,
         repositoryIds: [access.repositoryId],
         permissions: { contents: "read" },
+        repoFullName: `${sessionRecord.repoOwner}/${sessionRecord.repoName}`,
       });
-      try {
-        await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
-          syncToRemotePreservingChanges(sandbox, resolvedBranch),
-        );
-      } finally {
-        await revokeInstallationToken(syncToken.token);
-      }
+      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+        syncToRemotePreservingChanges(sandbox, resolvedBranch),
+      );
     } catch (error) {
       console.warn("[commit] pre-commit sandbox sync failed:", error);
       return {
@@ -356,6 +348,7 @@ export async function commitChanges(params: {
     installationId: intentResult.intent.installationId,
     repositoryId: intentResult.intent.repositoryId,
     permissions: { contents: "write" },
+    repoFullName: `${intentResult.intent.owner}/${intentResult.intent.repo}`,
     operation: async (octokit) =>
       createCommit({
         octokit,
@@ -384,14 +377,11 @@ export async function commitChanges(params: {
       installationId: intentResult.intent.installationId,
       repositoryIds: [intentResult.intent.repositoryId],
       permissions: { contents: "read" },
+      repoFullName: `${intentResult.intent.owner}/${intentResult.intent.repo}`,
     });
-    try {
-      await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
-        syncToRemote(sandbox, resolvedBranch),
-      );
-    } finally {
-      await revokeInstallationToken(syncToken.token);
-    }
+    await withTemporaryGitHubAuth(sandbox, syncToken.token, () =>
+      syncToRemote(sandbox, resolvedBranch),
+    );
   } catch (error) {
     console.warn("[commit] sandbox sync failed:", error);
   }

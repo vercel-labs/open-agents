@@ -18,9 +18,8 @@ import {
 } from "@/lib/github/access";
 import {
   mintInstallationToken,
-  revokeInstallationToken,
   type ScopedInstallationToken,
-} from "@/lib/github/app";
+} from "@/lib/github/installation-tokens";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
@@ -158,6 +157,10 @@ async function getSetupToken(params: {
     installationId: access.installationId,
     repositoryIds: [access.repositoryId],
     permissions: { contents: "read" },
+    repoFullName: `${params.session.repoOwner}/${params.session.repoName}`,
+    // Clones of large repos can be slow; make sure the shared cached token
+    // has plenty of lifetime left when handed to the sandbox broker.
+    validityBufferMs: 10 * 60_000,
   });
 }
 
@@ -231,27 +234,20 @@ export async function provisionSessionSandbox(params: {
     session,
   });
 
-  let sandbox: Sandbox;
-  try {
-    sandbox = await connectSandbox({
-      state: buildSandboxState(session),
-      options: {
-        githubToken: setupToken?.token,
-        gitUser,
-        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-        vcpus: DEFAULT_SANDBOX_VCPUS,
-        ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-        persistent: true,
-        resume: true,
-        createIfMissing: true,
-      },
-    });
-  } finally {
-    if (setupToken) {
-      await revokeInstallationToken(setupToken.token);
-    }
-  }
+  const sandbox = await connectSandbox({
+    state: buildSandboxState(session),
+    options: {
+      githubToken: setupToken?.token,
+      gitUser,
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      vcpus: DEFAULT_SANDBOX_VCPUS,
+      ports: DEFAULT_SANDBOX_PORTS,
+      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+      persistent: true,
+      resume: true,
+      createIfMissing: true,
+    },
+  });
 
   const rawSandboxState = sandbox.getState?.();
   const sandboxState = isSandboxState(rawSandboxState)
