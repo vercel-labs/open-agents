@@ -6,10 +6,10 @@ This document describes how sandbox lifecycle management works, including automa
 
 | Constant | Test | Production | Purpose |
 |---|---|---|---|
-| `DEFAULT_SANDBOX_TIMEOUT_MS` | 3 min | 5 hours | Hard VM expiry from Vercel |
+| `DEFAULT_SANDBOX_TIMEOUT_MS` | 3 min | 5 hours standard / 40 minutes hobby | Hard VM expiry from Vercel |
 | `SANDBOX_INACTIVITY_TIMEOUT_MS` | 30 min | 30 min | Inactivity window before hibernate |
 
-Configured in `lib/sandbox/config.ts`.
+Configured in `lib/sandbox/config.ts`. Set `OPEN_AGENTS_RESOURCE_PROFILE=hobby` to opt into the hobby profile; unset keeps standard behavior.
 
 ## State machine
 
@@ -44,7 +44,7 @@ Configured in `lib/sandbox/config.ts`.
 
 Where **I** = inactivity timeout, **H** = hard timeout.
 
-When the hard timeout is reached while the sandbox is still active, it hibernates the same way as inactivity - snapshot and stop. The user can manually resume if needed. This is simpler than automatic rollover and sufficient because the hard timeout (5 hours) is long enough that inactivity hibernation will almost always trigger first.
+When the hard timeout is reached while the sandbox is still active, it hibernates the same way as inactivity - snapshot and stop. The user can manually resume if needed. This is simpler than automatic rollover and sufficient because the standard hard timeout (5 hours) is long enough that inactivity hibernation will almost always trigger first.
 
 ## How workflows work
 

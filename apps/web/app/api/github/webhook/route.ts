@@ -214,30 +214,27 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ ok: true, deleted });
   }
 
-  if (!repositorySelection && !account) {
-    return Response.json({ ok: true, ignored: true, reason: "no-updates" });
-  }
-
   const existing = await getInstallationsByInstallationId(installationId);
 
-  if (
-    existing.length > 0 &&
-    account &&
-    repositorySelection &&
-    (event === "installation" || event === "installation_repositories")
-  ) {
+  // full upsert when we have account info and existing rows to update
+  if (existing.length > 0 && account) {
     for (const row of existing) {
       await upsertInstallation({
         userId: row.userId,
         installationId,
         accountLogin: account.login,
         accountType: normalizeAccountType(account.type),
-        repositorySelection,
+        repositorySelection: repositorySelection ?? row.repositorySelection,
         installationUrl,
       });
     }
 
     return Response.json({ ok: true, updatedUsers: existing.length });
+  }
+
+  // partial update with whatever fields are available
+  if (!repositorySelection && !installationUrl) {
+    return Response.json({ ok: true, ignored: true, reason: "no-updates" });
   }
 
   const updated = await updateInstallationsByInstallationId(installationId, {

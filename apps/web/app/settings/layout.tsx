@@ -6,6 +6,7 @@ import {
   LogOut,
   Menu,
   Settings as SettingsIcon,
+  ShieldAlert,
   SlidersHorizontal,
   Trophy,
   User,
@@ -13,6 +14,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { signOut } from "@/lib/auth/actions";
+import { useSession } from "@/hooks/use-session";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import {
   Sheet,
@@ -61,18 +64,12 @@ function ConnectionsPageSkeleton() {
   return <AccountsSectionSkeleton />;
 }
 
-const sidebarItems = [
+const baseSidebarItems = [
   {
     id: "profile",
     label: "Profile",
     href: "/settings/profile",
     icon: User,
-  },
-  {
-    id: "connections",
-    label: "Connections",
-    href: "/settings/connections",
-    icon: Cable,
   },
   {
     id: "preferences",
@@ -81,9 +78,15 @@ const sidebarItems = [
     icon: SettingsIcon,
   },
   {
-    id: "model-variants",
-    label: "Model Variants",
-    href: "/settings/model-variants",
+    id: "connections",
+    label: "Connections",
+    href: "/settings/connections",
+    icon: Cable,
+  },
+  {
+    id: "models",
+    label: "Models",
+    href: "/settings/models",
     icon: SlidersHorizontal,
   },
   {
@@ -94,22 +97,26 @@ const sidebarItems = [
   },
 ];
 
-function handleSignOut() {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/api/auth/signout";
-  document.body.appendChild(form);
-  form.submit();
-}
+const adminSidebarItem = {
+  id: "admin",
+  label: "Admin",
+  href: "/settings/admin",
+  icon: ShieldAlert,
+};
 
 function SettingsLayout({
   children,
   pathname,
+  isAdmin,
 }: {
   children: React.ReactNode;
   pathname: string;
+  isAdmin: boolean;
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const sidebarItems = isAdmin
+    ? [...baseSidebarItems, adminSidebarItem]
+    : baseSidebarItems;
   const activeItem = sidebarItems.find((item) => item.href === pathname);
 
   const navItems = (
@@ -159,7 +166,7 @@ function SettingsLayout({
           <div className="border-t border-border px-2 py-3">
             <button
               type="button"
-              onClick={handleSignOut}
+              onClick={signOut}
               className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />
@@ -193,7 +200,7 @@ function SettingsLayout({
           <div className="border-t border-border px-2 py-3">
             <button
               type="button"
-              onClick={handleSignOut}
+              onClick={signOut}
               className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />
@@ -226,14 +233,15 @@ function SettingsLayout({
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const activeItem = sidebarItems.find((item) => item.href === pathname);
+  const { isAdmin } = useSession();
+  const activeItem = baseSidebarItems.find((item) => item.href === pathname);
   const fallbackTitle = activeItem?.label ?? "Profile";
   const fallbackContent =
     activeItem?.id === "connections" ? (
       <ConnectionsPageSkeleton />
     ) : activeItem?.id === "preferences" ? (
       <PreferencesSectionSkeleton />
-    ) : activeItem?.id === "model-variants" ? (
+    ) : activeItem?.id === "models" ? (
       <ModelVariantsSectionSkeleton />
     ) : activeItem?.id === "leaderboard" ? (
       <LeaderboardSectionSkeleton />
@@ -244,13 +252,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard
       loadingFallback={
-        <SettingsLayout pathname={pathname}>
+        <SettingsLayout pathname={pathname} isAdmin={false}>
           <h1 className="text-2xl font-semibold">{fallbackTitle}</h1>
           {fallbackContent}
         </SettingsLayout>
       }
     >
-      <SettingsLayout pathname={pathname}>{children}</SettingsLayout>
+      <SettingsLayout pathname={pathname} isAdmin={isAdmin}>
+        {children}
+      </SettingsLayout>
     </AuthGuard>
   );
 }

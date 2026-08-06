@@ -3,8 +3,26 @@
  * All timeout values are in milliseconds.
  */
 
-/** Default timeout for new cloud sandboxes (5 hours) */
-export const DEFAULT_SANDBOX_TIMEOUT_MS = 5 * 60 * 60 * 1000;
+import { isHobbyResourceProfile } from "../deployment/resource-profile.ts";
+
+/** SDK safety buffer reserved for sandbox before-stop hooks (30 seconds) */
+const VERCEL_SANDBOX_TIMEOUT_BUFFER_MS = 30 * 1000;
+
+/** Standard timeout for new cloud sandboxes (5 hours minus hook buffer) */
+const STANDARD_SANDBOX_TIMEOUT_MS =
+  5 * 60 * 60 * 1000 - VERCEL_SANDBOX_TIMEOUT_BUFFER_MS;
+
+/** Hobby-compatible timeout for new cloud sandboxes (40 minutes minus hook buffer) */
+const HOBBY_SANDBOX_TIMEOUT_MS =
+  40 * 60 * 1000 - VERCEL_SANDBOX_TIMEOUT_BUFFER_MS;
+
+/** Default timeout for new cloud sandboxes */
+export const DEFAULT_SANDBOX_TIMEOUT_MS = isHobbyResourceProfile()
+  ? HOBBY_SANDBOX_TIMEOUT_MS
+  : STANDARD_SANDBOX_TIMEOUT_MS;
+
+/** Default vCPU count for new cloud sandboxes */
+export const DEFAULT_SANDBOX_VCPUS = isHobbyResourceProfile() ? 1 : 4;
 
 /** Manual extension duration for explicit fallback flows (20 minutes) */
 export const EXTEND_TIMEOUT_DURATION_MS = 20 * 60 * 1000;
@@ -37,13 +55,11 @@ export const CODE_SERVER_PORT = 8000;
 export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 
 /**
- * Base snapshot for fresh cloud sandboxes.
- * - Current snapshot includes: bun + jq + agent-browser + chromium + code-server
- * - Previous snapshot includes: bun + jq + agent-browser + chromium
+ * Optional base snapshot for fresh cloud sandboxes.
+ *
+ * Forked deployments should provide their own snapshot ID if they want a
+ * preconfigured image. When unset, sandboxes start from Vercel's standard
+ * runtime so deployments are not tied to a private snapshot in another scope.
  */
 export const DEFAULT_SANDBOX_BASE_SNAPSHOT_ID =
-  process.env.VERCEL_SANDBOX_BASE_SNAPSHOT_ID ??
-  // Previous snapshot (bun + jq): "snap_MQ0NqdLL5qEXiYusgWL3K0yaMmql"
-  // Previous snapshot (bun + jq + agent-browser + chromium): "snap_C8tUFhwRXZky4MaFvTuwO7DH66wx"
-  // Current snapshot (bun + jq + agent-browser + chromium + code-server):
-  "snap_EjsphVxi07bFKrfojljJdIS41KHT";
+  process.env.VERCEL_SANDBOX_BASE_SNAPSHOT_ID;

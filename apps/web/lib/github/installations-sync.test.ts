@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   GitHubInstallationsSyncError,
   isGitHubInstallationsAuthError,
-} from "./installations-sync";
+} from "./sync";
 
 describe("isGitHubInstallationsAuthError", () => {
   test("treats 401 responses as auth failures", () => {

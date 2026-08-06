@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   ExternalLink,
-  GitCommit,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -37,12 +36,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { Session } from "@/lib/db/schema";
-import {
-  createSessionBranch,
-  fetchRepoBranches,
-  generatePullRequestContent,
-  type GitActionsResult,
-} from "@/lib/git-flow-client";
+import { createBranch } from "@/lib/git/actions/branch";
+import { generatePrContent, openPullRequest } from "@/lib/github/actions/pr";
+import { getGitStatus } from "@/lib/git/queries/status";
+import { fetchRepoBranches } from "@/lib/git/branches";
 
 interface CreatePRDialogProps {
   open: boolean;
@@ -56,37 +53,8 @@ interface CreatePRDialogProps {
   }) => void;
 }
 
-type GitActions = GitActionsResult;
-
 type WizardStep = "create-branch" | "generate";
 type PrCreationMode = "ready" | "draft";
-
-function buildCompareUrl(params: {
-  owner: string;
-  repo: string;
-  baseBranch: string;
-  headRef: string;
-  title?: string;
-  body?: string;
-}): string {
-  const { owner, repo, baseBranch, headRef, title, body } = params;
-  const compareUrl = new URL(
-    `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headRef)}`,
-  );
-  compareUrl.searchParams.set("expand", "1");
-
-  const trimmedTitle = title?.trim();
-  if (trimmedTitle) {
-    compareUrl.searchParams.set("title", trimmedTitle);
-  }
-
-  const trimmedBody = body?.trim();
-  if (trimmedBody) {
-    compareUrl.searchParams.set("body", trimmedBody);
-  }
-
-  return compareUrl.toString();
-}
 
 export function CreatePRDialog({
   open,
@@ -111,14 +79,12 @@ export function CreatePRDialog({
     autoMergeError?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [gitActions, setGitActions] = useState<GitActions | null>(null);
   const [resolvedBranch, setResolvedBranch] = useState<string | null>(null);
   const [hasUncommittedChanges, setHasUncommittedChanges] = useState(false);
   const [isDetachedHead, setIsDetachedHead] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [step, setStep] = useState<WizardStep>("generate");
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
   const [enableAutoMerge, setEnableAutoMerge] = useState(false);
   const isDraft = prCreationMode === "draft";
@@ -130,14 +96,12 @@ export function CreatePRDialog({
       setBody("");
       setResult(null);
       setError(null);
-      setGitActions(null);
       setResolvedBranch(null);
       setIsCreatingBranch(false);
       setHasUncommittedChanges(false);
       setIsDetachedHead(false);
       setStep("generate");
       setHasGenerated(false);
-      setPrHeadOwner(null);
       setPrCreationMode("ready");
       setEnableAutoMerge(false);
     }
@@ -148,15 +112,10 @@ export function CreatePRDialog({
     if (!hasSandbox) return;
     setIsCheckingStatus(true);
     try {
-      const res = await fetch("/api/git-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHasUncommittedChanges(data.hasUncommittedChanges ?? false);
-        setIsDetachedHead(data.isDetachedHead ?? false);
+      const data = await getGitStatus({ sessionId: session.id });
+      if (data) {
+        setHasUncommittedChanges(data.hasUncommittedChanges);
+        setIsDetachedHead(data.isDetachedHead);
         if (data.branch && data.branch !== "HEAD") {
           setResolvedBranch(data.branch);
         }
@@ -179,15 +138,7 @@ export function CreatePRDialog({
   const displayBranch = currentBranch === "HEAD" ? baseBranch : currentBranch;
   const isOnBaseBranch = displayBranch === baseBranch;
   const needsNewBranch = isOnBaseBranch || isDetachedHead;
-  const normalizedRepoOwner = session.repoOwner?.toLowerCase() ?? null;
-  const normalizedHeadOwner = prHeadOwner?.toLowerCase() ?? null;
-  const shouldOpenCompareInsteadOfApi = Boolean(
-    gitActions?.pushedToFork ||
-    (normalizedRepoOwner &&
-      normalizedHeadOwner &&
-      normalizedHeadOwner !== normalizedRepoOwner),
-  );
-  const canEnableAutoMerge = !isDraft && !shouldOpenCompareInsteadOfApi;
+  const canEnableAutoMerge = !isDraft;
 
   useEffect(() => {
     if (!canEnableAutoMerge) {
@@ -239,7 +190,7 @@ export function CreatePRDialog({
     setIsCreatingBranch(true);
     setError(null);
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -264,22 +215,19 @@ export function CreatePRDialog({
     setIsGenerating(true);
     setError(null);
     try {
-      const data = await generatePullRequestContent({
+      const data = await generatePrContent({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
         branchName: displayBranch,
       });
 
+      if (data.error) {
+        throw new Error(data.error);
+      }
       setTitle(data.title ?? "");
       setBody(data.body ?? "");
       setHasGenerated(true);
-      if (data.gitActions) {
-        setGitActions(data.gitActions);
-      }
-      if (typeof data.prHeadOwner === "string" && data.prHeadOwner.length > 0) {
-        setPrHeadOwner(data.prHeadOwner);
-      }
       if (data.branchName && data.branchName !== "HEAD") {
         setResolvedBranch(data.branchName);
       }
@@ -311,78 +259,23 @@ export function CreatePRDialog({
         ],
       });
 
-      if (
-        shouldOpenCompareInsteadOfApi &&
-        session.repoOwner &&
-        session.repoName
-      ) {
-        const headOwner = prHeadOwner?.trim() || session.repoOwner;
-        const sameOwner =
-          headOwner.toLowerCase() === session.repoOwner.toLowerCase();
-        const headRef = sameOwner
-          ? displayBranch
-          : `${headOwner}:${displayBranch}`;
-        const compareUrl = buildCompareUrl({
-          owner: session.repoOwner,
-          repo: session.repoName,
-          baseBranch,
-          headRef,
-          title,
-          body,
-        });
-
-        window.open(compareUrl, "_blank", "noopener,noreferrer");
-        setResult({
-          prUrl: compareUrl,
-          requiresManualCreation: true,
-          autoMergeEnabled: false,
-          autoMergeError: enableAutoMerge
-            ? "Auto-merge can only be enabled for pull requests created through the GitHub API."
-            : undefined,
-        });
-        await onGitMessage?.({
-          id: gitMessageId,
-          role: "assistant",
-          metadata: {},
-          parts: [
-            {
-              type: "data-pr",
-              id: prPartId,
-              data: {
-                status: "success",
-                url: compareUrl,
-                requiresManualCreation: true,
-              },
-            },
-          ],
-        });
-        return;
-      }
-
-      const res = await fetch("/api/pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.id,
-          repoUrl: session.cloneUrl,
-          branchName: displayBranch,
-          title,
-          body,
-          baseBranch,
-          headOwner: prHeadOwner ?? undefined,
-          isDraft,
-          enableAutoMerge,
-        }),
+      const data = await openPullRequest({
+        sessionId: session.id,
+        repoUrl: session.cloneUrl ?? "",
+        branchName: displayBranch,
+        title,
+        body,
+        baseBranch,
+        isDraft,
+        shouldAutoMerge: enableAutoMerge,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create PR");
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setResult({
-        prUrl: data.prUrl,
+        prUrl: data.prUrl ?? "",
         requiresManualCreation: Boolean(data.requiresManualCreation),
         autoMergeEnabled: Boolean(data.autoMergeEnabled),
         autoMergeError:
@@ -555,50 +448,6 @@ export function CreatePRDialog({
                     </div>
                   )}
 
-                  {/* Git Actions Banner */}
-                  {gitActions &&
-                    (gitActions.committed || gitActions.pushed) && (
-                      <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
-                        <GitCommit className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <div className="space-y-1">
-                          {gitActions.committed && (
-                            <p>
-                              <span className="font-medium">Committed:</span>{" "}
-                              <code className="rounded bg-background px-1 py-0.5 text-xs">
-                                {gitActions.commitMessage}
-                              </code>
-                            </p>
-                          )}
-                          {gitActions.pushed && (
-                            <p className="text-muted-foreground">
-                              {gitActions.pushedToFork && prHeadOwner
-                                ? `Branch pushed to fork ${prHeadOwner}`
-                                : "Branch pushed to origin"}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                  {shouldOpenCompareInsteadOfApi && (
-                    <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-800 dark:text-blue-300">
-                      We pushed your branch, but this repository does not allow
-                      API-based PR creation for the current app token. Open
-                      GitHub to create the PR from the compare page.
-                      {isDraft && (
-                        <p className="mt-2">
-                          GitHub will still open the standard compare flow.
-                          Choose
-                          <span className="font-medium">
-                            {" "}
-                            Create draft pull request
-                          </span>
-                          on GitHub to keep it in draft mode.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
                   {/* Title Input */}
                   <div className="grid gap-2">
                     <Label htmlFor="pr-title">Title</Label>
@@ -629,11 +478,9 @@ export function CreatePRDialog({
                     <div className="space-y-0.5 pr-4">
                       <Label htmlFor="pr-auto-merge">Enable auto-merge</Label>
                       <p className="text-xs text-muted-foreground">
-                        {shouldOpenCompareInsteadOfApi
-                          ? "Unavailable when the pull request must be created from GitHub's compare page."
-                          : isDraft
-                            ? "Unavailable for draft pull requests."
-                            : "Automatically merge once required checks pass."}
+                        {isDraft
+                          ? "Unavailable for draft pull requests."
+                          : "Automatically merge once required checks pass."}
                       </p>
                     </div>
                     <Switch
@@ -720,12 +567,6 @@ export function CreatePRDialog({
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Creating...
                         </>
-                      ) : shouldOpenCompareInsteadOfApi ? (
-                        isDraft ? (
-                          "Open Compare for Draft"
-                        ) : (
-                          "Open Compare Page"
-                        )
                       ) : isDraft ? (
                         "Create Draft PR"
                       ) : (

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { isGitHubAppConfigured } from "@/lib/github/app-auth";
-import { getInstallationManageUrl } from "@/lib/github/installation-url";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { isGitHubAppConfigured } from "@/lib/github/app";
+import { getInstallationManageUrl } from "@/lib/github/urls";
+import { syncUserInstallations } from "@/lib/github/sync";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { hasGitHubAccount } from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface GitHubOrg {
@@ -58,66 +59,43 @@ export async function GET() {
     );
   }
 
-  const token = await getUserGitHubToken();
-  console.log("install-status: token resolved", {
-    userId: session.user.id,
-    hasToken: !!token,
-  });
+  const token = await getUserGitHubToken(session.user.id);
 
-  // When the token is expired/invalid, fall back to DB-cached data so the UI
-  // can still show the connected user and prompt to reconnect.
+  // when the token is unavailable, fall back to DB-cached installations
   if (!token) {
-    const [ghAccount, installations] = await Promise.all([
-      getGitHubAccount(session.user.id),
-      getInstallationsByUserId(session.user.id),
-    ]);
-
-    if (!ghAccount) {
+    const linked = await hasGitHubAccount(session.user.id);
+    if (!linked) {
       return NextResponse.json(
         { error: "GitHub not connected" },
         { status: 401 },
       );
     }
 
-    const personalInstallation = installations.find(
-      (i) => i.accountLogin.toLowerCase() === ghAccount.username.toLowerCase(),
-    );
+    const installations = await getInstallationsByUserId(session.user.id);
 
-    const orgs: OrgInstallStatus[] = installations
-      .filter(
-        (i) =>
-          i.accountLogin.toLowerCase() !== ghAccount.username.toLowerCase(),
-      )
-      .map((i) => ({
-        githubId: 0,
-        login: i.accountLogin,
-        avatarUrl: "",
-        installStatus: "installed" as const,
-        installationId: i.installationId,
-        installationUrl: getInstallationManageUrl(
-          i.installationId,
-          i.installationUrl,
-        ),
-        repositorySelection: i.repositorySelection,
-      }));
+    // without a token we can't fetch the user profile, so build from installations
+    const orgs: OrgInstallStatus[] = installations.map((i) => ({
+      githubId: 0,
+      login: i.accountLogin,
+      avatarUrl: "",
+      installStatus: "installed" as const,
+      installationId: i.installationId,
+      installationUrl: getInstallationManageUrl(
+        i.installationId,
+        i.installationUrl,
+      ),
+      repositorySelection: i.repositorySelection,
+    }));
 
     const response: ConnectionStatusResponse = {
       user: {
-        githubId: Number(ghAccount.externalUserId) || 0,
-        login: ghAccount.username,
-        avatarUrl: `https://avatars.githubusercontent.com/u/${ghAccount.externalUserId}?v=4`,
+        githubId: 0,
+        login: "",
+        avatarUrl: "",
       },
-      personalInstallStatus: personalInstallation
-        ? "installed"
-        : "not_installed",
-      personalInstallationUrl: personalInstallation
-        ? getInstallationManageUrl(
-            personalInstallation.installationId,
-            personalInstallation.installationUrl,
-          )
-        : null,
-      personalRepositorySelection:
-        personalInstallation?.repositorySelection ?? null,
+      personalInstallStatus: "not_installed",
+      personalInstallationUrl: null,
+      personalRepositorySelection: null,
       orgs,
       tokenExpired: true,
     };
@@ -142,6 +120,39 @@ export async function GET() {
     ]);
 
     if (!userResponse.ok || !orgsResponse.ok) {
+      // token revoked/expired — fall back to DB-cached installations
+      const isAuthError =
+        userResponse.status === 401 ||
+        userResponse.status === 403 ||
+        orgsResponse.status === 401 ||
+        orgsResponse.status === 403;
+
+      if (isAuthError) {
+        const installations = await getInstallationsByUserId(session.user.id);
+        const orgs: OrgInstallStatus[] = installations.map((i) => ({
+          githubId: 0,
+          login: i.accountLogin,
+          avatarUrl: "",
+          installStatus: "installed" as const,
+          installationId: i.installationId,
+          installationUrl: getInstallationManageUrl(
+            i.installationId,
+            i.installationUrl,
+          ),
+          repositorySelection: i.repositorySelection,
+        }));
+
+        const response: ConnectionStatusResponse = {
+          user: { githubId: 0, login: "", avatarUrl: "" },
+          personalInstallStatus: "not_installed",
+          personalInstallationUrl: null,
+          personalRepositorySelection: null,
+          orgs,
+          tokenExpired: true,
+        };
+        return NextResponse.json(response);
+      }
+
       const [userBody, orgsBody] = await Promise.all([
         userResponse.ok
           ? Promise.resolve("OK")
@@ -168,6 +179,13 @@ export async function GET() {
       orgsResponse.json(),
       userResponse.json(),
     ])) as [GitHubOrg[], GitHubUser];
+
+    // sync installations from GitHub before reading from DB
+    await syncUserInstallations(session.user.id, token, user.login).catch(
+      (err) => {
+        console.error("Failed to sync installations in install-status:", err);
+      },
+    );
 
     // Get all installations from DB
     const installations = await getInstallationsByUserId(session.user.id);

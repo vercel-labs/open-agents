@@ -1,6 +1,6 @@
 "use client";
 
-import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import { toRelativePath } from "@open-agents/shared/lib/tool-state";
 import { Pencil } from "lucide-react";
 import { MultiFileDiff } from "@pierre/diffs/react";
 import { useMemo } from "react";

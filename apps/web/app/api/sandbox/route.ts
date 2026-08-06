@@ -1,29 +1,33 @@
-import { checkBotId } from "botid/server";
-import { botIdConfig } from "@/lib/botid";
-import { connectSandbox, type SandboxState } from "@open-harness/sandbox";
+import { connectSandbox, type SandboxState } from "@open-agents/sandbox";
 import {
   requireAuthenticatedUser,
   requireOwnedSession,
   type SessionRecord,
 } from "@/app/api/sessions/_lib/session-context";
-import { getGitHubAccount } from "@/lib/db/accounts";
+import { checkBotProtection } from "@/lib/botid";
+import { getGitHubUserProfile } from "@/lib/github/users";
 import { updateSession } from "@/lib/db/sessions";
-import { parseGitHubUrl } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { parseGitHubHttpsUrl } from "@/lib/github/urls";
+import {
+  verifyRepoAccess,
+  getRepoAccessErrorMessage,
+} from "@/lib/github/access";
+import {
+  mintInstallationToken,
+  revokeInstallationToken,
+  type ScopedInstallationToken,
+} from "@/lib/github/app";
 import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
+  DEFAULT_SANDBOX_VCPUS,
 } from "@/lib/sandbox/config";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
 } from "@/lib/sandbox/lifecycle";
 import { kickSandboxLifecycleWorkflow } from "@/lib/sandbox/lifecycle-kick";
-import {
-  getVercelCliSandboxSetup,
-  syncVercelCliAuthToSandbox,
-} from "@/lib/sandbox/vercel-cli-auth";
 import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
 import {
   canOperateOnSandbox,
@@ -32,6 +36,7 @@ import {
   hasResumableSandboxState,
 } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 // import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
 // import { getUserVercelToken } from "@/lib/vercel/token";
 
@@ -73,22 +78,6 @@ interface CreateSandboxRequest {
 //   );
 // }
 
-async function syncVercelCliAuthForSandbox(params: {
-  userId: string;
-  sessionRecord: SessionRecord;
-  sandbox: Awaited<ReturnType<typeof connectSandbox>>;
-}): Promise<void> {
-  const setup = await getVercelCliSandboxSetup({
-    userId: params.userId,
-    sessionRecord: params.sessionRecord,
-  });
-
-  await syncVercelCliAuthToSandbox({
-    sandbox: params.sandbox,
-    setup,
-  });
-}
-
 async function installSessionGlobalSkills(params: {
   sessionRecord: SessionRecord;
   sandbox: Awaited<ReturnType<typeof connectSandbox>>;
@@ -118,69 +107,43 @@ export async function POST(req: Request) {
 
   const { repoUrl, branch = "main", isNewBranch = false, sessionId } = body;
 
+  if (!sessionId) {
+    return Response.json({ error: "Missing sessionId" }, { status: 400 });
+  }
+
   // Get session for auth
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const botVerification = await checkBotId(botIdConfig);
+  const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const githubToken = await getUserGitHubToken(session.user.id);
-
-  if (repoUrl) {
-    const parsedRepo = parseGitHubUrl(repoUrl);
-    if (!parsedRepo) {
-      return Response.json(
-        { error: "Invalid GitHub repository URL" },
-        { status: 400 },
-      );
-    }
-
-    if (!githubToken) {
-      return Response.json(
-        { error: "Connect GitHub to access repositories" },
-        { status: 403 },
-      );
-    }
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["sandbox-create", session.user.id]),
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
-  // Validate session ownership
+  // Validate session ownership before minting any short-lived setup tokens.
   let sessionRecord: SessionRecord | undefined;
-  if (sessionId) {
-    const sessionContext = await requireOwnedSession({
-      userId: session.user.id,
-      sessionId,
-    });
-    if (!sessionContext.ok) {
-      return sessionContext.response;
-    }
-
-    sessionRecord = sessionContext.sessionRecord;
+  const sessionContext = await requireOwnedSession({
+    userId: session.user.id,
+    sessionId,
+  });
+  if (!sessionContext.ok) {
+    return sessionContext.response;
   }
 
-  const sandboxName = sessionId ? getSessionSandboxName(sessionId) : undefined;
-  const githubAccount = await getGitHubAccount(session.user.id);
-  const githubNoreplyEmail =
-    githubAccount?.externalUserId && githubAccount.username
-      ? `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`
-      : undefined;
+  sessionRecord = sessionContext.sessionRecord;
 
-  const gitUser = {
-    name: session.user.name ?? githubAccount?.username ?? session.user.username,
-    email:
-      githubNoreplyEmail ??
-      session.user.email ??
-      `${session.user.username}@users.noreply.github.com`,
-  };
-
-  // ============================================
-  // CREATE OR RESUME: Create a named persistent sandbox for this session.
-  // ============================================
-  const startTime = Date.now();
+  const sandboxName = getSessionSandboxName(sessionId);
 
   const source = repoUrl
     ? {
@@ -190,23 +153,83 @@ export async function POST(req: Request) {
       }
     : undefined;
 
-  const sandbox = await connectSandbox({
-    state: {
-      type: "vercel",
-      ...(sandboxName ? { sandboxName } : {}),
-      source,
-    },
-    options: {
-      githubToken: githubToken ?? undefined,
-      gitUser,
-      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      ports: DEFAULT_SANDBOX_PORTS,
-      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-      persistent: !!sandboxName,
-      resume: !!sandboxName,
-      createIfMissing: !!sandboxName,
-    },
-  });
+  // verify repo access (user permissions ∩ installation scope) and get
+  // a repo-scoped read token for clone/setup when a repo is provided
+  let setupToken: ScopedInstallationToken | undefined;
+
+  if (repoUrl) {
+    const parsedRepo = parseGitHubHttpsUrl(repoUrl);
+    if (!parsedRepo) {
+      return Response.json(
+        { error: "Invalid GitHub repository URL" },
+        { status: 400 },
+      );
+    }
+
+    const access = await verifyRepoAccess({
+      userId: session.user.id,
+      owner: parsedRepo.owner,
+      repo: parsedRepo.repo,
+    });
+
+    if (!access.ok) {
+      return Response.json(
+        { error: getRepoAccessErrorMessage(access.reason) },
+        { status: 403 },
+      );
+    }
+
+    setupToken = await mintInstallationToken({
+      installationId: access.installationId,
+      repositoryIds: [access.repositoryId],
+      permissions: { contents: "read" },
+    });
+  }
+
+  // ============================================
+  // CREATE OR RESUME: Create a named persistent sandbox for this session.
+  // ============================================
+  const startTime = Date.now();
+
+  let sandbox: Awaited<ReturnType<typeof connectSandbox>>;
+  try {
+    const ghProfile = await getGitHubUserProfile(session.user.id);
+    const githubNoreplyEmail =
+      ghProfile?.externalUserId && ghProfile.username
+        ? `${ghProfile.externalUserId}+${ghProfile.username}@users.noreply.github.com`
+        : undefined;
+
+    const gitUser = {
+      name: session.user.name ?? ghProfile?.username ?? session.user.username,
+      email:
+        githubNoreplyEmail ??
+        session.user.email ??
+        `${session.user.username}@users.noreply.github.com`,
+    };
+
+    sandbox = await connectSandbox({
+      state: {
+        type: "vercel",
+        ...(sandboxName ? { sandboxName } : {}),
+        source,
+      },
+      options: {
+        githubToken: setupToken?.token,
+        gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+        vcpus: DEFAULT_SANDBOX_VCPUS,
+        ports: DEFAULT_SANDBOX_PORTS,
+        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+        persistent: !!sandboxName,
+        resume: !!sandboxName,
+        createIfMissing: !!sandboxName,
+      },
+    });
+  } finally {
+    if (setupToken) {
+      await revokeInstallationToken(setupToken.token);
+    }
+  }
 
   if (sessionId && sandbox.getState) {
     const nextState = sandbox.getState() as SandboxState;
@@ -234,19 +257,6 @@ export async function POST(req: Request) {
       //     error,
       //   );
       // }
-
-      try {
-        await syncVercelCliAuthForSandbox({
-          userId: session.user.id,
-          sessionRecord,
-          sandbox,
-        });
-      } catch (error) {
-        console.error(
-          `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
-          error,
-        );
-      }
 
       try {
         await installSessionGlobalSkills({
@@ -282,6 +292,20 @@ export async function DELETE(req: Request) {
   const authResult = await requireAuthenticatedUser();
   if (!authResult.ok) {
     return authResult.response;
+  }
+
+  const botVerification = await checkBotProtection();
+  if (botVerification.isBot) {
+    return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["sandbox-delete", authResult.userId]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: unknown;

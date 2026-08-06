@@ -1,0 +1,1 @@
+-- no-op: is_admin column already added in 0034_add_is_admin

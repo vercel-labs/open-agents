@@ -98,20 +98,95 @@ export function PreferencesSectionSkeleton() {
           <Skeleton className="h-16 w-full" />
         </div>
       </div>
+
       <div className="border-t border-border/50" />
+
       <div className="space-y-4">
-        <SectionHeader>Models</SectionHeader>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <SectionHeader>Skills</SectionHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-[28rem] max-w-full" />
+          </div>
+          <div className="rounded-lg border border-border/70">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-b-0"
+              >
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-44" />
+                </div>
+                <Skeleton className="size-8 rounded-md" />
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-2.5 rounded-lg border border-dashed border-border/60 p-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div className="grid gap-1.5">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <div className="grid gap-1.5">
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <Skeleton className="h-10 w-20" />
+            </div>
+            <Skeleton className="h-4 w-[30rem] max-w-full" />
+          </div>
         </div>
-        <Skeleton className="h-24 w-full" />
       </div>
     </div>
   );
 }
 
-export function PreferencesSection() {
+export function ModelPreferencesSectionSkeleton() {
+  return (
+    <div className="space-y-4">
+      <SectionHeader>Model Preferences</SectionHeader>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="grid gap-2">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-4 w-44" />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-14" />
+          </div>
+          <Skeleton className="h-4 w-[34rem] max-w-full" />
+        </div>
+        <div className="rounded-lg border border-border/70">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 border-b border-border/60 px-3 py-2 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+              <Skeleton className="size-6 rounded-md" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </div>
+  );
+}
+
+function usePreferencesSectionState() {
   const { theme, setTheme } = useTheme();
   const { session } = useSession();
   const { preferences, loading, updatePreferences } = useUserPreferences();
@@ -373,9 +448,78 @@ export function PreferencesSection() {
     [updatePreferences],
   );
 
-  if (loading) {
+  return {
+    theme,
+    setTheme,
+    preferences,
+    loading,
+    updatePreferences,
+    modelOptions,
+    modelOptionsLoading,
+    isSaving,
+    globalSkillSource,
+    setGlobalSkillSource,
+    globalSkillName,
+    setGlobalSkillName,
+    globalSkillsError,
+    setGlobalSkillsError,
+    copiedPublicProfile,
+    setCopiedPublicProfile,
+    selectedDefaultModelId,
+    selectedSubagentModelId,
+    publicProfilePath,
+    defaultModelOptions,
+    subagentModelOptions,
+    handleThemeChange,
+    handleModelChange,
+    handleSubagentModelChange,
+    handleSandboxChange,
+    handleDiffModeChange,
+    handleAutoCommitPushChange,
+    handleAutoCreatePrChange,
+    handleAlertsEnabledChange,
+    handleAlertSoundEnabledChange,
+    handlePublicUsageEnabledChange,
+    handleCopyPublicProfileUrl,
+    handleAddGlobalSkillRef,
+    handleRemoveGlobalSkillRef,
+    enabledModelIds,
+    handleAddModel,
+    handleRemoveModel,
+    handleSetEnabledModels,
+  };
+}
+
+export function PreferencesSection() {
+  const state = usePreferencesSectionState();
+
+  if (state.loading) {
     return <PreferencesSectionSkeleton />;
   }
+
+  const {
+    theme,
+    preferences,
+    isSaving,
+    copiedPublicProfile,
+    publicProfilePath,
+    globalSkillName,
+    setGlobalSkillName,
+    globalSkillSource,
+    setGlobalSkillSource,
+    globalSkillsError,
+    handleThemeChange,
+    handleSandboxChange,
+    handleDiffModeChange,
+    handleAutoCommitPushChange,
+    handleAutoCreatePrChange,
+    handleAlertsEnabledChange,
+    handleAlertSoundEnabledChange,
+    handlePublicUsageEnabledChange,
+    handleCopyPublicProfileUrl,
+    handleAddGlobalSkillRef,
+    handleRemoveGlobalSkillRef,
+  } = state;
 
   return (
     <div className="space-y-8">
@@ -557,74 +701,6 @@ export function PreferencesSection() {
 
       <div className="border-t border-border/50" />
 
-      {/* ── Models: Default + Subagent side by side, Custom Model Set below ── */}
-      <div className="space-y-4">
-        <SectionHeader>Models</SectionHeader>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="model">Default Model</Label>
-            <ModelCombobox
-              value={selectedDefaultModelId}
-              items={defaultModelOptions.map((option) => ({
-                id: option.id,
-                label: option.label,
-                description: option.description,
-                isVariant: option.isVariant,
-              }))}
-              placeholder="Select a model"
-              searchPlaceholder="Search models..."
-              emptyText={
-                modelOptionsLoading ? "Loading..." : "No models found."
-              }
-              disabled={isSaving || modelOptionsLoading}
-              onChange={handleModelChange}
-            />
-            <p className="text-xs text-muted-foreground">
-              The AI model used for new chats.
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="subagent-model">Subagent Model</Label>
-            <ModelCombobox
-              value={selectedSubagentModelId}
-              items={[
-                { id: "auto", label: "Same as main model" },
-                ...subagentModelOptions.map((option) => ({
-                  id: option.id,
-                  label: option.label,
-                  description: option.description,
-                  isVariant: option.isVariant,
-                })),
-              ]}
-              placeholder="Select a model"
-              searchPlaceholder="Search models..."
-              emptyText={
-                modelOptionsLoading ? "Loading..." : "No models found."
-              }
-              disabled={isSaving || modelOptionsLoading}
-              onChange={handleSubagentModelChange}
-            />
-            <p className="text-xs text-muted-foreground">
-              For explorer and executor subagents.
-            </p>
-          </div>
-        </div>
-
-        <EnabledModelsSection
-          modelOptions={modelOptions}
-          modelOptionsLoading={modelOptionsLoading}
-          enabledModelIds={enabledModelIds}
-          onAddModel={handleAddModel}
-          onRemoveModel={handleRemoveModel}
-          onSetEnabledModels={handleSetEnabledModels}
-          disabled={isSaving}
-        />
-      </div>
-
-      <div className="border-t border-border/50" />
-
       {/* ── Skills ── */}
       <div className="space-y-4">
         <SectionHeader>Skills</SectionHeader>
@@ -726,6 +802,93 @@ export function PreferencesSection() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+export function ModelPreferencesSection() {
+  const state = usePreferencesSectionState();
+
+  if (state.loading) {
+    return <ModelPreferencesSectionSkeleton />;
+  }
+
+  const {
+    defaultModelOptions,
+    selectedDefaultModelId,
+    selectedSubagentModelId,
+    subagentModelOptions,
+    modelOptions,
+    modelOptionsLoading,
+    enabledModelIds,
+    isSaving,
+    handleModelChange,
+    handleSubagentModelChange,
+    handleAddModel,
+    handleRemoveModel,
+    handleSetEnabledModels,
+  } = state;
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader>Model Preferences</SectionHeader>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="model">Default Model</Label>
+          <ModelCombobox
+            value={selectedDefaultModelId}
+            items={defaultModelOptions.map((option) => ({
+              id: option.id,
+              label: option.label,
+              description: option.description,
+              isVariant: option.isVariant,
+            }))}
+            placeholder="Select a model"
+            searchPlaceholder="Search models..."
+            emptyText={modelOptionsLoading ? "Loading..." : "No models found."}
+            disabled={isSaving || modelOptionsLoading}
+            onChange={handleModelChange}
+          />
+          <p className="text-xs text-muted-foreground">
+            The AI model used for new chats.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <Label htmlFor="subagent-model">Subagent Model</Label>
+          <ModelCombobox
+            value={selectedSubagentModelId}
+            items={[
+              { id: "auto", label: "Same as main model" },
+              ...subagentModelOptions.map((option) => ({
+                id: option.id,
+                label: option.label,
+                description: option.description,
+                isVariant: option.isVariant,
+              })),
+            ]}
+            placeholder="Select a model"
+            searchPlaceholder="Search models..."
+            emptyText={modelOptionsLoading ? "Loading..." : "No models found."}
+            disabled={isSaving || modelOptionsLoading}
+            onChange={handleSubagentModelChange}
+          />
+          <p className="text-xs text-muted-foreground">
+            For explorer and executor subagents.
+          </p>
+        </div>
+      </div>
+
+      <EnabledModelsSection
+        modelOptions={modelOptions}
+        modelOptionsLoading={modelOptionsLoading}
+        enabledModelIds={enabledModelIds}
+        onAddModel={handleAddModel}
+        onRemoveModel={handleRemoveModel}
+        onSetEnabledModels={handleSetEnabledModels}
+        disabled={isSaving}
+      />
     </div>
   );
 }

@@ -2,12 +2,19 @@ import { nanoid } from "nanoid";
 import { headers as nextHeaders } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import {
+  countSessionsByUserId,
   createSessionWithInitialChat,
   getUsedSessionTitles,
 } from "@/lib/db/sessions";
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
 import { getUserPreferences } from "@/lib/db/user-preferences";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import { getUserGitHubToken } from "@/lib/github/token";
+import {
+  isManagedTemplateTrialUser,
+  MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR,
+  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT,
+  MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR,
+} from "@/lib/managed-template-trial";
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -54,9 +61,17 @@ export default async function RepoPage({ params }: RepoPageProps) {
   // Auth check -- redirect to sign-in, preserving the URL for return
   const session = await getServerSession();
   if (!session?.user) {
-    redirect(
-      `/api/auth/signin/vercel?next=${encodeURIComponent(`/${username}/${repo}`)}`,
-    );
+    redirect("/");
+  }
+
+  const requestHost = (await nextHeaders()).get("host") ?? "";
+  if (isManagedTemplateTrialUser(session, requestHost)) {
+    const existingSessionCount = await countSessionsByUserId(session.user.id);
+    const error =
+      existingSessionCount >= MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT
+        ? MANAGED_TEMPLATE_TRIAL_SESSION_LIMIT_ERROR
+        : MANAGED_TEMPLATE_TRIAL_GITHUB_SESSION_ERROR;
+    redirect(`/?error=${encodeURIComponent(error)}`);
   }
 
   const preferencesPromise = getUserPreferences(session.user.id);
@@ -87,7 +102,6 @@ export default async function RepoPage({ params }: RepoPageProps) {
   }
 
   // Use the user's preferred sandbox type and model
-  const requestHost = (await nextHeaders()).get("host") ?? "";
   const [rawPreferences, savedVercelProject] = await Promise.all([
     preferencesPromise,
     savedVercelProjectPromise,

@@ -1,7 +1,6 @@
 import {
   createGateway,
   defaultSettingsMiddleware,
-  gateway as aiGateway,
   wrapLanguageModel,
   type GatewayModelId,
   type JSONValue,
@@ -96,6 +95,8 @@ export interface GatewayConfig {
 export interface GatewayOptions {
   config?: GatewayConfig;
   providerOptionsOverrides?: ProviderOptionsByProvider;
+  appName?: string;
+  appUrl?: string;
 }
 
 export type { GatewayModelId, LanguageModel, JSONValue };
@@ -172,12 +173,20 @@ export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
 ): LanguageModel {
-  const { config, providerOptionsOverrides } = options;
+  const { config, providerOptionsOverrides, appName, appUrl } = options;
 
-  // Use custom gateway config or default AI SDK gateway
+  const attributionHeaders = {
+    "http-referer": appUrl ?? "https://open-agents.dev",
+    "x-title": appName ?? "Open Agents",
+  };
+
   const baseGateway = config
-    ? createGateway({ baseURL: config.baseURL, apiKey: config.apiKey })
-    : aiGateway;
+    ? createGateway({
+        baseURL: config.baseURL,
+        apiKey: config.apiKey,
+        headers: attributionHeaders,
+      })
+    : createGateway({ headers: attributionHeaders });
 
   let model: LanguageModel = baseGateway(modelId);
 

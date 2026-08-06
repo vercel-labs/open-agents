@@ -32,12 +32,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type SessionGitStatus } from "@/hooks/use-session-git-status";
 import type { Session } from "@/lib/db/schema";
-import {
-  commitAndPushSessionChanges,
-  createSessionBranch,
-  fetchRepoBranches,
-  type GitActionsResult,
-} from "@/lib/git-flow-client";
+import { createBranch } from "@/lib/git/actions/branch";
+import { commitChanges, type CommitResult } from "@/lib/github/actions/commit";
+import { fetchRepoBranches } from "@/lib/git/branches";
 
 interface CommitDialogProps {
   open: boolean;
@@ -51,7 +48,10 @@ interface CommitDialogProps {
   onOpenCreatePr?: () => void;
 }
 
-type GitActions = GitActionsResult;
+type GitActions = Pick<
+  CommitResult,
+  "committed" | "pushed" | "commitMessage" | "commitSha"
+>;
 
 type CommitStep = "loading" | "create-branch" | "commit" | "success";
 type CommitMode = "ai" | "manual";
@@ -81,7 +81,6 @@ export function CommitDialog({
   const [mode, setMode] = useState<CommitMode>("ai");
   const [manualTitle, setManualTitle] = useState("");
   const [manualBody, setManualBody] = useState("");
-  const [prHeadOwner, setPrHeadOwner] = useState<string | null>(null);
   const [statusSnapshot, setStatusSnapshot] = useState<SessionGitStatus | null>(
     null,
   );
@@ -162,7 +161,6 @@ export function CommitDialog({
     setMode("ai");
     setManualTitle("");
     setManualBody("");
-    setPrHeadOwner(null);
     setStatusSnapshot(gitStatus);
 
     void fetchBranches();
@@ -212,7 +210,7 @@ export function CommitDialog({
     setError(null);
 
     try {
-      const result = await createSessionBranch({
+      const result = await createBranch({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -266,7 +264,7 @@ export function CommitDialog({
         ],
       });
 
-      const response = await commitAndPushSessionChanges({
+      const result = await commitChanges({
         sessionId: session.id,
         sessionTitle: session.title,
         baseBranch,
@@ -279,23 +277,24 @@ export function CommitDialog({
           : {}),
       });
 
-      setGitActions(response.gitActions ?? null);
-
-      if (response.branchName && response.branchName !== "HEAD") {
-        setResolvedBranch(response.branchName);
+      if (result.error) {
+        throw new Error(result.error);
       }
 
-      if (response.prHeadOwner) {
-        setPrHeadOwner(response.prHeadOwner);
+      setGitActions({
+        committed: result.committed,
+        pushed: result.pushed,
+        commitMessage: result.commitMessage,
+        commitSha: result.commitSha,
+      });
+
+      if (result.branchName && result.branchName !== "HEAD") {
+        setResolvedBranch(result.branchName);
       }
 
-      const commitOwner =
-        response.gitActions?.pushedToFork && response.prHeadOwner
-          ? response.prHeadOwner
-          : session.repoOwner;
       const commitUrl =
-        response.gitActions?.commitSha && commitOwner && session.repoName
-          ? `https://github.com/${commitOwner}/${session.repoName}/commit/${response.gitActions.commitSha}`
+        result.commitSha && session.repoOwner && session.repoName
+          ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${result.commitSha}`
           : undefined;
 
       await onGitMessage?.({
@@ -308,10 +307,10 @@ export function CommitDialog({
             id: commitPartId,
             data: {
               status: "success",
-              committed: response.gitActions?.committed,
-              pushed: response.gitActions?.pushed,
-              commitMessage: response.gitActions?.commitMessage,
-              commitSha: response.gitActions?.commitSha,
+              committed: result.committed,
+              pushed: result.pushed,
+              commitMessage: result.commitMessage,
+              commitSha: result.commitSha,
               url: commitUrl,
             },
           },
@@ -357,11 +356,9 @@ export function CommitDialog({
     : "Push commits";
   const isDisabled = isCheckingStatus || isCreatingBranch || isSubmitting;
 
-  const commitOwner =
-    gitActions?.pushedToFork && prHeadOwner ? prHeadOwner : session.repoOwner;
   const commitUrl =
-    gitActions?.commitSha && commitOwner && session.repoName
-      ? `https://github.com/${commitOwner}/${session.repoName}/commit/${gitActions.commitSha}`
+    gitActions?.commitSha && session.repoOwner && session.repoName
+      ? `https://github.com/${session.repoOwner}/${session.repoName}/commit/${gitActions.commitSha}`
       : null;
   const prUrl =
     session.prNumber && session.repoOwner && session.repoName
@@ -537,11 +534,7 @@ export function CommitDialog({
                 )}
 
                 {gitActions?.pushed && (
-                  <p className="text-muted-foreground">
-                    {gitActions.pushedToFork
-                      ? "Pushed to fork remote"
-                      : "Pushed to origin"}
-                  </p>
+                  <p className="text-muted-foreground">Pushed to origin</p>
                 )}
 
                 {commitUrl && (

@@ -11,7 +11,7 @@ type MockRunCommandResult = {
   exitCode?: number;
   cmdId: string;
   stdout: () => Promise<string>;
-  stderr?: () => Promise<string>;
+  stderr: () => Promise<string>;
   wait?: (params?: { signal?: AbortSignal }) => Promise<MockWaitResult>;
 };
 type MockRunCommandParams = {
@@ -48,6 +48,7 @@ let runCommandMock = async (
   exitCode: 0,
   cmdId: "cmd-1",
   stdout: async () => "",
+  stderr: async () => "",
 });
 let lastRunCommandEnv: Record<string, string> | undefined;
 let currentSessionStateFactory = (_name: string): MockSessionState => ({});
@@ -167,6 +168,7 @@ beforeEach(() => {
     exitCode: 0,
     cmdId: "cmd-1",
     stdout: async () => "",
+    stderr: async () => "",
   });
   lastRunCommandEnv = undefined;
   currentSessionStateFactory = () => ({});
@@ -246,6 +248,36 @@ describe("VercelSandbox.environmentDetails", () => {
     expect(lastRunCommandEnv?.SANDBOX_URL_3000).toBe(
       "https://sbx-3000.vercel.run",
     );
+  });
+});
+
+describe("VercelSandbox.exec", () => {
+  test("preserves stderr output from failed commands", async () => {
+    runCommandMock = async () => ({
+      exitCode: 128,
+      cmdId: "cmd-fetch-failed",
+      stdout: async () => "",
+      stderr: async () => "fatal: couldn't find remote ref feature\n",
+    });
+
+    const sandbox = await sandboxModule.VercelSandbox.connect("sbx-test", {
+      ports: [3000],
+      remainingTimeout: 0,
+    });
+
+    const result = await sandbox.exec(
+      "git fetch origin feature",
+      "/vercel/sandbox",
+      5_000,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      exitCode: 128,
+      stdout: "",
+      stderr: "fatal: couldn't find remote ref feature\n",
+      truncated: false,
+    });
   });
 });
 
@@ -337,8 +369,8 @@ describe("VercelSandbox persistence", () => {
   });
 });
 
-describe("GitHub credential brokering", () => {
-  test("applies a brokered GitHub network policy when creating a sandbox", async () => {
+describe("GitHub setup credential brokering", () => {
+  test("applies setup GitHub auth when creating a sandbox and then clears it", async () => {
     const basicAuthToken = Buffer.from(
       "x-access-token:github-user-token",
       "utf-8",
@@ -347,7 +379,7 @@ describe("GitHub credential brokering", () => {
     await sandboxModule.VercelSandbox.create({
       githubToken: "github-user-token",
       source: {
-        url: "https://github.com/open-harness/example",
+        url: "https://github.com/open-agents/example",
         branch: "main",
       },
     });
@@ -391,56 +423,19 @@ describe("GitHub credential brokering", () => {
     });
     expect(createCalls[0]?.source).toEqual({
       type: "git",
-      url: "https://github.com/open-harness/example",
+      url: "https://github.com/open-agents/example",
       revision: "main",
     });
+    expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 
-  test("refreshes brokered GitHub auth when reconnecting to a sandbox", async () => {
+  test("clears GitHub auth when reconnecting to a sandbox", async () => {
     await sandboxModule.VercelSandbox.connect("session_123", {
       githubToken: "github-user-token",
       remainingTimeout: 0,
     });
 
-    expect(updateNetworkPolicyCalls).toEqual([
-      {
-        allow: {
-          "api.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "uploads.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "codeload.github.com": [
-            {
-              transform: [
-                { headers: { Authorization: "Bearer github-user-token" } },
-              ],
-            },
-          ],
-          "github.com": [
-            {
-              transform: [
-                {
-                  headers: {
-                    Authorization: `Basic ${Buffer.from("x-access-token:github-user-token", "utf-8").toString("base64")}`,
-                  },
-                },
-              ],
-            },
-          ],
-          "*": [],
-        },
-      },
-    ]);
+    expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 });
 
@@ -449,7 +444,7 @@ describe("VercelSandbox.create", () => {
     await sandboxModule.VercelSandbox.create({
       baseSnapshotId: "snap-base-1",
       source: {
-        url: "https://github.com/open-harness/example",
+        url: "https://github.com/open-agents/example",
         branch: "main",
       },
     });
@@ -465,7 +460,7 @@ describe("VercelSandbox.create", () => {
         "clone",
         "--branch",
         "main",
-        "https://github.com/open-harness/example",
+        "https://github.com/open-agents/example",
         ".",
       ],
       cwd: "/vercel/sandbox",
@@ -509,6 +504,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-running",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => await new Promise<MockWaitResult>(() => {}),
     });
 
@@ -545,6 +541,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-error",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => {
         throw new Error("wait failed");
       },
@@ -564,6 +561,7 @@ describe("VercelSandbox.execDetached", () => {
     runCommandMock = async () => ({
       cmdId: "cmd-detached-fail",
       stdout: async () => "",
+      stderr: async () => "",
       wait: async () => ({
         exitCode: 1,
         stdout: async () => "",

@@ -48,7 +48,7 @@ mock.module("ai", () => {
   };
 });
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: async (state: { sandboxId?: string }) => {
     if (!state.sandboxId) {
       throw new Error("Missing sandboxId in test sandbox state.");
@@ -66,7 +66,8 @@ mock.module("@open-harness/sandbox", () => ({
 
 const { askUserQuestionTool } = await import("./ask-user-question");
 const { bashTool, commandNeedsApproval } = await import("./bash");
-const { MAX_BODY_LENGTH, webFetchTool } = await import("./fetch");
+const { MAX_BODY_LENGTH, isAllowedWebUrl, webFetchTool } =
+  await import("./fetch");
 const { globTool } = await import("./glob");
 const { grepTool } = await import("./grep");
 const { readFileTool } = await import("./read");
@@ -164,6 +165,34 @@ describe("tools execute behavior", () => {
       success: false,
       error: "Cannot read a directory. Use glob or ls command instead.",
     });
+  });
+
+  test("readFileTool requires approval for dotenv files", async () => {
+    const baseContext = {
+      sandbox: { workingDirectory: "/repo" },
+      model: "test-model",
+    };
+
+    const dotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: ".env.local" },
+      baseContext,
+    );
+    expect(dotenvApproval).toBe(true);
+
+    const nestedDotenvApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "apps/web/.env.example" },
+      baseContext,
+    );
+    expect(nestedDotenvApproval).toBe(true);
+
+    const regularFileApproval = await getNeedsApprovalResult(
+      readFileTool().needsApproval,
+      { filePath: "README.md" },
+      baseContext,
+    );
+    expect(regularFileApproval).toBe(false);
   });
 
   test("writeFileTool creates parent directories and writes content", async () => {
@@ -371,18 +400,30 @@ describe("tools execute behavior", () => {
     });
   });
 
-  test("commandNeedsApproval flags only rm -rf commands", () => {
+  test("commandNeedsApproval flags curl, rm -rf, and dotenv commands", () => {
     expect(commandNeedsApproval("ls -la")).toBe(false);
     expect(commandNeedsApproval("git status --short")).toBe(false);
     expect(commandNeedsApproval("npm install")).toBe(false);
     expect(commandNeedsApproval("bun install")).toBe(false);
     expect(commandNeedsApproval("custom-command --help")).toBe(false);
     expect(commandNeedsApproval("git reset --hard HEAD~1")).toBe(false);
-    expect(commandNeedsApproval("rm -fr tmp")).toBe(false);
+    expect(commandNeedsApproval("curl -s https://example.com")).toBe(true);
+    expect(commandNeedsApproval("bash -c 'curl https://example.com'")).toBe(
+      true,
+    );
+    expect(commandNeedsApproval("rm -fr tmp")).toBe(true);
+    expect(commandNeedsApproval("rm -r -f tmp")).toBe(true);
+    expect(commandNeedsApproval("find . -delete")).toBe(true);
     expect(commandNeedsApproval("rm -rf tmp")).toBe(true);
+    expect(commandNeedsApproval("cat .env.local")).toBe(true);
+    expect(commandNeedsApproval("cat .e''nv.local")).toBe(true);
+    expect(commandNeedsApproval("cat .e$(printf nv).local")).toBe(true);
+    expect(commandNeedsApproval("grep API_KEY apps/web/.env.example")).toBe(
+      true,
+    );
   });
 
-  test("bashTool needsApproval blocks dangerous commands by default", async () => {
+  test("bashTool needsApproval blocks dangerous and dotenv commands by default", async () => {
     const baseContext = {
       sandbox: { workingDirectory: "/repo" },
       model: "test-model",
@@ -406,6 +447,15 @@ describe("tools execute behavior", () => {
     );
     expect(dangerousCommand).toBe(true);
 
+    const dotenvCommand = await getNeedsApprovalResult(
+      bashTool().needsApproval,
+      { command: "cat .env.local" },
+      {
+        ...baseContext,
+      },
+    );
+    expect(dotenvCommand).toBe(true);
+
     const allowedBuildCommand = await getNeedsApprovalResult(
       bashTool().needsApproval,
       { command: "bun run ci" },
@@ -428,6 +478,17 @@ describe("tools execute behavior", () => {
       workingDirectory: "/repo",
       exec: async (command: string) => {
         executedCommand = command;
+
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "93.184.216.34\n",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
         return {
           success: true,
           exitCode: 0,
@@ -475,13 +536,25 @@ describe("tools execute behavior", () => {
 
     const sandbox = {
       workingDirectory: "/repo",
-      exec: async () => ({
-        success: true,
-        exitCode: 0,
-        stdout: `${Buffer.from(responseBody).toString("base64")}\n200\napplication/json\n11\nfalse\n`,
-        stderr: "",
-        truncated: false,
-      }),
+      exec: async (command: string) => {
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "93.184.216.34\n",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
+        return {
+          success: true,
+          exitCode: 0,
+          stdout: `${Buffer.from(responseBody).toString("base64")}\n200\napplication/json\n11\nfalse\n`,
+          stderr: "",
+          truncated: false,
+        };
+      },
     };
 
     const result = await webFetchTool.execute?.(
@@ -501,6 +574,120 @@ describe("tools execute behavior", () => {
       truncated: false,
       savedBodyPath: null,
     });
+  });
+
+  test("webFetchTool requires approval", async () => {
+    const needsApproval = await getNeedsApprovalResult(
+      webFetchTool.needsApproval,
+      { url: "https://example.com", method: "GET" },
+      {
+        sandbox: { workingDirectory: "/repo" },
+        model: "test-model",
+      },
+    );
+
+    expect(needsApproval).toBe(true);
+  });
+
+  test("webFetchTool rejects public hostnames that resolve to private addresses", async () => {
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async (command: string) => {
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "127.0.0.1\n",
+            stderr: "",
+            truncated: false,
+          };
+        }
+
+        throw new Error("curl should not run for private DNS results");
+      },
+    };
+
+    const result = await webFetchTool.execute?.(
+      {
+        url: "https://internal.example",
+        method: "GET",
+      },
+      executionOptions(createContext(sandbox)),
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Fetch failed: URL resolves to a private or internal host",
+    });
+  });
+
+  test("webFetchTool rejects when DNS resolution fails", async () => {
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async (command: string) => {
+        if (command.startsWith("getent ahosts")) {
+          return {
+            success: false,
+            exitCode: 2,
+            stdout: "",
+            stderr: "resolution failed",
+            truncated: false,
+          };
+        }
+
+        throw new Error("curl should not run when DNS validation fails");
+      },
+    };
+
+    const result = await webFetchTool.execute?.(
+      {
+        url: "https://unresolved.example",
+        method: "GET",
+      },
+      executionOptions(createContext(sandbox)),
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Fetch failed: URL resolves to a private or internal host",
+    });
+  });
+
+  test("webFetchTool rejects private and internal URL hosts", () => {
+    const blockedUrls = [
+      "http://localhost",
+      "http://127.0.0.1",
+      "http://10.0.0.1",
+      "http://172.16.0.1",
+      "http://192.168.0.1",
+      "http://169.254.169.254",
+      "http://0.0.0.0",
+      "http://[::]",
+      "http://[::1]",
+      "http://[fc00::1]",
+      "http://[fe80::1]",
+      "http://[::ffff:127.0.0.1]",
+      "http://[::ffff:0a00:0001]",
+      "http://[::ffff:c0a8:0001]",
+      "http://[::ffff:ac10:0001]",
+    ];
+
+    for (const url of blockedUrls) {
+      expect(isAllowedWebUrl(url)).toBe(false);
+    }
+  });
+
+  test("webFetchTool allows public http and https URL hosts", () => {
+    const allowedUrls = [
+      "https://example.com",
+      "http://93.184.216.34",
+      "https://[2606:2800:220:1:248:1893:25c8:1946]",
+      "https://[::ffff:5db8:d822]",
+    ];
+
+    for (const url of allowedUrls) {
+      expect(isAllowedWebUrl(url)).toBe(true);
+    }
   });
 
   test("askUserQuestionTool formats structured answers", () => {

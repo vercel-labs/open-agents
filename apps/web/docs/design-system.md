@@ -1,10 +1,10 @@
 # Design System
 
-This document defines the visual design system used across the Open Harness web application, particularly for unauthenticated/marketing pages.
+This document defines the visual design system used across the Open Agents web application, particularly for unauthenticated/marketing pages.
 
 ## Design Philosophy
 
-The design follows a **dark terminal aesthetic** that reflects the developer-focused, CLI-centric nature of Open Harness. The visual language communicates:
+The design follows a **dark terminal aesthetic** that reflects the developer-focused, CLI-centric nature of Open Agents. The visual language communicates:
 
 - **Technical credibility** - feels like a tool built by developers, for developers
 - **Terminal familiarity** - macOS window chrome, command prompts, monospace typography

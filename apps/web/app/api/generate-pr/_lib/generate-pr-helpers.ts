@@ -27,34 +27,6 @@ export function looksLikeCommitHash(str: string): boolean {
   return /^[0-9a-f]{7,40}$/i.test(str);
 }
 
-interface EnsureForkOptions {
-  token: string;
-  upstreamOwner: string;
-  upstreamRepo: string;
-  forkOwner: string;
-}
-
-type EnsureForkResult =
-  | { success: true; forkRepoName: string }
-  | { success: false; error: string };
-
-const FORK_PUSH_RETRY_ATTEMPTS = 12;
-const FORK_PUSH_RETRY_DELAY_MS = 2000;
-
-function getGitHubHeaders(token: string): HeadersInit {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 export function isPermissionPushError(output: string): boolean {
   const lowerOutput = output.toLowerCase();
   return (
@@ -66,15 +38,6 @@ export function isPermissionPushError(output: string): boolean {
     lowerOutput.includes("invalid username") ||
     lowerOutput.includes("unable to access") ||
     lowerOutput.includes("resource not accessible by integration")
-  );
-}
-
-export function isRetryableForkPushError(output: string): boolean {
-  const lowerOutput = output.toLowerCase();
-  return (
-    lowerOutput.includes("repository not found") ||
-    lowerOutput.includes("could not read from remote repository") ||
-    lowerOutput.includes("remote not found")
   );
 }
 
@@ -101,105 +64,6 @@ export function extractGitHubOwnerFromRemoteUrl(
   }
 
   return null;
-}
-
-export async function ensureForkExists({
-  token,
-  upstreamOwner,
-  upstreamRepo,
-  forkOwner,
-}: EnsureForkOptions): Promise<EnsureForkResult> {
-  const headers = getGitHubHeaders(token);
-  const forkRepoUrl = `https://api.github.com/repos/${forkOwner}/${upstreamRepo}`;
-
-  const publicForkResponse = await fetch(forkRepoUrl, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    cache: "no-store",
-  });
-
-  if (publicForkResponse.ok) {
-    const repoData: unknown = await publicForkResponse.json();
-    const forkRepoName =
-      typeof repoData === "object" &&
-      repoData !== null &&
-      "name" in repoData &&
-      typeof repoData.name === "string"
-        ? repoData.name
-        : upstreamRepo;
-    return { success: true, forkRepoName };
-  }
-
-  const existingForkResponse = await fetch(forkRepoUrl, {
-    headers,
-    cache: "no-store",
-  });
-
-  if (existingForkResponse.ok) {
-    const repoData: unknown = await existingForkResponse.json();
-    const forkRepoName =
-      typeof repoData === "object" &&
-      repoData !== null &&
-      "name" in repoData &&
-      typeof repoData.name === "string"
-        ? repoData.name
-        : upstreamRepo;
-    return { success: true, forkRepoName };
-  }
-
-  if (existingForkResponse.status !== 404) {
-    const responseText = await existingForkResponse.text();
-    return {
-      success: false,
-      error: `Failed to check fork repository: ${responseText.slice(0, 200)}`,
-    };
-  }
-
-  const createForkResponse = await fetch(
-    `https://api.github.com/repos/${upstreamOwner}/${upstreamRepo}/forks`,
-    {
-      method: "POST",
-      headers,
-      cache: "no-store",
-    },
-  );
-
-  if (
-    !createForkResponse.ok &&
-    createForkResponse.status !== 202 &&
-    createForkResponse.status !== 422
-  ) {
-    const responseText = await createForkResponse.text();
-    const lowerResponseText = responseText.toLowerCase();
-
-    if (
-      createForkResponse.status === 403 &&
-      lowerResponseText.includes("resource not accessible by integration")
-    ) {
-      return {
-        success: false,
-        error:
-          "GitHub denied automatic fork creation for this token. Create a fork manually on GitHub, then retry creating the PR.",
-      };
-    }
-
-    return {
-      success: false,
-      error: `Failed to create fork: ${responseText.slice(0, 200)}`,
-    };
-  }
-
-  const createData: unknown = await createForkResponse.json().catch(() => null);
-  const forkRepoName =
-    typeof createData === "object" &&
-    createData !== null &&
-    "name" in createData &&
-    typeof createData.name === "string"
-      ? createData.name
-      : upstreamRepo;
-  return { success: true, forkRepoName };
 }
 
 /**
@@ -243,13 +107,4 @@ export async function getConversationContext(
   }
 
   return lines.join("\n");
-}
-
-export const forkPushRetryConfig = {
-  attempts: FORK_PUSH_RETRY_ATTEMPTS,
-  delayMs: FORK_PUSH_RETRY_DELAY_MS,
-} as const;
-
-export async function sleepForForkRetry(): Promise<void> {
-  await sleep(FORK_PUSH_RETRY_DELAY_MS);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import type { GitHubConnectionStatusResponse } from "@/lib/github/connection-status";
+import type { GitHubConnectionStatusResponse } from "@/lib/github/status";
 import { fetcherNoStore } from "@/lib/swr";
 import { useSession } from "./use-session";
 

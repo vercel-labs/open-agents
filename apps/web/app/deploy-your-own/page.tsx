@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 
 const DEPLOY_ENV_VARS = [
   "POSTGRES_URL",
-  "JWE_SECRET",
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_URL",
   "ENCRYPTION_KEY",
   "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
   "VERCEL_APP_CLIENT_SECRET",
@@ -36,7 +37,7 @@ const DEPLOY_TEMPLATE_URL = (() => {
     ["project-name", "open-agents"],
     ["repository-name", "open-agents"],
     ["repository-url", "https://github.com/vercel-labs/open-agents"],
-    ["demo-title", "Open Harness"],
+    ["demo-title", "Open Agents"],
     [
       "demo-description",
       "Open-source reference app for building and running background coding agents on Vercel.",
@@ -45,7 +46,7 @@ const DEPLOY_TEMPLATE_URL = (() => {
     ["env", DEPLOY_ENV_VARS.join(",")],
     [
       "envDescription",
-      "Neon can provide POSTGRES_URL automatically. Generate JWE_SECRET and ENCRYPTION_KEY yourself, then add your Vercel OAuth and GitHub App credentials for a full deployment.",
+      "Neon can provide POSTGRES_URL automatically. Generate BETTER_AUTH_SECRET and ENCRYPTION_KEY yourself, then add your Vercel OAuth and GitHub App credentials for a full deployment.",
     ],
     ["products", encodeURIComponent(JSON.stringify(DEPLOY_PRODUCTS))],
     ["skippable-integrations", "1"],
@@ -57,23 +58,20 @@ const DEPLOY_TEMPLATE_URL = (() => {
 export const metadata: Metadata = {
   title: "Deploy your own",
   description:
-    "Deploy your own copy of Open Harness to sign in with your own account.",
+    "Deploy your own copy of Open Agents to unlock the full template.",
 };
 
 export default function DeployYourOwnPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-24 text-foreground">
       <div className="flex max-w-xl flex-col items-center text-center">
-        <p className="text-sm font-medium text-muted-foreground">
-          Open Harness
-        </p>
+        <p className="text-sm font-medium text-muted-foreground">Open Agents</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight">
           Deploy your own
         </h1>
         <p className="mt-4 text-base leading-7 text-muted-foreground">
-          This hosted deployment only supports sign-ins from @vercel.com email
-          addresses. To use the template with your own account, deploy your own
-          copy.
+          This hosted demo has limited functionality. Deploy your own copy to
+          unlock the full Open Agents template.
         </p>
         <Button asChild className="mt-8" size="lg">
           <Link href={DEPLOY_TEMPLATE_URL} rel="noreferrer" target="_blank">

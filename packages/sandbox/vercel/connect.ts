@@ -1,7 +1,7 @@
-import type { Sandbox, SandboxHooks } from "../interface";
-import type { VercelSandboxConfig } from "./config";
-import { VercelSandbox } from "./sandbox";
-import type { VercelState } from "./state";
+import type { Sandbox, SandboxHooks } from "../interface.ts";
+import type { VercelSandboxConfig } from "./config.ts";
+import { VercelSandbox } from "./sandbox.ts";
+import type { VercelState } from "./state.ts";
 
 interface ConnectOptions {
   env?: Record<string, string>;
@@ -9,6 +9,7 @@ interface ConnectOptions {
   gitUser?: { name: string; email: string };
   hooks?: SandboxHooks;
   timeout?: number;
+  vcpus?: number;
   ports?: number[];
   baseSnapshotId?: string;
   resume?: boolean;
@@ -67,7 +68,6 @@ function buildCreateConfig(
           source: {
             url: state.source.repo,
             branch: state.source.branch,
-            token: state.source.token,
             newBranch: state.source.newBranch,
           },
         }
@@ -78,6 +78,7 @@ function buildCreateConfig(
     gitUser: options?.gitUser,
     hooks: options?.hooks,
     ...(options?.timeout !== undefined && { timeout: options.timeout }),
+    ...(options?.vcpus !== undefined && { vcpus: options.vcpus }),
     ...(options?.ports && { ports: options.ports }),
     ...(options?.baseSnapshotId && {
       baseSnapshotId: options.baseSnapshotId,

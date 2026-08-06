@@ -1,4 +1,4 @@
-import { connectSandbox } from "@open-harness/sandbox";
+import { connectSandbox } from "@open-agents/sandbox";
 import {
   requireAuthenticatedUser,
   requireOwnedSession,
@@ -8,6 +8,7 @@ import { updateSession } from "@/lib/db/sessions";
 import {
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
+  DEFAULT_SANDBOX_VCPUS,
 } from "@/lib/sandbox/config";
 import {
   buildActiveLifecycleUpdate,
@@ -184,6 +185,7 @@ export async function PUT(req: Request) {
       },
       {
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+        vcpus: DEFAULT_SANDBOX_VCPUS,
         ports: DEFAULT_SANDBOX_PORTS,
         resume: true,
         createIfMissing: true,
@@ -202,6 +204,7 @@ export async function PUT(req: Request) {
               { type: sandboxType, sandboxName: persistentSandboxName },
               {
                 timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+                vcpus: DEFAULT_SANDBOX_VCPUS,
                 ports: DEFAULT_SANDBOX_PORTS,
                 resume: true,
               },

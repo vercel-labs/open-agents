@@ -1,82 +1,131 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-// ── Spy state ──────────────────────────────────────────────────────
+// ── spy state ──────────────────────────────────────────────────────
 
-type ExecResult = {
-  success: boolean;
-  stdout: string;
-  stderr?: string;
-};
-
-let execResults: Map<string, ExecResult>;
-let repoTokenResult: { token: string | null } = { token: "ghp_test123" };
-let githubAccountResult: {
-  externalUserId: string;
-  username: string;
-} | null = { externalUserId: "12345", username: "octocat" };
-let generateTextResult = { text: "feat: implement new feature" };
-
-const execSpy = mock(async (command: string): Promise<ExecResult> => {
-  // Match on command prefix to support parameterized commands
-  for (const [prefix, result] of execResults) {
-    if (command.startsWith(prefix) || command.includes(prefix)) {
-      return result;
+let hasChanges = true;
+let stageFails = false;
+let stagedDiff = "diff --git a/file.ts...";
+let changedFiles = [
+  {
+    path: "file.ts",
+    status: "modified" as const,
+    content: "export const x = 1;",
+    encoding: "utf-8" as const,
+  },
+];
+let verifyResult:
+  | {
+      ok: true;
+      installationId: number;
+      repositoryId: number;
+      defaultBranch: string;
     }
-  }
-  return { success: true, stdout: "", stderr: "" };
-});
-
-const sandbox = {
-  workingDirectory: "/vercel/sandbox",
-  exec: execSpy,
+  | { ok: false; reason: string } = {
+  ok: true,
+  installationId: 999,
+  repositoryId: 123,
+  defaultBranch: "main",
 };
+let coAuthorResult: { name: string; email: string } | null = {
+  name: "octocat",
+  email: "12345+octocat@users.noreply.github.com",
+};
+let apiCommitResult:
+  | { ok: true; commitSha: string }
+  | { ok: false; error: string } = {
+  ok: true,
+  commitSha: "abc123def456",
+};
+let generateTextResult = { text: "feat: implement new feature" };
+let syncPreservingChangesCalls = 0;
 
-// ── Module mocks ───────────────────────────────────────────────────
+// ── module mocks ───────────────────────────────────────────────────
+
+mock.module("server-only", () => ({}));
 
 mock.module("ai", () => ({
   generateText: async () => generateTextResult,
 }));
 
-mock.module("@open-harness/agent", () => ({
+mock.module("@open-agents/agent", () => ({
   gateway: () => "mock-model",
 }));
 
-mock.module("@/lib/db/accounts", () => ({
-  getGitHubAccount: async () => githubAccountResult,
+mock.module("@open-agents/sandbox", () => ({
+  connectSandbox: async () => ({}),
+  hasUncommittedChanges: async () => hasChanges,
+  stageAll: async () => {
+    if (stageFails) throw new Error("staging failed");
+  },
+  getStagedDiff: async () => stagedDiff,
+  getChangedFiles: async () =>
+    changedFiles.map(({ path, status }) => ({ path, status })),
+  detectBinaryFiles: async () => new Set<string>(),
+  getFileModes: async () => new Map([["file.ts", "100644"]]),
+  getHeadSha: async () => "base-sha",
+  getCurrentBranch: async () => "feature-branch",
+  syncToRemote: async () => {},
+  syncToRemotePreservingChanges: async () => {
+    syncPreservingChangesCalls += 1;
+  },
+  withTemporaryGitHubAuth: async (
+    _sandbox: unknown,
+    _token: string | undefined,
+    operation: () => Promise<unknown>,
+  ) => operation(),
 }));
 
-mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => repoTokenResult.token,
+mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
+  getSessionById: async () => null,
+  updateSession: async () => {},
+}));
+
+mock.module("@/lib/github/access", () => ({
+  verifyRepoAccess: async () => verifyResult,
+  getRepoAccessErrorMessage: () => "Access denied",
+}));
+
+mock.module("@/lib/github/commit", () => ({
+  createCommit: async () => apiCommitResult,
+  buildCoAuthor: async () => coAuthorResult,
+  buildCommitMessageWithCoAuthor: (
+    message: string,
+    coAuthor?: { name: string; email: string },
+  ) =>
+    coAuthor
+      ? `${message}\n\nCo-Authored-By: ${coAuthor.name} <${coAuthor.email}>`
+      : message,
+}));
+
+mock.module("@/lib/github/app", () => ({
+  withScopedInstallationOctokit: async ({
+    operation,
+  }: {
+    operation: (octokit: Record<string, never>) => Promise<unknown>;
+  }) => operation({}),
+  mintInstallationToken: async () => ({
+    token: "read-token",
+    expiresAt: null,
+    installationId: 999,
+    repositoryIds: [123],
+    permissions: { contents: "read" },
+  }),
+  revokeInstallationToken: async () => {},
 }));
 
 const { performAutoCommit } = await import("./auto-commit-direct");
 
-// ── Helpers ────────────────────────────────────────────────────────
-
-function defaultExecResults(): Map<string, ExecResult> {
-  return new Map<string, ExecResult>([
-    ["git status --porcelain", { success: true, stdout: " M file.ts\n" }],
-    ["git remote set-url", { success: true, stdout: "" }],
-    ["git add -A", { success: true, stdout: "" }],
-    ["git diff --cached", { success: true, stdout: "diff --git a/file.ts..." }],
-    ["git config user.name", { success: true, stdout: "" }],
-    ["git config user.email", { success: true, stdout: "" }],
-    ["git commit -m", { success: true, stdout: "[main abc123] feat: update" }],
-    [
-      "git rev-parse HEAD",
-      { success: true, stdout: "abc123def456789012345678901234567890abcd" },
-    ],
-    [
-      "git symbolic-ref --short HEAD",
-      { success: true, stdout: "feature-branch" },
-    ],
-    ["git push", { success: true, stdout: "" }],
-  ]);
-}
+// ── helpers ────────────────────────────────────────────────────────
 
 function makeParams() {
   return {
-    sandbox: sandbox as never,
+    sandbox: {
+      workingDirectory: "/sandbox",
+      readFile: async () => changedFiles[0]?.content ?? "",
+      readFileBuffer: async () => Buffer.from(changedFiles[0]?.content ?? ""),
+      exec: async () => ({ success: true, stdout: "" }),
+    } as never,
     userId: "user-1",
     sessionId: "session-1",
     sessionTitle: "Fix bug",
@@ -85,67 +134,46 @@ function makeParams() {
   };
 }
 
-// ── Tests ──────────────────────────────────────────────────────────
+// ── tests ──────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  execSpy.mockClear();
-  execResults = defaultExecResults();
-  repoTokenResult = { token: "ghp_test123" };
-  githubAccountResult = { externalUserId: "12345", username: "octocat" };
+  hasChanges = true;
+  stageFails = false;
+  stagedDiff = "diff --git a/file.ts...";
+  changedFiles = [
+    {
+      path: "file.ts",
+      status: "modified",
+      content: "export const x = 1;",
+      encoding: "utf-8",
+    },
+  ];
+  verifyResult = {
+    ok: true,
+    installationId: 999,
+    repositoryId: 123,
+    defaultBranch: "main",
+  };
+  coAuthorResult = {
+    name: "octocat",
+    email: "12345+octocat@users.noreply.github.com",
+  };
+  apiCommitResult = { ok: true, commitSha: "abc123def456" };
   generateTextResult = { text: "feat: implement new feature" };
+  syncPreservingChangesCalls = 0;
 });
 
 describe("performAutoCommit", () => {
   test("returns early with no commit when no changes", async () => {
-    execResults.set("git status --porcelain", {
-      success: true,
-      stdout: "",
-    });
+    hasChanges = false;
 
     const result = await performAutoCommit(makeParams());
 
     expect(result).toEqual({ committed: false, pushed: false });
   });
 
-  test("returns early when git status fails", async () => {
-    execResults.set("git status --porcelain", {
-      success: false,
-      stdout: "",
-    });
-
-    const result = await performAutoCommit(makeParams());
-
-    expect(result).toEqual({ committed: false, pushed: false });
-  });
-
-  test("sets up auth remote URL when token available", async () => {
-    const result = await performAutoCommit(makeParams());
-
-    const setUrlCall = execSpy.mock.calls.find((c) =>
-      (c[0] as string).includes("git remote set-url"),
-    );
-    expect(setUrlCall).toBeDefined();
-    expect(setUrlCall![0] as string).toContain("x-access-token:ghp_test123");
-    expect(result.committed).toBe(true);
-  });
-
-  test("skips auth remote URL when no token", async () => {
-    repoTokenResult = { token: null };
-
-    const result = await performAutoCommit(makeParams());
-
-    const setUrlCall = execSpy.mock.calls.find((c) =>
-      (c[0] as string).includes("git remote set-url"),
-    );
-    expect(setUrlCall).toBeUndefined();
-    expect(result.committed).toBe(true);
-  });
-
-  test("returns error when git add fails", async () => {
-    execResults.set("git add -A", {
-      success: false,
-      stdout: "",
-    });
+  test("returns error when staging fails", async () => {
+    stageFails = true;
 
     const result = await performAutoCommit(makeParams());
 
@@ -156,32 +184,22 @@ describe("performAutoCommit", () => {
     });
   });
 
-  test("returns error when commit fails", async () => {
-    execResults.set("git commit -m", {
-      success: false,
-      stdout: "nothing to commit",
-    });
+  test("returns error when repo access verification fails", async () => {
+    verifyResult = { ok: false, reason: "no_installation" };
 
     const result = await performAutoCommit(makeParams());
 
     expect(result.committed).toBe(false);
-    expect(result.pushed).toBe(false);
-    expect(result.error).toContain("Failed to commit");
+    expect(result.error).toContain("no_installation");
   });
 
-  test("returns committed but not pushed when push fails", async () => {
-    execResults.set("git push", {
-      success: false,
-      stdout: "",
-      stderr: "remote rejected",
-    });
+  test("returns error when api commit fails", async () => {
+    apiCommitResult = { ok: false, error: "Concurrent push detected" };
 
     const result = await performAutoCommit(makeParams());
 
-    expect(result.committed).toBe(true);
-    expect(result.pushed).toBe(false);
-    expect(result.commitMessage).toBeDefined();
-    expect(result.error).toBe("Commit succeeded but push failed");
+    expect(result.committed).toBe(false);
+    expect(result.error).toBe("Concurrent push detected");
   });
 
   test("full success path returns all fields", async () => {
@@ -190,41 +208,13 @@ describe("performAutoCommit", () => {
     expect(result.committed).toBe(true);
     expect(result.pushed).toBe(true);
     expect(result.commitMessage).toBeDefined();
-    expect(result.commitSha).toBe("abc123def456789012345678901234567890abcd");
+    expect(result.commitSha).toBe("abc123def456");
     expect(result.error).toBeUndefined();
-  });
-
-  test("sets git author identity when github account available", async () => {
-    await performAutoCommit(makeParams());
-
-    const nameCall = execSpy.mock.calls.find((c) =>
-      (c[0] as string).includes("git config user.name"),
-    );
-    const emailCall = execSpy.mock.calls.find((c) =>
-      (c[0] as string).includes("git config user.email"),
-    );
-
-    expect(nameCall).toBeDefined();
-    expect(nameCall![0] as string).toContain("octocat");
-    expect(emailCall).toBeDefined();
-    expect(emailCall![0] as string).toContain(
-      "12345+octocat@users.noreply.github.com",
-    );
-  });
-
-  test("skips git identity when no github account", async () => {
-    githubAccountResult = null;
-
-    await performAutoCommit(makeParams());
-
-    const nameCall = execSpy.mock.calls.find((c) =>
-      (c[0] as string).includes("git config user.name"),
-    );
-    expect(nameCall).toBeUndefined();
+    expect(syncPreservingChangesCalls).toBe(1);
   });
 
   test("uses fallback commit message when diff is empty", async () => {
-    execResults.set("git diff --cached", { success: true, stdout: "" });
+    stagedDiff = "";
 
     const result = await performAutoCommit(makeParams());
 
@@ -241,13 +231,11 @@ describe("performAutoCommit", () => {
     expect(result.commitMessage!.length).toBeLessThanOrEqual(72);
   });
 
-  test("proceeds without token when no user token is available", async () => {
-    // Override the mock for this test by manipulating exec results
-    // The token fetch will fail but commit should still work
-    repoTokenResult = { token: null };
+  test("returns early when no changed files after staging", async () => {
+    changedFiles = [];
 
     const result = await performAutoCommit(makeParams());
 
-    expect(result.committed).toBe(true);
+    expect(result).toEqual({ committed: false, pushed: false });
   });
 });

@@ -1,5 +1,5 @@
-import type { SandboxState } from "@open-harness/sandbox";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import type { SandboxState } from "@open-agents/sandbox";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -109,6 +109,10 @@ export async function getSessionById(sessionId: string) {
 
   return session ? normalizeSessionRecord(session) : session;
 }
+
+export type SessionRecord = NonNullable<
+  Awaited<ReturnType<typeof getSessionById>>
+>;
 
 export async function getShareById(shareId: string) {
   return db.query.shares.findFirst({
@@ -311,6 +315,28 @@ export async function updateSession(
   return session ? normalizeSessionRecord(session) : session;
 }
 
+export async function updateSessionIfNotArchived(
+  sessionId: string,
+  data: Partial<Omit<NewSession, "id" | "userId" | "createdAt">>,
+) {
+  const [session] = await db
+    .update(sessions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        ne(sessions.status, "archived"),
+        or(
+          isNull(sessions.lifecycleState),
+          ne(sessions.lifecycleState, "archived"),
+        ),
+      ),
+    )
+    .returning();
+
+  return session ? normalizeSessionRecord(session) : session;
+}
+
 /**
  * Atomically claims the session lifecycle lease when no run is currently
  * recorded. Returns true when the claim succeeds.
@@ -323,6 +349,46 @@ export async function claimSessionLifecycleRunId(
     .update(sessions)
     .set({ lifecycleRunId: runId, updatedAt: new Date() })
     .where(and(eq(sessions.id, sessionId), isNull(sessions.lifecycleRunId)))
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
+/**
+ * Atomically claims the session sandbox provisioning lease when no run is
+ * currently recorded. Returns true when the claim succeeds.
+ */
+export async function claimSessionSandboxProvisioningRunId(
+  sessionId: string,
+  runId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({ sandboxProvisioningRunId: runId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        isNull(sessions.sandboxProvisioningRunId),
+      ),
+    )
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
+export async function clearSessionSandboxProvisioningRunIdIfOwned(
+  sessionId: string,
+  runId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({ sandboxProvisioningRunId: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        eq(sessions.sandboxProvisioningRunId, runId),
+      ),
+    )
     .returning({ id: sessions.id });
 
   return Boolean(updated);
@@ -464,6 +530,39 @@ export async function compareAndSetChatActiveStreamId(
     .update(chats)
     .set({ activeStreamId: nextStreamId })
     .where(and(eq(chats.id, chatId), activeStreamMatch))
+    .returning({ id: chats.id });
+
+  return Boolean(updated);
+}
+
+/**
+ * Idempotently claims the activeStreamId slot for the given workflow run.
+ *
+ * Returns true when the slot is now owned by `workflowRunId` — i.e. it was
+ * either null (we just set it) or already equal to `workflowRunId` (no-op).
+ * Returns false when the slot is set to a different runId (conflict).
+ *
+ * Used so a workflow can self-persist its runId as its first step, ensuring
+ * `activeStreamId` is recorded as long as the workflow itself is running —
+ * even if the HTTP handler that started it was killed before its own CAS
+ * write completed.
+ */
+export async function claimChatActiveStreamId(
+  chatId: string,
+  workflowRunId: string,
+): Promise<boolean> {
+  const [updated] = await db
+    .update(chats)
+    .set({ activeStreamId: workflowRunId })
+    .where(
+      and(
+        eq(chats.id, chatId),
+        or(
+          isNull(chats.activeStreamId),
+          eq(chats.activeStreamId, workflowRunId),
+        ),
+      ),
+    )
     .returning({ id: chats.id });
 
   return Boolean(updated);
@@ -668,6 +767,15 @@ export async function upsertChatMessageScoped(
 export async function getChatMessageById(messageId: string) {
   return db.query.chatMessages.findFirst({
     where: eq(chatMessages.id, messageId),
+  });
+}
+
+export async function getChatMessageByIdForChat(
+  messageId: string,
+  chatId: string,
+) {
+  return db.query.chatMessages.findFirst({
+    where: and(eq(chatMessages.id, messageId), eq(chatMessages.chatId, chatId)),
   });
 }
 

@@ -1,17 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  buildGitHubAuthRemoteUrl,
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
-} from "./repo-identifiers";
+  parseGitHubHttpsUrl,
+  parseGitHubUrl,
+} from "./urls";
 
 describe("repo-identifiers", () => {
   test("accepts safe GitHub owner and repo segments", () => {
     expect(isValidGitHubRepoOwner("vercel")).toBe(true);
     expect(isValidGitHubRepoOwner("vercel-labs")).toBe(true);
-    expect(isValidGitHubRepoName("open-harness")).toBe(true);
-    expect(isValidGitHubRepoName("open_harness.v2")).toBe(true);
+    expect(isValidGitHubRepoName("open-agents")).toBe(true);
+    expect(isValidGitHubRepoName("open_agents.v2")).toBe(true);
   });
 
   test("rejects unsafe GitHub owner and repo segments", () => {
@@ -19,25 +20,26 @@ describe("repo-identifiers", () => {
     expect(isValidGitHubRepoName("open harness")).toBe(false);
   });
 
-  test("builds an encoded auth remote url for valid coordinates", () => {
+  test("parses only real github.com HTTPS repo URLs", () => {
     expect(
-      buildGitHubAuthRemoteUrl({
-        token: "ghp token/with?chars",
-        owner: "vercel",
-        repo: "open-harness",
-      }),
-    ).toBe(
-      "https://x-access-token:ghp%20token%2Fwith%3Fchars@github.com/vercel/open-harness.git",
-    );
+      parseGitHubHttpsUrl("https://github.com/vercel/open-agents.git"),
+    ).toEqual({ owner: "vercel", repo: "open-agents" });
+    expect(
+      parseGitHubHttpsUrl("https://attacker.example/github.com/vercel/repo"),
+    ).toBeNull();
+    expect(parseGitHubHttpsUrl("http://github.com/vercel/repo")).toBeNull();
+    expect(
+      parseGitHubHttpsUrl("https://github.com/vercel/repo/extra"),
+    ).toBeNull();
   });
 
-  test("returns null when the owner or repo is unsafe", () => {
+  test("parses SSH GitHub URLs without accepting arbitrary hosts", () => {
+    expect(parseGitHubUrl("git@github.com:vercel/open-agents.git")).toEqual({
+      owner: "vercel",
+      repo: "open-agents",
+    });
     expect(
-      buildGitHubAuthRemoteUrl({
-        token: "ghp_test",
-        owner: 'vercel" && echo nope && "',
-        repo: "open-harness",
-      }),
+      parseGitHubUrl("git@attacker.example:github.com/vercel/repo.git"),
     ).toBeNull();
   });
 });

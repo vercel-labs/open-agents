@@ -2,8 +2,9 @@ import {
   requireAuthenticatedUser,
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
-import type { PullRequestCheckRun } from "@/lib/github/client";
-import { getUserGitHubToken } from "@/lib/github/user-token";
+import type { CheckRun } from "@/lib/github/pulls";
+import { getUserGitHubToken } from "@/lib/github/token";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { Octokit } from "@octokit/rest";
 import { gateway, generateText } from "ai";
 
@@ -12,7 +13,7 @@ type RouteContext = {
 };
 
 type FixChecksRequest = {
-  checkRuns: PullRequestCheckRun[];
+  checkRuns: CheckRun[];
 };
 
 type FixCheckSnippet = {
@@ -66,10 +67,7 @@ Return ONLY the compacted log content. Do not add commentary, explanations, or m
 
 // ── Formatting helpers ──────────────────────────────────────────────────
 
-function formatSnippetFilename(
-  run: PullRequestCheckRun,
-  index: number,
-): string {
+function formatSnippetFilename(run: CheckRun, index: number): string {
   const slug = run.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -95,7 +93,7 @@ function formatAnnotations(annotations: CheckAnnotation[]): string {
 }
 
 function formatSnippetContent(
-  run: PullRequestCheckRun,
+  run: CheckRun,
   compactedLog: string | undefined,
   annotations: CheckAnnotation[] | undefined,
 ): string {
@@ -119,7 +117,7 @@ function formatSnippetContent(
 }
 
 function formatFixResponse(
-  checkRuns: PullRequestCheckRun[],
+  checkRuns: CheckRun[],
   compactedLogs: Record<string, string>,
   annotations: Record<string, CheckAnnotation[]>,
 ): FixChecksResponse {
@@ -182,7 +180,7 @@ async function compactLog(rawLog: string): Promise<string> {
  * Requires the user's GitHub token with `actions: read` and `checks: read` permissions.
  *
  * Request body:
- *   { checkRuns: PullRequestCheckRun[] } — the failing check runs
+ *   { checkRuns: CheckRun[] } — the failing check runs
  *
  * Returns:
  *   { prompt: string, snippets: { filename: string, content: string }[] }
@@ -200,6 +198,15 @@ export async function POST(req: Request, context: RouteContext) {
   });
   if (!sessionContext.ok) {
     return sessionContext.response;
+  }
+
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["fix-checks", authResult.userId, sessionId]),
+    limit: 5,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   const { sessionRecord } = sessionContext;

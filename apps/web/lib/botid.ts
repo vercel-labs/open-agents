@@ -1,3 +1,5 @@
+import { checkBotId } from "botid/server";
+
 /**
  * Shared Vercel BotID server-side configuration.
  *
@@ -16,3 +18,16 @@ export const botIdConfig = {
     ],
   },
 };
+
+export async function checkBotProtection() {
+  if (process.env.NODE_ENV !== "production") {
+    return {
+      isHuman: true,
+      isBot: false,
+      isVerifiedBot: false,
+      bypassed: true,
+    };
+  }
+
+  return checkBotId(botIdConfig);
+}

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-const CODE_EDITOR_PID_FILE = "/tmp/open-harness-code-server.pid";
+const CODE_EDITOR_PID_FILE = "/tmp/open-agents-code-server.pid";
+const CODE_EDITOR_LOCK_DIR = "/tmp/open-agents-code-server.lock";
 const RUNNING_CODE_SERVER_PID = "9001";
 
 const currentSessionRecord = {
@@ -13,6 +14,7 @@ const currentSessionRecord = {
 };
 
 let fileContents = new Map<string, string>();
+let directories = new Set<string>();
 let runningPids = new Set<string>();
 let processListOutput = "";
 let portProbeStatusCode: string | null = null;
@@ -90,6 +92,19 @@ const execMock = mock(async (command: string) => {
     return successResult();
   }
 
+  if (command === `mkdir '${CODE_EDITOR_LOCK_DIR}'`) {
+    if (directories.has(CODE_EDITOR_LOCK_DIR)) {
+      return failureResult("File exists");
+    }
+    directories.add(CODE_EDITOR_LOCK_DIR);
+    return successResult();
+  }
+
+  if (command === `rmdir '${CODE_EDITOR_LOCK_DIR}'`) {
+    directories.delete(CODE_EDITOR_LOCK_DIR);
+    return successResult();
+  }
+
   if (command.includes("curl -s -o /dev/null")) {
     return portProbeStatusCode === null
       ? failureResult("connection refused")
@@ -129,7 +144,7 @@ mock.module("@/app/api/sessions/_lib/session-context", () => ({
   requireOwnedSessionWithSandboxGuard: requireOwnedSessionWithSandboxGuardMock,
 }));
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: connectSandboxMock,
 }));
 
@@ -148,6 +163,7 @@ function createRouteContext(sessionId = "session-1") {
 describe("/api/sessions/[sessionId]/code-editor", () => {
   beforeEach(() => {
     fileContents = new Map<string, string>();
+    directories = new Set<string>();
     runningPids = new Set<string>();
     processListOutput = "";
     portProbeStatusCode = null;
@@ -244,7 +260,7 @@ describe("/api/sessions/[sessionId]/code-editor", () => {
     };
     const { POST } = await routeModulePromise;
     const expectedError =
-      "This hosted deployment does not allow the code editor for non-Vercel trial accounts. Deploy your own copy for full controls.";
+      "The code editor is disabled in the hosted demo. Deploy your own copy to unlock the full Open Agents template.";
 
     const response = await POST(
       new Request(

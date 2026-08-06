@@ -155,7 +155,7 @@ let moduleVersion = 0;
 
 async function loadClientModule() {
   moduleVersion += 1;
-  return import(`./client?test=${moduleVersion}`);
+  return import(`./pulls?test=${moduleVersion}`);
 }
 
 describe("github client merge readiness", () => {
@@ -180,8 +180,8 @@ describe("github client merge readiness", () => {
     ];
     mockState.requiredContexts = ["lint-and-typecheck", "Vercel"];
 
-    const { getPullRequestMergeReadiness } = await loadClientModule();
-    const readiness = await getPullRequestMergeReadiness({
+    const { getMergeReadiness } = await loadClientModule();
+    const readiness = await getMergeReadiness({
       repoUrl: "https://github.com/acme/rocket.git",
       prNumber: 42,
       token: "token-123",
@@ -227,8 +227,8 @@ describe("github client merge readiness", () => {
     ];
     mockState.requiredContexts = ["Vercel"];
 
-    const { getPullRequestMergeReadiness } = await loadClientModule();
-    const readiness = await getPullRequestMergeReadiness({
+    const { getMergeReadiness } = await loadClientModule();
+    const readiness = await getMergeReadiness({
       repoUrl: "https://github.com/acme/rocket.git",
       prNumber: 42,
       token: "token-123",

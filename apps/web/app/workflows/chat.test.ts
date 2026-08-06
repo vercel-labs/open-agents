@@ -6,12 +6,91 @@ import type { UIMessageChunk } from "ai";
 const writtenChunks: UIMessageChunk[] = [];
 let runStatus: string = "running";
 
+type TestResolvedChatSandboxRuntime = {
+  sandboxState: {
+    type: "vercel";
+    sandboxName: string;
+    expiresAt: number;
+  };
+  workingDirectory: string;
+  currentBranch: string;
+  environmentDetails: string;
+  skills: never[];
+  didSetupWorkspace: boolean;
+  sessionTitle: string;
+  repoOwner?: string;
+  repoName?: string;
+};
+
+function createResolvedChatSandboxRuntime(
+  overrides: Partial<TestResolvedChatSandboxRuntime> = {},
+): TestResolvedChatSandboxRuntime {
+  return {
+    sandboxState: {
+      type: "vercel",
+      sandboxName: "session_session-1",
+      expiresAt: Date.now() + 60_000,
+    },
+    workingDirectory: "/vercel/sandbox",
+    currentBranch: "main",
+    environmentDetails: "test sandbox",
+    skills: [],
+    didSetupWorkspace: false,
+    sessionTitle: "Session title",
+    repoOwner: "acme",
+    repoName: "repo",
+    ...overrides,
+  };
+}
+
 const spies = {
-  persistAssistantMessage: mock(() => Promise.resolve()),
-  persistSandboxState: mock(() => Promise.resolve()),
-  clearActiveStream: mock(() => Promise.resolve()),
+  persistUserMessage: mock(() => Promise.resolve()),
+  persistAssistantMessageWithToolResults: mock(() => Promise.resolve()),
+  persistAssistantMessage: mock((_chatId?: unknown, _message?: unknown) =>
+    Promise.resolve(),
+  ),
+  persistSandboxState: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
+    Promise.resolve(),
+  ),
+  resolveChatSandboxRuntime: mock((_params: { assistantId?: string }) => {
+    return Promise.resolve(createResolvedChatSandboxRuntime());
+  }),
+  claimActiveStream: mock(
+    async (
+      _chatId?: unknown,
+      _workflowRunId?: unknown,
+      writable?: WritableStream<UIMessageChunk>,
+      messageId?: string,
+    ) => {
+      if (writable && messageId) {
+        const writer = writable.getWriter();
+        try {
+          await writer.write({ type: "start", messageId });
+        } finally {
+          writer.releaseLock();
+        }
+      }
+      return "claimed";
+    },
+  ),
+  closeStream: mock((writable: WritableStream<UIMessageChunk>) =>
+    writable.close(),
+  ),
+  clearActiveStream: mock((_chatId?: unknown, _workflowRunId?: unknown) =>
+    Promise.resolve(),
+  ),
+  sendFinish: mock(async (writable: WritableStream<UIMessageChunk>) => {
+    const writer = writable.getWriter();
+    try {
+      await writer.write({ type: "finish", finishReason: "stop" });
+    } finally {
+      writer.releaseLock();
+    }
+  }),
   recordWorkflowUsage: mock(() => Promise.resolve()),
-  refreshDiffCache: mock(() => Promise.resolve()),
+  refreshDiffCache: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
+    Promise.resolve(),
+  ),
   refreshLifecycleActivity: mock(() => Promise.resolve()),
   hasAutoCommitChangesStep: mock(() => Promise.resolve(true)),
   runAutoCommitStep: mock(() =>
@@ -28,8 +107,37 @@ const spies = {
   ),
 };
 
+let testSessionRecord: {
+  id: string;
+  userId: string;
+  autoCommitPushOverride: boolean | null;
+  autoCreatePrOverride: boolean | null;
+  repoOwner: string | null;
+  repoName: string | null;
+};
+let testChatRecord: {
+  id: string;
+  sessionId: string;
+  modelId: string | null;
+};
+let testPreferences: {
+  defaultModelId: string;
+  defaultSubagentModelId: string | null;
+  defaultSandboxType: "vercel";
+  defaultDiffMode: "unified";
+  autoCommitPush: boolean;
+  autoCreatePr: boolean;
+  alertsEnabled: boolean;
+  alertSoundEnabled: boolean;
+  publicUsageEnabled: boolean;
+  globalSkillRefs: never[];
+  modelVariants: never[];
+  enabledModelIds: string[];
+};
+
 // Track what the agent stream yields
 let agentStreamParts: Array<Record<string, unknown>> = [];
+let agentAssistantParts: Array<Record<string, unknown>> | undefined;
 let agentFinishReason = "stop";
 let agentRawFinishReason: string | undefined = "provider_stop";
 let agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
@@ -131,7 +239,9 @@ mock.module("@/app/config", () => ({
               : {
                   id: "assistant-1",
                   role: "assistant",
-                  parts: [{ type: "text", text: "Hello!" }],
+                  parts: agentAssistantParts ?? [
+                    { type: "text", text: "Hello!" },
+                  ],
                   metadata: {},
                 }
           ) as {
@@ -217,7 +327,8 @@ mock.module("ai", () => ({
       };
     }),
   generateId: () => "gen-id-1",
-  isToolUIPart: (part: { type: string }) => part.type === "tool-invocation",
+  isToolUIPart: (part: { type: string }) =>
+    part.type === "tool-invocation" || part.type.startsWith("tool-"),
   pruneMessages: ({ messages }: { messages: Array<Record<string, unknown>> }) =>
     messages.filter((message) => {
       const content = message.content;
@@ -225,7 +336,20 @@ mock.module("ai", () => ({
     }),
 }));
 
-mock.module("@open-harness/agent", () => ({}));
+mock.module("@open-agents/agent", () => ({}));
+
+mock.module("@/lib/db/sessions", () => ({
+  getChatById: async () => testChatRecord,
+  getSessionById: async () => testSessionRecord,
+}));
+
+mock.module("@/lib/db/user-preferences", () => ({
+  getUserPreferences: async () => testPreferences,
+}));
+
+mock.module("./chat-sandbox-runtime", () => ({
+  resolveChatSandboxRuntime: spies.resolveChatSandboxRuntime,
+}));
 
 const { runAgentWorkflow } = await import("./chat");
 
@@ -243,11 +367,19 @@ function makeOptions(overrides?: Record<string, unknown>) {
     chatId: "chat-1",
     sessionId: "session-1",
     userId: "user-1",
+    requestUrl: "http://localhost/api/chat",
+    authSession: {
+      authProvider: "vercel" as const,
+      user: {
+        id: "user-1",
+        username: "user",
+        email: "user@example.com",
+        avatar: "",
+      },
+    },
     selectedModelId: "gpt-4",
     modelId: "gpt-4",
-    agentOptions: {
-      sandbox: { state: { type: "vercel" } },
-    },
+    agentOptions: {},
     maxSteps: 1,
     ...overrides,
   } as Parameters<typeof runAgentWorkflow>[0];
@@ -259,6 +391,7 @@ beforeEach(() => {
   writtenChunks.length = 0;
   runStatus = "running";
   agentStreamParts = [{ type: "text-delta", textDelta: "Hi" }];
+  agentAssistantParts = undefined;
   agentFinishReason = "stop";
   agentRawFinishReason = "provider_stop";
   agentTotalUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
@@ -271,6 +404,33 @@ beforeEach(() => {
   agentProviderMetadata = undefined;
   agentInputMessages = undefined;
   streamOnFinishCallback = undefined;
+  testSessionRecord = {
+    id: "session-1",
+    userId: "user-1",
+    autoCommitPushOverride: null,
+    autoCreatePrOverride: null,
+    repoOwner: "acme",
+    repoName: "repo",
+  };
+  testChatRecord = {
+    id: "chat-1",
+    sessionId: "session-1",
+    modelId: null,
+  };
+  testPreferences = {
+    defaultModelId: "anthropic/claude-haiku-4.5",
+    defaultSubagentModelId: null,
+    defaultSandboxType: "vercel",
+    defaultDiffMode: "unified",
+    autoCommitPush: false,
+    autoCreatePr: false,
+    alertsEnabled: true,
+    alertSoundEnabled: true,
+    publicUsageEnabled: false,
+    globalSkillRefs: [],
+    modelVariants: [],
+    enabledModelIds: [],
+  };
   Object.values(spies).forEach((s) => s.mockClear());
 });
 
@@ -284,6 +444,48 @@ describe("runAgentWorkflow", () => {
     }
   });
 
+  test("exits before side effects when another workflow owns the stream slot", async () => {
+    spies.claimActiveStream.mockImplementationOnce(() =>
+      Promise.resolve("conflict"),
+    );
+
+    await runAgentWorkflow(makeOptions());
+
+    expect(writtenChunks).toEqual([]);
+    expect(agentInputMessages).toBeUndefined();
+    expect(spies.persistAssistantMessage).not.toHaveBeenCalled();
+    expect(spies.clearActiveStream).not.toHaveBeenCalled();
+    expect(spies.recordWorkflowUsage).not.toHaveBeenCalled();
+  });
+
+  test("continues when claiming the stream errors", async () => {
+    spies.claimActiveStream.mockImplementationOnce(
+      async (
+        _chatId?: unknown,
+        _workflowRunId?: unknown,
+        writable?: WritableStream<UIMessageChunk>,
+        messageId?: string,
+      ) => {
+        if (writable && messageId) {
+          const writer = writable.getWriter();
+          try {
+            await writer.write({ type: "start", messageId });
+          } finally {
+            writer.releaseLock();
+          }
+        }
+        return "error";
+      },
+    );
+
+    await runAgentWorkflow(makeOptions());
+
+    const types = writtenChunks.map((chunk) => chunk.type);
+    expect(types[0]).toBe("start");
+    expect(types[types.length - 1]).toBe("finish");
+    expect(spies.persistAssistantMessage).toHaveBeenCalledTimes(1);
+  });
+
   test("sends start and finish chunks to writable", async () => {
     await runAgentWorkflow(makeOptions());
 
@@ -292,12 +494,96 @@ describe("runAgentWorkflow", () => {
     expect(types[types.length - 1]).toBe("finish");
   });
 
+  test("does not stream transient workspace setup status from runtime prep", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
+      return createResolvedChatSandboxRuntime({
+        didSetupWorkspace: true,
+      });
+    });
+
+    await runAgentWorkflow(makeOptions());
+
+    expect(writtenChunks[0]).toEqual({ type: "start", messageId: "gen-id-1" });
+    expect(
+      writtenChunks.some((chunk) => chunk.type === "data-workspace-status"),
+    ).toBe(false);
+  });
+
+  test("streams a user-visible message when workspace setup fails", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
+      throw new Error("Connect GitHub to access repositories");
+    });
+
+    await expect(runAgentWorkflow(makeOptions())).rejects.toThrow(
+      "Connect GitHub to access repositories",
+    );
+
+    expect(writtenChunks).toEqual(
+      expect.arrayContaining([
+        { type: "start", messageId: "gen-id-1" },
+        { type: "text-start", id: "setup-error" },
+        {
+          type: "text-delta",
+          id: "setup-error",
+          delta: "Connect GitHub to access this repository, then try again.",
+        },
+        { type: "text-end", id: "setup-error" },
+      ]),
+    );
+    expect(spies.persistAssistantMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        id: "gen-id-1",
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "Connect GitHub to access this repository, then try again.",
+          },
+        ],
+      }),
+    );
+  });
+
+  test("streams an archived-session setup message when runtime rejects", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(async () => {
+      throw new Error("Session is archived");
+    });
+
+    await expect(runAgentWorkflow(makeOptions())).rejects.toThrow(
+      "Session is archived",
+    );
+
+    expect(writtenChunks).toEqual(
+      expect.arrayContaining([
+        {
+          type: "text-delta",
+          id: "setup-error",
+          delta: "This session is archived. Unarchive it to continue.",
+        },
+      ]),
+    );
+  });
+
   test("persists assistant message after run", async () => {
     await runAgentWorkflow(makeOptions());
 
     expect(spies.persistAssistantMessage).toHaveBeenCalledTimes(1);
     const paCalls = spies.persistAssistantMessage.mock.calls as unknown[][];
     expect(paCalls[0][0]).toBe("chat-1");
+  });
+
+  test("persists incoming messages during workflow startup", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.persistUserMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({ id: "user-1", role: "user" }),
+    );
+    expect(spies.persistAssistantMessageWithToolResults).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({ id: "user-1", role: "user" }),
+    );
   });
 
   test("records usage after run", async () => {
@@ -700,6 +986,160 @@ describe("runAgentWorkflow", () => {
     });
   });
 
+  test("streams and persists cumulative gateway cost", async () => {
+    agentFinishReason = "tool-calls";
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "tool-calls",
+        rawFinishReason: "provider_tool_use",
+        usage: agentTotalUsage,
+        providerMetadata: {
+          gateway: { cost: "0.0025" },
+        },
+      },
+    ];
+    agentProviderMetadata = {
+      gateway: { cost: "0.0025" },
+    };
+
+    await runAgentWorkflow(
+      makeOptions({
+        maxSteps: 2,
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          lastStepCost?: number;
+          totalMessageCost?: number;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(
+      metadataChunks.map((chunk) => ({
+        lastStepCost: chunk.messageMetadata.lastStepCost,
+        totalMessageCost: chunk.messageMetadata.totalMessageCost,
+      })),
+    ).toEqual([
+      { lastStepCost: 0.0025, totalMessageCost: 0.0025 },
+      { lastStepCost: 0.0025, totalMessageCost: 0.005 },
+    ]);
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBe(0.0025);
+    expect(persistedMessage.metadata?.totalMessageCost).toBeCloseTo(0.005, 10);
+  });
+
+  test("preserves previously accumulated gateway cost when resuming an assistant message", async () => {
+    const existingTotalMessageCost = 0.0025;
+    const resumedStepCost = 0.001;
+    const expectedTotalMessageCost = existingTotalMessageCost + resumedStepCost;
+
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+        providerMetadata: {
+          gateway: { cost: String(resumedStepCost) },
+        },
+      },
+    ];
+    agentProviderMetadata = {
+      gateway: { cost: String(resumedStepCost) },
+    };
+
+    await runAgentWorkflow(
+      makeOptions({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant",
+            parts: [{ type: "text", text: "Need your approval" }],
+            metadata: {
+              totalMessageCost: existingTotalMessageCost,
+            },
+          },
+        ],
+      }),
+    );
+
+    const metadataChunks = writtenChunks.filter(
+      (
+        chunk,
+      ): chunk is UIMessageChunk & {
+        type: "message-metadata";
+        messageMetadata: {
+          lastStepCost?: number;
+          totalMessageCost?: number;
+        };
+      } => chunk.type === "message-metadata",
+    );
+
+    expect(metadataChunks.at(-1)?.messageMetadata.lastStepCost).toBe(
+      resumedStepCost,
+    );
+    expect(metadataChunks.at(-1)?.messageMetadata.totalMessageCost).toBeCloseTo(
+      expectedTotalMessageCost,
+      10,
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBe(resumedStepCost);
+    expect(persistedMessage.metadata?.totalMessageCost).toBeCloseTo(
+      expectedTotalMessageCost,
+      10,
+    );
+  });
+
+  test("omits cost metadata when provider does not report gateway cost", async () => {
+    agentStreamParts = [
+      {
+        type: "finish-step",
+        finishReason: "stop",
+        rawFinishReason: "provider_stop",
+        usage: agentTotalUsage,
+      },
+    ];
+
+    await runAgentWorkflow(makeOptions());
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        lastStepCost?: number;
+        totalMessageCost?: number;
+      };
+    };
+
+    expect(persistedMessage.metadata?.lastStepCost).toBeUndefined();
+    expect(persistedMessage.metadata?.totalMessageCost).toBeUndefined();
+  });
+
   test("refreshes lifecycle activity before clearing the active stream", async () => {
     const callOrder: string[] = [];
     spies.refreshLifecycleActivity.mockImplementationOnce(async () => {
@@ -721,16 +1161,6 @@ describe("runAgentWorkflow", () => {
     expect(spies.persistSandboxState).toHaveBeenCalledTimes(1);
   });
 
-  test("skips sandbox state when no sandbox", async () => {
-    await runAgentWorkflow(
-      makeOptions({
-        agentOptions: {},
-      }),
-    );
-
-    expect(spies.persistSandboxState).not.toHaveBeenCalled();
-  });
-
   test("clears active stream in finally block", async () => {
     await runAgentWorkflow(makeOptions());
 
@@ -740,7 +1170,26 @@ describe("runAgentWorkflow", () => {
     );
   });
 
-  test("refreshes diff cache after run", async () => {
+  test("skips diff cache refresh when no file-changing tools ran", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.refreshDiffCache).not.toHaveBeenCalled();
+  });
+
+  test("refreshes diff cache after a write tool runs", async () => {
+    agentStreamParts = [];
+    agentResponseMessages = [];
+    agentResponse = { messages: agentResponseMessages };
+    streamOnFinishCallback = undefined;
+    const writeToolPart = {
+      type: "tool-write",
+      toolCallId: "write-1",
+      state: "output-available",
+      input: { filePath: "app/page.tsx" },
+      output: { success: true },
+    };
+    agentAssistantParts = [writeToolPart];
+
     await runAgentWorkflow(makeOptions());
 
     expect(spies.refreshDiffCache).toHaveBeenCalledTimes(1);
@@ -1030,8 +1479,6 @@ describe("runAgentWorkflow", () => {
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: false,
-        repoOwner: "acme",
-        repoName: "repo",
       }),
     );
 
@@ -1039,11 +1486,18 @@ describe("runAgentWorkflow", () => {
   });
 
   test("skips auto-commit when repoOwner is missing", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(() =>
+      Promise.resolve(
+        createResolvedChatSandboxRuntime({
+          repoOwner: undefined,
+          repoName: "repo",
+        }),
+      ),
+    );
+
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: true,
-        repoOwner: undefined,
-        repoName: "repo",
       }),
     );
 
@@ -1051,11 +1505,18 @@ describe("runAgentWorkflow", () => {
   });
 
   test("skips auto-commit when repoName is missing", async () => {
+    spies.resolveChatSandboxRuntime.mockImplementationOnce(() =>
+      Promise.resolve(
+        createResolvedChatSandboxRuntime({
+          repoOwner: "acme",
+          repoName: undefined,
+        }),
+      ),
+    );
+
     await runAgentWorkflow(
       makeOptions({
         autoCommitEnabled: true,
-        repoOwner: "acme",
-        repoName: undefined,
       }),
     );
 

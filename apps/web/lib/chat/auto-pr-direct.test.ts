@@ -11,7 +11,7 @@ type ExecResult = {
 };
 
 let execResults: Map<string, ExecResult>;
-let userTokenResult: string | null = "ghp_user";
+let userTokenResult: string | null = "ghu_user";
 let cachedBranchesResult: { branches: string[]; defaultBranch: string } | null =
   {
     branches: ["main", "feature-branch"],
@@ -24,7 +24,7 @@ let findPullRequestResult: {
   prUrl?: string;
   error?: string;
 } = { found: false };
-let createPullRequestResult: {
+let openPullRequestResult: {
   success: boolean;
   prUrl?: string;
   prNumber?: number;
@@ -66,40 +66,81 @@ const execSpy = mock(async (command: string): Promise<ExecResult> => {
 
 const updateSessionSpy = mock(async () => {});
 const fetchGitHubBranchesSpy = mock(async () => cachedBranchesResult);
-const findPullRequestByBranchSpy = mock(async () => findPullRequestResult);
-const createPullRequestSpy = mock(async () => createPullRequestResult);
+const findPullRequestSpy = mock(async () => findPullRequestResult);
+const openPullRequestSpy = mock(async () => openPullRequestResult);
 const generatePullRequestContentFromSandboxSpy = mock(
   async () => prContentResult,
 );
 const getUserGitHubTokenSpy = mock(async (_userId?: string) => userTokenResult);
+const getGitHubAppUserTokenSpy = mock(async (_userId?: string) =>
+  getUserGitHubTokenSpy(_userId),
+);
+const withTemporaryGitHubAuthSpy = mock(
+  async (
+    _sandbox: unknown,
+    _token: string | undefined,
+    operation: () => Promise<unknown>,
+  ) => operation(),
+);
+const mintInstallationTokenSpy = mock(async () => ({
+  token: "ghs_read",
+  expiresAt: null,
+  installationId: 999,
+  repositoryIds: [123],
+  permissions: { contents: "read" },
+}));
+const revokeInstallationTokenSpy = mock(async () => {});
+const verifyRepoAccessSpy = mock(async () => ({
+  ok: true,
+  installationId: 999,
+  repositoryId: 123,
+  defaultBranch: "main",
+}));
 
 const sandbox = {
   workingDirectory: "/vercel/sandbox",
   exec: execSpy,
 };
 
-mock.module("@/app/api/generate-pr/_lib/generate-pr-helpers", () => ({
+mock.module("@open-agents/sandbox", () => ({
+  withTemporaryGitHubAuth: withTemporaryGitHubAuthSpy,
+}));
+
+mock.module("@/lib/git/helpers", () => ({
   looksLikeCommitHash: (value: string) => /^[0-9a-f]{7,40}$/i.test(value),
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  getChatsBySessionId: async () => [],
+  getSessionById: async () => null,
   updateSession: updateSessionSpy,
 }));
 
-mock.module("@/lib/github/api", () => ({
+mock.module("@/lib/github/repos", () => ({
   fetchGitHubBranches: fetchGitHubBranchesSpy,
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: getUserGitHubTokenSpy,
+  getGitHubAppUserToken: getGitHubAppUserTokenSpy,
 }));
 
-mock.module("@/lib/github/client", () => ({
-  findPullRequestByBranch: findPullRequestByBranchSpy,
-  createPullRequest: createPullRequestSpy,
+mock.module("@/lib/github/access", () => ({
+  verifyRepoAccess: verifyRepoAccessSpy,
+  getRepoAccessErrorMessage: () => "Access denied",
 }));
 
-mock.module("@/lib/git/pr-content", () => ({
+mock.module("@/lib/github/app", () => ({
+  mintInstallationToken: mintInstallationTokenSpy,
+  revokeInstallationToken: revokeInstallationTokenSpy,
+}));
+
+mock.module("@/lib/github/pulls", () => ({
+  findPullRequest: findPullRequestSpy,
+  openPullRequest: openPullRequestSpy,
+}));
+
+mock.module("@/lib/github/pr-content", () => ({
   generatePullRequestContentFromSandbox:
     generatePullRequestContentFromSandboxSpy,
 }));
@@ -112,7 +153,6 @@ function defaultExecResults(): Map<string, ExecResult> {
       "git symbolic-ref --short HEAD",
       { success: true, stdout: "feature-branch" },
     ],
-    ["git remote set-url", { success: true, stdout: "" }],
     ["git fetch origin", { success: true, stdout: "" }],
     ["git rev-parse HEAD", { success: true, stdout: "abc123" }],
     [
@@ -144,19 +184,24 @@ beforeEach(() => {
   execSpy.mockClear();
   updateSessionSpy.mockClear();
   fetchGitHubBranchesSpy.mockClear();
-  findPullRequestByBranchSpy.mockClear();
-  createPullRequestSpy.mockClear();
+  findPullRequestSpy.mockClear();
+  openPullRequestSpy.mockClear();
   generatePullRequestContentFromSandboxSpy.mockClear();
   getUserGitHubTokenSpy.mockClear();
+  getGitHubAppUserTokenSpy.mockClear();
+  withTemporaryGitHubAuthSpy.mockClear();
+  mintInstallationTokenSpy.mockClear();
+  revokeInstallationTokenSpy.mockClear();
+  verifyRepoAccessSpy.mockClear();
 
   execResults = defaultExecResults();
-  userTokenResult = "ghp_user";
+  userTokenResult = "ghu_user";
   cachedBranchesResult = {
     branches: ["main", "feature-branch"],
     defaultBranch: "main",
   };
   findPullRequestResult = { found: false };
-  createPullRequestResult = {
+  openPullRequestResult = {
     success: true,
     prNumber: 42,
     prUrl: "https://github.com/acme/repo/pull/42",
@@ -187,7 +232,7 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch is detached",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("skips when the current branch matches the default branch", async () => {
@@ -204,7 +249,7 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch matches the default branch",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("skips when the repository owner is not a safe GitHub path segment", async () => {
@@ -220,10 +265,7 @@ describe("performAutoCreatePr", () => {
       skipReason:
         "Repository owner or name is not supported for auto PR creation",
     } satisfies AutoCreatePrResult);
-    const setUrlCall = execSpy.mock.calls.find((call) =>
-      String(call[0]).includes("git remote set-url"),
-    );
-    expect(setUrlCall).toBeUndefined();
+    expect(execSpy).toHaveBeenCalledTimes(1);
   });
 
   test("skips when the current branch is not available on origin", async () => {
@@ -257,8 +299,8 @@ describe("performAutoCreatePr", () => {
       skipped: true,
       skipReason: "Current branch is not fully pushed to origin",
     } satisfies AutoCreatePrResult);
-    expect(findPullRequestByBranchSpy).not.toHaveBeenCalled();
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(findPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("syncs an existing open pull request instead of creating a new one", async () => {
@@ -282,7 +324,7 @@ describe("performAutoCreatePr", () => {
       prNumber: 7,
       prStatus: "open",
     });
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 
   test("creates a new pull request and persists PR metadata", async () => {
@@ -295,13 +337,31 @@ describe("performAutoCreatePr", () => {
       prNumber: 42,
       prUrl: "https://github.com/acme/repo/pull/42",
     } satisfies AutoCreatePrResult);
+    expect(getGitHubAppUserTokenSpy).toHaveBeenCalledWith("user-1");
     expect(getUserGitHubTokenSpy).toHaveBeenCalledWith("user-1");
+    expect(verifyRepoAccessSpy).toHaveBeenCalledWith({
+      userId: "user-1",
+      owner: "acme",
+      repo: "repo",
+    });
+    expect(mintInstallationTokenSpy).toHaveBeenCalledWith({
+      installationId: 999,
+      repositoryIds: [123],
+      permissions: { contents: "read" },
+    });
+    expect(withTemporaryGitHubAuthSpy).toHaveBeenCalledWith(
+      sandbox,
+      "ghs_read",
+      expect.any(Function),
+    );
+    expect(revokeInstallationTokenSpy).toHaveBeenCalledWith("ghs_read");
     expect(generatePullRequestContentFromSandboxSpy).toHaveBeenCalledTimes(1);
-    expect(createPullRequestSpy).toHaveBeenCalledWith(
+    expect(openPullRequestSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         repoUrl: "https://github.com/acme/repo",
         branchName: "feature-branch",
         baseBranch: "main",
+        token: "ghu_user",
       }),
     );
     expect(updateSessionSpy).toHaveBeenCalledWith("session-1", {
@@ -324,6 +384,6 @@ describe("performAutoCreatePr", () => {
       skipped: false,
       error: "Failed to resolve the repository default branch",
     } satisfies AutoCreatePrResult);
-    expect(createPullRequestSpy).not.toHaveBeenCalled();
+    expect(openPullRequestSpy).not.toHaveBeenCalled();
   });
 });

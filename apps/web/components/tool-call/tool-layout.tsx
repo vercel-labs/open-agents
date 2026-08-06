@@ -1,6 +1,6 @@
 "use client";
 
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRenderState } from "@open-agents/shared/lib/tool-state";
 import { CircleX, Loader2, Minus, OctagonPause, Plus } from "lucide-react";
 import type React from "react";
 import { type ReactNode, useEffect, useState } from "react";

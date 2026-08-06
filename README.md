@@ -1,6 +1,6 @@
 # Open Agents
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CJWE_SECRET%2CENCRYPTION_KEY%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+JWE_SECRET+and+ENCRYPTION_KEY+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
 
 Open Agents is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
 
@@ -46,37 +46,28 @@ A few details that matter for understanding the current implementation:
 - Chat requests start a workflow run instead of executing the agent inline.
 - Each agent turn can continue across many persisted workflow steps.
 - Active runs can be resumed by reconnecting to the stream for the existing workflow.
-- Sandboxes use a base snapshot, expose ports `3000`, `5173`, `4321`, and `8000`, and hibernate after inactivity.
+- Sandboxes expose ports `3000`, `5173`, `4321`, and `8000`, can optionally use a configured base snapshot, and hibernate after inactivity.
 - Auto-commit and auto-PR are supported, but they are preference-driven features, not always-on behavior.
 
-## What is actually required today
+## Environment variables
 
-These requirements are based on the current `apps/web` codepath, not older setup scripts.
+See `apps/web/.env.example` for the full list. Summary:
 
 ### Minimum runtime
 
-These are the hard requirements for the app to boot and load server state:
-
 ```env
 POSTGRES_URL=
-JWE_SECRET=
+BETTER_AUTH_SECRET=
 ```
 
-### Required to sign in and actually use the hosted app
-
-A useful deployment also needs token encryption plus Vercel OAuth sign-in:
+### Required for sign-in (Vercel OAuth)
 
 ```env
-ENCRYPTION_KEY=
 NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
 VERCEL_APP_CLIENT_SECRET=
 ```
 
-Without these, the site can deploy, but Vercel sign-in will not work.
-
 ### Required for GitHub repo access, pushes, and PRs
-
-If you want users to connect GitHub, install the app on repos/orgs, clone private repos, push branches, or open PRs, add these GitHub App values:
 
 ```env
 NEXT_PUBLIC_GITHUB_CLIENT_ID=
@@ -92,6 +83,7 @@ GITHUB_WEBHOOK_SECRET=
 ```env
 REDIS_URL=
 KV_URL=
+OPEN_AGENTS_RESOURCE_PROFILE=
 VERCEL_PROJECT_PRODUCTION_URL=
 NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=
 VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
@@ -99,66 +91,62 @@ ELEVENLABS_API_KEY=
 ```
 
 - `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
+- `OPEN_AGENTS_RESOURCE_PROFILE`: optional deployment resource profile. Set to `hobby` to use Hobby-compatible defaults for chat and sandbox resources; leave unset for standard behavior.
 - `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.
-- `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: override the default sandbox snapshot.
+- `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: optional base snapshot for fresh sandboxes. If unset, sandboxes start from Vercel's standard Sandbox runtime. Use a snapshot created in/accessible to your own Vercel scope.
 - `ELEVENLABS_API_KEY`: voice transcription.
 
 ## Deploy your own copy on Vercel
 
-Recommended path: deploy this repo at the repo root on Vercel, then layer on auth and GitHub integration.
-
 1. Fork this repo.
-2. Create a PostgreSQL database and copy its connection string.
-3. Generate these secrets:
+2. Import the repo into Vercel. Neon Postgres is auto-provisioned if you use the deploy button above.
+3. Generate a secret for session signing:
 
    ```bash
-   openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'   # JWE_SECRET
-   openssl rand -hex 32                                    # ENCRYPTION_KEY
+   openssl rand -base64 32   # BETTER_AUTH_SECRET
    ```
 
-4. Import the repo into Vercel.
-5. Add at least these env vars in Vercel project settings:
+4. Add env vars in Vercel project settings:
 
    ```env
    POSTGRES_URL=
-   JWE_SECRET=
-   ENCRYPTION_KEY=
+   BETTER_AUTH_SECRET=
    ```
 
-6. Deploy once to get a stable production URL.
-7. Create a Vercel OAuth app with callback URL:
+5. Deploy once to get a stable production URL.
+6. Create a Vercel OAuth app with callback URL:
 
    ```text
-   https://YOUR_DOMAIN/api/auth/vercel/callback
+   https://YOUR_DOMAIN/api/auth/callback/vercel
    ```
 
-8. Add these env vars and redeploy:
+7. Add these env vars and redeploy:
 
    ```env
    NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
    VERCEL_APP_CLIENT_SECRET=
    ```
 
-9. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
+8. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
 
    - Homepage URL: `https://YOUR_DOMAIN`
-   - Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
+   - Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
    - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
 
    In the GitHub App settings:
-   - enable "Request user authorization (OAuth) during installation"
    - use the GitHub App's Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
    - make the app public if you want org installs to work cleanly
 
-10. Add the GitHub App env vars and redeploy.
-11. Optionally add Redis/KV and the canonical production URL vars.
+9. Add the GitHub App env vars and redeploy.
+10. Optionally add Redis/KV, `OPEN_AGENTS_RESOURCE_PROFILE=hobby` for Hobby-compatible resource defaults, the canonical production URL vars, and your own `VERCEL_SANDBOX_BASE_SNAPSHOT_ID` if you want fresh sandboxes to start from a preconfigured image.
 
 ## Local setup
 
 1. Install dependencies:
 
    ```bash
-   bun install
+   corepack enable
+   pnpm install
    ```
 
 2. Create your local env file:
@@ -171,25 +159,27 @@ Recommended path: deploy this repo at the repo root on Vercel, then layer on aut
 4. Start the app:
 
    ```bash
-   bun run web
+   pnpm web
    ```
 
-If you already have a linked Vercel project, you can still pull env vars locally with `vc env pull`, but setup is now intentionally manual so you can see exactly which values matter.
+If you already have a linked Vercel project, you can pull env vars locally with `vc env pull`.
 
 ## OAuth and integration setup
 
 ### Vercel OAuth
 
+Authentication is handled by [Better Auth](https://www.better-auth.com/) with Vercel and GitHub as social providers. All auth routes are served from the `/api/auth/[...all]` catchall.
+
 Create a Vercel OAuth app and use this callback:
 
 ```text
-https://YOUR_DOMAIN/api/auth/vercel/callback
+https://YOUR_DOMAIN/api/auth/callback/vercel
 ```
 
 For local development, use:
 
 ```text
-http://localhost:3000/api/auth/vercel/callback
+http://localhost:3000/api/auth/callback/vercel
 ```
 
 Then set:
@@ -201,17 +191,16 @@ VERCEL_APP_CLIENT_SECRET=...
 
 ### GitHub App
 
-You do not need a separate GitHub OAuth app. Open Agents uses the GitHub App's user authorization flow.
+You do not need a separate GitHub OAuth app. Open Agents uses the GitHub App's OAuth credentials as a Better Auth social provider, plus the App's installation tokens for repo access.
 
 Create a GitHub App for installation-based repo access and configure:
 
 - Homepage URL: `https://YOUR_DOMAIN`
-- Callback URL: `https://YOUR_DOMAIN/api/github/app/callback`
+- Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
 - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- enable "Request user authorization (OAuth) during installation"
 - make the app public if you want org installs to work cleanly
 
-For local development, use `http://localhost:3000/api/github/app/callback` for the callback/setup URL and `http://localhost:3000` as the homepage URL.
+For local development, use `http://localhost:3000` as the homepage URL, `http://localhost:3000/api/auth/callback/github` as the callback URL, and `http://localhost:3000/api/github/app/callback` as the setup URL.
 
 Then set:
 
@@ -229,11 +218,12 @@ GITHUB_WEBHOOK_SECRET=...
 ## Useful commands
 
 ```bash
-bun run web
-bun run check
-bun run typecheck
-bun run ci
-bun run sandbox:snapshot-base
+pnpm web                    # run dev server
+pnpm check                  # lint + format check
+pnpm fix                    # lint + format fix
+pnpm typecheck              # typecheck all packages
+pnpm run ci                 # full CI: check, typecheck, tests, migration check
+pnpm sandbox:snapshot-base  # refresh sandbox base snapshot
 ```
 
 ## Repo layout

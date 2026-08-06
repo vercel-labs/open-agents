@@ -89,7 +89,7 @@ describe("getStreamRecoveryDecision", () => {
     expect(decision).toBe("none");
   });
 
-  test("probes when submitted stream appears stalled", () => {
+  test("does not probe while a submitted stream appears stalled", () => {
     const decision = getStreamRecoveryDecision({
       now,
       lastRecoveryAt: now - STREAM_RECOVERY_MIN_INTERVAL_MS,
@@ -99,7 +99,7 @@ describe("getStreamRecoveryDecision", () => {
       isProbeInFlight: false,
     });
 
-    expect(decision).toBe("probe");
+    expect(decision).toBe("none");
   });
 
   test("probes on visibility recovery when chat is ready", () => {
@@ -146,7 +146,7 @@ describe("getStreamRecoveryDecision", () => {
 });
 
 describe("shouldScheduleStallRecovery", () => {
-  test("requires in-flight status, no content, and visible document", () => {
+  test("does not schedule stall recovery during an active request", () => {
     expect(
       shouldScheduleStallRecovery({
         isChatInFlight: false,
@@ -177,7 +177,7 @@ describe("shouldScheduleStallRecovery", () => {
         hasAssistantRenderableContent: false,
         isDocumentVisible: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

@@ -14,6 +14,7 @@ import {
 import { Toaster } from "sonner";
 import { SWRConfig } from "swr";
 import { GitHubReconnectGate } from "@/components/github-reconnect-gate";
+import { authClient } from "@/lib/auth/client";
 import { FetchError } from "@/lib/swr";
 
 const THEME_STORAGE_KEY = "open-agents-theme";
@@ -108,11 +109,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       if (isSessionAuthError && !signingOut.current) {
         signingOut.current = true;
-        // POST to the signout endpoint to clear the session cookie,
-        // then redirect to the home page.
-        fetch("/api/auth/signout", { method: "POST", redirect: "manual" })
+        authClient
+          .signOut()
           .catch(() => {
-            // If signout fails, navigate anyway so the user isn't stuck.
+            // if signout fails, navigate anyway so the user isn't stuck
           })
           .finally(() => {
             signingOut.current = false;

@@ -13,15 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/hooks/use-session";
-
-function handleSignOut() {
-  // Use a form POST to trigger the signout
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/api/auth/signout";
-  document.body.appendChild(form);
-  form.submit();
-}
+import { signOut } from "@/lib/auth/actions";
 
 export function UserAvatarDropdown() {
   const { session } = useSession();
@@ -61,7 +53,7 @@ export function UserAvatarDropdown() {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            onClick={handleSignOut}
+            onClick={signOut}
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" />

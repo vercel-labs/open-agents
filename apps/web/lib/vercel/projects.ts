@@ -3,6 +3,28 @@ import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 const VERCEL_API_BASE_URL = "https://api.vercel.com";
 
+export class VercelApiError extends Error {
+  readonly status: number;
+  readonly details: string | null;
+  readonly invalidToken: boolean;
+
+  constructor(params: {
+    status: number;
+    details: string | null;
+    invalidToken: boolean;
+  }) {
+    super(
+      params.details
+        ? `Vercel API request failed with ${params.status}: ${params.details}`
+        : `Vercel API request failed with ${params.status}`,
+    );
+    this.name = "VercelApiError";
+    this.status = params.status;
+    this.details = params.details;
+    this.invalidToken = params.invalidToken;
+  }
+}
+
 interface VercelTeam {
   id?: string;
   slug?: string;
@@ -43,8 +65,46 @@ export interface DevelopmentEnvVar {
   value: string;
 }
 
-function createVercelApiError(message: string, details?: string): Error {
-  return new Error(details ? `${message}: ${details}` : message);
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseVercelErrorDetails(details: string): unknown {
+  try {
+    return JSON.parse(details);
+  } catch {
+    return null;
+  }
+}
+
+function hasInvalidTokenFlag(value: unknown): boolean {
+  if (!isUnknownRecord(value)) {
+    return false;
+  }
+
+  if (value.invalidToken === true || value.code === "invalid_token") {
+    return true;
+  }
+
+  return hasInvalidTokenFlag(value.error);
+}
+
+function createVercelApiError(status: number, details: string): VercelApiError {
+  const normalizedDetails = details.trim() || null;
+  return new VercelApiError({
+    status,
+    details: normalizedDetails,
+    invalidToken: normalizedDetails
+      ? hasInvalidTokenFlag(parseVercelErrorDetails(normalizedDetails))
+      : false,
+  });
+}
+
+export function isVercelInvalidTokenError(error: unknown): boolean {
+  return (
+    error instanceof VercelApiError &&
+    (error.invalidToken || error.status === 401)
+  );
 }
 
 async function fetchVercelJson<T>(params: {
@@ -66,10 +126,7 @@ async function fetchVercelJson<T>(params: {
 
   if (!response.ok) {
     const body = await response.text();
-    throw createVercelApiError(
-      `Vercel API request failed with ${response.status}`,
-      body,
-    );
+    throw createVercelApiError(response.status, body);
   }
 
   return response.json() as Promise<T>;

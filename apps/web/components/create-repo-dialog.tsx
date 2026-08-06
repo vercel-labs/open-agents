@@ -25,7 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import type { Session } from "@/lib/db/schema";
-import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
+import { buildGitHubReconnectUrl } from "@/lib/github/urls";
 
 interface CreateRepoDialogProps {
   open: boolean;

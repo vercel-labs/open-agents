@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
-import { getInstallationManageUrl } from "@/lib/github/installation-url";
+import { getInstallationManageUrl } from "@/lib/github/urls";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function GET() {

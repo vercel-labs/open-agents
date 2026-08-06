@@ -1,6 +1,9 @@
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
 import { getServerSession } from "@/lib/session/get-server-session";
-import { listMatchingVercelProjects } from "@/lib/vercel/projects";
+import {
+  isVercelInvalidTokenError,
+  listMatchingVercelProjects,
+} from "@/lib/vercel/projects";
 import { getUserVercelToken } from "@/lib/vercel/token";
 
 export async function GET(req: Request) {
@@ -51,6 +54,16 @@ export async function GET(req: Request) {
       selectedProjectId,
     });
   } catch (error) {
+    if (isVercelInvalidTokenError(error)) {
+      console.warn(
+        `Vercel token is invalid for user ${session.user.id}; reconnect required to load repo projects.`,
+      );
+      return Response.json(
+        { error: "Reconnect Vercel to load matching projects" },
+        { status: 403 },
+      );
+    }
+
     console.error("Failed to load Vercel repo projects:", error);
     return Response.json(
       { error: "Failed to load Vercel projects" },

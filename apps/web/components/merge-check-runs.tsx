@@ -11,23 +11,20 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type {
-  PullRequestCheckRun,
-  PullRequestCheckState,
-} from "@/lib/github/client";
+import type { CheckRun, CheckState } from "@/lib/github/pulls";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /*  Types & constants                                                  */
 /* ------------------------------------------------------------------ */
 
-const stateOrder: Record<PullRequestCheckState, number> = {
+const stateOrder: Record<CheckState, number> = {
   failed: 0,
   pending: 1,
   passed: 2,
 };
 
-function groupLabel(state: PullRequestCheckState, count: number): string {
+function groupLabel(state: CheckState, count: number): string {
   const s = count === 1 ? "" : "s";
   switch (state) {
     case "failed":
@@ -131,7 +128,7 @@ function CheckStateIcon({
   state,
   className,
 }: {
-  state: PullRequestCheckState;
+  state: CheckState;
   className?: string;
 }) {
   if (state === "passed") {
@@ -167,7 +164,7 @@ function CheckStateIcon({
 /*  Single check row                                                   */
 /* ------------------------------------------------------------------ */
 
-function CheckRunRow({ checkRun }: { checkRun: PullRequestCheckRun }) {
+function CheckRunRow({ checkRun }: { checkRun: CheckRun }) {
   const inner = (
     <div className="flex min-w-0 items-center gap-2 py-0.5">
       <CheckStateIcon state={checkRun.state} />
@@ -211,8 +208,8 @@ function GroupSection({
   defaultOpen,
   trailing,
 }: {
-  state: PullRequestCheckState;
-  checkRuns: PullRequestCheckRun[];
+  state: CheckState;
+  checkRuns: CheckRun[];
   defaultOpen: boolean;
   trailing?: React.ReactNode;
 }) {
@@ -302,7 +299,7 @@ function FixErrorsButton({
 /* ------------------------------------------------------------------ */
 
 interface CheckRunsListProps {
-  checkRuns: PullRequestCheckRun[];
+  checkRuns: CheckRun[];
   checks?: {
     passed: number;
     pending: number;
@@ -316,7 +313,7 @@ interface CheckRunsListProps {
   /** Disable the fix action without hiding it */
   fixChecksDisabled?: boolean;
   /** Called when the user clicks "Fix errors" — receives all failing check runs */
-  onFixChecks?: (failedRuns: PullRequestCheckRun[]) => Promise<void> | void;
+  onFixChecks?: (failedRuns: CheckRun[]) => Promise<void> | void;
 }
 
 export function CheckRunsList({
@@ -354,16 +351,14 @@ export function CheckRunsList({
   );
 
   const grouped = useMemo(() => {
-    const groups: Partial<
-      Record<PullRequestCheckState, PullRequestCheckRun[]>
-    > = {};
+    const groups: Partial<Record<CheckState, CheckRun[]>> = {};
     for (const cr of sorted) {
       (groups[cr.state] ??= []).push(cr);
     }
     return groups;
   }, [sorted]);
 
-  const groupOrder: PullRequestCheckState[] = ["failed", "pending", "passed"];
+  const groupOrder: CheckState[] = ["failed", "pending", "passed"];
 
   if (checkRuns.length === 0 && !isLoading) return null;
 

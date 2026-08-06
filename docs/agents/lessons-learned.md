@@ -13,6 +13,11 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Tool renderer `part.output` values may be `unknown`; when accessing fields like `files` or `matches`, add runtime narrowing/type guards first (in both TUI and web renderers) to satisfy strict typecheck.
 - AI SDK stream handles may return `PromiseLike` values (not full `Promise`), so avoid methods like `.finally()` and use `then`/`catch` patterns that work with `PromiseLike`.
 - After schema edits, review generated Drizzle migrations for unrelated schema drift changes before committing (for example defaults on untouched columns), since `drizzle-kit generate` can include those alongside intended changes.
+- pnpm 11 requires an explicit `allowBuilds` map in `pnpm-workspace.yaml`; approve required native/tooling builds deliberately and keep non-functional lifecycle scripts disabled.
+- Keep pnpm release-age policy explicit in `pnpm-workspace.yaml`: enforce a strict one-day `minimumReleaseAge` and fail closed when publish timestamps are missing.
+- Use `pnpm run ci` for the repository verification script. `pnpm ci` invokes pnpm's built-in clean-install command instead of the package script.
+- Keep Kysely pinned to `0.28.x` until Better Auth's bundled Kysely adapter stops importing migration constants from Kysely's root entrypoint; Kysely `0.29.x` removed those root exports and breaks the Next production bundle.
+- Node 24's built-in TypeScript support uses native ESM resolution and ignores tsconfig path aliases, so utility-script dependency chains need explicit `.ts` extensions and relative imports.
 - `bunx @vercel/config validate` executes the CLI under Node via its shebang and cannot parse TypeScript-style `vercel.ts` imports; use `bunx --bun @vercel/config validate` (or `bun node_modules/@vercel/config/dist/cli.js validate`) for reliable local validation.
 - Successful Vercel CLI auth (`vercel whoami`, team/project REST APIs, `.vercel` linking) does **not** guarantee Workflow observability access. `workflow inspect ... --backend vercel` can still fail with `401 {"error":{"code":"unauthorized","message":"You are not allowed to access this endpoint."}}` when the user/token lacks the Vercel product permission documented as `Vercel Workflow` (and possibly related Observability access), even if `WORKFLOW_VERCEL_AUTH_TOKEN` is passed explicitly from the Vercel CLI auth file.
 
@@ -106,8 +111,4 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - Public upstream repositories may reject direct branch pushes; PR generation should fall back to creating/pushing to the user's fork and PR creation must use a qualified head ref (`forkOwner:branch`).
 - GitHub fork creation can take longer than a few seconds to become pushable; PR fallback should retry fork push on transient `repository not found` errors instead of failing immediately.
 - Git push failures from Vercel sandboxes can return empty output even when auth/write is denied; PR fallback logic should not rely only on matching "permission" text before attempting fork fallback.
-- GitHub App user/integration tokens may return `403 Resource not accessible by integration` for fork creation; PR fallback should surface a manual-fork guidance path instead of assuming automatic fork creation is always allowed.
-- For PR/push flows, installation tokens can fail on repos outside selected installation scope even when the user's GitHub token has write access; retry origin push/PR creation with user token before forcing fork fallback.
-- Even when branch push succeeds, GitHub PR creation can still return `403 Resource not accessible by integration`; expose a compare URL fallback so users can complete PR creation manually in the browser.
-- For manual compare fallback, include `title` and `body` query params on the GitHub compare URL so PR details are prefilled when API creation is unavailable.
-- Preserve fork PR metadata across retries: if a branch already tracks `fork/<branch>` and no new push is needed, derive and return `prHeadOwner` from fork upstream/remote state so later PR creation still uses a qualified head ref.
+- When the GitHub App lacks push access (e.g. repo removed from installation scope), fail fast with a 403 directing users to /settings/connections rather than silently forking.

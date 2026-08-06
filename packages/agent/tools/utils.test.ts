@@ -6,7 +6,7 @@ let connectSandboxResult: unknown = {
   workingDirectory: "/repo",
 };
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: async (...args: unknown[]) => {
     connectSandboxCalls.push(args);
     return connectSandboxResult;

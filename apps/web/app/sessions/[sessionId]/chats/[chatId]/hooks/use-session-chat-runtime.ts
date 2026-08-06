@@ -2,14 +2,29 @@
 
 import { type UseChatHelpers, useChat } from "@ai-sdk/react";
 import { isToolUIPart } from "ai";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { WebAgentUIMessage } from "@/app/types";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
+import type {
+  WebAgentUIMessage,
+  WebAgentWorkspaceStatusData,
+} from "@/app/types";
 import { AbortableChatTransport } from "@/lib/abortable-chat-transport";
 import {
   abortChatInstanceTransport,
   getOrCreateChatInstance,
 } from "@/lib/chat-instance-manager";
 import { cleanupChatRouteOnUnmount } from "@/lib/chat-route-cleanup";
+import {
+  clearChatWorkspaceStatus,
+  getChatWorkspaceStatusSnapshot,
+  setChatWorkspaceStatus,
+  subscribeChatWorkspaceStatus,
+} from "@/lib/workspace-status-store";
 
 const CHAT_UI_UPDATE_THROTTLE_MS = 75;
 
@@ -30,6 +45,8 @@ type UseSessionChatRuntimeReturn = {
   chat: UseChatHelpers<WebAgentUIMessage>;
   stopChatStream: () => void;
   retryChatStream: (opts?: RetryChatStreamOptions) => void;
+  workspaceStatus: WebAgentWorkspaceStatusData | null;
+  clearWorkspaceStatus: () => void;
 };
 
 /**
@@ -80,6 +97,14 @@ export function useSessionChatRuntime({
   contextLimit,
 }: UseSessionChatRuntimeParams): UseSessionChatRuntimeReturn {
   const contextLimitRef = useRef<number | null>(contextLimit);
+  const workspaceStatus = useSyncExternalStore(
+    useCallback(
+      (listener) => subscribeChatWorkspaceStatus(chatId, listener),
+      [chatId],
+    ),
+    useCallback(() => getChatWorkspaceStatusSnapshot(chatId), [chatId]),
+    () => null,
+  );
 
   useEffect(() => {
     contextLimitRef.current = contextLimit;
@@ -116,6 +141,11 @@ export function useSessionChatRuntime({
         id: chatId,
         transport,
         messages: initialMessages,
+        onData: (dataPart) => {
+          if (dataPart.type === "data-workspace-status") {
+            setChatWorkspaceStatus(chatId, dataPart.data);
+          }
+        },
         sendAutomaticallyWhen: shouldAutoSubmit,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only create once per chatId; init values are only used at creation time
@@ -223,8 +253,105 @@ export function useSessionChatRuntime({
   useEffect(() => {
     if (chat.status === "submitted") {
       userStoppedRef.current = false;
+      clearChatWorkspaceStatus(chatId);
+      return;
     }
-  }, [chat.status]);
+
+    if (chat.status === "ready" || chat.status === "error") {
+      clearChatWorkspaceStatus(chatId);
+    }
+  }, [chat.status, chatId]);
+
+  useEffect(() => {
+    if (!workspaceStatus) {
+      return;
+    }
+
+    const lastMessage = chat.messages[chat.messages.length - 1];
+    if (lastMessage?.role === "assistant" && lastMessage.parts.length > 0) {
+      clearChatWorkspaceStatus(chatId);
+    }
+  }, [chat.messages, chatId, workspaceStatus]);
+
+  const clearWorkspaceStatus = useCallback(() => {
+    clearChatWorkspaceStatus(chatId);
+  }, [chatId]);
+
+  // Reactive resume fallback.
+  //
+  // `useChat({ resume })` only evaluates its argument once at mount, based on
+  // SSR-time `initialChatActiveStreamId`. That leaves a gap: if the user
+  // submits a message, navigates away before the server persists
+  // `activeStreamId`, and comes back quickly, the page can SSR with
+  // `activeStreamId = null` even though a workflow is (or is about to be)
+  // running. The server-side fix — having the workflow self-register its
+  // runId on step 1 — means the slot becomes populated shortly after the
+  // workflow starts executing, but we need to discover that from the client.
+  //
+  // Strategy: if we mounted without a known active stream AND the
+  // conversation ends with an unanswered user message, probe the resume
+  // endpoint a few times with backoff. `GET /api/chat/:id/stream` returns
+  // 204 when there's no active stream (cheap), so this is safe to call
+  // speculatively.
+  useEffect(() => {
+    if (initialChatActiveStreamId) {
+      // Normal resume path handles this; don't double-probe.
+      return;
+    }
+
+    const lastMessage = chatInstance.messages[chatInstance.messages.length - 1];
+    const endsWithUserMessage = lastMessage?.role === "user";
+    if (!endsWithUserMessage) {
+      // No unanswered user turn — no reason to expect a running stream.
+      return;
+    }
+
+    let cancelled = false;
+    // Backoff schedule tuned to cover the observed race window: the
+    // workflow's first step claims activeStreamId shortly after start().
+    // Total probe budget ~10s.
+    const delaysMs = [0, 1_000, 2_500, 5_500, 10_000];
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const attemptResume = async () => {
+      if (cancelled) return;
+
+      // Skip if a local send / resume is already in flight for this chat.
+      const status = chatInstance.status;
+      if (status !== "ready" && status !== "error") {
+        return;
+      }
+
+      try {
+        // GET /api/chat/:id/stream returns 204 when there's no active stream
+        // (cheap no-op for the AI SDK) and 200 + stream bytes when one is
+        // live. resumeStream handles both paths.
+        await chat.resumeStream();
+      } catch {
+        // Transient failure (network, stale session, etc.) — let the next
+        // scheduled attempt retry.
+      }
+    };
+
+    const schedule = (index: number) => {
+      if (cancelled || index >= delaysMs.length) return;
+      timeoutId = setTimeout(async () => {
+        await attemptResume();
+        if (cancelled) return;
+        // Keep probing until budget exhausted. Once resume attaches to a
+        // live stream, subsequent attempts self-skip via the status guard.
+        schedule(index + 1);
+      }, delaysMs[index]);
+    };
+
+    schedule(0);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only probe; chatInstance/chat identities are stable per chatId
+  }, [chatId, initialChatActiveStreamId]);
 
   // Cleanup: release per-route chat instances and abort local transport
   // connections so unmounted routes do not keep consuming client resources.
@@ -243,5 +370,7 @@ export function useSessionChatRuntime({
     chat,
     stopChatStream,
     retryChatStream,
+    workspaceStatus,
+    clearWorkspaceStatus,
   };
 }

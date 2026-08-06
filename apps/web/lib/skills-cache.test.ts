@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SkillMetadata } from "@open-harness/agent";
+import type { SkillMetadata } from "@open-agents/agent";
 import { createSkillsCache, getSkillsCacheKey } from "./skills-cache";
 
 const exampleSkills: SkillMetadata[] = [

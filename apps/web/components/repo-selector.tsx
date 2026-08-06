@@ -27,7 +27,7 @@ import {
 import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { useInstallationRepos } from "@/hooks/use-installation-repos";
 import { useSession } from "@/hooks/use-session";
-import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
+import { buildGitHubReconnectUrl } from "@/lib/github/urls";
 import { cn } from "@/lib/utils";
 
 interface Installation {

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatTokens } from "@open-harness/shared";
+import { formatTokens } from "@open-agents/shared";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import useSWR from "swr";

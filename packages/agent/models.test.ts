@@ -1,11 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { ProviderOptionsByProvider } from "./models";
 
+const createGatewayCalls: Array<Record<string, unknown>> = [];
+
 mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
 
   return {
-    createGateway: () => gateway,
+    createGateway: (settings?: Record<string, unknown>) => {
+      createGatewayCalls.push(settings ?? {});
+      return gateway;
+    },
     defaultSettingsMiddleware: (_settings: unknown) => ({
       kind: "default-settings-middleware",
     }),
@@ -19,6 +24,7 @@ mock.module("@ai-sdk/devtools", () => ({
 }));
 
 const {
+  gateway,
   getProviderOptionsForModel,
   mergeProviderOptions,
   shouldApplyOpenAIReasoningDefaults,
@@ -231,5 +237,56 @@ describe("mergeProviderOptions", () => {
         include: ["reasoning.summary"],
       },
     });
+  });
+});
+
+describe("gateway attribution headers", () => {
+  test("sends default attribution headers", () => {
+    createGatewayCalls.length = 0;
+    gateway("anthropic/claude-sonnet-4.6" as never);
+
+    expect(createGatewayCalls).toEqual([
+      {
+        headers: {
+          "http-referer": "https://open-agents.dev",
+          "x-title": "Open Agents",
+        },
+      },
+    ]);
+  });
+
+  test("allows overriding attribution via appName and appUrl", () => {
+    createGatewayCalls.length = 0;
+    gateway("anthropic/claude-sonnet-4.6" as never, {
+      appName: "My App",
+      appUrl: "https://myapp.com",
+    });
+
+    expect(createGatewayCalls).toEqual([
+      {
+        headers: {
+          "http-referer": "https://myapp.com",
+          "x-title": "My App",
+        },
+      },
+    ]);
+  });
+
+  test("passes attribution headers with custom gateway config", () => {
+    createGatewayCalls.length = 0;
+    gateway("anthropic/claude-sonnet-4.6" as never, {
+      config: { baseURL: "https://custom.api", apiKey: "sk-test" },
+    });
+
+    expect(createGatewayCalls).toEqual([
+      {
+        baseURL: "https://custom.api",
+        apiKey: "sk-test",
+        headers: {
+          "http-referer": "https://open-agents.dev",
+          "x-title": "Open Agents",
+        },
+      },
+    ]);
   });
 });

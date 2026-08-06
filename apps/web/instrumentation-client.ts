@@ -1,5 +1,18 @@
 import { initBotId } from "botid/client/core";
 
+export const botIdProtectedRoutes = [
+  // AI text-generation endpoints
+  { path: "/api/chat", method: "POST" },
+  { path: "/api/generate-pr", method: "POST" },
+  { path: "/api/generate-title", method: "POST" },
+  { path: "/api/sessions/*/generate-commit-message", method: "POST" },
+
+  // Resource-intensive endpoints
+  { path: "/api/sandbox", method: "POST" },
+  { path: "/api/sessions", method: "POST" },
+  { path: "/api/transcribe", method: "POST" },
+];
+
 /**
  * Vercel BotID client-side initialization.
  *
@@ -9,15 +22,5 @@ import { initBotId } from "botid/client/core";
  * @see https://vercel.com/docs/botid/get-started
  */
 initBotId({
-  protect: [
-    // AI text-generation endpoints
-    { path: "/api/chat", method: "POST" },
-    { path: "/api/generate-pr", method: "POST" },
-    { path: "/api/generate-title", method: "POST" },
-    { path: "/api/sessions/*/generate-commit-message", method: "POST" },
-
-    // Resource-intensive endpoints
-    { path: "/api/sandbox", method: "POST" },
-    { path: "/api/transcribe", method: "POST" },
-  ],
+  protect: botIdProtectedRoutes,
 });

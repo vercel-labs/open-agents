@@ -10,6 +10,12 @@ This file provides guidance for AI coding agents working in this repository.
 - [Code Style & Patterns](docs/agents/code-style.md)
 - [Lessons Learned](docs/agents/lessons-learned.md)
 
+## Authentication
+
+Authentication uses [Better Auth](https://www.better-auth.com/) with Vercel OAuth (sign-in) and GitHub OAuth (repo access). Config lives in `apps/web/lib/auth/config.ts`. Sessions are managed by better-auth's built-in session system — there is no manual JWE/encryption layer.
+
+Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` + `VERCEL_APP_CLIENT_SECRET` (Vercel OAuth), plus GitHub App credentials for repo access. See `apps/web/.env.example` for the full list.
+
 ## Database & Migrations
 
 Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle Kit.
@@ -17,12 +23,12 @@ Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle K
 **After modifying `schema.ts`, always generate a migration:**
 
 ```bash
-bun run --cwd apps/web db:generate   # Creates a new .sql migration file
+pnpm --dir apps/web db:generate   # Creates a new .sql migration file
 ```
 
 Commit the generated `.sql` file alongside the schema change. **Do not use `db:push`** except for local throwaway databases.
 
-Migrations run automatically during `bun run build` (via `lib/db/migrate.ts`), so every Vercel deploy — both preview and production — applies pending migrations to its own database.
+Migrations run automatically during `pnpm build` (via `lib/db/migrate.ts`), so every Vercel deploy — both preview and production — applies pending migrations to its own database.
 
 ### Environment isolation
 
@@ -32,15 +38,15 @@ Neon database branching is enabled in the Vercel project settings. Every preview
 
 ```bash
 # Development
-bun run web            # Run web app
+pnpm web            # Run web app
 
 # Quality checks (REQUIRED after making any changes)
-bun run ci                                 # Required: run format check, lint, typecheck, and tests
+pnpm run ci                             # Required: run format check, lint, typecheck, and tests
 turbo typecheck                            # Type check all packages
 
 # Linting and formatting (Ultracite - oxlint + oxfmt, run from root)
-bun run check                              # Lint and format check all files
-bun run fix                                # Lint fix and format all files
+pnpm check                              # Lint and format check all files
+pnpm fix                                # Lint fix and format all files
 
 # Filter by package (use --filter)
 turbo typecheck --filter=web # Type check web app only
@@ -49,14 +55,14 @@ turbo typecheck --filter=web # Type check web app only
 bun test                                              # Run all tests
 bun test path/to/file.test.ts                         # Run single test file
 bun test --watch                                      # Watch mode
-bun run test:verbose                                  # Run tests with JUnit reporter streamed to stdout (useful in non-interactive shells)
-bun run test:verbose path/to/file.test.ts             # Same verbose output for a single test file
+pnpm test:verbose                                  # Run tests with JUnit reporter streamed to stdout (useful in non-interactive shells)
+pnpm test:verbose path/to/file.test.ts             # Same verbose output for a single test file
 ```
 
 **CI/script execution rules:**
 
-- Run project checks through package scripts (for example `bun run ci`, `bun run --cwd apps/web db:check`).
-- Prefer `bun run <script>` over invoking tool binaries directly (`bunx`, `bun x`, `tsc`, `eslint`, etc.) so local runs match CI behavior.
+- Run project checks through package scripts (for example `pnpm run ci`, `pnpm --dir apps/web db:check`).
+- Prefer `pnpm <script>` over invoking tool binaries directly (`pnpm exec`, `tsc`, `eslint`, etc.) so local runs match CI behavior.
 
 ## Git Commands
 
@@ -93,7 +99,7 @@ See [Architecture & Workspace Structure](docs/agents/architecture.md) for detail
 
 ## Code Style (Summary)
 
-- **Bun exclusively** (not Node/npm/pnpm)
+- **pnpm exclusively for dependency management**; use Node 24 for utility scripts and Bun for tests
 - **Files**: kebab-case, **Types**: PascalCase, **Functions**: camelCase
 - **Never use `any`** -- use `unknown` and narrow with type guards
 - **No `.js` extensions** in imports

@@ -23,6 +23,10 @@ export type WebAgentMessageMetadata = {
   modelId?: string;
   lastStepUsage?: LanguageModelUsage;
   totalMessageUsage?: LanguageModelUsage;
+  /** Gateway-reported cost of the most recent step, in USD. */
+  lastStepCost?: number;
+  /** Cumulative gateway-reported cost across every step of the message, in USD. */
+  totalMessageCost?: number;
   lastStepFinishReason?: FinishReason;
   lastStepRawFinishReason?: string;
   stepFinishReasons?: WebAgentStepFinishMetadata[];
@@ -56,10 +60,16 @@ export type WebAgentSnippetData = {
   filename: string;
 };
 
+export type WebAgentWorkspaceStatusData = {
+  status: "setting-up";
+  message: string;
+};
+
 export type WebAgentDataParts = {
   commit: WebAgentCommitData;
   pr: WebAgentPrData;
   snippet: WebAgentSnippetData;
+  "workspace-status": WebAgentWorkspaceStatusData;
 };
 
 // All types derived from the agent

@@ -60,7 +60,7 @@ describe("Vercel project helpers", () => {
     const projects = await listMatchingVercelProjects({
       token: "token",
       repoOwner: "vercel",
-      repoName: "open-harness",
+      repoName: "open-agents",
     });
 
     expect(projects).toEqual([
@@ -84,6 +84,39 @@ describe("Vercel project helpers", () => {
       },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  test("identifies invalid token API responses", async () => {
+    const fetchMock = mock(async () =>
+      Response.json(
+        {
+          error: {
+            code: "forbidden",
+            message: "Not authorized",
+            invalidToken: true,
+          },
+        },
+        { status: 403 },
+      ),
+    );
+    globalThis.fetch = Object.assign(fetchMock, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const { isVercelInvalidTokenError, listMatchingVercelProjects } =
+      await projectsModulePromise;
+    let thrownError: unknown = null;
+    try {
+      await listMatchingVercelProjects({
+        token: "token",
+        repoOwner: "vercel",
+        repoName: "open-agents",
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(isVercelInvalidTokenError(thrownError)).toBe(true);
   });
 
   test("selectDevelopmentEnvVars prefers more specific development targets and newer values", async () => {

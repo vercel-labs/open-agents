@@ -50,7 +50,7 @@ type MockPullRequestStatusResult =
       error: string;
     };
 
-type MockFindPullRequestByBranchResult =
+type MockFindPullRequestResult =
   | {
       found: true;
       prNumber: number;
@@ -111,8 +111,8 @@ const spies = {
       error: "Failed to get PR status",
     }),
   ),
-  findPullRequestByBranch: mock(
-    async (): Promise<MockFindPullRequestByBranchResult> => ({
+  findPullRequest: mock(
+    async (): Promise<MockFindPullRequestResult> => ({
       found: false,
     }),
   ),
@@ -123,17 +123,17 @@ mock.module("@/lib/db/sessions", () => ({
   updateSession: spies.updateSession,
 }));
 
-mock.module("@open-harness/sandbox", () => ({
+mock.module("@open-agents/sandbox", () => ({
   connectSandbox: spies.connectSandbox,
 }));
 
-mock.module("@/lib/github/user-token", () => ({
+mock.module("@/lib/github/token", () => ({
   getUserGitHubToken: spies.getUserGitHubToken,
 }));
 
-mock.module("@/lib/github/client", () => ({
+mock.module("@/lib/github/pulls", () => ({
   getPullRequestStatus: spies.getPullRequestStatus,
-  findPullRequestByBranch: spies.findPullRequestByBranch,
+  findPullRequest: spies.findPullRequest,
 }));
 
 const archiveSessionModulePromise = import("./archive-session");
@@ -184,7 +184,7 @@ beforeEach(() => {
     success: false,
     error: "Failed to get PR status",
   }));
-  spies.findPullRequestByBranch.mockImplementation(async () => ({
+  spies.findPullRequest.mockImplementation(async () => ({
     found: false,
   }));
 });
@@ -303,7 +303,7 @@ describe("archiveSession", () => {
       status: "archived",
       prStatus: "merged",
     });
-    expect(spies.findPullRequestByBranch).not.toHaveBeenCalled();
+    expect(spies.findPullRequest).not.toHaveBeenCalled();
     expect(sessionRecord?.prStatus).toBe("merged");
   });
 });

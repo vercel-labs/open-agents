@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ToolRenderState } from "@open-harness/shared/lib/tool-state";
+import type { ToolRenderState } from "@open-agents/shared/lib/tool-state";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { BashRenderer } from "./bash-renderer";

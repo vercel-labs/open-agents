@@ -8,6 +8,7 @@ import { fetcher } from "@/lib/swr";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -79,6 +80,9 @@ export function BranchPickerDialog({
               Select branch for {owner}/{repo}
             </span>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Search and select the branch to use for this session.
+          </DialogDescription>
         </DialogHeader>
         {isCreating ? (
           <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">

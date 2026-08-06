@@ -1,6 +1,6 @@
 "use client";
 
-import { toRelativePath } from "@open-harness/shared/lib/tool-state";
+import { toRelativePath } from "@open-agents/shared/lib/tool-state";
 import { FileText } from "lucide-react";
 import { File as DiffsFile } from "@pierre/diffs/react";
 import type { ToolRendererProps } from "@/app/lib/render-tool";

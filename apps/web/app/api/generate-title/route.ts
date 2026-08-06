@@ -1,7 +1,7 @@
-import { checkBotId } from "botid/server";
-import { botIdConfig } from "@/lib/botid";
+import { checkBotProtection } from "@/lib/botid";
 import { gateway, generateText } from "ai";
 import { z } from "zod";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 /**
@@ -46,9 +46,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const botVerification = await checkBotId(botIdConfig);
+  const botVerification = await checkBotProtection();
   if (botVerification.isBot) {
     return Response.json({ error: "Access denied" }, { status: 403 });
+  }
+
+  const limited = await checkRateLimit({
+    key: rateLimitKey(["generate-title", session.user.id]),
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    return limited;
   }
 
   let body: unknown;

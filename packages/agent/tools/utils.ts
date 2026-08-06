@@ -1,4 +1,4 @@
-import { connectSandbox, type Sandbox } from "@open-harness/sandbox";
+import { connectSandbox, type Sandbox } from "@open-agents/sandbox";
 import type { LanguageModel, ModelMessage } from "ai";
 import * as path from "path";
 import type { AgentContext } from "../types";
@@ -24,8 +24,10 @@ export function isPathWithinDirectory(
   filePath: string,
   directory: string,
 ): boolean {
-  const resolvedPath = path.resolve(filePath);
   const resolvedDir = path.resolve(directory);
+  const resolvedPath = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(resolvedDir, filePath);
   return (
     resolvedPath.startsWith(resolvedDir + path.sep) ||
     resolvedPath === resolvedDir

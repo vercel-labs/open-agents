@@ -8,6 +8,7 @@ import type { VercelProjectSelection } from "@/lib/vercel/types";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -61,6 +62,9 @@ export function NewSessionDialog({
       <DialogContent className="w-[calc(100%-2rem)] max-w-none gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none [&>button]:hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>New Session</DialogTitle>
+          <DialogDescription>
+            Choose a repository or start an empty session.
+          </DialogDescription>
         </DialogHeader>
         <div className="min-w-0 rounded-2xl sm:rounded-[28px] border border-border/60 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <SessionStarter

@@ -1,9 +1,13 @@
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 
-const DISABLED_MODEL_IDS = new Set(["openai/gpt-5.4-pro"]);
+const DISABLED_OPENAI_GPT_PREFIX = "openai/gpt-";
+const DISABLED_OPENAI_PRO_SUFFIX = "-pro";
 
 export function isModelDisabled(modelId: string): boolean {
-  return DISABLED_MODEL_IDS.has(modelId);
+  return (
+    modelId.startsWith(DISABLED_OPENAI_GPT_PREFIX) &&
+    modelId.endsWith(DISABLED_OPENAI_PRO_SUFFIX)
+  );
 }
 
 export function filterDisabledModels<T extends { id: string }>(

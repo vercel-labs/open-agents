@@ -204,6 +204,62 @@
       "when": 1775924695719,
       "tag": "0028_optimal_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1776567963343,
+      "tag": "0029_amazing_galactus",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1776568000000,
+      "tag": "0030_better_auth_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776670141613,
+      "tag": "0032_ambitious_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776696625627,
+      "tag": "0032_funny_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1776848655619,
+      "tag": "0033_drop_legacy_github_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1776850000000,
+      "tag": "0034_add_is_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1776850100000,
+      "tag": "0035_secret_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778835412125,
+      "tag": "0036_faulty_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

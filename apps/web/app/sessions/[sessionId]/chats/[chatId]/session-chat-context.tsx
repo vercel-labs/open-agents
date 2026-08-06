@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import type { SandboxState } from "@open-harness/sandbox";
+import type { SandboxState } from "@open-agents/sandbox";
 import {
   createContext,
   type ReactNode,
@@ -18,7 +18,11 @@ import type { SandboxStatusResponse } from "@/app/api/sandbox/status/route";
 import type { DiffResponse } from "@/app/api/sessions/[sessionId]/diff/route";
 import type { FileSuggestion } from "@/app/api/sessions/[sessionId]/files/route";
 import type { SkillSuggestion } from "@/app/api/sessions/[sessionId]/skills/route";
-import type { WebAgentUIMessage } from "@/app/types";
+import type {
+  WebAgentUIMessage,
+  WebAgentWorkspaceStatusData,
+} from "@/app/types";
+import { checkPullRequest } from "@/lib/github/queries/pr";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useSessionDiff } from "@/hooks/use-session-diff";
@@ -107,6 +111,8 @@ type SessionChatContextValue = {
   contextLimit: number | null;
   stopChatStream: () => void;
   sandboxInfo: SandboxInfo | null;
+  workspaceStatus: WebAgentWorkspaceStatusData | null;
+  clearWorkspaceStatus: () => void;
   setSandboxInfo: (info: SandboxInfo) => void;
   clearSandboxInfo: () => void;
   archiveSession: () => Promise<void>;
@@ -204,6 +210,8 @@ type SessionChatRuntimeContextValue = Pick<
   | "chat"
   | "contextLimit"
   | "stopChatStream"
+  | "workspaceStatus"
+  | "clearWorkspaceStatus"
   | "retryChatStream"
   | "hadInitialMessages"
   | "initialMessages"
@@ -331,7 +339,13 @@ export function SessionChatProvider({
     [modelOptions, chatInfo.modelId],
   );
   const hadInitialMessages = initialMessages.length > 0;
-  const { chat, stopChatStream, retryChatStream } = useSessionChatRuntime({
+  const {
+    chat,
+    stopChatStream,
+    retryChatStream,
+    workspaceStatus,
+    clearWorkspaceStatus,
+  } = useSessionChatRuntime({
     sessionId: sessionRecord.id,
     chatId: chatInfo.id,
     initialMessages,
@@ -657,23 +671,12 @@ export function SessionChatProvider({
   );
 
   const checkBranchAndPr = useCallback(async () => {
-    // Only check if the session has repo info. The API will return a 400
-    // if the sandbox is not active, which we silently ignore.
+    // Only check if the session has repo info. While provisioning, the server
+    // action returns the current DB metadata without touching the sandbox.
     if (!sessionRecord.repoOwner || !sessionRecord.repoName) return;
 
     try {
-      const res = await fetch("/api/check-pr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: sessionRecord.id }),
-      });
-      if (!res.ok) return;
-
-      const data = (await res.json()) as {
-        branch: string | null;
-        prNumber: number | null;
-        prStatus: "open" | "merged" | "closed" | null;
-      };
+      const data = await checkPullRequest({ sessionId: sessionRecord.id });
       const nextPrFields =
         data.prNumber && data.prStatus
           ? { prNumber: data.prNumber, prStatus: data.prStatus }
@@ -1017,6 +1020,8 @@ export function SessionChatProvider({
       contextLimit,
       stopChatStream,
       retryChatStream,
+      workspaceStatus,
+      clearWorkspaceStatus,
       hadInitialMessages,
       initialMessages,
     }),
@@ -1025,6 +1030,8 @@ export function SessionChatProvider({
       contextLimit,
       stopChatStream,
       retryChatStream,
+      workspaceStatus,
+      clearWorkspaceStatus,
       hadInitialMessages,
       initialMessages,
     ],

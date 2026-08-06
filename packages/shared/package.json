@@ -1,5 +1,5 @@
 {
-  "name": "@open-harness/shared",
+  "name": "@open-agents/shared",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,9 @@
     "react": "19.2.3"
   },
   "devDependencies": {
-    "@open-harness/tsconfig": "workspace:*",
+    "@open-agents/tsconfig": "workspace:*",
     "@types/bun": "1.3.12",
+    "@types/node": "^22",
     "@types/react": "19.2.7"
   },
   "peerDependencies": {

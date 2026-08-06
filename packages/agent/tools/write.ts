@@ -2,6 +2,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
 import { getSandbox, toDisplayPath } from "./utils";
+import {
+  isDotEnvFilePath,
+  isSensitiveDotEnvPath,
+  resolveSandboxRealPath,
+  resolveWorkspacePath,
+} from "./path-security";
 
 const writeInputSchema = z.object({
   filePath: z
@@ -34,6 +40,35 @@ const editInputSchema = z.object({
 
 export const writeFileTool = () =>
   tool({
+    needsApproval: async ({ filePath }, { experimental_context }) => {
+      if (isDotEnvFilePath(filePath)) {
+        return true;
+      }
+
+      let sandbox;
+      try {
+        sandbox = await getSandbox(experimental_context, "write");
+      } catch {
+        return false;
+      }
+      const workingDirectory = sandbox.workingDirectory;
+      const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+      if (!absolutePath) {
+        return false;
+      }
+
+      const realPath = await resolveSandboxRealPath({
+        sandbox,
+        absolutePath,
+        workingDirectory,
+      });
+
+      return isSensitiveDotEnvPath({
+        requestedPath: filePath,
+        absolutePath,
+        realPath,
+      });
+    },
     description: `Write content to a file on the filesystem.
 
 WHEN TO USE:
@@ -66,9 +101,25 @@ EXAMPLES:
       const workingDirectory = sandbox.workingDirectory;
 
       try {
-        const absolutePath = path.isAbsolute(filePath)
-          ? filePath
-          : path.resolve(workingDirectory, filePath);
+        const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+        if (!absolutePath) {
+          return {
+            success: false,
+            error: "Path must stay within the workspace.",
+          };
+        }
+
+        const realPath = await resolveSandboxRealPath({
+          sandbox,
+          absolutePath,
+          workingDirectory,
+        });
+        if (realPath && !resolveWorkspacePath(realPath, workingDirectory)) {
+          return {
+            success: false,
+            error: "Path resolves outside the workspace.",
+          };
+        }
 
         const dir = path.dirname(absolutePath);
         await sandbox.mkdir(dir, { recursive: true });
@@ -93,6 +144,35 @@ EXAMPLES:
 
 export const editFileTool = () =>
   tool({
+    needsApproval: async ({ filePath }, { experimental_context }) => {
+      if (isDotEnvFilePath(filePath)) {
+        return true;
+      }
+
+      let sandbox;
+      try {
+        sandbox = await getSandbox(experimental_context, "edit");
+      } catch {
+        return false;
+      }
+      const workingDirectory = sandbox.workingDirectory;
+      const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+      if (!absolutePath) {
+        return false;
+      }
+
+      const realPath = await resolveSandboxRealPath({
+        sandbox,
+        absolutePath,
+        workingDirectory,
+      });
+
+      return isSensitiveDotEnvPath({
+        requestedPath: filePath,
+        absolutePath,
+        realPath,
+      });
+    },
     description: `Perform exact string replacement in a file.
 
 WHEN TO USE:
@@ -137,9 +217,25 @@ EXAMPLES:
           };
         }
 
-        const absolutePath = path.isAbsolute(filePath)
-          ? filePath
-          : path.resolve(workingDirectory, filePath);
+        const absolutePath = resolveWorkspacePath(filePath, workingDirectory);
+        if (!absolutePath) {
+          return {
+            success: false,
+            error: "Path must stay within the workspace.",
+          };
+        }
+
+        const realPath = await resolveSandboxRealPath({
+          sandbox,
+          absolutePath,
+          workingDirectory,
+        });
+        if (realPath && !resolveWorkspacePath(realPath, workingDirectory)) {
+          return {
+            success: false,
+            error: "Path resolves outside the workspace.",
+          };
+        }
 
         const content = await sandbox.readFile(absolutePath, "utf-8");
 
