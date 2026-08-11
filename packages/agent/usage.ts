@@ -21,11 +21,27 @@ function addTokenCounts(
   return (tokenCount1 ?? 0) + (tokenCount2 ?? 0);
 }
 
+function legacyCachedInputTokens(
+  usage: LanguageModelUsage,
+): number | undefined {
+  const value = (usage as unknown as Record<string, unknown>).cachedInputTokens;
+  return typeof value === "number" ? value : undefined;
+}
+
 export function addLanguageModelUsage(
   usage1: LanguageModelUsage,
   usage2: LanguageModelUsage,
 ): LanguageModelUsage {
+  // Usage persisted before AI SDK 7 carries cached tokens in a top-level
+  // `cachedInputTokens` field instead of inputTokenDetails; keep summing it
+  // so aggregated legacy events do not lose their cached-token counts.
+  const legacyCached = addTokenCounts(
+    legacyCachedInputTokens(usage1),
+    legacyCachedInputTokens(usage2),
+  );
+
   return {
+    ...(legacyCached !== undefined ? { cachedInputTokens: legacyCached } : {}),
     inputTokens: addTokenCounts(usage1.inputTokens, usage2.inputTokens),
     inputTokenDetails: {
       noCacheTokens: addTokenCounts(
