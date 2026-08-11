@@ -59,10 +59,21 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  if (cancelFailed && (await isRunStillLive(chat.activeStreamId))) {
+    // The run is verifiably still executing. Keep activeStreamId so a
+    // follow-up prompt cannot start a second workflow against the same
+    // chat and sandbox.
+    return Response.json(
+      { error: "Failed to cancel workflow run" },
+      { status: 500 },
+    );
+  }
+
   // Clear activeStreamId immediately so a follow-up prompt does not
-  // reconnect to the cancelled (but not yet terminal) workflow. This is
-  // still correct when cancellation fails: old deployment-pinned workflow
-  // runs can become impossible to cancel, but should not keep the chat stuck.
+  // reconnect to the cancelled (but not yet terminal) workflow. When
+  // cancellation failed, this branch is only reached for runs that are
+  // terminal or unreachable (e.g. old deployment-pinned runs that can no
+  // longer be cancelled) — those should not keep the chat stuck.
   // Uses CAS to avoid clobbering a newer workflow that raced in.
   await compareAndSetChatActiveStreamId(
     chatId,
@@ -79,6 +90,17 @@ export async function POST(request: Request, context: RouteContext) {
     success: true,
     ...(cancelFailed ? { warning: "Failed to cancel workflow run" } : {}),
   });
+}
+
+async function isRunStillLive(runId: string): Promise<boolean> {
+  try {
+    const status = await getRun(runId).status;
+    return status === "pending" || status === "running";
+  } catch {
+    // Status is unreachable (e.g. the run belongs to a torn-down
+    // deployment). Treat as not live so the chat does not stay stuck.
+    return false;
+  }
 }
 
 async function persistAssistantSnapshot(
