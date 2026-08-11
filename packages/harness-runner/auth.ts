@@ -1,11 +1,12 @@
 import { getVercelOidcToken } from "@vercel/oidc";
 
 /**
- * An AI_GATEWAY_API_KEY present at process start is a deployment-configured
- * static key. Keys written into process.env later are minted OIDC tokens;
- * those expire, so they must never short-circuit a refresh.
+ * The last OIDC token this module minted and wrote into the environment.
+ * Anything else in AI_GATEWAY_API_KEY is a caller/deployment-configured
+ * static key. Minted tokens expire, so they must never short-circuit a
+ * refresh or be reused after a refresh failure.
  */
-const bootGatewayApiKey = process.env.AI_GATEWAY_API_KEY || undefined;
+let lastMintedToken: string | undefined;
 
 export function resolveGatewayApiKey(
   env: NodeJS.ProcessEnv = process.env,
@@ -14,15 +15,11 @@ export function resolveGatewayApiKey(
 }
 
 function staticGatewayApiKeyFor(env: NodeJS.ProcessEnv): string | undefined {
-  if (!env.AI_GATEWAY_API_KEY) {
+  const key = env.AI_GATEWAY_API_KEY;
+  if (!key || key === lastMintedToken) {
     return undefined;
   }
-  if (env === process.env) {
-    return env.AI_GATEWAY_API_KEY === bootGatewayApiKey
-      ? bootGatewayApiKey
-      : undefined;
-  }
-  return env.AI_GATEWAY_API_KEY;
+  return key;
 }
 
 /**
@@ -42,14 +39,26 @@ export async function ensureGatewayApiKeyEnv(
 
   const token = await getVercelOidcToken().catch(() => undefined);
   if (token) {
+    lastMintedToken = token;
     env.VERCEL_OIDC_TOKEN = token;
     env.AI_GATEWAY_API_KEY = token;
     return token;
   }
 
   const fallback = resolveGatewayApiKey(env);
-  if (fallback) {
-    env.AI_GATEWAY_API_KEY ??= fallback;
+  if (!fallback) {
+    return undefined;
   }
+  if (fallback === lastMintedToken) {
+    // Honor the invariant above: after a failed refresh, the only available
+    // credential is a previously minted (possibly expired) token. Reusing it
+    // would produce confusing downstream auth failures, so refuse loudly.
+    console.error(
+      "[harness-runner] AI Gateway token refresh failed and only a previously minted (possibly expired) OIDC token is available; refusing to reuse it.",
+    );
+    return undefined;
+  }
+
+  env.AI_GATEWAY_API_KEY ??= fallback;
   return fallback;
 }

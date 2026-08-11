@@ -1,30 +1,21 @@
-import { prewarmHarness } from "@ai-sdk/harness/agent";
-import { createClaudeCode } from "@ai-sdk/harness-claude-code";
-import { createCodex } from "@ai-sdk/harness-codex";
-import { createPi } from "@ai-sdk/harness-pi";
-import type { SnapshotSandbox } from "@open-agents/sandbox/vercel";
+import { prepareHarnessSandboxTemplate } from "@ai-sdk/harness/agent";
+import type { HarnessCapableSandbox } from "@open-agents/sandbox/vercel";
+import { HARNESS_DEFINITIONS } from "./adapters.ts";
+import { EXTERNAL_HARNESS_IDS } from "./ids.ts";
 
+/**
+ * Prepare a sandbox's runtime profile for every registered external harness
+ * so production sessions resume from a warm snapshot.
+ */
 export async function prepareHarnessSandboxRuntimeProfile(
-  sandbox: SnapshotSandbox,
+  sandbox: Pick<HarnessCapableSandbox, "toHarnessSandboxProvider">,
 ): Promise<void> {
-  if (!sandbox.toHarnessSandboxProvider) {
-    throw new Error(
-      "Configured sandbox provider does not support AI SDK harness prewarming.",
-    );
-  }
-
   const sandboxProvider = sandbox.toHarnessSandboxProvider();
 
-  await prewarmHarness({
-    harness: createCodex(),
-    sandboxProvider,
-  });
-  await prewarmHarness({
-    harness: createClaudeCode(),
-    sandboxProvider,
-  });
-  await prewarmHarness({
-    harness: createPi(),
-    sandboxProvider,
-  });
+  for (const harnessId of EXTERNAL_HARNESS_IDS) {
+    await prepareHarnessSandboxTemplate({
+      harness: HARNESS_DEFINITIONS[harnessId].createAdapter(),
+      sandboxProvider,
+    });
+  }
 }

@@ -2,27 +2,60 @@ import type {
   HarnessAgentResumeSessionState,
   HarnessAgentToolResultContinuation,
 } from "@ai-sdk/harness/agent";
+import { z } from "zod";
 
 type MessageWithParts = {
   role: string;
   parts: Array<Record<string, unknown>>;
 };
 
+const lifecycleStateBaseShape = {
+  harnessId: z.string(),
+  specificationVersion: z.literal("harness-v1"),
+  /** Adapter-defined payload; opaque to the runner but must be JSON. */
+  data: z.json(),
+};
+
+const pendingToolResultSchema = z.object({
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: z.string(),
+});
+
+const pendingToolApprovalSchema = z.object({
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: z.string(),
+  kind: z.enum(["builtin", "custom"]),
+  providerExecuted: z.boolean().optional(),
+  nativeName: z.string().optional(),
+});
+
+const continueTurnStateSchema = z.object({
+  ...lifecycleStateBaseShape,
+  type: z.literal("continue-turn"),
+  pendingToolApprovals: z.array(pendingToolApprovalSchema).optional(),
+  pendingToolResults: z.array(pendingToolResultSchema).optional(),
+});
+
+const resumeSessionStateSchema = z.object({
+  ...lifecycleStateBaseShape,
+  type: z.literal("resume-session"),
+  continueFrom: continueTurnStateSchema.optional(),
+});
+
 /**
  * Validate a persisted harness session resume payload. Returns undefined for
  * anything that is not a resume-session state produced by the same harness,
- * so the caller falls back to a fresh session.
+ * so the caller falls back to a fresh session. On success the original value
+ * is returned (not the parsed clone) so adapter-defined fields survive.
  */
 export function parseHarnessResumeState(
   value: unknown,
   harnessId: string,
 ): HarnessAgentResumeSessionState | undefined {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-
-  const state = value as { type?: unknown; harnessId?: unknown };
-  if (state.type !== "resume-session" || state.harnessId !== harnessId) {
+  const parsed = resumeSessionStateSchema.safeParse(value);
+  if (!parsed.success || parsed.data.harnessId !== harnessId) {
     return undefined;
   }
 

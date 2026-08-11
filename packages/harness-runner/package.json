@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./ids": "./ids.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -16,8 +17,10 @@
     "@ai-sdk/harness-codex": "1.0.67",
     "@ai-sdk/harness-pi": "1.0.66",
     "@open-agents/sandbox": "workspace:*",
+    "@open-agents/shared": "workspace:*",
     "@vercel/oidc": "^2.0.2",
-    "ai": "catalog:"
+    "ai": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@open-agents/tsconfig": "workspace:*",
