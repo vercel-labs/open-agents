@@ -251,6 +251,22 @@ export async function persistSandboxState(
   }
 }
 
+export async function persistChatHarnessSessionState(
+  chatId: string,
+  harnessSessionState: unknown,
+): Promise<void> {
+  "use step";
+  try {
+    await updateChat(chatId, {
+      harnessSessionState: harnessSessionState ?? null,
+    });
+  } catch (error) {
+    // Best-effort: without persisted state the next turn starts a fresh
+    // harness session from the transcript.
+    console.error("[workflow] Failed to persist harness session state:", error);
+  }
+}
+
 const ACTIVE_STREAM_CLEAR_MAX_ATTEMPTS = 3;
 const ACTIVE_STREAM_CLEAR_RETRY_DELAY_MS = 50;
 

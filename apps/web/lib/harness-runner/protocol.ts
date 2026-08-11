@@ -16,6 +16,8 @@ export type InternalHarnessRunRequest = {
   originalMessages: HarnessUIMessage[];
   selectedModelId: string;
   modelId: string;
+  /** Harness session state persisted from the previous turn, if any. */
+  resumeState?: unknown;
 };
 
 export type InternalHarnessRunEvent =

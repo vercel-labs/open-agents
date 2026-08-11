@@ -274,6 +274,13 @@
       "when": 1781591975650,
       "tag": "0038_salty_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786435523893,
+      "tag": "0039_skinny_hercules",
+      "breakpoints": true
     }
   ]
 }

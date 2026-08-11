@@ -216,6 +216,12 @@ export const chats = pgTable(
       .notNull()
       .default("open-agent"),
     activeStreamId: text("active_stream_id"),
+    /**
+     * External-harness session resume state from the last completed turn
+     * (opaque payload from the AI SDK harness). Null when the last turn
+     * could not be parked for resume.
+     */
+    harnessSessionState: jsonb("harness_session_state"),
     lastAssistantMessageAt: timestamp("last_assistant_message_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

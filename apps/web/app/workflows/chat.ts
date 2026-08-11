@@ -35,6 +35,7 @@ import {
   hasAutoCommitChangesStep,
   persistAssistantMessage,
   persistAssistantMessageWithToolResults,
+  persistChatHarnessSessionState,
   persistSandboxState,
   persistUserMessage,
   recordWorkflowUsage,
@@ -93,6 +94,7 @@ type ChatModelRuntime = {
   agentOptions: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
   autoCommitEnabled: boolean;
   autoCreatePrEnabled: boolean;
+  harnessSessionState?: unknown;
 };
 
 type Writable = WritableStream<UIMessageChunk>;
@@ -244,6 +246,9 @@ async function resolveChatModelRuntime(params: {
     },
     autoCommitEnabled,
     autoCreatePrEnabled,
+    ...(chat.harnessSessionState != null
+      ? { harnessSessionState: chat.harnessSessionState }
+      : {}),
   };
 }
 
@@ -820,6 +825,7 @@ export async function runAgentWorkflow(options: Options) {
                 runtime.workingDirectory,
                 options.requestUrl,
                 step + 1,
+                modelRuntime.harnessSessionState,
               );
       } catch (error) {
         if (isStepTimingError(error)) {
@@ -829,6 +835,16 @@ export async function runAgentWorkflow(options: Options) {
       }
 
       stepTimings.push(result.stepTiming);
+      if (options.harnessId !== "open-agent" && !result.stepWasAborted) {
+        // Persist (or clear) the harness session resume state right away so
+        // the next turn can continue the same underlying session.
+        await persistChatHarnessSessionState(
+          options.chatId,
+          "harnessResumeState" in result
+            ? (result.harnessResumeState ?? null)
+            : null,
+        );
+      }
       pendingAssistantResponse =
         result.responseMessage ?? pendingAssistantResponse;
       if (
@@ -1147,6 +1163,7 @@ const runHarnessAgentStep = async (
   workingDirectory: string,
   requestUrl: string,
   stepNumber: number,
+  harnessSessionState?: unknown,
 ) => {
   "use step";
 
@@ -1167,6 +1184,9 @@ const runHarnessAgentStep = async (
       originalMessages: originalMessages as HarnessUIMessage[],
       selectedModelId,
       modelId,
+      ...(harnessSessionState != null
+        ? { resumeState: harnessSessionState }
+        : {}),
       requestUrl,
       abortSignal: abortController.signal,
       onChunk: async (chunk) => {
@@ -1191,6 +1211,7 @@ const runHarnessAgentStep = async (
       stepUsage,
       stepCost: result.usage?.costUsd,
       stepWasAborted: false,
+      harnessResumeState: result.resumeState,
       stepTiming: buildStepTiming(
         stepNumber,
         stepStartedAt,
