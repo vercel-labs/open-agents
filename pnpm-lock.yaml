@@ -247,9 +247,15 @@ importers:
       '@ai-sdk/openai':
         specifier: 'catalog:'
         version: 4.0.37(zod@4.4.3)
+      '@ai-sdk/provider-utils':
+        specifier: 5.0.26
+        version: 5.0.26(zod@4.4.3)
       '@open-agents/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@open-agents/shared':
+        specifier: workspace:*
+        version: link:../shared
       ai:
         specifier: 'catalog:'
         version: 7.0.59(zod@4.4.3)
@@ -290,6 +296,9 @@ importers:
       '@open-agents/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@open-agents/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@vercel/oidc':
         specifier: ^2.0.2
         version: 2.0.2
@@ -299,6 +308,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
     devDependencies:
       '@open-agents/tsconfig':
         specifier: workspace:*
@@ -340,6 +352,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
     devDependencies:
       '@open-agents/tsconfig':
         specifier: workspace:*
@@ -353,6 +368,9 @@ importers:
       '@types/react':
         specifier: 19.2.7
         version: 19.2.7
+      ai:
+        specifier: 'catalog:'
+        version: 7.0.59(zod@4.4.3)
 
   packages/tsconfig: {}
 
