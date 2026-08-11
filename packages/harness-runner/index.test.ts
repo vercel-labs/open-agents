@@ -223,6 +223,75 @@ describe("OPEN_AGENT_HARNESS_TOOLS", () => {
 });
 
 describe("assembleHarnessResponseMessage", () => {
+  test("keeps prior parts when seeded with the persisted assistant message", async () => {
+    const responseMessage = await assembleHarnessResponseMessage(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "start-step" });
+          controller.enqueue({ type: "text-start", id: "text-2" });
+          controller.enqueue({
+            type: "text-delta",
+            id: "text-2",
+            delta: "Continuing after your answer.",
+          });
+          controller.enqueue({ type: "text-end", id: "text-2" });
+          controller.close();
+        },
+      }),
+      "assistant-1",
+      {
+        id: "assistant-1",
+        role: "assistant",
+        parts: [
+          { type: "step-start" },
+          { type: "text", text: "Earlier answer", state: "done" },
+        ],
+        metadata: { totalMessageUsage: { inputTokens: 10 } },
+      },
+    );
+
+    expect(responseMessage.parts).toEqual([
+      { type: "step-start" },
+      { type: "text", text: "Earlier answer", state: "done" },
+      { type: "step-start" },
+      {
+        type: "text",
+        text: "Continuing after your answer.",
+        state: "done",
+      },
+    ]);
+    expect(responseMessage.metadata).toEqual({
+      totalMessageUsage: { inputTokens: 10 },
+    });
+  });
+
+  test("ignores a seed message from a different assistant id", async () => {
+    const responseMessage = await assembleHarnessResponseMessage(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "text-start", id: "text-1" });
+          controller.enqueue({
+            type: "text-delta",
+            id: "text-1",
+            delta: "Fresh turn",
+          });
+          controller.enqueue({ type: "text-end", id: "text-1" });
+          controller.close();
+        },
+      }),
+      "assistant-2",
+      {
+        id: "assistant-1",
+        role: "assistant",
+        parts: [{ type: "text", text: "Old message", state: "done" }],
+      },
+    );
+
+    expect(responseMessage.parts).toEqual([
+      { type: "text", text: "Fresh turn", state: "done" },
+    ]);
+  });
+
   test("assembles persisted assistant parts from UI stream chunks", async () => {
     const responseMessage = await assembleHarnessResponseMessage(
       new ReadableStream({

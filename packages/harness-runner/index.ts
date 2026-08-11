@@ -14,6 +14,15 @@ import {
 } from "./adapters.ts";
 import { ensureGatewayApiKeyEnv } from "./auth.ts";
 import { HARNESS_INSTRUCTIONS } from "./instructions.ts";
+import {
+  collectPendingToolResultContinuations,
+  parseHarnessResumeState,
+} from "./session-resume.ts";
+import {
+  addHarnessUsage,
+  harnessUsageFromMetadataValue,
+  type HarnessUsage,
+} from "./usage.ts";
 import { linkHarnessWorkingDirectory } from "./workspace.ts";
 
 export {
@@ -41,23 +50,11 @@ export type HarnessUIMessageChunk = {
   [key: string]: unknown;
 };
 
-export type HarnessUsage = {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  cachedInputTokens?: number;
-  reasoningTokens?: number;
-  inputTokenDetails?: {
-    noCacheTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-  };
-  outputTokenDetails?: {
-    textTokens?: number;
-    reasoningTokens?: number;
-  };
-  costUsd?: number;
-};
+export {
+  addHarnessUsage,
+  harnessUsageFromMetadataValue,
+  type HarnessUsage,
+} from "./usage.ts";
 
 export type HarnessTurnResult = {
   responseMessage: HarnessUIMessage;
@@ -70,6 +67,12 @@ export type HarnessTurnResult = {
     | "other";
   rawFinishReason?: string;
   usage?: HarnessUsage;
+  /**
+   * JSON-serializable session state to persist and pass back as
+   * `resumeState` on the next turn. Undefined when the session could not be
+   * parked for resume (the next turn then starts a fresh session).
+   */
+  resumeState?: unknown;
 };
 
 export type RunHarnessTurnInput = {
@@ -82,6 +85,8 @@ export type RunHarnessTurnInput = {
   originalMessages: HarnessUIMessage[];
   selectedModelId: string;
   modelId: string;
+  /** Session state returned by a previous turn's `resumeState`, if any. */
+  resumeState?: unknown;
   abortSignal?: AbortSignal;
   onChunk: (chunk: HarnessUIMessageChunk) => Promise<void> | void;
 };
@@ -422,23 +427,35 @@ function withHarnessMetadata(
   input: Pick<RunHarnessTurnInput, "selectedModelId" | "modelId">,
   result: Pick<HarnessTurnResult, "finishReason" | "rawFinishReason" | "usage">,
 ): HarnessUIMessage {
+  // Continuation turns reuse the assistant message id, so carry the previous
+  // turns' accumulated usage and step history forward instead of resetting.
+  const existingTotalMessageUsage = harnessUsageFromMetadataValue(
+    message.metadata?.totalMessageUsage,
+  );
+  const existingStepFinishReasons = Array.isArray(
+    message.metadata?.stepFinishReasons,
+  )
+    ? message.metadata.stepFinishReasons
+    : [];
+  const totalMessageUsage =
+    result.usage && existingTotalMessageUsage
+      ? addHarnessUsage(existingTotalMessageUsage, result.usage)
+      : (result.usage ?? existingTotalMessageUsage);
+
   return {
     ...message,
     metadata: {
       ...message.metadata,
       selectedModelId: input.selectedModelId,
       modelId: input.modelId,
-      ...(result.usage
-        ? {
-            lastStepUsage: result.usage,
-            totalMessageUsage: result.usage,
-          }
-        : {}),
+      ...(result.usage ? { lastStepUsage: result.usage } : {}),
+      ...(totalMessageUsage ? { totalMessageUsage } : {}),
       lastStepFinishReason: result.finishReason,
       ...(result.rawFinishReason
         ? { lastStepRawFinishReason: result.rawFinishReason }
         : {}),
       stepFinishReasons: [
+        ...existingStepFinishReasons,
         {
           finishReason: result.finishReason,
           ...(result.rawFinishReason
@@ -494,12 +511,21 @@ function toHarnessUsage(
 export async function assembleHarnessResponseMessage(
   stream: ReadableStream<HarnessUIMessageChunk>,
   messageId: string,
+  seedMessage?: HarnessUIMessage,
 ): Promise<HarnessUIMessage> {
-  let responseMessage: HarnessUIMessage = {
-    id: messageId,
-    role: "assistant",
-    parts: [],
-  };
+  // Seed with the persisted assistant message on continuation turns so the
+  // assembled message keeps earlier parts and metadata instead of replacing
+  // the stored row with only this turn's output.
+  let responseMessage: HarnessUIMessage =
+    seedMessage &&
+    seedMessage.role === "assistant" &&
+    seedMessage.id === messageId
+      ? { ...seedMessage, parts: [...seedMessage.parts] }
+      : {
+          id: messageId,
+          role: "assistant",
+          parts: [],
+        };
   const mappedStream = stream.pipeThrough(createOpenAgentToolMappingStream());
 
   for await (const message of readUIMessageStream({
@@ -513,14 +539,138 @@ export async function assembleHarnessResponseMessage(
   return responseMessage;
 }
 
-export async function runHarnessTurn(
+type OpenAgentHarness = HarnessAgent<
+  ReturnType<typeof createHarnessAdapter>,
+  typeof OPEN_AGENT_HARNESS_TOOLS
+>;
+type OpenAgentHarnessSession = Awaited<
+  ReturnType<OpenAgentHarness["createSession"]>
+>;
+type OpenAgentHarnessStream = Awaited<ReturnType<OpenAgentHarness["stream"]>>;
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+/**
+ * Start this turn against the harness. Resumes the previous turn's session
+ * when resume state is provided and usable — delivering pending client tool
+ * results (answered questions) or prompting only the newest message — and
+ * falls back to a fresh session primed with the full transcript otherwise.
+ */
+async function startHarnessTurn(
+  agent: OpenAgentHarness,
   input: RunHarnessTurnInput,
-): Promise<HarnessTurnResult> {
+): Promise<{
+  session: OpenAgentHarnessSession;
+  stream: OpenAgentHarnessStream;
+}> {
+  const abort = input.abortSignal ? { abortSignal: input.abortSignal } : {};
+  const resumeState = parseHarnessResumeState(
+    input.resumeState,
+    input.harnessId,
+  );
+
+  if (resumeState) {
+    let session: OpenAgentHarnessSession | undefined;
+    try {
+      session = await agent.createSession({
+        sessionId: input.sessionId,
+        resumeFrom: resumeState,
+        ...abort,
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      // Unusable resume state (recreated sandbox, harness update, forked
+      // chat). Fall through to a fresh session.
+    }
+
+    if (session) {
+      try {
+        if (session.hasUnfinishedTurn()) {
+          const toolResultContinuations = collectPendingToolResultContinuations(
+            resumeState,
+            input.messages,
+          );
+          if (toolResultContinuations) {
+            return {
+              session,
+              stream: await agent.continueStream({
+                session,
+                toolResultContinuations,
+                ...abort,
+              }),
+            };
+          }
+        } else {
+          const latestMessage = input.messages.at(-1);
+          const resumePrompt = latestMessage
+            ? buildHarnessPrompt([latestMessage])
+            : "";
+          if (resumePrompt) {
+            return {
+              session,
+              stream: await agent.stream({
+                session,
+                prompt: resumePrompt,
+                ...abort,
+              }),
+            };
+          }
+        }
+        // The resumed session cannot drive this turn; discard it.
+        await session.destroy().catch(() => undefined);
+      } catch (error) {
+        await session.destroy().catch(() => undefined);
+        if (isAbortError(error)) {
+          throw error;
+        }
+      }
+    }
+  }
+
   const prompt = buildHarnessPrompt(input.messages);
   if (!prompt) {
     throw new Error("Harness turn requires at least one text message");
   }
 
+  const session = await agent.createSession({
+    sessionId: input.sessionId,
+    ...abort,
+  });
+  return {
+    session,
+    stream: await agent.stream({ session, prompt, ...abort }),
+  };
+}
+
+/**
+ * Park the session so a future turn can resume it. Returns undefined (after
+ * destroying the session) when parking fails or the turn errored — a wedged
+ * runtime should not be resumed.
+ */
+async function stopSessionForResume(
+  session: OpenAgentHarnessSession,
+  finishReason: HarnessTurnResult["finishReason"],
+): Promise<unknown> {
+  if (finishReason === "error") {
+    await session.destroy().catch(() => undefined);
+    return undefined;
+  }
+
+  try {
+    return await session.stop();
+  } catch {
+    await session.destroy().catch(() => undefined);
+    return undefined;
+  }
+}
+
+export async function runHarnessTurn(
+  input: RunHarnessTurnInput,
+): Promise<HarnessTurnResult> {
   await ensureGatewayApiKeyEnv();
 
   const inactiveTools = HARNESS_INACTIVE_TOOLS[input.harnessId];
@@ -543,31 +693,36 @@ export async function runHarnessTurn(
       });
     },
   });
-  const session = await agent.createSession({
-    sessionId: input.sessionId,
-    ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
-  });
+  const { session, stream } = await startHarnessTurn(agent, input);
+  let sessionEnded = false;
 
   try {
-    const stream = await agent.stream({
-      session,
-      prompt,
-      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
-    });
-    const [outboundStream, responseStream] = stream
+    // Tee before transforming so each branch runs the tool-mapping transform
+    // exactly once with its own state (assembleHarnessResponseMessage maps
+    // its branch internally).
+    const [rawOutboundStream, responseStream] = stream
       .toUIMessageStream({
         originalMessages: input.originalMessages as never,
         generateMessageId: () => input.messageId,
         sendStart: false,
         sendFinish: false,
       })
-      .pipeThrough(createOpenAgentToolMappingStream())
-      .pipeThrough(createHarnessStepBoundaryStream())
       .tee();
+    const outboundStream = rawOutboundStream
+      .pipeThrough(createOpenAgentToolMappingStream())
+      .pipeThrough(createHarnessStepBoundaryStream());
+    const lastOriginalMessage = input.originalMessages.at(-1);
     const responseMessagePromise = assembleHarnessResponseMessage(
-      responseStream as ReadableStream<HarnessUIMessageChunk>,
+      (responseStream as ReadableStream<HarnessUIMessageChunk>).pipeThrough(
+        createHarnessStepBoundaryStream(),
+      ),
       input.messageId,
+      lastOriginalMessage,
     );
+    // Silence the unhandled-rejection window: the assembly promise can reject
+    // (terminateOnError) while the outbound drain loop is still awaiting the
+    // network. The rejection is re-observed in Promise.all below.
+    responseMessagePromise.catch(() => undefined);
 
     const outboundReader = outboundStream.getReader();
     while (true) {
@@ -608,11 +763,17 @@ export async function runHarnessTurn(
       messageMetadata: enrichedResponseMessage.metadata,
     });
 
+    const resumeState = await stopSessionForResume(session, finishReason);
+    sessionEnded = true;
+
     return {
       ...result,
       responseMessage: enrichedResponseMessage,
+      ...(resumeState !== undefined ? { resumeState } : {}),
     };
   } finally {
-    await session.destroy();
+    if (!sessionEnded) {
+      await session.destroy().catch(() => undefined);
+    }
   }
 }
