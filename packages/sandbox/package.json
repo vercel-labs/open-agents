@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/sandbox-vercel": "1.0.0-canary.10",
+    "@ai-sdk/sandbox-vercel": "1.0.65",
     "@vercel/sandbox": "2.2.1"
   },
   "devDependencies": {

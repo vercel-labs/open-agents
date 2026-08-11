@@ -17,7 +17,7 @@
     "sandbox:prewarm": "node ../../scripts/vercel-prewarm-sandbox-template.ts"
   },
   "dependencies": {
-    "@ai-sdk/elevenlabs": "3.0.0-canary.49",
+    "@ai-sdk/elevenlabs": "3.0.27",
     "@ai-sdk/react": "catalog:",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
