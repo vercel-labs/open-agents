@@ -54,7 +54,11 @@ import {
 } from "@/lib/model-access";
 import { getAllVariants } from "@/lib/model-variants";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
-import { type ChatHarnessId, getChatHarnessLabel } from "@/lib/chat-harnesses";
+import {
+  type ChatHarnessId,
+  getChatHarnessLabel,
+  resolveHarnessRunModelId,
+} from "@/lib/chat-harnesses";
 import type { Session as AuthSession } from "@/lib/session/types";
 import type {
   WorkflowRunStatus,
@@ -749,6 +753,11 @@ export async function runAgentWorkflow(options: Options) {
     ]);
     selectedModelId = options.selectedModelId ?? modelRuntime.selectedModelId;
     modelId = options.modelId ?? modelRuntime.modelId;
+    if (options.harnessId !== "open-agent") {
+      // External harnesses only run their native provider's models; record
+      // the model that will actually run, not the incompatible selection.
+      modelId = resolveHarnessRunModelId(options.harnessId, modelId);
+    }
     pendingAssistantResponse = {
       ...pendingAssistantResponse,
       metadata: withModelMetadata(

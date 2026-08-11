@@ -52,6 +52,9 @@ const spies = {
   persistSandboxState: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
     Promise.resolve(),
   ),
+  persistChatHarnessSessionState: mock(
+    (_chatId?: unknown, _harnessSessionState?: unknown) => Promise.resolve(),
+  ),
   resolveChatSandboxRuntime: mock((_params: { assistantId?: string }) => {
     return Promise.resolve(createResolvedChatSandboxRuntime());
   }),
@@ -392,7 +395,16 @@ mock.module("ai", () => ({
     }),
 }));
 
-mock.module("@open-agents/agent", () => ({}));
+mock.module("@open-agents/agent", () => ({
+  addLanguageModelUsage: (
+    usage1: Record<string, number>,
+    usage2: Record<string, number>,
+  ) => ({
+    inputTokens: (usage1.inputTokens ?? 0) + (usage2.inputTokens ?? 0),
+    outputTokens: (usage1.outputTokens ?? 0) + (usage2.outputTokens ?? 0),
+    totalTokens: (usage1.totalTokens ?? 0) + (usage2.totalTokens ?? 0),
+  }),
+}));
 
 mock.module("@/lib/harness-runner/client", () => ({
   runHarnessTurnViaApi: spies.runHarnessTurn,
@@ -531,7 +543,9 @@ describe("runAgentWorkflow", () => {
       },
       workingDirectory: "/vercel/sandbox",
       selectedModelId: "gpt-4",
-      modelId: "gpt-4",
+      // "gpt-4" has no openai/ provider prefix, so the workflow records the
+      // Codex harness default that will actually run.
+      modelId: "openai/gpt-5.4",
       requestUrl: "http://localhost/api/chat",
     });
     expect(writtenChunks).toContainEqual({

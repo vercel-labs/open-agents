@@ -409,10 +409,48 @@ describe("/api/sessions/[sessionId]/chats/[chatId]", () => {
     expect(updateEmptyChatCalls).toEqual([
       {
         chatId: "chat-1",
-        patch: { harnessId: "claude-code" },
+        patch: {
+          harnessId: "claude-code",
+          modelId: "anthropic/claude-haiku-4.5",
+        },
       },
     ]);
     expect(updateChatCalls).toHaveLength(0);
+  });
+
+  test("PATCH keeps a native-provider model when switching harness", async () => {
+    ownedSessionChatResult = {
+      ok: true,
+      sessionRecord: { id: "session-1" },
+      chat: {
+        id: "chat-1",
+        sessionId: "session-1",
+        modelId: "anthropic/claude-haiku-4.5",
+        harnessId: "open-agent",
+        activeStreamId: null,
+      },
+    };
+    updatedEmptyChat = {
+      id: "chat-1",
+      sessionId: "session-1",
+      title: "Chat",
+      modelId: "anthropic/claude-haiku-4.5",
+      harnessId: "claude-code",
+    };
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createPatchRequest({ harnessId: "claude-code" }),
+      createContext(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateEmptyChatCalls).toEqual([
+      {
+        chatId: "chat-1",
+        patch: { harnessId: "claude-code" },
+      },
+    ]);
   });
 
   test("PATCH switches an empty chat to the pi harness", async () => {

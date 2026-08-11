@@ -14,10 +14,11 @@ import {
   type ChatHarnessId,
   isAvailableChatHarnessId,
   isChatHarnessId,
+  resolveHarnessRunModelId,
 } from "@/lib/chat-harnesses";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { sanitizeSelectedModelIdForSession } from "@/lib/model-access";
-import { getAllVariants } from "@/lib/model-variants";
+import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 type RouteContext = {
@@ -153,6 +154,24 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     updatePayload.harnessId = nextHarnessId;
+
+    // Codex and Claude Code only run their native provider's models. When
+    // the harness changes and the chat's plain model id cannot run on it,
+    // switch the chat to the harness's default model so the selection stays
+    // truthful. Variant selections resolve to their base model at run time.
+    const currentModelId = chatContext.chat.modelId;
+    const isVariantSelection = currentModelId?.startsWith(
+      MODEL_VARIANT_ID_PREFIX,
+    );
+    if (updatePayload.modelId === undefined && !isVariantSelection) {
+      const harnessModelId = resolveHarnessRunModelId(
+        nextHarnessId,
+        currentModelId ?? "",
+      );
+      if (harnessModelId && harnessModelId !== currentModelId) {
+        updatePayload.modelId = harnessModelId;
+      }
+    }
   }
 
   const changesHarness =

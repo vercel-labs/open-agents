@@ -1,3 +1,5 @@
+import { APP_DEFAULT_MODEL_ID, DEFAULT_MODEL_ID } from "@/lib/models";
+
 export const CHAT_HARNESS_IDS = [
   "open-agent",
   "codex",
@@ -68,6 +70,34 @@ export function isPreferredModelProviderForHarness(
 ): boolean {
   const preferredProvider = getPreferredModelProviderForHarness(id);
   return preferredProvider === undefined || provider === preferredProvider;
+}
+
+const CHAT_HARNESS_DEFAULT_MODEL_IDS: Record<
+  HarnessPreferredModelProvider,
+  string
+> = {
+  openai: APP_DEFAULT_MODEL_ID,
+  anthropic: DEFAULT_MODEL_ID,
+};
+
+/**
+ * Resolve the model a harness will actually run. Codex and Claude Code can
+ * only run models from their native provider; any other selection silently
+ * falls back inside the harness, so substitute an explicit default here to
+ * keep message metadata and usage attribution truthful.
+ */
+export function resolveHarnessRunModelId(
+  id: ChatHarnessId,
+  modelId: string,
+): string {
+  const preferredProvider = getPreferredModelProviderForHarness(id);
+  if (!preferredProvider) {
+    return modelId;
+  }
+
+  return modelId.startsWith(`${preferredProvider}/`)
+    ? modelId
+    : CHAT_HARNESS_DEFAULT_MODEL_IDS[preferredProvider];
 }
 
 export function isChatHarnessId(value: unknown): value is ChatHarnessId {
