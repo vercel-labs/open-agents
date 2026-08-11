@@ -17,7 +17,7 @@ import type {
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
 import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
-import { addLanguageModelUsage } from "./usage-utils";
+import { addLanguageModelUsage } from "@open-agents/agent";
 import { extractGatewayCost } from "./gateway-metadata";
 import type {
   WebAgentCommitData,
@@ -785,7 +785,9 @@ export async function runAgentWorkflow(options: Options) {
       options.maxSteps === undefined || step < options.maxSteps;
       step++
     ) {
-      let result: Awaited<ReturnType<typeof runAgentStep>>;
+      let result:
+        | Awaited<ReturnType<typeof runAgentStep>>
+        | Awaited<ReturnType<typeof runHarnessAgentStep>>;
 
       try {
         result =
@@ -891,11 +893,15 @@ export async function runAgentWorkflow(options: Options) {
     }
 
     if (totalUsage) {
+      // Both step paths already merge prior turns' usage into the response
+      // message metadata; only fall back to this run's total when a step
+      // could not produce enriched metadata (e.g. aborted first turn).
       pendingAssistantResponse = {
         ...pendingAssistantResponse,
         metadata: {
           ...pendingAssistantResponse.metadata,
-          totalMessageUsage: totalUsage,
+          totalMessageUsage:
+            pendingAssistantResponse.metadata?.totalMessageUsage ?? totalUsage,
         },
       };
     }
@@ -1109,22 +1115,20 @@ export async function runAgentWorkflow(options: Options) {
   }
 }
 
-function toLanguageModelUsage(
-  usage: HarnessUsage | undefined,
-): LanguageModelUsage {
+function toLanguageModelUsage(usage: HarnessUsage): LanguageModelUsage {
   return {
-    inputTokens: usage?.inputTokens,
+    inputTokens: usage.inputTokens,
     inputTokenDetails: {
-      noCacheTokens: usage?.inputTokenDetails?.noCacheTokens,
-      cacheReadTokens: usage?.inputTokenDetails?.cacheReadTokens,
-      cacheWriteTokens: usage?.inputTokenDetails?.cacheWriteTokens,
+      noCacheTokens: usage.inputTokenDetails?.noCacheTokens,
+      cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens,
+      cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
     },
-    outputTokens: usage?.outputTokens,
+    outputTokens: usage.outputTokens,
     outputTokenDetails: {
-      textTokens: usage?.outputTokenDetails?.textTokens,
-      reasoningTokens: usage?.outputTokenDetails?.reasoningTokens,
+      textTokens: usage.outputTokenDetails?.textTokens,
+      reasoningTokens: usage.outputTokenDetails?.reasoningTokens,
     },
-    totalTokens: usage?.totalTokens,
+    totalTokens: usage.totalTokens,
   };
 }
 
@@ -1174,7 +1178,9 @@ const runHarnessAgentStep = async (
         }
       },
     });
-    const stepUsage = toLanguageModelUsage(result.usage);
+    const stepUsage = result.usage
+      ? toLanguageModelUsage(result.usage)
+      : undefined;
     const stepFinishedAt = new Date();
 
     return {
@@ -1229,6 +1235,7 @@ const runHarnessAgentStep = async (
     throw errorWithStepTiming;
   } finally {
     stopMonitor.stop();
+    await stopMonitor.done;
   }
 };
 
