@@ -73,17 +73,19 @@ Detailed coding conventions, tool implementation patterns, and common patterns f
 
 - Tools are defined with Zod schemas for input validation
 - Use `ToolLoopAgent` for agent implementations
-- Tools receive context via `experimental_context` parameter
+- Context-consuming tools declare `contextSchema: agentContextSchema` (from `packages/agent/types`) and receive the typed `AgentContext` via the `{ context }` option in `execute` and `needsApproval`
+- Agents bind one shared context to every tool with `uniformToolsContext` in `prepareCall` (see `packages/agent/tools/utils.ts`)
 - Implement `needsApproval` as boolean or function for tool approval logic
 
 ## Tool Implementation Patterns
 
-When creating tools in `packages/agent/tools/`:
+When creating tools in `packages/agent/tools/` (see `bash.ts` for a full example):
 
 ```typescript
 import { tool } from "ai";
 import { z } from "zod";
-import { getSandbox, getApprovalContext } from "./utils";
+import { agentContextSchema } from "../types";
+import { getSandbox } from "./utils";
 
 const inputSchema = z.object({
   param: z.string().describe("Description for the agent"),
@@ -91,15 +93,16 @@ const inputSchema = z.object({
 
 export const myTool = (options?: { needsApproval?: boolean }) =>
   tool({
-    needsApproval: (args, { experimental_context }) => {
-      const ctx = getApprovalContext(experimental_context, "myTool");
-      // Return true if approval needed, false otherwise
+    contextSchema: agentContextSchema,
+    needsApproval: async (args, { context }) => {
+      // Return true if approval needed, false otherwise; context helpers
+      // like getSandboxContext(context, "myTool") are available here.
       return options?.needsApproval ?? true;
     },
     description: `Tool description with USAGE, WHEN TO USE, EXAMPLES sections`,
     inputSchema,
-    execute: async (args, { experimental_context }) => {
-      const sandbox = getSandbox(experimental_context, "myTool");
+    execute: async (args, { context }) => {
+      const sandbox = await getSandbox(context, "myTool");
       // Implementation using sandbox methods
       return { success: true, result: "..." };
     },

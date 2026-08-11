@@ -8,6 +8,15 @@ const appDir = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: join(appDir, "../.."),
+  // The internal harness-runner route uploads each harness's in-sandbox bridge
+  // script at runtime, so those `dist/bridge` assets must be traced into the
+  // route's serverless bundle. The harness packages are marked external
+  // (serverExternalPackages) so they load from traced node_modules instead of
+  // being bundled, and the pnpm-store glob patterns below are load-bearing and
+  // layout-sensitive: they must match the `.pnpm/<name>@<version>` directory
+  // layout for tracing to find the files. `@ai-sdk/harness-pi` ships no
+  // `dist/bridge` directory (verified in node_modules), which is why it has no
+  // entry in outputFileTracingIncludes.
   outputFileTracingIncludes: {
     "/api/internal/harness-runner": [
       "../../node_modules/.pnpm/@ai-sdk+harness-claude-code@*/node_modules/@ai-sdk/harness-claude-code/dist/bridge/**/*",
