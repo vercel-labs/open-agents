@@ -2,6 +2,7 @@
 
 import type { AskUserQuestionInput } from "@open-agents/agent";
 import { formatTokens } from "@open-agents/shared";
+import { legacyCachedInputTokens } from "@open-agents/shared/lib/usage";
 import {
   isReasoningUIPart,
   isToolUIPart,
@@ -45,7 +46,12 @@ import {
 import { createPortal } from "react-dom";
 import useSWR from "swr";
 import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[chatId]/route";
-import { normalizeAskUserQuestionInput } from "@/lib/chat/normalize-ask-user-question";
+import { parseAskUserQuestionInput } from "@/lib/chat/tool-input";
+import {
+  getChatHarnessLabel,
+  getPreferredModelProviderForHarness,
+} from "@/lib/chat-harnesses";
+import { getProviderDisplayName } from "@/components/provider-icons";
 import type { MergePullRequestResult } from "@/lib/github/actions/pr";
 import {
   getDeploymentUrl,
@@ -135,7 +141,7 @@ import {
 } from "./session-chat-context";
 import { useStreamRecovery } from "./hooks/use-stream-recovery";
 import { useAutoCommitStatus } from "./hooks/use-auto-commit-status";
-import { useChatHarnessSelection } from "./hooks/use-chat-harness-selection";
+import { useChatSettingUpdate } from "./hooks/use-chat-setting-update";
 import { useCodeEditor } from "./hooks/use-code-editor";
 import { useDevServer } from "./hooks/use-dev-server";
 import { useGitPanel } from "./git-panel-context";
@@ -448,13 +454,14 @@ type MessageUsageTotals = {
 };
 
 function getCachedInputTokens(usage: LanguageModelUsage | undefined): number {
-  const legacyCachedInputTokens = (
-    usage as unknown as Record<string, unknown> | undefined
-  )?.cachedInputTokens;
+  if (!usage) {
+    return 0;
+  }
 
   return (
-    usage?.inputTokenDetails?.cacheReadTokens ??
-    (typeof legacyCachedInputTokens === "number" ? legacyCachedInputTokens : 0)
+    usage.inputTokenDetails?.cacheReadTokens ??
+    legacyCachedInputTokens(usage) ??
+    0
   );
 }
 
@@ -1276,10 +1283,10 @@ export function SessionChatContent({
     addToolApprovalResponse,
     addToolOutput,
   } = chat;
-  const { handleHarnessChange, isUpdatingHarness } = useChatHarnessSelection({
-    harnessId: chatInfo.harnessId,
-    updateChatHarness,
-  });
+  const { handleChange: handleHarnessChange, isUpdating: isUpdatingHarness } =
+    useChatSettingUpdate(chatInfo.harnessId, updateChatHarness, "harness");
+  const { handleChange: handleModelChange, isUpdating: isUpdatingModel } =
+    useChatSettingUpdate(chatInfo.modelId, updateChatModel, "model");
   const isHarnessLocked = hadInitialMessages || messages.length > 0;
   const {
     chats,
@@ -1563,7 +1570,6 @@ export function SessionChatContent({
     }),
     [],
   );
-  const [isUpdatingModel, setIsUpdatingModel] = useState(false);
   const lastStatusSyncAtRef = useRef(0);
   const statusSyncInFlightRef = useRef(false);
   const pendingOptimisticTitleChatIdRef = useRef<string | null>(null);
@@ -1786,25 +1792,38 @@ export function SessionChatContent({
     retryChatStream,
   });
 
-  const handleModelChange = useCallback(
-    async (modelId: string) => {
-      if (!modelId || modelId === chatInfo.modelId) return;
-      try {
-        setIsUpdatingModel(true);
-        await updateChatModel(modelId);
-      } catch (err) {
-        console.error("Failed to update chat model:", err);
-      } finally {
-        setIsUpdatingModel(false);
+  const refocusComposerInput = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const textarea = inputRef.current;
+      if (!textarea) {
+        return;
       }
-    },
-    [chatInfo.modelId, updateChatModel],
-  );
+
+      textarea.focus();
+      const nextCursorPosition = Math.min(
+        cursorPosition,
+        textarea.value.length,
+      );
+      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }, [cursorPosition]);
 
   const selectedModelOption = useMemo(
     () => modelOptions.find((option) => option.id === chatInfo.modelId),
     [modelOptions, chatInfo.modelId],
   );
+
+  const isHarnessSelectorDisabled =
+    isChatInFlight || isHarnessLocked || isUpdatingHarness;
+  const isModelSelectorDisabled =
+    isChatInFlight || isUpdatingModel || modelOptionsLoading;
+
+  const harnessPreferredProvider = getPreferredModelProviderForHarness(
+    chatInfo.harnessId,
+  );
+  const harnessProviderWarning = harnessPreferredProvider
+    ? `${getChatHarnessLabel(chatInfo.harnessId)} works best with ${getProviderDisplayName(harnessPreferredProvider)} models.`
+    : undefined;
 
   const handleFileSelect = (
     value: string,
@@ -2614,13 +2633,13 @@ export function SessionChatContent({
     }
   }, [questionToolCallId, addToolOutput]);
 
-  // Stable array identity so the hook doesn't reset on every render. Harness
-  // tool inputs are untyped JSON, so coerce instead of trusting the cast.
+  // Stable array identity so the hook doesn't reset on every render. Inputs
+  // are validated server-side; an unparsable input renders as no questions.
   const pendingQuestions = useMemo(
     () =>
-      hasPendingQuestion && pendingQuestionPart
-        ? normalizeAskUserQuestionInput(pendingQuestionPart.input)
-        : ([] as AskUserQuestionInput["questions"]),
+      (hasPendingQuestion && pendingQuestionPart
+        ? parseAskUserQuestionInput(pendingQuestionPart.input)?.questions
+        : undefined) ?? ([] as AskUserQuestionInput["questions"]),
     [hasPendingQuestion, pendingQuestionPart],
   );
 
@@ -4167,43 +4186,20 @@ export function SessionChatContent({
                             </Button>
                             <div
                               className={
-                                isChatInFlight ||
-                                isHarnessLocked ||
-                                isUpdatingHarness
+                                isHarnessSelectorDisabled
                                   ? "pointer-events-none opacity-60"
                                   : undefined
                               }
                             >
                               <HarnessSelectorCompact
                                 value={chatInfo.harnessId}
-                                disabled={
-                                  isChatInFlight ||
-                                  isHarnessLocked ||
-                                  isUpdatingHarness
-                                }
+                                disabled={isHarnessSelectorDisabled}
                                 disabledReason={
                                   isHarnessLocked
                                     ? "Harness is locked after the first message"
                                     : undefined
                                 }
-                                onCloseAutoFocus={() => {
-                                  window.requestAnimationFrame(() => {
-                                    const textarea = inputRef.current;
-                                    if (!textarea) {
-                                      return;
-                                    }
-
-                                    textarea.focus();
-                                    const nextCursorPosition = Math.min(
-                                      cursorPosition,
-                                      textarea.value.length,
-                                    );
-                                    textarea.setSelectionRange(
-                                      nextCursorPosition,
-                                      nextCursorPosition,
-                                    );
-                                  });
-                                }}
+                                onCloseAutoFocus={refocusComposerInput}
                                 onChange={(harnessId) => {
                                   void handleHarnessChange(harnessId);
                                 }}
@@ -4212,41 +4208,22 @@ export function SessionChatContent({
                             {chatInfo.modelId && (
                               <div
                                 className={
-                                  isChatInFlight ||
-                                  isUpdatingModel ||
-                                  modelOptionsLoading
+                                  isModelSelectorDisabled
                                     ? "pointer-events-none opacity-60"
                                     : undefined
                                 }
                               >
                                 <ModelSelectorCompact
                                   value={chatInfo.modelId}
-                                  harnessId={chatInfo.harnessId}
                                   modelOptions={modelOptions}
-                                  disabled={
-                                    isChatInFlight ||
-                                    isUpdatingModel ||
-                                    modelOptionsLoading
-                                  }
-                                  onCloseAutoFocus={() => {
-                                    window.requestAnimationFrame(() => {
-                                      const textarea = inputRef.current;
-                                      if (!textarea) {
-                                        return;
-                                      }
-
-                                      textarea.focus();
-                                      const nextCursorPosition = Math.min(
-                                        cursorPosition,
-                                        textarea.value.length,
-                                      );
-                                      textarea.setSelectionRange(
-                                        nextCursorPosition,
-                                        nextCursorPosition,
-                                      );
-                                    });
-                                  }}
+                                  disabled={isModelSelectorDisabled}
+                                  preferredProvider={harnessPreferredProvider}
+                                  providerWarning={harnessProviderWarning}
+                                  onCloseAutoFocus={refocusComposerInput}
                                   onChange={(modelId) => {
+                                    if (!modelId) {
+                                      return;
+                                    }
                                     void handleModelChange(modelId);
                                   }}
                                 />

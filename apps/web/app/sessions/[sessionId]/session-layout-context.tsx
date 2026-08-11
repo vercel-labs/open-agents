@@ -1,13 +1,10 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { SessionChatListItem } from "@/hooks/use-session-chats";
-import type { Chat } from "@/lib/db/schema";
-
-type CreateChatResult = {
-  chat: Chat;
-  persisted: Promise<Chat>;
-};
+import type {
+  CreateChatResult,
+  SessionChatListItem,
+} from "@/hooks/use-session-chats";
 
 type SessionLayoutContextValue = {
   session: {

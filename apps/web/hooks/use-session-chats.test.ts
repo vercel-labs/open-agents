@@ -19,7 +19,6 @@ function createChat(
     modelId: "anthropic/claude-haiku-4.5",
     harnessId: "open-agent",
     activeStreamId: null,
-    harnessSessionState: null,
     lastAssistantMessageAt: null,
     createdAt: now,
     updatedAt: now,

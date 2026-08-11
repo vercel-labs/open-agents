@@ -1,8 +1,9 @@
 "use client";
 
-import { CheckIcon, ChevronDown } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 import { HarnessIcon } from "@/components/harness-icon";
+import { SelectorTriggerButton } from "@/components/selector-trigger-button";
 import { CHAT_HARNESS_OPTIONS, type ChatHarnessId } from "@/lib/chat-harnesses";
 import { cn } from "@/lib/utils";
 import {
@@ -40,19 +41,14 @@ export function HarnessSelectorCompact({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <SelectorTriggerButton
           disabled={disabled}
           aria-label="Change harness"
           title={disabledReason ?? "Change harness"}
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300 disabled:pointer-events-none disabled:opacity-60"
-        >
-          <HarnessIcon harnessId={value} className="size-3.5 shrink-0" />
-          <span className="max-w-[110px] truncate">
-            {selectedOption?.label ?? value}
-          </span>
-          <ChevronDown className="h-3 w-3" />
-        </button>
+          icon={<HarnessIcon harnessId={value} className="size-3.5 shrink-0" />}
+          label={selectedOption?.label ?? value}
+          labelClassName="max-w-[110px]"
+        />
       </PopoverTrigger>
       <PopoverContent
         className="w-72 p-0"
@@ -68,13 +64,8 @@ export function HarnessSelectorCompact({
               {CHAT_HARNESS_OPTIONS.map((option) => (
                 <CommandItem
                   key={option.id}
-                  disabled={!option.available}
                   value={`${option.label} ${option.description}`}
                   onSelect={() => {
-                    if (!option.available) {
-                      return;
-                    }
-
                     onChange(option.id);
                     setOpen(false);
                   }}

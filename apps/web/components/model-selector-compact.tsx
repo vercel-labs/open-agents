@@ -1,13 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckIcon, ChevronDown } from "lucide-react";
-import {
-  type ChatHarnessId,
-  getChatHarnessLabel,
-  getPreferredModelProviderForHarness,
-  isPreferredModelProviderForHarness,
-} from "@/lib/chat-harnesses";
+import { AlertTriangle, CheckIcon } from "lucide-react";
+import { SelectorTriggerButton } from "@/components/selector-trigger-button";
 import { type ModelOption, groupByProvider } from "@/lib/model-options";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import { cn } from "@/lib/utils";
@@ -36,11 +31,14 @@ import {
 
 interface ModelSelectorCompactProps {
   value: string;
-  harnessId: ChatHarnessId;
   modelOptions: ModelOption[];
   onChange: (modelId: string) => void;
   disabled?: boolean;
   onCloseAutoFocus?: () => void;
+  /** Provider pinned to the top of the list, if any. */
+  preferredProvider?: string;
+  /** Warning shown next to models that are not from `preferredProvider`. */
+  providerWarning?: string;
 }
 
 function ModelProviderWarning({ message }: { message: string }) {
@@ -64,11 +62,12 @@ function ModelProviderWarning({ message }: { message: string }) {
 
 export function ModelSelectorCompact({
   value,
-  harnessId,
   modelOptions,
   onChange,
   disabled = false,
   onCloseAutoFocus,
+  preferredProvider,
+  providerWarning,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -125,15 +124,13 @@ export function ModelSelectorCompact({
     setOpen(false);
   };
 
+  const isNonPreferredProvider = (provider: string): boolean =>
+    preferredProvider !== undefined && provider !== preferredProvider;
+
   const selectedOption = modelOptions.find((option) => option.id === value);
   const displayText = selectedOption?.shortLabel ?? value;
-  const preferredProvider = getPreferredModelProviderForHarness(harnessId);
-  const providerWarning = preferredProvider
-    ? `${getChatHarnessLabel(harnessId)} works best with ${getProviderDisplayName(preferredProvider)} models.`
-    : undefined;
   const selectedProviderWarning =
-    selectedOption &&
-    !isPreferredModelProviderForHarness(harnessId, selectedOption.provider)
+    selectedOption && isNonPreferredProvider(selectedOption.provider)
       ? providerWarning
       : undefined;
 
@@ -153,26 +150,27 @@ export function ModelSelectorCompact({
       }}
     >
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <SelectorTriggerButton
           disabled={disabled}
           aria-label="Change model"
           aria-keyshortcuts="Meta+Alt+/"
           title="Change model (⌘⌥/)"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300 disabled:pointer-events-none disabled:opacity-60"
-        >
-          {selectedOption && (
-            <ProviderIcon
-              provider={selectedOption.provider}
-              className="size-3.5 shrink-0"
-            />
-          )}
-          <span className="max-w-[140px] truncate">{displayText}</span>
-          {selectedProviderWarning && (
-            <ModelProviderWarning message={selectedProviderWarning} />
-          )}
-          <ChevronDown className="h-3 w-3" />
-        </button>
+          icon={
+            selectedOption ? (
+              <ProviderIcon
+                provider={selectedOption.provider}
+                className="size-3.5 shrink-0"
+              />
+            ) : undefined
+          }
+          label={displayText}
+          labelClassName="max-w-[140px]"
+          trailing={
+            selectedProviderWarning ? (
+              <ModelProviderWarning message={selectedProviderWarning} />
+            ) : undefined
+          }
+        />
       </PopoverTrigger>
       <PopoverContent
         className="w-64 p-0"
@@ -201,13 +199,11 @@ export function ModelSelectorCompact({
                 heading={getProviderDisplayName(group.provider)}
               >
                 {group.options.map((option) => {
-                  const optionProviderWarning =
-                    !isPreferredModelProviderForHarness(
-                      harnessId,
-                      option.provider,
-                    )
-                      ? providerWarning
-                      : undefined;
+                  const optionProviderWarning = isNonPreferredProvider(
+                    option.provider,
+                  )
+                    ? providerWarning
+                    : undefined;
 
                   return (
                     <CommandItem

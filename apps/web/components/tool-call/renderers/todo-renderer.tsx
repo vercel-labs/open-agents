@@ -2,9 +2,9 @@
 
 import { ArrowRight, LayoutList, ListChecks, ListTodo } from "lucide-react";
 import type { ReactNode } from "react";
-import type { TodoItem as Todo } from "@open-agents/agent";
+import type { TodoItem as Todo } from "@open-agents/shared/lib/chat-tools";
 import { cn } from "@/lib/utils";
-import { normalizeTodoInput } from "@/lib/chat/normalize-todo-input";
+import { parseTodoWriteInput } from "@/lib/chat/tool-input";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
 
@@ -73,8 +73,7 @@ function PendingIcon({ className }: { className?: string }) {
 }
 
 function TodoItem({ todo }: { todo: Todo }) {
-  const status = todo.status ?? "pending";
-  const content = todo.content ?? "";
+  const { status, content } = todo;
 
   return (
     <div className="flex items-start gap-2 py-0.5">
@@ -107,7 +106,7 @@ export function TodoRenderer({
   part,
   state,
 }: ToolRendererProps<"tool-todo_write">) {
-  const todos = normalizeTodoInput(part.input);
+  const todos = parseTodoWriteInput(part.input) ?? [];
 
   const activeTodo = todos.find((todo) => todo.status === "in_progress");
   const completedCount = todos.filter(
