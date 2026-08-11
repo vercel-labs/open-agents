@@ -42,6 +42,28 @@ function withHarnessWorkingDirectory(
   }) as AiSdkHarnessSandboxSession;
 }
 
+/**
+ * The harness base directory does not exist on a fresh sandbox. Create it
+ * before the session is handed out: the AI SDK harness resolves bootstrap
+ * paths against the default working directory and runs commands with it as
+ * the cwd, which fails with "chdir: no such file or directory" otherwise.
+ */
+async function ensureHarnessWorkingDirectory(
+  session: AiSdkHarnessSandboxSession,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  const result = await session.run({
+    command: `mkdir -p ${HARNESS_WORKING_DIRECTORY}`,
+    ...(abortSignal ? { abortSignal } : {}),
+  });
+
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Failed to create harness working directory ${HARNESS_WORKING_DIRECTORY}: ${result.stderr || result.stdout}`,
+    );
+  }
+}
+
 interface SandboxRouteLike {
   port: number;
 }
@@ -1078,12 +1100,21 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       specificationVersion: provider.specificationVersion,
       providerId: provider.providerId,
       bridgePorts: provider.bridgePorts,
-      createSession: async (options) =>
-        withHarnessWorkingDirectory(await provider.createSession(options)),
+      createSession: async (options) => {
+        const session = await provider.createSession(options);
+        await ensureHarnessWorkingDirectory(session, options?.abortSignal);
+        return withHarnessWorkingDirectory(session);
+      },
       ...(resumeSession
         ? {
-            resumeSession: async (options) =>
-              withHarnessWorkingDirectory(await resumeSession(options)),
+            resumeSession: async (options) => {
+              const session = await resumeSession(options);
+              await ensureHarnessWorkingDirectory(
+                session,
+                options?.abortSignal,
+              );
+              return withHarnessWorkingDirectory(session);
+            },
           }
         : {}),
     };

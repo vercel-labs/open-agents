@@ -59,6 +59,7 @@ const harnessProviderSettings: Array<{
   sandbox: unknown;
   bridgePorts?: ReadonlyArray<number>;
 }> = [];
+const harnessSessionRunCalls: Array<{ command: string }> = [];
 let readFileToBufferResult: Buffer | null = Buffer.from("");
 
 let runCommandMock = async (
@@ -191,6 +192,10 @@ mock.module("@ai-sdk/sandbox-vercel", () => ({
       createSession: async () => ({
         id: "session_123",
         defaultWorkingDirectory: "/vercel/sandbox",
+        run: async (params: { command: string }) => {
+          harnessSessionRunCalls.push(params);
+          return { exitCode: 0, stdout: "", stderr: "" };
+        },
       }),
     };
   },
@@ -361,6 +366,20 @@ describe("VercelSandbox.toHarnessSandboxProvider", () => {
     expect(harnessProviderSettings).toHaveLength(1);
     expect(harnessProviderSettings[0]?.bridgePorts).toEqual([5001]);
     expect(harnessProviderSettings[0]?.sandbox).toBeDefined();
+  });
+
+  test("creates the harness working directory before handing out sessions", async () => {
+    harnessSessionRunCalls.length = 0;
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123", {
+      ports: [5001],
+      remainingTimeout: 0,
+    });
+    const provider = sandbox.toHarnessSandboxProvider([5001]);
+    await provider.createSession();
+
+    expect(harnessSessionRunCalls).toEqual([
+      { command: "mkdir -p /tmp/open-agents-harness" },
+    ]);
   });
 });
 
