@@ -17,7 +17,7 @@ import type {
 import { getWorkflowMetadata, getWritable } from "workflow";
 import { getRun } from "workflow/api";
 import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
-import { addLanguageModelUsage } from "@open-agents/agent";
+import { addLanguageModelUsage } from "./usage-utils";
 import { extractGatewayCost } from "./gateway-metadata";
 import type {
   WebAgentCommitData,

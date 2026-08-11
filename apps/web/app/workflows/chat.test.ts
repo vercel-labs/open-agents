@@ -395,16 +395,7 @@ mock.module("ai", () => ({
     }),
 }));
 
-mock.module("@open-agents/agent", () => ({
-  addLanguageModelUsage: (
-    usage1: Record<string, number>,
-    usage2: Record<string, number>,
-  ) => ({
-    inputTokens: (usage1.inputTokens ?? 0) + (usage2.inputTokens ?? 0),
-    outputTokens: (usage1.outputTokens ?? 0) + (usage2.outputTokens ?? 0),
-    totalTokens: (usage1.totalTokens ?? 0) + (usage2.totalTokens ?? 0),
-  }),
-}));
+mock.module("@open-agents/agent", () => ({}));
 
 mock.module("@/lib/harness-runner/client", () => ({
   runHarnessTurnViaApi: spies.runHarnessTurn,

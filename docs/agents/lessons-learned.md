@@ -4,6 +4,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 
 ## General / Tooling
 
+- `"use workflow"` functions run as deterministic state machines, not full compute: the workflow bundle must not contain Node.js modules. In workflow modules (`apps/web/app/workflows/*`), every `@open-agents/*` import must be type-only, and helpers called from the workflow body (not inside a `"use step"`) must live in pure workflow-local modules. `usage-utils.ts` deliberately duplicates `addLanguageModelUsage` from `@open-agents/agent` for this reason — do not "dedupe" it into a package import; that pulls Node.js modules into the state machine and breaks every workflow at runtime.
 - Skill discovery de-duplicates by first-seen name, so project skill directories must be scanned before user-level directories to allow project overrides.
 - The system prompt should list all model-invocable skills (including non-user-invocable ones), and reserve user-invocable filtering for the slash-command UI.
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
