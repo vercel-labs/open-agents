@@ -22,6 +22,10 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - `bunx @vercel/config validate` executes the CLI under Node via its shebang and cannot parse TypeScript-style `vercel.ts` imports; use `bunx --bun @vercel/config validate` (or `bun node_modules/@vercel/config/dist/cli.js validate`) for reliable local validation.
 - Successful Vercel CLI auth (`vercel whoami`, team/project REST APIs, `.vercel` linking) does **not** guarantee Workflow observability access. `workflow inspect ... --backend vercel` can still fail with `401 {"error":{"code":"unauthorized","message":"You are not allowed to access this endpoint."}}` when the user/token lacks the Vercel product permission documented as `Vercel Workflow` (and possibly related Observability access), even if `WORKFLOW_VERCEL_AUTH_TOKEN` is passed explicitly from the Vercel CLI auth file.
 
+## Database / Migrations
+
+- Preview databases are Neon branches that persist across deploys of the same git branch — they are NOT re-forked per deploy. Never delete or rewrite unmerged migrations that a preview deployment may already have applied: drizzle replays by journal timestamp against recorded history, so a rewritten migration re-runs on that database and fails (e.g. 42701 duplicate_column) during `pnpm build`. If migrations must be consolidated before merge, write every statement idempotently (`ADD COLUMN IF NOT EXISTS`, `DROP COLUMN IF EXISTS`) and clean up anything the replaced migrations left behind.
+
 ## Next.js
 
 - In Next.js App Router, dynamic route param names must match the folder segment exactly (e.g. `[sessionId]` requires `params.sessionId`, not `params.id`), or DB queries can receive `undefined` and fail at runtime.
