@@ -24,6 +24,7 @@ import {
   webFetchTool,
   writeFileTool,
 } from "./tools";
+import { PLACEHOLDER_AGENT_CONTEXT, uniformToolsContext } from "./tools/utils";
 
 export interface AgentModelSelection {
   id: GatewayModelId;
@@ -77,25 +78,11 @@ const tools = {
   web_fetch: webFetchTool,
 } satisfies ToolSet;
 
-// AI SDK 7 requires contextual tools to have an initial context map. Every
-// actual call replaces these placeholders in prepareCall before tool execution.
-const initialAgentContext = {} as AgentContext;
-
 export const openAgent = new ToolLoopAgent({
   model: defaultModel,
   instructions: buildSystemPrompt({}),
   tools,
-  toolsContext: {
-    read: initialAgentContext,
-    write: initialAgentContext,
-    edit: initialAgentContext,
-    grep: initialAgentContext,
-    glob: initialAgentContext,
-    bash: initialAgentContext,
-    task: initialAgentContext,
-    skill: initialAgentContext,
-    web_fetch: initialAgentContext,
-  },
+  toolsContext: uniformToolsContext(tools, PLACEHOLDER_AGENT_CONTEXT),
   stopWhen: isStepCount(1),
   callOptionsSchema,
   prepareStep: ({ messages, model, steps: _steps }) => {
@@ -130,7 +117,7 @@ export const openAgent = new ToolLoopAgent({
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
-    const agentContext = {
+    const agentContext: AgentContext = {
       sandbox,
       skills,
       model: callModel,
@@ -154,17 +141,7 @@ export const openAgent = new ToolLoopAgent({
         model: callModel,
       }),
       instructions,
-      toolsContext: {
-        read: agentContext,
-        write: agentContext,
-        edit: agentContext,
-        grep: agentContext,
-        glob: agentContext,
-        bash: agentContext,
-        task: agentContext,
-        skill: agentContext,
-        web_fetch: agentContext,
-      },
+      toolsContext: uniformToolsContext(tools, agentContext),
     };
   },
 });

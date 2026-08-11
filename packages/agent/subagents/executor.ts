@@ -1,10 +1,11 @@
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import { gateway, isStepCount, ToolLoopAgent } from "ai";
 import { z } from "zod";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
+import { PLACEHOLDER_AGENT_CONTEXT, uniformToolsContext } from "../tools/utils";
 import { editFileTool, writeFileTool } from "../tools/write";
 import type { AgentContext, SandboxExecutionContext } from "../types";
 import {
@@ -58,27 +59,20 @@ const callOptionsSchema = z.object({
 
 export type ExecutorCallOptions = z.infer<typeof callOptionsSchema>;
 
-const initialAgentContext = {} as AgentContext;
+const tools = {
+  read: readFileTool(),
+  write: writeFileTool(),
+  edit: editFileTool(),
+  grep: grepTool(),
+  glob: globTool(),
+  bash: bashTool(),
+} satisfies ToolSet;
 
 export const executorSubagent = new ToolLoopAgent({
   model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXECUTOR_SYSTEM_PROMPT,
-  tools: {
-    read: readFileTool(),
-    write: writeFileTool(),
-    edit: editFileTool(),
-    grep: grepTool(),
-    glob: globTool(),
-    bash: bashTool(),
-  },
-  toolsContext: {
-    read: initialAgentContext,
-    write: initialAgentContext,
-    edit: initialAgentContext,
-    grep: initialAgentContext,
-    glob: initialAgentContext,
-    bash: initialAgentContext,
-  },
+  tools,
+  toolsContext: uniformToolsContext(tools, PLACEHOLDER_AGENT_CONTEXT),
   stopWhen: isStepCount(SUBAGENT_STEP_LIMIT),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
@@ -88,7 +82,7 @@ export const executorSubagent = new ToolLoopAgent({
 
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
-    const agentContext = { sandbox, model };
+    const agentContext: AgentContext = { sandbox, model };
     return {
       ...settings,
       model,
@@ -103,14 +97,7 @@ ${options.task}
 ${options.instructions}
 
 ${SUBAGENT_REMINDER}`,
-      toolsContext: {
-        read: agentContext,
-        write: agentContext,
-        edit: agentContext,
-        grep: agentContext,
-        glob: agentContext,
-        bash: agentContext,
-      },
+      toolsContext: uniformToolsContext(tools, agentContext),
     };
   },
 });

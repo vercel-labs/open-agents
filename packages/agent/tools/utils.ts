@@ -1,15 +1,33 @@
+import type { InferToolSetContext } from "@ai-sdk/provider-utils";
 import { connectSandbox, type Sandbox } from "@open-agents/sandbox";
-import type { LanguageModel, ModelMessage } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import * as path from "path";
 import type { AgentContext } from "../types";
 
-function isAgentContext(value: unknown): value is AgentContext {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "sandbox" in value &&
-    "model" in value
-  );
+/**
+ * Placeholder context for agent construction. The AI SDK requires contextual
+ * tools to have an initial context map; every actual call replaces this
+ * placeholder in prepareCall before any tool executes, so the empty object is
+ * never observed by a running tool.
+ */
+export const PLACEHOLDER_AGENT_CONTEXT = {} as AgentContext;
+
+/**
+ * Build a toolsContext map that binds every tool in the set to the same
+ * shared context object.
+ *
+ * Invariant asserted by the single cast below: every context-consuming tool
+ * in this codebase declares `contextSchema: agentContextSchema`, so one
+ * AgentContext value is valid for the entire tool set. Tools without a
+ * contextSchema simply ignore their entry.
+ */
+export function uniformToolsContext<TOOLS extends ToolSet>(
+  tools: TOOLS,
+  context: AgentContext,
+): InferToolSetContext<TOOLS> {
+  return Object.fromEntries(
+    Object.keys(tools).map((name) => [name, context]),
+  ) as InferToolSetContext<TOOLS>;
 }
 
 /**
@@ -71,17 +89,16 @@ export function toDisplayPath(
  * @throws Error if sandbox is not available in context
  */
 export async function getSandbox(
-  toolContext: unknown,
+  context: AgentContext,
   toolName?: string,
 ): Promise<Sandbox> {
-  const context = isAgentContext(toolContext) ? toolContext : undefined;
-  if (!context?.sandbox) {
+  // Defensive: PLACEHOLDER_AGENT_CONTEXT is an empty object behind a cast, so
+  // a misconfigured agent (prepareCall not replacing it) surfaces here.
+  if (!context.sandbox) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
-    const contextInfo = context
-      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
-      : "Context is undefined or null";
     throw new Error(
-      `Sandbox not initialized in context${toolInfo}. ${contextInfo}. ` +
+      `Sandbox not initialized in context${toolInfo}. ` +
+        `Context keys: ${Object.keys(context).join(", ") || "none"}. ` +
         "Ensure the agent's prepareCall sets toolsContext for this tool.",
     );
   }
@@ -96,20 +113,18 @@ export async function getSandbox(
  * @param toolName - Optional tool name for better error messages
  */
 export function getSandboxContext(
-  toolContext: unknown,
+  context: AgentContext,
   toolName?: string,
 ): {
   sandbox: AgentContext["sandbox"];
   workingDirectory: string;
 } {
-  const context = isAgentContext(toolContext) ? toolContext : undefined;
-  if (!context?.sandbox) {
+  // Defensive: see getSandbox for why the placeholder can be an empty object.
+  if (!context.sandbox) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
-    const contextInfo = context
-      ? `Context exists but sandbox is missing. Context keys: ${Object.keys(context).join(", ")}`
-      : "Context is undefined or null";
     throw new Error(
-      `Sandbox context not initialized${toolInfo}. ${contextInfo}. ` +
+      `Sandbox context not initialized${toolInfo}. ` +
+        `Context keys: ${Object.keys(context).join(", ") || "none"}. ` +
         "Ensure the agent's prepareCall sets toolsContext for this tool.",
     );
   }
@@ -125,17 +140,15 @@ export function getSandboxContext(
  * Throws a descriptive error if model is not initialized.
  */
 export function getModel(
-  toolContext: unknown,
+  context: AgentContext,
   toolName?: string,
 ): LanguageModel {
-  const context = isAgentContext(toolContext) ? toolContext : undefined;
-  if (!context?.model) {
+  // Defensive: see getSandbox for why the placeholder can be an empty object.
+  if (!context.model) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
-    const contextInfo = context
-      ? `Context exists but model is missing. Context keys: ${Object.keys(context).join(", ")}`
-      : "Context is undefined or null";
     throw new Error(
-      `Model not initialized in context${toolInfo}. ${contextInfo}. ` +
+      `Model not initialized in context${toolInfo}. ` +
+        `Context keys: ${Object.keys(context).join(", ") || "none"}. ` +
         "Ensure the agent's prepareCall sets toolsContext for this tool.",
     );
   }
@@ -147,11 +160,11 @@ export function getModel(
  * Returns the dedicated subagent model if configured, otherwise the main agent model.
  */
 export function getSubagentModel(
-  toolContext: unknown,
+  context: AgentContext,
   toolName?: string,
 ): LanguageModel {
-  const context = isAgentContext(toolContext) ? toolContext : undefined;
-  if (!context?.model) {
+  // Defensive: see getSandbox for why the placeholder can be an empty object.
+  if (!context.model) {
     const toolInfo = toolName ? ` (tool: ${toolName})` : "";
     throw new Error(
       `Model not initialized in context${toolInfo}. ` +

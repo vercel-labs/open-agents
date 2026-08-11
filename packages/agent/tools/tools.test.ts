@@ -2,6 +2,11 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+// Import the real module so the mock below can extend it instead of replacing
+// it. bun's mock.module registry is shared across test files in one process,
+// so a partial "ai" mock would break sibling test files that import other
+// "ai" exports.
+import * as actualAi from "ai";
 import type { AgentContext } from "../types";
 import type { ToolNeedsApprovalFunction } from "./utils";
 
@@ -21,6 +26,7 @@ mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
 
   return {
+    ...actualAi,
     tool: <T extends Record<string, unknown>>(definition: T) => definition,
     gateway,
     isStepCount: (count: number) => ({ count }),

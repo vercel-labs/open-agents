@@ -1,4 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
+// Import the real module so the mock below can extend it instead of replacing
+// it. bun's mock.module registry is shared across test files in one process,
+// so a partial "ai" mock would break sibling test files that import other
+// "ai" exports (e.g. `tool`, `getToolName`).
+import * as actualAi from "ai";
 import type { ProviderOptionsByProvider } from "./models";
 
 const createGatewayCalls: Array<Record<string, unknown>> = [];
@@ -7,6 +12,7 @@ mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
 
   return {
+    ...actualAi,
     createGateway: (settings?: Record<string, unknown>) => {
       createGatewayCalls.push(settings ?? {});
       return gateway;

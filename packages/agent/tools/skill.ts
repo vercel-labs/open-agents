@@ -8,22 +8,6 @@ import {
   substituteArguments,
   injectSkillDirectory,
 } from "../skills/loader";
-import type { SkillMetadata } from "../skills/types";
-
-/**
- * Extended agent context that includes skills.
- */
-interface SkillAgentContext {
-  skills?: SkillMetadata[];
-}
-
-/**
- * Get skills from tool context.
- */
-function getSkills(toolContext: unknown): SkillMetadata[] {
-  const context = toolContext as SkillAgentContext | undefined;
-  return context?.skills ?? [];
-}
 
 const skillInputSchema = z.object({
   skill: z.string().describe("The skill name to invoke"),
@@ -57,7 +41,7 @@ Important:
   inputSchema: skillInputSchema,
   execute: async ({ skill, args }, { context }) => {
     const sandbox = await getSandbox(context, "skill");
-    const skills = getSkills(context);
+    const skills = context.skills ?? [];
 
     // Find the skill by name (case-insensitive to match slash command behavior)
     const normalizedSkillName = skill.toLowerCase();

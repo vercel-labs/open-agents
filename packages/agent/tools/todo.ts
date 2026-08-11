@@ -1,6 +1,5 @@
 import { tool } from "ai";
-import { z } from "zod";
-import { todoItemSchema } from "../types";
+import { todoWriteInputSchema } from "@open-agents/shared/lib/chat-tools";
 
 export const todoWriteTool = tool({
   description: `Create and manage a structured task list for the current session.
@@ -31,13 +30,7 @@ IMPORTANT:
 - Only one todo should be in-progress at a time; avoid parallel in-progress tasks
 - Mark todos as completed as soon as they are done - do not wait to batch completions
 - Use clear, concise todo content so the list remains readable to the user`,
-  inputSchema: z.object({
-    todos: z
-      .array(todoItemSchema)
-      .describe(
-        "The complete list of todo items. This replaces existing todos.",
-      ),
-  }),
+  inputSchema: todoWriteInputSchema,
   execute: async ({ todos }) => {
     return {
       success: true,
