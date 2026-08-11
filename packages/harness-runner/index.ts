@@ -7,7 +7,11 @@ import {
   type LanguageModelUsage,
   type ToolSet,
 } from "ai";
-import { createHarnessAdapter, type ExternalHarnessId } from "./adapters.ts";
+import {
+  createHarnessAdapter,
+  HARNESS_INACTIVE_TOOLS,
+  type ExternalHarnessId,
+} from "./adapters.ts";
 import { ensureGatewayApiKeyEnv } from "./auth.ts";
 import { HARNESS_INSTRUCTIONS } from "./instructions.ts";
 import { linkHarnessWorkingDirectory } from "./workspace.ts";
@@ -519,10 +523,12 @@ export async function runHarnessTurn(
 
   await ensureGatewayApiKeyEnv();
 
+  const inactiveTools = HARNESS_INACTIVE_TOOLS[input.harnessId];
   const agent = new HarnessAgent({
     harness: createHarnessAdapter(input.harnessId, input.modelId),
     instructions: HARNESS_INSTRUCTIONS[input.harnessId],
     tools: OPEN_AGENT_HARNESS_TOOLS,
+    ...(inactiveTools ? { inactiveTools: [...inactiveTools] } : {}),
     permissionMode: "allow-all",
     toolApproval: {
       ask_user_question: "user-approval",

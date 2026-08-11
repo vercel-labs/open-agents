@@ -1,9 +1,8 @@
 import { prewarmHarness } from "@ai-sdk/harness/agent";
+import { createClaudeCode } from "@ai-sdk/harness-claude-code";
 import { createCodex } from "@ai-sdk/harness-codex";
 import { createPi } from "@ai-sdk/harness-pi";
 import type { SnapshotSandbox } from "@open-agents/sandbox/vercel";
-
-import { createOpenAgentsClaudeCode } from "./claude-code-adapter.ts";
 
 export async function prepareHarnessSandboxRuntimeProfile(
   sandbox: SnapshotSandbox,
@@ -21,7 +20,7 @@ export async function prepareHarnessSandboxRuntimeProfile(
     sandboxProvider,
   });
   await prewarmHarness({
-    harness: createOpenAgentsClaudeCode(),
+    harness: createClaudeCode(),
     sandboxProvider,
   });
   await prewarmHarness({

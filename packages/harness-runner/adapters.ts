@@ -1,8 +1,7 @@
 import type { HarnessAgentAdapter } from "@ai-sdk/harness/agent";
+import { createClaudeCode } from "@ai-sdk/harness-claude-code";
 import { createCodex } from "@ai-sdk/harness-codex";
 import { createPi } from "@ai-sdk/harness-pi";
-
-import { createOpenAgentsClaudeCode } from "./claude-code-adapter.ts";
 
 export const EXTERNAL_HARNESS_IDS = ["codex", "claude-code", "pi"] as const;
 
@@ -33,6 +32,17 @@ export function resolvePiModelId(modelId: string): string {
   return modelId;
 }
 
+/**
+ * Built-in harness tools disabled per harness. Claude Code's native
+ * AskUserQuestion is replaced by the Open Agents ask_user_question client
+ * tool; the framework maps these names to the runtime's `disallowedTools`.
+ */
+export const HARNESS_INACTIVE_TOOLS: Partial<
+  Record<ExternalHarnessId, readonly string[]>
+> = {
+  "claude-code": ["AskUserQuestion"],
+};
+
 export function createHarnessAdapter(
   harnessId: ExternalHarnessId,
   modelId: string,
@@ -41,7 +51,7 @@ export function createHarnessAdapter(
     case "codex":
       return createCodex({ model: resolveCodexModelId(modelId) });
     case "claude-code":
-      return createOpenAgentsClaudeCode({
+      return createClaudeCode({
         model: resolveClaudeCodeModelId(modelId),
       });
     case "pi":
