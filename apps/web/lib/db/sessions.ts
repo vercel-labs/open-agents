@@ -423,6 +423,17 @@ export async function getChatById(chatId: string) {
   });
 }
 
+export async function countChatsBySessionId(
+  sessionId: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(chats)
+    .where(eq(chats.sessionId, sessionId));
+
+  return result?.count ?? 0;
+}
+
 /**
  * Get all chats for a session, ordered by most recent activity first.
  * Activity is tracked on chats.updatedAt and updated when new messages arrive.

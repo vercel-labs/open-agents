@@ -38,6 +38,7 @@ mock.module("@open-agents/sandbox", () => ({
 }));
 
 mock.module("@open-agents/harness-runner", () => ({
+  ensureGatewayApiKeyEnv: async () => "test-gateway-key",
   isExternalHarnessId: (value: unknown) =>
     value === "codex" || value === "claude-code" || value === "pi",
   runHarnessTurn: spies.runHarnessTurn,
@@ -145,9 +146,7 @@ describe("/api/internal/harness-runner", () => {
     expect(spies.connectSandbox).toHaveBeenCalledWith(
       { type: "vercel", sandboxName: "session-1" },
       {
-        ports: [
-          3000, 5173, 8000, 5001, 5002, 5003, 5004, 5005, 5006, 5007, 5008,
-        ],
+        ports: [3000, 5173, 4321, 8000, 5001, 5002, 5003, 5004, 5005],
       },
     );
     expect(spies.runHarnessTurn).toHaveBeenCalledWith(

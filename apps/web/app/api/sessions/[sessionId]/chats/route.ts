@@ -4,10 +4,12 @@ import {
   requireOwnedSession,
 } from "@/app/api/sessions/_lib/session-context";
 import {
+  countChatsBySessionId,
   createChat,
   getChatById,
   getChatSummariesBySessionId,
 } from "@/lib/db/sessions";
+import { MAX_CHATS_PER_SESSION } from "@/lib/sandbox/config";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -89,6 +91,16 @@ export async function POST(req: Request, context: RouteContext) {
       }
       return Response.json({ chat: existing });
     }
+  }
+
+  const chatCount = await countChatsBySessionId(sessionId);
+  if (chatCount >= MAX_CHATS_PER_SESSION) {
+    return Response.json(
+      {
+        error: `This session already has the maximum of ${MAX_CHATS_PER_SESSION} chats`,
+      },
+      { status: 400 },
+    );
   }
 
   const preferences = sanitizeUserPreferencesForSession(

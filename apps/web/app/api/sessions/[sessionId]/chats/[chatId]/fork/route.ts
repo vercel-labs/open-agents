@@ -2,7 +2,12 @@ import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
 } from "@/app/api/sessions/_lib/session-context";
-import { forkChatThroughMessage, getChatById } from "@/lib/db/sessions";
+import {
+  countChatsBySessionId,
+  forkChatThroughMessage,
+  getChatById,
+} from "@/lib/db/sessions";
+import { MAX_CHATS_PER_SESSION } from "@/lib/sandbox/config";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
@@ -62,6 +67,16 @@ export async function POST(req: Request, context: RouteContext) {
     if (existingChat) {
       return Response.json({ error: "Chat ID conflict" }, { status: 409 });
     }
+  }
+
+  const chatCount = await countChatsBySessionId(sessionId);
+  if (chatCount >= MAX_CHATS_PER_SESSION) {
+    return Response.json(
+      {
+        error: `This session already has the maximum of ${MAX_CHATS_PER_SESSION} chats`,
+      },
+      { status: 400 },
+    );
   }
 
   const result = await forkChatThroughMessage({

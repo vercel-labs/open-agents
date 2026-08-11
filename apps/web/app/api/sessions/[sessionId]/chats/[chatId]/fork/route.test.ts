@@ -57,6 +57,7 @@ let ownedSessionChatResult: OwnedSessionChatResult = {
   },
 };
 let existingChat: ChatRecord | null = null;
+let sessionChatCount = 1;
 let forkResult: ForkResult = {
   status: "created",
   chat: {
@@ -92,6 +93,7 @@ mock.module("@/lib/db/sessions", () => ({
     getChatByIdCalls.push(chatId);
     return existingChat;
   },
+  countChatsBySessionId: async () => sessionChatCount,
   forkChatThroughMessage: async (input: (typeof forkCalls)[number]) => {
     forkCalls.push(input);
     return forkResult;
@@ -119,6 +121,7 @@ function createPostRequest(body: unknown): Request {
 
 describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
   beforeEach(() => {
+    sessionChatCount = 1;
     authResult = { ok: true, userId: "user-1" };
     ownedSessionChatResult = {
       ok: true,
@@ -302,5 +305,20 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
       modelId: "model-1",
       harnessId: "codex",
     });
+  });
+
+  test("returns 400 when the session already has the maximum number of chats", async () => {
+    sessionChatCount = 5;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createPostRequest({ messageId: "message-2" }),
+      createContext(),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("maximum");
+    expect(forkCalls).toHaveLength(0);
   });
 });
