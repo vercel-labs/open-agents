@@ -13,7 +13,7 @@ import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "../apps/web/lib/sandbox/config.ts";
-import { prepareAgentHarnessSandboxRuntimeProfile } from "./agent-harness-sandbox-profile.ts";
+import { prepareSnapshotSandboxRuntimeProfile } from "./lib/harness-runtime-profile.ts";
 
 function shouldPrewarmVercelBuild(): boolean {
   return Boolean(
@@ -39,7 +39,7 @@ async function main() {
     sandboxTimeoutMs: DEFAULT_SANDBOX_TIMEOUT_MS,
     baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
     ports: DEFAULT_SANDBOX_PORTS,
-    prepare: prepareAgentHarnessSandboxRuntimeProfile,
+    prepare: prepareSnapshotSandboxRuntimeProfile,
     log: (message) => console.log(message),
   });
 

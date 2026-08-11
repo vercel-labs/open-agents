@@ -10,12 +10,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { connectVercelSandbox } from "@open-agents/sandbox/vercel";
 import {
   ensureGatewayApiKeyEnv,
   runHarnessTurn,
-} from "../packages/harness-runner/index.ts";
+} from "@open-agents/harness-runner";
+import { connectVercelSandbox } from "@open-agents/sandbox/vercel";
 import { DEFAULT_SANDBOX_PORTS } from "../apps/web/lib/sandbox/config.ts";
+import { requireOptionValue, runMain } from "./lib/cli.ts";
 
 const DEFAULT_PROMPT =
   "Reply with exactly: codex harness smoke ok. Do not call tools.";
@@ -36,18 +37,6 @@ Options:
   --prompt <text>    Prompt for the Codex turn
   --model <id>       Optional Codex model override
   --help             Show this message`);
-}
-
-function requireOptionValue(
-  argv: string[],
-  index: number,
-  option: string,
-): string {
-  const value = argv[index + 1];
-  if (!value || value.startsWith("--")) {
-    throw new Error(`Missing value for ${option}.`);
-  }
-  return value;
 }
 
 function parseArgs(argv: string[]): CliOptions | { help: true } {
@@ -173,10 +162,4 @@ async function main() {
   }
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exit(1);
-  });
+runMain(main);

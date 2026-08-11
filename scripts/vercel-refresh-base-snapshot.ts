@@ -18,7 +18,8 @@ import {
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "../apps/web/lib/sandbox/config.ts";
-import { prepareAgentHarnessSandboxRuntimeProfile } from "./agent-harness-sandbox-profile.ts";
+import { requireOptionValue, runMain } from "./lib/cli.ts";
+import { prepareSnapshotSandboxRuntimeProfile } from "./lib/harness-runtime-profile.ts";
 
 interface CliOptions {
   baseSnapshotId?: string;
@@ -45,19 +46,6 @@ Options:
 
 Current configured base snapshot:
   ${DEFAULT_SANDBOX_BASE_SNAPSHOT_ID}`);
-}
-
-function requireOptionValue(
-  argv: string[],
-  index: number,
-  option: string,
-): string {
-  const value = argv[index + 1];
-  if (!value || value.startsWith("--")) {
-    throw new Error(`Missing value for ${option}.`);
-  }
-
-  return value;
 }
 
 function parsePositiveNumber(value: string, option: string): number {
@@ -148,7 +136,7 @@ async function main() {
     sandboxTimeoutMs: parsed.sandboxTimeoutMs ?? DEFAULT_SANDBOX_TIMEOUT_MS,
     commandTimeoutMs: parsed.commandTimeoutMs,
     ports: DEFAULT_SANDBOX_PORTS,
-    prepare: prepareAgentHarnessSandboxRuntimeProfile,
+    prepare: prepareSnapshotSandboxRuntimeProfile,
     log: (message) => console.log(message),
   });
 
@@ -160,8 +148,4 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exit(1);
-});
+runMain(main);

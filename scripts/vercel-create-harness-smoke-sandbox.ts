@@ -12,6 +12,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { prepareHarnessSandboxRuntimeProfile } from "@open-agents/harness-runner";
 import { connectVercelSandbox } from "@open-agents/sandbox/vercel";
 import { resolveSandboxBaseSnapshotId } from "../apps/web/lib/sandbox/base-snapshot.ts";
 import {
@@ -19,7 +20,7 @@ import {
   DEFAULT_SANDBOX_TIMEOUT_MS,
   DEFAULT_SANDBOX_VCPUS,
 } from "../apps/web/lib/sandbox/config.ts";
-import { prepareAgentHarnessSandboxRuntimeProfile } from "./agent-harness-sandbox-profile.ts";
+import { requireOptionValue, runMain } from "./lib/cli.ts";
 
 interface CliOptions {
   sandboxName: string;
@@ -43,19 +44,6 @@ Options:
 
 The sandbox remains active after creation. Run the printed Codex smoke command
 to attach the harness and execute one turn.`);
-}
-
-function requireOptionValue(
-  argv: string[],
-  index: number,
-  option: string,
-): string {
-  const value = argv[index + 1];
-  if (!value || value.startsWith("--")) {
-    throw new Error(`Missing value for ${option}.`);
-  }
-
-  return value;
 }
 
 function parseArgs(argv: string[]): CliOptions | HelpResult {
@@ -123,7 +111,7 @@ async function main() {
   try {
     if (shouldPrepareRuntimeProfile) {
       console.log("Preparing external harness runtime profile.");
-      await prepareAgentHarnessSandboxRuntimeProfile(sandbox);
+      await prepareHarnessSandboxRuntimeProfile(sandbox);
     }
 
     console.log("");
@@ -144,10 +132,4 @@ async function main() {
   }
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exit(1);
-  });
+runMain(main);
