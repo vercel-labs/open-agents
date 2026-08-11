@@ -5,16 +5,16 @@ import type {
 import { connectSandbox } from "@open-agents/sandbox";
 import {
   ensureGatewayApiKeyEnv,
-  isExternalHarnessId,
   runHarnessTurn,
 } from "@open-agents/harness-runner";
 import {
   INTERNAL_HARNESS_SIGNATURE_HEADER,
   verifyInternalHarnessRequest,
 } from "@/lib/harness-runner/internal-request";
-import type {
-  InternalHarnessRunEvent,
-  InternalHarnessRunRequest,
+import {
+  type InternalHarnessRunEvent,
+  type InternalHarnessRunRequest,
+  internalHarnessRunRequestSchema,
 } from "@/lib/harness-runner/protocol";
 import {
   AGENT_HARNESS_BRIDGE_PORTS,
@@ -22,6 +22,12 @@ import {
 } from "@/lib/sandbox/config";
 
 export const maxDuration = 800;
+
+// Why an HTTP route instead of the workflow step calling `runHarnessTurn`
+// directly: the harness bridge assets and externalized packages can only be
+// attached to a route via `outputFileTracingIncludes`/`serverExternalPackages`
+// in `apps/web/next.config.ts` (see the comment there), not to a workflow
+// step bundle.
 
 type HarnessCapableSandbox = Sandbox & {
   toHarnessSandboxProvider(
@@ -53,15 +59,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let input: InternalHarnessRunRequest;
+  let parsedBody: unknown;
   try {
-    input = JSON.parse(bodyText) as InternalHarnessRunRequest;
+    parsedBody = JSON.parse(bodyText);
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  if (!isExternalHarnessId(input.harnessId)) {
-    return Response.json({ error: "Invalid harness" }, { status: 400 });
+  const parsedInput = internalHarnessRunRequestSchema.safeParse(parsedBody);
+  if (!parsedInput.success) {
+    return Response.json(
+      { error: `Invalid request: ${parsedInput.error.message}` },
+      { status: 400 },
+    );
   }
+  const input: InternalHarnessRunRequest = parsedInput.data;
 
   const encoder = new TextEncoder();
   // TransformStream + awaited writes couple the harness's chunk production

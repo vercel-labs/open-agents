@@ -30,13 +30,7 @@ import {
   type WorkflowRunStepTiming,
 } from "@/lib/db/workflow-runs";
 import { recordUsage } from "@/lib/db/usage";
-
-function legacyCachedInputTokens(
-  usage: LanguageModelUsage,
-): number | undefined {
-  const value = (usage as unknown as Record<string, unknown>).cachedInputTokens;
-  return typeof value === "number" ? value : undefined;
-}
+import { legacyCachedInputTokens } from "@open-agents/shared/lib/usage";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
   usage.inputTokenDetails?.cacheReadTokens ??

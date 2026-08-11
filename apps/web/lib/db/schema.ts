@@ -1,4 +1,5 @@
 import type { SandboxState } from "@open-agents/sandbox";
+import { CHAT_HARNESS_IDS } from "@/lib/chat-harnesses";
 import type { ModelVariant } from "@/lib/model-variants";
 import type { GlobalSkillRef } from "@/lib/skills/global-skill-refs";
 import {
@@ -177,7 +178,6 @@ export const sessions = pgTable(
     hibernateAfter: timestamp("hibernate_after"),
     lifecycleRunId: text("lifecycle_run_id"),
     sandboxProvisioningRunId: text("sandbox_provisioning_run_id"),
-    activeHarnessRunId: text("active_harness_run_id"),
     lifecycleError: text("lifecycle_error"),
     // Git stats (for display in session list)
     linesAdded: integer("lines_added").default(0),
@@ -210,9 +210,7 @@ export const chats = pgTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     modelId: text("model_id").default("anthropic/claude-haiku-4.5"),
-    harnessId: text("harness_id", {
-      enum: ["open-agent", "codex", "claude-code", "pi"],
-    })
+    harnessId: text("harness_id", { enum: CHAT_HARNESS_IDS })
       .notNull()
       .default("open-agent"),
     activeStreamId: text("active_stream_id"),

@@ -1,5 +1,5 @@
 {
-  "id": "54701862-be4a-4233-95f4-e2a212886109",
+  "id": "fa672cbd-85dd-449c-b53c-e513f90cec3c",
   "prevId": "43c6497a-ed2b-472e-8eb9-ffa907c2b669",
   "version": "7",
   "dialect": "postgresql",
@@ -365,6 +365,12 @@
         "active_stream_id": {
           "name": "active_stream_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "harness_session_state": {
+          "name": "harness_session_state",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

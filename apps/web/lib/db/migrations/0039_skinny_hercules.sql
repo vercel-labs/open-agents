@@ -1,1 +1,0 @@
-ALTER TABLE "chats" ADD COLUMN "harness_session_state" jsonb;

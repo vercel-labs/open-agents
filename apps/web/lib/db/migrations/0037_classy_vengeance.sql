@@ -1,1 +1,0 @@
-ALTER TABLE "chats" ADD COLUMN "harness_id" text DEFAULT 'open-agent' NOT NULL;

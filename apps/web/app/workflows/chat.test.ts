@@ -117,6 +117,7 @@ const spies = {
     async (input: {
       onChunk: (chunk: UIMessageChunk) => Promise<void> | void;
       messageId: string;
+      resumeState?: unknown;
     }): Promise<{
       responseMessage: {
         id: string;
@@ -126,11 +127,16 @@ const spies = {
       };
       finishReason: "stop" | "error";
       rawFinishReason: string;
+      errorCode?:
+        | "missing-ws-module"
+        | "gateway-auth-failed"
+        | "bridge-not-ready";
       usage?: {
         inputTokens: number;
         outputTokens: number;
         totalTokens: number;
       };
+      resumeState?: unknown;
     }> => {
       await input.onChunk({
         type: "text-start",
@@ -176,6 +182,7 @@ let testChatRecord: {
   id: string;
   sessionId: string;
   modelId: string | null;
+  harnessSessionState?: unknown;
 };
 let testPreferences: {
   defaultModelId: string;
@@ -580,6 +587,54 @@ describe("runAgentWorkflow", () => {
     });
   });
 
+  test("passes the persisted harness session state as resume state", async () => {
+    testChatRecord.harnessSessionState = { bridge: "state-1" };
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      resumeState: { bridge: "state-1" },
+    });
+  });
+
+  test("persists the harness resume state returned by the turn", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: { messageId: string }) => ({
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [{ type: "text", text: "Done" }],
+          metadata: {},
+        },
+        finishReason: "stop" as const,
+        rawFinishReason: "stop",
+        resumeState: { bridge: "state-2" },
+      }),
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.persistChatHarnessSessionState).toHaveBeenCalledWith(
+      "chat-1",
+      { bridge: "state-2" },
+    );
+  });
+
+  test("clears the harness session state when the turn returns none", async () => {
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.persistChatHarnessSessionState).toHaveBeenCalledWith(
+      "chat-1",
+      null,
+    );
+  });
+
+  test("does not touch harness session state for open-agent runs", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.persistChatHarnessSessionState).not.toHaveBeenCalled();
+  });
+
   test("surfaces Codex harness errors as visible assistant text", async () => {
     spies.runHarnessTurn.mockImplementationOnce(
       async (input: { messageId: string }) => ({
@@ -592,6 +647,7 @@ describe("runAgentWorkflow", () => {
         finishReason: "error" as const,
         rawFinishReason:
           "codex: Agent execution failed. Cannot find package 'ws' imported from /tmp/bridge-ws-server.mts",
+        errorCode: "missing-ws-module" as const,
         usage: undefined,
       }),
     );
@@ -616,6 +672,31 @@ describe("runAgentWorkflow", () => {
         parts: [{ type: "text", text: expectedText }],
       }),
     );
+  });
+
+  test("falls back to the raw finish reason for unclassified harness errors", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: { messageId: string }) => ({
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [],
+          metadata: {},
+        },
+        finishReason: "error" as const,
+        rawFinishReason: "codex: something novel exploded",
+        usage: undefined,
+      }),
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(writtenChunks).toContainEqual({
+      type: "text-delta",
+      id: expect.stringContaining(":harness-error"),
+      delta:
+        "Codex failed before it could respond: codex: something novel exploded",
+    });
   });
 
   test("appends visible Codex errors after partial harness text", async () => {
@@ -653,6 +734,7 @@ describe("runAgentWorkflow", () => {
           finishReason: "error" as const,
           rawFinishReason:
             'codex: Authentication failed for model "gpt-5.4". Check the configured credentials and provider base URL.\nRaw: unexpected status 401 Unauthorized: Authentication failed. Create an API key and set in AI_GATEWAY_API_KEY environment variable',
+          errorCode: "gateway-auth-failed" as const,
           usage: undefined,
         };
       },

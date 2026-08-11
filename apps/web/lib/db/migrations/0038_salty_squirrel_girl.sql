@@ -1,1 +1,0 @@
-ALTER TABLE "sessions" ADD COLUMN "active_harness_run_id" text;

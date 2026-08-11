@@ -1,15 +1,18 @@
 import type { LanguageModelUsage } from "ai";
 
 /**
- * Workflow-local copy of `addLanguageModelUsage` from `@open-agents/agent`.
+ * Workflow-local copy of `addLanguageModelUsage` from
+ * `@open-agents/shared/lib/usage`.
  *
- * DO NOT replace this with an import from `@open-agents/agent`. This module
- * is imported by `chat.ts`, whose `"use workflow"` function runs as a
- * deterministic state machine: the workflow bundle must not contain Node.js
- * modules, and the agent package pulls them in transitively. That is why
- * every other `@open-agents/*` import in the workflow modules is type-only.
+ * DO NOT replace this with a workspace import. This module is imported by
+ * `chat.ts`, whose `"use workflow"` function runs as a deterministic state
+ * machine: the workflow bundle must not pull workspace packages at runtime
+ * (importing from `@open-agents/agent` broke every workflow tool once
+ * already). That is why every other `@open-agents/*` import in the workflow
+ * modules is type-only.
  *
- * Keep this function in sync with `packages/agent/usage.ts`.
+ * Drift protection: `usage-utils.test.ts` asserts this copy behaves
+ * identically to the shared canonical implementation.
  */
 
 function addTokenCounts(

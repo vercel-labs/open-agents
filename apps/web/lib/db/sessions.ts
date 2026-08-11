@@ -445,7 +445,15 @@ export async function getChatsBySessionId(sessionId: string) {
   });
 }
 
-export type ChatSummary = typeof chats.$inferSelect & {
+/**
+ * Chat row projection for listings. Deliberately excludes
+ * `harnessSessionState`: it is an opaque server-side resume blob the browser
+ * never reads, and it would otherwise ride along with every chats listing.
+ */
+export type ChatSummary = Omit<
+  typeof chats.$inferSelect,
+  "harnessSessionState"
+> & {
   hasUnread: boolean;
   isStreaming: boolean;
 };
@@ -465,7 +473,6 @@ export async function getChatSummariesBySessionId(
       modelId: chats.modelId,
       harnessId: chats.harnessId,
       activeStreamId: chats.activeStreamId,
-      harnessSessionState: chats.harnessSessionState,
       lastAssistantMessageAt: chats.lastAssistantMessageAt,
       createdAt: chats.createdAt,
       updatedAt: chats.updatedAt,

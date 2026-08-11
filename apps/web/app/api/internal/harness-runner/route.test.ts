@@ -109,9 +109,23 @@ describe("/api/internal/harness-runner", () => {
     const response = await POST(createRequestWithHarnessId("open-agent"));
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "Invalid harness",
-    });
+    const responseBody = (await response.json()) as { error: string };
+    expect(responseBody.error).toStartWith("Invalid request:");
+    expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("rejects a structurally invalid request body", async () => {
+    const parsedBody = JSON.parse(body) as Record<string, unknown>;
+    const response = await POST(
+      createRequest(
+        true,
+        JSON.stringify({ ...parsedBody, messages: "not-an-array" }),
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    const responseBody = (await response.json()) as { error: string };
+    expect(responseBody.error).toStartWith("Invalid request:");
     expect(spies.connectSandbox).not.toHaveBeenCalled();
   });
 

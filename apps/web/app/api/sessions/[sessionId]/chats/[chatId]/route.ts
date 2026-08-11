@@ -10,16 +10,12 @@ import {
   updateEmptyChat,
   updateChat,
 } from "@/lib/db/sessions";
-import {
-  type ChatHarnessId,
-  isAvailableChatHarnessId,
-  isChatHarnessId,
-  resolveHarnessRunModelId,
-} from "@/lib/chat-harnesses";
+import type { ChatHarnessId } from "@/lib/chat-harnesses";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { sanitizeSelectedModelIdForSession } from "@/lib/model-access";
-import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
+import { getAllVariants } from "@/lib/model-variants";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { resolveHarnessSwitch } from "./harness-switch";
 
 type RouteContext = {
   params: Promise<{ sessionId: string; chatId: string }>;
@@ -35,7 +31,7 @@ export interface ChatRefreshResponse {
   chat: {
     id: string;
     modelId: string | null;
-    harnessId: string;
+    harnessId: ChatHarnessId;
     activeStreamId: string | null;
   };
   isStreaming: boolean;
@@ -141,42 +137,26 @@ export async function PATCH(req: Request, context: RouteContext) {
     updatePayload.modelId = sanitizedModelId ?? nextModelId;
   }
 
+  let changesHarness = false;
   if (nextHarnessId) {
-    if (!isChatHarnessId(nextHarnessId)) {
-      return Response.json({ error: "Invalid harness" }, { status: 400 });
+    const switchResult = resolveHarnessSwitch({
+      requestedHarnessId: nextHarnessId,
+      currentHarnessId: chatContext.chat.harnessId,
+      currentModelId: chatContext.chat.modelId,
+      hasExplicitModelUpdate: updatePayload.modelId !== undefined,
+    });
+    if (!switchResult.ok) {
+      return switchResult.response;
     }
 
-    if (!isAvailableChatHarnessId(nextHarnessId)) {
-      return Response.json(
-        { error: "Harness is not available yet" },
-        { status: 400 },
-      );
-    }
-
-    updatePayload.harnessId = nextHarnessId;
-
-    // Codex and Claude Code only run their native provider's models. When
-    // the harness changes and the chat's plain model id cannot run on it,
-    // switch the chat to the harness's default model so the selection stays
-    // truthful. Variant selections resolve to their base model at run time.
-    const currentModelId = chatContext.chat.modelId;
-    const isVariantSelection = currentModelId?.startsWith(
-      MODEL_VARIANT_ID_PREFIX,
-    );
-    if (updatePayload.modelId === undefined && !isVariantSelection) {
-      const harnessModelId = resolveHarnessRunModelId(
-        nextHarnessId,
-        currentModelId ?? "",
-      );
-      if (harnessModelId && harnessModelId !== currentModelId) {
-        updatePayload.modelId = harnessModelId;
-      }
+    const { harnessSwitch } = switchResult;
+    changesHarness = harnessSwitch.changesHarness;
+    updatePayload.harnessId = harnessSwitch.harnessId;
+    if (harnessSwitch.coercedModelId !== undefined) {
+      updatePayload.modelId = harnessSwitch.coercedModelId;
     }
   }
 
-  const changesHarness =
-    updatePayload.harnessId !== undefined &&
-    updatePayload.harnessId !== chatContext.chat.harnessId;
   const updatedChat = changesHarness
     ? await updateEmptyChat(chatId, updatePayload)
     : await updateChat(chatId, updatePayload);

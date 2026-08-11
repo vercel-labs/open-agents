@@ -264,22 +264,8 @@
     {
       "idx": 37,
       "version": "7",
-      "when": 1780557724714,
-      "tag": "0037_classy_vengeance",
-      "breakpoints": true
-    },
-    {
-      "idx": 38,
-      "version": "7",
-      "when": 1781591975650,
-      "tag": "0038_salty_squirrel_girl",
-      "breakpoints": true
-    },
-    {
-      "idx": 39,
-      "version": "7",
-      "when": 1786435523893,
-      "tag": "0039_skinny_hercules",
+      "when": 1786450669218,
+      "tag": "0037_complete_squirrel_girl",
       "breakpoints": true
     }
   ]

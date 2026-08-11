@@ -1,17 +1,23 @@
 import type {
   HarnessTurnResult,
-  HarnessUIMessage,
   HarnessUIMessageChunk,
 } from "@open-agents/harness-runner";
 import {
   INTERNAL_HARNESS_SIGNATURE_HEADER,
   signInternalHarnessRequest,
 } from "./internal-request";
-import type {
-  InternalHarnessRunEvent,
-  InternalHarnessRunRequest,
+import {
+  type InternalHarnessRunEvent,
+  type InternalHarnessRunRequest,
+  internalHarnessRunEventSchema,
 } from "./protocol";
 
+/**
+ * Runs one harness turn through the internal harness-runner route instead of
+ * calling `runHarnessTurn` in-process: the harness bridge assets and
+ * externalized packages are only traced into that route's bundle (see the
+ * `outputFileTracingIncludes` comment in `apps/web/next.config.ts`).
+ */
 type RunHarnessTurnViaApiInput = InternalHarnessRunRequest & {
   requestUrl: string;
   abortSignal?: AbortSignal;
@@ -43,8 +49,8 @@ export async function runHarnessTurnViaApi(
     workingDirectory: input.workingDirectory,
     sessionId: input.sessionId,
     messageId: input.messageId,
-    messages: input.messages as HarnessUIMessage[],
-    originalMessages: input.originalMessages as HarnessUIMessage[],
+    messages: input.messages,
+    originalMessages: input.originalMessages,
     selectedModelId: input.selectedModelId,
     modelId: input.modelId,
     ...(input.resumeState !== undefined
@@ -94,7 +100,7 @@ export async function runHarnessTurnViaApi(
     if (!line.trim()) {
       return;
     }
-    const event = JSON.parse(line) as InternalHarnessRunEvent;
+    const event = internalHarnessRunEventSchema.parse(JSON.parse(line));
     result = (await processEvent(event, input)) ?? result;
   };
 

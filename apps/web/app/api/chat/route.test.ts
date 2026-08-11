@@ -335,7 +335,7 @@ describe("/api/chat route", () => {
     expect(createChatMessageIfNotExistsSpy).not.toHaveBeenCalled();
   });
 
-  test("returns 400 for a harness that is not available", async () => {
+  test("returns 400 for a chat row with an unknown harness id", async () => {
     if (!chatRecord) {
       throw new Error("chatRecord must be set");
     }
@@ -346,7 +346,7 @@ describe("/api/chat route", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "Harness is not available yet",
+      error: "Invalid harness",
     });
     expect(startCalls).toHaveLength(0);
     expect(createChatMessageIfNotExistsSpy).not.toHaveBeenCalled();
