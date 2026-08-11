@@ -46,6 +46,13 @@ export interface VercelSandboxConfig {
   /** GitHub token used only during setup clone/fetch, then cleared. */
   githubToken?: string;
   /**
+   * AI Gateway API key brokered to the sandbox via its network policy.
+   * When omitted, the `AI_GATEWAY_API_KEY` environment variable is the
+   * documented fallback; without either, AI Gateway credentials are not
+   * brokered.
+   */
+  aiGatewayApiKey?: string;
+  /**
    * Number of vCPUs (1-8). Each vCPU provides 2048 MB of memory.
    * @default 4
    */
@@ -103,6 +110,13 @@ export interface VercelSandboxConnectConfig {
   env?: Record<string, string>;
   /** GitHub token used only during setup clone/fetch, then cleared. */
   githubToken?: string;
+  /**
+   * AI Gateway API key brokered to the sandbox via its network policy.
+   * When omitted, the `AI_GATEWAY_API_KEY` environment variable is the
+   * documented fallback; without either, AI Gateway credentials are not
+   * brokered.
+   */
+  aiGatewayApiKey?: string;
   /** Lifecycle hooks for setup and teardown */
   hooks?: SandboxHooks;
   /**

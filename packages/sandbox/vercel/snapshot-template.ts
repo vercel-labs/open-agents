@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto";
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
-import { connectSandbox, type SandboxConnectConfig } from "../factory.ts";
-import type { SnapshotSandbox } from "./snapshot-refresh.ts";
+import {
+  defaultConnectSnapshotSandbox,
+  resolveSnapshotLog,
+  runSnapshotLifecycle,
+  type SnapshotSandbox,
+  type SnapshotSandboxConnector,
+  toErrorMessage,
+} from "./snapshot-lifecycle.ts";
 
 const VERCEL_SNAPSHOT_TEMPLATE_CONTRACT_VERSION = 1;
-
-type SnapshotSandboxConnector = (
-  config: SandboxConnectConfig,
-) => Promise<SnapshotSandbox>;
 
 export interface EnsureVercelSnapshotTemplateOptions {
   templateName: string;
@@ -30,19 +32,9 @@ interface VercelSnapshotTemplateDependencies {
   resolveSnapshotId?: (templateName: string) => Promise<string | undefined>;
 }
 
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function isSandboxNotFoundError(error: unknown): boolean {
   const message = toErrorMessage(error).toLowerCase();
   return message.includes("status code 404") || message.includes("not found");
-}
-
-function defaultConnectSnapshotSandbox(
-  config: SandboxConnectConfig,
-): Promise<SnapshotSandbox> {
-  return connectSandbox(config);
 }
 
 export function createVercelSnapshotTemplateName(deploymentId: string): string {
@@ -77,7 +69,7 @@ export async function ensureVercelSnapshotTemplate(
   options: EnsureVercelSnapshotTemplateOptions,
   dependencies: VercelSnapshotTemplateDependencies = {},
 ): Promise<EnsureVercelSnapshotTemplateResult> {
-  const log = options.log ?? (() => {});
+  const log = resolveSnapshotLog(options.log);
   const connectSnapshotSandbox =
     dependencies.connectSandbox ?? defaultConnectSnapshotSandbox;
   const resolveSnapshotId =
@@ -95,57 +87,39 @@ export async function ensureVercelSnapshotTemplate(
     };
   }
 
-  let sandbox: SnapshotSandbox | null = null;
-  let snapshotCreated = false;
-
-  try {
-    log(`Creating snapshot template ${options.templateName}.`);
-    sandbox = await connectSnapshotSandbox({
-      state: { type: "vercel", sandboxName: options.templateName },
-      options: {
-        timeout: options.sandboxTimeoutMs,
-        persistent: false,
-        resume: true,
-        createIfMissing: true,
-        skipGitWorkspaceBootstrap: true,
-        ...(options.baseSnapshotId !== undefined && {
-          baseSnapshotId: options.baseSnapshotId,
-        }),
-        ...(options.ports !== undefined && { ports: options.ports }),
-        ...(options.env !== undefined && { env: options.env }),
-      },
-    });
-
-    if (!sandbox.snapshot) {
-      throw new Error(
-        "Configured sandbox provider does not support snapshots.",
-      );
-    }
-
-    if (options.prepare) {
-      log("Preparing sandbox template runtime profile.");
-      await options.prepare(sandbox);
-    }
-
-    log(`Creating snapshot from template ${options.templateName}.`);
-    const snapshot = await sandbox.snapshot();
-    snapshotCreated = true;
-    log(`Created snapshot ${snapshot.snapshotId}.`);
-
-    return {
-      templateName: options.templateName,
-      snapshotId: snapshot.snapshotId,
-      created: true,
-    };
-  } finally {
-    if (sandbox && !snapshotCreated) {
-      try {
-        await sandbox.stop();
-      } catch (error) {
-        log(
-          `Failed to stop sandbox after template setup attempt: ${toErrorMessage(error)}`,
-        );
+  const { snapshotId } = await runSnapshotLifecycle({
+    log,
+    connect: () => {
+      log(`Creating snapshot template ${options.templateName}.`);
+      return connectSnapshotSandbox({
+        state: { type: "vercel", sandboxName: options.templateName },
+        options: {
+          timeout: options.sandboxTimeoutMs,
+          persistent: false,
+          resume: true,
+          createIfMissing: true,
+          skipGitWorkspaceBootstrap: true,
+          ...(options.baseSnapshotId !== undefined && {
+            baseSnapshotId: options.baseSnapshotId,
+          }),
+          ...(options.ports !== undefined && { ports: options.ports }),
+          ...(options.env !== undefined && { env: options.env }),
+        },
+      });
+    },
+    prepare: async (sandbox) => {
+      if (options.prepare) {
+        log("Preparing sandbox template runtime profile.");
+        await options.prepare(sandbox);
       }
-    }
-  }
+    },
+    creatingSnapshotMessage: `Creating snapshot from template ${options.templateName}.`,
+    stopFailureMessage: "Failed to stop sandbox after template setup attempt",
+  });
+
+  return {
+    templateName: options.templateName,
+    snapshotId,
+    created: true,
+  };
 }

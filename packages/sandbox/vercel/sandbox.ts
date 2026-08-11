@@ -1,4 +1,3 @@
-import { createVercelSandbox } from "@ai-sdk/sandbox-vercel";
 import { Sandbox as VercelSandboxSDK } from "@vercel/sandbox";
 import type { Dirent } from "fs";
 import type {
@@ -13,6 +12,10 @@ import type {
   VercelSandboxConfig,
   VercelSandboxConnectConfig,
 } from "./config.ts";
+import {
+  type AiSdkHarnessSandboxProvider,
+  createHarnessSandboxProvider,
+} from "./harness-provider.ts";
 import type { VercelState } from "./state.ts";
 
 const MAX_OUTPUT_LENGTH = 50_000;
@@ -22,47 +25,6 @@ const MAX_SDK_TIMEOUT_MS = 18_000_000; // Vercel API limit: 5 hours
 const MAX_PROACTIVE_TIMEOUT_MS = MAX_SDK_TIMEOUT_MS - TIMEOUT_BUFFER_MS;
 const DEFAULT_RECONNECT_TIMEOUT_MS = 300_000; // 5 minutes default timeout for reconnected sandboxes
 const DETACHED_QUICK_FAILURE_WINDOW_MS = 2_000;
-const HARNESS_WORKING_DIRECTORY = "/tmp/open-agents-harness";
-
-export type AiSdkHarnessSandboxProvider = ReturnType<
-  typeof createVercelSandbox
->;
-type AiSdkHarnessSandboxSession = Awaited<
-  ReturnType<AiSdkHarnessSandboxProvider["createSession"]>
->;
-
-function withHarnessWorkingDirectory(
-  session: AiSdkHarnessSandboxSession,
-): AiSdkHarnessSandboxSession {
-  return Object.create(session, {
-    defaultWorkingDirectory: {
-      value: HARNESS_WORKING_DIRECTORY,
-      enumerable: true,
-    },
-  }) as AiSdkHarnessSandboxSession;
-}
-
-/**
- * The harness base directory does not exist on a fresh sandbox. Create it
- * before the session is handed out: the AI SDK harness resolves bootstrap
- * paths against the default working directory and runs commands with it as
- * the cwd, which fails with "chdir: no such file or directory" otherwise.
- */
-async function ensureHarnessWorkingDirectory(
-  session: AiSdkHarnessSandboxSession,
-  abortSignal?: AbortSignal,
-): Promise<void> {
-  const result = await session.run({
-    command: `mkdir -p ${HARNESS_WORKING_DIRECTORY}`,
-    ...(abortSignal ? { abortSignal } : {}),
-  });
-
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `Failed to create harness working directory ${HARNESS_WORKING_DIRECTORY}: ${result.stderr || result.stdout}`,
-    );
-  }
-}
 
 interface SandboxRouteLike {
   port: number;
@@ -80,12 +42,28 @@ interface SandboxNetworkPolicy {
   allow: Record<string, SandboxNetworkRule[]>;
 }
 
-function getAiGatewayApiKey(): string | undefined {
-  return process.env.AI_GATEWAY_API_KEY || process.env.AI_GATEWAY_TOKEN;
+let warnedMissingAiGatewayApiKey = false;
+
+/**
+ * Resolve the AI Gateway API key used for credential brokering. An explicit
+ * key from sandbox config wins; the `AI_GATEWAY_API_KEY` environment variable
+ * is the documented fallback (the harness runner writes it before sandbox
+ * reconnects so the network policy can pick it up).
+ */
+function resolveAiGatewayApiKey(explicitKey?: string): string | undefined {
+  return explicitKey ?? process.env.AI_GATEWAY_API_KEY;
 }
 
-function buildDefaultCredentialBrokeringPolicy(): SandboxNetworkPolicy {
-  const aiGatewayApiKey = getAiGatewayApiKey();
+function buildDefaultCredentialBrokeringPolicy(
+  explicitAiGatewayApiKey?: string,
+): SandboxNetworkPolicy {
+  const aiGatewayApiKey = resolveAiGatewayApiKey(explicitAiGatewayApiKey);
+  if (!aiGatewayApiKey && !warnedMissingAiGatewayApiKey) {
+    warnedMissingAiGatewayApiKey = true;
+    console.warn(
+      "[VercelSandbox] No AI Gateway API key available (config.aiGatewayApiKey or AI_GATEWAY_API_KEY); the sandbox network policy will not broker AI Gateway credentials.",
+    );
+  }
   return {
     allow: {
       ...(aiGatewayApiKey
@@ -108,8 +86,11 @@ function buildDefaultCredentialBrokeringPolicy(): SandboxNetworkPolicy {
   };
 }
 
-function buildCredentialBrokeringPolicy(token?: string): SandboxNetworkPolicy {
-  const policy = buildDefaultCredentialBrokeringPolicy();
+function buildCredentialBrokeringPolicy(
+  token?: string,
+  aiGatewayApiKey?: string,
+): SandboxNetworkPolicy {
+  const policy = buildDefaultCredentialBrokeringPolicy(aiGatewayApiKey);
 
   if (!token) {
     return policy;
@@ -153,6 +134,7 @@ function buildCredentialBrokeringPolicy(token?: string): SandboxNetworkPolicy {
 async function syncGitHubCredentialBrokering(
   sdk: VercelSandboxSDK,
   token?: string,
+  aiGatewayApiKey?: string,
 ): Promise<void> {
   const updateNetworkPolicy = (
     sdk as VercelSandboxSDK & {
@@ -169,20 +151,25 @@ async function syncGitHubCredentialBrokering(
     return;
   }
 
-  await updateNetworkPolicy.call(sdk, buildCredentialBrokeringPolicy(token));
+  await updateNetworkPolicy.call(
+    sdk,
+    buildCredentialBrokeringPolicy(token, aiGatewayApiKey),
+  );
 }
 
 async function clearGitHubCredentialBrokering(
   sdk: VercelSandboxSDK,
+  aiGatewayApiKey?: string,
 ): Promise<void> {
-  await syncGitHubCredentialBrokering(sdk, undefined);
+  await syncGitHubCredentialBrokering(sdk, undefined, aiGatewayApiKey);
 }
 
 async function clearGitHubCredentialBrokeringBestEffort(
   sdk: VercelSandboxSDK,
+  aiGatewayApiKey?: string,
 ): Promise<void> {
   try {
-    await clearGitHubCredentialBrokering(sdk);
+    await clearGitHubCredentialBrokering(sdk, aiGatewayApiKey);
   } catch (error) {
     console.warn("[VercelSandbox] failed to clear GitHub setup auth:", error);
   }
@@ -261,6 +248,8 @@ export class VercelSandbox implements Sandbox {
   private _expiresAt?: number;
   private _timeout?: number;
   private _ports?: number[];
+  /** Explicit AI Gateway key for credential brokering (env is the fallback). */
+  private aiGatewayApiKey?: string;
 
   /**
    * Timestamp (ms since epoch) when this sandbox will be proactively stopped.
@@ -291,6 +280,7 @@ export class VercelSandbox implements Sandbox {
     timeout?: number,
     startTime?: number,
     ports?: number[],
+    aiGatewayApiKey?: string,
   ) {
     this.sdk = sdk;
     this.session = session;
@@ -301,6 +291,7 @@ export class VercelSandbox implements Sandbox {
     this.currentBranch = currentBranch;
     this.hooks = hooks;
     this._ports = ports;
+    this.aiGatewayApiKey = aiGatewayApiKey;
     this.isStopped = isStoppedSessionStatus(session.status);
 
     // Set timeout tracking for proactive stop
@@ -578,6 +569,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       gitUser,
       env,
       githubToken,
+      aiGatewayApiKey,
       vcpus = 4,
       timeout = 300_000,
       runtime = "node22",
@@ -606,7 +598,10 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       timeout: sdkTimeout,
       runtime,
       persistent,
-      networkPolicy: buildCredentialBrokeringPolicy(githubToken),
+      networkPolicy: buildCredentialBrokeringPolicy(
+        githubToken,
+        aiGatewayApiKey,
+      ),
       ...(ports && { ports }),
       ...(snapshotExpiration !== undefined && { snapshotExpiration }),
     };
@@ -656,7 +651,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
       if (cloneResult.exitCode !== 0) {
         if (githubToken) {
-          await clearGitHubCredentialBrokeringBestEffort(sdk);
+          await clearGitHubCredentialBrokeringBestEffort(sdk, aiGatewayApiKey);
         }
         throw new Error(
           `Failed to clone repository '${source.url}' (exit code ${cloneResult.exitCode})`,
@@ -717,7 +712,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
 
       if (checkoutResult.exitCode !== 0) {
         if (githubToken) {
-          await clearGitHubCredentialBrokeringBestEffort(sdk);
+          await clearGitHubCredentialBrokeringBestEffort(sdk, aiGatewayApiKey);
         }
         throw new Error(
           `Failed to create branch '${source.newBranch}': ${await checkoutResult.stderr()}`,
@@ -730,7 +725,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     }
 
     if (githubToken) {
-      await clearGitHubCredentialBrokering(sdk);
+      await clearGitHubCredentialBrokering(sdk, aiGatewayApiKey);
     }
 
     // Capture startTime AFTER all setup operations so users get their full timeout duration.
@@ -748,6 +743,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       effectiveTimeout,
       startTime,
       ports,
+      aiGatewayApiKey,
     );
 
     // Call afterStart hook if provided
@@ -766,6 +762,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
     options: {
       env?: Record<string, string>;
       githubToken?: string;
+      /**
+       * AI Gateway API key brokered via the sandbox network policy
+       * (falls back to `AI_GATEWAY_API_KEY` when omitted).
+       */
+      aiGatewayApiKey?: string;
       hooks?: SandboxHooks;
       /**
        * Remaining timeout in ms for this sandbox session.
@@ -782,7 +783,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       name: sandboxName,
       resume: options.resume ?? false,
     });
-    await syncGitHubCredentialBrokering(sdk, undefined);
+    await syncGitHubCredentialBrokering(
+      sdk,
+      undefined,
+      options.aiGatewayApiKey,
+    );
     const session = sdk.currentSession();
 
     // Use provided remainingTimeout when available; otherwise derive it from the
@@ -808,6 +813,7 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       remainingTimeout,
       startTime,
       options.ports,
+      options.aiGatewayApiKey,
     );
 
     // Call afterStart hook if provided (useful for reconnection setup)
@@ -1090,38 +1096,11 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
   toHarnessSandboxProvider(
     bridgePorts: ReadonlyArray<number> = [],
   ): AiSdkHarnessSandboxProvider {
-    const provider = createVercelSandbox({
-      sandbox: this.sdk,
-      ...(bridgePorts.length > 0 ? { bridgePorts } : {}),
-    });
-    const resumeSession = provider.resumeSession;
-
-    return {
-      specificationVersion: provider.specificationVersion,
-      providerId: provider.providerId,
-      bridgePorts: provider.bridgePorts,
-      createSession: async (options) => {
-        const session = await provider.createSession(options);
-        await ensureHarnessWorkingDirectory(session, options?.abortSignal);
-        return withHarnessWorkingDirectory(session);
-      },
-      ...(resumeSession
-        ? {
-            resumeSession: async (options) => {
-              const session = await resumeSession(options);
-              await ensureHarnessWorkingDirectory(
-                session,
-                options?.abortSignal,
-              );
-              return withHarnessWorkingDirectory(session);
-            },
-          }
-        : {}),
-    };
+    return createHarnessSandboxProvider(this.sdk, bridgePorts);
   }
 
   async setGitHubAuthToken(token?: string): Promise<void> {
-    await syncGitHubCredentialBrokering(this.sdk, token);
+    await syncGitHubCredentialBrokering(this.sdk, token, this.aiGatewayApiKey);
   }
 
   /**
@@ -1241,6 +1220,7 @@ export async function connectVercelSandbox(
     return VercelSandbox.connect(sandboxName, {
       env: connectConfig.env,
       githubToken: connectConfig.githubToken,
+      aiGatewayApiKey: connectConfig.aiGatewayApiKey,
       hooks: connectConfig.hooks,
       remainingTimeout: connectConfig.remainingTimeout,
       ports: connectConfig.ports,

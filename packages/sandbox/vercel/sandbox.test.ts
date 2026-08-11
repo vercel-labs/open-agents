@@ -9,7 +9,6 @@ import {
 } from "bun:test";
 
 const originalAiGatewayApiKey = process.env.AI_GATEWAY_API_KEY;
-const originalAiGatewayToken = process.env.AI_GATEWAY_TOKEN;
 
 const portDomains = new Map<number, string>();
 const missingPorts = new Set<number>();
@@ -209,7 +208,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   delete process.env.AI_GATEWAY_API_KEY;
-  delete process.env.AI_GATEWAY_TOKEN;
   createCalls.length = 0;
   getCalls.length = 0;
   updateNetworkPolicyCalls.length = 0;
@@ -236,12 +234,6 @@ afterAll(() => {
     delete process.env.AI_GATEWAY_API_KEY;
   } else {
     process.env.AI_GATEWAY_API_KEY = originalAiGatewayApiKey;
-  }
-
-  if (originalAiGatewayToken === undefined) {
-    delete process.env.AI_GATEWAY_TOKEN;
-  } else {
-    process.env.AI_GATEWAY_TOKEN = originalAiGatewayToken;
   }
 });
 
@@ -570,6 +562,42 @@ describe("Sandbox credential brokering", () => {
     ]);
   });
 
+  test("prefers the explicit config key over the environment when creating", async () => {
+    process.env.AI_GATEWAY_API_KEY = "env-key";
+
+    await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "explicit-key",
+    });
+
+    expect(createCalls[0]?.networkPolicy).toEqual({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
+        "*": [],
+      },
+    });
+  });
+
+  test("keeps the explicit key for later GitHub auth updates", async () => {
+    const sandbox = await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "explicit-key",
+    });
+
+    await sandbox.setGitHubAuthToken("github-user-token");
+
+    expect(updateNetworkPolicyCalls[0]).toMatchObject({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
+        "api.github.com": [
+          {
+            transform: [
+              { headers: { Authorization: "Bearer github-user-token" } },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test("clears GitHub auth when reconnecting to a sandbox", async () => {
     await sandboxModule.VercelSandbox.connect("session_123", {
       githubToken: "github-user-token",
@@ -590,6 +618,24 @@ describe("Sandbox credential brokering", () => {
       {
         allow: {
           "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
+          "*": [],
+        },
+      },
+    ]);
+  });
+
+  test("applies the explicit config key when reconnecting to a sandbox", async () => {
+    process.env.AI_GATEWAY_API_KEY = "env-key";
+
+    await sandboxModule.VercelSandbox.connect("session_123", {
+      aiGatewayApiKey: "explicit-key",
+      remainingTimeout: 0,
+    });
+
+    expect(updateNetworkPolicyCalls).toEqual([
+      {
+        allow: {
+          "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
           "*": [],
         },
       },

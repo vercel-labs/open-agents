@@ -1,5 +1,8 @@
 export { VercelSandbox, connectVercelSandbox } from "./sandbox.ts";
-export type { AiSdkHarnessSandboxProvider } from "./sandbox.ts";
+export type {
+  AiSdkHarnessSandboxProvider,
+  HarnessCapableSandbox,
+} from "./harness-provider.ts";
 export type {
   VercelSandboxConfig,
   VercelSandboxConnectConfig,
