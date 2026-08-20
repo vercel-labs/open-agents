@@ -16,6 +16,8 @@ Authentication uses [Better Auth](https://www.better-auth.com/) with Vercel OAut
 
 Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CLIENT_ID` + `VERCEL_APP_CLIENT_SECRET` (Vercel OAuth), plus GitHub App credentials for repo access. See `apps/web/.env.example` for the full list.
 
+`INTERNAL_HARNESS_SECRET` is separate on purpose: it signs the deployment's own calls to `/api/internal/harness-runner` (external agent harnesses) and must never be folded into `BETTER_AUTH_SECRET`. Give each secret exactly one job so a leak of one does not forge the other's material.
+
 ## Database & Migrations
 
 Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle Kit.

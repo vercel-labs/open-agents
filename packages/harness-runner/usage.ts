@@ -166,13 +166,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Enrich the assembled assistant message with model/usage/finish metadata.
  * Continuation turns reuse the assistant message id, so the previous turns'
  * accumulated usage and step history are carried forward, not reset.
+ *
+ * Message metadata is streamed to the browser and persisted with the message,
+ * so the harness's raw finish reason is deliberately left out: unlike a
+ * provider's short finish token, it is unsanitized agent-process output that
+ * can carry sandbox paths, environment variable names, credentials, and
+ * internal URLs. The raw value stays on `HarnessTurnResult`, which the chat
+ * workflow logs and persists to `workflow_run_steps.raw_finish_reason`.
  */
 export function withHarnessMetadata(
   message: UIMessage,
   input: { selectedModelId: string; modelId: string },
   result: {
     finishReason: FinishReason;
-    rawFinishReason?: string;
     usage?: HarnessUsage;
   },
 ): UIMessage {
@@ -201,17 +207,9 @@ export function withHarnessMetadata(
       ...(result.usage ? { lastStepUsage: result.usage } : {}),
       ...(totalMessageUsage ? { totalMessageUsage } : {}),
       lastStepFinishReason: result.finishReason,
-      ...(result.rawFinishReason
-        ? { lastStepRawFinishReason: result.rawFinishReason }
-        : {}),
       stepFinishReasons: [
         ...existingStepFinishReasons,
-        {
-          finishReason: result.finishReason,
-          ...(result.rawFinishReason
-            ? { rawFinishReason: result.rawFinishReason }
-            : {}),
-        },
+        { finishReason: result.finishReason },
       ],
     },
   };

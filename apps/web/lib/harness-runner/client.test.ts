@@ -3,48 +3,45 @@ import { runHarnessTurnViaApi } from "./client";
 import { verifyInternalHarnessRequest } from "./internal-request";
 
 const originalFetch = globalThis.fetch;
-const originalSecret = process.env.BETTER_AUTH_SECRET;
-const originalAutomationBypassSecret =
-  process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-const originalOidcToken = process.env.VERCEL_OIDC_TOKEN;
+const originalEnv = {
+  INTERNAL_HARNESS_SECRET: process.env.INTERNAL_HARNESS_SECRET,
+  VERCEL_AUTOMATION_BYPASS_SECRET: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+  VERCEL_OIDC_TOKEN: process.env.VERCEL_OIDC_TOKEN,
+};
 
 beforeEach(() => {
-  process.env.BETTER_AUTH_SECRET = "test-internal-harness-secret";
+  process.env.INTERNAL_HARNESS_SECRET = "test-internal-harness-secret";
   process.env.VERCEL_AUTOMATION_BYPASS_SECRET = "test-bypass-secret";
   process.env.VERCEL_OIDC_TOKEN = "test-oidc-token";
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  if (originalSecret === undefined) {
-    delete process.env.BETTER_AUTH_SECRET;
-  } else {
-    process.env.BETTER_AUTH_SECRET = originalSecret;
-  }
-  if (originalAutomationBypassSecret === undefined) {
-    delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-  } else {
-    process.env.VERCEL_AUTOMATION_BYPASS_SECRET =
-      originalAutomationBypassSecret;
-  }
-  if (originalOidcToken === undefined) {
-    delete process.env.VERCEL_OIDC_TOKEN;
-  } else {
-    process.env.VERCEL_OIDC_TOKEN = originalOidcToken;
+  for (const [name, value] of Object.entries(originalEnv)) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
   }
 });
 
 describe("runHarnessTurnViaApi", () => {
   test("forwards streamed chunks and returns the final result", async () => {
     const fetchMock = mock(
-      async (_url: string | URL | Request, init?: RequestInit) => {
+      async (url: string | URL | Request, init?: RequestInit) => {
         const body = String(init?.body);
         const headers = new Headers(init?.headers);
+        expect(String(url)).toBe(
+          "https://preview.example.com/api/internal/harness-runner",
+        );
         expect(
-          verifyInternalHarnessRequest(
+          verifyInternalHarnessRequest({
+            method: "POST",
+            url: String(url),
             body,
-            headers.get("x-open-agents-harness-signature"),
-          ),
+            signature: headers.get("x-open-agents-harness-signature"),
+          }),
         ).toBe(true);
         expect(headers.get("x-vercel-protection-bypass")).toBe(
           "test-bypass-secret",

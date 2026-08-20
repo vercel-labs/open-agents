@@ -81,6 +81,7 @@ GITHUB_WEBHOOK_SECRET=
 ### Optional
 
 ```env
+INTERNAL_HARNESS_SECRET=
 REDIS_URL=
 KV_URL=
 OPEN_AGENTS_RESOURCE_PROFILE=
@@ -90,6 +91,7 @@ VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
 ELEVENLABS_API_KEY=
 ```
 
+- `INTERNAL_HARNESS_SECRET`: required to run the external agent harnesses (Codex, Claude Code, Pi). It signs the deployment's own calls to `/api/internal/harness-runner`; without it those harnesses fail closed while `open-agent` keeps working. Generate a dedicated value with `openssl rand -base64 32`, and do not reuse `BETTER_AUTH_SECRET` — the two secrets have different consumers and blast radius.
 - `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
 - `OPEN_AGENTS_RESOURCE_PROFILE`: optional deployment resource profile. Set to `hobby` to use Hobby-compatible defaults for chat and sandbox resources; leave unset for standard behavior.
 - `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.

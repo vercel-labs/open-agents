@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { signInternalHarnessRequest } from "@/lib/harness-runner/internal-request";
 
-const originalSecret = process.env.BETTER_AUTH_SECRET;
+const originalSecret = process.env.INTERNAL_HARNESS_SECRET;
+const RUNNER_URL = "https://preview.example.com/api/internal/harness-runner";
 const sandboxProvider = {
   specificationVersion: "harness-sandbox-v1",
   providerId: "vercel-sandbox",
@@ -45,14 +46,14 @@ mock.module("@open-agents/harness-runner", () => ({
 }));
 
 beforeAll(() => {
-  process.env.BETTER_AUTH_SECRET = "test-internal-harness-secret";
+  process.env.INTERNAL_HARNESS_SECRET = "test-internal-harness-secret";
 });
 
 afterAll(() => {
   if (originalSecret === undefined) {
-    delete process.env.BETTER_AUTH_SECRET;
+    delete process.env.INTERNAL_HARNESS_SECRET;
   } else {
-    process.env.BETTER_AUTH_SECRET = originalSecret;
+    process.env.INTERNAL_HARNESS_SECRET = originalSecret;
   }
 });
 
@@ -77,19 +78,19 @@ const body = JSON.stringify({
 });
 
 function createRequest(signed: boolean, requestBody = body) {
-  return new Request(
-    "https://preview.example.com/api/internal/harness-runner",
-    {
-      method: "POST",
-      headers: signed
-        ? {
-            "x-open-agents-harness-signature":
-              signInternalHarnessRequest(requestBody),
-          }
-        : undefined,
-      body: requestBody,
-    },
-  );
+  return new Request(RUNNER_URL, {
+    method: "POST",
+    headers: signed
+      ? {
+          "x-open-agents-harness-signature": signInternalHarnessRequest({
+            method: "POST",
+            url: RUNNER_URL,
+            body: requestBody,
+          }),
+        }
+      : undefined,
+    body: requestBody,
+  });
 }
 
 function createRequestWithHarnessId(harnessId: string) {
@@ -100,6 +101,25 @@ function createRequestWithHarnessId(harnessId: string) {
 describe("/api/internal/harness-runner", () => {
   test("rejects unsigned requests", async () => {
     const response = await POST(createRequest(false));
+
+    expect(response.status).toBe(401);
+    expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("rejects a signature minted for another internal path", async () => {
+    const response = await POST(
+      new Request(RUNNER_URL, {
+        method: "POST",
+        headers: {
+          "x-open-agents-harness-signature": signInternalHarnessRequest({
+            method: "POST",
+            url: "https://preview.example.com/api/internal/other-runner",
+            body,
+          }),
+        },
+        body,
+      }),
+    );
 
     expect(response.status).toBe(401);
     expect(spies.connectSandbox).not.toHaveBeenCalled();
@@ -127,6 +147,19 @@ describe("/api/internal/harness-runner", () => {
     const responseBody = (await response.json()) as { error: string };
     expect(responseBody.error).toStartWith("Invalid request:");
     expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("marks responses uncacheable and unindexable", async () => {
+    const rejected = await POST(createRequest(false));
+
+    expect(rejected.headers.get("cache-control")).toBe("no-store");
+    expect(rejected.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+
+    const accepted = await POST(createRequest(true));
+    await accepted.text();
+
+    expect(accepted.headers.get("cache-control")).toBe("no-store");
+    expect(accepted.headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
 
   test("accepts the claude-code harness", async () => {

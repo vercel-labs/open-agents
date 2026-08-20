@@ -8,9 +8,10 @@ import {
   runHarnessTurn,
 } from "@open-agents/harness-runner";
 import {
+  INTERNAL_API_RESPONSE_HEADERS,
   INTERNAL_HARNESS_SIGNATURE_HEADER,
-  verifyInternalHarnessRequest,
-} from "@/lib/harness-runner/internal-request";
+} from "@/lib/harness-runner/internal-endpoints";
+import { verifyInternalHarnessRequest } from "@/lib/harness-runner/internal-request";
 import {
   type InternalHarnessRunEvent,
   type InternalHarnessRunRequest,
@@ -28,6 +29,13 @@ export const maxDuration = 800;
 // attached to a route via `outputFileTracingIncludes`/`serverExternalPackages`
 // in `apps/web/next.config.ts` (see the comment there), not to a workflow
 // step bundle.
+//
+// The route is therefore reachable over the public internet, so it is
+// defended in depth: `proxy.ts` drops any request under `/api/internal/`
+// that is not a signed POST before it reaches this handler, and every request
+// that does arrive must carry a fresh HMAC over its method, path, and body
+// keyed by `INTERNAL_HARNESS_SECRET`. Only the deployment itself holds that
+// secret, so only its own workflow steps can start a harness turn.
 
 type HarnessCapableSandbox = Sandbox & {
   toHarnessSandboxProvider(
@@ -48,29 +56,35 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function errorResponse(error: string, status: number): Response {
+  return Response.json(
+    { error },
+    { status, headers: INTERNAL_API_RESPONSE_HEADERS },
+  );
+}
+
 export async function POST(request: Request) {
   const bodyText = await request.text();
   if (
-    !verifyInternalHarnessRequest(
-      bodyText,
-      request.headers.get(INTERNAL_HARNESS_SIGNATURE_HEADER),
-    )
+    !verifyInternalHarnessRequest({
+      method: request.method,
+      url: request.url,
+      body: bodyText,
+      signature: request.headers.get(INTERNAL_HARNESS_SIGNATURE_HEADER),
+    })
   ) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse("Unauthorized", 401);
   }
 
   let parsedBody: unknown;
   try {
     parsedBody = JSON.parse(bodyText);
   } catch {
-    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    return errorResponse("Invalid JSON body", 400);
   }
   const parsedInput = internalHarnessRunRequestSchema.safeParse(parsedBody);
   if (!parsedInput.success) {
-    return Response.json(
-      { error: `Invalid request: ${parsedInput.error.message}` },
-      { status: 400 },
-    );
+    return errorResponse(`Invalid request: ${parsedInput.error.message}`, 400);
   }
   const input: InternalHarnessRunRequest = parsedInput.data;
 
@@ -136,8 +150,8 @@ export async function POST(request: Request) {
 
   return new Response(readable, {
     headers: {
+      ...INTERNAL_API_RESPONSE_HEADERS,
       "content-type": "application/x-ndjson",
-      "cache-control": "no-store",
       "x-accel-buffering": "no",
     },
   });

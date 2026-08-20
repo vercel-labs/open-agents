@@ -1,4 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  INTERNAL_API_PATH_PREFIX,
+  INTERNAL_API_RESPONSE_HEADERS,
+  INTERNAL_HARNESS_SIGNATURE_HEADER,
+} from "@/lib/harness-runner/internal-endpoints";
+
+/**
+ * `/api/internal/*` endpoints are called by the deployment itself, never by a
+ * browser, and their handlers are expensive — the harness runner holds a
+ * streaming connection open for a whole agent turn. Drop anything that cannot
+ * possibly be one of those calls before it reaches a handler, and answer 404
+ * so the endpoints stay undiscoverable from outside.
+ *
+ * This is the outer layer, not the authorization check: handlers still verify
+ * the signature. Every internal caller signs with the harness signature
+ * header, so requiring it here costs nothing and rejects unauthenticated
+ * traffic without spinning up the route.
+ */
+function isPossibleInternalApiRequest(request: NextRequest): boolean {
+  return (
+    request.method === "POST" &&
+    request.headers.has(INTERNAL_HARNESS_SIGNATURE_HEADER)
+  );
+}
 
 function wantsSharedMarkdown(acceptHeader: string | null): boolean {
   if (!acceptHeader) {
@@ -10,11 +34,21 @@ function wantsSharedMarkdown(acceptHeader: string | null): boolean {
 }
 
 export function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname.startsWith(INTERNAL_API_PATH_PREFIX)) {
+    return isPossibleInternalApiRequest(request)
+      ? NextResponse.next()
+      : new NextResponse(null, {
+          status: 404,
+          headers: INTERNAL_API_RESPONSE_HEADERS,
+        });
+  }
+
   if (request.method !== "GET") {
     return NextResponse.next();
   }
 
-  const pathname = request.nextUrl.pathname;
   const segments = pathname.split("/").filter(Boolean);
 
   if (
@@ -31,5 +65,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/shared/:path*"],
+  matcher: ["/api/internal/:path*", "/shared/:path*"],
 };
