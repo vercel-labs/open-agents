@@ -1,7 +1,7 @@
 /**
  * Constants shared by every layer that fronts an internal, server-to-server
- * endpoint: the proxy that filters external traffic, the workflow-side client
- * that signs calls, and the route handler that verifies them.
+ * endpoint: the route handler that authenticates calls, the workflow-side
+ * client that signs them, and the proxy that pre-filters external traffic.
  *
  * This module stays dependency-free on purpose. `proxy.ts` imports it, and the
  * proxy bundle must not pull in `node:crypto` (or anything else) through it.
@@ -20,6 +20,15 @@ export const INTERNAL_HARNESS_RUNNER_PATH = "/api/internal/harness-runner";
  * handler.
  */
 export const INTERNAL_API_PATH_PREFIX = "/api/internal/";
+
+/**
+ * The single answer every layer gives to a request for an internal endpoint it
+ * cannot authenticate — wrong method, no signature, bad signature, oversized
+ * body. `404` rather than `401`/`405` so the endpoints stay undiscoverable, and
+ * shared so the route handler's answer matches the proxy's: with the proxy in
+ * front or without it, an unauthenticated caller learns the same nothing.
+ */
+export const INTERNAL_API_REJECTED_STATUS = 404;
 
 /** Internal endpoints are never cached and never indexed. */
 export const INTERNAL_API_RESPONSE_HEADERS = {

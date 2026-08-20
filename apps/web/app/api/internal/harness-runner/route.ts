@@ -8,10 +8,9 @@ import {
   runHarnessTurn,
 } from "@open-agents/harness-runner";
 import {
-  INTERNAL_API_RESPONSE_HEADERS,
-  INTERNAL_HARNESS_SIGNATURE_HEADER,
-} from "@/lib/harness-runner/internal-endpoints";
-import { verifyInternalHarnessRequest } from "@/lib/harness-runner/internal-request";
+  rejectInternalMethod,
+  withInternalRouteGuard,
+} from "@/lib/harness-runner/internal-route";
 import {
   type InternalHarnessRunEvent,
   type InternalHarnessRunRequest,
@@ -23,6 +22,9 @@ import {
 } from "@/lib/sandbox/config";
 
 export const maxDuration = 800;
+// Nothing under /api/internal is ever prerendered or cached; the guard's
+// response headers only mean something if every response is per-request.
+export const dynamic = "force-dynamic";
 
 // Why an HTTP route instead of the workflow step calling `runHarnessTurn`
 // directly: the harness bridge assets and externalized packages can only be
@@ -30,12 +32,14 @@ export const maxDuration = 800;
 // in `apps/web/next.config.ts` (see the comment there), not to a workflow
 // step bundle.
 //
-// The route is therefore reachable over the public internet, so it is
-// defended in depth: `proxy.ts` drops any request under `/api/internal/`
-// that is not a signed POST before it reaches this handler, and every request
-// that does arrive must carry a fresh HMAC over its method, path, and body
-// keyed by `INTERNAL_HARNESS_SECRET`. Only the deployment itself holds that
-// secret, so only its own workflow steps can start a harness turn.
+// The route is therefore reachable over the public internet, and it is this
+// module that keeps it safe: `withInternalRouteGuard` runs inside the route
+// bundle, so every request — whatever reached it, however — must carry a fresh
+// HMAC over its own method, path, and body keyed by `INTERNAL_HARNESS_SECRET`.
+// Only the deployment itself holds that secret, so only its own workflow steps
+// can start a harness turn. `proxy.ts` drops the same traffic earlier as a
+// pure optimization (it saves booting an 800s function); removing it must not
+// change what this route accepts. See `lib/harness-runner/internal-route.ts`.
 
 type HarnessCapableSandbox = Sandbox & {
   toHarnessSandboxProvider(
@@ -56,26 +60,15 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// The guard stamps `cache-control: no-store` and `x-robots-tag` onto whatever
+// this handler returns, so responses below only set their own headers.
 function errorResponse(error: string, status: number): Response {
-  return Response.json(
-    { error },
-    { status, headers: INTERNAL_API_RESPONSE_HEADERS },
-  );
+  return Response.json({ error }, { status });
 }
 
-export async function POST(request: Request) {
-  const bodyText = await request.text();
-  if (
-    !verifyInternalHarnessRequest({
-      method: request.method,
-      url: request.url,
-      body: bodyText,
-      signature: request.headers.get(INTERNAL_HARNESS_SIGNATURE_HEADER),
-    })
-  ) {
-    return errorResponse("Unauthorized", 401);
-  }
-
+// Only reached once the guard has authenticated the request, which is also
+// where `bodyText` comes from: the handler never sees an unverified body.
+export const POST = withInternalRouteGuard(async (request, bodyText) => {
   let parsedBody: unknown;
   try {
     parsedBody = JSON.parse(bodyText);
@@ -150,9 +143,18 @@ export async function POST(request: Request) {
 
   return new Response(readable, {
     headers: {
-      ...INTERNAL_API_RESPONSE_HEADERS,
       "content-type": "application/x-ndjson",
       "x-accel-buffering": "no",
     },
   });
-}
+});
+
+// Every other verb is answered here rather than by Next's `405`, so the route
+// is indistinguishable from a nonexistent one to anything that is not a signed
+// POST — including when `proxy.ts` did not run.
+export const GET = rejectInternalMethod;
+export const HEAD = rejectInternalMethod;
+export const PUT = rejectInternalMethod;
+export const PATCH = rejectInternalMethod;
+export const DELETE = rejectInternalMethod;
+export const OPTIONS = rejectInternalMethod;

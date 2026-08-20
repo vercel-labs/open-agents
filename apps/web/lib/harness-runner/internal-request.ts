@@ -97,8 +97,8 @@ export function verifyInternalHarnessRequest(
   nowMs: number = Date.now(),
 ): boolean {
   // Fail closed rather than throwing: a deployment missing the secret cannot
-  // authenticate anyone, and a request handler should answer 401 for that
-  // instead of surfacing a 500 that confirms the endpoint exists.
+  // authenticate anyone, and the route guard should answer its usual 404 for
+  // that instead of surfacing a 500 that confirms the endpoint exists.
   const secret = readInternalHarnessSecret();
   if (!(secret && request.signature)) {
     return false;

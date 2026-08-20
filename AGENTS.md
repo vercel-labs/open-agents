@@ -18,6 +18,12 @@ Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CL
 
 `INTERNAL_HARNESS_SECRET` is separate on purpose: it signs the deployment's own calls to `/api/internal/harness-runner` (external agent harnesses) and must never be folded into `BETTER_AUTH_SECRET`. Give each secret exactly one job so a leak of one does not forge the other's material.
 
+### Internal (`/api/internal/*`) endpoints
+
+These are called by the deployment itself, and they are protected by `withInternalRouteGuard` in `apps/web/lib/harness-runner/internal-route.ts`, which runs inside the route bundle: it restricts the verb, requires a fresh HMAC over the request's method, path, and body, bounds how much body it will read before that check, and answers anything it cannot authenticate with a bodyless `404`. A new internal route wraps its `POST` in the guard and exports `rejectInternalMethod` for every other verb.
+
+`proxy.ts` filters the same traffic, but only as an optimization — it saves booting an expensive function for junk requests. Never put a control there that the route does not also enforce: a proxy is one `matcher` edit away from not covering a path, and Next middleware has had outright bypass vulnerabilities.
+
 ## Database & Migrations
 
 Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle Kit.
