@@ -23,15 +23,15 @@ export const INTERNAL_API_PATH_PREFIX = "/api/internal/";
 
 /**
  * The single answer every layer gives to a request for an internal endpoint it
- * cannot authenticate — wrong method, no signature, bad signature, oversized
- * body. `404` rather than `401`/`405` so the endpoints stay undiscoverable, and
- * shared so the route handler's answer matches the proxy's: with the proxy in
- * front or without it, an unauthenticated caller learns the same nothing.
+ * cannot authenticate — no signature, bad signature, oversized body. `404`
+ * rather than `401` because an unauthenticated caller is owed no detail, not
+ * because the endpoint is a secret: a verb the route does not implement still
+ * gets Next's own `405`. Shared so the route handler's answer to an
+ * unauthenticated call matches the proxy's.
  */
 export const INTERNAL_API_REJECTED_STATUS = 404;
 
-/** Internal endpoints are never cached and never indexed. */
+/** Internal endpoints are never cached. */
 export const INTERNAL_API_RESPONSE_HEADERS = {
   "cache-control": "no-store",
-  "x-robots-tag": "noindex, nofollow",
 } as const;

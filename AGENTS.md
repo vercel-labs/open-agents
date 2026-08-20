@@ -20,7 +20,7 @@ Key env vars: `BETTER_AUTH_SECRET` (session signing), `NEXT_PUBLIC_VERCEL_APP_CL
 
 ### Internal (`/api/internal/*`) endpoints
 
-These are called by the deployment itself, and they are protected by `withInternalRouteGuard` in `apps/web/lib/harness-runner/internal-route.ts`, which runs inside the route bundle: it restricts the verb, requires a fresh HMAC over the request's method, path, and body, bounds how much body it will read before that check, and answers anything it cannot authenticate with a bodyless `404`. A new internal route wraps its `POST` in the guard and exports `rejectInternalMethod` for every other verb.
+These are called by the deployment itself, and they are protected by `withInternalRouteGuard` in `apps/web/lib/harness-runner/internal-route.ts`, which runs inside the route bundle: it requires a fresh HMAC over the request's method, path, and body, bounds how much body it will read before that check, and answers anything it cannot authenticate with a bodyless `404`. A new internal route wraps its `POST` in the guard and exports nothing else — every other verb is Next's own `405`. Do not hand-roll handlers for them: the method is part of the signed material, so the verb restriction is enforced by the HMAC, and answering `404` in place of the `405` only obscures an endpoint whose existence is not the secret.
 
 `proxy.ts` filters the same traffic, but only as an optimization — it saves booting an expensive function for junk requests. Never put a control there that the route does not also enforce: a proxy is one `matcher` edit away from not covering a path, and Next middleware has had outright bypass vulnerabilities.
 

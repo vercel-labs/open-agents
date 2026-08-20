@@ -116,7 +116,14 @@ export function verifyInternalHarnessRequest(
   }
 
   const timestampMs = Number(timestampPart);
-  const expected = computeDigest(secret, request, timestampMs);
+  // A route can be reached with a URL the parser rejects, and there is no path
+  // to sign for one. Fail closed rather than letting it become a 500.
+  let expected: Buffer;
+  try {
+    expected = computeDigest(secret, request, timestampMs);
+  } catch {
+    return false;
+  }
   const actual = Buffer.from(digestPart, "hex");
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
     return false;

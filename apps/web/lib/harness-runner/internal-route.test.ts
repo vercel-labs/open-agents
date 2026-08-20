@@ -3,7 +3,6 @@ import { INTERNAL_API_REJECTED_STATUS } from "./internal-endpoints";
 import { signInternalHarnessRequest } from "./internal-request";
 import {
   INTERNAL_API_MAX_BODY_BYTES,
-  rejectInternalMethod,
   withInternalRouteGuard,
 } from "./internal-route";
 
@@ -98,7 +97,11 @@ describe("withInternalRouteGuard", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  test("re-checks the verb instead of trusting how the request was routed", async () => {
+  test("never runs the handler for a verb the signature was not minted for", async () => {
+    // Verb handling is left to Next, which answers `405` for anything a route
+    // does not export. The guard does not re-check the method because it does
+    // not have to: the method is signed material, so a request that arrives
+    // with a different one cannot carry a signature that covers it.
     const { handler, guarded } = createHandler();
 
     const response = await guarded(
@@ -109,6 +112,31 @@ describe("withInternalRouteGuard", () => {
     );
 
     expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test("answers the rejection status for an unparseable request url", async () => {
+    // A route can be reached with a URL the URL parser rejects. There is no
+    // path to verify a signature against for one, so it has to fail closed
+    // rather than becoming a 500 that says the endpoint is there.
+    const { handler, guarded } = createHandler();
+    const unparseable = {
+      method: "POST",
+      url: "not-a-url",
+      body: null,
+    };
+
+    const unsigned = await guarded({
+      ...unparseable,
+      headers: new Headers(),
+    } as Request);
+    const signed = await guarded({
+      ...unparseable,
+      headers: new Headers({ "x-open-agents-harness-signature": sign("") }),
+    } as Request);
+
+    expect(unsigned.status).toBe(INTERNAL_API_REJECTED_STATUS);
+    expect(signed.status).toBe(INTERNAL_API_REJECTED_STATUS);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -188,7 +216,7 @@ describe("withInternalRouteGuard", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  test("marks a handler's response uncacheable and unindexable", async () => {
+  test("marks a handler's response uncacheable", async () => {
     const guarded = withInternalRouteGuard(() => new Response("streamed"));
 
     const response = await guarded(
@@ -197,31 +225,5 @@ describe("withInternalRouteGuard", () => {
 
     expect(await response.text()).toBe("streamed");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
-  });
-});
-
-describe("rejectInternalMethod", () => {
-  test("answers the shared rejection status with no body", async () => {
-    const response = rejectInternalMethod(
-      new Request(RUNNER_URL, { method: "GET" }),
-    );
-
-    expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
-    expect(await response.text()).toBe("");
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
-  });
-
-  test("does not throw on an unparseable request url", () => {
-    // A route can be reached with a URL the URL parser rejects; the guard has
-    // to answer 404 for it rather than turning it into a 500.
-    const response = rejectInternalMethod({
-      method: "GET",
-      url: "not-a-url",
-      headers: new Headers(),
-    } as Request);
-
-    expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
   });
 });

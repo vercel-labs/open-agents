@@ -43,9 +43,9 @@ describe("shared page content negotiation proxy", () => {
 });
 
 /**
- * The internal-API branch is an optimization, not a control: the same method
- * restriction, signature requirement, and 404/no-store/noindex response are
- * enforced inside the route bundle by `withInternalRouteGuard` (asserted in
+ * The internal-API branch is an optimization, not a control: the signature
+ * requirement, the body cap, and the bodyless 404 are enforced inside the route
+ * bundle by `withInternalRouteGuard` (asserted in
  * `app/api/internal/harness-runner/route.test.ts`, which calls the handlers with
  * the proxy skipped). These tests cover the saved work and the fact that this
  * layer only ever drops or forwards — never grants.
@@ -75,11 +75,12 @@ describe("internal API proxy pre-filter", () => {
 
     expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
     expect(response.headers.get("x-middleware-next")).toBeNull();
-    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
-  test("drops browser navigations", () => {
+  test("drops browser navigations before the function boots", () => {
+    // Saved work only: without this branch the request reaches the route, which
+    // exports no GET handler, and Next answers its own 405.
     const response = proxy(makeInternalRequest("GET", signed));
 
     expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);

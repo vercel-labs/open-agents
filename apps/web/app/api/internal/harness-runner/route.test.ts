@@ -71,8 +71,8 @@ afterAll(() => {
   }
 });
 
-const { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT } =
-  await import("./route");
+const routeModule = await import("./route");
+const { POST } = routeModule;
 
 const body = JSON.stringify({
   harnessId: "codex",
@@ -150,18 +150,16 @@ describe("/api/internal/harness-runner", () => {
     expect(spies.connectSandbox).not.toHaveBeenCalled();
   });
 
-  test("rejects every verb other than POST", async () => {
-    const handlers = { GET, HEAD, PUT, PATCH, DELETE, OPTIONS };
+  test("exports no handler for any verb other than POST", () => {
+    // Next answers `405` for a verb a route does not export. The route does not
+    // hand-roll a response for those: the method is signed material, so the
+    // restriction that matters is the HMAC, and a `404` here would only be
+    // hiding an endpoint whose existence is not the secret.
+    const exported = new Set(Object.keys(routeModule));
 
-    for (const [method, handler] of Object.entries(handlers)) {
-      const response = handler(new Request(RUNNER_URL, { method }));
-
-      expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
-      expect(response.headers.get("cache-control")).toBe("no-store");
-      expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    for (const verb of ["GET", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(exported.has(verb)).toBe(false);
     }
-
-    expect(spies.connectSandbox).not.toHaveBeenCalled();
   });
 
   test("rejects an over-cap body before starting a harness turn", async () => {
@@ -196,23 +194,20 @@ describe("/api/internal/harness-runner", () => {
     expect(spies.connectSandbox).not.toHaveBeenCalled();
   });
 
-  test("marks every response uncacheable and unindexable", async () => {
+  test("marks every response uncacheable", async () => {
     const rejected = await POST(createRequest(false));
 
     expect(rejected.headers.get("cache-control")).toBe("no-store");
-    expect(rejected.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 
     const invalid = await POST(createRequestWithHarnessId("open-agent"));
     await invalid.text();
 
     expect(invalid.headers.get("cache-control")).toBe("no-store");
-    expect(invalid.headers.get("x-robots-tag")).toBe("noindex, nofollow");
 
     const accepted = await POST(createRequest(true));
     await accepted.text();
 
     expect(accepted.headers.get("cache-control")).toBe("no-store");
-    expect(accepted.headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
 
   test("accepts the claude-code harness", async () => {

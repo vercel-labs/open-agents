@@ -10,25 +10,21 @@ import { verifyInternalHarnessRequest } from "./internal-request";
  *
  * Every control an internal endpoint needs in order to be safe lives here,
  * inside the route bundle, because this is the only layer nothing can skip:
+ * `proxy.ts` filters the same traffic, but a proxy is an optimization, not a
+ * control. It is one `matcher` edit away from not covering a path, it is not
+ * guaranteed to run for every way a deployment's functions can be reached, and
+ * Next middleware has had outright bypass vulnerabilities in the past
+ * (CVE-2025-29927). Deleting its internal branch must cost wasted compute and
+ * nothing else.
  *
- * - `proxy.ts` filters the same traffic, but a proxy is an optimization, not a
- *   control. It is one `matcher` edit away from not covering a path, it is not
- *   guaranteed to run for every way a deployment's functions can be reached,
- *   and Next middleware has had outright bypass vulnerabilities in the past
- *   (CVE-2025-29927). Deleting its internal branch must cost wasted compute and
- *   nothing else.
- * - Next's own method routing answers `405` for verbs a route does not export,
- *   which confirms the route exists and skips the response headers below. Every
- *   verb is handled here instead, so an unauthenticated request gets the same
- *   `404` whatever it asks for.
+ * HTTP verb handling is deliberately *not* here. An internal route exports
+ * `POST` and nothing else, so Next answers `405` for every other verb on its
+ * own — no handler runs, and hand-rolling one only trades that `405` for a
+ * `404` that hides nothing an attacker cannot learn from any other path. What
+ * keeps the endpoint POST-only is the signature: it covers the method, so
+ * reaching a handler with a different verb would take a signature minted for
+ * that verb, which takes the secret.
  */
-
-/**
- * Internal endpoints are POST-only. The signature covers the method, so
- * serving another verb has to be a deliberate act — minting signatures for it —
- * rather than something a route inherits by exporting a handler.
- */
-const INTERNAL_API_METHOD = "POST";
 
 /**
  * Ceiling on the request body an unauthenticated caller can make an internal
@@ -69,16 +65,8 @@ function reject(request: Request, reason: string): Response {
 }
 
 /**
- * Handler for every verb an internal route does not implement. Exported from
- * the route itself so Next never falls back to its own `405`.
- */
-export function rejectInternalMethod(request: Request): Response {
-  return reject(request, "internal endpoints only accept signed POSTs");
-}
-
-/**
- * Internal responses are never cached and never indexed, whatever a handler
- * returns and whether or not the proxy ran.
+ * Internal responses are never cached, whatever a handler returns and whether
+ * or not the proxy ran.
  */
 function withInternalResponseHeaders(response: Response): Response {
   for (const [name, value] of Object.entries(INTERNAL_API_RESPONSE_HEADERS)) {
@@ -150,10 +138,6 @@ export function withInternalRouteGuard(
   handler: InternalRouteHandler,
 ): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    if (request.method.toUpperCase() !== INTERNAL_API_METHOD) {
-      return rejectInternalMethod(request);
-    }
-
     // Checked before the body is touched: an unsigned caller does not get to
     // hand this route any bytes at all.
     const signature = request.headers.get(INTERNAL_HARNESS_SIGNATURE_HEADER);

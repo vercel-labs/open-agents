@@ -15,10 +15,11 @@ import {
  *
  * That is all this is: an optimization. It is deliberately *not* load-bearing.
  * `withInternalRouteGuard` in `lib/harness-runner/internal-route.ts` runs inside
- * the route bundle and enforces the same method restriction, the same signature
- * requirement, and the same `404`/no-store/noindex response, so this block can
- * be narrowed, broken, or deleted without changing what any internal endpoint
- * accepts. Do not move a control here that the route does not also apply.
+ * the route bundle and is what decides whether a call is authentic — it requires
+ * the same signature, bounds the same body, and answers the same `404` — so this
+ * block can be narrowed, broken, or deleted without changing what any internal
+ * endpoint accepts. Do not move a control here that the route does not also
+ * apply.
  */
 function isPossibleInternalApiRequest(request: NextRequest): boolean {
   return (
@@ -40,8 +41,10 @@ export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   if (pathname.startsWith(INTERNAL_API_PATH_PREFIX)) {
-    // Same status and headers the route's own guard answers with, so skipping
-    // this branch is invisible from outside.
+    // Dropped with the status the route's own guard answers an unauthenticated
+    // call with. This layer grants nothing, so whether it runs only decides
+    // whether the function boots — a non-POST verb that does get through is
+    // answered by Next's own `405`.
     return isPossibleInternalApiRequest(request)
       ? NextResponse.next()
       : new NextResponse(null, {

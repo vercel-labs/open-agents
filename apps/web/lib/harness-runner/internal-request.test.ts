@@ -119,6 +119,16 @@ describe("internal harness request signatures", () => {
     ).toBe(true);
   });
 
+  test("fails closed on a request url the parser rejects", () => {
+    // There is no path to sign for an unparseable URL. Verification has to
+    // answer `false` for it — a throw would turn a malformed request into a
+    // 500, which is both an error oracle and a worse answer than the route's.
+    const body = "{}";
+    const signature = sign(body);
+
+    expect(verify(body, signature, { url: "not-a-url" })).toBe(false);
+  });
+
   test("does not validate signatures minted with the raw dedicated secret", () => {
     // Guards the purpose-scoped key derivation: an HMAC minted with
     // INTERNAL_HARNESS_SECRET directly (what any other consumer of the secret

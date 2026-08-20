@@ -7,10 +7,7 @@ import {
   ensureGatewayApiKeyEnv,
   runHarnessTurn,
 } from "@open-agents/harness-runner";
-import {
-  rejectInternalMethod,
-  withInternalRouteGuard,
-} from "@/lib/harness-runner/internal-route";
+import { withInternalRouteGuard } from "@/lib/harness-runner/internal-route";
 import {
   type InternalHarnessRunEvent,
   type InternalHarnessRunRequest,
@@ -22,9 +19,6 @@ import {
 } from "@/lib/sandbox/config";
 
 export const maxDuration = 800;
-// Nothing under /api/internal is ever prerendered or cached; the guard's
-// response headers only mean something if every response is per-request.
-export const dynamic = "force-dynamic";
 
 // Why an HTTP route instead of the workflow step calling `runHarnessTurn`
 // directly: the harness bridge assets and externalized packages can only be
@@ -40,6 +34,11 @@ export const dynamic = "force-dynamic";
 // can start a harness turn. `proxy.ts` drops the same traffic earlier as a
 // pure optimization (it saves booting an 800s function); removing it must not
 // change what this route accepts. See `lib/harness-runner/internal-route.ts`.
+//
+// `POST` is the only handler exported, so Next answers `405` for every other
+// verb. That is left as is: the verb a request arrives with is signed material,
+// so the restriction that matters is enforced by the HMAC, not by a route
+// pretending not to exist.
 
 type HarnessCapableSandbox = Sandbox & {
   toHarnessSandboxProvider(
@@ -60,8 +59,8 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// The guard stamps `cache-control: no-store` and `x-robots-tag` onto whatever
-// this handler returns, so responses below only set their own headers.
+// The guard stamps `cache-control: no-store` onto whatever this handler
+// returns, so responses below only set their own headers.
 function errorResponse(error: string, status: number): Response {
   return Response.json({ error }, { status });
 }
@@ -148,13 +147,3 @@ export const POST = withInternalRouteGuard(async (request, bodyText) => {
     },
   });
 });
-
-// Every other verb is answered here rather than by Next's `405`, so the route
-// is indistinguishable from a nonexistent one to anything that is not a signed
-// POST — including when `proxy.ts` did not run.
-export const GET = rejectInternalMethod;
-export const HEAD = rejectInternalMethod;
-export const PUT = rejectInternalMethod;
-export const PATCH = rejectInternalMethod;
-export const DELETE = rejectInternalMethod;
-export const OPTIONS = rejectInternalMethod;
