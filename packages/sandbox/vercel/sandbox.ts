@@ -42,28 +42,31 @@ interface SandboxNetworkPolicy {
   allow: Record<string, SandboxNetworkRule[]>;
 }
 
-let warnedMissingAiGatewayApiKey = false;
-
 /**
- * Resolve the AI Gateway API key used for credential brokering. An explicit
- * key from sandbox config wins; the `AI_GATEWAY_API_KEY` environment variable
- * is the documented fallback (the harness runner writes it before sandbox
- * reconnects so the network policy can pick it up).
+ * Build the policy every sandbox starts from: outbound access to anything,
+ * with no credentials attached on the sandbox's behalf unless this call was
+ * given one.
+ *
+ * AI Gateway brokering is opt-in per create/connect call, and nothing is read
+ * from the environment. Falling back to `AI_GATEWAY_API_KEY` here brokered the
+ * deployment's own gateway credential into *every* sandbox, because every path
+ * that touches a sandbox — session provisioning, lifecycle kicks, dev-server
+ * polls, git status reads, snapshot refreshes, base-snapshot builds — connects
+ * through this module. A sandbox runs untrusted code (the agent's bash tool,
+ * repository build scripts, the in-sandbox editor, dev servers on public
+ * preview URLs), so any of it could spend the deployment's gateway budget with
+ * the platform attaching the `Authorization` header on its behalf, unmetered
+ * and unattributable to a user.
+ *
+ * Only the external-harness runner needs the sandbox itself to reach AI
+ * Gateway, and only for the turn it is running: `connectSandbox` from
+ * `apps/web/app/api/internal/harness-runner/route.ts` is the one caller that
+ * passes a key. Because a policy update replaces the whole policy, every other
+ * connect also revokes brokering that an earlier harness turn left in place.
  */
-function resolveAiGatewayApiKey(explicitKey?: string): string | undefined {
-  return explicitKey ?? process.env.AI_GATEWAY_API_KEY;
-}
-
 function buildDefaultCredentialBrokeringPolicy(
-  explicitAiGatewayApiKey?: string,
+  aiGatewayApiKey?: string,
 ): SandboxNetworkPolicy {
-  const aiGatewayApiKey = resolveAiGatewayApiKey(explicitAiGatewayApiKey);
-  if (!aiGatewayApiKey && !warnedMissingAiGatewayApiKey) {
-    warnedMissingAiGatewayApiKey = true;
-    console.warn(
-      "[VercelSandbox] No AI Gateway API key available (config.aiGatewayApiKey or AI_GATEWAY_API_KEY); the sandbox network policy will not broker AI Gateway credentials.",
-    );
-  }
   return {
     allow: {
       ...(aiGatewayApiKey
@@ -248,7 +251,11 @@ export class VercelSandbox implements Sandbox {
   private _expiresAt?: number;
   private _timeout?: number;
   private _ports?: number[];
-  /** Explicit AI Gateway key for credential brokering (env is the fallback). */
+  /**
+   * AI Gateway key this sandbox brokers, when the caller that created or
+   * connected it opted in. Kept so a later policy update (GitHub setup auth)
+   * does not silently drop brokering the caller asked for.
+   */
   private aiGatewayApiKey?: string;
 
   /**
@@ -763,8 +770,9 @@ ${hostLine}${portLines}${runtimeEnvLine}`;
       env?: Record<string, string>;
       githubToken?: string;
       /**
-       * AI Gateway API key brokered via the sandbox network policy
-       * (falls back to `AI_GATEWAY_API_KEY` when omitted).
+       * AI Gateway API key brokered via the sandbox network policy. Opt-in:
+       * omitting it connects with no gateway credential brokered, and revokes
+       * one an earlier connect established.
        */
       aiGatewayApiKey?: string;
       hooks?: SandboxHooks;

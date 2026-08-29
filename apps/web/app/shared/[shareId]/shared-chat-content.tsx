@@ -26,9 +26,9 @@ import { ThinkingBlock } from "@/components/thinking-block";
 import { ToolCall } from "@/components/tool-call";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import type { Chat } from "@/lib/db/schema";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
+import type { PublicSharedChat } from "./public-shared-chat";
 import { SharedChatStatus } from "./shared-chat-status";
 import "streamdown/styles.css";
 
@@ -38,7 +38,11 @@ export type MessageWithTiming = {
 };
 
 type ChatWithMessages = {
-  chat: Chat;
+  /**
+   * The projected chat, not the row: this component's props cross into a
+   * publicly readable RSC payload. See `public-shared-chat.ts`.
+   */
+  chat: PublicSharedChat;
   messagesWithTiming: MessageWithTiming[];
 };
 

@@ -12,6 +12,7 @@ import {
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getAllVariants, MODEL_VARIANT_ID_PREFIX } from "@/lib/model-variants";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { toPublicSharedChat } from "./public-shared-chat";
 import { redactSharedEnvContent } from "./redact-shared-env-content";
 import { SharedChatContent } from "./shared-chat-content";
 import type { MessageWithTiming } from "./shared-chat-content";
@@ -126,6 +127,10 @@ export default async function SharedPage({ params }: SharedPageProps) {
     viewerSession?.user?.id === session.userId
       ? `/sessions/${sharedChat.sessionId}/chats/${sharedChat.id}`
       : null;
+  // Project the row before it becomes a client component prop: everything
+  // below is serialized into the RSC payload of a page that needs no session
+  // to read, and the row carries server-only columns.
+  const publicSharedChat = toPublicSharedChat(sharedChat);
 
   return (
     <SharedChatContent
@@ -138,7 +143,7 @@ export default async function SharedPage({ params }: SharedPageProps) {
         prNumber,
         prStatus,
       }}
-      chats={[{ chat: sharedChat, messagesWithTiming }]}
+      chats={[{ chat: publicSharedChat, messagesWithTiming }]}
       modelId={sharedChat.modelId}
       modelName={modelName}
       sharedBy={

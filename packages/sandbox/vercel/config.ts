@@ -47,9 +47,11 @@ export interface VercelSandboxConfig {
   githubToken?: string;
   /**
    * AI Gateway API key brokered to the sandbox via its network policy.
-   * When omitted, the `AI_GATEWAY_API_KEY` environment variable is the
-   * documented fallback; without either, AI Gateway credentials are not
-   * brokered.
+   *
+   * Opt-in: passing a key is what enables brokering, and nothing is read from
+   * the environment. Pass it only for a sandbox that must reach AI Gateway
+   * itself (the external-harness runner) — anything running in the sandbox can
+   * use a brokered credential.
    */
   aiGatewayApiKey?: string;
   /**
@@ -112,9 +114,10 @@ export interface VercelSandboxConnectConfig {
   githubToken?: string;
   /**
    * AI Gateway API key brokered to the sandbox via its network policy.
-   * When omitted, the `AI_GATEWAY_API_KEY` environment variable is the
-   * documented fallback; without either, AI Gateway credentials are not
-   * brokered.
+   *
+   * Opt-in: passing a key is what enables brokering, and nothing is read from
+   * the environment. Reconnecting without one revokes brokering an earlier
+   * connect established, because the policy is replaced wholesale.
    */
   aiGatewayApiKey?: string;
   /** Lifecycle hooks for setup and teardown */

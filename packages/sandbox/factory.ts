@@ -20,6 +20,13 @@ export interface ConnectOptions {
   env?: Record<string, string>;
   /** GitHub token used only during setup clone/fetch, then cleared */
   githubToken?: string;
+  /**
+   * AI Gateway API key the platform attaches to requests the sandbox makes to
+   * AI Gateway. Opt-in, and never read from the environment: pass it only when
+   * the sandbox itself must reach AI Gateway (the external-harness runner),
+   * because anything running inside the sandbox can use a brokered credential.
+   */
+  aiGatewayApiKey?: string;
   /** Git user for commits */
   gitUser?: { name: string; email: string };
   /** Lifecycle hooks */

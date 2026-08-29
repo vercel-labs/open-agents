@@ -24,6 +24,15 @@ These are called by the deployment itself, and they are protected by `withIntern
 
 `proxy.ts` filters the same traffic, but only as an optimization — it saves booting an expensive function for junk requests. Never put a control there that the route does not also enforce: a proxy is one `matcher` edit away from not covering a path, and Next middleware has had outright bypass vulnerabilities.
 
+### Sandbox credential brokering
+
+A sandbox's network policy can make the platform attach credentials to requests the sandbox sends (`packages/sandbox/vercel/sandbox.ts`). Brokering is **opt-in per create/connect call, and nothing is read from the environment**: a sandbox runs untrusted code — the agent's bash tool, repository build scripts, the in-sandbox editor, dev servers on public preview URLs — and any of it can use whatever the policy brokers.
+
+- AI Gateway: `/api/internal/harness-runner` passes the credential from `ensureGatewayApiKeyEnv()` to its own `connectSandbox` call, for the turn it is about to run. It is the only caller that does, because it is the only path where the sandbox itself must reach AI Gateway. Do not add an `AI_GATEWAY_API_KEY` fallback inside the sandbox package: every other connect path would then broker the deployment's gateway credential into every sandbox.
+- GitHub: a scoped installation token is brokered for the setup clone/fetch only and cleared before the sandbox is handed to the agent.
+
+Because a policy update replaces the whole policy, a connect that does not opt in also revokes brokering an earlier one established.
+
 ## Database & Migrations
 
 Schema lives in `apps/web/lib/db/schema.ts`. Migrations are managed by Drizzle Kit.
