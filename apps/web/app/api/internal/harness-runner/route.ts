@@ -96,12 +96,18 @@ export const POST = withInternalRouteGuard(async (request, bodyText) => {
 
   void (async () => {
     try {
-      // Refresh the gateway credential before connecting: connecting
-      // rebuilds the sandbox network policy from the environment, and a
-      // token stored by an earlier run may already be expired.
-      await ensureGatewayApiKeyEnv();
+      // Refresh the gateway credential before connecting, and hand it to
+      // `connectSandbox` explicitly. AI Gateway brokering is opt-in per
+      // connect (see `buildDefaultCredentialBrokeringPolicy` in
+      // `packages/sandbox/vercel/sandbox.ts`): this is the only caller that
+      // asks for it, so it is the only path that gives a sandbox the
+      // deployment's gateway credential — for the turn it is about to run,
+      // rather than for every sandbox this deployment ever touches. A token
+      // stored by an earlier run may already be expired, hence the refresh.
+      const aiGatewayApiKey = await ensureGatewayApiKeyEnv();
       const sandbox = await connectSandbox(input.sandboxState, {
         ports: DEFAULT_SANDBOX_PORTS,
+        ...(aiGatewayApiKey ? { aiGatewayApiKey } : {}),
       });
       if (!isHarnessCapableSandbox(sandbox)) {
         throw new Error(

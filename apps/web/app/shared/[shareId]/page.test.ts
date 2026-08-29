@@ -12,6 +12,7 @@ let chatRecord: {
   title: string;
   modelId: string | null;
   activeStreamId: string | null;
+  harnessSessionState?: unknown;
 } | null = {
   id: "chat-1",
   sessionId: "session-1",
@@ -462,6 +463,36 @@ describe("/shared/[shareId] page", () => {
     expect(element.props.isStreaming).toBe(true);
     expect(element.props.lastUserMessageSentAt).toBe(
       "2025-01-01T00:00:00.000Z",
+    );
+  });
+
+  test("projects the chat row instead of handing it to the shared page", async () => {
+    // `harnessSessionState` is an opaque external-harness resume blob that only
+    // the workflow reads. The shared page renders for anyone holding the share
+    // link, and its props are serialized into the RSC payload, so the row must
+    // not cross that boundary — now or when a future column is added to it.
+    chatRecord = {
+      id: "chat-1",
+      sessionId: "session-1",
+      title: "Debug flaky tests",
+      modelId: "anthropic/claude-opus-4.6",
+      activeStreamId: "stream-abc",
+      harnessSessionState: { bridgeToken: "harness-resume-secret" },
+    };
+    const { default: SharedPage } = await pageModulePromise;
+
+    const element = (await SharedPage({
+      params: Promise.resolve({ shareId: "share-1" }),
+    })) as {
+      props: { chats: Array<{ chat: Record<string, unknown> }> };
+    };
+
+    expect(element.props.chats[0]?.chat).toEqual({
+      id: "chat-1",
+      title: "Debug flaky tests",
+    });
+    expect(JSON.stringify(element.props)).not.toContain(
+      "harness-resume-secret",
     );
   });
 

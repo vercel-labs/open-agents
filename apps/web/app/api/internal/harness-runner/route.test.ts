@@ -22,6 +22,12 @@ const sandboxProvider = {
   providerId: "vercel-sandbox",
 };
 
+/**
+ * What `ensureGatewayApiKeyEnv` resolves for a run. Mutable so a run with no
+ * gateway credential available can be covered too.
+ */
+let gatewayApiKey: string | undefined = "test-gateway-key";
+
 const spies = {
   connectSandbox: mock(async () => ({
     toHarnessSandboxProvider: () => sandboxProvider,
@@ -53,7 +59,7 @@ mock.module("@open-agents/sandbox", () => ({
 }));
 
 mock.module("@open-agents/harness-runner", () => ({
-  ensureGatewayApiKeyEnv: async () => "test-gateway-key",
+  ensureGatewayApiKeyEnv: async () => gatewayApiKey,
   isExternalHarnessId: (value: unknown) =>
     value === "codex" || value === "claude-code" || value === "pi",
   runHarnessTurn: spies.runHarnessTurn,
@@ -114,6 +120,7 @@ function createRequestWithHarnessId(harnessId: string) {
 }
 
 beforeEach(() => {
+  gatewayApiKey = "test-gateway-key";
   spies.connectSandbox.mockClear();
   spies.runHarnessTurn.mockClear();
 });
@@ -230,6 +237,20 @@ describe("/api/internal/harness-runner", () => {
     );
   });
 
+  test("connects without a brokered credential when none is available", async () => {
+    gatewayApiKey = undefined;
+
+    const response = await POST(createRequest(true));
+    await response.text();
+
+    expect(spies.connectSandbox).toHaveBeenCalledWith(
+      { type: "vercel", sandboxName: "session-1" },
+      {
+        ports: [3000, 5173, 4321, 8000, 5001, 5002, 5003, 5004, 5005],
+      },
+    );
+  });
+
   test("streams runner chunks and the final result", async () => {
     const response = await POST(createRequest(true));
     const events = (await response.text())
@@ -238,10 +259,13 @@ describe("/api/internal/harness-runner", () => {
       .map((line) => JSON.parse(line));
 
     expect(response.status).toBe(200);
+    // The gateway credential is passed to the connect, not left to a fallback
+    // that would broker it into every sandbox this deployment touches.
     expect(spies.connectSandbox).toHaveBeenCalledWith(
       { type: "vercel", sandboxName: "session-1" },
       {
         ports: [3000, 5173, 4321, 8000, 5001, 5002, 5003, 5004, 5005],
+        aiGatewayApiKey: "test-gateway-key",
       },
     );
     expect(spies.runHarnessTurn).toHaveBeenCalledWith(

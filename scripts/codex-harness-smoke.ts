@@ -79,14 +79,21 @@ function parseArgs(argv: string[]): CliOptions | { help: true } {
   return { sandboxName, prompt, model };
 }
 
-async function ensureCodexAuth() {
-  if (
-    process.env.AI_GATEWAY_API_KEY ||
-    process.env.VERCEL_OIDC_TOKEN ||
-    process.env.CODEX_API_KEY ||
-    process.env.OPENAI_API_KEY
-  ) {
-    return;
+/**
+ * Resolve Codex auth for this run and return the AI Gateway credential to
+ * broker to the sandbox, if any. Brokering is opt-in per connect (see
+ * `buildDefaultCredentialBrokeringPolicy` in `packages/sandbox`), so this
+ * mirrors the harness runner route: pass the key the turn authenticates with,
+ * and nothing when Codex talks to OpenAI directly.
+ */
+async function resolveCodexAuth(): Promise<string | undefined> {
+  const configuredGatewayKey =
+    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+  if (configuredGatewayKey) {
+    return configuredGatewayKey;
+  }
+  if (process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY) {
+    return undefined;
   }
 
   const gatewayKey = await ensureGatewayApiKeyEnv();
@@ -95,6 +102,7 @@ async function ensureCodexAuth() {
       "Codex auth is unavailable. Set AI_GATEWAY_API_KEY, VERCEL_OIDC_TOKEN, CODEX_API_KEY, or OPENAI_API_KEY.",
     );
   }
+  return gatewayKey;
 }
 
 async function main() {
@@ -104,12 +112,13 @@ async function main() {
     return;
   }
 
-  await ensureCodexAuth();
+  const aiGatewayApiKey = await resolveCodexAuth();
 
   const sandbox = await connectVercelSandbox({
     sandboxName: parsed.sandboxName,
     resume: true,
     ports: DEFAULT_SANDBOX_PORTS,
+    ...(aiGatewayApiKey ? { aiGatewayApiKey } : {}),
   });
   const sessionId = `codex-smoke-${randomUUID()}`;
   const messageId = `assistant-${randomUUID()}`;

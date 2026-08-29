@@ -464,10 +464,10 @@ describe("VercelSandbox persistence", () => {
 });
 
 describe("Sandbox credential brokering", () => {
-  test("applies AI Gateway auth when creating a sandbox", async () => {
-    process.env.AI_GATEWAY_API_KEY = "gateway-key";
-
-    await sandboxModule.VercelSandbox.create();
+  test("applies AI Gateway auth when the caller opts in at creation", async () => {
+    await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "gateway-key",
+    });
 
     expect(createCalls[0]?.networkPolicy).toEqual({
       allow: {
@@ -475,6 +475,42 @@ describe("Sandbox credential brokering", () => {
         "*": [],
       },
     });
+  });
+
+  // A sandbox runs untrusted code, so the deployment's own gateway credential
+  // must never be brokered into one just because it is in this process's
+  // environment. Only a caller that asks for brokering gets it.
+  test("does not broker the deployment AI Gateway key from the environment when creating", async () => {
+    process.env.AI_GATEWAY_API_KEY = "deployment-key";
+
+    await sandboxModule.VercelSandbox.create();
+
+    expect(createCalls[0]?.networkPolicy).toEqual({ allow: { "*": [] } });
+  });
+
+  test("does not broker the deployment AI Gateway key from the environment when reconnecting", async () => {
+    process.env.AI_GATEWAY_API_KEY = "deployment-key";
+
+    await sandboxModule.VercelSandbox.connect("session_123", {
+      remainingTimeout: 0,
+    });
+
+    // A policy update replaces the whole policy, so a connect without opt-in
+    // also revokes brokering an earlier harness turn established.
+    expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
+  });
+
+  test("does not broker the deployment AI Gateway key from the environment when updating GitHub auth", async () => {
+    process.env.AI_GATEWAY_API_KEY = "deployment-key";
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123", {
+      remainingTimeout: 0,
+    });
+
+    await sandbox.setGitHubAuthToken("github-user-token");
+
+    expect(updateNetworkPolicyCalls.at(-1)?.allow).not.toHaveProperty(
+      "ai-gateway.vercel.sh",
+    );
   });
 
   test("applies setup GitHub auth when creating a sandbox and then clears it", async () => {
@@ -537,9 +573,8 @@ describe("Sandbox credential brokering", () => {
   });
 
   test("preserves AI Gateway auth when clearing setup GitHub auth", async () => {
-    process.env.AI_GATEWAY_API_KEY = "gateway-key";
-
     await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "gateway-key",
       githubToken: "github-user-token",
       source: {
         url: "https://github.com/open-agents/example",
@@ -562,8 +597,8 @@ describe("Sandbox credential brokering", () => {
     ]);
   });
 
-  test("prefers the explicit config key over the environment when creating", async () => {
-    process.env.AI_GATEWAY_API_KEY = "env-key";
+  test("brokers the explicit config key and ignores the environment when creating", async () => {
+    process.env.AI_GATEWAY_API_KEY = "deployment-key";
 
     await sandboxModule.VercelSandbox.create({
       aiGatewayApiKey: "explicit-key",
@@ -607,25 +642,8 @@ describe("Sandbox credential brokering", () => {
     expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 
-  test("applies AI Gateway auth when reconnecting to a sandbox", async () => {
-    process.env.AI_GATEWAY_API_KEY = "gateway-key";
-
-    await sandboxModule.VercelSandbox.connect("session_123", {
-      remainingTimeout: 0,
-    });
-
-    expect(updateNetworkPolicyCalls).toEqual([
-      {
-        allow: {
-          "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
-          "*": [],
-        },
-      },
-    ]);
-  });
-
-  test("applies the explicit config key when reconnecting to a sandbox", async () => {
-    process.env.AI_GATEWAY_API_KEY = "env-key";
+  test("brokers the explicit config key and ignores the environment when reconnecting", async () => {
+    process.env.AI_GATEWAY_API_KEY = "deployment-key";
 
     await sandboxModule.VercelSandbox.connect("session_123", {
       aiGatewayApiKey: "explicit-key",

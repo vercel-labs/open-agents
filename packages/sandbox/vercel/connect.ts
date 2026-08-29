@@ -6,6 +6,7 @@ import type { VercelState } from "./state.ts";
 interface ConnectOptions {
   env?: Record<string, string>;
   githubToken?: string;
+  aiGatewayApiKey?: string;
   gitUser?: { name: string; email: string };
   hooks?: SandboxHooks;
   timeout?: number;
@@ -75,6 +76,7 @@ function buildCreateConfig(
     ...(state.snapshotId ? { restoreSnapshotId: state.snapshotId } : {}),
     env: options?.env,
     githubToken: options?.githubToken,
+    aiGatewayApiKey: options?.aiGatewayApiKey,
     gitUser: options?.gitUser,
     hooks: options?.hooks,
     ...(options?.timeout !== undefined && { timeout: options.timeout }),
@@ -110,6 +112,7 @@ async function connectNamedSandbox(
     return await VercelSandbox.connect(sandboxName, {
       env: options?.env,
       githubToken: options?.githubToken,
+      aiGatewayApiKey: options?.aiGatewayApiKey,
       hooks: options?.hooks,
       remainingTimeout,
       ports: options?.ports,

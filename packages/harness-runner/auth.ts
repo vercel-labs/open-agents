@@ -24,10 +24,14 @@ function staticGatewayApiKeyFor(env: NodeJS.ProcessEnv): string | undefined {
 
 /**
  * Resolve the AI Gateway credential for a harness run and write it into the
- * environment (harness adapters and the sandbox network policy read it from
- * there). Without a static key, a fresh OIDC token is minted on every call —
- * warm server instances outlive a stored token's expiry, so a cached token
- * must never be reused.
+ * environment, where the harness adapters read it. It is also returned so the
+ * caller can hand it to its own sandbox connect: brokering the credential
+ * through the sandbox network policy is opt-in per connect and reads nothing
+ * from the environment (see `packages/sandbox/vercel/sandbox.ts`).
+ *
+ * Without a static key, a fresh OIDC token is minted on every call — warm
+ * server instances outlive a stored token's expiry, so a cached token must
+ * never be reused.
  */
 export async function ensureGatewayApiKeyEnv(
   env: NodeJS.ProcessEnv = process.env,
