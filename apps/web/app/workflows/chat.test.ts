@@ -674,7 +674,7 @@ describe("runAgentWorkflow", () => {
     );
   });
 
-  test("falls back to the raw finish reason for unclassified harness errors", async () => {
+  test("never surfaces the raw finish reason for unclassified harness errors", async () => {
     spies.runHarnessTurn.mockImplementationOnce(
       async (input: { messageId: string }) => ({
         responseMessage: {
@@ -684,7 +684,8 @@ describe("runAgentWorkflow", () => {
           metadata: {},
         },
         finishReason: "error" as const,
-        rawFinishReason: "codex: something novel exploded",
+        rawFinishReason:
+          "codex: something novel exploded at /vercel/sandbox/.codex/auth.json (AI_GATEWAY_API_KEY=vck_live_deadbeef)",
         usage: undefined,
       }),
     );
@@ -694,9 +695,13 @@ describe("runAgentWorkflow", () => {
     expect(writtenChunks).toContainEqual({
       type: "text-delta",
       id: expect.stringContaining(":harness-error"),
-      delta:
-        "Codex failed before it could respond: codex: something novel exploded",
+      delta: "Codex failed before it could respond. Try again in a moment.",
     });
+    // Nothing that reaches the browser may carry the raw reason.
+    expect(JSON.stringify(writtenChunks)).not.toContain("vck_live_deadbeef");
+    expect(
+      JSON.stringify(spies.persistAssistantMessage.mock.calls),
+    ).not.toContain("vck_live_deadbeef");
   });
 
   test("appends visible Codex errors after partial harness text", async () => {

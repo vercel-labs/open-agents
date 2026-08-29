@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type { UIMessage } from "ai";
 import {
   addHarnessUsage,
   extractHarnessCostUsd,
   harnessUsageFromMetadataValue,
+  withHarnessMetadata,
 } from "./usage.ts";
 
 describe("extractHarnessCostUsd", () => {
@@ -165,5 +167,70 @@ describe("harnessUsageFromMetadataValue", () => {
         inputTokenDetails: { cacheReadTokens: "4" },
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("withHarnessMetadata", () => {
+  const message: UIMessage = {
+    id: "assistant-1",
+    role: "assistant",
+    parts: [{ type: "text", text: "hi" }],
+  };
+  const input = {
+    selectedModelId: "openai/gpt-5.4",
+    modelId: "openai/gpt-5.4",
+  };
+
+  test("records the normalized finish reason", () => {
+    const enriched = withHarnessMetadata(message, input, {
+      finishReason: "stop",
+    });
+
+    expect(enriched.metadata).toMatchObject({
+      selectedModelId: "openai/gpt-5.4",
+      modelId: "openai/gpt-5.4",
+      lastStepFinishReason: "stop",
+      stepFinishReasons: [{ finishReason: "stop" }],
+    });
+  });
+
+  test("keeps raw harness failure text out of client-visible metadata", () => {
+    // Message metadata is streamed to the browser and persisted with the
+    // message, so a harness's unsanitized failure text must never ride along.
+    // `run-turn` passes the whole turn result here, raw finish reason included.
+    const turnResult = {
+      finishReason: "error" as const,
+      rawFinishReason:
+        "codex: exploded at /vercel/sandbox/.codex/auth.json (AI_GATEWAY_API_KEY=vck_live_deadbeef)",
+    };
+
+    const enriched = withHarnessMetadata(message, input, turnResult);
+
+    expect(JSON.stringify(enriched.metadata)).not.toContain(
+      "vck_live_deadbeef",
+    );
+    expect(JSON.stringify(enriched.metadata)).not.toContain("rawFinishReason");
+    expect(enriched.metadata).toMatchObject({
+      lastStepFinishReason: "error",
+      stepFinishReasons: [{ finishReason: "error" }],
+    });
+  });
+
+  test("carries forward the previous turns' step history", () => {
+    const enriched = withHarnessMetadata(
+      {
+        ...message,
+        metadata: { stepFinishReasons: [{ finishReason: "tool-calls" }] },
+      },
+      input,
+      { finishReason: "stop" },
+    );
+
+    expect(enriched.metadata).toMatchObject({
+      stepFinishReasons: [
+        { finishReason: "tool-calls" },
+        { finishReason: "stop" },
+      ],
+    });
   });
 });

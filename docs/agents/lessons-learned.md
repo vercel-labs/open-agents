@@ -35,6 +35,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - In this codebase's Next.js version, `revalidateTag` must be called with a second argument (for example `{ expire: 0 }`); single-argument calls fail typecheck.
 - For Workflow SDK discovery in Next.js, ensure workflow files live in scanned directories (for this app, `app/`), otherwise manifests can show steps but `0 workflows` and `start()` will not run durable workflows.
 - Server-side optimistic chat route lookup must allow realistic persistence latency (multi-second retry window), otherwise `/sessions/[sessionId]/chats/[chatId]` can redirect away before chat creation finishes.
+- A Route Handler that exports only `POST` does not need `export const dynamic = "force-dynamic"`: Next only prerenders `GET`, so the route is dynamic (`ƒ` in the build output) either way. Nor should it hand-roll handlers for the verbs it does not implement — Next's own `405` is the answer, and replacing it with a `404` conceals only the route's existence, which is never what protects it.
 
 ## Sandbox Lifecycle
 

@@ -3,9 +3,10 @@ import type {
   HarnessUIMessageChunk,
 } from "@open-agents/harness-runner";
 import {
+  INTERNAL_HARNESS_RUNNER_PATH,
   INTERNAL_HARNESS_SIGNATURE_HEADER,
-  signInternalHarnessRequest,
-} from "./internal-request";
+} from "./internal-endpoints";
+import { signInternalHarnessRequest } from "./internal-request";
 import {
   type InternalHarnessRunEvent,
   type InternalHarnessRunRequest,
@@ -58,29 +59,31 @@ export async function runHarnessTurnViaApi(
       : {}),
   };
   const body = JSON.stringify(requestBody);
-  const response = await fetch(
-    new URL("/api/internal/harness-runner", input.requestUrl),
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [INTERNAL_HARNESS_SIGNATURE_HEADER]: signInternalHarnessRequest(body),
-        ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-          ? {
-              "x-vercel-protection-bypass":
-                process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-            }
-          : {}),
-        ...(process.env.VERCEL_OIDC_TOKEN
-          ? {
-              "x-vercel-trusted-oidc-idp-token": process.env.VERCEL_OIDC_TOKEN,
-            }
-          : {}),
-      },
-      body,
-      ...(input.abortSignal ? { signal: input.abortSignal } : {}),
+  const url = new URL(INTERNAL_HARNESS_RUNNER_PATH, input.requestUrl);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      [INTERNAL_HARNESS_SIGNATURE_HEADER]: signInternalHarnessRequest({
+        method: "POST",
+        url: url.toString(),
+        body,
+      }),
+      ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+        ? {
+            "x-vercel-protection-bypass":
+              process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+          }
+        : {}),
+      ...(process.env.VERCEL_OIDC_TOKEN
+        ? {
+            "x-vercel-trusted-oidc-idp-token": process.env.VERCEL_OIDC_TOKEN,
+          }
+        : {}),
     },
-  );
+    body,
+    ...(input.abortSignal ? { signal: input.abortSignal } : {}),
+  });
 
   if (!response.ok) {
     throw new Error(

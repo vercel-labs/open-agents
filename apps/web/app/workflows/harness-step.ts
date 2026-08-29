@@ -32,7 +32,7 @@ export function buildHarnessSessionKey(
 /**
  * User-facing copy for the runner's machine-readable failure codes. The
  * runner classifies known failure modes where the raw failure text
- * originates; anything unclassified falls back to the raw finish reason.
+ * originates, and only these codes ever reach the user.
  */
 const HARNESS_ERROR_COPY: Record<HarnessTurnErrorCode, string> = {
   "missing-ws-module":
@@ -43,12 +43,20 @@ const HARNESS_ERROR_COPY: Record<HarnessTurnErrorCode, string> = {
     "because the sandbox bridge did not start. Recreate the sandbox and try again.",
 };
 
-const MAX_RAW_REASON_LENGTH = 500;
-
+/**
+ * Build the assistant-visible text for a failed harness turn.
+ *
+ * A harness's raw finish reason is unsanitized text lifted straight from the
+ * agent process — provider error payloads, stderr, stack traces — and in
+ * practice it carries sandbox paths, environment variable names, credentials,
+ * and internal URLs. It is never interpolated here. Known failure modes get
+ * curated copy via the runner's error codes; everything else gets a generic
+ * message, and the raw text stays server-side (run logs and
+ * `workflow_run_steps.raw_finish_reason`) for debugging.
+ */
 export function getHarnessErrorMessage(params: {
   harnessLabel: string;
   errorCode: HarnessTurnErrorCode | undefined;
-  rawFinishReason: string | undefined;
   hasPartialResponse: boolean;
 }): string {
   const timing = params.hasPartialResponse
@@ -60,15 +68,7 @@ export function getHarnessErrorMessage(params: {
     return `${failed} ${HARNESS_ERROR_COPY[params.errorCode]}`;
   }
 
-  if (!params.rawFinishReason) {
-    return `${failed}. Try again in a moment.`;
-  }
-
-  const reason =
-    params.rawFinishReason.length > MAX_RAW_REASON_LENGTH
-      ? `${params.rawFinishReason.slice(0, MAX_RAW_REASON_LENGTH)}...`
-      : params.rawFinishReason;
-  return `${failed}: ${reason}`;
+  return `${failed}. Try again in a moment.`;
 }
 
 /**
@@ -145,15 +145,20 @@ export const runHarnessAgentStep = async (
     });
     const responseMessage = toWebAgentUIMessage(result.responseMessage);
     const hasPartialResponse = responseMessage.parts.length > 0;
-    const errorText =
-      result.finishReason === "error"
-        ? getHarnessErrorMessage({
-            harnessLabel: getChatHarnessLabel(params.harnessId),
-            errorCode: result.errorCode,
-            rawFinishReason: result.rawFinishReason,
-            hasPartialResponse,
-          })
-        : undefined;
+    let errorText: string | undefined;
+    if (result.finishReason === "error") {
+      // The only place the raw reason is recorded verbatim, so unclassified
+      // failures stay diagnosable without shipping the text to the browser.
+      console.error(
+        `[harness-step] ${params.harnessId} turn failed for chat ${params.chatId} (code: ${result.errorCode ?? "unclassified"}):`,
+        result.rawFinishReason,
+      );
+      errorText = getHarnessErrorMessage({
+        harnessLabel: getChatHarnessLabel(params.harnessId),
+        errorCode: result.errorCode,
+        hasPartialResponse,
+      });
+    }
     const stepFinishedAt = new Date();
 
     return {

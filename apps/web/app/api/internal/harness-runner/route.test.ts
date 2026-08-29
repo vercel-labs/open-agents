@@ -1,7 +1,22 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { INTERNAL_API_REJECTED_STATUS } from "@/lib/harness-runner/internal-endpoints";
 import { signInternalHarnessRequest } from "@/lib/harness-runner/internal-request";
+import { INTERNAL_API_MAX_BODY_BYTES } from "@/lib/harness-runner/internal-route";
 
-const originalSecret = process.env.BETTER_AUTH_SECRET;
+// These tests call the route's exported handlers directly, which is the same
+// thing as `proxy.ts` never having run. Every control asserted here therefore
+// holds on its own; the proxy is only an optimization in front of it.
+
+const originalSecret = process.env.INTERNAL_HARNESS_SECRET;
+const RUNNER_URL = "https://preview.example.com/api/internal/harness-runner";
 const sandboxProvider = {
   specificationVersion: "harness-sandbox-v1",
   providerId: "vercel-sandbox",
@@ -45,18 +60,19 @@ mock.module("@open-agents/harness-runner", () => ({
 }));
 
 beforeAll(() => {
-  process.env.BETTER_AUTH_SECRET = "test-internal-harness-secret";
+  process.env.INTERNAL_HARNESS_SECRET = "test-internal-harness-secret";
 });
 
 afterAll(() => {
   if (originalSecret === undefined) {
-    delete process.env.BETTER_AUTH_SECRET;
+    delete process.env.INTERNAL_HARNESS_SECRET;
   } else {
-    process.env.BETTER_AUTH_SECRET = originalSecret;
+    process.env.INTERNAL_HARNESS_SECRET = originalSecret;
   }
 });
 
-const { POST } = await import("./route");
+const routeModule = await import("./route");
+const { POST } = routeModule;
 
 const body = JSON.stringify({
   harnessId: "codex",
@@ -77,19 +93,19 @@ const body = JSON.stringify({
 });
 
 function createRequest(signed: boolean, requestBody = body) {
-  return new Request(
-    "https://preview.example.com/api/internal/harness-runner",
-    {
-      method: "POST",
-      headers: signed
-        ? {
-            "x-open-agents-harness-signature":
-              signInternalHarnessRequest(requestBody),
-          }
-        : undefined,
-      body: requestBody,
-    },
-  );
+  return new Request(RUNNER_URL, {
+    method: "POST",
+    headers: signed
+      ? {
+          "x-open-agents-harness-signature": signInternalHarnessRequest({
+            method: "POST",
+            url: RUNNER_URL,
+            body: requestBody,
+          }),
+        }
+      : undefined,
+    body: requestBody,
+  });
 }
 
 function createRequestWithHarnessId(harnessId: string) {
@@ -97,11 +113,60 @@ function createRequestWithHarnessId(harnessId: string) {
   return createRequest(true, JSON.stringify({ ...parsedBody, harnessId }));
 }
 
-describe("/api/internal/harness-runner", () => {
-  test("rejects unsigned requests", async () => {
-    const response = await POST(createRequest(false));
+beforeEach(() => {
+  spies.connectSandbox.mockClear();
+  spies.runHarnessTurn.mockClear();
+});
 
-    expect(response.status).toBe(401);
+describe("/api/internal/harness-runner", () => {
+  test("rejects unsigned requests without reading their body", async () => {
+    const request = createRequest(false);
+    const response = await POST(request);
+
+    // 404, not 401: the route is indistinguishable from a nonexistent one to
+    // an unauthenticated caller even with no proxy in front of it.
+    expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
+    expect(await response.text()).toBe("");
+    expect(request.bodyUsed).toBe(false);
+    expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("rejects a signature minted for another internal path", async () => {
+    const response = await POST(
+      new Request(RUNNER_URL, {
+        method: "POST",
+        headers: {
+          "x-open-agents-harness-signature": signInternalHarnessRequest({
+            method: "POST",
+            url: "https://preview.example.com/api/internal/other-runner",
+            body,
+          }),
+        },
+        body,
+      }),
+    );
+
+    expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
+    expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("exports no handler for any verb other than POST", () => {
+    // Next answers `405` for a verb a route does not export. The route does not
+    // hand-roll a response for those: the method is signed material, so the
+    // restriction that matters is the HMAC, and a `404` here would only be
+    // hiding an endpoint whose existence is not the secret.
+    const exported = new Set(Object.keys(routeModule));
+
+    for (const verb of ["GET", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(exported.has(verb)).toBe(false);
+    }
+  });
+
+  test("rejects an over-cap body before starting a harness turn", async () => {
+    const oversized = "x".repeat(INTERNAL_API_MAX_BODY_BYTES + 1);
+    const response = await POST(createRequest(true, oversized));
+
+    expect(response.status).toBe(INTERNAL_API_REJECTED_STATUS);
     expect(spies.connectSandbox).not.toHaveBeenCalled();
   });
 
@@ -127,6 +192,22 @@ describe("/api/internal/harness-runner", () => {
     const responseBody = (await response.json()) as { error: string };
     expect(responseBody.error).toStartWith("Invalid request:");
     expect(spies.connectSandbox).not.toHaveBeenCalled();
+  });
+
+  test("marks every response uncacheable", async () => {
+    const rejected = await POST(createRequest(false));
+
+    expect(rejected.headers.get("cache-control")).toBe("no-store");
+
+    const invalid = await POST(createRequestWithHarnessId("open-agent"));
+    await invalid.text();
+
+    expect(invalid.headers.get("cache-control")).toBe("no-store");
+
+    const accepted = await POST(createRequest(true));
+    await accepted.text();
+
+    expect(accepted.headers.get("cache-control")).toBe("no-store");
   });
 
   test("accepts the claude-code harness", async () => {
