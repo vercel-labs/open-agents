@@ -1,12 +1,13 @@
-import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
+import { gateway, isStepCount, ToolLoopAgent } from "ai";
 import { z } from "zod";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
+import { PLACEHOLDER_AGENT_CONTEXT, uniformToolsContext } from "../tools/utils";
 import { editFileTool, writeFileTool } from "../tools/write";
-import type { SandboxExecutionContext } from "../types";
+import type { AgentContext, SandboxExecutionContext } from "../types";
 import {
   SUBAGENT_BASH_RULES,
   SUBAGENT_COMPLETE_TASK_RULES,
@@ -88,18 +89,21 @@ const callOptionsSchema = z.object({
 
 export type DesignCallOptions = z.infer<typeof callOptionsSchema>;
 
+const tools = {
+  read: readFileTool(),
+  write: writeFileTool(),
+  edit: editFileTool(),
+  grep: grepTool(),
+  glob: globTool(),
+  bash: bashTool(),
+} satisfies ToolSet;
+
 export const designSubagent = new ToolLoopAgent({
   model: gateway("anthropic/claude-opus-4.6"),
   instructions: DESIGN_SYSTEM_PROMPT,
-  tools: {
-    read: readFileTool(),
-    write: writeFileTool(),
-    edit: editFileTool(),
-    grep: grepTool(),
-    glob: globTool(),
-    bash: bashTool(),
-  },
-  stopWhen: stepCountIs(SUBAGENT_STEP_LIMIT),
+  tools,
+  toolsContext: uniformToolsContext(tools, PLACEHOLDER_AGENT_CONTEXT),
+  stopWhen: isStepCount(SUBAGENT_STEP_LIMIT),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     if (!options) {
@@ -108,6 +112,7 @@ export const designSubagent = new ToolLoopAgent({
 
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
+    const agentContext: AgentContext = { sandbox, model };
     return {
       ...settings,
       model,
@@ -122,10 +127,7 @@ ${options.task}
 ${options.instructions}
 
 ${SUBAGENT_REMINDER}`,
-      experimental_context: {
-        sandbox,
-        model,
-      },
+      toolsContext: uniformToolsContext(tools, agentContext),
     };
   },
 });

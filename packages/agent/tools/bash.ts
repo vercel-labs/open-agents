@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
+import { agentContextSchema } from "../types";
 import { getSandbox } from "./utils";
 
 const TIMEOUT_MS = 120_000;
@@ -65,6 +66,7 @@ export function commandNeedsApproval(command: string): boolean {
 
 export const bashTool = (options?: ToolOptions) =>
   tool({
+    contextSchema: agentContextSchema,
     needsApproval: async (args) => {
       if (commandNeedsApproval(args.command)) {
         if (typeof options?.needsApproval === "function") {
@@ -114,11 +116,8 @@ EXAMPLES:
 - List files in src: command: "ls -la", cwd: "src"
 - Start a dev server: command: "npm run dev", detached: true`,
     inputSchema: bashInputSchema,
-    execute: async (
-      { command, cwd, detached },
-      { experimental_context, abortSignal },
-    ) => {
-      const sandbox = await getSandbox(experimental_context, "bash");
+    execute: async ({ command, cwd, detached }, { context, abortSignal }) => {
+      const sandbox = await getSandbox(context, "bash");
       const workingDirectory = sandbox.workingDirectory;
 
       // Resolve the working directory

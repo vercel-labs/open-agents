@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
+import { agentContextSchema } from "../types";
 import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface FileInfo {
@@ -23,6 +24,7 @@ const globInputSchema = z.object({
 
 export const globTool = () =>
   tool({
+    contextSchema: agentContextSchema,
     description: `Find files matching a glob pattern.
 
 WHEN TO USE:
@@ -54,9 +56,9 @@ EXAMPLES:
     inputSchema: globInputSchema,
     execute: async (
       { pattern, path: basePath, limit = 100 },
-      { experimental_context, abortSignal },
+      { context, abortSignal },
     ) => {
-      const sandbox = await getSandbox(experimental_context, "glob");
+      const sandbox = await getSandbox(context, "glob");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

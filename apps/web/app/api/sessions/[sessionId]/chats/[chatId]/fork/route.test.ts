@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+type TestHarnessId = "open-agent" | "codex" | "claude-code" | "pi";
+
 type AuthResult =
   | {
       ok: true;
@@ -19,6 +21,7 @@ type OwnedSessionChatResult =
         sessionId: string;
         title: string;
         modelId: string | null;
+        harnessId: TestHarnessId;
         activeStreamId: string | null;
       };
     }
@@ -32,6 +35,7 @@ type ChatRecord = {
   sessionId: string;
   title: string;
   modelId: string | null;
+  harnessId: TestHarnessId;
 };
 
 type ForkResult =
@@ -48,10 +52,12 @@ let ownedSessionChatResult: OwnedSessionChatResult = {
     sessionId: "session-1",
     title: "Original chat",
     modelId: "model-1",
+    harnessId: "codex",
     activeStreamId: null,
   },
 };
 let existingChat: ChatRecord | null = null;
+let sessionChatCount = 1;
 let forkResult: ForkResult = {
   status: "created",
   chat: {
@@ -59,6 +65,7 @@ let forkResult: ForkResult = {
     sessionId: "session-1",
     title: "Fork of Original chat",
     modelId: "model-1",
+    harnessId: "codex",
   },
 };
 
@@ -72,6 +79,7 @@ const forkCalls: Array<{
     sessionId: string;
     title: string;
     modelId: string | null;
+    harnessId: TestHarnessId;
   };
 }> = [];
 
@@ -85,6 +93,7 @@ mock.module("@/lib/db/sessions", () => ({
     getChatByIdCalls.push(chatId);
     return existingChat;
   },
+  countChatsBySessionId: async () => sessionChatCount,
   forkChatThroughMessage: async (input: (typeof forkCalls)[number]) => {
     forkCalls.push(input);
     return forkResult;
@@ -112,6 +121,7 @@ function createPostRequest(body: unknown): Request {
 
 describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
   beforeEach(() => {
+    sessionChatCount = 1;
     authResult = { ok: true, userId: "user-1" };
     ownedSessionChatResult = {
       ok: true,
@@ -121,6 +131,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
         sessionId: "session-1",
         title: "Original chat",
         modelId: "model-1",
+        harnessId: "codex",
         activeStreamId: null,
       },
     };
@@ -132,6 +143,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
         sessionId: "session-1",
         title: "Fork of Original chat",
         modelId: "model-1",
+        harnessId: "codex",
       },
     };
     getChatByIdCalls.length = 0;
@@ -218,6 +230,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
       sessionId: "session-1",
       title: "Existing",
       modelId: "model-1",
+      harnessId: "codex",
     };
     const { POST } = await routeModulePromise;
 
@@ -281,6 +294,7 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
           sessionId: "session-1",
           title: "Fork of Original chat",
           modelId: "model-1",
+          harnessId: "codex",
         },
       },
     ]);
@@ -289,6 +303,22 @@ describe("/api/sessions/[sessionId]/chats/[chatId]/fork", () => {
       sessionId: "session-1",
       title: "Fork of Original chat",
       modelId: "model-1",
+      harnessId: "codex",
     });
+  });
+
+  test("returns 400 when the session already has the maximum number of chats", async () => {
+    sessionChatCount = 5;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createPostRequest({ messageId: "message-2" }),
+      createContext(),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("maximum");
+    expect(forkCalls).toHaveLength(0);
   });
 });

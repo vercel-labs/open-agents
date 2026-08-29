@@ -260,6 +260,13 @@
       "when": 1778835412125,
       "tag": "0036_faulty_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786450669218,
+      "tag": "0037_complete_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }

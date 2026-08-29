@@ -13,7 +13,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
     "@ai-sdk/openai": "catalog:",
+    "@ai-sdk/provider-utils": "5.0.26",
     "@open-agents/sandbox": "workspace:*",
+    "@open-agents/shared": "workspace:*",
     "ai": "catalog:",
     "zod": "catalog:"
   },

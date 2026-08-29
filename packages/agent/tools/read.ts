@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { agentContextSchema } from "../types";
 import { getSandbox, toDisplayPath } from "./utils";
 import {
   isDotEnvFilePath,
@@ -26,14 +27,15 @@ const readInputSchema = z.object({
 
 export const readFileTool = () =>
   tool({
-    needsApproval: async ({ filePath }, { experimental_context }) => {
+    contextSchema: agentContextSchema,
+    needsApproval: async ({ filePath }, { context }) => {
       if (isDotEnvFilePath(filePath)) {
         return true;
       }
 
       let sandbox;
       try {
-        sandbox = await getSandbox(experimental_context, "read");
+        sandbox = await getSandbox(context, "read");
       } catch {
         return false;
       }
@@ -73,11 +75,8 @@ EXAMPLES:
 - Read an entire file: filePath: "src/index.ts"
 - Read a slice of a long file: filePath: "logs/app.log", offset: 500, limit: 200`,
     inputSchema: readInputSchema,
-    execute: async (
-      { filePath, offset = 1, limit = 2000 },
-      { experimental_context },
-    ) => {
-      const sandbox = await getSandbox(experimental_context, "read");
+    execute: async ({ filePath, offset = 1, limit = 2000 }, { context }) => {
+      const sandbox = await getSandbox(context, "read");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

@@ -1,5 +1,15 @@
 import type { SandboxState } from "@open-agents/sandbox";
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -70,7 +80,7 @@ export async function createSession(data: NewSession) {
 
 interface CreateSessionWithInitialChatInput {
   session: NewSession;
-  initialChat: Pick<NewChat, "id" | "title" | "modelId">;
+  initialChat: Pick<NewChat, "id" | "title" | "modelId" | "harnessId">;
 }
 
 export async function createSessionWithInitialChat(
@@ -92,6 +102,7 @@ export async function createSessionWithInitialChat(
         sessionId: session.id,
         title: input.initialChat.title,
         modelId: input.initialChat.modelId,
+        harnessId: input.initialChat.harnessId,
       })
       .returning();
     if (!chat) {
@@ -412,6 +423,17 @@ export async function getChatById(chatId: string) {
   });
 }
 
+export async function countChatsBySessionId(
+  sessionId: string,
+): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(chats)
+    .where(eq(chats.sessionId, sessionId));
+
+  return result?.count ?? 0;
+}
+
 /**
  * Get all chats for a session, ordered by most recent activity first.
  * Activity is tracked on chats.updatedAt and updated when new messages arrive.
@@ -423,7 +445,15 @@ export async function getChatsBySessionId(sessionId: string) {
   });
 }
 
-export type ChatSummary = typeof chats.$inferSelect & {
+/**
+ * Chat row projection for listings. Deliberately excludes
+ * `harnessSessionState`: it is an opaque server-side resume blob the browser
+ * never reads, and it would otherwise ride along with every chats listing.
+ */
+export type ChatSummary = Omit<
+  typeof chats.$inferSelect,
+  "harnessSessionState"
+> & {
   hasUnread: boolean;
   isStreaming: boolean;
 };
@@ -441,6 +471,7 @@ export async function getChatSummariesBySessionId(
       sessionId: chats.sessionId,
       title: chats.title,
       modelId: chats.modelId,
+      harnessId: chats.harnessId,
       activeStreamId: chats.activeStreamId,
       lastAssistantMessageAt: chats.lastAssistantMessageAt,
       createdAt: chats.createdAt,
@@ -474,6 +505,28 @@ export async function updateChat(
     .update(chats)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(chats.id, chatId))
+    .returning();
+  return chat;
+}
+
+export async function updateEmptyChat(
+  chatId: string,
+  data: Partial<Omit<NewChat, "id" | "sessionId" | "createdAt">>,
+) {
+  const [chat] = await db
+    .update(chats)
+    .set({ ...data, updatedAt: new Date() })
+    .where(
+      and(
+        eq(chats.id, chatId),
+        notExists(
+          db
+            .select({ id: chatMessages.id })
+            .from(chatMessages)
+            .where(eq(chatMessages.chatId, chatId)),
+        ),
+      ),
+    )
     .returning();
   return chat;
 }
@@ -592,7 +645,10 @@ type ForkChatThroughMessageInput = {
   userId: string;
   sourceChatId: string;
   throughMessageId: string;
-  forkedChat: Pick<NewChat, "id" | "sessionId" | "title" | "modelId">;
+  forkedChat: Pick<
+    NewChat,
+    "id" | "sessionId" | "title" | "modelId" | "harnessId"
+  >;
 };
 
 type ForkChatThroughMessageResult =

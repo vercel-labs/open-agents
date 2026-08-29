@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { agentContextSchema } from "../types";
 import { getSandbox, shellEscape } from "./utils";
 
 const TIMEOUT_MS = 30_000;
@@ -245,6 +246,7 @@ const fetchOutputSchema = z.union([
 ]);
 
 export const webFetchTool = tool({
+  contextSchema: agentContextSchema,
   needsApproval: true,
   description: `Fetch a URL from the web.
 
@@ -261,9 +263,9 @@ EXAMPLES:
   outputSchema: fetchOutputSchema,
   execute: async (
     { url, method = "GET", headers, body },
-    { experimental_context, abortSignal },
+    { context, abortSignal },
   ) => {
-    const sandbox = await getSandbox(experimental_context, "web_fetch");
+    const sandbox = await getSandbox(context, "web_fetch");
     const workingDirectory = sandbox.workingDirectory;
 
     const parsedUrl = new URL(url);

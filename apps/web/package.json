@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm db:migrate:apply && next build",
+    "build": "pnpm db:migrate:apply && pnpm sandbox:prewarm && next build",
     "db:migrate:apply": "node lib/db/migrate.ts",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -13,14 +13,16 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:check": "node scripts/check-migrations.ts"
+    "db:check": "node scripts/check-migrations.ts",
+    "sandbox:prewarm": "node ../../scripts/vercel-prewarm-sandbox-template.ts"
   },
   "dependencies": {
-    "@ai-sdk/elevenlabs": "^2.0.29",
+    "@ai-sdk/elevenlabs": "3.0.27",
     "@ai-sdk/react": "catalog:",
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
     "@open-agents/agent": "workspace:*",
+    "@open-agents/harness-runner": "workspace:*",
     "@open-agents/sandbox": "workspace:*",
     "@open-agents/shared": "workspace:*",
     "@pierre/diffs": "^1.0.10",
@@ -40,7 +42,7 @@
     "@streamdown/code": "^1.1.1",
     "@vercel/analytics": "^1.4.1",
     "@vercel/oidc": "^2.0.0",
-    "@workflow/ai": "5.0.0-beta.4",
+    "@workflow/ai": "5.0.0-beta.6",
     "ai": "catalog:",
     "arctic": "^3.7.0",
     "better-auth": "^1.6.5",
@@ -65,7 +67,7 @@
     "swr": "^2.3.8",
     "tailwind-merge": "^3.4.0",
     "vaul": "^1.1.2",
-    "workflow": "5.0.0-beta.5",
+    "workflow": "5.0.0-beta.12",
     "zod": "catalog:"
   },
   "devDependencies": {

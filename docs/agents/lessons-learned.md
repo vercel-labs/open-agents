@@ -4,6 +4,7 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 
 ## General / Tooling
 
+- `"use workflow"` functions run as deterministic state machines, not full compute: the workflow bundle must not contain Node.js modules. In workflow modules (`apps/web/app/workflows/*`), every `@open-agents/*` import must be type-only, and helpers called from the workflow body (not inside a `"use step"`) must live in pure workflow-local modules. `usage-utils.ts` deliberately duplicates `addLanguageModelUsage` from `@open-agents/agent` for this reason — do not "dedupe" it into a package import; that pulls Node.js modules into the state machine and breaks every workflow at runtime.
 - Skill discovery de-duplicates by first-seen name, so project skill directories must be scanned before user-level directories to allow project overrides.
 - The system prompt should list all model-invocable skills (including non-user-invocable ones), and reserve user-invocable filtering for the slash-command UI.
 - Glob patterns ending in `**` (for example `"**"` or `"src/**"`) should be treated as recursive, even when `**` is the final segment.
@@ -21,6 +22,10 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - `bunx @vercel/config validate` executes the CLI under Node via its shebang and cannot parse TypeScript-style `vercel.ts` imports; use `bunx --bun @vercel/config validate` (or `bun node_modules/@vercel/config/dist/cli.js validate`) for reliable local validation.
 - Successful Vercel CLI auth (`vercel whoami`, team/project REST APIs, `.vercel` linking) does **not** guarantee Workflow observability access. `workflow inspect ... --backend vercel` can still fail with `401 {"error":{"code":"unauthorized","message":"You are not allowed to access this endpoint."}}` when the user/token lacks the Vercel product permission documented as `Vercel Workflow` (and possibly related Observability access), even if `WORKFLOW_VERCEL_AUTH_TOKEN` is passed explicitly from the Vercel CLI auth file.
 
+## Database / Migrations
+
+- Preview databases are Neon branches that persist across deploys of the same git branch — they are NOT re-forked per deploy. Never delete or rewrite unmerged migrations that a preview deployment may already have applied: drizzle replays by journal timestamp against recorded history, so a rewritten migration re-runs on that database and fails (e.g. 42701 duplicate_column) during `pnpm build`. If migrations must be consolidated before merge, write every statement idempotently (`ADD COLUMN IF NOT EXISTS`, `DROP COLUMN IF EXISTS`) and clean up anything the replaced migrations left behind.
+
 ## Next.js
 
 - In Next.js App Router, dynamic route param names must match the folder segment exactly (e.g. `[sessionId]` requires `params.sessionId`, not `params.id`), or DB queries can receive `undefined` and fail at runtime.
@@ -30,9 +35,12 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 - In this codebase's Next.js version, `revalidateTag` must be called with a second argument (for example `{ expire: 0 }`); single-argument calls fail typecheck.
 - For Workflow SDK discovery in Next.js, ensure workflow files live in scanned directories (for this app, `app/`), otherwise manifests can show steps but `0 workflows` and `start()` will not run durable workflows.
 - Server-side optimistic chat route lookup must allow realistic persistence latency (multi-second retry window), otherwise `/sessions/[sessionId]/chats/[chatId]` can redirect away before chat creation finishes.
+- A Route Handler that exports only `POST` does not need `export const dynamic = "force-dynamic"`: Next only prerenders `GET`, so the route is dynamic (`ƒ` in the build output) either way. Nor should it hand-roll handlers for the verbs it does not implement — Next's own `405` is the answer, and replacing it with a `404` conceals only the route's existence, which is never what protects it.
 
 ## Sandbox Lifecycle
 
+- AI SDK Harness custom tools are host-executed. A client-only tool without `execute()` leaves the runtime bridge waiting for a result. Configure interactive tools with `toolApproval: "user-approval"` to finish the turn, and hide the internal approval event when the product UI collects a richer tool result in the next request.
+- AI SDK `HarnessAgent` creates session work directories beneath the sandbox provider's `defaultWorkingDirectory`. When that directory is also the repository root, place the harness base elsewhere (for example `/tmp/open-agents-harness`) before symlinking to the repo, or Git will see the harness session symlink as an untracked workspace change.
 - Detached/background bash results may have `exitCode: null` for both successful starts and explicit tool failures; bash renderer error state must also honor `output.success === false` (not only numeric non-zero exit codes), and detached quick-failure probing should prefer a timer-vs-wait race branch over matching SDK-specific error names.
 - Creating a sandbox snapshot automatically shuts down that sandbox; lifecycle plans and implementations must treat snapshotting as a stop/hibernate transition, not a non-disruptive backup.
 - Vercel `sdk.domain(port)` throws when a sandbox has no route for that port (common on some restored/reconnected sandboxes); environment/prompt metadata should guard per-port URL generation instead of assuming every configured port is routable.
@@ -79,6 +87,12 @@ Hard-won knowledge from building this codebase. When you make a mistake or disco
 
 ## Chat / Streaming UI
 
+- Workflow `"use step"` functions whose only side effect is an external mutation (e.g. closing the durable run stream via PUT) must be idempotent: the runtime can re-execute a step when the process dies between the side effect landing and the journal write, so a second `writable.close()` returns HTTP 409 "Stream is already completed". Treat that conflict as success (see `stream-conflict.ts`) instead of letting the retry fail the whole workflow.
+- Claude Code exposes a native `AskUserQuestion` tool that executes provider-side under permissive harness permissions and can complete without showing the product UI. Disable it via `HarnessAgent`'s `inactiveTools` (native built-in tool filtering, mapped to the CLI's `disallowedTools`) so durable user input always uses the custom lower-case `ask_user_question` tool. Do not patch the generated bridge file — stable `@ai-sdk/harness-claude-code` computes its own `disallowedTools` from `inactiveTools`, and an injected duplicate key silently overrides it.
+- Client tool auto-submit must be scoped to the current assistant step. External harness streams need an explicit `start-step` boundary; without one, an old completed `ask_user_question` remains eligible after later text and can spawn workflows indefinitely.
+- Tool part inputs from external harnesses are untyped JSON — the AI SDK schema never validated them, so typed `part.input` casts are unsafe and models can send stringified or non-array nested fields. Normalize at the render boundary (`lib/chat/normalize-ask-user-question.ts`, `lib/chat/normalize-todo-input.ts`) before calling array methods, or the whole chat page crashes.
+- AI SDK harness adapters do not all run an in-sandbox bridge. Pi runs in the host Node.js process and uses the sandbox as remote filesystem/shell, so `prewarmHarness(createPi())` is intentionally a no-op unless the adapter gains a bootstrap recipe later.
+- Concurrent external-harness chats on one session sandbox are supported by declaring a pool of bridge ports (`AGENT_HARNESS_BRIDGE_PORTS`, 5001-5005) at sandbox creation and letting the AI SDK harness session manager lease one port per session. Do not add app-level single-run ownership claims on top; overlapping chats are expected and the pool bounds concurrency.
 - In large chat/page client components, extract new feature-specific UI flows into colocated hooks and child components instead of adding more state/effects/handlers inline; if the feature state must survive dropdown/popover/dialog toggles, mount the hook in the parent view and pass its controls down.
 - In the web chat UI, do not keep `@ai-sdk/react` Chat instances alive after route transitions while they are still streaming; abort local stream processing and remove the instance on teardown, then rely on resumable stream reconnect when revisiting that chat.
 - For client-side tool flows (`ask_user_question`), `onFinish`-only assistant persistence is insufficient across route switches: persist the latest incoming message snapshot at API request start (upsert by message id) so answered/declined tool state survives teardown/resume and does not rehydrate stale `input-available` UI.

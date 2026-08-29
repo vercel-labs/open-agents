@@ -18,11 +18,11 @@ import {
   type ScopedInstallationToken,
 } from "@/lib/github/app";
 import {
-  DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
   DEFAULT_SANDBOX_VCPUS,
 } from "@/lib/sandbox/config";
+import { resolveSandboxBaseSnapshotId } from "@/lib/sandbox/base-snapshot";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
@@ -206,6 +206,7 @@ export async function POST(req: Request) {
         session.user.email ??
         `${session.user.username}@users.noreply.github.com`,
     };
+    const baseSnapshotId = await resolveSandboxBaseSnapshotId();
 
     sandbox = await connectSandbox({
       state: {
@@ -219,7 +220,7 @@ export async function POST(req: Request) {
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         vcpus: DEFAULT_SANDBOX_VCPUS,
         ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+        baseSnapshotId,
         persistent: !!sandboxName,
         resume: !!sandboxName,
         createIfMissing: !!sandboxName,

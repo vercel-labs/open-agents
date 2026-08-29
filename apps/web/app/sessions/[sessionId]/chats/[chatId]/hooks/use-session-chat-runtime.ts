@@ -1,7 +1,6 @@
 "use client";
 
 import { type UseChatHelpers, useChat } from "@ai-sdk/react";
-import { isToolUIPart } from "ai";
 import {
   useCallback,
   useEffect,
@@ -25,6 +24,7 @@ import {
   setChatWorkspaceStatus,
   subscribeChatWorkspaceStatus,
 } from "@/lib/workspace-status-store";
+import { shouldAutoSubmitChat } from "../chat-auto-submit";
 
 const CHAT_UI_UPDATE_THROTTLE_MS = 75;
 
@@ -48,46 +48,6 @@ type UseSessionChatRuntimeReturn = {
   workspaceStatus: WebAgentWorkspaceStatusData | null;
   clearWorkspaceStatus: () => void;
 };
-
-/**
- * Custom predicate for auto-submitting messages.
- * Unlike the default `lastAssistantMessageIsCompleteWithApprovalResponses`,
- * this also checks for tools waiting in `input-available` state (e.g., AskUserQuestion).
- */
-function shouldAutoSubmit({
-  messages,
-}: {
-  messages: WebAgentUIMessage[];
-}): boolean {
-  const lastMessage = messages[messages.length - 1];
-  if (!lastMessage || lastMessage.role !== "assistant") return false;
-
-  // Find the last step-start to get tools from the current step only
-  const lastStepStartIndex = lastMessage.parts.reduce(
-    (lastIndex, part, index) =>
-      part.type === "step-start" ? index : lastIndex,
-    -1,
-  );
-
-  // Get tool invocations from the last step (non-provider-executed)
-  const lastStepToolInvocations = lastMessage.parts
-    .slice(lastStepStartIndex + 1)
-    .filter(isToolUIPart)
-    .filter((part) => !part.providerExecuted);
-
-  // If no tool invocations, don't auto-submit
-  if (lastStepToolInvocations.length === 0) return false;
-
-  // Auto-submit only if ALL tools are in terminal state
-  // Terminal states: output-available, output-error, approval-responded
-  // NOT terminal: input-available (waiting for user input, e.g., AskUserQuestion)
-  return lastStepToolInvocations.every(
-    (part) =>
-      part.state === "output-available" ||
-      part.state === "output-error" ||
-      part.state === "approval-responded",
-  );
-}
 
 export function useSessionChatRuntime({
   sessionId,
@@ -146,7 +106,7 @@ export function useSessionChatRuntime({
             setChatWorkspaceStatus(chatId, dataPart.data);
           }
         },
-        sendAutomaticallyWhen: shouldAutoSubmit,
+        sendAutomaticallyWhen: shouldAutoSubmitChat,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only create once per chatId; init values are only used at creation time
     [chatId],

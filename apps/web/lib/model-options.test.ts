@@ -125,6 +125,40 @@ describe("model options", () => {
     expect(groups[0].options[1].id).toBe("anthropic/claude-opus-4.6");
   });
 
+  test("groupByProvider puts a harness-preferred provider first", () => {
+    const options = [
+      {
+        id: "google/gemini-2.5",
+        label: "Gemini 2.5",
+        shortLabel: "2.5",
+        isVariant: false,
+        provider: "google",
+      },
+      {
+        id: "anthropic/claude-opus-4.6",
+        label: "Claude Opus 4.6",
+        shortLabel: "Opus 4.6",
+        isVariant: false,
+        provider: "anthropic",
+      },
+      {
+        id: "openai/gpt-5",
+        label: "GPT-5",
+        shortLabel: "GPT-5",
+        isVariant: false,
+        provider: "openai",
+      },
+    ];
+
+    const groups = groupByProvider(options, "openai");
+
+    expect(groups.map((group) => group.provider)).toEqual([
+      "openai",
+      "anthropic",
+      "google",
+    ]);
+  });
+
   test("withMissingModelOption appends missing variant option", () => {
     const result = withMissingModelOption([], "variant:removed");
 

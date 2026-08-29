@@ -1,18 +1,15 @@
-import { connectSandbox, type SandboxConnectConfig } from "../factory.ts";
-import type { ExecResult, SnapshotResult } from "../interface.ts";
+import type { ExecResult } from "../interface.ts";
+import {
+  defaultConnectSnapshotSandbox,
+  resolveSnapshotLog,
+  runSnapshotLifecycle,
+  type SnapshotSandbox,
+  type SnapshotSandboxConnector,
+} from "./snapshot-lifecycle.ts";
+
+export type { SnapshotSandbox } from "./snapshot-lifecycle.ts";
 
 export const DEFAULT_BASE_SNAPSHOT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
-
-interface SnapshotSandbox {
-  workingDirectory: string;
-  exec(command: string, cwd: string, timeoutMs: number): Promise<ExecResult>;
-  stop(): Promise<void>;
-  snapshot?(): Promise<SnapshotResult>;
-}
-
-type SnapshotSandboxConnector = (
-  config: SandboxConnectConfig,
-) => Promise<SnapshotSandbox>;
 
 export interface RefreshBaseSnapshotOptions {
   baseSnapshotId: string;
@@ -21,6 +18,7 @@ export interface RefreshBaseSnapshotOptions {
   commandTimeoutMs?: number;
   ports?: number[];
   env?: Record<string, string>;
+  prepare?: (sandbox: SnapshotSandbox) => Promise<void>;
   log?: (message: string) => void;
 }
 
@@ -40,12 +38,6 @@ export interface RefreshBaseSnapshotResult {
 
 interface RefreshBaseSnapshotDependencies {
   connectSandbox?: SnapshotSandboxConnector;
-}
-
-function defaultConnectSnapshotSandbox(
-  config: SandboxConnectConfig,
-): Promise<SnapshotSandbox> {
-  return connectSandbox(config);
 }
 
 function formatCommandOutput(label: string, output: string): string | null {
@@ -77,77 +69,67 @@ export async function refreshBaseSnapshot(
     options.commands?.filter((command) => command.trim().length > 0) ?? [];
   const commandTimeoutMs =
     options.commandTimeoutMs ?? DEFAULT_BASE_SNAPSHOT_COMMAND_TIMEOUT_MS;
-  const log = options.log ?? (() => {});
+  const log = resolveSnapshotLog(options.log);
   const connectSnapshotSandbox =
     dependencies.connectSandbox ?? defaultConnectSnapshotSandbox;
 
-  let sandbox: SnapshotSandbox | null = null;
-  let snapshotCreated = false;
-
-  try {
-    log(`Creating sandbox from base snapshot ${options.baseSnapshotId}.`);
-    // Skip git init so the new base image does not ship `.git` in /vercel/sandbox
-    // (would break `git clone … .` for agent sandboxes).
-    sandbox = await connectSnapshotSandbox({
-      state: { type: "vercel" },
-      options: {
-        baseSnapshotId: options.baseSnapshotId,
-        timeout: options.sandboxTimeoutMs,
-        persistent: false,
-        skipGitWorkspaceBootstrap: true,
-        ...(options.ports !== undefined && { ports: options.ports }),
-        ...(options.env !== undefined && { env: options.env }),
-      },
-    });
-
-    if (!sandbox.snapshot) {
-      throw new Error(
-        "Configured sandbox provider does not support snapshots.",
-      );
-    }
-
-    const commandResults: RefreshBaseSnapshotCommandResult[] = [];
-
-    for (const [index, command] of commands.entries()) {
-      log(`Running command ${index + 1}/${commands.length}: ${command}`);
-
-      const result = await sandbox.exec(
-        command,
-        sandbox.workingDirectory,
-        commandTimeoutMs,
-      );
-
-      commandResults.push({
-        command,
-        exitCode: result.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        truncated: result.truncated,
+  const { snapshotId, prepared: commandResults } = await runSnapshotLifecycle({
+    log,
+    connect: () => {
+      log(`Creating sandbox from base snapshot ${options.baseSnapshotId}.`);
+      // Skip git init so the new base image does not ship `.git` in /vercel/sandbox
+      // (would break `git clone … .` for agent sandboxes).
+      return connectSnapshotSandbox({
+        state: { type: "vercel" },
+        options: {
+          baseSnapshotId: options.baseSnapshotId,
+          timeout: options.sandboxTimeoutMs,
+          persistent: false,
+          skipGitWorkspaceBootstrap: true,
+          ...(options.ports !== undefined && { ports: options.ports }),
+          ...(options.env !== undefined && { env: options.env }),
+        },
       });
+    },
+    prepare: async (sandbox) => {
+      const commandResults: RefreshBaseSnapshotCommandResult[] = [];
 
-      if (!result.success) {
-        throw new Error(formatCommandFailure(command, result));
+      for (const [index, command] of commands.entries()) {
+        log(`Running command ${index + 1}/${commands.length}: ${command}`);
+
+        const result = await sandbox.exec(
+          command,
+          sandbox.workingDirectory,
+          commandTimeoutMs,
+        );
+
+        commandResults.push({
+          command,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          truncated: result.truncated,
+        });
+
+        if (!result.success) {
+          throw new Error(formatCommandFailure(command, result));
+        }
       }
-    }
 
-    log("Creating snapshot from prepared sandbox.");
-    const snapshot = await sandbox.snapshot();
-    snapshotCreated = true;
-    log(`Created snapshot ${snapshot.snapshotId}.`);
-
-    return {
-      sourceSnapshotId: options.baseSnapshotId,
-      snapshotId: snapshot.snapshotId,
-      commandResults,
-    };
-  } finally {
-    if (sandbox && !snapshotCreated) {
-      try {
-        await sandbox.stop();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        log(`Failed to stop sandbox after refresh attempt: ${message}`);
+      if (options.prepare) {
+        log("Preparing sandbox runtime profile.");
+        await options.prepare(sandbox);
       }
-    }
-  }
+
+      return commandResults;
+    },
+    creatingSnapshotMessage: "Creating snapshot from prepared sandbox.",
+    stopFailureMessage: "Failed to stop sandbox after refresh attempt",
+  });
+
+  return {
+    sourceSnapshotId: options.baseSnapshotId,
+    snapshotId,
+    commandResults,
+  };
 }

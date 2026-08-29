@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
+import { agentContextSchema } from "../types";
 import { getSandbox, shellEscape, toDisplayPath } from "./utils";
 
 interface GrepMatch {
@@ -26,6 +27,7 @@ const grepInputSchema = z.object({
 
 export const grepTool = () =>
   tool({
+    contextSchema: agentContextSchema,
     description: `Search for patterns in files using POSIX Extended Regular Expressions (ERE).
 
 WHEN TO USE:
@@ -58,9 +60,9 @@ EXAMPLES:
     inputSchema: grepInputSchema,
     execute: async (
       { pattern, path: searchPath, glob, caseSensitive = true },
-      { experimental_context, abortSignal },
+      { context, abortSignal },
     ) => {
-      const sandbox = await getSandbox(experimental_context, "grep");
+      const sandbox = await getSandbox(context, "grep");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

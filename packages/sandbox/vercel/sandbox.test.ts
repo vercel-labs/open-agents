@@ -1,4 +1,14 @@
-import { beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+
+const originalAiGatewayApiKey = process.env.AI_GATEWAY_API_KEY;
 
 const portDomains = new Map<number, string>();
 const missingPorts = new Set<number>();
@@ -8,17 +18,20 @@ type MockWaitResult = {
   stderr: () => Promise<string>;
 };
 type MockRunCommandResult = {
-  exitCode?: number;
+  exitCode?: number | null;
   cmdId: string;
   stdout: () => Promise<string>;
   stderr: () => Promise<string>;
   wait?: (params?: { signal?: AbortSignal }) => Promise<MockWaitResult>;
+  logs?: () => AsyncIterable<{ stream: "stdout" | "stderr"; data: string }>;
+  kill?: () => Promise<void>;
 };
 type MockRunCommandParams = {
   cmd?: string;
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
+  detached?: boolean;
 };
 
 type MockSessionState = {
@@ -38,8 +51,14 @@ type MockSessionState = {
 const createCalls: Array<Record<string, unknown>> = [];
 const getCalls: Array<Record<string, unknown>> = [];
 const updateNetworkPolicyCalls: Array<Record<string, unknown>> = [];
+const deleteCalls: string[] = [];
 const runCommandCalls: MockRunCommandParams[] = [];
 const writeFilesCalls: Array<{ path: string; content: Buffer }[]> = [];
+const harnessProviderSettings: Array<{
+  sandbox: unknown;
+  bridgePorts?: ReadonlyArray<number>;
+}> = [];
+const harnessSessionRunCalls: Array<{ command: string }> = [];
 let readFileToBufferResult: Buffer | null = Buffer.from("");
 
 let runCommandMock = async (
@@ -72,6 +91,14 @@ function buildRoutes() {
     const subdomain = new URL(domain).host.replace(".vercel.run", "");
     return { port, subdomain };
   });
+}
+
+function aiGatewayCredentialRule(apiKey = "gateway-key") {
+  return [
+    {
+      transform: [{ headers: { Authorization: `Bearer ${apiKey}` } }],
+    },
+  ];
 }
 
 function buildMockSession(name: string, state: MockSessionState = {}) {
@@ -128,6 +155,9 @@ function createMockSandboxSdk(name: string) {
       return readFileToBufferResult;
     },
     stop: async () => {},
+    delete: async () => {
+      deleteCalls.push(name);
+    },
   };
 }
 
@@ -148,6 +178,28 @@ mock.module("@vercel/sandbox", () => ({
   },
 }));
 
+mock.module("@ai-sdk/sandbox-vercel", () => ({
+  createVercelSandbox: (settings: {
+    sandbox: unknown;
+    bridgePorts?: ReadonlyArray<number>;
+  }) => {
+    harnessProviderSettings.push(settings);
+    return {
+      specificationVersion: "harness-sandbox-v1",
+      providerId: "vercel-sandbox",
+      bridgePorts: settings.bridgePorts,
+      createSession: async () => ({
+        id: "session_123",
+        defaultWorkingDirectory: "/vercel/sandbox",
+        run: async (params: { command: string }) => {
+          harnessSessionRunCalls.push(params);
+          return { exitCode: 0, stdout: "", stderr: "" };
+        },
+      }),
+    };
+  },
+}));
+
 let sandboxModule: typeof import("./sandbox");
 
 beforeAll(async () => {
@@ -155,11 +207,14 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  delete process.env.AI_GATEWAY_API_KEY;
   createCalls.length = 0;
   getCalls.length = 0;
   updateNetworkPolicyCalls.length = 0;
+  deleteCalls.length = 0;
   runCommandCalls.length = 0;
   writeFilesCalls.length = 0;
+  harnessProviderSettings.length = 0;
   readFileToBufferResult = Buffer.from("");
   portDomains.clear();
   missingPorts.clear();
@@ -172,6 +227,14 @@ beforeEach(() => {
   });
   lastRunCommandEnv = undefined;
   currentSessionStateFactory = () => ({});
+});
+
+afterAll(() => {
+  if (originalAiGatewayApiKey === undefined) {
+    delete process.env.AI_GATEWAY_API_KEY;
+  } else {
+    process.env.AI_GATEWAY_API_KEY = originalAiGatewayApiKey;
+  }
 });
 
 describe("VercelSandbox.environmentDetails", () => {
@@ -281,6 +344,37 @@ describe("VercelSandbox.exec", () => {
   });
 });
 
+describe("VercelSandbox.toHarnessSandboxProvider", () => {
+  test("wraps the caller-owned sandbox without transferring lifecycle ownership", async () => {
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123", {
+      ports: [5001],
+      remainingTimeout: 0,
+    });
+    const provider = sandbox.toHarnessSandboxProvider([5001]);
+    const session = await provider.createSession();
+
+    expect(provider.providerId).toBe("vercel-sandbox");
+    expect(session.defaultWorkingDirectory).toBe("/tmp/open-agents-harness");
+    expect(harnessProviderSettings).toHaveLength(1);
+    expect(harnessProviderSettings[0]?.bridgePorts).toEqual([5001]);
+    expect(harnessProviderSettings[0]?.sandbox).toBeDefined();
+  });
+
+  test("creates the harness working directory before handing out sessions", async () => {
+    harnessSessionRunCalls.length = 0;
+    const sandbox = await sandboxModule.VercelSandbox.connect("session_123", {
+      ports: [5001],
+      remainingTimeout: 0,
+    });
+    const provider = sandbox.toHarnessSandboxProvider([5001]);
+    await provider.createSession();
+
+    expect(harnessSessionRunCalls).toEqual([
+      { command: "mkdir -p /tmp/open-agents-harness" },
+    ]);
+  });
+});
+
 describe("VercelSandbox persistence", () => {
   test("connects by persistent sandbox name without auto-resume by default", async () => {
     const sandbox = await sandboxModule.VercelSandbox.connect("session_123", {
@@ -369,7 +463,20 @@ describe("VercelSandbox persistence", () => {
   });
 });
 
-describe("GitHub setup credential brokering", () => {
+describe("Sandbox credential brokering", () => {
+  test("applies AI Gateway auth when creating a sandbox", async () => {
+    process.env.AI_GATEWAY_API_KEY = "gateway-key";
+
+    await sandboxModule.VercelSandbox.create();
+
+    expect(createCalls[0]?.networkPolicy).toEqual({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
+        "*": [],
+      },
+    });
+  });
+
   test("applies setup GitHub auth when creating a sandbox and then clears it", async () => {
     const basicAuthToken = Buffer.from(
       "x-access-token:github-user-token",
@@ -429,6 +536,68 @@ describe("GitHub setup credential brokering", () => {
     expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
   });
 
+  test("preserves AI Gateway auth when clearing setup GitHub auth", async () => {
+    process.env.AI_GATEWAY_API_KEY = "gateway-key";
+
+    await sandboxModule.VercelSandbox.create({
+      githubToken: "github-user-token",
+      source: {
+        url: "https://github.com/open-agents/example",
+        branch: "main",
+      },
+    });
+
+    expect(createCalls[0]?.networkPolicy).toMatchObject({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
+      },
+    });
+    expect(updateNetworkPolicyCalls).toEqual([
+      {
+        allow: {
+          "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
+          "*": [],
+        },
+      },
+    ]);
+  });
+
+  test("prefers the explicit config key over the environment when creating", async () => {
+    process.env.AI_GATEWAY_API_KEY = "env-key";
+
+    await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "explicit-key",
+    });
+
+    expect(createCalls[0]?.networkPolicy).toEqual({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
+        "*": [],
+      },
+    });
+  });
+
+  test("keeps the explicit key for later GitHub auth updates", async () => {
+    const sandbox = await sandboxModule.VercelSandbox.create({
+      aiGatewayApiKey: "explicit-key",
+    });
+
+    await sandbox.setGitHubAuthToken("github-user-token");
+
+    expect(updateNetworkPolicyCalls[0]).toMatchObject({
+      allow: {
+        "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
+        "api.github.com": [
+          {
+            transform: [
+              { headers: { Authorization: "Bearer github-user-token" } },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
   test("clears GitHub auth when reconnecting to a sandbox", async () => {
     await sandboxModule.VercelSandbox.connect("session_123", {
       githubToken: "github-user-token",
@@ -436,6 +605,41 @@ describe("GitHub setup credential brokering", () => {
     });
 
     expect(updateNetworkPolicyCalls).toEqual([{ allow: { "*": [] } }]);
+  });
+
+  test("applies AI Gateway auth when reconnecting to a sandbox", async () => {
+    process.env.AI_GATEWAY_API_KEY = "gateway-key";
+
+    await sandboxModule.VercelSandbox.connect("session_123", {
+      remainingTimeout: 0,
+    });
+
+    expect(updateNetworkPolicyCalls).toEqual([
+      {
+        allow: {
+          "ai-gateway.vercel.sh": aiGatewayCredentialRule(),
+          "*": [],
+        },
+      },
+    ]);
+  });
+
+  test("applies the explicit config key when reconnecting to a sandbox", async () => {
+    process.env.AI_GATEWAY_API_KEY = "env-key";
+
+    await sandboxModule.VercelSandbox.connect("session_123", {
+      aiGatewayApiKey: "explicit-key",
+      remainingTimeout: 0,
+    });
+
+    expect(updateNetworkPolicyCalls).toEqual([
+      {
+        allow: {
+          "ai-gateway.vercel.sh": aiGatewayCredentialRule("explicit-key"),
+          "*": [],
+        },
+      },
+    ]);
   });
 });
 

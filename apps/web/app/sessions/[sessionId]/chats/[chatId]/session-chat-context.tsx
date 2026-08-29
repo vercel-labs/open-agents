@@ -33,6 +33,7 @@ import {
 } from "@/hooks/use-session-git-status";
 import { useSessionSkills } from "@/hooks/use-session-skills";
 import type { Chat, Session } from "@/lib/db/schema";
+import type { ChatHarnessId } from "@/lib/chat-harnesses";
 import { type ModelOption, withMissingModelOption } from "@/lib/model-options";
 import {
   clearSandboxResumeState,
@@ -119,6 +120,7 @@ type SessionChatContextValue = {
   unarchiveSession: () => Promise<void>;
   updateSessionTitle: (title: string) => Promise<void>;
   updateChatModel: (modelId: string) => Promise<void>;
+  updateChatHarness: (harnessId: ChatHarnessId) => Promise<void>;
   /** Whether the chat had persisted messages when it was loaded */
   hadInitialMessages: boolean;
   /** The initial message snapshot used for SSR hydration */
@@ -251,6 +253,7 @@ type SessionChatMetadataContextValue = Pick<
   | "unarchiveSession"
   | "updateSessionTitle"
   | "updateChatModel"
+  | "updateChatHarness"
   | "updateSessionSnapshot"
   | "preferredSandboxType"
   | "supportsDiff"
@@ -1014,6 +1017,27 @@ export function SessionChatProvider({
     [sessionRecord.id, chatInfo.id],
   );
 
+  const updateChatHarness = useCallback(
+    async (harnessId: ChatHarnessId) => {
+      const res = await fetch(
+        `/api/sessions/${sessionRecord.id}/chats/${chatInfo.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ harnessId }),
+        },
+      );
+
+      const data = (await res.json()) as { chat?: Chat; error?: string };
+      if (!res.ok || !data.chat) {
+        throw new Error(data.error ?? "Failed to update chat harness");
+      }
+
+      setChatInfo(data.chat);
+    },
+    [sessionRecord.id, chatInfo.id],
+  );
+
   const runtimeContextValue = useMemo<SessionChatRuntimeContextValue>(
     () => ({
       chat,
@@ -1094,6 +1118,7 @@ export function SessionChatProvider({
       unarchiveSession,
       updateSessionTitle,
       updateChatModel,
+      updateChatHarness,
       updateSessionSnapshot,
       preferredSandboxType,
       supportsDiff,
@@ -1120,6 +1145,7 @@ export function SessionChatProvider({
       unarchiveSession,
       updateSessionTitle,
       updateChatModel,
+      updateChatHarness,
       updateSessionSnapshot,
       preferredSandboxType,
       supportsDiff,

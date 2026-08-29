@@ -73,7 +73,10 @@ export interface ModelGroup {
  * Group options by provider, sort groups (priority first, then alphabetical),
  * and within each group put base models before variants.
  */
-export function groupByProvider(options: ModelOption[]): ModelGroup[] {
+export function groupByProvider(
+  options: ModelOption[],
+  preferredProvider?: string,
+): ModelGroup[] {
   const groups: Record<string, ModelOption[]> = {};
   const providers: string[] = [];
   for (const option of options) {
@@ -87,6 +90,11 @@ export function groupByProvider(options: ModelOption[]): ModelGroup[] {
 
   // Sort: priority providers first (in order), then rest alphabetically
   providers.sort((a, b) => {
+    if (preferredProvider) {
+      if (a === preferredProvider) return -1;
+      if (b === preferredProvider) return 1;
+    }
+
     const aIdx = PRIORITY_PROVIDERS.indexOf(a);
     const bIdx = PRIORITY_PROVIDERS.indexOf(b);
     if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;

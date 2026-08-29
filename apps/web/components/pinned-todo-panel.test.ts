@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { TodoItem } from "@open-agents/shared/lib/chat-tools";
 import type { WebAgentUIMessage } from "@/app/types";
-import { getLatestTodos, type TodoItem } from "./pinned-todo-panel";
+import { getLatestTodos } from "./pinned-todo-panel";
 
 function createMessage(parts: unknown[]): WebAgentUIMessage {
   return {
@@ -70,5 +71,30 @@ describe("getLatestTodos", () => {
     ]);
 
     expect(latestTodos).toEqual(updatedTodos);
+  });
+
+  test("skips invalid inputs and keeps the last valid todo list", () => {
+    const validTodos: TodoItem[] = [
+      { id: "1", content: "Inspect the failure", status: "in_progress" },
+    ];
+
+    const latestTodos = getLatestTodos([
+      createMessage([
+        {
+          type: "tool-todo_write",
+          state: "input-available",
+          input: { todos: validTodos },
+        },
+      ]),
+      createMessage([
+        {
+          type: "tool-todo_write",
+          state: "input-available",
+          input: { todos: JSON.stringify(validTodos) },
+        },
+      ]),
+    ]);
+
+    expect(latestTodos).toEqual(validTodos);
   });
 });

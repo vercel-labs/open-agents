@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, ChevronDown } from "lucide-react";
+import { AlertTriangle, CheckIcon } from "lucide-react";
+import { SelectorTriggerButton } from "@/components/selector-trigger-button";
 import { type ModelOption, groupByProvider } from "@/lib/model-options";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,11 @@ import {
   ProviderIcon,
   getProviderDisplayName,
 } from "@/components/provider-icons";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ModelSelectorCompactProps {
   value: string;
@@ -29,6 +35,29 @@ interface ModelSelectorCompactProps {
   onChange: (modelId: string) => void;
   disabled?: boolean;
   onCloseAutoFocus?: () => void;
+  /** Provider pinned to the top of the list, if any. */
+  preferredProvider?: string;
+  /** Warning shown next to models that are not from `preferredProvider`. */
+  providerWarning?: string;
+}
+
+function ModelProviderWarning({ message }: { message: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={message}
+          className="inline-flex shrink-0 text-amber-600 dark:text-amber-400"
+        >
+          <AlertTriangle className="size-3.5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {message}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function ModelSelectorCompact({
@@ -37,6 +66,8 @@ export function ModelSelectorCompact({
   onChange,
   disabled = false,
   onCloseAutoFocus,
+  preferredProvider,
+  providerWarning,
 }: ModelSelectorCompactProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -93,10 +124,20 @@ export function ModelSelectorCompact({
     setOpen(false);
   };
 
+  const isNonPreferredProvider = (provider: string): boolean =>
+    preferredProvider !== undefined && provider !== preferredProvider;
+
   const selectedOption = modelOptions.find((option) => option.id === value);
   const displayText = selectedOption?.shortLabel ?? value;
+  const selectedProviderWarning =
+    selectedOption && isNonPreferredProvider(selectedOption.provider)
+      ? providerWarning
+      : undefined;
 
-  const groups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
+  const groups = useMemo(
+    () => groupByProvider(modelOptions, preferredProvider),
+    [modelOptions, preferredProvider],
+  );
 
   return (
     <Popover
@@ -109,23 +150,27 @@ export function ModelSelectorCompact({
       }}
     >
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <SelectorTriggerButton
           disabled={disabled}
           aria-label="Change model"
           aria-keyshortcuts="Meta+Alt+/"
           title="Change model (⌘⌥/)"
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-white/5 hover:text-neutral-300 disabled:pointer-events-none disabled:opacity-60"
-        >
-          {selectedOption && (
-            <ProviderIcon
-              provider={selectedOption.provider}
-              className="size-3.5 shrink-0"
-            />
-          )}
-          <span className="max-w-[140px] truncate">{displayText}</span>
-          <ChevronDown className="h-3 w-3" />
-        </button>
+          icon={
+            selectedOption ? (
+              <ProviderIcon
+                provider={selectedOption.provider}
+                className="size-3.5 shrink-0"
+              />
+            ) : undefined
+          }
+          label={displayText}
+          labelClassName="max-w-[140px]"
+          trailing={
+            selectedProviderWarning ? (
+              <ModelProviderWarning message={selectedProviderWarning} />
+            ) : undefined
+          }
+        />
       </PopoverTrigger>
       <PopoverContent
         className="w-64 p-0"
@@ -153,38 +198,53 @@ export function ModelSelectorCompact({
                 key={group.provider}
                 heading={getProviderDisplayName(group.provider)}
               >
-                {group.options.map((option) => (
-                  <CommandItem
-                    key={option.id}
-                    value={`${option.label} ${option.id}`}
-                    onSelect={() => handleSelect(option.id)}
-                    className="flex items-center"
-                  >
-                    <ProviderIcon
-                      provider={option.provider}
-                      className="mr-1.5 size-3.5 shrink-0 opacity-70"
-                    />
-                    <span className="min-w-0 truncate">
-                      {option.shortLabel}
-                    </span>
-                    {option.isVariant && (
-                      <span className="ml-1.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                        variant
+                {group.options.map((option) => {
+                  const optionProviderWarning = isNonPreferredProvider(
+                    option.provider,
+                  )
+                    ? providerWarning
+                    : undefined;
+
+                  return (
+                    <CommandItem
+                      key={option.id}
+                      value={`${option.label} ${option.id}`}
+                      onSelect={() => handleSelect(option.id)}
+                      className="flex items-center"
+                    >
+                      <ProviderIcon
+                        provider={option.provider}
+                        className="mr-1.5 size-3.5 shrink-0 opacity-70"
+                      />
+                      <span className="min-w-0 truncate">
+                        {option.shortLabel}
                       </span>
-                    )}
-                    {option.id === APP_DEFAULT_MODEL_ID && (
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                        default
-                      </span>
-                    )}
-                    <CheckIcon
-                      className={cn(
-                        "ml-auto size-4 shrink-0",
-                        value === option.id ? "opacity-100" : "opacity-0",
+                      {option.isVariant && (
+                        <span className="ml-1.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          variant
+                        </span>
                       )}
-                    />
-                  </CommandItem>
-                ))}
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        {option.id === APP_DEFAULT_MODEL_ID && (
+                          <span className="text-xs text-muted-foreground">
+                            default
+                          </span>
+                        )}
+                        {optionProviderWarning && (
+                          <ModelProviderWarning
+                            message={optionProviderWarning}
+                          />
+                        )}
+                        <CheckIcon
+                          className={cn(
+                            "size-4",
+                            value === option.id ? "opacity-100" : "opacity-0",
+                          )}
+                        />
+                      </span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             ))}
           </CommandList>

@@ -2,27 +2,29 @@
 
 import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import type { TodoItem } from "@open-agents/shared/lib/chat-tools";
 import { cn } from "@/lib/utils";
+import { parseTodoWriteInput } from "@/lib/chat/tool-input";
 import { isToolUIPart } from "ai";
 import type { WebAgentUIMessage } from "@/app/types";
-
-export type TodoItem = {
-  id?: string;
-  content?: string;
-  status?: string;
-};
 
 /**
  * Extract the latest committed todo list from the conversation.
  * Ignores still-streaming todo tool inputs so the pinned panel only swaps once
- * a full update is available.
+ * a full update is available. Scans from the newest message backwards and
+ * stops at the first complete update, so streaming ticks stay cheap even for
+ * long conversations.
  */
 export function getLatestTodos(messages: WebAgentUIMessage[]): TodoItem[] {
-  let latestTodos: TodoItem[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message) {
+      continue;
+    }
 
-  for (const message of messages) {
-    for (const part of message.parts) {
-      if (!isToolUIPart(part) || part.type !== "tool-todo_write") {
+    for (let j = message.parts.length - 1; j >= 0; j--) {
+      const part = message.parts[j];
+      if (!part || !isToolUIPart(part) || part.type !== "tool-todo_write") {
         continue;
       }
 
@@ -30,15 +32,14 @@ export function getLatestTodos(messages: WebAgentUIMessage[]): TodoItem[] {
         continue;
       }
 
-      const input = part.input as { todos?: TodoItem[] } | undefined;
-      const todos = input?.todos;
-      if (Array.isArray(todos) && todos.length > 0) {
-        latestTodos = todos;
+      const todos = parseTodoWriteInput(part.input);
+      if (todos && todos.length > 0) {
+        return todos;
       }
     }
   }
 
-  return latestTodos;
+  return [];
 }
 
 /** Completed: check inside a circle */
@@ -158,10 +159,9 @@ export function PinnedTodoPanel({ todos }: PinnedTodoPanelProps) {
         <div className="max-h-48 overflow-y-auto border-t border-border/40 px-3 py-2">
           <div className="space-y-1">
             {todos.map((todo, index) => {
-              if (!todo) return null;
               return (
                 <div
-                  key={`pinned-todo-${todo.id ?? index}`}
+                  key={`pinned-todo-${todo.id || index}`}
                   className="flex items-center gap-2.5"
                 >
                   <span className="shrink-0">

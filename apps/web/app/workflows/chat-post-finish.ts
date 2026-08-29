@@ -1,4 +1,9 @@
-import { isToolUIPart, type LanguageModelUsage, type UIMessageChunk } from "ai";
+import {
+  isToolUIPart,
+  type FinishReason,
+  type LanguageModelUsage,
+  type UIMessageChunk,
+} from "ai";
 import type { SandboxState, Sandbox } from "@open-agents/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { AutoCommitResult } from "@/lib/chat/auto-commit-direct";
@@ -25,9 +30,12 @@ import {
   type WorkflowRunStepTiming,
 } from "@/lib/db/workflow-runs";
 import { recordUsage } from "@/lib/db/usage";
+import { legacyCachedInputTokens } from "@open-agents/shared/lib/usage";
 
 const cachedInputTokensFor = (usage: LanguageModelUsage) =>
-  usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+  usage.inputTokenDetails?.cacheReadTokens ??
+  legacyCachedInputTokens(usage) ??
+  0;
 
 type UsageByModel = {
   usage: LanguageModelUsage;
@@ -234,6 +242,22 @@ export async function persistSandboxState(
     }
   } catch (error) {
     console.error("[workflow] Failed to persist sandbox state:", error);
+  }
+}
+
+export async function persistChatHarnessSessionState(
+  chatId: string,
+  harnessSessionState: unknown,
+): Promise<void> {
+  "use step";
+  try {
+    await updateChat(chatId, {
+      harnessSessionState: harnessSessionState ?? null,
+    });
+  } catch (error) {
+    // Best-effort: without persisted state the next turn starts a fresh
+    // harness session from the transcript.
+    console.error("[workflow] Failed to persist harness session state:", error);
   }
 }
 
@@ -487,16 +511,29 @@ export async function closeStream(
   writable: WritableStream<UIMessageChunk>,
 ): Promise<void> {
   "use step";
-  await writable.close();
+  const { isStreamAlreadyCompletedError } = await import("./stream-conflict");
+  try {
+    await writable.close();
+  } catch (error) {
+    if (!isStreamAlreadyCompletedError(error)) {
+      throw error;
+    }
+  }
 }
 
 export async function sendFinish(
   writable: WritableStream<UIMessageChunk>,
+  finishReason: FinishReason = "stop",
 ): Promise<void> {
   "use step";
+  const { isStreamAlreadyCompletedError } = await import("./stream-conflict");
   const writer = writable.getWriter();
   try {
-    await writer.write({ type: "finish", finishReason: "stop" });
+    await writer.write({ type: "finish", finishReason });
+  } catch (error) {
+    if (!isStreamAlreadyCompletedError(error)) {
+      throw error;
+    }
   } finally {
     writer.releaseLock();
   }

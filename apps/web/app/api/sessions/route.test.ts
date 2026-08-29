@@ -92,6 +92,7 @@ mock.module("@/lib/db/sessions", () => ({
         sessionId: String(input.session.id),
         title: String(input.initialChat.title),
         modelId: String(input.initialChat.modelId),
+        harnessId: String(input.initialChat.harnessId),
         createdAt: new Date(),
         updatedAt: new Date(),
       },

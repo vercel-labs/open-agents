@@ -5,6 +5,7 @@ import {
   type UIToolInvocation,
 } from "ai";
 import { z } from "zod";
+import { agentContextSchema } from "../types";
 import {
   buildSubagentSummaryLines,
   SUBAGENT_REGISTRY,
@@ -53,6 +54,7 @@ export const taskOutputSchema = z.object({
 export type TaskToolOutput = z.infer<typeof taskOutputSchema>;
 
 export const taskTool = tool({
+  contextSchema: agentContextSchema,
   needsApproval: false,
   description: `Launch a specialized subagent to handle complex tasks autonomously.
 
@@ -87,10 +89,10 @@ IMPORTANT:
   outputSchema: taskOutputSchema,
   execute: async function* (
     { subagentType, task, instructions },
-    { experimental_context, abortSignal },
+    { context, abortSignal },
   ) {
-    const sandboxContext = getSandboxContext(experimental_context, "task");
-    const model = getSubagentModel(experimental_context, "task");
+    const sandboxContext = getSandboxContext(context, "task");
+    const model = getSubagentModel(context, "task");
     const subagentModelId = typeof model === "string" ? model : model.modelId;
 
     const subagent = SUBAGENT_REGISTRY[subagentType].agent;

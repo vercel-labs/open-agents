@@ -4,78 +4,18 @@ import {
   type LanguageModelUsage,
   type UIMessage,
 } from "ai";
+import { addLanguageModelUsage } from "@open-agents/shared/lib/usage";
+
+export {
+  addLanguageModelUsage,
+  sumLanguageModelUsage,
+} from "@open-agents/shared/lib/usage";
 
 export type TaskToolUsageEvent = {
   usage: LanguageModelUsage;
   modelId?: string;
   toolCallId?: string;
 };
-
-function addTokenCounts(
-  tokenCount1: number | undefined,
-  tokenCount2: number | undefined,
-): number | undefined {
-  if (tokenCount1 == null && tokenCount2 == null) {
-    return undefined;
-  }
-  return (tokenCount1 ?? 0) + (tokenCount2 ?? 0);
-}
-
-export function addLanguageModelUsage(
-  usage1: LanguageModelUsage,
-  usage2: LanguageModelUsage,
-): LanguageModelUsage {
-  return {
-    inputTokens: addTokenCounts(usage1.inputTokens, usage2.inputTokens),
-    inputTokenDetails: {
-      noCacheTokens: addTokenCounts(
-        usage1.inputTokenDetails?.noCacheTokens,
-        usage2.inputTokenDetails?.noCacheTokens,
-      ),
-      cacheReadTokens: addTokenCounts(
-        usage1.inputTokenDetails?.cacheReadTokens,
-        usage2.inputTokenDetails?.cacheReadTokens,
-      ),
-      cacheWriteTokens: addTokenCounts(
-        usage1.inputTokenDetails?.cacheWriteTokens,
-        usage2.inputTokenDetails?.cacheWriteTokens,
-      ),
-    },
-    outputTokens: addTokenCounts(usage1.outputTokens, usage2.outputTokens),
-    outputTokenDetails: {
-      textTokens: addTokenCounts(
-        usage1.outputTokenDetails?.textTokens,
-        usage2.outputTokenDetails?.textTokens,
-      ),
-      reasoningTokens: addTokenCounts(
-        usage1.outputTokenDetails?.reasoningTokens,
-        usage2.outputTokenDetails?.reasoningTokens,
-      ),
-    },
-    totalTokens: addTokenCounts(usage1.totalTokens, usage2.totalTokens),
-    reasoningTokens: addTokenCounts(
-      usage1.reasoningTokens,
-      usage2.reasoningTokens,
-    ),
-    cachedInputTokens: addTokenCounts(
-      usage1.cachedInputTokens,
-      usage2.cachedInputTokens,
-    ),
-  };
-}
-
-export function sumLanguageModelUsage(
-  usage1: LanguageModelUsage | undefined,
-  usage2: LanguageModelUsage | undefined,
-): LanguageModelUsage | undefined {
-  if (!usage1) {
-    return usage2;
-  }
-  if (!usage2) {
-    return usage1;
-  }
-  return addLanguageModelUsage(usage1, usage2);
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -96,9 +36,7 @@ function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
     isRecord(outputTokenDetails) ||
     isNumber(value.inputTokens) ||
     isNumber(value.outputTokens) ||
-    isNumber(value.totalTokens) ||
-    isNumber(value.cachedInputTokens) ||
-    isNumber(value.reasoningTokens)
+    isNumber(value.totalTokens)
   );
 }
 

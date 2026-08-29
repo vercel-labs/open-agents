@@ -8,6 +8,7 @@
         "BLOB_READ_WRITE_TOKEN",
         "ENCRYPTION_KEY",
         "GITHUB_CLIENT_SECRET",
+        "INTERNAL_HARNESS_SECRET",
         "JWE_SECRET",
         "KV_REST_API_READ_ONLY_TOKEN",
         "KV_REST_API_TOKEN",
@@ -18,7 +19,10 @@
         "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
         "POSTGRES_URL",
         "REDIS_URL",
-        "VERCEL_APP_CLIENT_SECRET"
+        "VERCEL",
+        "VERCEL_APP_CLIENT_SECRET",
+        "VERCEL_DEPLOYMENT_ID",
+        "VERCEL_SANDBOX_BASE_SNAPSHOT_ID"
       ],
       "outputs": ["dist/**"]
     },

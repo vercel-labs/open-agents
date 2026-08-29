@@ -2,6 +2,12 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+// Import the real module so the mock below can extend it instead of replacing
+// it. bun's mock.module registry is shared across test files in one process,
+// so a partial "ai" mock would break sibling test files that import other
+// "ai" exports.
+import * as actualAi from "ai";
+import type { AgentContext } from "../types";
 import type { ToolNeedsApprovalFunction } from "./utils";
 
 const sandboxRegistry = new Map<string, Record<string, unknown>>();
@@ -20,9 +26,10 @@ mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
 
   return {
+    ...actualAi,
     tool: <T extends Record<string, unknown>>(definition: T) => definition,
     gateway,
-    stepCountIs: (count: number) => ({ count }),
+    isStepCount: (count: number) => ({ count }),
     ToolLoopAgent: MockToolLoopAgent,
     getToolName: (part: { toolName?: string; type?: string }) => {
       if (part.toolName) {
@@ -77,7 +84,7 @@ const { todoWriteTool } = await import("./todo");
 const { editFileTool, writeFileTool } = await import("./write");
 const { buildSystemPrompt } = await import("../system-prompt");
 
-function createContext(sandbox: Record<string, unknown>) {
+function createContext(sandbox: Record<string, unknown>): AgentContext {
   const sandboxId = `sandbox-${sandboxRegistry.size + 1}`;
   sandboxRegistry.set(sandboxId, sandbox);
 
@@ -89,27 +96,28 @@ function createContext(sandbox: Record<string, unknown>) {
           ? sandbox.workingDirectory
           : "/repo",
     },
-    approval: {},
-    model: "test-model",
+    model: { modelId: "test-model" } as AgentContext["model"],
   };
 }
 
-function executionOptions(experimental_context?: unknown) {
+function executionOptions<
+  CONTEXT extends Record<string, unknown> = Record<string, never>,
+>(context?: CONTEXT) {
   return {
     toolCallId: "tool-call-1",
     messages: [],
-    experimental_context,
+    context: context ?? ({} as CONTEXT),
   };
 }
 
 async function getNeedsApprovalResult<TArgs>(
   needsApproval: boolean | ToolNeedsApprovalFunction<TArgs> | undefined,
   args: TArgs,
-  experimental_context: unknown,
+  context: AgentContext,
 ) {
   if (typeof needsApproval === "function") {
     return await Promise.resolve(
-      needsApproval(args, executionOptions(experimental_context)),
+      needsApproval(args, executionOptions(context)),
     );
   }
   return needsApproval ?? false;
@@ -168,10 +176,7 @@ describe("tools execute behavior", () => {
   });
 
   test("readFileTool requires approval for dotenv files", async () => {
-    const baseContext = {
-      sandbox: { workingDirectory: "/repo" },
-      model: "test-model",
-    };
+    const baseContext = createContext({ workingDirectory: "/repo" });
 
     const dotenvApproval = await getNeedsApprovalResult(
       readFileTool().needsApproval,
@@ -424,10 +429,7 @@ describe("tools execute behavior", () => {
   });
 
   test("bashTool needsApproval blocks dangerous and dotenv commands by default", async () => {
-    const baseContext = {
-      sandbox: { workingDirectory: "/repo" },
-      model: "test-model",
-    };
+    const baseContext = createContext({ workingDirectory: "/repo" });
 
     const safeCommand = await getNeedsApprovalResult(
       bashTool().needsApproval,
@@ -528,10 +530,7 @@ describe("tools execute behavior", () => {
     const needsApproval = await getNeedsApprovalResult(
       webFetchTool.needsApproval,
       { url: "https://example.com", method: "GET" },
-      {
-        sandbox: { workingDirectory: "/repo" },
-        model: "test-model",
-      },
+      createContext({ workingDirectory: "/repo" }),
     );
 
     expect(needsApproval).toBe(true);
@@ -748,11 +747,7 @@ describe("tools execute behavior", () => {
         task: "Find usages",
         instructions: "Search for helper usage",
       },
-      {
-        sandbox: { workingDirectory: "/repo" },
-        model: "test-model",
-        approval: {},
-      },
+      createContext({ workingDirectory: "/repo" }),
     );
     expect(explorerNeedsApproval).toBe(false);
 
@@ -763,11 +758,7 @@ describe("tools execute behavior", () => {
         task: "Apply changes",
         instructions: "Update files",
       },
-      {
-        sandbox: { workingDirectory: "/repo" },
-        model: "test-model",
-        approval: {},
-      },
+      createContext({ workingDirectory: "/repo" }),
     );
     expect(executorNeedsApproval).toBe(false);
   });

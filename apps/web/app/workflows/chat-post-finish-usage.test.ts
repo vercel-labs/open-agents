@@ -7,8 +7,6 @@ function makeUsage(
     Pick<LanguageModelUsage, "inputTokens" | "outputTokens" | "totalTokens">,
 ): LanguageModelUsage {
   return {
-    cachedInputTokens: 0,
-    reasoningTokens: 0,
     inputTokenDetails: undefined,
     outputTokenDetails: undefined,
     ...partial,
@@ -87,7 +85,11 @@ describe("recordWorkflowUsage", () => {
       inputTokens: 100,
       outputTokens: 50,
       totalTokens: 150,
-      cachedInputTokens: 10,
+      inputTokenDetails: {
+        noCacheTokens: 90,
+        cacheReadTokens: 10,
+        cacheWriteTokens: 0,
+      },
     });
 
     await recordWorkflowUsage("user-1", "gpt-4", usage, makeAssistantMessage());

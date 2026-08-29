@@ -52,6 +52,9 @@ const spies = {
   persistSandboxState: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
     Promise.resolve(),
   ),
+  persistChatHarnessSessionState: mock(
+    (_chatId?: unknown, _harnessSessionState?: unknown) => Promise.resolve(),
+  ),
   resolveChatSandboxRuntime: mock((_params: { assistantId?: string }) => {
     return Promise.resolve(createResolvedChatSandboxRuntime());
   }),
@@ -79,14 +82,19 @@ const spies = {
   clearActiveStream: mock((_chatId?: unknown, _workflowRunId?: unknown) =>
     Promise.resolve(),
   ),
-  sendFinish: mock(async (writable: WritableStream<UIMessageChunk>) => {
-    const writer = writable.getWriter();
-    try {
-      await writer.write({ type: "finish", finishReason: "stop" });
-    } finally {
-      writer.releaseLock();
-    }
-  }),
+  sendFinish: mock(
+    async (
+      writable: WritableStream<UIMessageChunk>,
+      finishReason: "stop" | "error" = "stop",
+    ) => {
+      const writer = writable.getWriter();
+      try {
+        await writer.write({ type: "finish", finishReason });
+      } finally {
+        writer.releaseLock();
+      }
+    },
+  ),
   recordWorkflowUsage: mock(() => Promise.resolve()),
   refreshDiffCache: mock((_sessionId?: unknown, _sandboxState?: unknown) =>
     Promise.resolve(),
@@ -105,6 +113,61 @@ const spies = {
       prUrl: "https://github.com/acme/repo/pull/42",
     }),
   ),
+  runHarnessTurn: mock(
+    async (input: {
+      onChunk: (chunk: UIMessageChunk) => Promise<void> | void;
+      messageId: string;
+      resumeState?: unknown;
+    }): Promise<{
+      responseMessage: {
+        id: string;
+        role: "assistant";
+        parts: Array<{ type: string; text?: string }>;
+        metadata: Record<string, unknown>;
+      };
+      finishReason: "stop" | "error";
+      rawFinishReason: string;
+      errorCode?:
+        | "missing-ws-module"
+        | "gateway-auth-failed"
+        | "bridge-not-ready";
+      usage?: {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+      };
+      resumeState?: unknown;
+    }> => {
+      await input.onChunk({
+        type: "text-start",
+        id: "harness-text",
+      });
+      await input.onChunk({
+        type: "text-delta",
+        id: "harness-text",
+        delta: "Hello from Codex",
+      });
+      await input.onChunk({
+        type: "text-end",
+        id: "harness-text",
+      });
+      return {
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [{ type: "text", text: "Hello from Codex" }],
+          metadata: {},
+        },
+        finishReason: "stop" as const,
+        rawFinishReason: "stop",
+        usage: {
+          inputTokens: 12,
+          outputTokens: 4,
+          totalTokens: 16,
+        },
+      };
+    },
+  ),
 };
 
 let testSessionRecord: {
@@ -119,6 +182,7 @@ let testChatRecord: {
   id: string;
   sessionId: string;
   modelId: string | null;
+  harnessSessionState?: unknown;
 };
 let testPreferences: {
   defaultModelId: string;
@@ -328,7 +392,9 @@ mock.module("ai", () => ({
     }),
   generateId: () => "gen-id-1",
   isToolUIPart: (part: { type: string }) =>
-    part.type === "tool-invocation" || part.type.startsWith("tool-"),
+    part.type === "dynamic-tool" ||
+    part.type === "tool-invocation" ||
+    part.type.startsWith("tool-"),
   pruneMessages: ({ messages }: { messages: Array<Record<string, unknown>> }) =>
     messages.filter((message) => {
       const content = message.content;
@@ -337,6 +403,10 @@ mock.module("ai", () => ({
 }));
 
 mock.module("@open-agents/agent", () => ({}));
+
+mock.module("@/lib/harness-runner/client", () => ({
+  runHarnessTurnViaApi: spies.runHarnessTurn,
+}));
 
 mock.module("@/lib/db/sessions", () => ({
   getChatById: async () => testChatRecord,
@@ -365,6 +435,7 @@ function makeOptions(overrides?: Record<string, unknown>) {
       },
     ],
     chatId: "chat-1",
+    harnessId: "open-agent",
     sessionId: "session-1",
     userId: "user-1",
     requestUrl: "http://localhost/api/chat",
@@ -442,6 +513,264 @@ describe("runAgentWorkflow", () => {
     } catch (error) {
       expect((error as Error).message).toContain("at least one message");
     }
+  });
+
+  test("runs Claude Code through the isolated harness runner", async () => {
+    await runAgentWorkflow(makeOptions({ harnessId: "claude-code" }));
+
+    expect(spies.runHarnessTurn).toHaveBeenCalledTimes(1);
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      harnessId: "claude-code",
+      sandboxState: {
+        type: "vercel",
+        sandboxName: "session_session-1",
+      },
+      workingDirectory: "/vercel/sandbox",
+    });
+  });
+
+  test("runs Codex through the isolated harness runner", async () => {
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.runHarnessTurn).toHaveBeenCalledTimes(1);
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      harnessId: "codex",
+      sandboxState: {
+        type: "vercel",
+        sandboxName: "session_session-1",
+      },
+      workingDirectory: "/vercel/sandbox",
+      selectedModelId: "gpt-4",
+      // "gpt-4" has no openai/ provider prefix, so the workflow records the
+      // Codex harness default that will actually run.
+      modelId: "openai/gpt-5.4",
+      requestUrl: "http://localhost/api/chat",
+    });
+    expect(writtenChunks).toContainEqual({
+      type: "text-delta",
+      id: "harness-text",
+      delta: "Hello from Codex",
+    });
+    expect(spies.persistAssistantMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        role: "assistant",
+        parts: [{ type: "text", text: "Hello from Codex" }],
+      }),
+    );
+  });
+
+  test("runs Pi through the isolated harness runner", async () => {
+    await runAgentWorkflow(makeOptions({ harnessId: "pi" }));
+
+    expect(spies.runHarnessTurn).toHaveBeenCalledTimes(1);
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      harnessId: "pi",
+      sandboxState: {
+        type: "vercel",
+        sandboxName: "session_session-1",
+      },
+      workingDirectory: "/vercel/sandbox",
+    });
+  });
+
+  test("keys the harness session to the chat, not the message", async () => {
+    await runAgentWorkflow(
+      makeOptions({ harnessId: "codex", chatId: "chat-1" }),
+    );
+
+    // Regression: the harness session id must be stable across messages within
+    // a chat. Including the message id here spun up a fresh Claude Code/Codex
+    // session every turn and orphaned the previous one.
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      sessionId: "codex-chat-1",
+    });
+  });
+
+  test("passes the persisted harness session state as resume state", async () => {
+    testChatRecord.harnessSessionState = { bridge: "state-1" };
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.runHarnessTurn.mock.calls[0]?.[0]).toMatchObject({
+      resumeState: { bridge: "state-1" },
+    });
+  });
+
+  test("persists the harness resume state returned by the turn", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: { messageId: string }) => ({
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [{ type: "text", text: "Done" }],
+          metadata: {},
+        },
+        finishReason: "stop" as const,
+        rawFinishReason: "stop",
+        resumeState: { bridge: "state-2" },
+      }),
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.persistChatHarnessSessionState).toHaveBeenCalledWith(
+      "chat-1",
+      { bridge: "state-2" },
+    );
+  });
+
+  test("clears the harness session state when the turn returns none", async () => {
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(spies.persistChatHarnessSessionState).toHaveBeenCalledWith(
+      "chat-1",
+      null,
+    );
+  });
+
+  test("does not touch harness session state for open-agent runs", async () => {
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.persistChatHarnessSessionState).not.toHaveBeenCalled();
+  });
+
+  test("surfaces Codex harness errors as visible assistant text", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: { messageId: string }) => ({
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [],
+          metadata: {},
+        },
+        finishReason: "error" as const,
+        rawFinishReason:
+          "codex: Agent execution failed. Cannot find package 'ws' imported from /tmp/bridge-ws-server.mts",
+        errorCode: "missing-ws-module" as const,
+        usage: undefined,
+      }),
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    const expectedText =
+      "Codex failed before it could respond because this sandbox is missing the prepared harness runtime. Recreate the sandbox and try again.";
+    expect(writtenChunks).toContainEqual({
+      type: "text-delta",
+      id: expect.stringContaining(":harness-error"),
+      delta: expectedText,
+    });
+    expect(writtenChunks).toContainEqual({
+      type: "finish",
+      finishReason: "error",
+    });
+    expect(spies.persistAssistantMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        role: "assistant",
+        parts: [{ type: "text", text: expectedText }],
+      }),
+    );
+  });
+
+  test("never surfaces the raw finish reason for unclassified harness errors", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: { messageId: string }) => ({
+        responseMessage: {
+          id: input.messageId,
+          role: "assistant" as const,
+          parts: [],
+          metadata: {},
+        },
+        finishReason: "error" as const,
+        rawFinishReason:
+          "codex: something novel exploded at /vercel/sandbox/.codex/auth.json (AI_GATEWAY_API_KEY=vck_live_deadbeef)",
+        usage: undefined,
+      }),
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    expect(writtenChunks).toContainEqual({
+      type: "text-delta",
+      id: expect.stringContaining(":harness-error"),
+      delta: "Codex failed before it could respond. Try again in a moment.",
+    });
+    // Nothing that reaches the browser may carry the raw reason.
+    expect(JSON.stringify(writtenChunks)).not.toContain("vck_live_deadbeef");
+    expect(
+      JSON.stringify(spies.persistAssistantMessage.mock.calls),
+    ).not.toContain("vck_live_deadbeef");
+  });
+
+  test("appends visible Codex errors after partial harness text", async () => {
+    spies.runHarnessTurn.mockImplementationOnce(
+      async (input: {
+        messageId: string;
+        onChunk: (chunk: UIMessageChunk) => Promise<void> | void;
+      }) => {
+        await input.onChunk({
+          type: "text-start",
+          id: "harness-text",
+        });
+        await input.onChunk({
+          type: "text-delta",
+          id: "harness-text",
+          delta: "I’m gathering the minimum inputs needed.",
+        });
+        await input.onChunk({
+          type: "text-end",
+          id: "harness-text",
+        });
+
+        return {
+          responseMessage: {
+            id: input.messageId,
+            role: "assistant" as const,
+            parts: [
+              {
+                type: "text",
+                text: "I’m gathering the minimum inputs needed.",
+              },
+            ],
+            metadata: {},
+          },
+          finishReason: "error" as const,
+          rawFinishReason:
+            'codex: Authentication failed for model "gpt-5.4". Check the configured credentials and provider base URL.\nRaw: unexpected status 401 Unauthorized: Authentication failed. Create an API key and set in AI_GATEWAY_API_KEY environment variable',
+          errorCode: "gateway-auth-failed" as const,
+          usage: undefined,
+        };
+      },
+    );
+
+    await runAgentWorkflow(makeOptions({ harnessId: "codex" }));
+
+    const expectedText =
+      "\n\nCodex failed after producing a partial response because AI Gateway rejected the configured credentials. Check AI_GATEWAY_API_KEY or Vercel OIDC for this deployment and try again.";
+    expect(writtenChunks).toContainEqual({
+      type: "text-delta",
+      id: expect.stringContaining(":harness-error"),
+      delta: expectedText,
+    });
+    expect(writtenChunks).toContainEqual({
+      type: "finish",
+      finishReason: "error",
+    });
+    expect(spies.persistAssistantMessage).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "I’m gathering the minimum inputs needed.",
+          },
+          { type: "text", text: expectedText },
+        ],
+      }),
+    );
   });
 
   test("exits before side effects when another workflow owns the stream slot", async () => {
@@ -1189,6 +1518,27 @@ describe("runAgentWorkflow", () => {
       output: { success: true },
     };
     agentAssistantParts = [writeToolPart];
+
+    await runAgentWorkflow(makeOptions());
+
+    expect(spies.refreshDiffCache).toHaveBeenCalledTimes(1);
+  });
+
+  test("refreshes diff cache after a dynamic harness edit tool runs", async () => {
+    agentStreamParts = [];
+    agentResponseMessages = [];
+    agentResponse = { messages: agentResponseMessages };
+    streamOnFinishCallback = undefined;
+    agentAssistantParts = [
+      {
+        type: "dynamic-tool",
+        toolName: "edit",
+        toolCallId: "edit-1",
+        state: "output-available",
+        input: { path: "app/page.tsx" },
+        output: { success: true },
+      },
+    ];
 
     await runAgentWorkflow(makeOptions());
 

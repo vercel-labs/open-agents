@@ -166,6 +166,65 @@ describe("refreshBaseSnapshot", () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
+  test("prepares the sandbox runtime profile before snapshotting", async () => {
+    const events: string[] = [];
+    const sandbox = createSandbox({
+      exec: async (command) => {
+        events.push(`command:${command}`);
+        return createExecResult();
+      },
+      snapshot: async () => {
+        events.push("snapshot");
+        return { snapshotId: "snap-next" };
+      },
+    });
+
+    await refreshBaseSnapshot(
+      {
+        baseSnapshotId: "snap-current",
+        sandboxTimeoutMs: 300_000,
+        commands: ["bun install"],
+        prepare: async (profileSandbox) => {
+          expect(profileSandbox).toBe(sandbox);
+          events.push("prepare");
+        },
+      },
+      {
+        connectSandbox: async () => sandbox,
+      },
+    );
+
+    expect(events).toEqual(["command:bun install", "prepare", "snapshot"]);
+  });
+
+  test("stops the sandbox when runtime profile preparation fails", async () => {
+    const stop = mock(async () => {});
+    const snapshot = mock(async () => ({ snapshotId: "snap-next" }));
+
+    const refreshPromise = refreshBaseSnapshot(
+      {
+        baseSnapshotId: "snap-current",
+        sandboxTimeoutMs: 300_000,
+        prepare: async () => {
+          throw new Error("Runtime profile preparation failed");
+        },
+      },
+      {
+        connectSandbox: async () =>
+          createSandbox({
+            stop,
+            snapshot,
+          }),
+      },
+    );
+
+    await expect(refreshPromise).rejects.toThrow(
+      "Runtime profile preparation failed",
+    );
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
   test("stops the sandbox when snapshot support is unavailable", async () => {
     const stop = mock(async () => {});
 

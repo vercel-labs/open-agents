@@ -2,12 +2,11 @@
 
 import { ArrowRight, LayoutList, ListChecks, ListTodo } from "lucide-react";
 import type { ReactNode } from "react";
+import type { TodoItem as Todo } from "@open-agents/shared/lib/chat-tools";
 import { cn } from "@/lib/utils";
+import { parseTodoWriteInput } from "@/lib/chat/tool-input";
 import type { ToolRendererProps } from "@/app/lib/render-tool";
 import { ToolLayout } from "../tool-layout";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Todo = Record<string, any>;
 
 /** Completed: check inside a circle */
 function CompletedIcon({ className }: { className?: string }) {
@@ -74,8 +73,7 @@ function PendingIcon({ className }: { className?: string }) {
 }
 
 function TodoItem({ todo }: { todo: Todo }) {
-  const status = todo.status ?? "pending";
-  const content = todo.content ?? "";
+  const { status, content } = todo;
 
   return (
     <div className="flex items-start gap-2 py-0.5">
@@ -108,14 +106,11 @@ export function TodoRenderer({
   part,
   state,
 }: ToolRendererProps<"tool-todo_write">) {
-  const input = part.input;
-  const todos: Todo[] = (input?.todos ?? []).filter(
-    (t): t is Todo => t !== undefined,
-  );
+  const todos = parseTodoWriteInput(part.input) ?? [];
 
-  const activeTodo = todos.find((todo) => todo?.status === "in_progress");
+  const activeTodo = todos.find((todo) => todo.status === "in_progress");
   const completedCount = todos.filter(
-    (todo) => todo?.status === "completed",
+    (todo) => todo.status === "completed",
   ).length;
   const allDone = completedCount === todos.length && todos.length > 0;
   const noneStarted = completedCount === 0 && !activeTodo;
@@ -149,7 +144,7 @@ export function TodoRenderer({
     todos.length > 0 ? (
       <div className="max-h-48 space-y-0.5 overflow-y-auto pl-6">
         {todos.map((todo, i) => (
-          <TodoItem key={todo.id ?? i} todo={todo} />
+          <TodoItem key={todo.id || i} todo={todo} />
         ))}
       </div>
     ) : undefined;

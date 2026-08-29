@@ -21,6 +21,7 @@ interface TestSessionRecord {
 interface TestChatRecord {
   sessionId: string;
   modelId: string | null;
+  harnessId: string;
   activeStreamId: string | null;
 }
 
@@ -304,6 +305,7 @@ describe("/api/chat route", () => {
     chatRecord = {
       sessionId: "session-1",
       modelId: null,
+      harnessId: "open-agent",
       activeStreamId: null,
     };
   });
@@ -328,6 +330,23 @@ describe("/api/chat route", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: "Session is archived",
+    });
+    expect(startCalls).toHaveLength(0);
+    expect(createChatMessageIfNotExistsSpy).not.toHaveBeenCalled();
+  });
+
+  test("returns 400 for a chat row with an unknown harness id", async () => {
+    if (!chatRecord) {
+      throw new Error("chatRecord must be set");
+    }
+    chatRecord.harnessId = "unknown-harness";
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid harness",
     });
     expect(startCalls).toHaveLength(0);
     expect(createChatMessageIfNotExistsSpy).not.toHaveBeenCalled();
@@ -431,6 +450,7 @@ describe("/api/chat route", () => {
     expect(startCalls[0]?.[1]).toEqual([
       expect.objectContaining({
         assistantId: "gen-id-1",
+        harnessId: "open-agent",
         maxSteps: 500,
         requestUrl: "http://localhost/api/chat",
         authSession: currentAuthSession,

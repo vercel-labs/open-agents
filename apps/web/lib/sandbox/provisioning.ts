@@ -23,11 +23,11 @@ import {
 } from "@/lib/github/app";
 import { getGitHubUserProfile } from "@/lib/github/users";
 import {
-  DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
   DEFAULT_SANDBOX_VCPUS,
 } from "@/lib/sandbox/config";
+import { resolveSandboxBaseSnapshotId } from "@/lib/sandbox/base-snapshot";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
@@ -230,6 +230,7 @@ export async function provisionSessionSandbox(params: {
     userId: session.userId,
     session,
   });
+  const baseSnapshotId = await resolveSandboxBaseSnapshotId();
 
   let sandbox: Sandbox;
   try {
@@ -241,7 +242,7 @@ export async function provisionSessionSandbox(params: {
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
         vcpus: DEFAULT_SANDBOX_VCPUS,
         ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+        baseSnapshotId,
         persistent: true,
         resume: true,
         createIfMissing: true,

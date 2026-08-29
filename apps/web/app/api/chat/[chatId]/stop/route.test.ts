@@ -23,6 +23,7 @@ let sessionRecord: {
 };
 
 let cancelShouldThrow = false;
+let runStatus: Promise<string> = Promise.resolve("running");
 
 const spies = {
   cancel: mock(() => {
@@ -48,6 +49,9 @@ globalThis.fetch = (async () =>
 mock.module("workflow/api", () => ({
   getRun: () => ({
     cancel: spies.cancel,
+    get status() {
+      return runStatus;
+    },
   }),
 }));
 
@@ -96,6 +100,7 @@ beforeEach(() => {
     activeStreamId: "wrun_active-123",
   };
   cancelShouldThrow = false;
+  runStatus = Promise.resolve("running");
   Object.values(spies).forEach((s) => s.mockClear());
 });
 
@@ -156,8 +161,9 @@ describe("POST /api/chat/[chatId]/stop", () => {
     );
   });
 
-  test("returns 500 when workflow cancel fails", async () => {
+  test("keeps activeStreamId and returns 500 when cancel fails on a live run", async () => {
     cancelShouldThrow = true;
+    runStatus = Promise.resolve("running");
     const { POST } = await routeModulePromise;
 
     const response = await POST(createStopRequest(), routeContext);
@@ -165,6 +171,48 @@ describe("POST /api/chat/[chatId]/stop", () => {
 
     const body = await response.json();
     expect(body).toEqual({ error: "Failed to cancel workflow run" });
+    expect(spies.compareAndSetChatActiveStreamId).not.toHaveBeenCalled();
+  });
+
+  test("clears activeStreamId when cancel fails on a terminal run", async () => {
+    cancelShouldThrow = true;
+    runStatus = Promise.resolve("failed");
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createStopRequest(), routeContext);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body).toEqual({
+      success: true,
+      warning: "Failed to cancel workflow run",
+    });
+    expect(spies.compareAndSetChatActiveStreamId).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_active-123",
+      null,
+    );
+  });
+
+  test("clears activeStreamId when cancel fails and status is unreachable", async () => {
+    cancelShouldThrow = true;
+    runStatus = Promise.reject(new Error("run not found"));
+    runStatus.catch(() => undefined);
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createStopRequest(), routeContext);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body).toEqual({
+      success: true,
+      warning: "Failed to cancel workflow run",
+    });
+    expect(spies.compareAndSetChatActiveStreamId).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_active-123",
+      null,
+    );
   });
 
   test("persists assistant snapshot when valid message in body", async () => {

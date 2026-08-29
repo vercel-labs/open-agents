@@ -9,8 +9,8 @@ import {
   type UIMessageChunk,
 } from "ai";
 import type { OpenAgentCallOptions } from "@open-agents/agent";
+import type { ExternalHarnessId } from "@open-agents/harness-runner";
 import { getWorkflowMetadata, getWritable } from "workflow";
-import { getRun } from "workflow/api";
 import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { addLanguageModelUsage } from "./usage-utils";
 import { extractGatewayCost } from "./gateway-metadata";
@@ -30,6 +30,7 @@ import {
   hasAutoCommitChangesStep,
   persistAssistantMessage,
   persistAssistantMessageWithToolResults,
+  persistChatHarnessSessionState,
   persistSandboxState,
   persistUserMessage,
   recordWorkflowUsage,
@@ -49,6 +50,10 @@ import {
 } from "@/lib/model-access";
 import { getAllVariants } from "@/lib/model-variants";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
+import {
+  type ChatHarnessId,
+  resolveHarnessRunModelId,
+} from "@/lib/chat-harnesses";
 import type { Session as AuthSession } from "@/lib/session/types";
 import type {
   WorkflowRunStatus,
@@ -56,12 +61,22 @@ import type {
 } from "@/lib/db/workflow-runs";
 import { resolveChatModelSelection } from "../api/chat/_lib/model-selection";
 import { resolveChatSandboxRuntime } from "./chat-sandbox-runtime";
+import { runHarnessAgentStep } from "./harness-step";
+import {
+  type AgentStepResult,
+  buildStepTiming,
+  isAbortError,
+  isStepTimingError,
+  startStopMonitor,
+  type StepWritable,
+} from "./step-utils";
 
 type AuthSessionContext = Pick<AuthSession, "authProvider" | "user"> | null;
 
 type Options = {
   messages: WebAgentUIMessage[];
   chatId: string;
+  harnessId: ChatHarnessId;
   sessionId: string;
   userId: string;
   requestUrl: string;
@@ -84,7 +99,7 @@ type ChatModelRuntime = {
   autoCreatePrEnabled: boolean;
 };
 
-type Writable = WritableStream<UIMessageChunk>;
+type Writable = StepWritable;
 
 const shouldPauseForToolInteraction = (parts: WebAgentUIMessage["parts"]) =>
   parts.some(
@@ -102,12 +117,18 @@ const DIFF_REFRESHING_TOOL_TYPES = new Set([
 function shouldRefreshDiffCacheForParts(
   parts: WebAgentUIMessage["parts"],
 ): boolean {
-  return parts.some(
-    (part) =>
-      isToolUIPart(part) &&
-      DIFF_REFRESHING_TOOL_TYPES.has(part.type) &&
-      (part.state === "output-available" || part.state === "output-error"),
-  );
+  return parts.some((part) => {
+    if (!isToolUIPart(part)) {
+      return false;
+    }
+
+    const toolType =
+      part.type === "dynamic-tool" ? `tool-${part.toolName}` : part.type;
+    return (
+      DIFF_REFRESHING_TOOL_TYPES.has(toolType) &&
+      (part.state === "output-available" || part.state === "output-error")
+    );
+  });
 }
 
 const convertMessages = async (
@@ -247,23 +268,6 @@ async function persistInputMessages(
   ]);
 }
 
-function buildStepTiming(
-  stepNumber: number,
-  startedAt: Date,
-  finishedAt: Date,
-  finishReason?: string,
-  rawFinishReason?: string,
-): WorkflowRunStepTiming {
-  return {
-    stepNumber,
-    startedAt: startedAt.toISOString(),
-    finishedAt: finishedAt.toISOString(),
-    durationMs: finishedAt.getTime() - startedAt.getTime(),
-    finishReason,
-    rawFinishReason,
-  };
-}
-
 function withModelMetadata(
   metadata: WebAgentMessageMetadata | undefined,
   selectedModelId: string,
@@ -290,17 +294,6 @@ function getSetupErrorMessage(error: unknown): string {
   }
 
   return "Workspace setup failed. Try again in a moment.";
-}
-
-function isStepTimingError(
-  error: unknown,
-): error is Error & { stepTiming: WorkflowRunStepTiming } {
-  return (
-    error instanceof Error &&
-    "stepTiming" in error &&
-    typeof error.stepTiming === "object" &&
-    error.stepTiming !== null
-  );
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -607,7 +600,15 @@ export async function runAgentWorkflow(options: Options) {
       ? latestMessage.id
       : (options.assistantId ?? generateIdAi());
 
-  const modelMessagesPromise = convertMessages(options.messages);
+  // The single place that distinguishes the built-in open-agent loop from an
+  // external harness: everything downstream dispatches on this value or on
+  // the shared AgentStepResult contract.
+  const externalHarnessId: ExternalHarnessId | undefined =
+    options.harnessId === "open-agent" ? undefined : options.harnessId;
+
+  const modelMessagesPromise = externalHarnessId
+    ? Promise.resolve<ModelMessage[]>([])
+    : convertMessages(options.messages);
   const inputMessagesPersistPromise = options.inputMessagesPersisted
     ? Promise.resolve()
     : persistInputMessages(options.chatId, options.messages);
@@ -618,11 +619,6 @@ export async function runAgentWorkflow(options: Options) {
     requestUrl: options.requestUrl,
     authSession: options.authSession,
   });
-  const runtimePromise = resolveChatSandboxRuntime({
-    userId: options.userId,
-    sessionId: options.sessionId,
-  });
-
   // Self-register this workflow's runId onto the chat as the very first step.
   // The HTTP POST handler also writes this (via compareAndSetChatActiveStreamId
   // after `start()` returns), but that write is best-effort and can be lost
@@ -642,7 +638,6 @@ export async function runAgentWorkflow(options: Options) {
     // Exit before emitting chunks or persisting messages so only the owning
     // workflow can mutate this chat.
     await Promise.allSettled([
-      runtimePromise,
       modelMessagesPromise,
       inputMessagesPersistPromise,
       modelRuntimePromise,
@@ -689,6 +684,10 @@ export async function runAgentWorkflow(options: Options) {
   let shouldRefreshCachedDiff = false;
 
   try {
+    const runtimePromise = resolveChatSandboxRuntime({
+      userId: options.userId,
+      sessionId: options.sessionId,
+    });
     const [, runtime, modelRuntime, modelMessages] = await Promise.all([
       activeStreamClaimPromise,
       runtimePromise,
@@ -697,7 +696,13 @@ export async function runAgentWorkflow(options: Options) {
       inputMessagesPersistPromise,
     ]);
     selectedModelId = options.selectedModelId ?? modelRuntime.selectedModelId;
-    modelId = options.modelId ?? modelRuntime.modelId;
+    // Harnesses with a native provider only run that provider's models;
+    // record the model that will actually run, not the incompatible
+    // selection. For unrestricted harnesses this returns the input unchanged.
+    modelId = resolveHarnessRunModelId(
+      options.harnessId,
+      options.modelId ?? modelRuntime.modelId,
+    );
     pendingAssistantResponse = {
       ...pendingAssistantResponse,
       metadata: withModelMetadata(
@@ -725,22 +730,40 @@ export async function runAgentWorkflow(options: Options) {
       options.maxSteps === undefined || step < options.maxSteps;
       step++
     ) {
-      let result: Awaited<ReturnType<typeof runAgentStep>>;
+      let result: AgentStepResult;
 
       try {
-        result = await runAgentStep(
-          modelMessages,
-          originalMessagesForStep,
-          assistantId,
-          writable,
-          workflowRunId,
-          options.chatId,
-          options.sessionId,
-          selectedModelId,
-          modelId,
-          agentOptions,
-          step + 1,
-        );
+        result = externalHarnessId
+          ? await runHarnessAgentStep(
+              {
+                harnessId: externalHarnessId,
+                messages: options.messages,
+                originalMessages: originalMessagesForStep,
+                messageId: assistantId,
+                workflowRunId,
+                chatId: options.chatId,
+                selectedModelId,
+                modelId,
+                sandboxState: runtime.sandboxState,
+                workingDirectory: runtime.workingDirectory,
+                requestUrl: options.requestUrl,
+                stepNumber: step + 1,
+              },
+              writable,
+            )
+          : await runAgentStep(
+              modelMessages,
+              originalMessagesForStep,
+              assistantId,
+              writable,
+              workflowRunId,
+              options.chatId,
+              options.sessionId,
+              selectedModelId,
+              modelId,
+              agentOptions,
+              step + 1,
+            );
       } catch (error) {
         if (isStepTimingError(error)) {
           stepTimings.push(error.stepTiming);
@@ -749,8 +772,30 @@ export async function runAgentWorkflow(options: Options) {
       }
 
       stepTimings.push(result.stepTiming);
+      if (result.harnessResumeState !== undefined) {
+        // Persist (or clear) the harness session resume state right away so
+        // the next turn can continue the same underlying session.
+        await persistChatHarnessSessionState(
+          options.chatId,
+          result.harnessResumeState,
+        );
+      }
       pendingAssistantResponse =
         result.responseMessage ?? pendingAssistantResponse;
+      if (result.userFacingErrorText) {
+        pendingAssistantResponse = {
+          ...pendingAssistantResponse,
+          parts: [
+            ...pendingAssistantResponse.parts,
+            { type: "text", text: result.userFacingErrorText },
+          ],
+        };
+        await sendTextMessage(
+          writable,
+          `${assistantId}:harness-error`,
+          result.userFacingErrorText,
+        );
+      }
       shouldRefreshCachedDiff =
         shouldRefreshCachedDiff ||
         shouldRefreshDiffCacheForParts(pendingAssistantResponse.parts);
@@ -765,13 +810,7 @@ export async function runAgentWorkflow(options: Options) {
           : result.stepUsage;
       }
 
-      const shouldContinue =
-        result.finishReason === "tool-calls" &&
-        !shouldPauseForToolInteraction(
-          result.responseMessage?.parts ?? pendingAssistantResponse.parts,
-        );
-
-      if (!shouldContinue) {
+      if (!result.canContinue) {
         break;
       }
 
@@ -786,11 +825,15 @@ export async function runAgentWorkflow(options: Options) {
     }
 
     if (totalUsage) {
+      // Both step paths already merge prior turns' usage into the response
+      // message metadata; only fall back to this run's total when a step
+      // could not produce enriched metadata (e.g. aborted first turn).
       pendingAssistantResponse = {
         ...pendingAssistantResponse,
         metadata: {
           ...pendingAssistantResponse.metadata,
-          totalMessageUsage: totalUsage,
+          totalMessageUsage:
+            pendingAssistantResponse.metadata?.totalMessageUsage ?? totalUsage,
         },
       };
     }
@@ -936,7 +979,10 @@ export async function runAgentWorkflow(options: Options) {
 
     await Promise.all([
       clearActiveStream(options.chatId, workflowRunId),
-      sendFinish(writable).then(() => closeStream(writable)),
+      sendFinish(
+        writable,
+        finalFinishReason === "error" ? "error" : "stop",
+      ).then(() => closeStream(writable)),
       ...(sandboxState && shouldRefreshCachedDiff
         ? [refreshDiffCache(options.sessionId, sandboxState)]
         : []),
@@ -945,7 +991,7 @@ export async function runAgentWorkflow(options: Options) {
 
     workflowStatus = wasAborted
       ? "aborted"
-      : exhaustedMaxSteps
+      : exhaustedMaxSteps || finalFinishReason === "error"
         ? "failed"
         : "completed";
   } catch (error) {
@@ -968,7 +1014,10 @@ export async function runAgentWorkflow(options: Options) {
       if (!streamClosed) {
         await Promise.all([
           clearActiveStream(options.chatId, workflowRunId),
-          sendFinish(writable).then(() => closeStream(writable)),
+          sendFinish(
+            writable,
+            workflowStatus === "failed" ? "error" : "stop",
+          ).then(() => closeStream(writable)),
         ]);
       }
     } finally {
@@ -1010,7 +1059,7 @@ const runAgentStep = async (
   modelId: string,
   agentOptions: OpenAgentCallOptions,
   stepNumber: number,
-) => {
+): Promise<AgentStepResult> => {
   "use step";
 
   const stepStartedAt = new Date();
@@ -1217,6 +1266,11 @@ const runAgentStep = async (
       stepUsage,
       stepCost: stepsCost,
       stepWasAborted: false,
+      // The tool loop continues only when the model stopped to call tools and
+      // none of them are waiting on user input or approval.
+      canContinue:
+        finishReason === "tool-calls" &&
+        !shouldPauseForToolInteraction(responseMessage.parts),
       stepTiming: buildStepTiming(
         stepNumber,
         stepStartedAt,
@@ -1229,20 +1283,20 @@ const runAgentStep = async (
     const stepFinishedAt = new Date();
 
     if (isAbortError(error)) {
-      const abortedFinishReason: FinishReason = "stop";
       return {
         responseMessage: undefined,
         responseMessages: [],
-        finishReason: abortedFinishReason,
+        finishReason: "stop",
         rawFinishReason: undefined,
         stepUsage: undefined,
         stepCost: undefined,
         stepWasAborted: true,
+        canContinue: false,
         stepTiming: buildStepTiming(
           stepNumber,
           stepStartedAt,
           stepFinishedAt,
-          abortedFinishReason,
+          "stop",
         ),
       };
     }
@@ -1264,54 +1318,6 @@ const runAgentStep = async (
     await stopMonitor.done;
   }
 };
-
-function startStopMonitor(runId: string, abortController: AbortController) {
-  let shouldStop = false;
-
-  const done = (async () => {
-    const run = getRun(runId);
-
-    while (!shouldStop && !abortController.signal.aborted) {
-      let runStatus:
-        | "pending"
-        | "running"
-        | "completed"
-        | "failed"
-        | "cancelled";
-
-      try {
-        runStatus = await run.status;
-      } catch {
-        await delay(150);
-        continue;
-      }
-
-      if (runStatus === "cancelled") {
-        abortController.abort();
-        return;
-      }
-
-      await delay(150);
-    }
-  })();
-
-  return {
-    stop() {
-      shouldStop = true;
-    },
-    done,
-  };
-}
-
-function delay(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof Error && error.name === "AbortError";
-}
 
 async function sendTextMessage(writable: Writable, id: string, text: string) {
   "use step";

@@ -1,28 +1,13 @@
 import * as path from "path";
 import { tool } from "ai";
 import { z } from "zod";
+import { agentContextSchema } from "../types";
 import { getSandbox } from "./utils";
 import {
   extractSkillBody,
   substituteArguments,
   injectSkillDirectory,
 } from "../skills/loader";
-import type { SkillMetadata } from "../skills/types";
-
-/**
- * Extended agent context that includes skills.
- */
-interface SkillAgentContext {
-  skills?: SkillMetadata[];
-}
-
-/**
- * Get skills from experimental context.
- */
-function getSkills(experimental_context: unknown): SkillMetadata[] {
-  const context = experimental_context as SkillAgentContext | undefined;
-  return context?.skills ?? [];
-}
 
 const skillInputSchema = z.object({
   skill: z.string().describe("The skill name to invoke"),
@@ -30,6 +15,7 @@ const skillInputSchema = z.object({
 });
 
 export const skillTool = tool({
+  contextSchema: agentContextSchema,
   description: `Execute a skill within the main conversation.
 
 When users ask you to perform tasks, check if any of the available skills can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
@@ -53,9 +39,9 @@ Important:
 - Only use skills listed in "Available skills" in your system prompt
 - If you see a <command-name> tag in the conversation, the skill is ALREADY loaded - follow its instructions directly`,
   inputSchema: skillInputSchema,
-  execute: async ({ skill, args }, { experimental_context }) => {
-    const sandbox = await getSandbox(experimental_context, "skill");
-    const skills = getSkills(experimental_context);
+  execute: async ({ skill, args }, { context }) => {
+    const sandbox = await getSandbox(context, "skill");
+    const skills = context.skills ?? [];
 
     // Find the skill by name (case-insensitive to match slash command behavior)
     const normalizedSkillName = skill.toLowerCase();

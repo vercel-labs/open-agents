@@ -6,6 +6,8 @@
     "web": "pnpm --dir apps/web dev",
     "dev": "turbo dev",
     "build": "turbo build",
+    "harness:smoke:sandbox:create": "node --env-file-if-exists=.env.local scripts/vercel-create-harness-smoke-sandbox.ts",
+    "harness:smoke:codex": "node --env-file-if-exists=.env.local scripts/codex-harness-smoke.ts",
     "sandbox:snapshot-base": "node scripts/vercel-refresh-base-snapshot.ts",
     "typecheck": "turbo typecheck",
     "check": "ultracite check",
@@ -15,6 +17,8 @@
     "test:verbose": "bun test --reporter=junit --reporter-outfile /dev/stdout"
   },
   "devDependencies": {
+    "@open-agents/harness-runner": "workspace:*",
+    "@open-agents/sandbox": "workspace:*",
     "oxfmt": "^0.43.0",
     "oxlint": "1.57.0",
     "turbo": "^2.5.4",

@@ -1,11 +1,12 @@
-import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
+import { gateway, isStepCount, ToolLoopAgent } from "ai";
 import { z } from "zod";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
-import type { SandboxExecutionContext } from "../types";
+import { PLACEHOLDER_AGENT_CONTEXT, uniformToolsContext } from "../tools/utils";
+import type { AgentContext, SandboxExecutionContext } from "../types";
 import {
   SUBAGENT_NO_QUESTIONS_RULES,
   SUBAGENT_RESPONSE_FORMAT,
@@ -73,16 +74,19 @@ const callOptionsSchema = z.object({
 
 export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
 
+const tools = {
+  read: readFileTool(),
+  grep: grepTool(),
+  glob: globTool(),
+  bash: bashTool(),
+} satisfies ToolSet;
+
 export const explorerSubagent = new ToolLoopAgent({
   model: gateway("anthropic/claude-haiku-4.5"),
   instructions: EXPLORER_SYSTEM_PROMPT,
-  tools: {
-    read: readFileTool(),
-    grep: grepTool(),
-    glob: globTool(),
-    bash: bashTool(),
-  },
-  stopWhen: stepCountIs(SUBAGENT_STEP_LIMIT),
+  tools,
+  toolsContext: uniformToolsContext(tools, PLACEHOLDER_AGENT_CONTEXT),
+  stopWhen: isStepCount(SUBAGENT_STEP_LIMIT),
   callOptionsSchema,
   prepareCall: ({ options, ...settings }) => {
     if (!options) {
@@ -91,6 +95,7 @@ export const explorerSubagent = new ToolLoopAgent({
 
     const sandbox = options.sandbox;
     const model = options.model ?? settings.model;
+    const agentContext: AgentContext = { sandbox, model };
     return {
       ...settings,
       model,
@@ -105,10 +110,7 @@ ${options.task}
 ${options.instructions}
 
 ${EXPLORER_REMINDER}`,
-      experimental_context: {
-        sandbox,
-        model,
-      },
+      toolsContext: uniformToolsContext(tools, agentContext),
     };
   },
 });

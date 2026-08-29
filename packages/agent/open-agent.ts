@@ -1,5 +1,5 @@
 import type { SandboxState } from "@open-agents/sandbox";
-import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
+import { isStepCount, ToolLoopAgent, type ToolSet } from "ai";
 import { z } from "zod";
 import { addCacheControl } from "./context-management";
 import {
@@ -10,6 +10,7 @@ import {
 
 import type { SkillMetadata } from "./skills/types";
 import { buildSystemPrompt } from "./system-prompt";
+import type { AgentContext } from "./types";
 import {
   askUserQuestionTool,
   bashTool,
@@ -23,6 +24,7 @@ import {
   webFetchTool,
   writeFileTool,
 } from "./tools";
+import { PLACEHOLDER_AGENT_CONTEXT, uniformToolsContext } from "./tools/utils";
 
 export interface AgentModelSelection {
   id: GatewayModelId;
@@ -80,7 +82,8 @@ export const openAgent = new ToolLoopAgent({
   model: defaultModel,
   instructions: buildSystemPrompt({}),
   tools,
-  stopWhen: stepCountIs(1),
+  toolsContext: uniformToolsContext(tools, PLACEHOLDER_AGENT_CONTEXT),
+  stopWhen: isStepCount(1),
   callOptionsSchema,
   prepareStep: ({ messages, model, steps: _steps }) => {
     return {
@@ -114,6 +117,12 @@ export const openAgent = new ToolLoopAgent({
     const customInstructions = options.customInstructions;
     const sandbox = options.sandbox;
     const skills = options.skills ?? [];
+    const agentContext: AgentContext = {
+      sandbox,
+      skills,
+      model: callModel,
+      subagentModel,
+    };
 
     const instructions = buildSystemPrompt({
       cwd: sandbox.workingDirectory,
@@ -132,12 +141,7 @@ export const openAgent = new ToolLoopAgent({
         model: callModel,
       }),
       instructions,
-      experimental_context: {
-        sandbox,
-        skills,
-        model: callModel,
-        subagentModel,
-      },
+      toolsContext: uniformToolsContext(tools, agentContext),
     };
   },
 });

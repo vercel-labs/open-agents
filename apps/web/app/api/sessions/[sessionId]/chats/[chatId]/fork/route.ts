@@ -1,3 +1,4 @@
+import { requireChatCapacity } from "@/app/api/sessions/_lib/chat-capacity";
 import {
   requireAuthenticatedUser,
   requireOwnedSessionChat,
@@ -64,6 +65,11 @@ export async function POST(req: Request, context: RouteContext) {
     }
   }
 
+  const capacity = await requireChatCapacity(sessionId);
+  if (!capacity.ok) {
+    return capacity.response;
+  }
+
   const result = await forkChatThroughMessage({
     userId: authResult.userId,
     sourceChatId: chatId,
@@ -73,6 +79,7 @@ export async function POST(req: Request, context: RouteContext) {
       sessionId,
       title: `Fork of ${chatContext.chat.title}`,
       modelId: chatContext.chat.modelId,
+      harnessId: chatContext.chat.harnessId,
     },
   });
 

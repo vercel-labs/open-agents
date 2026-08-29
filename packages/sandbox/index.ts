@@ -43,6 +43,8 @@ export {
 export {
   connectVercelSandbox,
   VercelSandbox,
+  type AiSdkHarnessSandboxProvider,
+  type HarnessCapableSandbox,
   type VercelSandboxConfig,
   type VercelSandboxConnectConfig,
   type VercelState,

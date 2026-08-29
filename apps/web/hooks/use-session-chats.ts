@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import type { Chat } from "@/lib/db/schema";
+import { DEFAULT_CHAT_HARNESS_ID } from "@/lib/chat-harnesses";
 import { fetcherNoStore } from "@/lib/swr";
 
-export type SessionChatListItem = Chat & {
+/**
+ * Client-side chat shape: the chat APIs never expose the opaque
+ * `harnessSessionState` resume payload to the browser.
+ */
+export type SessionChat = Omit<Chat, "harnessSessionState">;
+
+export type SessionChatListItem = SessionChat & {
   hasUnread: boolean;
   isStreaming: boolean;
 };
@@ -28,9 +35,9 @@ interface UseSessionChatsOptions {
   initialData?: ChatsResponse;
 }
 
-type CreateChatResult = {
-  chat: Chat;
-  persisted: Promise<Chat>;
+export type CreateChatResult = {
+  chat: SessionChat;
+  persisted: Promise<SessionChat>;
 };
 
 type StreamingOverlay = {
@@ -492,11 +499,12 @@ export function useSessionChats(
     }
 
     const now = new Date();
-    const optimisticChat: Chat = {
+    const optimisticChat: SessionChat = {
       id: crypto.randomUUID(),
       sessionId,
       title: "New chat",
       modelId: data?.defaultModelId ?? null,
+      harnessId: DEFAULT_CHAT_HARNESS_ID,
       activeStreamId: null,
       lastAssistantMessageAt: null,
       createdAt: now,
@@ -526,7 +534,7 @@ export function useSessionChats(
       });
 
       const responseData = (await res.json()) as {
-        chat?: Chat;
+        chat?: SessionChat;
         error?: string;
       };
 
@@ -584,11 +592,12 @@ export function useSessionChats(
     }
 
     const now = new Date();
-    const optimisticChat: Chat = {
+    const optimisticChat: SessionChat = {
       id: crypto.randomUUID(),
       sessionId,
       title: `Fork of ${sourceChat.title}`,
       modelId: sourceChat.modelId,
+      harnessId: sourceChat.harnessId,
       activeStreamId: null,
       lastAssistantMessageAt: null,
       createdAt: now,
@@ -624,7 +633,7 @@ export function useSessionChats(
       );
 
       const responseData = (await res.json()) as {
-        chat?: Chat;
+        chat?: SessionChat;
         error?: string;
       };
 
@@ -681,7 +690,10 @@ export function useSessionChats(
       body: JSON.stringify({ title }),
     });
 
-    const responseData = (await res.json()) as { chat?: Chat; error?: string };
+    const responseData = (await res.json()) as {
+      chat?: SessionChat;
+      error?: string;
+    };
     if (!res.ok || !responseData.chat) {
       throw new Error(responseData.error ?? "Failed to rename chat");
     }

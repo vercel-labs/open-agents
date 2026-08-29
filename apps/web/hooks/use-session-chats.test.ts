@@ -17,6 +17,7 @@ function createChat(
     sessionId: "session-1",
     title: `Chat ${id}`,
     modelId: "anthropic/claude-haiku-4.5",
+    harnessId: "open-agent",
     activeStreamId: null,
     lastAssistantMessageAt: null,
     createdAt: now,

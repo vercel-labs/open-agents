@@ -30,6 +30,7 @@ type ChatRecord = {
   sessionId: string;
   title: string;
   modelId: string;
+  harnessId: "open-agent";
 };
 
 let authResult: AuthResult = { ok: true, userId: "user-1" };
@@ -45,12 +46,14 @@ let currentSession: {
 };
 
 let chatSummaries: ChatSummary[] = [{ id: "chat-1", title: "Chat 1" }];
+let sessionChatCount = 1;
 let existingChat: ChatRecord | null = null;
 let createdChat: ChatRecord = {
   id: "generated-chat-id",
   sessionId: "session-1",
   title: "New chat",
   modelId: "model-default",
+  harnessId: "open-agent",
 };
 
 const getSummaryCalls: Array<{ sessionId: string; userId: string }> = [];
@@ -59,6 +62,7 @@ const createChatCalls: Array<{
   sessionId: string;
   title: string;
   modelId: string;
+  harnessId: "open-agent";
 }> = [];
 
 mock.module("@/app/api/sessions/_lib/session-context", () => ({
@@ -79,12 +83,14 @@ mock.module("@/lib/db/sessions", () => ({
     getSummaryCalls.push({ sessionId, userId });
     return chatSummaries;
   },
+  countChatsBySessionId: async () => sessionChatCount,
   getChatById: async () => existingChat,
   createChat: async (input: {
     id: string;
     sessionId: string;
     title: string;
     modelId: string;
+    harnessId: "open-agent";
   }) => {
     createChatCalls.push(input);
     return createdChat;
@@ -133,12 +139,14 @@ describe("/api/sessions/[sessionId]/chats", () => {
     };
     currentSession = { user: { id: "user-1" } };
     chatSummaries = [{ id: "chat-1", title: "Chat 1" }];
+    sessionChatCount = 1;
     existingChat = null;
     createdChat = {
       id: "generated-chat-id",
       sessionId: "session-1",
       title: "New chat",
       modelId: "model-default",
+      harnessId: "open-agent",
     };
     getSummaryCalls.length = 0;
     createChatCalls.length = 0;
@@ -213,6 +221,7 @@ describe("/api/sessions/[sessionId]/chats", () => {
       sessionId: "session-1",
       title: "Existing",
       modelId: "model-existing",
+      harnessId: "open-agent",
     };
     const { POST } = await routeModulePromise;
 
@@ -233,6 +242,7 @@ describe("/api/sessions/[sessionId]/chats", () => {
       sessionId: "session-2",
       title: "Elsewhere",
       modelId: "model-existing",
+      harnessId: "open-agent",
     };
     const { POST } = await routeModulePromise;
 
@@ -263,8 +273,21 @@ describe("/api/sessions/[sessionId]/chats", () => {
         sessionId: "session-abc",
         title: "New chat",
         modelId: "model-default",
+        harnessId: "open-agent",
       },
     ]);
     expect(body.chat.id).toBe("generated-chat-id");
+  });
+
+  test("POST returns 400 when the session already has the maximum number of chats", async () => {
+    sessionChatCount = 5;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createJsonRequest({}), createContext());
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("maximum");
+    expect(createChatCalls).toHaveLength(0);
   });
 });

@@ -31,6 +31,7 @@ import {
 import { parseChatRequestBody, requireChatIdentifiers } from "./_lib/request";
 import { runAgentWorkflow } from "@/app/workflows/chat";
 import { persistAssistantMessagesWithToolResults } from "./_lib/persist-tool-results";
+import { isChatHarnessId } from "@/lib/chat-harnesses";
 
 type WebAgentUIMessageChunk = InferUIMessageChunk<WebAgentUIMessage>;
 
@@ -90,6 +91,12 @@ export async function POST(req: Request) {
     return Response.json({ error: "Session is archived" }, { status: 400 });
   }
 
+  // Defensive: the column is enum-typed, but a stale row from a removed
+  // harness must not reach the workflow.
+  if (!isChatHarnessId(chat.harnessId)) {
+    return Response.json({ error: "Invalid harness" }, { status: 400 });
+  }
+
   if (isManagedTemplateTrialUser(session, req.url)) {
     const latestUserMessage = getLatestUserMessage(messages);
     if (latestUserMessage) {
@@ -143,6 +150,7 @@ export async function POST(req: Request) {
     {
       messages,
       chatId,
+      harnessId: chat.harnessId,
       sessionId,
       userId,
       requestUrl: req.url,

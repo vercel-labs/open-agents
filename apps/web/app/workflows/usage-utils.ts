@@ -1,24 +1,51 @@
 import type { LanguageModelUsage } from "ai";
 
 /**
- * Add two LanguageModelUsage objects together.
- * Pure function with no step overhead - safe to call in loop.
+ * Workflow-local copy of `addLanguageModelUsage` from
+ * `@open-agents/shared/lib/usage`.
+ *
+ * DO NOT replace this with a workspace import. This module is imported by
+ * `chat.ts`, whose `"use workflow"` function runs as a deterministic state
+ * machine: the workflow bundle must not pull workspace packages at runtime
+ * (importing from `@open-agents/agent` broke every workflow tool once
+ * already). That is why every other `@open-agents/*` import in the workflow
+ * modules is type-only.
+ *
+ * Drift protection: `usage-utils.test.ts` asserts this copy behaves
+ * identically to the shared canonical implementation.
  */
+
+function addTokenCounts(
+  tokenCount1: number | undefined,
+  tokenCount2: number | undefined,
+): number | undefined {
+  if (tokenCount1 == null && tokenCount2 == null) {
+    return undefined;
+  }
+  return (tokenCount1 ?? 0) + (tokenCount2 ?? 0);
+}
+
+function legacyCachedInputTokens(
+  usage: LanguageModelUsage,
+): number | undefined {
+  const value = (usage as unknown as Record<string, unknown>).cachedInputTokens;
+  return typeof value === "number" ? value : undefined;
+}
+
 export function addLanguageModelUsage(
   usage1: LanguageModelUsage,
   usage2: LanguageModelUsage,
 ): LanguageModelUsage {
-  function addTokenCounts(
-    tokenCount1: number | undefined,
-    tokenCount2: number | undefined,
-  ): number | undefined {
-    if (tokenCount1 == null && tokenCount2 == null) {
-      return undefined;
-    }
-    return (tokenCount1 ?? 0) + (tokenCount2 ?? 0);
-  }
+  // Usage persisted before AI SDK 7 carries cached tokens in a top-level
+  // `cachedInputTokens` field instead of inputTokenDetails; keep summing it
+  // so aggregated legacy events do not lose their cached-token counts.
+  const legacyCached = addTokenCounts(
+    legacyCachedInputTokens(usage1),
+    legacyCachedInputTokens(usage2),
+  );
 
   return {
+    ...(legacyCached !== undefined ? { cachedInputTokens: legacyCached } : {}),
     inputTokens: addTokenCounts(usage1.inputTokens, usage2.inputTokens),
     inputTokenDetails: {
       noCacheTokens: addTokenCounts(
@@ -46,13 +73,5 @@ export function addLanguageModelUsage(
       ),
     },
     totalTokens: addTokenCounts(usage1.totalTokens, usage2.totalTokens),
-    reasoningTokens: addTokenCounts(
-      usage1.reasoningTokens,
-      usage2.reasoningTokens,
-    ),
-    cachedInputTokens: addTokenCounts(
-      usage1.cachedInputTokens,
-      usage2.cachedInputTokens,
-    ),
   };
 }

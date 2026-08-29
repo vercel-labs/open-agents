@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import * as path from "path";
+import { agentContextSchema } from "../types";
 import { getSandbox, toDisplayPath } from "./utils";
 import {
   isDotEnvFilePath,
@@ -40,14 +41,15 @@ const editInputSchema = z.object({
 
 export const writeFileTool = () =>
   tool({
-    needsApproval: async ({ filePath }, { experimental_context }) => {
+    contextSchema: agentContextSchema,
+    needsApproval: async ({ filePath }, { context }) => {
       if (isDotEnvFilePath(filePath)) {
         return true;
       }
 
       let sandbox;
       try {
-        sandbox = await getSandbox(experimental_context, "write");
+        sandbox = await getSandbox(context, "write");
       } catch {
         return false;
       }
@@ -96,8 +98,8 @@ EXAMPLES:
 - Create a new test file: filePath: "src/user.test.ts", content: "<full file contents>"
 - Replace a script after reading it: filePath: "scripts/build.sh", content: "<entire updated script>"`,
     inputSchema: writeInputSchema,
-    execute: async ({ filePath, content }, { experimental_context }) => {
-      const sandbox = await getSandbox(experimental_context, "write");
+    execute: async ({ filePath, content }, { context }) => {
+      const sandbox = await getSandbox(context, "write");
       const workingDirectory = sandbox.workingDirectory;
 
       try {
@@ -144,14 +146,15 @@ EXAMPLES:
 
 export const editFileTool = () =>
   tool({
-    needsApproval: async ({ filePath }, { experimental_context }) => {
+    contextSchema: agentContextSchema,
+    needsApproval: async ({ filePath }, { context }) => {
       if (isDotEnvFilePath(filePath)) {
         return true;
       }
 
       let sandbox;
       try {
-        sandbox = await getSandbox(experimental_context, "edit");
+        sandbox = await getSandbox(context, "edit");
       } catch {
         return false;
       }
@@ -204,9 +207,9 @@ EXAMPLES:
     inputSchema: editInputSchema,
     execute: async (
       { filePath, oldString, newString, replaceAll = false },
-      { experimental_context },
+      { context },
     ) => {
-      const sandbox = await getSandbox(experimental_context, "edit");
+      const sandbox = await getSandbox(context, "edit");
       const workingDirectory = sandbox.workingDirectory;
 
       try {

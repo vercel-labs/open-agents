@@ -18,6 +18,7 @@ import {
 import { sanitizeUserPreferencesForSession } from "@/lib/model-access";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { DEFAULT_CHAT_HARNESS_ID } from "@/lib/chat-harnesses";
 
 interface RepoPageProps {
   params: Promise<{ username: string; repo: string }>;
@@ -144,6 +145,7 @@ export default async function RepoPage({ params }: RepoPageProps) {
       id: nanoid(),
       title: "New chat",
       modelId: preferences.defaultModelId,
+      harnessId: DEFAULT_CHAT_HARNESS_ID,
     },
   });
 

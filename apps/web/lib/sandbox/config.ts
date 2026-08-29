@@ -41,25 +41,52 @@ export const SANDBOX_LIFECYCLE_MIN_SLEEP_MS = 5 * 1000;
 
 /**
  * Default ports to expose from cloud sandboxes.
- * Limited to 5 ports. Covers the most common framework defaults
- * plus the built-in code editor:
+ * Vercel sandboxes support at most 15 exposed ports; ports are fixed at
+ * sandbox creation. Covers the most common framework defaults,
+ * the built-in code editor, and the external harness runtime:
  * - 3000: Next.js, Express, Remix
  * - 5173: Vite, SvelteKit
  * - 4321: Astro
  * - 8000: code-server (built-in editor)
+ * - 5001-5005: external harness bridge pool
  */
-export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321, 8000];
+export const AGENT_HARNESS_BRIDGE_PORT = 5001;
+/**
+ * Number of concurrent external-harness sessions a single sandbox supports.
+ * Multiple chats in one session share the sandbox, so the AI SDK harness needs
+ * a pool of bridge ports to lease one per concurrent session. The pool size
+ * matches MAX_CHATS_PER_SESSION so every chat can always lease a port.
+ */
+export const AGENT_HARNESS_BRIDGE_PORT_COUNT = 5;
+/** Pool of bridge ports the AI SDK harness leases from for concurrent sessions. */
+export const AGENT_HARNESS_BRIDGE_PORTS = Array.from(
+  { length: AGENT_HARNESS_BRIDGE_PORT_COUNT },
+  (_, index) => AGENT_HARNESS_BRIDGE_PORT + index,
+);
+/**
+ * Maximum chats per session. Bounded by the harness bridge port pool: every
+ * chat may select an external harness, and each concurrent harness session
+ * needs its own bridge port on the shared session sandbox.
+ */
+export const MAX_CHATS_PER_SESSION = AGENT_HARNESS_BRIDGE_PORT_COUNT;
+export const DEFAULT_SANDBOX_PORTS = [
+  3000,
+  5173,
+  4321,
+  8000,
+  ...AGENT_HARNESS_BRIDGE_PORTS,
+];
 export const CODE_SERVER_PORT = 8000;
 
 /** Default working directory for sandboxes, used for path display */
 export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 
 /**
- * Optional base snapshot for fresh cloud sandboxes.
+ * Optional explicit base snapshot override for fresh cloud sandboxes.
  *
- * Forked deployments should provide their own snapshot ID if they want a
- * preconfigured image. When unset, sandboxes start from Vercel's standard
- * runtime so deployments are not tied to a private snapshot in another scope.
+ * Vercel deployments normally resolve their build-prewarmed named template.
+ * When unset outside a deployment, sandboxes start from Vercel's standard
+ * runtime.
  */
 export const DEFAULT_SANDBOX_BASE_SNAPSHOT_ID =
   process.env.VERCEL_SANDBOX_BASE_SNAPSHOT_ID;

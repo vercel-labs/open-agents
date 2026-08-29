@@ -32,6 +32,7 @@ import {
   isVercelInvalidTokenError,
   listMatchingVercelProjects,
 } from "@/lib/vercel/projects";
+import { DEFAULT_CHAT_HARNESS_ID } from "@/lib/chat-harnesses";
 import { getUserVercelToken } from "@/lib/vercel/token";
 import {
   vercelProjectSelectionSchema,
@@ -402,6 +403,7 @@ export async function POST(req: Request) {
         id: nanoid(),
         title: "New chat",
         modelId: preferences.defaultModelId,
+        harnessId: DEFAULT_CHAT_HARNESS_ID,
       },
     });
 

@@ -11,6 +11,7 @@
     "./vercel": "./vercel/index.ts",
     "./vercel/index.js": "./vercel/index.ts",
     "./vercel/snapshot-refresh.js": "./vercel/snapshot-refresh.ts",
+    "./vercel/snapshot-template.js": "./vercel/snapshot-template.ts",
     "./vercel/sandbox.js": "./vercel/sandbox.ts",
     "./vercel/config.js": "./vercel/config.ts"
   },
@@ -18,7 +19,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vercel/sandbox": "2.0.0-beta.11"
+    "@ai-sdk/sandbox-vercel": "1.0.65",
+    "@vercel/sandbox": "2.2.1"
   },
   "devDependencies": {
     "@open-agents/tsconfig": "workspace:*",
